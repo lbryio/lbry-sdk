@@ -97,7 +97,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def __init__(self, node):
         self._node = node
-        self._encoder = encoding.Bencode()
         self._translator = msgformat.DefaultFormat()
         self._sentMessages = {}
         self._partialMessages = {}
@@ -163,7 +162,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         msg = msgtypes.RequestMessage(self._node.node_id, method, self._migrate_outgoing_rpc_args(contact, method,
                                                                                                   *args))
         msgPrimitive = self._translator.toPrimitive(msg)
-        encodedMsg = self._encoder.encode(msgPrimitive)
+        encodedMsg = encoding.bencode(msgPrimitive)
 
         if args:
             log.debug("%s:%i SEND CALL %s(%s) TO %s:%i", self._node.externalIP, self._node.port, method,
@@ -237,7 +236,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             else:
                 return
         try:
-            msgPrimitive = self._encoder.decode(datagram)
+            msgPrimitive = encoding.bdecode(datagram)
             message = self._translator.fromPrimitive(msgPrimitive)
         except (encoding.DecodeError, ValueError) as err:
             # We received some rubbish here
@@ -394,7 +393,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         """
         msg = msgtypes.ResponseMessage(rpcID, self._node.node_id, response)
         msgPrimitive = self._translator.toPrimitive(msg)
-        encodedMsg = self._encoder.encode(msgPrimitive)
+        encodedMsg = encoding.bencode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))
 
     def _sendError(self, contact, rpcID, exceptionType, exceptionMessage):
@@ -403,7 +402,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         exceptionMessage = exceptionMessage.encode()
         msg = msgtypes.ErrorMessage(rpcID, self._node.node_id, exceptionType, exceptionMessage)
         msgPrimitive = self._translator.toPrimitive(msg)
-        encodedMsg = self._encoder.encode(msgPrimitive)
+        encodedMsg = encoding.bencode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))
 
     def _handleRPC(self, senderContact, rpcID, method, args):
