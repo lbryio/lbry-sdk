@@ -22,7 +22,7 @@ class _Contact:
 
     def __init__(self, contactManager, id, ipAddress, udpPort, networkProtocol, firstComm):
         if id is not None:
-            if not len(id) == constants.key_bits / 8:
+            if not len(id) == constants.key_bits // 8:
                 raise ValueError("invalid node id: %s" % hexlify(id.encode()))
         if not 0 <= udpPort <= 65536:
             raise ValueError("invalid port")

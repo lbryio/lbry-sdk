@@ -160,7 +160,7 @@ class BlobFile:
             return False
 
         def errback_finished_deferred(err):
-            for p, (w, finished_deferred) in self.writers.items():
+            for p, (w, finished_deferred) in list(self.writers.items()):
                 if w == writer:
                     del self.writers[p]
                     finished_deferred.errback(err)
