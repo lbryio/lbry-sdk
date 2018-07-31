@@ -1,8 +1,10 @@
-# -*- coding: utf-8 -*-
-from cryptography.hazmat.primitives.ciphers.algorithms import AES
+import json
+import mock
 from twisted.trial import unittest
 from twisted.internet import defer
 
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.BlobManager import DiskBlobManager
@@ -12,7 +14,7 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.core.StreamDescriptor import bytes2unicode
+from lbrynet.core.StreamDescriptor import JSONBytesEncoder
 from tests import mocks
 from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
@@ -30,7 +32,7 @@ MB = 2**20
 
 def iv_generator():
     while True:
-        yield '3' * (AES.block_size // 8)
+        yield b'3' * (AES.block_size // 8)
 
 
 class CreateEncryptedFileTest(unittest.TestCase):
@@ -87,7 +89,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
         # this comes from the database, the blobs returned are sorted
         sd_info = yield get_sd_info(self.storage, lbry_file.stream_hash, include_blobs=True)
         self.maxDiff = None
-        self.assertDictEqual(bytes2unicode(sd_info), sd_file_info)
+        unicode_sd_info = json.loads(json.dumps(sd_info, sort_keys=True, cls=JSONBytesEncoder))
+        self.assertDictEqual(unicode_sd_info, sd_file_info)
         self.assertEqual(sd_info['stream_hash'], expected_stream_hash)
         self.assertEqual(len(sd_info['blobs']), 3)
         self.assertNotEqual(sd_info['blobs'][0]['length'], 0)

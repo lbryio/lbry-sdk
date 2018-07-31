@@ -7,7 +7,7 @@ from lbrynet.dht import constants
 
 def is_valid_ipv4(address):
     try:
-        ip = ipaddress.ip_address(address.encode().decode())  # this needs to be unicode, thus re-encode-able
+        ip = ipaddress.ip_address(address)
         return ip.version == 4
     except ipaddress.AddressValueError:
         return False
@@ -22,8 +22,8 @@ class _Contact:
 
     def __init__(self, contactManager, id, ipAddress, udpPort, networkProtocol, firstComm):
         if id is not None:
-            if not len(id) == constants.key_bits / 8:
-                raise ValueError("invalid node id: %s" % hexlify(id.encode()))
+            if not len(id) == constants.key_bits // 8:
+                raise ValueError("invalid node id: {}".format(hexlify(id).decode()))
         if not 0 <= udpPort <= 65536:
             raise ValueError("invalid port")
         if not is_valid_ipv4(ipAddress):

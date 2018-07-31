@@ -1,11 +1,3 @@
-#!/usr/bin/env python
-#
-# This library is free software, distributed under the terms of
-# the GNU Lesser General Public License Version 3, or any later version.
-# See the COPYING file included in this archive
-#
-# The docstrings in this module contain epytext markup; API documentation
-# may be created by processing this file with epydoc: http://epydoc.sf.net
 import binascii
 import hashlib
 import struct
@@ -34,7 +26,7 @@ def expand_peer(compact_peer_info):
     host = ".".join([str(ord(d)) for d in compact_peer_info[:4]])
     port, = struct.unpack('>H', compact_peer_info[4:6])
     peer_node_id = compact_peer_info[6:]
-    return (peer_node_id, host, port)
+    return peer_node_id, host, port
 
 
 def rpcmethod(func):
@@ -348,7 +340,7 @@ class Node(MockKademliaHelper):
         stored_to = yield DeferredDict({contact: self.storeToContact(blob_hash, contact) for contact in contacts})
         contacted_node_ids = [binascii.hexlify(contact.id) for contact in stored_to.keys() if stored_to[contact]]
         log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(blob_hash),
-                  len(list(contacted_node_ids)), len(contacts))
+                  len(contacted_node_ids), len(contacts))
         defer.returnValue(contacted_node_ids)
 
     def change_token(self):
