@@ -12,6 +12,13 @@ from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorEr
 log = logging.getLogger(__name__)
 
 
+class JSONBytesEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, bytes):
+            return obj.decode()
+        return super().default(self, obj)
+
+
 class StreamDescriptorReader:
     """Classes which derive from this class read a stream descriptor file return
        a dictionary containing the fields in the file"""
@@ -66,16 +73,6 @@ class BlobStreamDescriptorReader(StreamDescriptorReader):
         return threads.deferToThread(get_data)
 
 
-def bytes2unicode(value):
-    if isinstance(value, bytes):
-        return value.decode()
-    elif isinstance(value, (list, tuple)):
-        return [bytes2unicode(v) for v in value]
-    elif isinstance(value, dict):
-        return {key: bytes2unicode(v) for key, v in value.items()}
-    return value
-
-
 class StreamDescriptorWriter:
     """Classes which derive from this class write fields from a dictionary
        of fields to a stream descriptor"""
@@ -83,7 +80,9 @@ class StreamDescriptorWriter:
         pass
 
     def create_descriptor(self, sd_info):
-        return self._write_stream_descriptor(json.dumps(bytes2unicode(sd_info), sort_keys=True))
+        return self._write_stream_descriptor(
+            json.dumps(sd_info, sort_keys=True, cls=JSONBytesEncoder).encode()
+        )
 
     def _write_stream_descriptor(self, raw_data):
         """This method must be overridden by subclasses to write raw data to
