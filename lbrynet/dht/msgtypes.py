@@ -17,7 +17,7 @@ class Message:
     def __init__(self, rpcID, nodeID):
         if len(rpcID) != constants.rpc_id_length:
             raise ValueError("invalid rpc id: %i bytes (expected 20)" % len(rpcID))
-        if len(nodeID) != constants.key_bits / 8:
+        if len(nodeID) != constants.key_bits // 8:
             raise ValueError("invalid node id: %i bytes (expected 48)" % len(nodeID))
         self.id = rpcID
         self.nodeID = nodeID

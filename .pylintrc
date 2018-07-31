@@ -124,7 +124,8 @@ disable=
   keyword-arg-before-vararg,
   assignment-from-no-return,
   useless-return,
-  assignment-from-none
+  assignment-from-none,
+  stop-iteration-return
 
 
 [REPORTS]
@@ -389,7 +390,7 @@ int-import-graph=
 [DESIGN]
 
 # Maximum number of arguments for function / method
-max-args=5
+max-args=10
 
 # Argument names that match this expression will be ignored. Default to name
 # with leading underscore

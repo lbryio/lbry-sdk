@@ -68,14 +68,14 @@ class StreamBlobDecryptor:
 
         def write_bytes():
             if self.len_read < self.length:
-                num_bytes_to_decrypt = greatest_multiple(len(self.buff), (AES.block_size / 8))
+                num_bytes_to_decrypt = greatest_multiple(len(self.buff), (AES.block_size // 8))
                 data_to_decrypt, self.buff = split(self.buff, num_bytes_to_decrypt)
                 write_func(self.cipher.update(data_to_decrypt))
 
         def finish_decrypt():
-            bytes_left = len(self.buff) % (AES.block_size / 8)
+            bytes_left = len(self.buff) % (AES.block_size // 8)
             if bytes_left != 0:
-                log.warning(self.buff[-1 * (AES.block_size / 8):].encode('hex'))
+                log.warning(self.buff[-1 * (AES.block_size // 8):].encode('hex'))
                 raise Exception("blob %s has incorrect padding: %i bytes left" %
                                 (self.blob.blob_hash, bytes_left))
             data_to_decrypt, self.buff = self.buff, b''
@@ -128,8 +128,6 @@ class CryptStreamBlobMaker:
         max bytes are written. num_bytes_to_write is the number
         of bytes that will be written from data in this call
         """
-        if not isinstance(data, bytes):
-            data = data.encode()
         max_bytes_to_write = MAX_BLOB_SIZE - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
