@@ -19,8 +19,8 @@ from lbrynet.core import utils
 from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.auth.util import APIKey, get_auth_message, LBRY_SECRET
-from lbrynet.undecorated import undecorated
+from .util import APIKey, get_auth_message, LBRY_SECRET
+from .undecorated import undecorated
 from .factory import AuthJSONRPCResource
 log = logging.getLogger(__name__)
 
