@@ -90,6 +90,7 @@ class CommandTestCase(IntegrationTestCase):
         address = (await d2f(self.account.receiving.get_addresses(1, only_usable=True)))[0]
         sendtxid = await self.blockchain.send_to_address(address, 10)
         await self.confirm_tx(sendtxid)
+        await self.generate(5)
 
         def wallet_maker(component_manager):
             self.wallet_component = WalletComponent(component_manager)
@@ -136,68 +137,122 @@ class CommandTestCase(IntegrationTestCase):
         return defer.Deferred.fromFuture(asyncio.ensure_future(self.generate(blocks)))
 
 
-class CommonWorkflowTests(CommandTestCase):
+class EpicAdventuresOfChris45(CommandTestCase):
 
     VERBOSE = False
 
     @defer.inlineCallbacks
-    def test_user_creating_channel_and_publishing_file(self):
+    def test_no_this_is_not_a_test_its_an_adventure(self):
+        # Chris45 is an avid user of LBRY and this is his story. It's fact and fiction
+        # and everything in between; it's also the setting of some record setting
+        # integration tests.
 
-        # User checks their balance.
-        result = yield self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True)
+        # Chris45 starts everyday by checking his balance.
+        result = yield self.daemon.jsonrpc_wallet_balance()
         self.assertEqual(result, 10)
+        # "10 LBC, yippy! I can do a lot with that.", he thinks to himself,
+        # enthusiastically. But he is hungry so he goes into the kitchen
+        # to make himself a spamdwich.
 
-        # Decides to get a cool new channel.
+        # While making the spamdwich he wonders... has anyone on LBRY
+        # registered the @spam channel yet? "I should do that!" he
+        # exclaims and goes back to his computer to do just that!
         channel = yield self.daemon.jsonrpc_channel_new('@spam', 1)
         self.assertTrue(channel['success'])
         yield self.d_confirm_tx(channel['txid'])
 
-        # Check balance, include utxos with less than 6 confirmations (unconfirmed).
-        result = yield self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True)
-        self.assertEqual(result, 8.99)
+        # As the new channel claim travels through the intertubes and makes its
+        # way into the mempool and then a block and then into the claimtrie,
+        # Chris doesn't sit idly by: he checks his balance!
 
-        # Check confirmed balance, only includes utxos with 6+ confirmations.
         result = yield self.daemon.jsonrpc_wallet_balance()
         self.assertEqual(result, 0)
 
-        # Add some confirmations (there is already 1 confirmation, so we add 5 to equal 6 total).
-        yield self.d_generate(5)
+        # "Oh! No! It's all gone? Did I make a mistake in entering the amount?"
+        # exclaims Chris, then he remembers there is a 6 block confirmation window
+        # to make sure the TX is really going to stay in the blockchain. And he only
+        # had one UTXO that morning.
 
-        # Check balance again after some confirmations, should be correct again.
+        # To get the unconfirmed balance he has to pass the '--include-unconfirmed'
+        # flag to lbrynet:
+        result = yield self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True)
+        self.assertEqual(result, 8.99)
+        # "Well, that's a relief." he thinks to himself as he exhales a sigh of relief.
+
+        # He waits for a block
+        yield self.d_generate(1)
+        # and checks the confirmed balance again.
+        result = yield self.daemon.jsonrpc_wallet_balance()
+        self.assertEqual(result, 0)
+        # Still zero.
+
+        # But it's only at 2 confirmations, so he waits another 3
+        yield self.d_generate(3)
+        # and checks again.
+        result = yield self.daemon.jsonrpc_wallet_balance()
+        self.assertEqual(result, 0)
+        # Still zero.
+
+        # Just one more confirmation
+        yield self.d_generate(1)
+        # and it should be 6 total, enough to get the correct balance!
         result = yield self.daemon.jsonrpc_wallet_balance()
         self.assertEqual(result, 8.99)
+        # Like a Swiss watch (right niko?) the blockchain never disappoints! We're
+        # at 6 confirmations and the total is correct.
 
-        # Now lets publish a hello world file to the channel.
+        # "What goes well with spam?" ponders Chris...
+        # "A hovercraft with eels!" he exclaims.
+        # "That's what goes great with spam!" he further confirms.
+
+        # And so, many hours later, Chris is finished writing his epic story
+        # about eels driving a hovercraft across the wetlands while eating spam
+        # and decides it's time to publish it to the @spam channel.
         with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hello world!')
+            file.write(b'blah blah blah...')
+            file.write(b'[insert long story about eels driving hovercraft]')
+            file.write(b'yada yada yada!')
+            file.write(b'the end')
             file.flush()
-            claim = yield self.daemon.jsonrpc_publish(
+            claim1 = yield self.daemon.jsonrpc_publish(
                 'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
             )
-            self.assertTrue(claim['success'])
-            yield self.d_confirm_tx(claim['txid'])
+            self.assertTrue(claim1['success'])
+            yield self.d_confirm_tx(claim1['txid'])
 
-        # Check unconfirmed balance.
+        # He quickly checks the unconfirmed balance to make sure everything looks
+        # correct.
         result = yield self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True)
         self.assertEqual(round(result, 2), 7.97)
 
-        # Resolve our claim.
+        # Also checks that his new story can be found on the blockchain before
+        # giving the link to all his friends.
         response = yield self.ledger.resolve(0, 10, 'lbry://@spam/hovercraft')
         self.assertIn('lbry://@spam/hovercraft', response)
 
-        # A few confirmations before trying to spend again.
+        # He goes to tell everyone about it and in the meantime 5 blocks are confirmed.
         yield self.d_generate(5)
-
-        # Verify confirmed balance.
+        # When he comes back he verifies the confirmed balance.
         result = yield self.daemon.jsonrpc_wallet_balance()
         self.assertEqual(round(result, 2), 7.97)
 
-        # Now lets update an existing claim.
+        # As people start reading his story they discover some typos and notify
+        # Chris who explains in despair "Oh! Noooooos!" but then remembers
+        # "No big deal! I can update my claim." And so he updates his claim.
         with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hello world x2!')
+            file.write(b'blah blah blah...')
+            file.write(b'[typo fixing sounds being made]')
+            file.write(b'yada yada yada!')
             file.flush()
-            claim = yield self.daemon.jsonrpc_publish(
+            claim2 = yield self.daemon.jsonrpc_publish(
                 'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
             )
-            self.assertTrue(claim['success'])
-            yield self.d_confirm_tx(claim['txid'])
+            self.assertTrue(claim2['success'])
+            #self.assertEqual(claim2['claim_id'], claim1['claim_id'])
+            yield self.d_confirm_tx(claim2['txid'])
+
+        # After some soul searching Chris decides that his story needs more
+        # heart and a better ending. He takes down the story and begins the rewrite.
+        abandon = yield self.daemon.jsonrpc_claim_abandon(claim1['claim_id'])
+        self.assertTrue(abandon['success'])
+        yield self.d_confirm_tx(abandon['txid'])
