@@ -62,6 +62,10 @@ class ContactOperatorsTest(unittest.TestCase):
         self.assertEqual(self.first_contact.log_id(False), hexlify(self.node_ids[1]))
         self.assertEqual(self.first_contact.log_id(True),  hexlify(self.node_ids[1])[:8])
 
+    def test_hash(self):
+        # fails with "TypeError: unhashable type: '_Contact'" if __hash__ is not implemented
+        {self.first_contact, self.second_contact, self.second_contact_copy}
+
 
 class TestContactLastReplied(unittest.TestCase):
     def setUp(self):
