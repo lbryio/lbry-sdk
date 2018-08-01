@@ -90,3 +90,6 @@ class Account(BaseAccount):
         d = super().to_dict()
         d['certificates'] = self.certificates
         return d
+
+    def get_claim(self, claim_id):
+        return self.ledger.db.get_claim(self, claim_id)

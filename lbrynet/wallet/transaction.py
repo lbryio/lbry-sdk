@@ -50,4 +50,4 @@ class Transaction(BaseTransaction):
     @classmethod
     def abandon(cls, utxo, funding_accounts, change_account):
         # type: (Output, List[BaseAccount], BaseAccount) -> defer.Deferred
-        return cls.liquidate([utxo], funding_accounts, change_account)
+        return cls.liquidate(utxo, funding_accounts, change_account)
