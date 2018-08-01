@@ -81,7 +81,7 @@ class BasicTransactionTest(IntegrationTestCase):
         response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertIn('lbry://@bar/foo', response)
 
-        abandon_tx = await d2f(Transaction.abandon(claim_tx.outputs[0], [self.account], self.account))
+        abandon_tx = await d2f(Transaction.abandon([claim_tx.outputs[0]], [self.account], self.account))
         await self.broadcast(abandon_tx)
         await self.on_transaction(abandon_tx)
         await self.blockchain.generate(1)
