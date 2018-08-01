@@ -60,7 +60,7 @@ class BasicTransactionTest(IntegrationTestCase):
         cert, key = generate_certificate()
         cert_tx = await d2f(Transaction.claim(b'@bar', cert, 1*COIN, address1, [self.account], self.account))
         claim = ClaimDict.load_dict(example_claim_dict)
-        claim = claim.sign(key, address1, hexlify(cert_tx.get_claim_id(0)))
+        claim = claim.sign(key, address1, hexlify(cert_tx.get_claim_id(0)[::-1]))
         claim_tx = await d2f(Transaction.claim(b'foo', claim, 1*COIN, address1, [self.account], self.account))
 
         await self.broadcast(cert_tx)
