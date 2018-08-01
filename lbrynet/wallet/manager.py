@@ -185,6 +185,15 @@ class LbryWalletManager(BaseWalletManager):
         }
 
     @defer.inlineCallbacks
+    def abandon_claim(self, claim_id, txid, nout):
+        account = self.default_account
+        claim = yield account.get_claim(claim_id)
+        tx = yield Transaction.abandon(claim, [account], account)
+        yield account.ledger.broadcast(tx)
+        # TODO: release reserved tx outputs in case anything fails by this point
+        defer.returnValue(tx)
+
+    @defer.inlineCallbacks
     def claim_new_channel(self, channel_name, amount):
         try:
             parsed = parse_lbry_uri(channel_name)

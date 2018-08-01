@@ -1907,7 +1907,15 @@ class Daemon(AuthJSONRPCServer):
         if nout is None and txid is not None:
             raise Exception('Must specify nout')
 
-        result = yield self.wallet.abandon_claim(claim_id, txid, nout)
+        tx = yield self.wallet.abandon_claim(claim_id, txid, nout)
+        result = {
+            "success": True,
+            "txid": tx.id,
+            "nout": 0,
+            "tx": hexlify(tx.raw),
+            "fee": str(Decimal(tx.fee) / COIN),
+            "claim_id": claim_id
+        }
         self.analytics_manager.send_claim_action('abandon')
         defer.returnValue(result)
 
