@@ -64,7 +64,9 @@ class ContactOperatorsTest(unittest.TestCase):
 
     def test_hash(self):
         # fails with "TypeError: unhashable type: '_Contact'" if __hash__ is not implemented
-        {self.first_contact, self.second_contact, self.second_contact_copy}
+        self.assertEqual(
+            len({self.first_contact, self.second_contact, self.second_contact_copy}), 2
+        )
 
 
 class TestContactLastReplied(unittest.TestCase):
