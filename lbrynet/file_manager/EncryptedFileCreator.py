@@ -2,10 +2,9 @@
 Utilities for turning plain files into LBRY Files.
 """
 
-import six
-import binascii
 import logging
 import os
+from binascii import hexlify
 
 from twisted.internet import defer
 from twisted.protocols.basic import FileSender
@@ -38,14 +37,14 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
     def _finished(self):
         # calculate the stream hash
         self.stream_hash = get_stream_hash(
-            hexlify(self.name), hexlify(self.key), hexlify(self.name),
+            hexlify(self.name.encode()), hexlify(self.key), hexlify(self.name.encode()),
             self.blob_infos
         )
 
         # generate the sd info
         self.sd_info = format_sd_info(
-            EncryptedFileStreamType, hexlify(self.name), hexlify(self.key),
-            hexlify(self.name), self.stream_hash.encode(), self.blob_infos
+            EncryptedFileStreamType, hexlify(self.name.encode()), hexlify(self.key),
+            hexlify(self.name.encode()), self.stream_hash.encode(), self.blob_infos
         )
 
         # sanity check
@@ -125,15 +124,7 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     )
     log.debug("adding to the file manager")
     lbry_file = yield lbry_file_manager.add_published_file(
-        sd_info['stream_hash'], sd_hash, binascii.hexlify(file_directory.encode()), session.payment_rate_manager,
+        sd_info['stream_hash'], sd_hash, hexlify(file_directory.encode()), session.payment_rate_manager,
         session.payment_rate_manager.min_blob_data_payment_rate
     )
     defer.returnValue(lbry_file)
-
-
-def hexlify(str_or_unicode):
-    if isinstance(str_or_unicode, six.text_type):
-        strng = str_or_unicode.encode('utf-8')
-    else:
-        strng = str_or_unicode
-    return binascii.hexlify(strng)
