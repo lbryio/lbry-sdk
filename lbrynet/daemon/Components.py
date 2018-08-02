@@ -360,6 +360,16 @@ class BlobComponent(Component):
     def stop(self):
         return self.blob_manager.stop()
 
+    @defer.inlineCallbacks
+    def get_status(self):
+        if not self.blob_manager:
+            count = 0
+        else:
+            count = yield self.blob_manager.storage.count_finished_blobs()
+        defer.returnValue({
+            'finished_blobs': count
+        })
+
 
 class DHTComponent(Component):
     component_name = DHT_COMPONENT
@@ -431,6 +441,11 @@ class HashAnnouncerComponent(Component):
     @defer.inlineCallbacks
     def stop(self):
         yield self.hash_announcer.stop()
+
+    def get_status(self):
+        return {
+            'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.hash_queue)
+        }
 
 
 class RateLimiterComponent(Component):
@@ -523,7 +538,7 @@ class FileManagerComponent(Component):
         if not self.file_manager:
             return
         return {
-            'managed_streams': len(self.file_manager.lbry_files)
+            'managed_files': len(self.file_manager.lbry_files)
         }
 
     @defer.inlineCallbacks

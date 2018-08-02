@@ -90,7 +90,7 @@ class IterableContainer(object):
 
 class Checker(object):
     """The looping calls the daemon runs"""
-    INTERNET_CONNECTION = 'internet_connection_checker', 3600
+    INTERNET_CONNECTION = 'internet_connection_checker', 300
     # CONNECTION_STATUS = 'connection_status_checker'
 
 
@@ -659,15 +659,12 @@ class Daemon(AuthJSONRPCServer):
     ############################################################################
 
     @defer.inlineCallbacks
-    def jsonrpc_status(self, session_status=False):
+    def jsonrpc_status(self):
         """
         Get daemon status
 
         Usage:
-            status [--session_status]
-
-        Options:
-            --session_status  : (bool) include session status in results
+            status
 
         Returns:
             (dict) lbrynet-daemon status
@@ -684,6 +681,8 @@ class Daemon(AuthJSONRPCServer):
                     'hash_announcer': (bool),
                     'stream_identifier': (bool),
                     'file_manager': (bool),
+                    'blob_manager': (bool),
+                    'blockchain_headers': (bool),
                     'peer_protocol_server': (bool),
                     'reflector': (bool),
                     'upnp': (bool),
@@ -693,27 +692,33 @@ class Daemon(AuthJSONRPCServer):
                     'code': (str) connection status code,
                     'message': (str) connection status message
                 },
-                'blockchain_status': {
+                'blockchain_headers': {
+                    'downloading_headers': (bool),
+                    'download_progress': (float) 0-100.0
+                },
+                'wallet': {
                     'blocks': (int) local blockchain height,
                     'blocks_behind': (int) remote_height - local_height,
                     'best_blockhash': (str) block hash of most recent block,
+                    'is_encrypted': (bool)
                 },
                 'dht': {
                     'node_id': (str) lbry dht node id - hex encoded,
                     'peers_in_routing_table': (int) the number of peers in the routing table,
                 },
-                'wallet_is_encrypted': (bool),
-                If given the session status option:
-                    'session_status': {
-                        'managed_blobs': (int) count of blobs in the blob manager,
-                        'managed_streams': (int) count of streams in the file manager,
-                        'announce_queue_size': (int) number of blobs currently queued to be announced,
-                        'should_announce_blobs': (int) number of blobs that should be announced,
-                    }
+                'blob_manager': {
+                    'finished_blobs': (int) number of finished blobs in the blob manager,
+                },
+                'hash_announcer': {
+                    'announce_queue_size': (int) number of blobs currently queued to be announced
+                },
+                'file_manager': {
+                    'managed_files': (int) count of files in the file manager,
+                }
             }
         """
 
-        connection_code = CONNECTION_STATUS_CONNECTED if utils.check_connection() else CONNECTION_STATUS_NETWORK
+        connection_code = CONNECTION_STATUS_CONNECTED if self.connected_to_internet else CONNECTION_STATUS_NETWORK
         response = {
             'installation_id': conf.settings.installation_id,
             'is_running': all(self.component_manager.get_components_status().values()),
@@ -729,7 +734,6 @@ class Daemon(AuthJSONRPCServer):
             status = yield defer.maybeDeferred(component.get_status)
             if status:
                 response[component.component_name] = status
-
         defer.returnValue(response)
 
     def jsonrpc_version(self):
