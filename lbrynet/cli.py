@@ -1,7 +1,8 @@
 import sys
 import json
 import asyncio
-from aiohttp import client_exceptions
+from aiohttp.client_exceptions import ClientConnectorError
+from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
@@ -13,11 +14,11 @@ from lbrynet.daemon.DaemonConsole import main as daemon_console
 
 
 async def execute_command(method, params, conf_path=None):
-    api = LBRYAPIClient.get_client(conf_path)
     # this check if the daemon is running or not
     try:
+        api = LBRYAPIClient.get_client(conf_path)
         await api.status()
-    except client_exceptions.ClientConnectorError:
+    except (ClientConnectorError, ConnectionError):
         print("Could not connect to daemon. Are you sure it's running?")
         return 1
 
@@ -62,9 +63,9 @@ def guess_type(x, key=None):
         return x
     if key in ('uri', 'channel_name', 'name', 'file_name', 'download_directory'):
         return x
-    if x in ('true', 'True', 'TRUE'):
+    if x.lower() == 'true':
         return True
-    if x in ('false', 'False', 'FALSE'):
+    if x.lower() == 'false':
         return False
     if '.' in x:
         try:
@@ -121,9 +122,11 @@ def main(argv=None):
             print_help_for_command(args[0])
         else:
             print_help()
+        return 0
 
     elif method in ['version', '--version', '-v']:
         print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=2, separators=(',', ': ')))
+        return 0
 
     elif method == 'start':
         sys.exit(daemon_main(args))
@@ -133,7 +136,7 @@ def main(argv=None):
 
     elif method not in Daemon.callable_methods:
         if method not in Daemon.deprecated_methods:
-            print('"{}" is not a valid command.'.format(method))
+            print('{} is not a valid command.'.format(method))
             return 1
         new_method = Daemon.deprecated_methods[method].new_command
         print("{} is deprecated, using {}.".format(method, new_method))
