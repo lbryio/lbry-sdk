@@ -31,7 +31,6 @@ class EncryptedFileManager(object):
     def __init__(self, peer_finder, rate_limiter, blob_manager, wallet, payment_rate_manager, storage, sd_identifier):
         self.auto_re_reflect = conf.settings['reflect_uploads'] and conf.settings['auto_re_reflect_interval'] > 0
         self.auto_re_reflect_interval = conf.settings['auto_re_reflect_interval']
-        self.download_mirrors = conf.settings['download_mirrors']
         self.peer_finder = peer_finder
         self.rate_limiter = rate_limiter
         self.blob_manager = blob_manager
@@ -74,12 +73,12 @@ class EncryptedFileManager(object):
         return dl
 
     def _add_to_sd_identifier(self):
-        downloader_factory = ManagedEncryptedFileDownloaderFactory(self)
+        downloader_factory = ManagedEncryptedFileDownloaderFactory(self, self.blob_manager)
         self.sd_identifier.add_stream_downloader_factory(
             EncryptedFileStreamType, downloader_factory)
 
     def _get_lbry_file(self, rowid, stream_hash, payment_rate_manager, sd_hash, key,
-                       stream_name, file_name, download_directory, suggested_file_name):
+                       stream_name, file_name, download_directory, suggested_file_name, download_mirrors=None):
         return ManagedEncryptedFileDownloader(
             rowid,
             stream_hash,
@@ -96,14 +95,14 @@ class EncryptedFileManager(object):
             sd_hash=sd_hash,
             key=key,
             suggested_file_name=suggested_file_name,
-            download_mirrors=self.download_mirrors
+            download_mirrors=download_mirrors
         )
 
-    def _start_lbry_file(self, file_info, payment_rate_manager, claim_info):
+    def _start_lbry_file(self, file_info, payment_rate_manager, claim_info, download_mirrors=None):
         lbry_file = self._get_lbry_file(
             file_info['row_id'], file_info['stream_hash'], payment_rate_manager, file_info['sd_hash'],
             file_info['key'], file_info['stream_name'], file_info['file_name'], file_info['download_directory'],
-            file_info['suggested_file_name']
+            file_info['suggested_file_name'], download_mirrors
         )
         if claim_info:
             lbry_file.set_claim_info(claim_info)
@@ -166,7 +165,7 @@ class EncryptedFileManager(object):
         )
         lbry_file = self._get_lbry_file(
             rowid, stream_hash, payment_rate_manager, sd_hash, key, stream_name, file_name, download_directory,
-            stream_metadata['suggested_file_name']
+            stream_metadata['suggested_file_name'], download_mirrors=None
         )
         lbry_file.restore(status)
         yield lbry_file.get_claim_info()
@@ -176,7 +175,7 @@ class EncryptedFileManager(object):
 
     @defer.inlineCallbacks
     def add_downloaded_file(self, stream_hash, sd_hash, download_directory, payment_rate_manager=None,
-                            blob_data_rate=None, status=None, file_name=None):
+                            blob_data_rate=None, status=None, file_name=None, download_mirrors=None):
         status = status or ManagedEncryptedFileDownloader.STATUS_STOPPED
         payment_rate_manager = payment_rate_manager or self.payment_rate_manager
         blob_data_rate = blob_data_rate or payment_rate_manager.min_blob_data_payment_rate
@@ -193,7 +192,7 @@ class EncryptedFileManager(object):
         file_name = yield self.storage.get_filename_for_rowid(rowid)
         lbry_file = self._get_lbry_file(
             rowid, stream_hash, payment_rate_manager, sd_hash, key, stream_name, file_name, download_directory,
-            stream_metadata['suggested_file_name']
+            stream_metadata['suggested_file_name'], download_mirrors
         )
         lbry_file.restore(status)
         yield lbry_file.get_claim_info(include_supports=False)
