@@ -5,6 +5,7 @@ from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, STREAM_IDENTIFIER_COMPONENT
 from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
 from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbrynet.daemon.Components import BLOB_COMPONENT, RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
 from lbrynet.daemon import Components
 from lbrynet.tests import mocks
 
@@ -13,17 +14,32 @@ class TestComponentManager(unittest.TestCase):
     def setUp(self):
         mocks.mock_conf_settings(self)
         self.default_components_sort = [
-            [Components.DatabaseComponent,
-             Components.ExchangeRateManagerComponent,
-             Components.UPnPComponent],
-            [Components.DHTComponent,
-             Components.WalletComponent],
-            [Components.HashAnnouncerComponent],
-            [Components.SessionComponent],
-            [Components.PeerProtocolServerComponent,
-             Components.StreamIdentifierComponent],
-            [Components.FileManagerComponent],
-            [Components.ReflectorComponent]
+            [
+                Components.HeadersComponent,
+                Components.DatabaseComponent,
+                Components.ExchangeRateManagerComponent,
+                Components.PaymentRateComponent,
+                Components.RateLimiterComponent,
+                Components.UPnPComponent
+            ],
+            [
+                Components.DHTComponent,
+                Components.WalletComponent
+            ],
+            [
+                Components.BlobComponent,
+                Components.HashAnnouncerComponent
+            ],
+            [
+                Components.PeerProtocolServerComponent,
+                Components.StreamIdentifierComponent
+            ],
+            [
+                Components.FileManagerComponent
+            ],
+            [
+                Components.ReflectorComponent
+            ]
         ]
         self.component_manager = ComponentManager()
 
@@ -87,11 +103,12 @@ class TestComponentManagerProperStart(unittest.TestCase):
         self.component_manager = ComponentManager(
             skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, STREAM_IDENTIFIER_COMPONENT,
                              PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT,
+                             HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT, RATE_LIMITER_COMPONENT,
                              EXCHANGE_RATE_MANAGER_COMPONENT],
             reactor=self.reactor,
             wallet=mocks.FakeDelayedWallet,
-            session=mocks.FakeDelayedSession,
-            file_manager=mocks.FakeDelayedFileManager
+            file_manager=mocks.FakeDelayedFileManager,
+            blob_manager=mocks.FakeDelayedBlobManager
         )
 
     def tearDown(self):
@@ -100,17 +117,17 @@ class TestComponentManagerProperStart(unittest.TestCase):
     def test_proper_starting_of_components(self):
         self.component_manager.setup()
         self.assertTrue(self.component_manager.get_component('wallet').running)
-        self.assertFalse(self.component_manager.get_component('session').running)
+        self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
 
         self.reactor.advance(1)
         self.assertTrue(self.component_manager.get_component('wallet').running)
-        self.assertTrue(self.component_manager.get_component('session').running)
+        self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
 
         self.reactor.advance(1)
         self.assertTrue(self.component_manager.get_component('wallet').running)
-        self.assertTrue(self.component_manager.get_component('session').running)
+        self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('file_manager').running)
 
     def test_proper_stopping_of_components(self):
@@ -119,15 +136,15 @@ class TestComponentManagerProperStart(unittest.TestCase):
         self.reactor.advance(1)
         self.component_manager.stop()
         self.assertFalse(self.component_manager.get_component('file_manager').running)
-        self.assertTrue(self.component_manager.get_component('session').running)
+        self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('wallet').running)
 
         self.reactor.advance(1)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
-        self.assertFalse(self.component_manager.get_component('session').running)
+        self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('wallet').running)
 
         self.reactor.advance(1)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
-        self.assertFalse(self.component_manager.get_component('session').running)
+        self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertFalse(self.component_manager.get_component('wallet').running)

@@ -414,8 +414,8 @@ class FakeDelayedWallet(FakeComponent):
         return d
 
 
-class FakeDelayedSession(FakeComponent):
-    component_name = "session"
+class FakeDelayedBlobManager(FakeComponent):
+    component_name = "blob_manager"
     depends_on = [FakeDelayedWallet.component_name]
 
     def start(self):
@@ -431,7 +431,7 @@ class FakeDelayedSession(FakeComponent):
 
 class FakeDelayedFileManager(FakeComponent):
     component_name = "file_manager"
-    depends_on = [FakeDelayedSession.component_name]
+    depends_on = [FakeDelayedBlobManager.component_name]
 
     def start(self):
         d = defer.Deferred()
@@ -440,6 +440,7 @@ class FakeDelayedFileManager(FakeComponent):
 
     def stop(self):
         return defer.succeed(True)
+
 
 class FakeFileManager(FakeComponent):
     component_name = "file_manager"
