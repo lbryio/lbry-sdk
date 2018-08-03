@@ -123,7 +123,7 @@ class _IterativeFind(object):
                 if (contactTriple[1], contactTriple[2]) in ((c.address, c.port) for c in self.already_contacted):
                     continue
                 elif self.node.contact_manager.is_ignored((contactTriple[1], contactTriple[2])):
-                    raise ValueError("contact is ignored")
+                    continue
                 else:
                     found_contact = self.node.contact_manager.make_contact(contactTriple[0], contactTriple[1],
                                                                            contactTriple[2], self.node._protocol)
@@ -173,6 +173,9 @@ class _IterativeFind(object):
         already_contacted_addresses = {(c.address, c.port) for c in self.already_contacted}
         to_remove = []
         for contact in self.shortlist:
+            if self.node.contact_manager.is_ignored((contact.address, contact.port)):
+                to_remove.append(contact)  # a contact became bad during iteration
+                continue
             if (contact.address, contact.port) not in already_contacted_addresses:
                 self.already_contacted.append(contact)
                 to_remove.append(contact)

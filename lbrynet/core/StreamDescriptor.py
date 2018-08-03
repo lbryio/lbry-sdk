@@ -7,7 +7,7 @@ from twisted.internet import threads, defer
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
-
+from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
 
 log = logging.getLogger(__name__)
 
@@ -425,7 +425,8 @@ class EncryptedFileStreamDescriptorValidator(object):
 
 
 @defer.inlineCallbacks
-def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
+def download_sd_blob(blob_hash, blob_manager, peer_finder, rate_limiter, payment_rate_manager, wallet, timeout=None,
+                     download_mirrors=None):
     """
     Downloads a single blob from the network
 
@@ -439,21 +440,24 @@ def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
     """
 
     downloader = StandaloneBlobDownloader(blob_hash,
-                                          session.blob_manager,
-                                          session.peer_finder,
-                                          session.rate_limiter,
+                                          blob_manager,
+                                          peer_finder,
+                                          rate_limiter,
                                           payment_rate_manager,
-                                          session.wallet,
+                                          wallet,
                                           timeout)
+    mirror = HTTPBlobDownloader(blob_manager, [blob_hash], download_mirrors or [])
+    mirror.start()
     sd_blob = yield downloader.download()
+    mirror.stop()
     sd_reader = BlobStreamDescriptorReader(sd_blob)
     sd_info = yield sd_reader.get_info()
     try:
         validate_descriptor(sd_info)
     except InvalidStreamDescriptorError as err:
-        yield session.blob_manager.delete_blobs([blob_hash])
+        yield blob_manager.delete_blobs([blob_hash])
         raise err
     raw_sd = yield sd_reader._get_raw_data()
-    yield session.blob_manager.storage.add_known_blob(blob_hash, len(raw_sd))
-    yield save_sd_info(session.blob_manager, sd_blob.blob_hash, sd_info)
+    yield blob_manager.storage.add_known_blob(blob_hash, len(raw_sd))
+    yield save_sd_info(blob_manager, sd_blob.blob_hash, sd_info)
     defer.returnValue(sd_blob)

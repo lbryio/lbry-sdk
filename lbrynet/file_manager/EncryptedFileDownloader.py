@@ -6,8 +6,9 @@ import binascii
 
 from zope.interface import implements
 from twisted.internet import defer
-
+from lbrynet import conf
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
+from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
 from lbrynet.core.utils import short_hash
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownloader
@@ -37,7 +38,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, storage, lbry_file_manager,
                  payment_rate_manager, wallet, download_directory, file_name, stream_name, sd_hash, key,
-                 suggested_file_name):
+                 suggested_file_name, download_mirrors=None):
         EncryptedFileSaver.__init__(
             self, stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
             download_directory, key, stream_name, file_name
@@ -55,6 +56,11 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.channel_claim_id = None
         self.channel_name = None
         self.metadata = None
+        self.mirror = None
+        if download_mirrors:
+            self.mirror = HTTPBlobDownloader(
+                self.blob_manager, servers=download_mirrors or conf.settings['download_mirrors']
+            )
 
     def set_claim_info(self, claim_info):
         self.claim_id = claim_info['claim_id']
@@ -94,11 +100,13 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     @defer.inlineCallbacks
     def stop(self, err=None, change_status=True):
         log.debug('Stopping download for stream %s', short_hash(self.stream_hash))
+        if self.mirror:
+            self.mirror.stop()
         # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
         yield EncryptedFileDownloader.stop(self, err=err)
         if change_status is True:
             status = yield self._save_status()
-        defer.returnValue(status)
+            defer.returnValue(status)
 
     @defer.inlineCallbacks
     def status(self):
@@ -123,6 +131,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield EncryptedFileSaver._start(self)
         status = yield self._save_status()
         log_status(self.sd_hash, status)
+        if self.mirror:
+            blobs = yield self.storage.get_blobs_for_stream(self.stream_hash)
+            self.mirror.blob_hashes = [b.blob_hash for b in blobs if b.blob_hash is not None]
+            self.mirror.start()
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):
@@ -155,23 +167,25 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 class ManagedEncryptedFileDownloaderFactory(object):
     implements(IStreamDownloaderFactory)
 
-    def __init__(self, lbry_file_manager):
+    def __init__(self, lbry_file_manager, blob_manager):
         self.lbry_file_manager = lbry_file_manager
+        self.blob_manager = blob_manager
 
     def can_download(self, sd_validator):
         # TODO: add a sd_validator for non live streams, use it
         return True
 
     @defer.inlineCallbacks
-    def make_downloader(self, metadata, data_rate, payment_rate_manager, download_directory, file_name=None):
-        stream_hash = yield save_sd_info(self.lbry_file_manager.session.blob_manager,
+    def make_downloader(self, metadata, data_rate, payment_rate_manager, download_directory, file_name=None,
+                        download_mirrors=None):
+        stream_hash = yield save_sd_info(self.blob_manager,
                                          metadata.source_blob_hash,
                                          metadata.validator.raw_info)
         if file_name:
             file_name = binascii.hexlify(file_name)
         lbry_file = yield self.lbry_file_manager.add_downloaded_file(
             stream_hash, metadata.source_blob_hash, binascii.hexlify(download_directory), payment_rate_manager,
-            data_rate, file_name=file_name
+            data_rate, file_name=file_name, download_mirrors=download_mirrors
         )
         defer.returnValue(lbry_file)
 

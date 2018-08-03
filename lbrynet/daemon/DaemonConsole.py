@@ -10,7 +10,6 @@ from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.core import log_support
-from lbrynet.daemon.DaemonServer import DaemonServer
 from lbrynet.daemon.auth.client import LBRYAPIClient
 from lbrynet.daemon.Daemon import Daemon
 
@@ -175,18 +174,7 @@ def start_server_and_listen(use_auth, analytics_manager, quiet):
     logging.getLogger("requests").setLevel(logging.CRITICAL)
 
     analytics_manager.send_server_startup()
-    daemon_server = DaemonServer(analytics_manager)
-    try:
-        yield daemon_server.start(use_auth)
-        analytics_manager.send_server_startup_success()
-        if not quiet:
-            print "Started lbrynet-daemon!"
-        defer.returnValue(True)
-    except Exception as e:
-        log.exception('Failed to start lbrynet-daemon')
-        analytics_manager.send_server_startup_error(str(e))
-        daemon_server.stop()
-        raise
+    yield Daemon().start_listening()
 
 
 def threaded_terminal(started_daemon, quiet):

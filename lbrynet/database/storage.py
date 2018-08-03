@@ -181,10 +181,17 @@ class SQLiteStorage(object):
         # when it loads each file
         self.content_claim_callbacks = {}  # {<stream_hash>: <callable returning a deferred>}
 
+        if 'reflector' not in conf.settings['components_to_skip']:
+            self.check_should_announce_lc = task.LoopingCall(self.verify_will_announce_all_head_and_sd_blobs)
+
+    @defer.inlineCallbacks
     def setup(self):
         def _create_tables(transaction):
             transaction.executescript(self.CREATE_TABLES_QUERY)
-        return self.db.runInteraction(_create_tables)
+        yield self.db.runInteraction(_create_tables)
+        if self.check_should_announce_lc and not self.check_should_announce_lc.running:
+            self.check_should_announce_lc.start(600)
+        defer.returnValue(None)
 
     @defer.inlineCallbacks
     def run_and_return_one_or_none(self, query, *args):
@@ -203,6 +210,8 @@ class SQLiteStorage(object):
             defer.returnValue([])
 
     def stop(self):
+        if self.check_should_announce_lc and self.check_should_announce_lc.running:
+            self.check_should_announce_lc.stop()
         self.db.close()
         return defer.succeed(True)
 
@@ -251,6 +260,11 @@ class SQLiteStorage(object):
             "select blob_hash from blob where status='finished'"
         )
         defer.returnValue([blob_hash.decode('hex') for blob_hash in blob_hashes])
+
+    def count_finished_blobs(self):
+        return self.run_and_return_one_or_none(
+            "select count(*) from blob where status='finished'"
+        )
 
     def update_last_announced_blob(self, blob_hash, last_announced):
         return self.db.runOperation(

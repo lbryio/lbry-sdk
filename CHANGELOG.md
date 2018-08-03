@@ -13,24 +13,54 @@ at anytime.
   *
 
 ### Fixed
-  * daemon cli spelling fixes
-  *
+  * loggly error reporting not following `share_usage_data`
+  * improper error handling when data is not valid JSON
+  * edge cases of http mirrored download of blobs
 
 ### Deprecated
-  *
+  * automatic claim renew, this is no longer needed
   *
 
 ### Changed
-  *
-  *
+  * api server class to use components, and for all JSONRPC API commands to be callable so long as the required components are available.
+  * return error messages when required conditions on components are not met for API calls
+  * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht` field.
+  * `startup_status` field in the response to `status` to be a dict of component names to status booleans
+  * renamed the `blockchain_status` field in the response to `status` to `wallet`
+  * moved and renamed `wallet_is_encrypted` to `is_encrypted` in the `wallet` field in the response to `status`
+  * moved wallet, upnp and dht startup code from `Session` to `Components`
+  * attempt blob downloads from http mirror sources (by default) concurrently to p2p sources
+  * replace miniupnpc with [txupnp](https://github.com/lbryio/txupnp). Since txupnp is still under development, it will internally fall back to miniupnpc.
+  * simplified test_misc.py in the functional tests
+  * update `cryptography` requirement to 2.3
 
 ### Added
-  * greedy search with exclude filtering on peer finder calls to iterative find value
-  *
+  * `skipped_components` list to the response from `status`
+  * component statuses (`blockchain_headers`, `dht`, `wallet`, `blob_manager` `hash_announcer`, and `file_manager`) to the response to `status`
+  * `skipped_components` config setting, accepts a list of names of components to not run
+  * `ComponentManager` for managing the life-cycles of dependencies
+  * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously
+  * unittests for `ComponentManager`
+  * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
+  * additional information to the balance error message when editing a claim (https://github.com/lbryio/lbry/pull/1309)
+  * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313)
+  * ability to download from HTTP mirrors by setting `download_mirrors`
+  * ability to filter peers from an iterative find value operation (finding peers for a blob). This is used to filter peers we've already found for a blob when accumulating the list of peers.
 
 ### Removed
-  *
-  *
+  * `session_status` argument and response field from `status`
+  * most of the internal attributes from `Daemon`
+
+
+## [0.20.4] - 2018-07-18
+### Fixed
+ * spelling errors in messages printed by `lbrynet-cli`
+ * high CPU usage when a stream is incomplete and the peers we're requesting from have no more blobs to send us (https://github.com/lbryio/lbry/pull/1301)
+
+### Changed
+ * keep track of failures for DHT peers for up to ten minutes instead of indefinitely (https://github.com/lbryio/lbry/pull/1300)
+ * skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too (https://github.com/lbryio/lbry/pull/1300)
+ * if a node becomes ignored during an iterative find cycle remove it from the shortlist so that we can't return it as a result nor try to probe it anyway (https://github.com/lbryio/lbry/pull/1303)
 
 
 ## [0.20.3] - 2018-07-03

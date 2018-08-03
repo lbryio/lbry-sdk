@@ -185,5 +185,12 @@ class ContactManager(object):
         return contact
 
     def is_ignored(self, origin_tuple):
-        failed_rpc_count = len(self._rpc_failures.get(origin_tuple, []))
+        failed_rpc_count = len(self._prune_failures(origin_tuple))
         return failed_rpc_count > constants.rpcAttempts
+
+    def _prune_failures(self, origin_tuple):
+        # Prunes recorded failures to the last time window of attempts
+        pruning_limit = self._get_time() - constants.rpcAttemptsPruningTimeWindow
+        pruned = list(filter(lambda t: t >= pruning_limit, self._rpc_failures.get(origin_tuple, [])))
+        self._rpc_failures[origin_tuple] = pruned
+        return pruned

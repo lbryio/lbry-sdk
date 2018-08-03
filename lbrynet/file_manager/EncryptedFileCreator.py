@@ -59,7 +59,8 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 #       we can simply read the file from the disk without needing to
 #       involve reactor.
 @defer.inlineCallbacks
-def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=None, iv_generator=None):
+def create_lbry_file(blob_manager, storage, payment_rate_manager, lbry_file_manager, file_name, file_handle,
+                     key=None, iv_generator=None):
     """Turn a plain file into an LBRY File.
 
     An LBRY File is a collection of encrypted blobs of data and the metadata that binds them
@@ -98,7 +99,7 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     file_directory = os.path.dirname(file_handle.name)
 
     lbry_file_creator = EncryptedFileStreamCreator(
-        session.blob_manager, lbry_file_manager, base_file_name, key, iv_generator
+        blob_manager, lbry_file_manager, base_file_name, key, iv_generator
     )
 
     yield lbry_file_creator.setup()
@@ -114,18 +115,18 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
 
     log.debug("making the sd blob")
     sd_info = lbry_file_creator.sd_info
-    descriptor_writer = BlobStreamDescriptorWriter(session.blob_manager)
+    descriptor_writer = BlobStreamDescriptorWriter(blob_manager)
     sd_hash = yield descriptor_writer.create_descriptor(sd_info)
 
     log.debug("saving the stream")
-    yield session.storage.store_stream(
+    yield storage.store_stream(
         sd_info['stream_hash'], sd_hash, sd_info['stream_name'], sd_info['key'],
         sd_info['suggested_file_name'], sd_info['blobs']
     )
     log.debug("adding to the file manager")
     lbry_file = yield lbry_file_manager.add_published_file(
-        sd_info['stream_hash'], sd_hash, binascii.hexlify(file_directory), session.payment_rate_manager,
-        session.payment_rate_manager.min_blob_data_payment_rate
+        sd_info['stream_hash'], sd_hash, binascii.hexlify(file_directory), payment_rate_manager,
+        payment_rate_manager.min_blob_data_payment_rate
     )
     defer.returnValue(lbry_file)
 
