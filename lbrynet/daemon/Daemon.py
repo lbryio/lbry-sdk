@@ -668,6 +668,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             status
 
+        Options:
+            None
+
         Returns:
             (dict) lbrynet-daemon status
             {
