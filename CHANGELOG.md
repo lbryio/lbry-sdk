@@ -28,6 +28,7 @@ at anytime.
   * `startup_status` field in the response to `status` to be a dict of component names to status booleans
   * moved wallet, upnp and dht startup code from `Session` to `Components`
   * attempt blob downloads from http mirror sources (by default) concurrently to p2p sources
+  * update `cryptography` requirement to 2.3
 
 ### Added
   * `skipped_components` list to the response from `status`
