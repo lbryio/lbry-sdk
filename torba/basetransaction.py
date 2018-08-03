@@ -293,6 +293,10 @@ class BaseTransaction:
     def output_sum(self):
         return sum(o.amount for o in self.outputs)
 
+    @property
+    def fee(self):
+        return self.input_sum - self.output_sum
+
     def get_base_fee(self, ledger):
         """ Fee for base tx excluding inputs and outputs. """
         return self.base_size * ledger.fee_per_byte
