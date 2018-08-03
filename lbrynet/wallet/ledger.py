@@ -128,20 +128,6 @@ class MainNetLedger(BaseLedger):
         super().__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
 
-    def get_transaction_base_fee(self, tx):
-        """ Fee for the transaction header and all outputs; without inputs. """
-        return max(
-            super().get_transaction_base_fee(tx),
-            self.get_transaction_claim_name_fee(tx)
-        )
-
-    def get_transaction_claim_name_fee(self, tx):
-        fee = 0
-        for output in tx.outputs:
-            if output.script.is_claim_name:
-                fee += len(output.script.values['claim_name']) * self.fee_per_name_char
-        return fee
-
     @defer.inlineCallbacks
     def resolve(self, page, page_size, *uris):
         for uri in uris:

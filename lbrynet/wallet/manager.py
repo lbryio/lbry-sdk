@@ -122,6 +122,9 @@ class LbryWalletManager(BaseWalletManager):
     def get_new_address(self):
         return self.get_unused_address()
 
+    def list_addresses(self):
+        return self.default_account.get_addresses()
+
     def reserve_points(self, address, amount):
         # TODO: check if we have enough to cover amount
         return ReservedPoints(address, amount)
@@ -210,7 +213,7 @@ class LbryWalletManager(BaseWalletManager):
         cert, key = generate_certificate()
         tx = yield Transaction.claim(channel_name.encode(), cert, amount, address, [account], account)
         yield account.ledger.broadcast(tx)
-        account.add_certificate_private_key(tx, 0, key.decode())
+        account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
 

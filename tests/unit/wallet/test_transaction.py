@@ -42,43 +42,39 @@ class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
         self.ledger = MainNetLedger({'db': WalletDatabase(':memory:')})
-        return self.ledger.db.start()
-
-    def io_fee(self, io):
-        return self.ledger.get_input_output_fee(io)
 
     def test_output_size_and_fee(self):
         txo = get_output()
         self.assertEqual(txo.size, 46)
-        self.assertEqual(self.io_fee(txo), 46 * FEE_PER_BYTE)
+        self.assertEqual(txo.get_fee(self.ledger), 46 * FEE_PER_BYTE)
+        claim_name = b'verylongname'
+        tx = get_claim_transaction(claim_name, b'0'*4000)
+        base_size = tx.size - tx.inputs[0].size - tx.outputs[0].size
+        txo = tx.outputs[0]
+        self.assertEqual(tx.size, 4225)
+        self.assertEqual(tx.base_size, base_size)
+        self.assertEqual(txo.size, 4067)
+        self.assertEqual(txo.get_fee(self.ledger), len(claim_name) * FEE_PER_CHAR)
+        # fee based on total bytes is the larger fee
+        claim_name = b'a'
+        tx = get_claim_transaction(claim_name, b'0'*4000)
+        base_size = tx.size - tx.inputs[0].size - tx.outputs[0].size
+        txo = tx.outputs[0]
+        self.assertEqual(tx.size, 4214)
+        self.assertEqual(tx.base_size, base_size)
+        self.assertEqual(txo.size, 4056)
+        self.assertEqual(txo.get_fee(self.ledger), txo.size * FEE_PER_BYTE)
 
     def test_input_size_and_fee(self):
         txi = get_input()
         self.assertEqual(txi.size, 148)
-        self.assertEqual(self.io_fee(txi), 148 * FEE_PER_BYTE)
+        self.assertEqual(txi.get_fee(self.ledger), 148 * FEE_PER_BYTE)
 
     def test_transaction_size_and_fee(self):
         tx = get_transaction()
-        base_size = tx.size - 1 - tx.inputs[0].size
         self.assertEqual(tx.size, 204)
-        self.assertEqual(tx.base_size, base_size)
-        self.assertEqual(self.ledger.get_transaction_base_fee(tx), FEE_PER_BYTE * base_size)
-
-    def test_claim_name_transaction_size_and_fee(self):
-        # fee based on claim name is the larger fee
-        claim_name = b'verylongname'
-        tx = get_claim_transaction(claim_name, b'0'*4000)
-        base_size = tx.size - 1 - tx.inputs[0].size
-        self.assertEqual(tx.size, 4225)
-        self.assertEqual(tx.base_size, base_size)
-        self.assertEqual(self.ledger.get_transaction_base_fee(tx), len(claim_name) * FEE_PER_CHAR)
-        # fee based on total bytes is the larger fee
-        claim_name = b'a'
-        tx = get_claim_transaction(claim_name, b'0'*4000)
-        base_size = tx.size - 1 - tx.inputs[0].size
-        self.assertEqual(tx.size, 4214)
-        self.assertEqual(tx.base_size, base_size)
-        self.assertEqual(self.ledger.get_transaction_base_fee(tx), FEE_PER_BYTE * base_size)
+        self.assertEqual(tx.base_size, tx.size - tx.inputs[0].size - tx.outputs[0].size)
+        self.assertEqual(tx.get_base_fee(self.ledger), FEE_PER_BYTE * tx.base_size)
 
 
 class TestTransactionSerialization(unittest.TestCase):
