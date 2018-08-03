@@ -37,6 +37,9 @@ class Component(object):
     def running(self):
         return self._running
 
+    def get_status(self):
+        return
+
     def start(self):
         raise NotImplementedError()
 

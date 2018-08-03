@@ -24,13 +24,14 @@ requires = [
     'lbryschema==0.0.16',
     'lbryum==3.2.3',
     'miniupnpc',
+    'txupnp==0.0.1a6',
     'pyyaml',
     'requests',
     'txJSON-RPC',
     'zope.interface',
     'treq',
     'docopt',
-    'six'
+    'six',
 ]
 
 console_scripts = [

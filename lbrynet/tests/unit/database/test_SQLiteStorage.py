@@ -7,9 +7,7 @@ from twisted.internet import defer
 from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.database.storage import SQLiteStorage, open_file_for_writing
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.tests.util import random_lbry_hash
 
 log = logging.getLogger()
@@ -65,7 +63,6 @@ fake_claim_info = {
     'channel_claim_id': None,
     'channel_name': None
 }
-
 
 
 class FakeAnnouncer(object):
@@ -245,12 +242,8 @@ class FileStorageTests(StorageTest):
 
     @defer.inlineCallbacks
     def test_store_file(self):
-        session = MocSession(self.storage)
-        session.db_dir = self.db_dir
-        sd_identifier = StreamDescriptorIdentifier()
         download_directory = self.db_dir
-        manager = EncryptedFileManager(session, sd_identifier)
-        out = yield manager.session.storage.get_all_lbry_files()
+        out = yield self.storage.get_all_lbry_files()
         self.assertEqual(len(out), 0)
 
         stream_hash = random_lbry_hash()
@@ -268,33 +261,29 @@ class FileStorageTests(StorageTest):
 
         blob_data_rate = 0
         file_name = "test file"
-        out = yield manager.session.storage.save_published_file(
+        out = yield self.storage.save_published_file(
             stream_hash, file_name, download_directory, blob_data_rate
         )
-        rowid = yield manager.session.storage.get_rowid_for_stream_hash(stream_hash)
+        rowid = yield self.storage.get_rowid_for_stream_hash(stream_hash)
         self.assertEqual(out, rowid)
 
-        files = yield manager.session.storage.get_all_lbry_files()
+        files = yield self.storage.get_all_lbry_files()
         self.assertEqual(1, len(files))
 
-        status = yield manager.session.storage.get_lbry_file_status(rowid)
+        status = yield self.storage.get_lbry_file_status(rowid)
         self.assertEqual(status, ManagedEncryptedFileDownloader.STATUS_STOPPED)
 
         running = ManagedEncryptedFileDownloader.STATUS_RUNNING
-        yield manager.session.storage.change_file_status(rowid, running)
-        status = yield manager.session.storage.get_lbry_file_status(rowid)
+        yield self.storage.change_file_status(rowid, running)
+        status = yield self.storage.get_lbry_file_status(rowid)
         self.assertEqual(status, ManagedEncryptedFileDownloader.STATUS_RUNNING)
 
 
 class ContentClaimStorageTests(StorageTest):
     @defer.inlineCallbacks
     def test_store_content_claim(self):
-        session = MocSession(self.storage)
-        session.db_dir = self.db_dir
-        sd_identifier = StreamDescriptorIdentifier()
         download_directory = self.db_dir
-        manager = EncryptedFileManager(session, sd_identifier)
-        out = yield manager.session.storage.get_all_lbry_files()
+        out = yield self.storage.get_all_lbry_files()
         self.assertEqual(len(out), 0)
 
         stream_hash = random_lbry_hash()
@@ -307,7 +296,7 @@ class ContentClaimStorageTests(StorageTest):
         yield self.make_and_store_fake_stream(blob_count=2, stream_hash=stream_hash, sd_hash=sd_hash)
         blob_data_rate = 0
         file_name = "test file"
-        yield manager.session.storage.save_published_file(
+        yield self.storage.save_published_file(
             stream_hash, file_name, download_directory, blob_data_rate
         )
         yield self.storage.save_claims([fake_claim_info])

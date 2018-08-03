@@ -196,11 +196,14 @@ class AuthJSONRPCServer(AuthorizedBase):
     component_attributes = {}
 
     def __init__(self, analytics_manager=None, component_manager=None, use_authentication=None, to_skip=None,
-                 looping_calls=None):
+                 looping_calls=None, reactor=None):
+        if not reactor:
+            from twisted.internet import reactor
         self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
         self.component_manager = component_manager or ComponentManager(
             analytics_manager=self.analytics_manager,
-            skip_components=to_skip or []
+            skip_components=to_skip or [],
+            reactor=reactor
         )
         self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).iteritems()})
         self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).iteritems()}

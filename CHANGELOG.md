@@ -24,15 +24,20 @@ at anytime.
 ### Changed
   * api server class to use components, and for all JSONRPC API commands to be callable so long as the required components are available.
   * return error messages when required conditions on components are not met for API calls
-  * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht_node_status` field. 
+  * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht` field.
   * `startup_status` field in the response to `status` to be a dict of component names to status booleans
+  * renamed the `blockchain_status` field in the response to `status` to `wallet`
+  * moved and renamed `wallet_is_encrypted` to `is_encrypted` in the `wallet` field in the response to `status`
   * moved wallet, upnp and dht startup code from `Session` to `Components`
   * attempt blob downloads from http mirror sources (by default) concurrently to p2p sources
+  * replace miniupnpc with [txupnp](https://github.com/lbryio/txupnp). Since txupnp is still under development, it will internally fall back to miniupnpc.
+  * simplified test_misc.py in the functional tests
 
 ### Added
   * `skipped_components` list to the response from `status`
-  * `skipped_components` config setting, accemapts a list of names of components to not run
-  * `ComponentManager` for managing the lifecycles of dependencies
+  * component statuses (`blockchain_headers`, `dht`, `wallet`, `blob_manager` `hash_announcer`, and `file_manager`) to the response to `status`
+  * `skipped_components` config setting, accepts a list of names of components to not run
+  * `ComponentManager` for managing the life-cycles of dependencies
   * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously
   * unittests for `ComponentManager`
   * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
@@ -42,6 +47,7 @@ at anytime.
   *
 
 ### Removed
+  * `session_status` argument and response field from `status`
   * most of the internal attributes from `Daemon`
 
 

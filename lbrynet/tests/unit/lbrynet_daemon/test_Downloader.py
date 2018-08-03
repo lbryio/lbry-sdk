@@ -3,16 +3,18 @@ import mock
 from twisted.trial import unittest
 from twisted.internet import defer, task
 
-from lbrynet.core import Session, PaymentRateManager, Wallet
+from lbrynet.core import PaymentRateManager, Wallet
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.daemon import Downloader
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
-
+from lbrynet.database.storage import SQLiteStorage
+from lbrynet.core.BlobManager import DiskBlobManager
+from lbrynet.dht.peerfinder import DummyPeerFinder
+from lbrynet.core.RateLimiter import DummyRateLimiter
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 
-from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from lbrynet.tests.mocks import mock_conf_settings
 
 
@@ -61,25 +63,22 @@ def moc_pay_key_fee(self, key_fee, name):
 
 
 class GetStreamTests(unittest.TestCase):
-
     def init_getstream_with_mocs(self):
         mock_conf_settings(self)
-
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
-        session = mock.Mock(spec=Session.Session)
-        session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
+        wallet = mock.Mock(spec=Wallet.LBRYumWallet)
         prm = mock.Mock(spec=PaymentRateManager.NegotiatedPaymentRateManager)
-        session.payment_rate_manager = prm
-        market_feeds = []
-        rates = {}
-        exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
-        max_key_fee = {'currency':"LBC", 'amount':10, 'address':''}
+        storage = mock.Mock(spec=SQLiteStorage)
+        peer_finder = DummyPeerFinder()
+        blob_manager = mock.Mock(spec=DiskBlobManager)
+        max_key_fee = {'currency': "LBC", 'amount': 10, 'address': ''}
         disable_max_key_fee = False
-        data_rate = {'currency':"LBC", 'amount':0, 'address':''}
-
-        getstream = Downloader.GetStream(sd_identifier, session,
-            exchange_rate_manager, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate)
+        data_rate = {'currency': "LBC", 'amount': 0, 'address': ''}
+        getstream = Downloader.GetStream(
+            sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, DummyRateLimiter(), prm,
+            storage, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate
+        )
         getstream.pay_key_fee_called = False
 
         self.clock = task.Clock()
@@ -99,7 +98,6 @@ class GetStreamTests(unittest.TestCase):
 
         with self.assertRaises(AttributeError):
             yield getstream.start(stream_info, name, "deadbeef" * 12, 0)
-
 
     @defer.inlineCallbacks
     def test_sd_blob_download_timeout(self):

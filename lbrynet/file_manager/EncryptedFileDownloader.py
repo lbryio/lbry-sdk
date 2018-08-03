@@ -6,7 +6,7 @@ import binascii
 
 from zope.interface import implements
 from twisted.internet import defer
-
+from lbrynet import conf
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
 from lbrynet.core.utils import short_hash
@@ -56,7 +56,11 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.channel_claim_id = None
         self.channel_name = None
         self.metadata = None
-        self.mirror = HTTPBlobDownloader(self.blob_manager, servers=download_mirrors) if download_mirrors else None
+        self.mirror = None
+        if download_mirrors:
+            self.mirror = HTTPBlobDownloader(
+                self.blob_manager, servers=download_mirrors or conf.settings['download_mirrors']
+            )
 
     def set_claim_info(self, claim_info):
         self.claim_id = claim_info['claim_id']
@@ -102,7 +106,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield EncryptedFileDownloader.stop(self, err=err)
         if change_status is True:
             status = yield self._save_status()
-        defer.returnValue(status)
+            defer.returnValue(status)
 
     @defer.inlineCallbacks
     def status(self):
@@ -163,23 +167,25 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 class ManagedEncryptedFileDownloaderFactory(object):
     implements(IStreamDownloaderFactory)
 
-    def __init__(self, lbry_file_manager):
+    def __init__(self, lbry_file_manager, blob_manager):
         self.lbry_file_manager = lbry_file_manager
+        self.blob_manager = blob_manager
 
     def can_download(self, sd_validator):
         # TODO: add a sd_validator for non live streams, use it
         return True
 
     @defer.inlineCallbacks
-    def make_downloader(self, metadata, data_rate, payment_rate_manager, download_directory, file_name=None):
-        stream_hash = yield save_sd_info(self.lbry_file_manager.session.blob_manager,
+    def make_downloader(self, metadata, data_rate, payment_rate_manager, download_directory, file_name=None,
+                        download_mirrors=None):
+        stream_hash = yield save_sd_info(self.blob_manager,
                                          metadata.source_blob_hash,
                                          metadata.validator.raw_info)
         if file_name:
             file_name = binascii.hexlify(file_name)
         lbry_file = yield self.lbry_file_manager.add_downloaded_file(
             stream_hash, metadata.source_blob_hash, binascii.hexlify(download_directory), payment_rate_manager,
-            data_rate, file_name=file_name
+            data_rate, file_name=file_name, download_mirrors=download_mirrors
         )
         defer.returnValue(lbry_file)
 
