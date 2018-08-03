@@ -456,6 +456,10 @@ class FakeFileManager(FakeComponent):
     def stop(self):
         pass
 
+    def get_status(self):
+        return {}
+
+
 create_stream_sd_file = {
     'stream_name': '746573745f66696c65',
     'blobs': [

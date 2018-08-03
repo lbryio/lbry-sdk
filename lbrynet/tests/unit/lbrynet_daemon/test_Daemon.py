@@ -15,8 +15,9 @@ from lbrynet.core import Wallet
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
-from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
+from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, BLOB_COMPONENT
 from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
@@ -39,7 +40,14 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
         'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
         'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
     }
-    daemon = LBRYDaemon()
+    component_manager = ComponentManager(
+        skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, UPNP_COMPONENT,
+                         PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, HASH_ANNOUNCER_COMPONENT,
+                         STREAM_IDENTIFIER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+                         HEADERS_COMPONENT, RATE_LIMITER_COMPONENT],
+        file_manager=FakeFileManager
+    )
+    daemon = LBRYDaemon(component_manager=component_manager)
     daemon.payment_rate_manager = OnlyFreePaymentsManager()
     daemon.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
     daemon.wallet.wallet = mock.Mock(spec=NewWallet)
@@ -48,6 +56,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     daemon.storage = mock.Mock(spec=SQLiteStorage)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
     daemon.exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
+    daemon.file_manager = component_manager.get_component(FILE_MANAGER_COMPONENT)
 
     metadata = {
         "author": "fake author",
@@ -117,10 +126,6 @@ class TestJsonRpc(unittest.TestCase):
         mock_conf_settings(self)
         util.resetTime(self)
         self.test_daemon = get_test_daemon()
-        for component in self.test_daemon.component_manager.components:
-            if component.component_name == "file_manager":
-                component._running = True
-
         self.test_daemon.wallet.is_first_run = False
         self.test_daemon.wallet.get_best_blockhash = noop
 
@@ -144,17 +149,7 @@ class TestFileListSorting(unittest.TestCase):
         self.faker = Faker('en_US')
         self.faker.seed(66410)
         self.test_daemon = get_test_daemon()
-        component_manager = ComponentManager(
-            skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, UPNP_COMPONENT,
-                             PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-                             STREAM_IDENTIFIER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT],
-            file_manager=FakeFileManager
-        )
-        component_manager.setup()
-        self.test_daemon.component_manager = component_manager
-        self.test_daemon.file_manager = component_manager.get_component("file_manager")
         self.test_daemon.file_manager.lbry_files = self._get_fake_lbry_files()
-
         # Pre-sorted lists of prices and file names in ascending order produced by
         # faker with seed 66410. This seed was chosen becacuse it produces 3 results
         # 'points_paid' at 6.0 and 2 results at 4.5 to test multiple sort criteria.
@@ -165,6 +160,7 @@ class TestFileListSorting(unittest.TestCase):
         self.test_authors = ['angela41', 'edward70', 'fhart', 'johnrosales',
                              'lucasfowler', 'peggytorres', 'qmitchell',
                              'trevoranderson', 'xmitchell', 'zhangsusan']
+        return self.test_daemon.component_manager.setup()
 
     def test_sort_by_points_paid_no_direction_specified(self):
         sort_options = ['points_paid']

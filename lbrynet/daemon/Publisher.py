@@ -32,8 +32,10 @@ class Publisher(object):
 
         file_name = os.path.basename(file_path)
         with file_utils.get_read_handle(file_path) as read_handle:
-            self.lbry_file = yield create_lbry_file(self.blob_manager, self.storage, self.payment_rate_manager,
-                                                    self.lbry_file_manager, file_name, read_handle)
+            self.lbry_file = yield create_lbry_file(
+                self.blob_manager, self.storage, self.payment_rate_manager, self.lbry_file_manager, file_name,
+                read_handle
+            )
 
         if 'source' not in claim_dict['stream']:
             claim_dict['stream']['source'] = {}
@@ -44,8 +46,9 @@ class Publisher(object):
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
-        old_stream_hashes = yield self.storage.get_old_stream_hashes_for_claim_id(claim_out['claim_id'],
-                                                                                          self.lbry_file.stream_hash)
+        old_stream_hashes = yield self.storage.get_old_stream_hashes_for_claim_id(
+            claim_out['claim_id'], self.lbry_file.stream_hash
+        )
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
                                     list(self.lbry_file_manager.lbry_files)):
@@ -62,8 +65,9 @@ class Publisher(object):
         """Make a claim without creating a lbry file"""
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
-            yield self.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'],
-                                                                                  claim_out['nout']))
+            yield self.storage.save_content_claim(
+                stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout'])
+            )
             self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         defer.returnValue(claim_out)
 

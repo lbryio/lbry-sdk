@@ -45,8 +45,10 @@ class TestStreamify(TestCase):
         self.storage = SQLiteStorage(self.db_dir)
         self.blob_manager = DiskBlobManager(self.blob_dir, self.storage, self.dht_node._dataStore)
         self.prm = OnlyFreePaymentsManager()
-        self.lbry_file_manager = EncryptedFileManager(self.peer_finder, self.rate_limiter, self.blob_manager,
-                                                      self.wallet, self.prm, self.storage, self.sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(
+            self.peer_finder, self.rate_limiter, self.blob_manager, self.wallet, self.prm, self.storage,
+            self.sd_identifier
+        )
         d = self.storage.setup()
         d.addCallback(lambda _: self.lbry_file_manager.setup())
         return d
@@ -80,8 +82,10 @@ class TestStreamify(TestCase):
 
         def create_stream():
             test_file = GenFile(5209343, b''.join([chr(i + 3) for i in xrange(0, 64, 6)]))
-            d = create_lbry_file(self.blob_manager, self.storage, self.prm, self.lbry_file_manager, "test_file",
-                                 test_file, key="0123456701234567", iv_generator=iv_generator())
+            d = create_lbry_file(
+                self.blob_manager, self.storage, self.prm, self.lbry_file_manager, "test_file", test_file,
+                key="0123456701234567", iv_generator=iv_generator()
+            )
             d.addCallback(lambda lbry_file: lbry_file.stream_hash)
             return d
 

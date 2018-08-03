@@ -3,8 +3,8 @@ import logging
 from hashlib import sha256
 import treq
 import math
+import binascii
 from twisted.internet import defer, threads, reactor, error
-from txupnp.fault import UPnPError
 from txupnp.upnp import UPnP
 from lbryum.simple_config import SimpleConfig
 from lbryum.constants import HEADERS_URL, HEADER_SIZE
@@ -183,9 +183,7 @@ class HeadersComponent(Component):
         return self
 
     def get_status(self):
-        if self._downloading_headers is None:
-            return {}
-        return {
+        return {} if not self._downloading_headers else {
             'downloading_headers': self._downloading_headers,
             'download_progress': self._headers_progress_percent
         }
@@ -314,17 +312,16 @@ class WalletComponent(Component):
 
     @defer.inlineCallbacks
     def get_status(self):
-        if not self.wallet:
-            return
-        local_height = self.wallet.network.get_local_height()
-        remote_height = self.wallet.network.get_server_height()
-        best_hash = yield self.wallet.get_best_blockhash()
-        defer.returnValue({
-            'blocks': local_height,
-            'blocks_behind': remote_height - local_height,
-            'best_blockhash': best_hash,
-            'is_encrypted': self.wallet.wallet.use_encryption
-        })
+        if self.wallet:
+            local_height = self.wallet.network.get_local_height()
+            remote_height = self.wallet.network.get_server_height()
+            best_hash = yield self.wallet.get_best_blockhash()
+            defer.returnValue({
+                'blocks': local_height,
+                'blocks_behind': remote_height - local_height,
+                'best_blockhash': best_hash,
+                'is_encrypted': self.wallet.wallet.use_encryption
+            })
 
     @defer.inlineCallbacks
     def start(self):
@@ -362,9 +359,8 @@ class BlobComponent(Component):
 
     @defer.inlineCallbacks
     def get_status(self):
-        if not self.blob_manager:
-            count = 0
-        else:
+        count = 0
+        if self.blob_manager:
             count = yield self.blob_manager.storage.count_finished_blobs()
         defer.returnValue({
             'finished_blobs': count
@@ -388,7 +384,7 @@ class DHTComponent(Component):
 
     def get_status(self):
         return {
-            'node_id': CS.get_node_id().encode('hex'),
+            'node_id': binascii.hexlify(CS.get_node_id()),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.contacts)
         }
 

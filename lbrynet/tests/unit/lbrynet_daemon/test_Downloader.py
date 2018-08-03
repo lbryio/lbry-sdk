@@ -75,9 +75,10 @@ class GetStreamTests(unittest.TestCase):
         max_key_fee = {'currency': "LBC", 'amount': 10, 'address': ''}
         disable_max_key_fee = False
         data_rate = {'currency': "LBC", 'amount': 0, 'address': ''}
-        getstream = Downloader.GetStream(sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder,
-                                         DummyRateLimiter(), prm, storage, max_key_fee, disable_max_key_fee,
-                                         timeout=3, data_rate=data_rate)
+        getstream = Downloader.GetStream(
+            sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, DummyRateLimiter(), prm,
+            storage, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate
+        )
         getstream.pay_key_fee_called = False
 
         self.clock = task.Clock()
@@ -97,7 +98,6 @@ class GetStreamTests(unittest.TestCase):
 
         with self.assertRaises(AttributeError):
             yield getstream.start(stream_info, name, "deadbeef" * 12, 0)
-
 
     @defer.inlineCallbacks
     def test_sd_blob_download_timeout(self):

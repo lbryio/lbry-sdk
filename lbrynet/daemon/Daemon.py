@@ -325,11 +325,12 @@ class Daemon(AuthJSONRPCServer):
         else:
             download_id = utils.random_string()
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
-            self.streams[sd_hash] = GetStream(self.sd_identifier, self.wallet, self.exchange_rate_manager,
-                                              self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
-                                              self.payment_rate_manager, self.storage, conf.settings['max_key_fee'],
-                                              conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
-                                              timeout)
+            self.streams[sd_hash] = GetStream(
+                self.sd_identifier, self.wallet, self.exchange_rate_manager, self.blob_manager,
+                self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
+                conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
+                timeout
+            )
             try:
                 lbry_file, finished_deferred = yield self.streams[sd_hash].start(
                     claim_dict, name, txid, nout, file_name
@@ -355,8 +356,9 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None,
                         claim_address=None, change_address=None):
-        publisher = Publisher(self.blob_manager, self.payment_rate_manager, self.storage, self.file_manager,
-                              self.wallet, certificate_id)
+        publisher = Publisher(
+            self.blob_manager, self.payment_rate_manager, self.storage, self.file_manager, self.wallet, certificate_id
+        )
         parse_lbry_uri(name)
         if not file_path:
             stream_hash = yield self.storage.get_stream_hash_for_sd_hash(
@@ -2552,8 +2554,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
         timeout = timeout or 30
-        blob = yield self._download_blob(blob_hash, rate_manager=self.payment_rate_manager,
-                                         timeout=timeout)
+        blob = yield self._download_blob(blob_hash, rate_manager=self.payment_rate_manager, timeout=timeout)
         if encoding and encoding in decoders:
             blob_file = blob.open_for_reading()
             result = decoders[encoding](blob_file.read())
