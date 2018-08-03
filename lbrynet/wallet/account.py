@@ -4,11 +4,11 @@ from binascii import unhexlify
 from twisted.internet import defer
 
 from torba.baseaccount import BaseAccount
+from torba.basetransaction import TXORef
 
 from lbryschema.claim import ClaimDict
 from lbryschema.signer import SECP256k1, get_signer
 
-from .transaction import Transaction
 
 log = logging.getLogger(__name__)
 
@@ -18,26 +18,18 @@ def generate_certificate():
     return ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1), secp256k1_private_key
 
 
-def get_certificate_lookup(tx_or_hash, nout):
-    if isinstance(tx_or_hash, Transaction):
-        return '{}:{}'.format(tx_or_hash.id, nout)
-    else:
-        return '{}:{}'.format(tx_or_hash, nout)
-
-
 class Account(BaseAccount):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.certificates = {}
 
-    def add_certificate_private_key(self, tx_or_hash, nout, private_key):
-        lookup_key = get_certificate_lookup(tx_or_hash, nout)
-        assert lookup_key not in self.certificates, 'Trying to add a duplicate certificate.'
-        self.certificates[lookup_key] = private_key
+    def add_certificate_private_key(self, ref: TXORef, private_key):
+        assert ref.id not in self.certificates, 'Trying to add a duplicate certificate.'
+        self.certificates[ref.id] = private_key
 
-    def get_certificate_private_key(self, tx_or_hash, nout):
-        return self.certificates.get(get_certificate_lookup(tx_or_hash, nout))
+    def get_certificate_private_key(self, ref: TXORef):
+        return self.certificates.get(ref.id)
 
     @defer.inlineCallbacks
     def maybe_migrate_certificates(self):
@@ -81,7 +73,7 @@ class Account(BaseAccount):
         return super().get_unspent_outputs(**constraints)
 
     @classmethod
-    def from_dict(cls, ledger, d):  # type: (torba.baseledger.BaseLedger, Dict) -> BaseAccount
+    def from_dict(cls, ledger, d: dict) -> 'Account':
         account = super().from_dict(ledger, d)
         account.certificates = d['certificates']
         return account
