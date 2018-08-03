@@ -28,7 +28,7 @@ class DHTPeerFinder(DummyPeerFinder):
         """
         self.dht_node = dht_node
         self.peer_manager = peer_manager
-        self.peers = []
+        self.peers = {}
 
     @defer.inlineCallbacks
     def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=True):
@@ -42,8 +42,10 @@ class DHTPeerFinder(DummyPeerFinder):
         Returns:
         list of peers for the blob
         """
+        if blob_hash not in self.peers:
+            self.peers[blob_hash] = [(self.dht_node.externalIP, self.dht_node.peerPort)]
         bin_hash = binascii.unhexlify(blob_hash)
-        finished_deferred = self.dht_node.iterativeFindValue(bin_hash)
+        finished_deferred = self.dht_node.iterativeFindValue(bin_hash, exclude=self.peers[blob_hash])
         timeout = timeout or conf.settings['peer_search_timeout']
         if timeout:
             finished_deferred.addTimeout(timeout, self.dht_node.clock)
@@ -60,4 +62,5 @@ class DHTPeerFinder(DummyPeerFinder):
             if filter_self and (host, port) == (self.dht_node.externalIP, self.dht_node.peerPort):
                 continue
             results.append(self.peer_manager.get_peer(host, port))
+            self.peers[blob_hash].append((host, port))
         defer.returnValue(results)

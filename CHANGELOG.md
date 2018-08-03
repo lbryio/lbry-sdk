@@ -45,7 +45,7 @@ at anytime.
   * additional information to the balance error message when editing a claim (https://github.com/lbryio/lbry/pull/1309)
   * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313)
   * ability to download from HTTP mirrors by setting `download_mirrors`
-  *
+  * ability to filter peers from an iterative find value operation (finding peers for a blob). This is used to filter peers we've already found for a blob when accumulating the list of peers.
 
 ### Removed
   * `session_status` argument and response field from `status`
