@@ -111,3 +111,15 @@ class CLITest(unittest.TestCase):
         actual_output = actual_output.getvalue().strip()
 
         self.assertEqual(expected_output, actual_output)
+
+    def test_deprecated_command_daemon_not_started(self):
+        deprecated_command = "channel_list_mine"
+        expected_output = "channel_list_mine is deprecated, using channel_list.\n" \
+                          "Could not connect to daemon. Are you sure it's running?"
+
+        actual_output = StringIO()
+        with contextlib.redirect_stdout(actual_output):
+            cli.main([deprecated_command])
+        actual_output = actual_output.getvalue().strip()
+
+        self.assertEqual(expected_output, actual_output)
