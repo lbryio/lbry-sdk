@@ -66,6 +66,18 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         self.assertEqual([2 * CENT], [c.txo.amount for c in match])
         self.assertFalse(selector.exact_match)
 
+    def test_pick(self):
+        utxo_pool = self.estimates(
+            utxo(1*CENT),
+            utxo(1*CENT),
+            utxo(3*CENT),
+            utxo(5*CENT),
+            utxo(10*CENT),
+        )
+        selector = CoinSelector(utxo_pool, 3*CENT, 0)
+        match = selector.select()
+        self.assertEqual([5*CENT], [c.txo.amount for c in match])
+
 
 class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
 
@@ -108,7 +120,7 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         self.assertEqual([3 * CENT, 2 * CENT], search(utxo_pool, 5 * CENT, 0.5 * CENT))
 
         # Select 11 Cent, not possible
-        self.assertEqual(search(utxo_pool, 11 * CENT, 0.5 * CENT), [])
+        self.assertEqual([], search(utxo_pool, 11 * CENT, 0.5 * CENT))
 
         # Select 10 Cent
         utxo_pool += self.estimates(utxo(5 * CENT))

@@ -25,7 +25,11 @@ class CoinSelector:
             return []
         if self.target > self.available:
             return []
-        return self.branch_and_bound() or self.single_random_draw()
+        return (
+            self.branch_and_bound() or
+            self.closest_match() or
+            self.random_draw()
+        )
 
     def branch_and_bound(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         # see bitcoin implementation for more info:
@@ -85,13 +89,27 @@ class CoinSelector:
 
         return []
 
-    def single_random_draw(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def closest_match(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+        """ Pick one UTXOs that is larger than the target but with the smallest change. """
+        target = self.target + self.cost_of_change
+        smallest_change = None
+        best_match = None
+        for txo in self.txos:
+            if txo.effective_amount >= target:
+                change = txo.effective_amount - target
+                if smallest_change is None or change < smallest_change:
+                    smallest_change, best_match = change, txo
+        return [best_match] if best_match else []
+
+    def random_draw(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+        """ Accumulate UTXOs at random until there is enough to cover the target. """
+        target = self.target + self.cost_of_change
         self.random.shuffle(self.txos, self.random.random)
         selection = []
         amount = 0
         for coin in self.txos:
             selection.append(coin)
             amount += coin.effective_amount
-            if amount >= self.target+self.cost_of_change:
+            if amount >= target:
                 return selection
         return []

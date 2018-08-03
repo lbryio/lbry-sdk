@@ -29,7 +29,8 @@ class BasicTransactionTests(IntegrationTestCase):
 
         address2 = await d2f(account2.receiving.get_or_create_usable_address())
         hash2 = self.ledger.address_to_hash160(address2)
-        tx = await d2f(self.ledger.transaction_class.pay(
+        tx = await d2f(self.ledger.transaction_class.create(
+            [],
             [self.ledger.transaction_class.output_class.pay_pubkey_hash(2*COIN, hash2)],
             [account1], account1
         ))
@@ -42,8 +43,10 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 2.0)
 
         utxos = await d2f(self.account.get_unspent_outputs())
-        tx = await d2f(self.ledger.transaction_class.liquidate(
-            [utxos[0]], [account1], account1
+        tx = await d2f(self.ledger.transaction_class.create(
+            [self.ledger.transaction_class.input_class.spend(utxos[0])],
+            [],
+            [account1], account1
         ))
         await self.broadcast(tx)
         await self.on_transaction(tx)  # mempool

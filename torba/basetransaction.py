@@ -95,6 +95,9 @@ class InputOutput:
         self.serialize_to(stream)
         return len(stream.get_bytes())
 
+    def get_fee(self, ledger):
+        return self.size * ledger.fee_per_byte
+
     def serialize_to(self, stream, alternate_script=None):
         raise NotImplementedError
 
@@ -166,7 +169,7 @@ class BaseOutputEffectiveAmountEstimator:
     def __init__(self, ledger: 'baseledger.BaseLedger', txo: 'BaseOutput') -> None:
         self.txo = txo
         self.txi = ledger.transaction_class.input_class.spend(txo)
-        self.fee: int = ledger.get_input_output_fee(self.txi)
+        self.fee: int = self.txi.get_fee(ledger)
         self.effective_amount: int = txo.amount - self.fee
 
     def __lt__(self, other):
@@ -269,19 +272,38 @@ class BaseTransaction:
         return self._add(outputs, self._outputs)
 
     @property
-    def fee(self) -> int:
-        """ Fee that will actually be paid."""
-        return self.input_sum - self.output_sum
-
-    @property
     def size(self) -> int:
         """ Size in bytes of the entire transaction. """
         return len(self.raw)
 
     @property
     def base_size(self) -> int:
-        """ Size in bytes of transaction meta data and all outputs; without inputs. """
-        return len(self._serialize(with_inputs=False))
+        """ Size of transaction without inputs or outputs in bytes. """
+        return (
+            self.size
+            - sum(txi.size for txi in self._inputs)
+            - sum(txo.size for txo in self._outputs)
+        )
+
+    @property
+    def input_sum(self):
+        return sum(i.amount for i in self.inputs)
+
+    @property
+    def output_sum(self):
+        return sum(o.amount for o in self.outputs)
+
+    def get_base_fee(self, ledger):
+        """ Fee for base tx excluding inputs and outputs. """
+        return self.base_size * ledger.fee_per_byte
+
+    def get_effective_input_sum(self, ledger):
+        """ Sum of input values *minus* the cost involved to spend them. """
+        return sum(txi.amount - txi.get_fee(ledger) for txi in self._inputs)
+
+    def get_total_output_sum(self, ledger):
+        """ Sum of output values *plus* the cost involved to spend them. """
+        return sum(txo.amount + txo.get_fee(ledger) for txo in self._outputs)
 
     def _serialize(self, with_inputs: bool = True) -> bytes:
         stream = BCDataStream()
@@ -346,60 +368,54 @@ class BaseTransaction:
 
     @classmethod
     @defer.inlineCallbacks
-    def pay(cls, outputs: Iterable[BaseOutput], funding_accounts: Iterable[BaseAccount],
-            change_account: BaseAccount):
-        """ Efficiently spend utxos from funding_accounts to cover the new outputs. """
+    def create(cls, inputs: Iterable[BaseInput], outputs: Iterable[BaseOutput],
+               funding_accounts: Iterable[BaseAccount], change_account: BaseAccount):
+        """ Find optimal set of inputs when only outputs are provided; add change
+            outputs if only inputs are provided or if inputs are greater than outputs. """
 
-        tx = cls().add_outputs(outputs)
+        tx = cls() \
+            .add_inputs(inputs) \
+            .add_outputs(outputs)
+
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
-        amount = tx.output_sum + ledger.get_transaction_base_fee(tx)
-        spendables = yield ledger.get_spendable_utxos(amount, funding_accounts)
 
-        if not spendables:
-            raise ValueError('Not enough funds to cover this transaction.')
+        # value of the outputs plus associated fees
+        cost = (
+            tx.get_base_fee(ledger) +
+            tx.get_total_output_sum(ledger)
+        )
+        # value of the inputs less the cost to spend those inputs
+        payment = tx.get_effective_input_sum(ledger)
 
         try:
-            spent_sum = sum(s.effective_amount for s in spendables)
-            if spent_sum > amount:
-                change_address = yield change_account.change.get_or_create_usable_address()
-                change_hash160 = change_account.ledger.address_to_hash160(change_address)
-                change_amount = spent_sum - amount
-                tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
 
-            tx.add_inputs(s.txi for s in spendables)
+            if payment < cost:
+                deficit = cost - payment
+                spendables = yield ledger.get_spendable_utxos(deficit, funding_accounts)
+                if not spendables:
+                    raise ValueError('Not enough funds to cover this transaction.')
+                payment += sum(s.effective_amount for s in spendables)
+                tx.add_inputs(s.txi for s in spendables)
+
+            if payment > cost:
+                cost_of_change = (
+                    tx.get_base_fee(ledger) +
+                    cls.output_class.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
+                )
+                change = payment - cost
+                if change > cost_of_change:
+                    change_address = yield change_account.change.get_or_create_usable_address()
+                    change_hash160 = change_account.ledger.address_to_hash160(change_address)
+                    change_amount = change - cost_of_change
+                    tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
+
             yield tx.sign(funding_accounts)
 
         except Exception as e:
             log.exception('Failed to synchronize transaction:')
-            yield ledger.release_outputs(s.txo for s in spendables)
+            yield ledger.release_outputs(tx.outputs)
             raise e
 
-        defer.returnValue(tx)
-
-    @classmethod
-    @defer.inlineCallbacks
-    def liquidate(cls, assets, funding_accounts, change_account):
-        """ Spend assets (utxos) supplementing with funding_accounts if fee is higher than asset value. """
-        tx = cls().add_inputs([
-            cls.input_class.spend(utxo) for utxo in assets
-        ])
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
-        yield ledger.reserve_outputs(assets)
-        try:
-            cost_of_change = (
-                ledger.get_transaction_base_fee(tx) +
-                ledger.get_input_output_fee(cls.output_class.pay_pubkey_hash(COIN, NULL_HASH32))
-            )
-            liquidated_total = sum(utxo.amount for utxo in assets)
-            if liquidated_total > cost_of_change:
-                change_address = yield change_account.change.get_or_create_usable_address()
-                change_hash160 = change_account.ledger.address_to_hash160(change_address)
-                change_amount = liquidated_total - cost_of_change
-                tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
-            yield tx.sign(funding_accounts)
-        except Exception:
-            yield ledger.release_outputs(assets)
-            raise
         defer.returnValue(tx)
 
     @staticmethod
@@ -424,14 +440,6 @@ class BaseTransaction:
             else:
                 raise NotImplementedError("Don't know how to spend this output.")
         self._reset()
-
-    @property
-    def input_sum(self):
-        return sum(i.amount for i in self.inputs)
-
-    @property
-    def output_sum(self):
-        return sum(o.amount for o in self.outputs)
 
     @defer.inlineCallbacks
     def get_my_addresses(self, ledger):

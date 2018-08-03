@@ -117,14 +117,6 @@ class BaseLedger(metaclass=LedgerRegistry):
     def path(self):
         return os.path.join(self.config['data_path'], self.get_id())
 
-    def get_input_output_fee(self, io: basetransaction.InputOutput) -> int:
-        """ Fee based on size of the input / output. """
-        return self.fee_per_byte * io.size
-
-    def get_transaction_base_fee(self, tx):
-        """ Fee for the transaction header and all outputs; without inputs. """
-        return self.fee_per_byte * tx.base_size
-
     @defer.inlineCallbacks
     def add_account(self, account: baseaccount.BaseAccount) -> defer.Deferred:
         self.accounts.append(account)
@@ -161,9 +153,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             txos = yield self.get_effective_amount_estimators(funding_accounts)
             selector = CoinSelector(
                 txos, amount,
-                self.get_input_output_fee(
-                    self.transaction_class.output_class.pay_pubkey_hash(COIN, NULL_HASH32)
-                )
+                self.transaction_class.output_class.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
             )
             spendables = selector.select()
             if spendables:

@@ -1,4 +1,5 @@
 from binascii import hexlify, unhexlify
+from itertools import cycle
 from twisted.trial import unittest
 from twisted.internet import defer
 
@@ -17,8 +18,8 @@ def get_output(amount=CENT, pubkey_hash=NULL_HASH):
         .outputs[0]
 
 
-def get_input():
-    return ledger_class.transaction_class.input_class.spend(get_output())
+def get_input(amount=CENT, pubkey_hash=NULL_HASH):
+    return ledger_class.transaction_class.input_class.spend(get_output(amount, pubkey_hash))
 
 
 def get_transaction(txo=None):
@@ -31,27 +32,22 @@ class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
         self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
-        return self.ledger.db.start()
-
-    def io_fee(self, io):
-        return self.ledger.get_input_output_fee(io)
 
     def test_output_size_and_fee(self):
         txo = get_output()
         self.assertEqual(txo.size, 46)
-        self.assertEqual(self.io_fee(txo), 46 * FEE_PER_BYTE)
+        self.assertEqual(txo.get_fee(self.ledger), 46 * FEE_PER_BYTE)
 
     def test_input_size_and_fee(self):
         txi = get_input()
         self.assertEqual(txi.size, 148)
-        self.assertEqual(self.io_fee(txi), 148 * FEE_PER_BYTE)
+        self.assertEqual(txi.get_fee(self.ledger), 148 * FEE_PER_BYTE)
 
     def test_transaction_size_and_fee(self):
         tx = get_transaction()
-        base_size = tx.size - 1 - tx.inputs[0].size
         self.assertEqual(tx.size, 204)
-        self.assertEqual(tx.base_size, base_size)
-        self.assertEqual(self.ledger.get_transaction_base_fee(tx), FEE_PER_BYTE * base_size)
+        self.assertEqual(tx.base_size, tx.size - tx.inputs[0].size - tx.outputs[0].size)
+        self.assertEqual(tx.get_base_fee(self.ledger), FEE_PER_BYTE * tx.base_size)
 
 
 class TestTransactionSerialization(unittest.TestCase):
@@ -169,3 +165,121 @@ class TestTransactionSigning(unittest.TestCase):
             b'304402203d463519290d06891e461ea5256c56097ccdad53379b1bb4e51ec5abc6e9fd02022034ed15b9'
             b'd7c678716c4aa7c0fd26c688e8f9db8075838f2839ab55d551b62c0a01'
         )
+
+
+class TransactionIOBalancing(unittest.TestCase):
+
+    @defer.inlineCallbacks
+    def setUp(self):
+        self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
+        yield self.ledger.db.start()
+        self.account = self.ledger.account_class.from_seed(
+            self.ledger,
+            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
+            u"sent", u"torba", {}
+        )
+
+        addresses = yield self.account.ensure_address_gap()
+        self.pubkey_hash = [self.ledger.address_to_hash160(a) for a in addresses]
+        self.hash_cycler = cycle(self.pubkey_hash)
+
+    def txo(self, amount, address=None):
+        return get_output(int(amount*COIN), address or next(self.hash_cycler))
+
+    def txi(self, txo):
+        return ledger_class.transaction_class.input_class.spend(txo)
+
+    def tx(self, inputs, outputs):
+        return ledger_class.transaction_class.create(inputs, outputs, [self.account], self.account)
+
+    @defer.inlineCallbacks
+    def create_utxos(self, amounts):
+        utxos = [self.txo(amount) for amount in amounts]
+
+        self.funding_tx = ledger_class.transaction_class() \
+            .add_inputs([self.txi(self.txo(sum(amounts)+0.1))]) \
+            .add_outputs(utxos)
+
+        save_tx = 'insert'
+        for utxo in utxos:
+            yield self.ledger.db.save_transaction_io(
+                save_tx, self.funding_tx, 1, True,
+                self.ledger.hash160_to_address(utxo.script.values['pubkey_hash']),
+                utxo.script.values['pubkey_hash'], ''
+            )
+            save_tx = 'update'
+
+        defer.returnValue(utxos)
+
+    @staticmethod
+    def inputs(tx):
+        return [round(i.amount/COIN, 2) for i in tx.inputs]
+
+    @staticmethod
+    def outputs(tx):
+        return [round(o.amount/COIN, 2) for o in tx.outputs]
+
+    @defer.inlineCallbacks
+    def test_basic_use_cases(self):
+        self.ledger.fee_per_byte = int(.01*CENT)
+
+        # available UTXOs for filling missing inputs
+        utxos = yield self.create_utxos([
+            1, 1, 3, 5, 10
+        ])
+
+        # pay 3 coins (3.02 w/ fees)
+        tx = yield self.tx(
+            [],            # inputs
+            [self.txo(3)]  # outputs
+        )
+        # best UTXO match is 5 (as UTXO 3 will be short 0.02 to cover fees)
+        self.assertEqual(self.inputs(tx), [5])
+        # a change of 1.98 is added to reach balance
+        self.assertEqual(self.outputs(tx), [3, 1.98])
+
+        yield self.ledger.release_outputs(utxos)
+
+        # pay 2.98 coins (3.00 w/ fees)
+        tx = yield self.tx(
+            [],               # inputs
+            [self.txo(2.98)]  # outputs
+        )
+        # best UTXO match is 3 and no change is needed
+        self.assertEqual(self.inputs(tx), [3])
+        self.assertEqual(self.outputs(tx), [2.98])
+
+        yield self.ledger.release_outputs(utxos)
+
+        # supplied input and output, but input is not enough to cover output
+        tx = yield self.tx(
+            [self.txi(self.txo(10))],  # inputs
+            [self.txo(11)]             # outputs
+        )
+        # additional input is chosen (UTXO 3)
+        self.assertEqual([10, 3], self.inputs(tx))
+        # change is now needed to consume extra input
+        self.assertEqual([11, 1.96], self.outputs(tx))
+
+        yield self.ledger.release_outputs(utxos)
+
+        # liquidating a UTXO
+        tx = yield self.tx(
+            [self.txi(self.txo(10))],  # inputs
+            []                         # outputs
+        )
+        self.assertEqual([10], self.inputs(tx))
+        # missing change added to consume the amount
+        self.assertEqual([9.98], self.outputs(tx))
+
+        yield self.ledger.release_outputs(utxos)
+
+        # liquidating at a loss, requires adding extra inputs
+        tx = yield self.tx(
+            [self.txi(self.txo(0.01))],  # inputs
+            []                           # outputs
+        )
+        # UTXO 1 is added to cover some of the fee
+        self.assertEqual([0.01, 1], self.inputs(tx))
+        # change is now needed to consume extra input
+        self.assertEqual([0.97], self.outputs(tx))
