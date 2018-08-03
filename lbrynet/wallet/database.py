@@ -2,6 +2,7 @@ from binascii import hexlify
 from twisted.internet import defer
 from torba.basedatabase import BaseDatabase
 from torba.hash import TXRefImmutable
+from torba.basetransaction import TXORef
 from .certificate import Certificate
 
 
@@ -61,12 +62,12 @@ class WalletDatabase(BaseDatabase):
         certificates = []
         # Lookup private keys for each certificate.
         if private_key_accounts is not None:
-            for txhash, nout, claim_id in txos:
+            for txid, nout, claim_id in txos:
                 for account in private_key_accounts:
                     private_key = account.get_certificate_private_key(
-                        txhash, nout
+                        TXORef(TXRefImmutable.from_id(txid), nout)
                     )
-                    certificates.append(Certificate(txhash, nout, claim_id, name, private_key))
+                    certificates.append(Certificate(txid, nout, claim_id, name, private_key))
 
         if exclude_without_key:
             defer.returnValue([
