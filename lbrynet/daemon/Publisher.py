@@ -6,7 +6,6 @@ from binascii import hexlify
 from twisted.internet import defer
 
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
-from lbrynet.wallet.account import get_certificate_lookup
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ class Publisher:
                 log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
 
         yield self.session.storage.save_content_claim(
-            self.lbry_file.stream_hash, get_certificate_lookup(tx, 0)
+            self.lbry_file.stream_hash, tx.outputs[0].id
         )
         defer.returnValue(tx)
 
@@ -65,7 +64,7 @@ class Publisher:
             name, bid, claim_dict, self.certificate, holding_address
         )
         if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
-            yield self.session.storage.save_content_claim(stream_hash.decode(), get_certificate_lookup(tx, 0))
+            yield self.session.storage.save_content_claim(stream_hash.decode(), tx.outputs[0].id)
             self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         defer.returnValue(tx)
 
