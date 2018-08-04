@@ -1,7 +1,6 @@
 import logging
 import mimetypes
 import os
-from binascii import hexlify
 
 from twisted.internet import defer
 

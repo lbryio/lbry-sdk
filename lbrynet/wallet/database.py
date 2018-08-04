@@ -1,4 +1,3 @@
-from binascii import hexlify
 from twisted.internet import defer
 from torba.basedatabase import BaseDatabase
 from torba.hash import TXRefImmutable

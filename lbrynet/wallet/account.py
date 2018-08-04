@@ -1,5 +1,4 @@
 import logging
-from binascii import unhexlify
 
 from twisted.internet import defer
 
