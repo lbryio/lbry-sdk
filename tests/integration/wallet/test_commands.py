@@ -164,7 +164,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Do we have it locally?
         channels = yield self.daemon.jsonrpc_channel_list()
         self.assertEqual(len(channels), 1)
-        self.assertEqual(channels[0]['name'], b'@spam')
+        self.assertEqual(channels[0]['name'], '@spam')
         self.assertTrue(channels[0]['have_certificate'])
 
         # As the new channel claim travels through the intertubes and makes its
