@@ -80,6 +80,7 @@ class BasicTransactionTest(IntegrationTestCase):
 
         response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertIn('lbry://@bar/foo', response)
+        self.assertIn('claim', response['lbry://@bar/foo'])
 
         abandon_tx = await d2f(Transaction.abandon([claim_tx.outputs[0]], [self.account], self.account))
         await self.broadcast(abandon_tx)
@@ -88,5 +89,5 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.on_transaction(abandon_tx)
 
         # should not resolve, but does, why?
-        # response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
-        # self.assertNotIn('lbry://@bar/foo', response)
+        response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
+        self.assertNotIn('claim', response['lbry://@bar/foo'])
