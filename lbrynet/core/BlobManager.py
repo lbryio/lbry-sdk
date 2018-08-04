@@ -122,7 +122,7 @@ class DiskBlobManager:
         try:
             yield self.storage.delete_blobs_from_db(bh_to_delete_from_db)
         except IntegrityError as err:
-            if err.message != "FOREIGN KEY constraint failed":
+            if str(err) != "FOREIGN KEY constraint failed":
                 raise err
 
     @defer.inlineCallbacks
