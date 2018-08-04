@@ -129,7 +129,7 @@ def main(argv=None):
         return 0
 
     elif method == 'start':
-        sys.exit(daemon_main(args))
+        sys.exit(daemon_main(args, conf_path))
 
     elif method == 'console':
         sys.exit(daemon_console())

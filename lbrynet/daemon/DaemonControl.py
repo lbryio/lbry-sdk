@@ -25,21 +25,13 @@ def test_internet_connection():
     return utils.check_connection()
 
 
-def start(argv=None):
-    argv = argv or sys.argv[1:]
-    """The primary entry point for launching the daemon."""
+def start(argv=None, conf_path=None):
+    if conf_path is not None:
+        conf.conf_file = conf_path
 
-    # postpone loading the config file to after the CLI arguments
-    # have been parsed, as they may contain an alternate config file location
-    conf.initialize_settings(load_conf_file=False)
+    conf.initialize_settings()
 
-    parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
-    parser.add_argument(
-        "--conf",
-        help="specify an alternative configuration file",
-        type=str,
-        default=None
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "--http-auth", dest="useauth", action="store_true", default=conf.settings['use_auth_http']
     )
@@ -58,9 +50,8 @@ def start(argv=None):
     )
 
     args = parser.parse_args(argv)
-    update_settings_from_args(args)
-
-    conf.settings.load_conf_file_settings()
+    if args.useauth:
+        conf.settings.update({'use_auth_http': args.useauth}, data_types=(conf.TYPE_CLI,))
 
     if args.version:
         version = system_info.get_platform(get_ip=False)
@@ -90,17 +81,3 @@ def start(argv=None):
         reactor.run()
     else:
         log.info("Not connected to internet, unable to start")
-
-
-def update_settings_from_args(args):
-    if args.conf:
-        conf.conf_file = args.conf
-
-    if args.useauth:
-        conf.settings.update({
-            'use_auth_http': args.useauth,
-        }, data_types=(conf.TYPE_CLI,))
-
-
-if __name__ == "__main__":
-    start()
