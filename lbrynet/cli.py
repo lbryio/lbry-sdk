@@ -58,7 +58,7 @@ def print_help_for_command(command):
         print("Invalid command name")
 
 
-def guess_type(x, key=None):
+def normalize_value(x, key=None):
     if not isinstance(x, str):
         return x
     if key in ('uri', 'channel_name', 'name', 'file_name', 'download_directory'):
@@ -95,7 +95,7 @@ def set_kwargs(parsed_args):
             k = remove_brackets(key[2:])
         elif remove_brackets(key) not in kwargs:
             k = remove_brackets(key)
-        kwargs[k] = guess_type(arg, k)
+        kwargs[k] = normalize_value(arg, k)
     return kwargs
 
 

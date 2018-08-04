@@ -3,3 +3,4 @@ from lbrynet import cli
 
 
 class CLIIntegrationTest:
+    pass

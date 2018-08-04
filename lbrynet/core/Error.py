@@ -1,6 +1,3 @@
-from lbrynet import error_code_map as ECM
-
-
 class RPCError(Exception):
     code = 0
 
@@ -49,7 +46,7 @@ class NullFundsError(Exception):
 
 
 class InsufficientFundsError(RPCError):
-    code = ECM.CODE_INSUFFICIENT_FUNDS_ERROR
+    code = -310
 
 
 class ConnectionClosedBeforeResponseError(Exception):

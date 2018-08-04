@@ -83,22 +83,21 @@ class AuthAPIClient:
             'id': self.__id_count
         }
         to_auth = get_auth_message(pre_auth_post_data)
-        pre_auth_post_data.update({'hmac': self.__api_key.get_hmac(to_auth).decode('UTF-8')})
+        pre_auth_post_data.update({'hmac': self.__api_key.get_hmac(to_auth).decode()})
         post_data = json.dumps(pre_auth_post_data)
         cookies = copy_cookies(self.__cookies)
 
         req = requests.Request(
             method='POST', url=self.__service_url, data=post_data, cookies=cookies,
             headers={
-                        'Host': self.__url.hostname,
-                        'User-Agent': USER_AGENT,
-                        'Content-type': 'application/json'
+                'Host': self.__url.hostname,
+                'User-Agent': USER_AGENT,
+                'Content-type': 'application/json'
             }
         )
         http_response = self.__conn.send(req.prepare())
         if http_response is None:
-            raise JSONRPCException({
-                'code': -342, 'message': 'missing HTTP response from server'})
+            raise JSONRPCException({'code': -342, 'message': 'missing HTTP response from server'})
         http_response.raise_for_status()
         next_secret = http_response.headers.get(LBRY_SECRET, False)
         if next_secret:
@@ -118,10 +117,9 @@ class AuthAPIClient:
         else:
             api_key = APIKey(name=api_key_name, secret=key)
         if login_url is None:
-            service_url = "http://%s:%s@%s:%i" % (api_key_name,
-                                                  api_key.secret,
-                                                  conf.settings['api_host'],
-                                                  conf.settings['api_port'])
+            service_url = "http://{}:{}@{}:{}".format(
+                api_key_name, api_key.secret, conf.settings['api_host'], conf.settings['api_port']
+            )
         else:
             service_url = login_url
         id_count = count
@@ -130,11 +128,12 @@ class AuthAPIClient:
             # This is a new client instance, start an authenticated session
             url = urlparse(service_url)
             conn = requests.Session()
-            req = requests.Request(method='POST',
-                                   url=service_url,
-                                   headers={'Host': url.hostname,
-                                            'User-Agent': USER_AGENT,
-                                            'Content-type': 'application/json'},)
+            req = requests.Request(
+                method='POST', url=service_url, headers={
+                    'Host': url.hostname,
+                    'User-Agent': USER_AGENT,
+                    'Content-type': 'application/json'
+                })
             r = req.prepare()
             http_response = conn.send(r)
             cookies = RequestsCookieJar()

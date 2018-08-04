@@ -41,7 +41,7 @@ class PasswordChecker:
     def requestAvatarId(self, creds):
         password_dict_bytes = {}
         for api in self.passwords:
-            password_dict_bytes.update({bytes(api, 'UTF-8'): bytes(self.passwords[api], 'UTF-8')})
+            password_dict_bytes.update({api.encode(): self.passwords[api].encode()})
 
         if creds.username in password_dict_bytes:
             pw = password_dict_bytes.get(creds.username)

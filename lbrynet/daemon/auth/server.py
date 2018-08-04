@@ -109,8 +109,7 @@ def jsonrpc_dumps_pretty(obj, **kwargs):
     else:
         data = {"jsonrpc": "2.0", "result": obj, "id": id_}
 
-    return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2,
-                      separators=(',', ': '), **kwargs) + "\n"
+    return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2, **kwargs) + "\n"
 
 
 class JSONRPCServerType(type):
@@ -281,10 +280,8 @@ class AuthJSONRPCServer(AuthorizedBase):
             request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
 
     @staticmethod
-    def _render_message(request, message):
-        if isinstance(message, str):
-            message = bytes(message, 'utf-8')
-        request.write(message)
+    def _render_message(request, message: str):
+        request.write(message.encode())
         request.finish()
 
     def _render_error(self, failure, request, id_):
@@ -295,7 +292,10 @@ class AuthJSONRPCServer(AuthorizedBase):
             error = failure.check(JSONRPCError)
             if error is None:
                 # maybe its a twisted Failure with another type of error
-                error_code = failure.type.code if hasattr(failure.type, "code") else JSONRPCError.CODE_APPLICATION_ERROR
+                if hasattr(failure.type, "code"):
+                    error_code = failure.type.code
+                else:
+                    error_code = JSONRPCError.CODE_APPLICATION_ERROR
                 error = JSONRPCError.create_from_exception(
                     failure.getErrorMessage() or failure.type.__name__,
                     code=error_code,
@@ -355,7 +355,7 @@ class AuthJSONRPCServer(AuthorizedBase):
                 session.touch()
 
         request.content.seek(0, 0)
-        content = request.content.read().decode('UTF-8')
+        content = request.content.read().decode()
         try:
             parsed = jsonrpclib.loads(content)
         except json.JSONDecodeError:
