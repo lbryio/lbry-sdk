@@ -1,6 +1,5 @@
 import os
 import json
-from binascii import hexlify
 from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
@@ -164,7 +163,17 @@ class LbryWalletManager(BaseWalletManager):
             claim = claim.sign(
                 certificate.private_key, claim_address, certificate.claim_id
             )
-        tx = yield Transaction.claim(name.encode(), claim, amount, claim_address, [account], account)
+        existing_claims = yield account.get_unspent_outputs(include_claims=True, claim_name=name)
+        if len(existing_claims) == 0:
+            tx = yield Transaction.claim(
+                name, claim, amount, claim_address, [account], account
+            )
+        elif len(existing_claims) == 1:
+            tx = yield Transaction.update(
+                existing_claims[0], claim, amount, claim_address, [account], account
+            )
+        else:
+            raise NameError("More than one other claim exists with the name '{}'.".format(name))
         yield account.ledger.broadcast(tx)
         yield self.old_db.save_claims([self._old_get_temp_claim_info(
             tx, tx.outputs[0], claim_address, claim_dict, name, amount
@@ -173,10 +182,8 @@ class LbryWalletManager(BaseWalletManager):
         defer.returnValue(tx)
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
-        if isinstance(address, memoryview):
-            address = str(address)
         return {
-            "claim_id": hexlify(tx.get_claim_id(txo.position)).decode(),
+            "claim_id": txo.claim_id,
             "name": name,
             "amount": bid,
             "address": address,
@@ -211,7 +218,7 @@ class LbryWalletManager(BaseWalletManager):
         account = self.default_account
         address = yield account.receiving.get_or_create_usable_address()
         cert, key = generate_certificate()
-        tx = yield Transaction.claim(channel_name.encode(), cert, amount, address, [account], account)
+        tx = yield Transaction.claim(channel_name, cert, amount, address, [account], account)
         yield account.ledger.broadcast(tx)
         account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
