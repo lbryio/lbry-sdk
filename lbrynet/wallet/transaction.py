@@ -45,13 +45,13 @@ class Transaction(BaseTransaction):
         return claim_id_hash(self.hash, output_index)
 
     @classmethod
-    def claim(cls, name, meta, amount, holding_address, funding_accounts, change_account):
+    def claim(cls, name, meta, amount, holding_address, funding_accounts, change_account, spend=None):
         # type: (bytes, ClaimDict, int, bytes, List[Account], Account) -> defer.Deferred
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
             amount, name, meta.serialized, ledger.address_to_hash160(holding_address)
         )
-        return cls.create([], [claim_output], funding_accounts, change_account)
+        return cls.create(spend or [], [claim_output], funding_accounts, change_account)
 
     @classmethod
     def abandon(cls, claims: Iterable[Output], funding_accounts: Iterable[Account], change_account: Account):

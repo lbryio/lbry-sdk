@@ -161,6 +161,12 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertTrue(channel['success'])
         yield self.d_confirm_tx(channel['txid'])
 
+        # Do we have it locally?
+        channels = yield self.daemon.jsonrpc_channel_list()
+        self.assertEqual(len(channels), 1)
+        self.assertEqual(channels[0]['name'], b'@spam')
+        self.assertTrue(channels[0]['have_certificate'])
+
         # As the new channel claim travels through the intertubes and makes its
         # way into the mempool and then a block and then into the claimtrie,
         # Chris doesn't sit idly by: he checks his balance!
@@ -229,6 +235,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # giving the link to all his friends.
         response = yield self.ledger.resolve(0, 10, 'lbry://@spam/hovercraft')
         self.assertIn('lbry://@spam/hovercraft', response)
+        self.assertIn('claim', response['lbry://@spam/hovercraft'])
 
         # He goes to tell everyone about it and in the meantime 5 blocks are confirmed.
         yield self.d_generate(5)
@@ -256,3 +263,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         abandon = yield self.daemon.jsonrpc_claim_abandon(claim1['claim_id'])
         self.assertTrue(abandon['success'])
         yield self.d_confirm_tx(abandon['txid'])
+
+        # And checks that the claim doesn't resolve anymore.
+        response = yield self.ledger.resolve(0, 10, 'lbry://@spam/hovercraft')
+        self.assertNotIn('claim', response['lbry://@spam/hovercraft'])
