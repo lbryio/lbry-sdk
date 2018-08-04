@@ -93,7 +93,8 @@ class Account(BaseAccount):
         for utxo in utxos:
             d = ClaimDict.deserialize(utxo.script.values['claim'])
             channels.append({
-                'name': utxo.script.values['claim_name'],
+                'name': utxo.claim_name,
+                'claim_id': utxo.claim_id,
                 'txid': utxo.tx_ref.id,
                 'nout': utxo.position,
                 'have_certificate': utxo.ref.id in self.certificates
