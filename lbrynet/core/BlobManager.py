@@ -109,7 +109,7 @@ class DiskBlobManager:
         for blob_hash in blob_hashes:
             if self._node_datastore is not None:
                 try:
-                    self._node_datastore.completed_blobs.remove(blob_hash.decode('hex'))
+                    self._node_datastore.completed_blobs.remove(unhexlify(blob_hash))
                 except KeyError:
                     pass
             try:

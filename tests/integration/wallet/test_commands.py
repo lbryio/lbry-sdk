@@ -207,6 +207,11 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Like a Swiss watch (right niko?) the blockchain never disappoints! We're
         # at 6 confirmations and the total is correct.
 
+        # And is the channel resolvable and empty?
+        response = yield self.daemon.jsonrpc_resolve(uri='lbry://@spam')
+        self.assertIn('lbry://@spam', response)
+        self.assertIn('certificate', response['lbry://@spam'])
+
         # "What goes well with spam?" ponders Chris...
         # "A hovercraft with eels!" he exclaims.
         # "That's what goes great with spam!" he further confirms.
@@ -233,7 +238,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # Also checks that his new story can be found on the blockchain before
         # giving the link to all his friends.
-        response = yield self.ledger.resolve(0, 10, 'lbry://@spam/hovercraft')
+        response = yield self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft')
         self.assertIn('lbry://@spam/hovercraft', response)
         self.assertIn('claim', response['lbry://@spam/hovercraft'])
 
@@ -255,7 +260,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
                 'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
             )
             self.assertTrue(claim2['success'])
-            #self.assertEqual(claim2['claim_id'], claim1['claim_id'])
+            self.assertEqual(claim2['claim_id'], claim1['claim_id'])
             yield self.d_confirm_tx(claim2['txid'])
 
         # After some soul searching Chris decides that his story needs more
@@ -264,6 +269,6 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertTrue(abandon['success'])
         yield self.d_confirm_tx(abandon['txid'])
 
-        # And checks that the claim doesn't resolve anymore.
-        response = yield self.ledger.resolve(0, 10, 'lbry://@spam/hovercraft')
+        # And now check that the claim doesn't resolve anymore.
+        response = yield self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft')
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])

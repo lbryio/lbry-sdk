@@ -41,11 +41,8 @@ class WalletDatabase(BaseDatabase):
             'is_support': txo.script.is_support_claim,
         })
         if txo.script.is_claim_involved:
-            row['claim_name'] = txo.script.values['claim_name'].decode()
-        if txo.script.is_update_claim or txo.script.is_support_claim:
-            row['claim_id'] = hexlify(txo.script.values['claim_id'][::-1])
-        elif txo.script.is_claim_name:
-            row['claim_id'] = hexlify(tx.get_claim_id(txo.position)[::-1])
+            row['claim_id'] = txo.claim_id
+            row['claim_name'] = txo.claim_name
         return row
 
     @defer.inlineCallbacks
