@@ -217,6 +217,9 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
 
+    def channel_list(self):
+        return self.default_account.get_channels()
+
     def get_certificates(self, name):
         return self.db.get_certificates(name, [self.default_account], exclude_without_key=True)
 
