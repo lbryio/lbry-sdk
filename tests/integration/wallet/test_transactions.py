@@ -1,5 +1,4 @@
 import asyncio
-from binascii import hexlify
 
 from orchstr8.testcase import IntegrationTestCase, d2f
 from lbryschema.claim import ClaimDict
@@ -58,10 +57,10 @@ class BasicTransactionTest(IntegrationTestCase):
         self.assertEqual(round(await d2f(self.account.get_balance(0))/COIN, 1), 10.0)
 
         cert, key = generate_certificate()
-        cert_tx = await d2f(Transaction.claim(b'@bar', cert, 1*COIN, address1, [self.account], self.account))
+        cert_tx = await d2f(Transaction.claim('@bar', cert, 1*COIN, address1, [self.account], self.account))
         claim = ClaimDict.load_dict(example_claim_dict)
-        claim = claim.sign(key, address1, hexlify(cert_tx.get_claim_id(0)[::-1]))
-        claim_tx = await d2f(Transaction.claim(b'foo', claim, 1*COIN, address1, [self.account], self.account))
+        claim = claim.sign(key, address1, cert_tx.outputs[0].claim_id)
+        claim_tx = await d2f(Transaction.claim('foo', claim, 1*COIN, address1, [self.account], self.account))
 
         await self.broadcast(cert_tx)
         await self.broadcast(claim_tx)
@@ -88,6 +87,5 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.on_transaction(abandon_tx)
 
-        # should not resolve, but does, why?
         response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertNotIn('claim', response['lbry://@bar/foo'])

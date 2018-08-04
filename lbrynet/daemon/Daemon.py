@@ -383,18 +383,21 @@ class Daemon(AuthJSONRPCServer):
                                log.exception)
         self.analytics_manager.send_claim_action('publish')
         nout = 0
-        script = tx.outputs[nout].script
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-        defer.returnValue({
+        defer.returnValue(self._txo_to_response(tx, nout))
+
+    def _txo_to_response(self, tx, nout):
+        txo = tx.outputs[nout]
+        return {
             "success": True,
             "txid": tx.id,
             "nout": nout,
             "tx": hexlify(tx.raw),
             "fee": str(Decimal(tx.fee) / COIN),
-            "claim_id": hexlify(tx.get_claim_id(0)[::-1]),
-            "value": hexlify(script.values['claim']),
-            "claim_address": self.ledger.hash160_to_address(script.values['pubkey_hash'])
-        })
+            "claim_id": txo.claim_id,
+            "value": hexlify(txo.claim).decode(),
+            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash'])
+        }
 
     @defer.inlineCallbacks
     def _resolve(self, *uris, **kwargs):
@@ -1573,17 +1576,7 @@ class Daemon(AuthJSONRPCServer):
         amount = int(amount * COIN)
         tx = yield self.wallet.claim_new_channel(channel_name, amount)
         self.wallet.save()
-        script = tx.outputs[0].script
-        result = {
-            "success": True,
-            "txid": tx.id,
-            "nout": 0,
-            "tx": hexlify(tx.raw),
-            "fee": str(Decimal(tx.fee) / COIN),
-            "claim_id": hexlify(tx.get_claim_id(0)[::-1]),
-            "value": hexlify(script.values['claim']),
-            "claim_address": self.ledger.hash160_to_address(script.values['pubkey_hash'])
-        }
+        result = self._txo_to_response(tx, 0)
         self.analytics_manager.send_new_channel()
         log.info("Claimed a new channel! Result: %s", result)
         defer.returnValue(result)

@@ -47,7 +47,7 @@ class TestSizeAndFeeEstimation(unittest.TestCase):
         txo = get_output()
         self.assertEqual(txo.size, 46)
         self.assertEqual(txo.get_fee(self.ledger), 46 * FEE_PER_BYTE)
-        claim_name = b'verylongname'
+        claim_name = 'verylongname'
         tx = get_claim_transaction(claim_name, b'0'*4000)
         base_size = tx.size - tx.inputs[0].size - tx.outputs[0].size
         txo = tx.outputs[0]
@@ -56,7 +56,7 @@ class TestSizeAndFeeEstimation(unittest.TestCase):
         self.assertEqual(txo.size, 4067)
         self.assertEqual(txo.get_fee(self.ledger), len(claim_name) * FEE_PER_CHAR)
         # fee based on total bytes is the larger fee
-        claim_name = b'a'
+        claim_name = 'a'
         tx = get_claim_transaction(claim_name, b'0'*4000)
         base_size = tx.size - tx.inputs[0].size - tx.outputs[0].size
         txo = tx.outputs[0]

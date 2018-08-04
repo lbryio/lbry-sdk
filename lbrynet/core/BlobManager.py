@@ -101,7 +101,7 @@ class DiskBlobManager:
                 continue
             if self._node_datastore is not None:
                 try:
-                    self._node_datastore.completed_blobs.remove(blob_hash.decode('hex'))
+                    self._node_datastore.completed_blobs.remove(unhexlify(blob_hash))
                 except KeyError:
                     pass
             try:
@@ -114,7 +114,7 @@ class DiskBlobManager:
         try:
             yield self.storage.delete_blobs_from_db(bh_to_delete_from_db)
         except IntegrityError as err:
-            if err.message != "FOREIGN KEY constraint failed":
+            if str(err) != "FOREIGN KEY constraint failed":
                 raise err
 
     @defer.inlineCallbacks
