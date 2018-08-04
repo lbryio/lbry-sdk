@@ -63,6 +63,15 @@ class OutputScript(BaseOutputScript):
             'pubkey_hash': pubkey_hash
         })
 
+    @classmethod
+    def pay_update_claim_pubkey_hash(cls, claim_name, claim_id, claim, pubkey_hash):
+        return cls(template=cls.UPDATE_CLAIM_PUBKEY, values={
+            'claim_name': claim_name,
+            'claim_id': claim_id,
+            'claim': claim,
+            'pubkey_hash': pubkey_hash
+        })
+
     @property
     def is_claim_name(self):
         return self.template.name.startswith('claim_name+')

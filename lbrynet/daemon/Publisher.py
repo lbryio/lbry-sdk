@@ -1,7 +1,6 @@
 import logging
 import mimetypes
 import os
-from binascii import hexlify
 
 from twisted.internet import defer
 
@@ -48,7 +47,7 @@ class Publisher:
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
         old_stream_hashes = yield self.storage.get_old_stream_hashes_for_claim_id(
-            hexlify(tx.get_claim_id(0)[::-1]), self.lbry_file.stream_hash
+            tx.outputs[0].claim_id, self.lbry_file.stream_hash
         )
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
