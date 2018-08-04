@@ -81,8 +81,8 @@ class JSONRPCError:
         }
 
     @classmethod
-    def create_from_exception(cls, exception, code=CODE_APPLICATION_ERROR, traceback=None):
-        return cls(exception.message, code=code, traceback=traceback)
+    def create_from_exception(cls, message, code=CODE_APPLICATION_ERROR, traceback=None):
+        return cls(message, code=code, traceback=traceback)
 
 
 def default_decimal(obj):
@@ -109,8 +109,7 @@ def jsonrpc_dumps_pretty(obj, **kwargs):
     else:
         data = {"jsonrpc": "2.0", "result": obj, "id": id_}
 
-    return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2,
-                      separators=(',', ': '), **kwargs) + "\n"
+    return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2, **kwargs) + "\n"
 
 
 class JSONRPCServerType(type):
@@ -134,7 +133,7 @@ class AuthorizedBase(metaclass=JSONRPCServerType):
     @staticmethod
     def deprecated(new_command=None):
         def _deprecated_wrapper(f):
-            f._new_command = new_command
+            f.new_command = new_command
             f._deprecated = True
             return f
         return _deprecated_wrapper
@@ -284,8 +283,8 @@ class AuthJSONRPCServer(AuthorizedBase):
             request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
 
     @staticmethod
-    def _render_message(request, message):
-        request.write(message)
+    def _render_message(request, message: str):
+        request.write(message.encode())
         request.finish()
 
     def _render_error(self, failure, request, id_):
@@ -296,8 +295,15 @@ class AuthJSONRPCServer(AuthorizedBase):
             error = failure.check(JSONRPCError)
             if error is None:
                 # maybe its a twisted Failure with another type of error
-                error = JSONRPCError(failure.getErrorMessage() or failure.type.__name__,
-                                     traceback=failure.getTraceback())
+                if hasattr(failure.type, "code"):
+                    error_code = failure.type.code
+                else:
+                    error_code = JSONRPCError.CODE_APPLICATION_ERROR
+                error = JSONRPCError.create_from_exception(
+                    failure.getErrorMessage() or failure.type.__name__,
+                    code=error_code,
+                    traceback=failure.getTraceback()
+                )
             if not failure.check(ComponentsNotStarted, ComponentStartConditionNotMet):
                 log.warning("error processing api request: %s\ntraceback: %s", error.message,
                             "\n".join(error.traceback))
@@ -321,7 +327,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             return self._render(request)
         except BaseException as e:
             log.error(e)
-            error = JSONRPCError.create_from_exception(e, traceback=format_exc())
+            error = JSONRPCError.create_from_exception(str(e), traceback=format_exc())
             self._render_error(error, request, None)
             return server.NOT_DONE_YET
 
@@ -352,12 +358,12 @@ class AuthJSONRPCServer(AuthorizedBase):
                 session.touch()
 
         request.content.seek(0, 0)
-        content = request.content.read()
+        content = request.content.read().decode()
         try:
             parsed = jsonrpclib.loads(content)
-        except ValueError:
+        except json.JSONDecodeError:
             log.warning("Unable to decode request json")
-            self._render_error(JSONRPCError(None, JSONRPCError.CODE_PARSE_ERROR), request, None)
+            self._render_error(JSONRPCError(None, code=JSONRPCError.CODE_PARSE_ERROR), request, None)
             return server.NOT_DONE_YET
 
         request_id = None
@@ -381,7 +387,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                 log.warning("API validation failed")
                 self._render_error(
                     JSONRPCError.create_from_exception(
-                        err, code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
+                        str(err),
+                        code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
                         traceback=format_exc()
                     ),
                     request, request_id
@@ -396,7 +403,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         except UnknownAPIMethodError as err:
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
-                JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
+                JSONRPCError(None, code=JSONRPCError.CODE_METHOD_NOT_FOUND),
                 request, request_id
             )
             return server.NOT_DONE_YET
@@ -507,7 +514,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _get_jsonrpc_method(self, function_path):
         if function_path in self.deprecated_methods:
-            new_command = self.deprecated_methods[function_path]._new_command
+            new_command = self.deprecated_methods[function_path].new_command
             log.warning('API function \"%s\" is deprecated, please update to use \"%s\"',
                         function_path, new_command)
             function_path = new_command
@@ -565,10 +572,10 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _callback_render(self, result, request, id_, auth_required=False):
         try:
-            encoded_message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal).encode()
+            message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal)
             request.setResponseCode(200)
-            self._set_headers(request, encoded_message, auth_required)
-            self._render_message(request, encoded_message)
+            self._set_headers(request, message, auth_required)
+            self._render_message(request, message)
         except Exception as err:
             log.exception("Failed to render API response: %s", result)
             self._render_error(err, request, id_)

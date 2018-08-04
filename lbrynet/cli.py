@@ -1,36 +1,52 @@
 import sys
 import json
 import asyncio
-import aiohttp
+from aiohttp.client_exceptions import ClientConnectorError
+from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
+from lbrynet.daemon.auth.client import LBRYAPIClient
 from lbrynet.core.system_info import get_platform
 from lbrynet.daemon.Daemon import Daemon
-from lbrynet.daemon.DaemonControl import start
+from lbrynet.daemon.DaemonControl import start as daemon_main
+from lbrynet.daemon.DaemonConsole import main as daemon_console
 
 
-async def execute_command(command, args):
-    message = {'method': command, 'params': args}
-    async with aiohttp.ClientSession() as session:
-        async with session.get('http://localhost:5279/lbryapi', json=message) as resp:
-            print(json.dumps(await resp.json(), indent=4))
+async def execute_command(method, params, conf_path=None):
+    # this check if the daemon is running or not
+    try:
+        api = LBRYAPIClient.get_client(conf_path)
+        await api.status()
+    except (ClientConnectorError, ConnectionError):
+        print("Could not connect to daemon. Are you sure it's running?")
+        return 1
+
+    # this actually executes the method
+    try:
+        resp = await api.call(method, params)
+        print(json.dumps(resp["result"], indent=2))
+    except KeyError:
+        if resp["error"]["code"] == -32500:
+            print(json.dumps(resp["error"], indent=2))
+        else:
+            print(json.dumps(resp["error"]["message"], indent=2))
 
 
 def print_help():
     print(dedent("""
     NAME
-       lbry - LBRY command line client.
+       lbrynet - LBRY command line client.
     
     USAGE
-       lbry [--conf <config file>] <command> [<args>]
+       lbrynet [--conf <config file>] <command> [<args>]
     
     EXAMPLES
-       lbry commands                 # list available commands
-       lbry status                   # get daemon status
-       lbry --conf ~/l1.conf status  # like above but using ~/l1.conf as config file
-       lbry resolve_name what        # resolve a name
-       lbry help resolve_name        # get help for a command
+       lbrynet commands                 # list available commands
+       lbrynet status                   # get daemon status
+       lbrynet --conf ~/l1.conf status  # like above but using ~/l1.conf as config file
+       lbrynet resolve_name what        # resolve a name
+       lbrynet help resolve_name        # get help for a command
     """))
 
 
@@ -42,14 +58,14 @@ def print_help_for_command(command):
         print("Invalid command name")
 
 
-def guess_type(x, key=None):
+def normalize_value(x, key=None):
     if not isinstance(x, str):
         return x
     if key in ('uri', 'channel_name', 'name', 'file_name', 'download_directory'):
         return x
-    if x in ('true', 'True', 'TRUE'):
+    if x.lower() == 'true':
         return True
-    if x in ('false', 'False', 'FALSE'):
+    if x.lower() == 'false':
         return False
     if '.' in x:
         try:
@@ -79,7 +95,7 @@ def set_kwargs(parsed_args):
             k = remove_brackets(key[2:])
         elif remove_brackets(key) not in kwargs:
             k = remove_brackets(key)
-        kwargs[k] = guess_type(arg, k)
+        kwargs[k] = normalize_value(arg, k)
     return kwargs
 
 
@@ -89,6 +105,16 @@ def main(argv=None):
         print_help()
         return 1
 
+    conf_path = None
+    if len(argv) and argv[0] == "--conf":
+        if len(argv) < 2:
+            print("No config file specified for --conf option")
+            print_help()
+            return 1
+
+        conf_path = argv[1]
+        argv = argv[2:]
+
     method, args = argv[0], argv[1:]
 
     if method in ['help', '--help', '-h']:
@@ -96,24 +122,31 @@ def main(argv=None):
             print_help_for_command(args[0])
         else:
             print_help()
+        return 0
 
     elif method in ['version', '--version', '-v']:
-        print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=4, separators=(',', ': ')))
-
+        print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=2, separators=(',', ': ')))
+        return 0
 
     elif method == 'start':
-        start(args)
+        sys.exit(daemon_main(args, conf_path))
+
+    elif method == 'console':
+        sys.exit(daemon_console())
 
     elif method not in Daemon.callable_methods:
-        print('"{}" is not a valid command.'.format(method))
-        return 1
+        if method not in Daemon.deprecated_methods:
+            print('{} is not a valid command.'.format(method))
+            return 1
+        new_method = Daemon.deprecated_methods[method].new_command
+        print("{} is deprecated, using {}.".format(method, new_method))
+        method = new_method
 
-    else:
-        fn = Daemon.callable_methods[method]
-        parsed = docopt(fn.__doc__, args)
-        kwargs = set_kwargs(parsed)
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(execute_command(method, kwargs))
+    fn = Daemon.callable_methods[method]
+    parsed = docopt(fn.__doc__, args)
+    params = set_kwargs(parsed)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(execute_command(method, params, conf_path))
 
     return 0
 
