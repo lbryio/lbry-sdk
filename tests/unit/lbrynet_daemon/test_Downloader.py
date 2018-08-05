@@ -3,22 +3,21 @@ import mock
 from twisted.trial import unittest
 from twisted.internet import defer, task
 
-from lbrynet.wallet.manager import LbryWalletManager
 
 from lbrynet.core import PaymentRateManager
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.daemon import Downloader
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht.peerfinder import DummyPeerFinder
 from lbrynet.core.RateLimiter import DummyRateLimiter
+from lbrynet.daemon import Downloader
+from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.database.storage import SQLiteStorage
+from lbrynet.dht.peerfinder import DummyPeerFinder
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.wallet.manager import LbryWalletManager
 
-from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from lbrynet.tests.mocks import mock_conf_settings
+from tests.mocks import mock_conf_settings
 
 
 class MocDownloader(object):
@@ -71,7 +70,7 @@ class GetStreamTests(unittest.TestCase):
         mock_conf_settings(self)
 
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
-        wallet = mock.Mock(spec=LbryWalletmanager)
+        wallet = mock.Mock(spec=LbryWalletManager)
         prm = mock.Mock(spec=PaymentRateManager.NegotiatedPaymentRateManager)
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
         storage = mock.Mock(spec=SQLiteStorage)
