@@ -1,3 +1,4 @@
+# pylint: skip-file
 from collections import defaultdict, deque
 import datetime
 import logging
@@ -7,13 +8,6 @@ from zope.interface import implements
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionAborted
-
-from lbryum import wallet as lbryum_wallet
-from lbryum.network import Network
-from lbryum.simple_config import SimpleConfig
-from lbryum.constants import COIN
-from lbryum.commands import Commands
-from lbryum.errors import InvalidPassword
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.claim import ClaimDict
