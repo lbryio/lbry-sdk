@@ -139,7 +139,7 @@ class AuthAPIClient:
             cookies = RequestsCookieJar()
             cookies.update(http_response.cookies)
             uid = cookies.get(TWISTED_SESSION)
-            api_key = APIKey.new(seed=uid)
+            api_key = APIKey.new(seed=uid.encode())
         else:
             # This is a client that already has a session, use it
             conn = connection
