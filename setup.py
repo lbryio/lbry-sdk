@@ -32,7 +32,7 @@ setup(
         'cryptography',
         'lbryschema',
         'torba',
-        'upnpclient',
+        'txupnp',
         'pyyaml',
         'requests',
         'txJSON-RPC',
