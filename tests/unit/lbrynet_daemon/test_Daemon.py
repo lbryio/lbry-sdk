@@ -50,8 +50,8 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     )
     daemon = LBRYDaemon(component_manager=component_manager)
     daemon.payment_rate_manager = OnlyFreePaymentsManager()
-    daemon.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
-    daemon.wallet.wallet = mock.Mock(spec=NewWallet)
+    daemon.wallet = mock.Mock(spec=LbryWalletManager)
+    daemon.wallet.wallet = mock.Mock(spec=Wallet)
     daemon.wallet.wallet.use_encryption = False
     daemon.wallet.network = FakeNetwork()
     daemon.storage = mock.Mock(spec=SQLiteStorage)
@@ -106,7 +106,7 @@ class TestCostEst(unittest.TestCase):
         correct_result = size / 10 ** 6 * data_rate + fake_fee_amount
         daemon = get_test_daemon(generous=False, with_fee=True)
         result = yield daemon.get_est_cost("test", size)
-        self.assertEqual(result, correct_result)
+        self.assertEqual(result, round(correct_result, 1))
 
     @defer.inlineCallbacks
     def test_generous_data_and_no_fee(self):
@@ -123,7 +123,7 @@ class TestCostEst(unittest.TestCase):
         correct_result = size / 10 ** 6 * data_rate
         daemon = get_test_daemon(generous=False)
         result = yield daemon.get_est_cost("test", size)
-        self.assertEqual(result, correct_result)
+        self.assertEqual(result, round(correct_result, 1))
 
 
 class TestJsonRpc(unittest.TestCase):
