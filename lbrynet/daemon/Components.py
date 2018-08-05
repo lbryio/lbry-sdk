@@ -240,7 +240,10 @@ class HeadersComponent(Component):
     @defer.inlineCallbacks
     def get_remote_height(self):
         ledger = SimpleNamespace()
-        ledger.config = conf
+        ledger.config = {
+            'default_servers': conf.settings['lbryum_servers'],
+            'data_path': conf.settings['lbryum_wallet_dir']
+        }
         net = Network(ledger)
         net.start()
         yield net.on_connected.first
