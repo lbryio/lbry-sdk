@@ -15,12 +15,29 @@ from lbrynet.dht.node import Node
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, ExchangeRateManagerComponent
+from lbrynet.daemon.Components import UPnPComponent
 from lbrynet.daemon.Components import REFLECTOR_COMPONENT, HASH_ANNOUNCER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.daemon.Components import UPNP_COMPONENT
+from lbrynet.daemon.Components import UPNP_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT, DHT_COMPONENT
+from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, HEADERS_COMPONENT, RATE_LIMITER_COMPONENT
 from lbrynet.daemon.ComponentManager import ComponentManager
 
 
 log = logging.getLogger(__name__)
+
+
+class FakeUPnP(UPnPComponent):
+
+    def __init__(self, component_manager):
+        self.component_manager = component_manager
+        self._running = False
+        self.use_upnp = False
+        self.upnp_redirects = {}
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
 
 
 class FakeDHT(DHTComponent):
@@ -98,21 +115,24 @@ class CommandTestCase(IntegrationTestCase):
             self.wallet_component._running = True
             return self.wallet_component
 
+        skip = [
+            #UPNP_COMPONENT,
+            PEER_PROTOCOL_SERVER_COMPONENT,
+            REFLECTOR_COMPONENT
+        ]
         analytics_manager = FakeAnalytics()
         self.daemon = Daemon(analytics_manager, ComponentManager(
-            analytics_manager,
-            skip_components=[
-                #UPNP_COMPONENT,
-                REFLECTOR_COMPONENT,
-                #HASH_ANNOUNCER_COMPONENT,
-                #EXCHANGE_RATE_MANAGER_COMPONENT
-            ],
-            dht=FakeDHT, wallet=wallet_maker,
-            hash_announcer=FakeHashAnnouncerComponent,
-            exchange_rate_manager=FakeExchangeRateComponent
+            analytics_manager=analytics_manager,
+            skip_components=skip, wallet=wallet_maker,
+            dht=FakeDHT, hash_announcer=FakeHashAnnouncerComponent,
+            exchange_rate_manager=FakeExchangeRateComponent,
+            upnp=FakeUPnP
         ))
+        #for component in skip:
+        #    self.daemon.component_attributes.pop(component, None)
         await d2f(self.daemon.setup())
-        self.manager.old_db = self.daemon.session.storage
+        self.daemon.wallet = self.wallet_component.wallet
+        self.manager.old_db = self.daemon.storage
 
     async def tearDown(self):
         await super().tearDown()

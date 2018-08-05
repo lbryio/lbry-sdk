@@ -423,7 +423,7 @@ class Daemon(AuthJSONRPCServer):
                     to_save.append(info['certificate'])
                 if 'claim' in info and info['claim']['value']:
                     to_save.append(info['claim'])
-        yield self.session.storage.save_claims(to_save)
+        yield self.storage.save_claims(to_save)
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
