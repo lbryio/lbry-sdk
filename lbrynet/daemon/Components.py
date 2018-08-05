@@ -6,6 +6,7 @@ import binascii
 from hashlib import sha256
 from types import SimpleNamespace
 from twisted.internet import defer, threads, reactor, error
+import lbryschema
 from txupnp.upnp import UPnP
 from lbrynet import conf
 from lbrynet.core.utils import DeferredDict
@@ -289,6 +290,7 @@ class HeadersComponent(Component):
         if not os.path.exists(self.headers_dir):
             os.mkdir(self.headers_dir)
         if os.path.exists(self.old_file):
+            log.warning("Moving old headers from %s to %s.", self.old_file, self.headers_file)
             os.rename(self.old_file, self.headers_file)
         self._downloading_headers = yield self.should_download_headers_from_s3()
         if self._downloading_headers:
@@ -333,7 +335,7 @@ class WalletComponent(Component):
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet = LbryWalletManager.from_lbrynet_config(conf.settings)
+        self.wallet = LbryWalletManager.from_lbrynet_config(conf.settings, storage)
         self.wallet.old_db = storage
         yield self.wallet.start()
 

@@ -17,7 +17,7 @@ def sha(x: bytes) -> bytes:
     return base58.b58encode(h)
 
 
-def generate_key(x: bytes=None) -> bytes:
+def generate_key(x: bytes = None) -> bytes:
     if x is None:
         return sha(os.urandom(256))
     else:

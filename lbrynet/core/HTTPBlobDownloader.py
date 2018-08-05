@@ -9,7 +9,7 @@ from lbrynet.core.Error import DownloadCanceledError
 log = logging.getLogger(__name__)
 
 
-class HTTPBlobDownloader(object):
+class HTTPBlobDownloader:
     '''
     A downloader that is able to get blobs from HTTP mirrors.
     Note that when a blob gets downloaded from a mirror or from a peer, BlobManager will mark it as completed
