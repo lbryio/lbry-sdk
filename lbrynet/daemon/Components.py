@@ -573,7 +573,7 @@ class PeerProtocolServerComponent(Component):
     @defer.inlineCallbacks
     def start(self):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        peer_port = self.component_manager.get_component(UPNP_COMPONENT).upnp_redirects["TCP"]
+        peer_port = self.component_manager.get_component(UPNP_COMPONENT).get_redirects()[0]
         query_handlers = {
             handler.get_primary_query_identifier(): handler for handler in [
                 BlobRequestHandlerFactory(
@@ -675,6 +675,8 @@ class UPnPComponent(Component):
 
     @defer.inlineCallbacks
     def start(self):
+        if not self.use_upnp:
+            return
         log.debug("In _try_upnp")
         found = yield self.upnp.discover()
         if found and not self.upnp.miniupnpc_runner:
