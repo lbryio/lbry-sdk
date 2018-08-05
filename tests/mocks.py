@@ -400,6 +400,9 @@ class FakeComponent(object):
         self._running = False
         defer.returnValue(result)
 
+    def __lt__(self, other):
+        return self.component_name < other.component_name
+
 
 class FakeDelayedWallet(FakeComponent):
     component_name = "wallet"
