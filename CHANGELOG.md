@@ -33,6 +33,7 @@ at anytime.
   * replace miniupnpc with [txupnp](https://github.com/lbryio/txupnp). Since txupnp is still under development, it will internally fall back to miniupnpc.
   * simplified test_misc.py in the functional tests
   * update `cryptography` requirement to 2.3
+  * improved logging of component startup and shutdown errors
 
 ### Added
   * `skipped_components` list to the response from `status`

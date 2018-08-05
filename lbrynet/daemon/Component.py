@@ -1,6 +1,7 @@
 import logging
 from twisted.internet import defer
 from twisted._threads import AlreadyQuit
+from lbrynet.core.utils import maybe_deferred_trap_and_trace
 from ComponentManager import ComponentManager
 
 log = logging.getLogger(__name__)
@@ -50,26 +51,26 @@ class Component(object):
     def component(self):
         raise NotImplementedError()
 
-    @defer.inlineCallbacks
     def _setup(self):
-        try:
-            result = yield defer.maybeDeferred(self.start)
+        def set_running(result):
             self._running = True
-            defer.returnValue(result)
-        except (defer.CancelledError, AlreadyQuit):
-            pass
-        except Exception as err:
-            log.exception("Error setting up %s", self.component_name or self.__class__.__name__)
-            raise err
+            return result
 
-    @defer.inlineCallbacks
+        def handle_error(err):
+            log.error("Error setting up %s\n%s", self.component_name or self.__class__.__name__, err.getTraceback())
+
+        return maybe_deferred_trap_and_trace(
+            (defer.CancelledError, AlreadyQuit), set_running, handle_error
+        )(self.start)()
+
     def _stop(self):
-        try:
-            result = yield defer.maybeDeferred(self.stop)
+        def set_running(result):
             self._running = False
-            defer.returnValue(result)
-        except (defer.CancelledError, AlreadyQuit):
-            pass
-        except Exception as err:
-            log.exception("Error stopping %s", self.__class__.__name__)
-            raise err
+            return result
+
+        def handle_error(err):
+            log.error("Error stopping %s\n%s", self.component_name or self.__class__.__name__, err.getTraceback())
+
+        return maybe_deferred_trap_and_trace(
+            (defer.CancelledError, AlreadyQuit), set_running, handle_error
+        )(self.stop)()
