@@ -3022,7 +3022,7 @@ class Daemon(AuthJSONRPCServer):
             'head_blob_hash': None,
             'head_blob_availability': {},
             'use_upnp': conf.settings['use_upnp'],
-            'upnp_redirect_is_set': len(self.upnp.get_redirects()) > 0,
+            'upnp_redirect_is_set': len(self.upnp.upnp_redirects),
             'error': None
         }
 

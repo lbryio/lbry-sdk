@@ -99,7 +99,7 @@ class Node(MockKademliaHelper):
                  routingTableClass=None, networkProtocol=None,
                  externalIP=None, peerPort=3333, listenUDP=None,
                  callLater=None, resolve=None, clock=None, peer_finder=None,
-                 peer_manager=None, interface=''):
+                 peer_manager=None, interface='', externalUDPPort=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -149,6 +149,7 @@ class Node(MockKademliaHelper):
         self.old_token_secret = None
         self.externalIP = externalIP
         self.peerPort = peerPort
+        self.externalUDPPort = externalUDPPort or self.port
         self._dataStore = dataStore or datastore.DictDataStore(self.clock.seconds)
         self.peer_manager = peer_manager or PeerManager()
         self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)

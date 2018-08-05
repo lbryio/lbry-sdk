@@ -375,8 +375,8 @@ class DHTComponent(Component):
         Component.__init__(self, component_manager)
         self.dht_node = None
         self.upnp_component = None
-        self.udp_port = None
-        self.peer_port = None
+        self.external_udp_port = None
+        self.external_peer_port = None
 
     @property
     def component(self):
@@ -391,16 +391,18 @@ class DHTComponent(Component):
     @defer.inlineCallbacks
     def start(self):
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
-        self.peer_port, self.udp_port = self.upnp_component.get_redirects()
+        self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", GCS("peer_port"))
+        self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", GCS("dht_node_port"))
         node_id = CS.get_node_id()
         if node_id is None:
             node_id = generate_id()
 
         self.dht_node = node.Node(
             node_id=node_id,
-            udpPort=self.udp_port,
-            externalIP=CS.get_external_ip(),
-            peerPort=self.peer_port
+            udpPort=GCS('dht_node_port'),
+            externalUDPPort=self.external_udp_port,
+            externalIP=self.upnp_component.external_ip,
+            peerPort=self.external_peer_port
         )
 
         self.dht_node.start_listening()
@@ -573,7 +575,8 @@ class PeerProtocolServerComponent(Component):
     @defer.inlineCallbacks
     def start(self):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        peer_port = self.component_manager.get_component(UPNP_COMPONENT).get_redirects()[0]
+        upnp = self.component_manager.get_component(UPNP_COMPONENT)
+        peer_port = GCS('peer_port')
         query_handlers = {
             handler.get_primary_query_identifier(): handler for handler in [
                 BlobRequestHandlerFactory(
@@ -591,7 +594,8 @@ class PeerProtocolServerComponent(Component):
         )
 
         try:
-            log.info("Peer protocol listening on TCP %d", peer_port)
+            log.info("Peer protocol listening on TCP %i (ext port %i)", peer_port,
+                     upnp.upnp_redirects.get("TCP", peer_port))
             self.lbry_server_port = yield reactor.listenTCP(peer_port, server_factory)
         except error.CannotListenError as e:
             import traceback
@@ -648,51 +652,41 @@ class UPnPComponent(Component):
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
-        self._default_peer_port = GCS('peer_port')
-        self._default_dht_node_port = GCS('dht_node_port')
+        self._int_peer_port = GCS('peer_port')
+        self._int_dht_node_port = GCS('dht_node_port')
         self.use_upnp = GCS('use_upnp')
-        self.external_ip = None
-        self.upnp = UPnP(self.component_manager.reactor, try_miniupnpc_fallback=True)
+        self.upnp = None
         self.upnp_redirects = {}
+        self.external_ip = None
 
     @property
     def component(self):
         return self
 
-    def get_redirects(self):
-        if not self.use_upnp or not self.upnp_redirects:
-            return self._default_peer_port, self._default_dht_node_port
-        return self.upnp_redirects["TCP"], self.upnp_redirects["UDP"]
-
     @defer.inlineCallbacks
     def _setup_redirects(self):
-        self.external_ip = yield self.upnp.get_external_ip()
         upnp_redirects = yield DeferredDict({
-            "UDP": self.upnp.get_next_mapping(self._default_dht_node_port, "UDP", "LBRY DHT port"),
-            "TCP": self.upnp.get_next_mapping(self._default_peer_port, "TCP", "LBRY peer port")
+            "UDP": self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"),
+            "TCP": self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
         })
         self.upnp_redirects.update(upnp_redirects)
 
     @defer.inlineCallbacks
     def start(self):
         if not self.use_upnp:
+            self.external_ip = CS.get_external_ip()
             return
-        log.debug("In _try_upnp")
+        self.upnp = UPnP(self.component_manager.reactor, try_miniupnpc_fallback=True)
         found = yield self.upnp.discover()
         if found and not self.upnp.miniupnpc_runner:
             log.info("set up redirects using txupnp")
         elif found and self.upnp.miniupnpc_runner:
             log.warning("failed to set up redirect with txupnp, miniupnpc fallback was successful")
         if found:
-            try:
-                yield self._setup_redirects()
-            except Exception as err:
-                if not self.upnp.miniupnpc_runner:
-                    started_fallback = yield self.upnp.start_miniupnpc_fallback()
-                    if started_fallback:
-                        yield self._setup_redirects()
-                    else:
-                        log.warning("failed to set up upnp redirects")
+            self.external_ip = yield self.upnp.get_external_ip()
+            yield self._setup_redirects()
+        else:
+            self.external_ip = CS.get_external_ip()
 
     def stop(self):
         return defer.DeferredList(
