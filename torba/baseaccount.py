@@ -211,20 +211,12 @@ class BaseAccount:
         ledger.add_account(self)
 
     @classmethod
-    def generate(cls, ledger: 'baseledger.BaseLedger', password: str, address_generator: dict = None):
-        seed = cls.mnemonic_class().make_seed()
-        return cls.from_seed(ledger, seed, password, address_generator or {})
-
-    @classmethod
-    def from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str, address_generator: dict):
-        private_key = cls.get_private_key_from_seed(ledger, seed, password)
-        return cls(
-            ledger=ledger, name='Account #{}'.format(private_key.public_key.address),
-            seed=seed, encrypted=False,
-            private_key=private_key,
-            public_key=private_key.public_key,
-            address_generator=address_generator
-        )
+    def generate(cls, ledger: 'baseledger.BaseLedger', name: str = None, address_generator: dict = None):
+        return cls.from_dict(ledger, {
+            'name': name,
+            'seed': cls.mnemonic_class().make_seed(),
+            'address_generator': address_generator or {}
+        })
 
     @classmethod
     def get_private_key_from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str):
@@ -234,23 +226,30 @@ class BaseAccount:
 
     @classmethod
     def from_dict(cls, ledger: 'baseledger.BaseLedger', d: dict):
-        if not d['private_key'] and not d['public_key'] and d['seed']:
-            private_key = cls.get_private_key_from_seed(ledger, d['seed'], '')
-            public_key = private_key.public_key
-        elif not d['encrypted'] and d['private_key']:
-            private_key = from_extended_key_string(ledger, d['private_key'])
-            public_key = private_key.public_key
-        else:
-            private_key = d['private_key']
+        seed = d.get('seed', '')
+        private_key = d.get('private_key', '')
+        public_key = None
+        encrypted = d.get('encrypted', False)
+        if not encrypted:
+            if seed:
+                private_key = cls.get_private_key_from_seed(ledger, seed, '')
+                public_key = private_key.public_key
+            elif private_key:
+                private_key = from_extended_key_string(ledger, private_key)
+                public_key = private_key.public_key
+        if public_key is None:
             public_key = from_extended_key_string(ledger, d['public_key'])
+        name = d.get('name')
+        if not name:
+            name = 'Account #{}'.format(public_key.address)
         return cls(
             ledger=ledger,
-            name=d['name'],
-            seed=d['seed'],
-            encrypted=d['encrypted'],
+            name=name,
+            seed=seed,
+            encrypted=encrypted,
             private_key=private_key,
             public_key=public_key,
-            address_generator=d['address_generator']
+            address_generator=d.get('address_generator', {})
         )
 
     def to_dict(self):

@@ -141,10 +141,12 @@ class TestTransactionSigning(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_sign(self):
-        account = self.ledger.account_class.from_seed(
-            self.ledger,
-            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent", u"torba", {}
+        account = self.ledger.account_class.from_dict(
+            self.ledger, {
+                "seed": "carbon smart garage balance margin twelve chest sword "
+                        "toast envelope bottom stomach absent"
+
+            }
         )
 
         yield account.ensure_address_gap()
@@ -160,10 +162,11 @@ class TestTransactionSigning(unittest.TestCase):
 
         yield tx.sign([account])
 
+        print(hexlify(tx.inputs[0].script.values['signature']))
         self.assertEqual(
             hexlify(tx.inputs[0].script.values['signature']),
-            b'304402203d463519290d06891e461ea5256c56097ccdad53379b1bb4e51ec5abc6e9fd02022034ed15b9'
-            b'd7c678716c4aa7c0fd26c688e8f9db8075838f2839ab55d551b62c0a01'
+            b'304402205a1df8cd5d2d2fa5934b756883d6c07e4f83e1350c740992d47a12422'
+            b'226aaa202200098ac8675827aea2b0d6f0e49566143a95d523e311d342172cd99e2021e47cb01'
         )
 
 
@@ -173,10 +176,11 @@ class TransactionIOBalancing(unittest.TestCase):
     def setUp(self):
         self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
         yield self.ledger.db.start()
-        self.account = self.ledger.account_class.from_seed(
-            self.ledger,
-            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent", u"torba", {}
+        self.account = self.ledger.account_class.from_dict(
+            self.ledger, {
+                "seed": "carbon smart garage balance margin twelve chest sword "
+                        "toast envelope bottom stomach absent"
+            }
         )
 
         addresses = yield self.account.ensure_address_gap()

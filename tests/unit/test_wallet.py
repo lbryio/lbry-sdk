@@ -39,11 +39,11 @@ class TestWalletCreation(unittest.TestCase):
                         "h absent",
                     'encrypted': False,
                     'private_key':
-                        'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-                        '6yz3jMbycrLrRMpeAJxR8qDg8',
+                        'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3Z'
+                        'T4vYymkp5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
                     'public_key':
-                        'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-                        'iW44g14WF52fYC5J483wqQ5ZP',
+                        'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6'
+                        'mKUMJFc7UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
                     'address_generator': {
                         'name': 'deterministic-chain',
                         'receiving': {'gap': 17, 'maximum_uses_per_address': 3},

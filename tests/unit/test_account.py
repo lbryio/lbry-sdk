@@ -92,29 +92,35 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_generate_account_from_seed(self):
-        account = self.ledger.account_class.from_seed(
-            self.ledger,
-            "carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            "sent", "torba", {'name': 'deterministic-chain', 'receiving_gap': 3, 'change_gap': 2}
+        account = self.ledger.account_class.from_dict(
+            self.ledger, {
+                "seed": "carbon smart garage balance margin twelve chest sword "
+                        "toast envelope bottom stomach absent",
+                "address_generator": {
+                    'name': 'deterministic-chain',
+                    'receiving': {'gap': 3, 'maximum_uses_per_address': 1},
+                    'change': {'gap': 2, 'maximum_uses_per_address': 1}
+                }
+            }
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-            '6yz3jMbycrLrRMpeAJxR8qDg8'
+            'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp5BxK'
+            'Kfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna'
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-            'iW44g14WF52fYC5J483wqQ5ZP'
+            'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7UbpV'
+            'NzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g'
         )
         address = yield account.receiving.ensure_address_gap()
-        self.assertEqual(address[0], '1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
+        self.assertEqual(address[0], '1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J')
 
-        private_key = yield self.ledger.get_private_key_for_address('1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
+        private_key = yield self.ledger.get_private_key_for_address('1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J')
         self.assertEqual(
             private_key.extended_key_string(),
-            'xprv9xNEfQ296VTRaEUDZ8oKq74xw2U6kpj486vFUB4K1wT9U25GX4UwuzFgJN1YuRrqkQ5TTwCpkYnjNpSoH'
-            'SBaEigNHPkoeYbuPMRo6mRUjxg'
+            'xprv9xV7rhbg6M4yWrdTeLorz3Q1GrQb4aQzzGWboP3du7W7UUztzNTUrEYTnDfz7o'
+            'ptBygDxXYRppyiuenJpoBTgYP2C26E1Ah5FEALM24CsWi'
         )
 
         invalid_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
@@ -122,7 +128,7 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
 
         self.assertEqual(
             hexlify(private_key.wif()),
-            b'1cc27be89ad47ef932562af80e95085eb0ab2ae3e5c019b1369b8b05ff2e94512f01'
+            b'1c01ae1e4c7d89e39f6d3aa7792c097a30ca7d40be249b6de52c81ec8cf9aab48b01'
         )
 
     @defer.inlineCallbacks
@@ -134,11 +140,11 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
                 "h absent",
             'encrypted': False,
             'private_key':
-                'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-                '6yz3jMbycrLrRMpeAJxR8qDg8',
+                'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
+                '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
             'public_key':
-                'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-                'iW44g14WF52fYC5J483wqQ5ZP',
+                'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
+                'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
             'address_generator': {
                 'name': 'deterministic-chain',
                 'receiving': {'gap': 5, 'maximum_uses_per_address': 2},
@@ -244,20 +250,23 @@ class TestSingleKeyAccount(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_generate_account_from_seed(self):
-        account = self.ledger.account_class.from_seed(
-            self.ledger,
-            "carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            "sent", "torba", {'name': 'single-address'}
+        account = self.ledger.account_class.from_dict(
+            self.ledger, {
+                "seed":
+                    "carbon smart garage balance margin twelve chest sword toas"
+                    "t envelope bottom stomach absent",
+                'address_generator': {'name': 'single-address'}
+            }
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-            '6yz3jMbycrLrRMpeAJxR8qDg8'
+            'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
+            '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-            'iW44g14WF52fYC5J483wqQ5ZP'
+            'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
+            'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
         )
         address = yield account.receiving.ensure_address_gap()
         self.assertEqual(address[0], account.public_key.address)
@@ -265,8 +274,8 @@ class TestSingleKeyAccount(unittest.TestCase):
         private_key = yield self.ledger.get_private_key_for_address(address[0])
         self.assertEqual(
             private_key.extended_key_string(),
-            'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-            '6yz3jMbycrLrRMpeAJxR8qDg8'
+            'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
+            '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
         )
 
         invalid_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
@@ -274,7 +283,7 @@ class TestSingleKeyAccount(unittest.TestCase):
 
         self.assertEqual(
             hexlify(private_key.wif()),
-            b'1c2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c01'
+            b'1c92caa0ef99bfd5e2ceb73b66da8cd726a9370be8c368d448a322f3c5b23aaab901'
         )
 
     @defer.inlineCallbacks
@@ -286,11 +295,11 @@ class TestSingleKeyAccount(unittest.TestCase):
                 "h absent",
             'encrypted': False,
             'private_key':
-                'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-                '6yz3jMbycrLrRMpeAJxR8qDg8',
+                'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
+                '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
             'public_key':
-                'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-                'iW44g14WF52fYC5J483wqQ5ZP',
+                'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
+                'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
             'address_generator': {'name': 'single-address'}
         }
 
