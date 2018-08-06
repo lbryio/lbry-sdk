@@ -110,7 +110,7 @@ class Account(BaseAccount):
     @classmethod
     def from_dict(cls, ledger, d: dict) -> 'Account':
         account = super().from_dict(ledger, d)
-        account.certificates = d['certificates']
+        account.certificates = d.get('certificates', {})
         return account
 
     def to_dict(self):
