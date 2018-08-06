@@ -67,16 +67,9 @@ def normalize_value(x, key=None):
         return True
     if x.lower() == 'false':
         return False
-    if '.' in x:
-        try:
-            return float(x)
-        except ValueError:
-            # not a float
-            pass
-    try:
+    if x.isdigit():
         return int(x)
-    except ValueError:
-        return x
+    return x
 
 
 def remove_brackets(key):
