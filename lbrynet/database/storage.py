@@ -96,7 +96,7 @@ class SqliteConnection(adbapi.ConnectionPool):
         cls.reactor = reactor
 
 
-class SQLiteStorage(WalletDatabase):
+class SQLiteStorage:
 
     CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;

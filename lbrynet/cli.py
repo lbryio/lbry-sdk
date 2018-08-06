@@ -6,6 +6,9 @@ from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
+from twisted.internet.asyncioreactor import install
+install(asyncio.get_event_loop())
+
 from lbrynet.daemon.auth.client import LBRYAPIClient
 from lbrynet.core.system_info import get_platform
 from lbrynet.daemon.Daemon import Daemon
