@@ -3064,7 +3064,7 @@ class Daemon(AuthJSONRPCServer):
                         seed=None, private_key=None, public_key=None,
                         change_gap=None, change_max_uses=None,
                         receiving_gap=None, receiving_max_uses=None,
-                        rename=None):
+                        rename=None, default=False):
         """
         Create new account or update some settings on an existing account. If no
         creation or modification options are provided but the account exists then
@@ -3075,7 +3075,7 @@ class Daemon(AuthJSONRPCServer):
                  [--seed=<seed> | --private_key=<private_key> | --public_key=<public_key>]
                  [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
                  [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
-                 [--rename=<rename>]
+                 [--rename=<rename>] [--default]
 
         Options:
             --account_name=<account_name>   : (str) name of the account to create or update
@@ -3091,7 +3091,8 @@ class Daemon(AuthJSONRPCServer):
             --change_gap=<change_gap>           : (int) set the gap for change addresses
             --change_max_uses=<change_max_uses> : (int) set the maximum number of times to
                                                         use a change address
-            --rename=<rename>     : (str) change name of existing account
+            --rename=<rename>               : (str) change name of existing account
+            --default                       : (bool) make this account the default
 
         Returns:
             (map) new or updated account details
@@ -3151,8 +3152,15 @@ class Daemon(AuthJSONRPCServer):
                             change_made = True
             if change_made:
                 wallet.save()
+
+        if default:
+            wallet.accounts.remove(account)
+            wallet.accounts.insert(0, account)
+            wallet.save()
+
         result = account.to_dict()
         result.pop('certificates', None)
+        result['is_default'] = wallet.accounts[0] == account
         return result
 
     @requires("wallet")
