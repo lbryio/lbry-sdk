@@ -88,7 +88,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
 
 
 def collect(response, write):
-    write('f' * response.length)
+    write(b'f' * response.length)
 
 
 def bad_collect(response, write):
