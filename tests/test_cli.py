@@ -11,7 +11,7 @@ class CLITest(unittest.TestCase):
 
     def test_guess_type(self):
         self.assertEqual('0.3.8', normalize_value('0.3.8'))
-        self.assertEqual(0.3, normalize_value('0.3'))
+        self.assertEqual('0.3', normalize_value('0.3'))
         self.assertEqual(3, normalize_value('3'))
         self.assertEqual(3, normalize_value(3))
 

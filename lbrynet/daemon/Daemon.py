@@ -12,6 +12,7 @@ from twisted.web import server
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
+from typing import Union
 
 from torba.constants import COIN
 
@@ -42,7 +43,7 @@ from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.wallet.account import Account as LBRYAccount
+from lbrynet.wallet.account import Account as LBCAccount
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
@@ -804,7 +805,6 @@ class Daemon(AuthJSONRPCServer):
         log.info("Get version info: " + json.dumps(platform_info))
         return self._render_response(platform_info)
 
-    # @AuthJSONRPCServer.deprecated() # deprecated actually disables the call
     def jsonrpc_report_bug(self, message=None):
         """
         Report a bug to slack
@@ -2369,36 +2369,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @AuthJSONRPCServer.deprecated("wallet_send")
-    @defer.inlineCallbacks
-    def jsonrpc_send_amount_to_address(self, amount, address):
-        """
-        Queue a payment of credits to an address
-
-        Usage:
-            send_amount_to_address (<amount> | --amount=<amount>) (<address> | --address=<address>)
-
-        Options:
-            --amount=<amount>     : (float) amount to send
-            --address=<address>   : (str) address to send credits to
-
-        Returns:
-            (bool) true if payment successfully scheduled
-        """
-
-        if amount < 0:
-            raise NegativeFundsError()
-        elif not amount:
-            raise NullFundsError()
-
-        reserved_points = self.wallet.reserve_points(address, amount)
-        if reserved_points is None:
-            raise InsufficientFundsError()
-        yield self.wallet.send_points_to_address(reserved_points, amount)
-        self.analytics_manager.send_credits_sent()
-        defer.returnValue(True)
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_wallet_send(self, amount, address=None, claim_id=None):
         """
@@ -2972,27 +2942,6 @@ class Daemon(AuthJSONRPCServer):
         return self._blob_availability(blob_hash, search_timeout, blob_timeout)
 
     @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @AuthJSONRPCServer.deprecated("stream_availability")
-    def jsonrpc_get_availability(self, uri, sd_timeout=None, peer_timeout=None):
-        """
-        Get stream availability for lbry uri
-
-        Usage:
-            get_availability (<uri> | --uri=<uri>) [<sd_timeout> | --sd_timeout=<sd_timeout>]
-                             [<peer_timeout> | --peer_timeout=<peer_timeout>]
-
-        Options:
-            --uri=<uri>                    : (str) check availability for this uri
-            --sd_timeout=<sd_timeout>      : (int) sd blob download timeout
-            --peer_timeout=<peer_timeout>  : (int) how long to look for peers
-
-        Returns:
-            (float) Peers per blob / total blobs
-        """
-
-        return self.jsonrpc_stream_availability(uri, peer_timeout, sd_timeout)
-
-    @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_stream_availability(self, uri, search_timeout=None, blob_timeout=None):
         """
@@ -3095,39 +3044,22 @@ class Daemon(AuthJSONRPCServer):
                                    response['head_blob_availability'].get('is_available')
         defer.returnValue(response)
 
-    @defer.inlineCallbacks
-    def jsonrpc_cli_test_command(self, pos_arg, pos_args=[], pos_arg2=None, pos_arg3=None,
-                                 a_arg=False, b_arg=False):
-        """
-        This command is only for testing the CLI argument parsing
-        Usage:
-            cli_test_command [--a_arg] [--b_arg] (<pos_arg> | --pos_arg=<pos_arg>)
-                             [<pos_args>...] [--pos_arg2=<pos_arg2>]
-                             [--pos_arg3=<pos_arg3>]
-
-        Options:
-            --a_arg                            : (bool) a arg
-            --b_arg                            : (bool) b arg
-            --pos_arg=<pos_arg>                : (int) pos arg
-            --pos_args=<pos_args>              : (int) pos args
-            --pos_arg2=<pos_arg2>              : (int) pos arg 2
-            --pos_arg3=<pos_arg3>              : (int) pos arg 3
-        Returns:
-            pos args
-        """
-        out = (pos_arg, pos_args, pos_arg2, pos_arg3, a_arg, b_arg)
-        response = yield self._render_response(out)
-        defer.returnValue(response)
+    #######################
+    # New Wallet Commands #
+    #######################
+    # TODO:
+    # Delete this after all commands have been migrated
+    # and refactored.
 
     @requires("wallet")
-    def jsonrpc_account_balance(self, account_name=None, confirmations=6,
-                                include_reserved=False, include_claims=False):
+    def jsonrpc_balance(self, account_name=None, confirmations=6, include_reserved=False,
+                        include_claims=False):
         """
         Return the balance of an individual account or all of the accounts.
 
         Usage:
-            account_balance [<account_name>] [--confirmations=<confirmations>]
-                            [--include_reserved] [--include_claims]
+            balance [<account_name>] [--confirmations=<confirmations>]
+                    [--include_reserved] [--include_claims]
 
         Options:
             --account=<account_name>        : (str) If provided only the balance for this
@@ -3143,7 +3075,7 @@ class Daemon(AuthJSONRPCServer):
         if account_name:
             for account in self.wallet.accounts:
                 if account.name == account_name:
-                    if include_claims and not isinstance(account, LBRYAccount):
+                    if include_claims and not isinstance(account, LBCAccount):
                         raise Exception(
                             "'--include-claims' requires specifying an LBC ledger account. "
                             "Found '{}', but it's an {} ledger account."
@@ -3163,7 +3095,7 @@ class Daemon(AuthJSONRPCServer):
             return self.wallet.get_balances(confirmations)
 
     @requires("wallet")
-    def jsonrpc_account_max_gap(self, account_name):
+    def jsonrpc_max_address_gap(self, account_name):
         """
         Finds ranges of consecutive addresses that are unused and returns the length
         of the longest such range: for change and receiving address chains. This is
@@ -3171,7 +3103,7 @@ class Daemon(AuthJSONRPCServer):
         account settings.
 
         Usage:
-            account_max_gap <account_name>
+            max_address_gap <account_name>
 
         Options:
             --account=<account_name>        : (str) account for which to get max gaps
@@ -3179,10 +3111,89 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (map) maximum gap for change and receiving addresses
         """
+        return self.get_account_or_error('account', account_name).get_max_gap()
+
+    @requires("wallet")
+    def jsonrpc_fund(self, to_account, from_account, amount=0,
+                         everything=False, outputs=1, broadcast=False):
+        """
+        Transfer some amount (or --everything) to an account from another
+        account (can be the same account). Decimal amounts are interpreted
+        as LBC and non-decimal amounts are interpreted as dewies. You can
+        also spread the transfer across a number of --outputs (cannot be
+        used together with --everything).
+
+        Usage:
+            transfer (<to_account> | --to_account=<to_account>)
+                     (<from_account> | --from_account=<from_account>)
+                     (<amount> | --amount=<amount> | --everything)
+                     [<outputs> | --outputs=<outputs>]
+                     [--broadcast]
+
+        Options:
+            --to_account=<to_account>     : (str) send to this account
+            --from_account=<from_account> : (str) spend from this account
+            --amount=<amount>             : (str) the amount to transfer (lbc or dewies)
+            --everything                  : (bool) transfer everything (excluding claims), default: false.
+            --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
+            --broadcast                   : (bool) actually broadcast the transaction, default: false.
+
+        Returns:
+            (map) maximum gap for change and receiving addresses
+
+        """
+        to_account = self.get_account_or_error('to_account', to_account)
+        from_account = self.get_account_or_error('from_account', from_account)
+        amount = self.get_dewies_or_error('amount', amount) if amount else None
+        if not isinstance(outputs, int):
+            raise ValueError("--outputs must be an integer.")
+        if everything and outputs > 1:
+            raise ValueError("Using --everything along with --outputs is not supported.")
+        return from_account.fund(
+            to_account=to_account, amount=amount, everything=everything,
+            outputs=outputs, broadcast=broadcast
+        ).addCallback(lambda tx: self.tx_to_json(tx, from_account.ledger))
+
+    @staticmethod
+    def tx_to_json(tx, ledger):
+        return {
+            'txid': tx.id,
+            'inputs': [
+                {'amount': txi.amount, 'address': txi.txo_ref.txo.get_address(ledger)}
+                for txi in tx.inputs
+            ],
+            'outputs': [
+                {'amount': txo.amount, 'address': txo.get_address(ledger)}
+                for txo in tx.outputs
+            ],
+            'total_input': tx.input_sum,
+            'total_output': tx.input_sum,
+            'total_fee': tx.fee,
+            'xhex': hexlify(tx.raw).decode(),
+        }
+
+    def get_account_or_error(self, argument: str, account_name: str, lbc_only=False):
         for account in self.wallet.accounts:
             if account.name == account_name:
-                return account.get_max_gap()
-        raise Exception("Couldn't find an account named: '{}'.".format(account_name))
+                if lbc_only and not isinstance(account, LBCAccount):
+                    raise ValueError(
+                        "Found '{}', but it's an {} ledger account. "
+                        "'{}' requires specifying an LBC ledger account."
+                        .format(account_name, account.ledger.symbol, argument)
+                    )
+                return account
+        raise ValueError("Couldn't find an account named: '{}'.".format(account_name))
+
+    @staticmethod
+    def get_dewies_or_error(argument: str, amount: Union[str, int]):
+        if isinstance(amount, str):
+            if '.' in amount:
+                return int(Decimal(amount) * COIN)
+            elif amount.isdigit():
+                return int(amount)
+        elif isinstance(amount, int):
+            return amount
+        raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
 
 
 def loggly_time_string(dt):

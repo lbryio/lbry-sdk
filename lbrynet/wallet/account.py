@@ -102,6 +102,12 @@ class Account(BaseAccount):
         defer.returnValue(channels)
 
     @classmethod
+    def get_private_key_from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str):
+        return super().get_private_key_from_seed(
+            ledger, seed, password or 'lbryum'
+        )
+
+    @classmethod
     def from_dict(cls, ledger, d: dict) -> 'Account':
         account = super().from_dict(ledger, d)
         account.certificates = d['certificates']
