@@ -234,7 +234,10 @@ class BaseAccount:
 
     @classmethod
     def from_dict(cls, ledger: 'baseledger.BaseLedger', d: dict):
-        if not d['encrypted'] and d['private_key']:
+        if not d['private_key'] and not d['public_key'] and d['seed']:
+            private_key = cls.get_private_key_from_seed(ledger, d['seed'], '')
+            public_key = private_key.public_key
+        elif not d['encrypted'] and d['private_key']:
             private_key = from_extended_key_string(ledger, d['private_key'])
             public_key = private_key.public_key
         else:
@@ -316,3 +319,41 @@ class BaseAccount:
 
     def get_unspent_outputs(self, **constraints):
         return self.ledger.db.get_utxos_for_account(self, **constraints)
+
+    @defer.inlineCallbacks
+    def fund(self, to_account, amount=None, everything=False,
+             outputs=1, broadcast=False, **constraints):
+        assert self.ledger == to_account.ledger, 'Can only transfer between accounts of the same ledger.'
+        tx_class = self.ledger.transaction_class
+        if everything:
+            utxos = yield self.get_unspent_outputs(**constraints)
+            yield self.ledger.reserve_outputs(utxos)
+            tx = yield tx_class.create(
+                inputs=[tx_class.input_class.spend(txo) for txo in utxos],
+                outputs=[],
+                funding_accounts=[self],
+                change_account=to_account
+            )
+        elif amount > 0:
+            to_address = yield to_account.change.get_or_create_usable_address()
+            to_hash160 = to_account.ledger.address_to_hash160(to_address)
+            tx = yield tx_class.create(
+                inputs=[],
+                outputs=[
+                    tx_class.output_class.pay_pubkey_hash(amount//outputs, to_hash160)
+                    for _ in range(outputs)
+                ],
+                funding_accounts=[self],
+                change_account=self
+            )
+        else:
+            raise ValueError('An amount is required.')
+
+        if broadcast:
+            yield self.ledger.broadcast(tx)
+        else:
+            yield self.ledger.release_outputs(
+                [txi.txo_ref.txo for txi in tx.inputs]
+            )
+
+        defer.returnValue(tx)

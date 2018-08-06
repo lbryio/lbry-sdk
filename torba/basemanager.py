@@ -1,9 +1,12 @@
+import logging
 from typing import Type, MutableSequence, MutableMapping
 from twisted.internet import defer
 
 from torba.baseledger import BaseLedger, LedgerRegistry
 from torba.wallet import Wallet, WalletStorage
 from torba.constants import COIN
+
+log = logging.getLogger(__name__)
 
 
 class BaseWalletManager:
@@ -22,6 +25,11 @@ class BaseWalletManager:
         for wallet_path in config.get('wallets', []):
             wallet_storage = WalletStorage(wallet_path)
             wallet = Wallet.from_storage(wallet_storage, manager)
+            if wallet.default_account is None:
+                ledger = manager.get_or_create_ledger('lbc_mainnet')
+                log.info('Wallet at %s is empty, generating a default account.', wallet_path)
+                wallet.generate_account(ledger)
+                wallet.save()
             manager.wallets.append(wallet)
         return manager
 
