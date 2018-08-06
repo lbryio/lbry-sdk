@@ -221,10 +221,12 @@ class TestTransactionSigning(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_sign(self):
-        account = self.ledger.account_class.from_seed(
-            self.ledger,
-            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent", u"lbryum", {}
+        account = self.ledger.account_class.from_dict(
+            self.ledger, {
+                "seed":
+                    "carbon smart garage balance margin twelve chest sword toas"
+                    "t envelope bottom stomach absent"
+            }
         )
 
         yield account.ensure_address_gap()

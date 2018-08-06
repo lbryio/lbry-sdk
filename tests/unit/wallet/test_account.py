@@ -36,10 +36,12 @@ class TestAccount(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_generate_account_from_seed(self):
-        account = Account.from_seed(
-            self.ledger,
-            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent", u"lbryum", {}
+        account = Account.from_dict(
+            self.ledger, {
+                "seed":
+                    "carbon smart garage balance margin twelve chest sword toas"
+                    "t envelope bottom stomach absent"
+            }
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
