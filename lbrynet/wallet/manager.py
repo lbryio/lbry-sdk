@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
@@ -12,6 +13,8 @@ from .ledger import MainNetLedger
 from .account import generate_certificate
 from .transaction import Transaction
 from .database import WalletDatabase
+
+log = logging.getLogger(__name__)
 
 
 class BackwardsCompatibleNetwork:
@@ -107,10 +110,16 @@ class LbryWalletManager(BaseWalletManager):
                 with open(wallet_file_path, 'w') as f:
                     f.write(json_data)
 
-        return cls.from_config({
+        manager = cls.from_config({
             'ledgers': {ledger_id: ledger_config},
             'wallets': [wallet_file_path]
         })
+        if manager.default_account is None:
+            ledger = manager.get_or_create_ledger('lbc_mainnet')
+            log.info('Wallet at %s is empty, generating a default account.', wallet_file_path)
+            manager.default_wallet.generate_account(ledger)
+            manager.default_wallet.save()
+        return manager
 
     def get_best_blockhash(self):
         return defer.succeed('')
