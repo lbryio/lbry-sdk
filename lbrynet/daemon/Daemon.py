@@ -44,6 +44,7 @@ from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.wallet.account import Account as LBCAccount
+from torba.baseaccount import SingleKey, HierarchicalDeterministic
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
@@ -3059,6 +3060,102 @@ class Daemon(AuthJSONRPCServer):
     # and refactored.
 
     @requires("wallet")
+    def jsonrpc_account(self, account_name, create=False, delete=False, single_key=False,
+                        seed=None, private_key=None, public_key=None,
+                        change_gap=None, change_max_uses=None,
+                        receiving_gap=None, receiving_max_uses=None,
+                        rename=None):
+        """
+        Create new account or update some settings on an existing account. If no
+        creation or modification options are provided but the account exists then
+        it will just displayed the unmodified settings for the account.
+
+        Usage:
+            account [--create | --delete] (<account_name> | --account_name=<account_name>) [--single_key]
+                 [--seed=<seed> | --private_key=<private_key> | --public_key=<public_key>]
+                 [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
+                 [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
+                 [--rename=<rename>]
+
+        Options:
+            --account_name=<account_name>   : (str) name of the account to create or update
+            --create                        : (bool) create the account
+            --delete                        : (bool) delete the account
+            --single_key                    : (bool) create single key account, default is multi-key
+            --seed=<seed>                   : (str) seed to generate new account from
+            --private_key=<private_key>     : (str) private key for new account
+            --public_key=<public_key>       : (str) public key for new account
+            --receiving_gap=<receiving_gap> : (int) set the gap for receiving addresses
+            --receiving_max_uses=<receiving_max_uses> : (int) set the maximum number of times to
+                                                              use a receiving address
+            --change_gap=<change_gap>           : (int) set the gap for change addresses
+            --change_max_uses=<change_max_uses> : (int) set the maximum number of times to
+                                                        use a change address
+            --rename=<rename>     : (str) change name of existing account
+
+        Returns:
+            (map) new or updated account details
+
+        """
+        wallet = self.wallet.default_wallet
+        if create:
+            self.error_if_account_exists(account_name)
+            if single_key:
+                address_generator = {'name': SingleKey.name}
+            else:
+                address_generator = {
+                    'name': HierarchicalDeterministic.name,
+                    'receiving': {
+                        'gap': receiving_gap or 20,
+                        'maximum_uses_per_address': receiving_max_uses or 2},
+                    'change': {
+                        'gap': change_gap or 6,
+                        'maximum_uses_per_address': change_max_uses or 2}
+                }
+            ledger = self.wallet.get_or_create_ledger('lbc_mainnet')
+            if seed or private_key or public_key:
+                account = LBCAccount.from_dict(ledger, {
+                    'name': account_name,
+                    'seed': seed,
+                    'private_key': private_key,
+                    'public_key': public_key,
+                    'address_generator': address_generator
+                })
+            else:
+                account = LBCAccount.generate(
+                    ledger, account_name, address_generator)
+            wallet.accounts.append(account)
+            wallet.save()
+        elif delete:
+            account = self.get_account_or_error('account_name', account_name)
+            wallet.accounts.remove(account)
+            wallet.save()
+            return "Account '{}' deleted.".format(account_name)
+        else:
+            change_made = False
+            account = self.get_account_or_error('account_name', account_name)
+            if rename is not None:
+                self.error_if_account_exists(rename)
+                account.name = rename
+                change_made = True
+            if account.receiving.name == HierarchicalDeterministic.name:
+                address_changes = {
+                    'change': {'gap': change_gap, 'maximum_uses_per_address': change_max_uses},
+                    'receiving': {'gap': receiving_gap, 'maximum_uses_per_address': receiving_max_uses},
+                }
+                for chain_name in address_changes:
+                    chain = getattr(account, chain_name)
+                    for attr, value in address_changes[chain_name].items():
+                        if value is not None:
+                            setattr(chain, attr, value)
+                            change_made = True
+            if change_made:
+                wallet.save()
+        result = account.to_dict()
+        result.pop('certificates', None)
+        return result
+
+    @requires("wallet")
     def jsonrpc_balance(self, account_name=None, confirmations=6, include_reserved=False,
                         include_claims=False):
         """
@@ -3110,7 +3207,7 @@ class Daemon(AuthJSONRPCServer):
         account settings.
 
         Usage:
-            max_address_gap <account_name>
+            max_address_gap (<account_name> | --account=<account_name>)
 
         Options:
             --account=<account_name>        : (str) account for which to get max gaps
@@ -3131,11 +3228,11 @@ class Daemon(AuthJSONRPCServer):
         used together with --everything).
 
         Usage:
-            transfer (<to_account> | --to_account=<to_account>)
-                     (<from_account> | --from_account=<from_account>)
-                     (<amount> | --amount=<amount> | --everything)
-                     [<outputs> | --outputs=<outputs>]
-                     [--broadcast]
+            fund (<to_account> | --to_account=<to_account>)
+                 (<from_account> | --from_account=<from_account>)
+                 (<amount> | --amount=<amount> | --everything)
+                 [<outputs> | --outputs=<outputs>]
+                 [--broadcast]
 
         Options:
             --to_account=<to_account>     : (str) send to this account
@@ -3180,7 +3277,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
     def get_account_or_error(self, argument: str, account_name: str, lbc_only=False):
-        for account in self.wallet.accounts:
+        for account in self.wallet.default_wallet.accounts:
             if account.name == account_name:
                 if lbc_only and not isinstance(account, LBCAccount):
                     raise ValueError(
@@ -3190,6 +3287,11 @@ class Daemon(AuthJSONRPCServer):
                     )
                 return account
         raise ValueError("Couldn't find an account named: '{}'.".format(account_name))
+
+    def error_if_account_exists(self, account_name: str):
+        for account in self.wallet.default_wallet.accounts:
+            if account.name == account_name:
+                raise ValueError("Account with name '{}' already exists.".format(account_name))
 
     @staticmethod
     def get_dewies_or_error(argument: str, amount: Union[str, int]):
