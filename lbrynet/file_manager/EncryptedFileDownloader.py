@@ -57,7 +57,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.channel_name = None
         self.metadata = None
         self.mirror = None
-        if download_mirrors:
+        if download_mirrors or conf.settings['download_mirrors']:
             self.mirror = HTTPBlobDownloader(
                 self.blob_manager, servers=download_mirrors or conf.settings['download_mirrors']
             )
