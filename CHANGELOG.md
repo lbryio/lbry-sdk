@@ -13,6 +13,7 @@ at anytime.
   *
 
 ### Fixed
+  * `transaction_show` for claim txs
   * loggly error reporting not following `share_usage_data`
   * improper error handling when data is not valid JSON
   * edge cases of http mirrored download of blobs
