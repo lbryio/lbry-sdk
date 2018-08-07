@@ -2221,6 +2221,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @requires(WALLET_COMPONENT)
+    @defer.inlineCallbacks
     def jsonrpc_transaction_show(self, txid):
         """
         Get a decoded transaction from a txid
@@ -2235,9 +2236,19 @@ class Daemon(AuthJSONRPCServer):
             (dict) JSON formatted transaction
         """
 
-        d = self.wallet.get_transaction(txid)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        tx_dict = yield self.wallet.get_transaction(txid)
+        if 'outputs' in tx_dict:
+            new_outputs = []
+            for output in deepcopy(tx_dict['outputs']):
+                if 'address' in output and len(output['address']) == 2:
+                    claim = output['address'][0]
+                    output['claim_name'] = claim[0]
+                    output['claim_hex'] = binascii.hexlify(claim[1])
+                    output['address'] = output['address'][1]
+                new_outputs.append(output)
+            tx_dict['outputs'] = new_outputs
+
+        defer.returnValue(((yield self._render_response(tx_dict))))
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_wallet_is_address_mine(self, address):
