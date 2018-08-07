@@ -1734,6 +1734,11 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise ValueError("Bid value must be greater than 0.0")
 
+        for address in [claim_address, change_address]:
+            if address is not None:
+                # raises an error if the address is invalid
+                decode_address(address)
+
         yield self.wallet.update_balance()
         if bid >= self.wallet.get_balance():
             balance = yield self.wallet.get_max_usable_balance_for_claim(name)

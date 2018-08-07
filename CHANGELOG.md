@@ -13,6 +13,7 @@ at anytime.
   *
 
 ### Fixed
+  * check `claim_address` and `change_address` earlier on publishing, to avoid hard to understand errors later in the process
   * loggly error reporting not following `share_usage_data`
   * improper error handling when data is not valid JSON
   * edge cases of http mirrored download of blobs
