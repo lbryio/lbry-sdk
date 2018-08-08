@@ -52,6 +52,7 @@ if ! cmd_exists python; then
     $INSTALL python2.7
   elif $OSX; then
     brew install python
+    curl https://bootstrap.pypa.io/get-pip.py | python
   fi
 fi
 
