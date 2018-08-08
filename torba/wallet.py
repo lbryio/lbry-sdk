@@ -23,27 +23,24 @@ class Wallet:
         self.accounts = accounts or []
         self.storage = storage or WalletStorage()
 
-    def generate_account(self, ledger: 'baseledger.BaseLedger') -> 'baseaccount.BaseAccount':
-        account = ledger.account_class.generate(ledger, u'torba', {})
+    def add_account(self, account):
         self.accounts.append(account)
-        return account
+
+    def generate_account(self, ledger: 'baseledger.BaseLedger') -> 'baseaccount.BaseAccount':
+        return ledger.account_class.generate(ledger, self)
 
     @classmethod
     def from_storage(cls, storage: 'WalletStorage', manager: 'basemanager.BaseWalletManager') -> 'Wallet':
         json_dict = storage.read()
-
-        accounts = []
+        wallet = cls(
+            name=json_dict.get('name', 'Wallet'),
+            storage=storage
+        )
         account_dicts: Sequence[dict] = json_dict.get('accounts', [])
         for account_dict in account_dicts:
             ledger = manager.get_or_create_ledger(account_dict['ledger'])
-            account = ledger.account_class.from_dict(ledger, account_dict)
-            accounts.append(account)
-
-        return cls(
-            name=json_dict.get('name', 'Wallet'),
-            accounts=accounts,
-            storage=storage
-        )
+            ledger.account_class.from_dict(ledger, wallet, account_dict)
+        return wallet
 
     def to_dict(self):
         return {

@@ -4,6 +4,7 @@ from twisted.internet import defer
 
 from torba.coin.bitcoinsegwit import MainNetLedger
 from torba.baseaccount import HierarchicalDeterministic, SingleKey
+from torba.wallet import Wallet
 
 
 class TestHierarchicalDeterministicAccount(unittest.TestCase):
@@ -12,7 +13,7 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
     def setUp(self):
         self.ledger = MainNetLedger({'db': MainNetLedger.database_class(':memory:')})
         yield self.ledger.db.start()
-        self.account = self.ledger.account_class.generate(self.ledger, u"torba")
+        self.account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
 
     @defer.inlineCallbacks
     def test_generate_account(self):
@@ -93,7 +94,7 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
     @defer.inlineCallbacks
     def test_generate_account_from_seed(self):
         account = self.ledger.account_class.from_dict(
-            self.ledger, {
+            self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
                         "toast envelope bottom stomach absent",
                 "address_generator": {
@@ -152,7 +153,7 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
             }
         }
 
-        account = self.ledger.account_class.from_dict(self.ledger, account_data)
+        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
 
         yield account.ensure_address_gap()
 
@@ -172,7 +173,8 @@ class TestSingleKeyAccount(unittest.TestCase):
     def setUp(self):
         self.ledger = MainNetLedger({'db': MainNetLedger.database_class(':memory:')})
         yield self.ledger.db.start()
-        self.account = self.ledger.account_class.generate(self.ledger, u"torba", {'name': 'single-address'})
+        self.account = self.ledger.account_class.generate(
+            self.ledger, Wallet(), "torba", {'name': 'single-address'})
 
     @defer.inlineCallbacks
     def test_generate_account(self):
@@ -251,7 +253,7 @@ class TestSingleKeyAccount(unittest.TestCase):
     @defer.inlineCallbacks
     def test_generate_account_from_seed(self):
         account = self.ledger.account_class.from_dict(
-            self.ledger, {
+            self.ledger, Wallet(), {
                 "seed":
                     "carbon smart garage balance margin twelve chest sword toas"
                     "t envelope bottom stomach absent",
@@ -303,7 +305,7 @@ class TestSingleKeyAccount(unittest.TestCase):
             'address_generator': {'name': 'single-address'}
         }
 
-        account = self.ledger.account_class.from_dict(self.ledger, account_data)
+        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
 
         yield account.ensure_address_gap()
 

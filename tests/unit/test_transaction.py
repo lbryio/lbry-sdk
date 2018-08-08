@@ -4,6 +4,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
+from torba.wallet import Wallet
 from torba.constants import CENT, COIN
 
 
@@ -142,7 +143,7 @@ class TestTransactionSigning(unittest.TestCase):
     @defer.inlineCallbacks
     def test_sign(self):
         account = self.ledger.account_class.from_dict(
-            self.ledger, {
+            self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
                         "toast envelope bottom stomach absent"
 
@@ -177,7 +178,7 @@ class TransactionIOBalancing(unittest.TestCase):
         self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
         yield self.ledger.db.start()
         self.account = self.ledger.account_class.from_dict(
-            self.ledger, {
+            self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
                         "toast envelope bottom stomach absent"
             }

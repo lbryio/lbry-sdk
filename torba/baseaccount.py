@@ -195,10 +195,11 @@ class BaseAccount:
         HierarchicalDeterministic.name: HierarchicalDeterministic,
     }
 
-    def __init__(self, ledger: 'baseledger.BaseLedger', name: str, seed: str, encrypted: bool,
+    def __init__(self, ledger: 'baseledger.BaseLedger', wallet, name: str, seed: str, encrypted: bool,
                  private_key: PrivateKey, public_key: PubKey, address_generator: dict
                  ) -> None:
         self.ledger = ledger
+        self.wallet = wallet
         self.name = name
         self.seed = seed
         self.encrypted = encrypted
@@ -209,10 +210,11 @@ class BaseAccount:
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
         self.address_managers = {self.receiving, self.change}
         ledger.add_account(self)
+        wallet.add_account(self)
 
     @classmethod
-    def generate(cls, ledger: 'baseledger.BaseLedger', name: str = None, address_generator: dict = None):
-        return cls.from_dict(ledger, {
+    def generate(cls, ledger: 'baseledger.BaseLedger', wallet, name: str = None, address_generator: dict = None):
+        return cls.from_dict(ledger, wallet, {
             'name': name,
             'seed': cls.mnemonic_class().make_seed(),
             'address_generator': address_generator or {}
@@ -225,7 +227,7 @@ class BaseAccount:
         )
 
     @classmethod
-    def from_dict(cls, ledger: 'baseledger.BaseLedger', d: dict):
+    def from_dict(cls, ledger: 'baseledger.BaseLedger', wallet, d: dict):
         seed = d.get('seed', '')
         private_key = d.get('private_key', '')
         public_key = None
@@ -244,6 +246,7 @@ class BaseAccount:
             name = 'Account #{}'.format(public_key.address)
         return cls(
             ledger=ledger,
+            wallet=wallet,
             name=name,
             seed=seed,
             encrypted=encrypted,

@@ -3,6 +3,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from torba.coin.bitcoinsegwit import MainNetLedger
+from torba.wallet import Wallet
 
 from .test_transaction import get_transaction, get_output
 
@@ -63,7 +64,7 @@ class TestSynchronization(LedgerTestCase):
 
     @defer.inlineCallbacks
     def test_update_history(self):
-        account = self.ledger.account_class.generate(self.ledger, u"torba")
+        account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
         address = yield account.receiving.get_or_create_usable_address()
         address_details = yield self.ledger.db.get_address(address)
         self.assertEqual(address_details['history'], None)
