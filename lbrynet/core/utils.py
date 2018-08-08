@@ -241,3 +241,46 @@ class DeferredProfiler(object):
 
 _profiler = DeferredProfiler()
 profile_deferred = _profiler.profiled_deferred
+
+
+def get_log_untrapped_tracebacks(errback=None):
+    if not errback or not callable(errback):
+        def errback(err):
+            log.error(err.getTraceback())
+
+    def log_untrapped_tracebacks(*failures):
+        def handle_error(err):
+            if not err.check(*failures):
+                errback(err)
+        return handle_error
+
+    return log_untrapped_tracebacks
+
+
+def maybe_deferred_trap_and_trace(trap=None, callback=None, errback=None):
+    trap = trap or ()
+    if not callback:
+        callback = lambda result: result
+
+    def _decorator(fn):
+        @functools.wraps(fn)
+        def _wrapper(*args, **kwargs):
+            d = defer.maybeDeferred(fn, *args, **kwargs)
+            d.addCallbacks(callback, get_log_untrapped_tracebacks(errback)(*trap))
+            return d
+        return _wrapper
+    return _decorator
+
+
+def inlinecallbacks_trap_and_trace(trap=None, callback=None, errback=None):
+    trap = trap or ()
+    callback = callback or (lambda result: result)
+
+    def _decorator(fn):
+        @functools.wraps(fn)
+        def _wrapper(*args, **kwargs):
+            d = defer.inlineCallbacks(fn)(*args, **kwargs)
+            d.addCallbacks(callback, get_log_untrapped_tracebacks(errback)(*trap))
+            return d
+        return _wrapper
+    return _decorator
