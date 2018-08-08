@@ -8,6 +8,7 @@ from torba.hash import double_sha256, aes_encrypt, aes_decrypt
 
 if typing.TYPE_CHECKING:
     from torba import baseledger
+    from torba import wallet
 
 
 class AddressManager:
@@ -195,9 +196,9 @@ class BaseAccount:
         HierarchicalDeterministic.name: HierarchicalDeterministic,
     }
 
-    def __init__(self, ledger: 'baseledger.BaseLedger', wallet, name: str, seed: str, encrypted: bool,
-                 private_key: PrivateKey, public_key: PubKey, address_generator: dict
-                 ) -> None:
+    def __init__(self, ledger: 'baseledger.BaseLedger', wallet: 'wallet.Wallet', name: str,
+                 seed: str, encrypted: bool, private_key: PrivateKey, public_key: PubKey,
+                 address_generator: dict) -> None:
         self.ledger = ledger
         self.wallet = wallet
         self.name = name
@@ -213,7 +214,8 @@ class BaseAccount:
         wallet.add_account(self)
 
     @classmethod
-    def generate(cls, ledger: 'baseledger.BaseLedger', wallet, name: str = None, address_generator: dict = None):
+    def generate(cls, ledger: 'baseledger.BaseLedger', wallet: 'wallet.Wallet',
+                 name: str = None, address_generator: dict = None):
         return cls.from_dict(ledger, wallet, {
             'name': name,
             'seed': cls.mnemonic_class().make_seed(),
@@ -227,7 +229,7 @@ class BaseAccount:
         )
 
     @classmethod
-    def from_dict(cls, ledger: 'baseledger.BaseLedger', wallet, d: dict):
+    def from_dict(cls, ledger: 'baseledger.BaseLedger', wallet: 'wallet.Wallet', d: dict):
         seed = d.get('seed', '')
         private_key = d.get('private_key', '')
         public_key = None
