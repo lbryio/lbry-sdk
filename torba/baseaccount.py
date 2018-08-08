@@ -8,7 +8,7 @@ from torba.hash import double_sha256, aes_encrypt, aes_decrypt
 
 if typing.TYPE_CHECKING:
     from torba import baseledger
-    from torba import wallet
+    from torba import wallet as basewallet
 
 
 class AddressManager:
@@ -196,7 +196,7 @@ class BaseAccount:
         HierarchicalDeterministic.name: HierarchicalDeterministic,
     }
 
-    def __init__(self, ledger: 'baseledger.BaseLedger', wallet: 'wallet.Wallet', name: str,
+    def __init__(self, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet', name: str,
                  seed: str, encrypted: bool, private_key: PrivateKey, public_key: PubKey,
                  address_generator: dict) -> None:
         self.ledger = ledger
@@ -214,7 +214,7 @@ class BaseAccount:
         wallet.add_account(self)
 
     @classmethod
-    def generate(cls, ledger: 'baseledger.BaseLedger', wallet: 'wallet.Wallet',
+    def generate(cls, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet',
                  name: str = None, address_generator: dict = None):
         return cls.from_dict(ledger, wallet, {
             'name': name,
@@ -229,7 +229,7 @@ class BaseAccount:
         )
 
     @classmethod
-    def from_dict(cls, ledger: 'baseledger.BaseLedger', wallet: 'wallet.Wallet', d: dict):
+    def from_dict(cls, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet', d: dict):
         seed = d.get('seed', '')
         private_key = d.get('private_key', '')
         public_key = None
