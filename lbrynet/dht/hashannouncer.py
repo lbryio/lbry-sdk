@@ -15,17 +15,22 @@ class DHTHashAnnouncer(object):
         self.clock = dht_node.clock
         self.peer_port = dht_node.peerPort
         self.hash_queue = []
-        self.concurrent_announcers = concurrent_announcers or conf.settings['concurrent_announcers']
-        self._manage_lc = task.LoopingCall(self.manage)
-        self._manage_lc.clock = self.clock
-        self.sem = defer.DeferredSemaphore(self.concurrent_announcers)
+        if concurrent_announcers is None:
+            self.concurrent_announcers = conf.settings['concurrent_announcers']
+        else:
+            self.concurrent_announcers = concurrent_announcers
+        self._manage_lc = None
+        if self.concurrent_announcers:
+            self._manage_lc = task.LoopingCall(self.manage)
+            self._manage_lc.clock = self.clock
+        self.sem = defer.DeferredSemaphore(self.concurrent_announcers or conf.settings['concurrent_announcers'] or 1)
 
     def start(self):
-        if self.concurrent_announcers:
+        if self._manage_lc:
             self._manage_lc.start(30)
 
     def stop(self):
-        if self._manage_lc.running:
+        if self._manage_lc and self._manage_lc.running:
             self._manage_lc.stop()
 
     @defer.inlineCallbacks
