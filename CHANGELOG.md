@@ -19,7 +19,7 @@ at anytime.
   * blob mirroring being set in unrelated tests, making them fail (pr https://github.com/lbryio/lbry/pull/1348)
   * http blob mirroring edge cases (pr https://github.com/lbryio/lbry/pull/1315)
   * external ports in log messages not showing the correct external port from the upnp redirects (https://github.com/lbryio/lbry/issues/1338) (pr https://github.com/lbryio/lbry/pull/1349)
-  * miniupnpc fallback issues in txupnp (https://github.com/lbryio/lbry/issues/1341)
+  * miniupnpc fallback issues in txupnp (https://github.com/lbryio/lbry/issues/1341) (pr https://github.com/lbryio/lbry/pull/1349)
   * upnp error when disabled on router and a non-gateway is found, such as chromecast (https://github.com/lbryio/lbry/issues/1352) (https://github.com/lbryio/lbry/commit/dca4af942fbe95547794213775f0a62cd04a393f)
 
 ### Deprecated
@@ -28,7 +28,7 @@ at anytime.
 
 ### Changed
   * api server class to use components, and for all JSONRPC API commands to be callable so long as the required components are available. (pr https://github.com/lbryio/lbry/pull/1294)
-  * return error messages when required conditions on components are not met for API calls
+  * return error messages when required conditions on components are not met for API calls (pr https://github.com/lbryio/lbry/pull/1328)
   * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht` field. (pr https://github.com/lbryio/lbry/pull/1328)
   * `startup_status` field in the response to `status` to be a dict of component names to status booleans (pr https://github.com/lbryio/lbry/pull/1328)
   * renamed the `blockchain_status` field in the response to `status` to `wallet` (pr https://github.com/lbryio/lbry/pull/1328)
