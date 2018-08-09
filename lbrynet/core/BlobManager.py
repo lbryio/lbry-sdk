@@ -96,6 +96,8 @@ class DiskBlobManager(object):
     def delete_blobs(self, blob_hashes):
         bh_to_delete_from_db = []
         for blob_hash in blob_hashes:
+            if not blob_hash:
+                continue
             if self._node_datastore is not None:
                 try:
                     self._node_datastore.completed_blobs.remove(blob_hash.decode('hex'))
