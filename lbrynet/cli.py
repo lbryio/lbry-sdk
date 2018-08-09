@@ -6,14 +6,11 @@ from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
-from twisted.internet.asyncioreactor import install
-install(asyncio.get_event_loop())
-
-from lbrynet.daemon.auth.client import LBRYAPIClient
-from lbrynet.core.system_info import get_platform
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.daemon.DaemonControl import start as daemon_main
 from lbrynet.daemon.DaemonConsole import main as daemon_console
+from lbrynet.daemon.auth.client import LBRYAPIClient
+from lbrynet.core.system_info import get_platform
 
 
 async def execute_command(method, params, conf_path=None):
