@@ -293,6 +293,8 @@ class HeadersComponent(Component):
                 yield self.fetch_headers_from_s3()
             except Exception as err:
                 log.error("failed to fetch headers from s3: %s", err)
+            finally:
+                self._downloading_headers = False
 
     def stop(self):
         return defer.succeed(None)
