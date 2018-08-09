@@ -1,3 +1,4 @@
+import json
 import logging
 
 from twisted.internet import defer
@@ -32,19 +33,33 @@ class Account(BaseAccount):
 
     @defer.inlineCallbacks
     def maybe_migrate_certificates(self):
-        failed, succeded, done, total = 0, 0, 0, 0
+        if not self.certificates:
+            return
+
+        addresses = {}
+        results = {
+            'total': 0,
+            'not-a-claim-tx': 0,
+            'migrate-success': 0,
+            'migrate-failed': 0,
+            'previous-success': 0,
+            'previous-corrupted': 0
+        }
+
         for maybe_claim_id in self.certificates.keys():
-            total += 1
+            results['total'] += 1
             if ':' not in maybe_claim_id:
                 claims = yield self.ledger.network.get_claims_by_ids(maybe_claim_id)
                 claim = claims[maybe_claim_id]
-                #txhash = unhexlify(claim['txid'])[::-1]
                 tx = yield self.ledger.get_transaction(claim['txid'])
                 if tx is not None:
                     txo = tx.outputs[claim['nout']]
-                    assert txo.script.is_claim_involved,\
-                        "Certificate with claim_id {} doesn't point to a valid transaction."\
-                        .format(maybe_claim_id)
+                    if not txo.script.is_claim_involved:
+                        results['not-a-claim-tx'] += 1
+                        raise ValueError(
+                            "Certificate with claim_id {} doesn't point to a valid transaction."
+                            .format(maybe_claim_id)
+                        )
                     tx_nout = '{txid}:{nout}'.format(**claim)
                     self.certificates[tx_nout] = self.certificates[maybe_claim_id]
                     del self.certificates[maybe_claim_id]
@@ -52,26 +67,36 @@ class Account(BaseAccount):
                         "Migrated certificate with claim_id '%s' ('%s') to a new look up key %s.",
                         maybe_claim_id, txo.script.values['claim_name'], tx_nout
                     )
-                    succeded += 1
+                    results['migrate-success'] += 1
                 else:
+                    addresses.setdefault(claim['address'], 0)
+                    addresses[claim['address']] += 1
                     log.warning(
                         "Failed to migrate claim '%s', it's not associated with any of your addresses.",
                         maybe_claim_id
                     )
-                    failed += 1
+                    results['migrate-failed'] += 1
             else:
                 try:
                     txid, nout = maybe_claim_id.split(':')
                     tx = yield self.ledger.get_transaction(txid)
                     if tx.outputs[int(nout)].script.is_claim_involved:
-                        done += 1
+                        results['previous-success'] += 1
                     else:
-                        failed += 1
+                        results['previous-corrupted'] += 1
                 except Exception:
                     log.exception("Couldn't verify certificate with look up key: %s", maybe_claim_id)
-                    failed += 1
+                    results['previous-corrupted'] += 1
 
-        log.info('Checked: %s, Done: %s, Converted: %s, Failed: %s', total, done, succeded, failed)
+        self.wallet.save()
+        log.info('verifying and possibly migrating certificates:')
+        log.info(json.dumps(results, indent=2))
+        if addresses:
+            log.warning('failed for addresses:')
+            log.warning(json.dumps(
+                [{'address': a, 'number of certificates': c} for a, c in addresses.items()],
+                indent=2
+            ))
 
     def get_balance(self, confirmations=6, include_claims=False, **constraints):
         if not include_claims:
@@ -108,8 +133,8 @@ class Account(BaseAccount):
         )
 
     @classmethod
-    def from_dict(cls, ledger, d: dict) -> 'Account':
-        account = super().from_dict(ledger, d)
+    def from_dict(cls, ledger, wallet, d: dict) -> 'Account':
+        account = super().from_dict(ledger, wallet, d)
         account.certificates = d.get('certificates', {})
         return account
 
