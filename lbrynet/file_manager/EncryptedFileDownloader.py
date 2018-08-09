@@ -132,9 +132,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         status = yield self._save_status()
         log_status(self.sd_hash, status)
         if self.mirror:
-            blobs = yield self.storage.get_blobs_for_stream(self.stream_hash)
-            self.mirror.blob_hashes = [b.blob_hash for b in blobs if b.blob_hash is not None]
-            self.mirror.start()
+            self.mirror.download_stream(self.stream_hash, self.sd_hash)
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):
