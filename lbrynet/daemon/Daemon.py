@@ -2416,6 +2416,12 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Given both an address and a claim id")
         elif not address and not claim_id:
             raise Exception("Not given an address or a claim id")
+
+        try:
+            amount = Decimal(str(amount))
+        except InvalidOperation:
+            raise TypeError("Amount does not represent a valid decimal.")
+
         if amount < 0:
             raise NegativeFundsError()
         elif not amount:
