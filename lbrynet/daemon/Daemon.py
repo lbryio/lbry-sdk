@@ -3115,7 +3115,7 @@ class Daemon(AuthJSONRPCServer):
                 }
             ledger = self.wallet.get_or_create_ledger('lbc_mainnet')
             if seed or private_key or public_key:
-                account = LBCAccount.from_dict(ledger, {
+                account = LBCAccount.from_dict(ledger, wallet, {
                     'name': account_name,
                     'seed': seed,
                     'private_key': private_key,
@@ -3124,8 +3124,7 @@ class Daemon(AuthJSONRPCServer):
                 })
             else:
                 account = LBCAccount.generate(
-                    ledger, account_name, address_generator)
-            wallet.accounts.append(account)
+                    ledger, wallet, account_name, address_generator)
             wallet.save()
         elif delete:
             account = self.get_account_or_error('account_name', account_name)
