@@ -5,6 +5,20 @@ import requests
 import urllib
 import json
 import textwrap
+
+#import sys
+#from twisted.internet import asyncioreactor
+#if 'twisted.internet.reactor' not in sys.modules:
+#    asyncioreactor.install()
+#else:
+#    from twisted.internet import reactor
+#    if not isinstance(reactor, asyncioreactor.AsyncioSelectorReactor):
+#        # pyinstaller hooks install the default reactor before
+#        # any of our code runs, see kivy for similar problem:
+#        #    https://github.com/kivy/kivy/issues/4182
+#        del sys.modules['twisted.internet.reactor']
+#        asyncioreactor.install()
+
 from binascii import hexlify, unhexlify
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation

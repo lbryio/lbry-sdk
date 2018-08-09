@@ -46,7 +46,7 @@ class Account(BaseAccount):
             'previous-corrupted': 0
         }
 
-        for maybe_claim_id in self.certificates.keys():
+        for maybe_claim_id in list(self.certificates):
             results['total'] += 1
             if ':' not in maybe_claim_id:
                 claims = yield self.ledger.network.get_claims_by_ids(maybe_claim_id)
