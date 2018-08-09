@@ -35,7 +35,7 @@ class LedgerTestCase(unittest.TestCase):
     def setUp(self):
         conf.initialize_settings(False)
         self.ledger = MainNetTestLedger()
-        self.account = Account.generate(self.ledger, u"lbryum")
+        self.account = Account.generate(self.ledger, Wallet(), "lbryum")
         return self.ledger.db.start()
 
     def tearDown(self):

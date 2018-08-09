@@ -222,7 +222,7 @@ class TestTransactionSigning(unittest.TestCase):
     @defer.inlineCallbacks
     def test_sign(self):
         account = self.ledger.account_class.from_dict(
-            self.ledger, {
+            self.ledger, Wallet(), {
                 "seed":
                     "carbon smart garage balance margin twelve chest sword toas"
                     "t envelope bottom stomach absent"

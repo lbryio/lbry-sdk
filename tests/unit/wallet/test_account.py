@@ -3,6 +3,7 @@ from twisted.internet import defer
 
 from lbrynet.wallet.ledger import MainNetLedger, WalletDatabase
 from lbrynet.wallet.account import Account
+from torba.wallet import Wallet
 
 
 class TestAccount(unittest.TestCase):
@@ -13,7 +14,7 @@ class TestAccount(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_generate_account(self):
-        account = Account.generate(self.ledger, u'lbryum')
+        account = Account.generate(self.ledger, Wallet(), 'lbryum')
         self.assertEqual(account.ledger, self.ledger)
         self.assertIsNotNone(account.seed)
         self.assertEqual(account.public_key.ledger, self.ledger)
@@ -37,7 +38,7 @@ class TestAccount(unittest.TestCase):
     @defer.inlineCallbacks
     def test_generate_account_from_seed(self):
         account = Account.from_dict(
-            self.ledger, {
+            self.ledger, Wallet(), {
                 "seed":
                     "carbon smart garage balance margin twelve chest sword toas"
                     "t envelope bottom stomach absent"
@@ -86,6 +87,6 @@ class TestAccount(unittest.TestCase):
             }
         }
 
-        account = Account.from_dict(self.ledger, account_data)
+        account = Account.from_dict(self.ledger, Wallet(), account_data)
         account_data['ledger'] = 'lbc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())
