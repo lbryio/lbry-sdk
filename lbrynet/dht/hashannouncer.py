@@ -21,7 +21,8 @@ class DHTHashAnnouncer(object):
         self.sem = defer.DeferredSemaphore(self.concurrent_announcers)
 
     def start(self):
-        self._manage_lc.start(30)
+        if self.concurrent_announcers:
+            self._manage_lc.start(30)
 
     def stop(self):
         if self._manage_lc.running:
