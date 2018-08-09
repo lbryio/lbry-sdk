@@ -74,6 +74,9 @@ class DHTHashAnnouncer(object):
 
     @defer.inlineCallbacks
     def manage(self):
+        if not self.dht_node.contacts:
+            log.info("Not ready to start announcing hashes")
+            return
         need_reannouncement = yield self.storage.get_blobs_to_announce()
         if need_reannouncement:
             yield self.immediate_announce(need_reannouncement)
