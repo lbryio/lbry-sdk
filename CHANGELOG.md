@@ -14,12 +14,12 @@ at anytime.
 
 ### Fixed
   * check `claim_address` and `change_address` earlier on publishing, to avoid hard to understand errors later in the process
-  * mirroring being set on tests, making unrelated tests fail
   * loggly error reporting not following `share_usage_data`
   * improper error handling when data is not valid JSON
-  * edge cases of http mirrored download of blobs
-  * ports with upnp redirects not showing the correct external port in log messages ( https://github.com/lbryio/lbry/issues/1338 )
-  * miniupnpc fallback issue in txupnp ( https://github.com/lbryio/lbry/issues/1341 )
+  * blob mirroring being set in unrelated tests, making them fail
+  * http blob mirroring edge cases
+  * external ports in log messages not showing the correct external port from the upnp redirects ( https://github.com/lbryio/lbry/issues/1338 )
+  * miniupnpc fallback issues in txupnp ( https://github.com/lbryio/lbry/issues/1341 )
   * upnp error when disabled on router and a non-gateway is found, such as chromecast ( https://github.com/lbryio/lbry/issues/1352 )
 
 ### Deprecated
@@ -45,7 +45,7 @@ at anytime.
   * `skipped_components` config setting, accepts a list of names of components to not run
   * `ComponentManager` for managing the life-cycles of dependencies
   * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously
-  * unittests for `ComponentManager`
+  * unit tests for `ComponentManager`
   * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
   * additional information to the balance error message when editing a claim (https://github.com/lbryio/lbry/pull/1309)
   * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313)
