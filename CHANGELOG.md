@@ -20,6 +20,7 @@ at anytime.
   * edge cases of http mirrored download of blobs
   * ports with upnp redirects not showing the correct external port in log messages ( https://github.com/lbryio/lbry/issues/1338 )
   * miniupnpc fallback issue in txupnp ( https://github.com/lbryio/lbry/issues/1341 )
+  * upnp error when disabled on router and a non-gateway is found, such as chromecast ( https://github.com/lbryio/lbry/issues/1352 )
 
 ### Deprecated
   * automatic claim renew, this is no longer needed

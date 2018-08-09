@@ -683,8 +683,12 @@ class UPnPComponent(Component):
         elif found and self.upnp.miniupnpc_runner:
             log.warning("failed to set up redirect with txupnp, miniupnpc fallback was successful")
         if found:
-            self.external_ip = yield self.upnp.get_external_ip()
-            yield self._setup_redirects()
+            try:
+                self.external_ip = yield self.upnp.get_external_ip()
+                yield self._setup_redirects()
+            except Exception as err:
+                log.warning("error trying to set up upnp: %s", err)
+                self.external_ip = CS.get_external_ip()
         else:
             self.external_ip = CS.get_external_ip()
 
