@@ -180,7 +180,7 @@ class SQLiteStorage(object):
         # change to the associated content claim occurs. these are added by the file manager
         # when it loads each file
         self.content_claim_callbacks = {}  # {<stream_hash>: <callable returning a deferred>}
-
+        self.check_should_announce_lc = None
         if 'reflector' not in conf.settings['components_to_skip']:
             self.check_should_announce_lc = task.LoopingCall(self.verify_will_announce_all_head_and_sd_blobs)
 
