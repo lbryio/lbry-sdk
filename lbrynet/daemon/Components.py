@@ -679,7 +679,11 @@ class UPnPComponent(Component):
             self.external_ip = CS.get_external_ip()
             return
         self.upnp = UPnP(self.component_manager.reactor, try_miniupnpc_fallback=True)
-        found = yield self.upnp.discover()
+        try:
+            found = yield self.upnp.discover()
+        except Exception as err:
+            log.warning("upnp discovery failed: %s", err)
+            found = False
         if found and not self.upnp.miniupnpc_runner:
             log.info("set up redirects using txupnp")
         elif found and self.upnp.miniupnpc_runner:
