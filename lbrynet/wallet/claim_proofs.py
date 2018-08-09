@@ -1,31 +1,19 @@
 import six
+import struct
 import binascii
-
-from lbryschema.hashing import sha256
+from torba.hash import double_sha256
 
 
 class InvalidProofError(Exception):
     pass
 
 
-def height_to_vch(n):
-    r = [0 for i in range(8)]
-    r[4] = n >> 24
-    r[5] = n >> 16
-    r[6] = n >> 8
-    r[7] = n % 256
-    # need to reset each value mod 256 because for values like 67784
-    # 67784 >> 8 = 264, which is obviously larger then the maximum
-    # value input into chr()
-    return b''.join([six.int2byte(x % 256) for x in r])
-
-
-def get_hash_for_outpoint(txhash, nOut, nHeightOfLastTakeover):
-    txhash_hash = Hash(txhash)
-    nOut_hash = Hash(str(nOut))
-    height_of_last_takeover_hash = Hash(height_to_vch(nHeightOfLastTakeover))
-    outPointHash = Hash(txhash_hash + nOut_hash + height_of_last_takeover_hash)
-    return outPointHash
+def get_hash_for_outpoint(txhash, nout, height_of_last_takeover):
+    return double_sha256(
+        double_sha256(txhash) +
+        double_sha256(str(nout).encode()) +
+        double_sha256(struct.pack('>Q', height_of_last_takeover))
+    )
 
 
 # noinspection PyPep8
@@ -80,7 +68,7 @@ def verify_proof(proof, rootHash, name):
                 raise InvalidProofError("valueHash was invalid")
             to_hash += binascii.unhexlify(node['valueHash'])[::-1]
 
-        previous_computed_hash = Hash(to_hash)
+        previous_computed_hash = double_sha256(to_hash)
 
     if previous_computed_hash != binascii.unhexlify(rootHash)[::-1]:
         raise InvalidProofError("computed hash does not match roothash")
@@ -93,8 +81,3 @@ def verify_proof(proof, rootHash, name):
     if not name.startswith(reverse_computed_name[::-1]):
         raise InvalidProofError("name fragment does not match proof")
     return True
-
-def Hash(x):
-    if isinstance(x, six.text_type):
-        x = x.encode('utf-8')
-    return sha256(sha256(x))
