@@ -83,7 +83,7 @@ class TestReflector(unittest.TestCase):
             return d
 
         def create_stream():
-            test_file = mocks.GenFile(5209343, bytes([(i + 3) for i in range(0, 64, 6)]))
+            test_file = mocks.GenFile(5209343, bytes((i + 3) for i in range(0, 64, 6)))
             d = EncryptedFileCreator.create_lbry_file(
                 self.client_blob_manager, self.client_storage, prm, self.client_lbry_file_manager,
                 "test_file",
