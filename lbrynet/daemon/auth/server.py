@@ -204,6 +204,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).items()})
         self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).items()}
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
+        self.listening_port = None
         self._component_setup_deferred = None
         self.announced_startup = False
         self.sessions = {}
@@ -213,7 +214,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         from twisted.internet import reactor, error as tx_error
 
         try:
-            reactor.listenTCP(
+            self.listening_port = reactor.listenTCP(
                 conf.settings['api_port'], self.get_server_factory(), interface=conf.settings['api_host']
             )
             log.info("lbrynet API listening on TCP %s:%i", conf.settings['api_host'], conf.settings['api_port'])
@@ -255,6 +256,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         # ignore INT/TERM signals once shutdown has started
         signal.signal(signal.SIGINT, self._already_shutting_down)
         signal.signal(signal.SIGTERM, self._already_shutting_down)
+        self.listening_port.stopListening()
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
