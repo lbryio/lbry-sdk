@@ -1,4 +1,4 @@
-import binascii
+from binascii import unhexlify
 import logging
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager
@@ -60,8 +60,8 @@ class CryptStreamDownloader:
         self.blob_manager = blob_manager
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
-        self.key = binascii.unhexlify(key)
-        self.stream_name = binascii.unhexlify(stream_name).decode()
+        self.key = unhexlify(key)
+        self.stream_name = unhexlify(stream_name).decode()
         self.completed = False
         self.stopped = True
         self.stopping = False

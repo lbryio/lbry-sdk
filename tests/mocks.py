@@ -268,7 +268,7 @@ class GenFile(io.RawIOBase):
     def __init__(self, size, pattern):
         io.RawIOBase.__init__(self)
         self.size = size
-        self.pattern = pattern.encode() if not isinstance(pattern, bytes) else pattern
+        self.pattern = pattern
         self.read_so_far = 0
         self.buff = b''
         self.last_offset = 0
