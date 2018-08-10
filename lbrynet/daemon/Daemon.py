@@ -2845,14 +2845,14 @@ class Daemon(AuthJSONRPCServer):
 
         contact = None
         if node_id and address and port:
-            contact = self.dht_node.contact_manager.get_contact(node_id.decode('hex'), address, int(port))
+            contact = self.dht_node.contact_manager.get_contact(unhexlify(node_id), address, int(port))
             if not contact:
                 contact = self.dht_node.contact_manager.make_contact(
-                    node_id.decode('hex'), address, int(port), self.dht_node._protocol
+                    unhexlify(node_id), address, int(port), self.dht_node._protocol
                 )
         if not contact:
             try:
-                contact = yield self.dht_node.findContact(node_id.decode('hex'))
+                contact = yield self.dht_node.findContact(unhexlify(node_id))
             except TimeoutError:
                 result = {'error': 'timeout finding peer'}
                 defer.returnValue(result)
@@ -2893,20 +2893,22 @@ class Daemon(AuthJSONRPCServer):
                 "node_id": (str) the local dht node id
             }
         """
-
         result = {}
-        data_store = self.dht_node._dataStore._dict
+        data_store = self.dht_node._dataStore
         datastore_len = len(data_store)
         hosts = {}
 
         if datastore_len:
             for k, v in data_store.items():
                 for contact, value, lastPublished, originallyPublished, originalPublisherID in v:
-                    blobs = blobs.get(contact, [])
-                    blobs.append(k.encode('hex'))
+                    if contact in hosts:
+                        blobs = hosts[contact]
+                    else:
+                        blobs = []
+                    blobs.append(hexlify(k))
                     hosts[contact] = blobs
 
-        contact_set = []
+        contact_set = set()
         blob_hashes = []
         result['buckets'] = {}
 
@@ -2921,7 +2923,7 @@ class Daemon(AuthJSONRPCServer):
                 host = {
                     "address": contact.address,
                     "port": contact.port,
-                    "node_id": contact.id.encode("hex"),
+                    "node_id": hexlify(contact.id).decode(),
                     "blobs": blobs,
                 }
                 for blob_hash in blobs:
@@ -2929,12 +2931,11 @@ class Daemon(AuthJSONRPCServer):
                         blob_hashes.append(blob_hash)
                 contacts.append(host)
                 result['buckets'][i] = contacts
-                if contact.id.encode('hex') not in contact_set:
-                    contact_set.append(contact.id.encode("hex"))
+                contact_set.add(hexlify(contact.id).decode())
 
         result['contacts'] = contact_set
         result['blob_hashes'] = blob_hashes
-        result['node_id'] = self.dht_node.node_id.encode('hex')
+        result['node_id'] = hexlify(self.dht_node.node_id).decode()
         return self._render_response(result)
 
     # the single peer downloader needs wallet access
