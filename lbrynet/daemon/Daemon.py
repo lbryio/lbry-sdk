@@ -2888,46 +2888,31 @@ class Daemon(AuthJSONRPCServer):
         """
         result = {}
         data_store = self.dht_node._dataStore
-        datastore_len = len(data_store)
         hosts = {}
 
-        if datastore_len:
-            for k, v in data_store.items():
-                for contact, value, lastPublished, originallyPublished, originalPublisherID in v:
-                    if contact in hosts:
-                        blobs = hosts[contact]
-                    else:
-                        blobs = []
-                    blobs.append(hexlify(k))
-                    hosts[contact] = blobs
+        for k, v in data_store.items():
+            for contact, _ in v:
+                hosts.setdefault(contact, []).append(hexlify(k).decode())
 
         contact_set = set()
-        blob_hashes = []
+        blob_hashes = set()
         result['buckets'] = {}
 
         for i in range(len(self.dht_node._routingTable._buckets)):
             for contact in self.dht_node._routingTable._buckets[i]._contacts:
-                contacts = result['buckets'].get(i, [])
-                if contact in hosts:
-                    blobs = hosts[contact]
-                    del hosts[contact]
-                else:
-                    blobs = []
+                blobs = [hexlify(raw_hash).decode() for raw_hash in hosts.pop(contact)] if contact in hosts else []
+                blob_hashes.update(blobs)
                 host = {
                     "address": contact.address,
                     "port": contact.port,
                     "node_id": hexlify(contact.id).decode(),
                     "blobs": blobs,
                 }
-                for blob_hash in blobs:
-                    if blob_hash not in blob_hashes:
-                        blob_hashes.append(blob_hash)
-                contacts.append(host)
-                result['buckets'][i] = contacts
+                result['buckets'].setdefault(i, []).append(host)
                 contact_set.add(hexlify(contact.id).decode())
 
-        result['contacts'] = contact_set
-        result['blob_hashes'] = blob_hashes
+        result['contacts'] = list(contact_set)
+        result['blob_hashes'] = list(blob_hashes)
         result['node_id'] = hexlify(self.dht_node.node_id).decode()
         return self._render_response(result)
 
