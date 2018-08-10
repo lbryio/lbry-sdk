@@ -2,7 +2,7 @@
 Download LBRY Files from LBRYnet and save them to disk.
 """
 import logging
-import binascii
+from binascii import hexlify, unhexlify
 
 from twisted.internet import defer
 from lbrynet import conf
@@ -43,7 +43,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         )
         self.sd_hash = sd_hash
         self.rowid = rowid
-        self.suggested_file_name = binascii.unhexlify(suggested_file_name)
+        self.suggested_file_name = unhexlify(suggested_file_name).decode()
         self.lbry_file_manager = lbry_file_manager
         self._saving_status = False
         self.claim_id = None
@@ -178,9 +178,10 @@ class ManagedEncryptedFileDownloaderFactory:
                                          metadata.source_blob_hash,
                                          metadata.validator.raw_info)
         if file_name:
-            file_name = binascii.hexlify(file_name)
+            file_name = hexlify(file_name.encode())
+        hex_download_directory = hexlify(download_directory.encode())
         lbry_file = yield self.lbry_file_manager.add_downloaded_file(
-            stream_hash, metadata.source_blob_hash, binascii.hexlify(download_directory), payment_rate_manager,
+            stream_hash, metadata.source_blob_hash, hex_download_directory, payment_rate_manager,
             data_rate, file_name=file_name, download_mirrors=download_mirrors
         )
         defer.returnValue(lbry_file)

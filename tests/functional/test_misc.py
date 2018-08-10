@@ -155,7 +155,7 @@ class TestTransfer(unittest.TestCase):
         )
         metadata = yield self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
         downloader = yield metadata.factories[0].make_downloader(
-            metadata, self.prm.min_blob_data_payment_rate, self.prm, self.db_dir.encode(), download_mirrors=None
+            metadata, self.prm.min_blob_data_payment_rate, self.prm, self.db_dir, download_mirrors=None
         )
         yield downloader.start()
         with open(os.path.join(self.db_dir, 'test_file'), 'rb') as f:
