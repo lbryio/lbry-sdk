@@ -94,7 +94,7 @@ class PointTraderKeyExchanger(object):
 
     def send_next_request(self, peer, protocol):
         if not protocol in self._protocols:
-            r = ClientRequest({'public_key': self.wallet.encoded_public_key},
+            r = ClientRequest({'public_key': self.wallet.encoded_public_key.decode()},
                               'public_key')
             d = protocol.add_request(r)
             d.addCallback(self._handle_exchange_response, peer, r, protocol)
@@ -156,7 +156,7 @@ class PointTraderKeyQueryHandler(object):
                 return defer.fail(Failure(value_error))
             self.public_key = new_encoded_pub_key
             self.wallet.set_public_key_for_peer(self.peer, self.public_key)
-            fields = {'public_key': self.wallet.encoded_public_key}
+            fields = {'public_key': self.wallet.encoded_public_key.decode()}
             return defer.succeed(fields)
         if self.public_key is None:
             return defer.fail(Failure(ValueError("Expected but did not receive a public key")))
@@ -268,7 +268,7 @@ class GenFile(io.RawIOBase):
     def __init__(self, size, pattern):
         io.RawIOBase.__init__(self)
         self.size = size
-        self.pattern = pattern.encode()
+        self.pattern = pattern.encode() if not isinstance(pattern, bytes) else pattern
         self.read_so_far = 0
         self.buff = b''
         self.last_offset = 0

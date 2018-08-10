@@ -92,7 +92,7 @@ class LbryUploader(object):
                                                query_handler_factories,
                                                self.peer_manager)
         self.server_port = reactor.listenTCP(5553, server_factory, interface="localhost")
-        test_file = GenFile(self.file_size, b''.join([chr(i) for i in xrange(0, 64, 6)]))
+        test_file = GenFile(self.file_size, bytes([i for i in range(0, 64, 6)]))
         lbry_file = yield create_lbry_file(self.blob_manager, self.storage, self.prm, self.lbry_file_manager,
                                            "test_file", test_file)
         defer.returnValue(lbry_file.sd_hash)
@@ -155,10 +155,10 @@ class TestTransfer(unittest.TestCase):
         )
         metadata = yield self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
         downloader = yield metadata.factories[0].make_downloader(
-            metadata, self.prm.min_blob_data_payment_rate, self.prm, self.db_dir, download_mirrors=None
+            metadata, self.prm.min_blob_data_payment_rate, self.prm, self.db_dir.encode(), download_mirrors=None
         )
         yield downloader.start()
-        with open(os.path.join(self.db_dir, 'test_file')) as f:
+        with open(os.path.join(self.db_dir, 'test_file'), 'rb') as f:
             hashsum = md5()
             hashsum.update(f.read())
         self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")

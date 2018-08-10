@@ -73,8 +73,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_can_create_file(self):
-        expected_stream_hash = b"41e6b247d923d191b154fb6f1b8529d6ddd6a73d65c35" \
-                               b"7b1acb742dd83151fb66393a7709e9f346260a4f4db6de10c25"
+        expected_stream_hash = "41e6b247d923d191b154fb6f1b8529d6ddd6a73d65c35" \
+                               "7b1acb742dd83151fb66393a7709e9f346260a4f4db6de10c25"
         expected_sd_hash = "40c485432daec586c1a2d247e6c08d137640a5af6e81f3f652" \
                            "3e62e81a2e8945b0db7c94f1852e70e371d917b994352c"
         filename = 'test.file'
@@ -106,8 +106,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_can_create_file_with_unicode_filename(self):
-        expected_stream_hash = (b'd1da4258f3ce12edb91d7e8e160d091d3ab1432c2e55a6352dce0'
-                                b'2fd5adb86fe144e93e110075b5865fff8617776c6c0')
+        expected_stream_hash = ('d1da4258f3ce12edb91d7e8e160d091d3ab1432c2e55a6352dce0'
+                                '2fd5adb86fe144e93e110075b5865fff8617776c6c0')
         filename = u'☃.file'
         lbry_file = yield self.create_file(filename)
         self.assertEqual(expected_stream_hash, lbry_file.stream_hash)
