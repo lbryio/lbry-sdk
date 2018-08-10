@@ -1,4 +1,5 @@
 import binascii
+import string
 from collections import defaultdict
 import json
 import logging
@@ -81,7 +82,7 @@ class StreamDescriptorWriter:
 
     def create_descriptor(self, sd_info):
         return self._write_stream_descriptor(
-            json.dumps(sd_info, sort_keys=True, cls=JSONBytesEncoder).encode()
+            json.dumps(sd_info, sort_keys=True).encode()
         )
 
     def _write_stream_descriptor(self, raw_data):
@@ -263,7 +264,7 @@ def save_sd_info(blob_manager, sd_hash, sd_info):
                                                (sd_hash, calculated_sd_hash))
     stream_hash = yield blob_manager.storage.get_stream_hash_for_sd_hash(sd_hash)
     if not stream_hash:
-        log.debug("Saving info for %s", sd_info['stream_name'].decode('hex'))
+        log.debug("Saving info for %s", binascii.unhexlify(sd_info['stream_name']))
         stream_name = sd_info['stream_name']
         key = sd_info['key']
         stream_hash = sd_info['stream_hash']
@@ -355,16 +356,16 @@ def get_blob_hashsum(b):
     if length != 0:
         blob_hashsum.update(blob_hash.encode())
     blob_hashsum.update(str(blob_num).encode())
-    blob_hashsum.update(iv)
+    blob_hashsum.update(iv.encode())
     blob_hashsum.update(str(length).encode())
     return blob_hashsum.digest()
 
 
 def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
     h = get_lbry_hash_obj()
-    h.update(hex_stream_name)
-    h.update(key)
-    h.update(hex_suggested_file_name)
+    h.update(hex_stream_name.encode())
+    h.update(key.encode())
+    h.update(hex_suggested_file_name.encode())
     blobs_hashsum = get_lbry_hash_obj()
     for blob in blob_infos:
         blobs_hashsum.update(get_blob_hashsum(blob))
@@ -373,9 +374,8 @@ def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
 
 
 def verify_hex(text, field_name):
-    for c in text:
-        if c not in b'0123456789abcdef':
-            raise InvalidStreamDescriptorError("%s is not a hex-encoded string" % field_name)
+    if not set(text).issubset(set(string.hexdigits)):
+        raise InvalidStreamDescriptorError("%s is not a hex-encoded string" % field_name)
 
 
 def validate_descriptor(stream_info):
@@ -400,7 +400,7 @@ def validate_descriptor(stream_info):
 
     calculated_stream_hash = get_stream_hash(
         hex_stream_name, key, hex_suggested_file_name, blobs
-    ).encode()
+    )
     if calculated_stream_hash != stream_hash:
         raise InvalidStreamDescriptorError("Stream hash does not match stream metadata")
     return True
