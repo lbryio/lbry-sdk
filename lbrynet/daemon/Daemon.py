@@ -292,7 +292,7 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def _get_stream_analytics_report(self, claim_dict):
-        sd_hash = claim_dict.source_hash
+        sd_hash = claim_dict.source_hash.decode()
         try:
             stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
         except Exception:
@@ -371,7 +371,7 @@ class Daemon(AuthJSONRPCServer):
                     log.error('Failed to get %s (%s)', name, err)
                 if self.streams[sd_hash].downloader and self.streams[sd_hash].code != 'running':
                     yield self.streams[sd_hash].downloader.stop(err)
-                result = {'error': err.message}
+                result = {'error': str(err)}
             finally:
                 del self.streams[sd_hash]
             defer.returnValue(result)
@@ -1413,7 +1413,7 @@ class Daemon(AuthJSONRPCServer):
                 resolved = resolved['claim']
         txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
         claim_dict = ClaimDict.load_dict(resolved['value'])
-        sd_hash = claim_dict.source_hash
+        sd_hash = claim_dict.source_hash.decode()
 
         if sd_hash in self.streams:
             log.info("Already waiting on lbry://%s to start downloading", name)

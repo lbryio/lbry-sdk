@@ -158,7 +158,7 @@ class Manager:
 
     @staticmethod
     def _download_properties(id_, name, claim_dict=None, report=None):
-        sd_hash = None if not claim_dict else claim_dict.source_hash
+        sd_hash = None if not claim_dict else claim_dict.source_hash.decode()
         p = {
             'download_id': id_,
             'name': name,
@@ -177,9 +177,9 @@ class Manager:
         return {
             'download_id': id_,
             'name': name,
-            'stream_info': claim_dict.source_hash,
+            'stream_info': claim_dict.source_hash.decode(),
             'error': error_name(error),
-            'reason': error.message,
+            'reason': str(error),
             'report': report
         }
 

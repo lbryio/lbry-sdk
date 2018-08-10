@@ -96,7 +96,7 @@ class ConnectionManager:
             d.addBoth(lambda _: disconnect_peer(p))
             return d
 
-        closing_deferreds = [close_connection(peer) for peer in self._peer_connections.keys()]
+        closing_deferreds = [close_connection(peer) for peer in list(self._peer_connections.keys())]
         return defer.DeferredList(closing_deferreds)
 
     @defer.inlineCallbacks
