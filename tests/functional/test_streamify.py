@@ -78,13 +78,13 @@ class TestStreamify(TestCase):
             iv = 0
             while 1:
                 iv += 1
-                yield "%016d" % iv
+                yield b"%016d" % iv
 
         def create_stream():
-            test_file = GenFile(5209343, b''.join([chr(i + 3) for i in range(0, 64, 6)]))
+            test_file = GenFile(5209343, bytes([(i + 3) for i in range(0, 64, 6)]))
             d = create_lbry_file(
                 self.blob_manager, self.storage, self.prm, self.lbry_file_manager, "test_file", test_file,
-                key="0123456701234567", iv_generator=iv_generator()
+                key=b'0123456701234567', iv_generator=iv_generator()
             )
             d.addCallback(lambda lbry_file: lbry_file.stream_hash)
             return d
@@ -95,13 +95,13 @@ class TestStreamify(TestCase):
 
     @defer.inlineCallbacks
     def test_create_and_combine_stream(self):
-        test_file = GenFile(53209343, b''.join([chr(i + 5) for i in range(0, 64, 6)]))
+        test_file = GenFile(53209343, bytes([(i + 5) for i in range(0, 64, 6)]))
         lbry_file = yield create_lbry_file(self.blob_manager, self.storage, self.prm, self.lbry_file_manager,
                                            "test_file", test_file)
         sd_hash = yield self.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash)
         self.assertTrue(lbry_file.sd_hash, sd_hash)
         yield lbry_file.start()
-        f = open('test_file')
+        f = open('test_file', 'rb')
         hashsum = md5()
         hashsum.update(f.read())
         self.assertEqual(hashsum.hexdigest(), "68959747edc73df45e45db6379dd7b3b")

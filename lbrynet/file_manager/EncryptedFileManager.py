@@ -3,6 +3,7 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 """
 import os
 import logging
+from binascii import hexlify, unhexlify
 
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
@@ -186,7 +187,7 @@ class EncryptedFileManager:
         # when we save the file we'll atomic touch the nearest file to the suggested file name
         # that doesn't yet exist in the download directory
         rowid = yield self.storage.save_downloaded_file(
-            stream_hash, os.path.basename(file_name.decode('hex')).encode('hex'), download_directory, blob_data_rate
+            stream_hash, hexlify(os.path.basename(unhexlify(file_name))), download_directory, blob_data_rate
         )
         file_name = yield self.storage.get_filename_for_rowid(rowid)
         lbry_file = self._get_lbry_file(

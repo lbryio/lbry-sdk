@@ -16,8 +16,8 @@ class ServerRequestHandler:
     def __init__(self, consumer):
         self.consumer = consumer
         self.production_paused = False
-        self.request_buff = ''
-        self.response_buff = ''
+        self.request_buff = b''
+        self.response_buff = b''
         self.producer = None
         self.request_received = False
         self.CHUNK_SIZE = 2**14
@@ -54,7 +54,7 @@ class ServerRequestHandler:
             return
         chunk = self.response_buff[:self.CHUNK_SIZE]
         self.response_buff = self.response_buff[self.CHUNK_SIZE:]
-        if chunk == '':
+        if chunk == b'':
             return
         log.trace("writing %s bytes to the client", len(chunk))
         self.consumer.write(chunk)
@@ -99,7 +99,7 @@ class ServerRequestHandler:
         self.request_buff = self.request_buff + data
         msg = self.try_to_parse_request(self.request_buff)
         if msg:
-            self.request_buff = ''
+            self.request_buff = b''
             self._process_msg(msg)
         else:
             log.debug("Request buff not a valid json message")
@@ -132,7 +132,7 @@ class ServerRequestHandler:
         self._produce_more()
 
     def send_response(self, msg):
-        m = json.dumps(msg)
+        m = json.dumps(msg).encode()
         log.debug("Sending a response of length %s", str(len(m)))
         log.debug("Response: %s", str(m))
         self.response_buff = self.response_buff + m
