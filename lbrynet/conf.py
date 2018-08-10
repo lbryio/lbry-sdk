@@ -552,7 +552,7 @@ class Config:
         if 'share_debug_info' in settings_dict:
             settings_dict['share_usage_data'] = settings_dict['share_debug_info']
             del settings_dict['share_debug_info']
-        for key in settings_dict.keys():
+        for key in list(settings_dict.keys()):
             if not self._is_valid_setting(key):
                 log.warning('Ignoring invalid conf file setting: %s', key)
                 del settings_dict[key]
