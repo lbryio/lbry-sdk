@@ -64,7 +64,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def create_file(self, filename):
-        handle = mocks.GenFile(3*MB, '1')
+        handle = mocks.GenFile(3*MB, b'1')
         key = b'2' * (AES.block_size // 8)
         out = yield EncryptedFileCreator.create_lbry_file(
             self.blob_manager, self.storage, self.prm, self.lbry_file_manager, filename, handle, key, iv_generator()

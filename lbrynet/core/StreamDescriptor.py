@@ -1,4 +1,4 @@
-import binascii
+from binascii import unhexlify
 import string
 from collections import defaultdict
 import json
@@ -264,7 +264,7 @@ def save_sd_info(blob_manager, sd_hash, sd_info):
                                                (sd_hash, calculated_sd_hash))
     stream_hash = yield blob_manager.storage.get_stream_hash_for_sd_hash(sd_hash)
     if not stream_hash:
-        log.debug("Saving info for %s", binascii.unhexlify(sd_info['stream_name']))
+        log.debug("Saving info for %s", unhexlify(sd_info['stream_name']))
         stream_name = sd_info['stream_name']
         key = sd_info['key']
         stream_hash = sd_info['stream_hash']
@@ -415,14 +415,14 @@ class EncryptedFileStreamDescriptorValidator:
 
     def info_to_show(self):
         info = []
-        info.append(("stream_name", binascii.unhexlify(self.raw_info.get("stream_name"))))
+        info.append(("stream_name", unhexlify(self.raw_info.get("stream_name"))))
         size_so_far = 0
         for blob_info in self.raw_info.get("blobs", []):
             size_so_far += int(blob_info['length'])
         info.append(("stream_size", str(self.get_length_of_stream())))
         suggested_file_name = self.raw_info.get("suggested_file_name", None)
         if suggested_file_name is not None:
-            suggested_file_name = binascii.unhexlify(suggested_file_name)
+            suggested_file_name = unhexlify(suggested_file_name)
         info.append(("suggested_file_name", suggested_file_name))
         return info
 
