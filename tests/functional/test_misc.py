@@ -92,7 +92,7 @@ class LbryUploader(object):
                                                query_handler_factories,
                                                self.peer_manager)
         self.server_port = reactor.listenTCP(5553, server_factory, interface="localhost")
-        test_file = GenFile(self.file_size, bytes([i for i in range(0, 64, 6)]))
+        test_file = GenFile(self.file_size, bytes(i for i in range(0, 64, 6)))
         lbry_file = yield create_lbry_file(self.blob_manager, self.storage, self.prm, self.lbry_file_manager,
                                            "test_file", test_file)
         defer.returnValue(lbry_file.sd_hash)
