@@ -23,7 +23,7 @@ class CryptBlobInfo(BlobInfo):
         info = {
             "blob_num": self.blob_num,
             "length": self.length,
-            "iv": self.iv
+            "iv": self.iv.decode()
         }
         if self.blob_hash:
             info['blob_hash'] = self.blob_hash

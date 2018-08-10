@@ -65,13 +65,13 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.broadcast(cert_tx)
         await self.broadcast(claim_tx)
         await asyncio.wait([  # mempool
-            self.on_transaction(claim_tx),
-            self.on_transaction(cert_tx),
+            self.on_transaction_id(claim_tx.id),
+            self.on_transaction_id(cert_tx.id),
         ])
         await self.blockchain.generate(1)
         await asyncio.wait([  # confirmed
-            self.on_transaction(claim_tx),
-            self.on_transaction(cert_tx),
+            self.on_transaction_id(claim_tx.id),
+            self.on_transaction_id(cert_tx.id),
         ])
 
         self.assertEqual(round(await d2f(self.account.get_balance(0))/COIN, 1), 8.0)

@@ -37,14 +37,14 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
     def _finished(self):
         # calculate the stream hash
         self.stream_hash = get_stream_hash(
-            hexlify(self.name.encode()), hexlify(self.key), hexlify(self.name.encode()),
+            hexlify(self.name.encode()).decode(), hexlify(self.key).decode(), hexlify(self.name.encode()).decode(),
             self.blob_infos
         )
 
         # generate the sd info
         self.sd_info = format_sd_info(
-            EncryptedFileStreamType, hexlify(self.name.encode()), hexlify(self.key),
-            hexlify(self.name.encode()), self.stream_hash.encode(), self.blob_infos
+            EncryptedFileStreamType, hexlify(self.name.encode()).decode(), hexlify(self.key).decode(),
+            hexlify(self.name.encode()).decode(), self.stream_hash, self.blob_infos
         )
 
         # sanity check
