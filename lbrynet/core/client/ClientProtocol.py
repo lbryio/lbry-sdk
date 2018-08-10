@@ -109,7 +109,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self.connection_closing = True
         ds = []
         err = RequestCanceledError()
-        for key, d in self._response_deferreds.items():
+        for key, d in list(self._response_deferreds.items()):
             del self._response_deferreds[key]
             d.errback(err)
             ds.append(d)
