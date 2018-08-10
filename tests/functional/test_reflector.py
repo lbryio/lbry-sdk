@@ -1,4 +1,6 @@
 import os
+from binascii import hexlify
+
 from twisted.internet import defer, error
 from twisted.trial import unittest
 from lbrynet.core.StreamDescriptor import get_sd_info
@@ -81,12 +83,12 @@ class TestReflector(unittest.TestCase):
             return d
 
         def create_stream():
-            test_file = mocks.GenFile(5209343, b''.join([chr(i + 3) for i in range(0, 64, 6)]))
+            test_file = mocks.GenFile(5209343, bytes([(i + 3) for i in range(0, 64, 6)]))
             d = EncryptedFileCreator.create_lbry_file(
                 self.client_blob_manager, self.client_storage, prm, self.client_lbry_file_manager,
                 "test_file",
                 test_file,
-                key="0123456701234567",
+                key=b"0123456701234567",
                 iv_generator=iv_generator()
             )
             d.addCallback(lambda lbry_file: lbry_file.stream_hash)
@@ -165,7 +167,7 @@ class TestReflector(unittest.TestCase):
             self.assertEqual(1, len(streams))
             stream_info = yield self.server_storage.get_stream_info(self.stream_hash)
             self.assertEqual(self.sd_hash, stream_info[3])
-            self.assertEqual('test_file'.encode('hex'), stream_info[0])
+            self.assertEqual(hexlify(b'test_file').decode(), stream_info[0])
 
             # check should_announce blobs on blob_manager
             blob_hashes = yield self.server_storage.get_all_should_announce_blobs()
@@ -334,4 +336,4 @@ def iv_generator():
     iv = 0
     while True:
         iv += 1
-        yield "%016d" % iv
+        yield b"%016d" % iv
