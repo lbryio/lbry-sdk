@@ -40,7 +40,7 @@ class ReflectorServer(Protocol):
         self.receiving_blob = False
         self.incoming_blob = None
         self.blob_finished_d = None
-        self.request_buff = ""
+        self.request_buff = b""
 
         self.blob_writer = None
 
@@ -52,7 +52,7 @@ class ReflectorServer(Protocol):
         self.transport.loseConnection()
 
     def send_response(self, response_dict):
-        self.transport.write(json.dumps(response_dict))
+        self.transport.write(json.dumps(response_dict).encode())
 
     ############################
     # Incoming blob file stuff #
@@ -122,7 +122,7 @@ class ReflectorServer(Protocol):
             self.request_buff += data
             msg, extra_data = self._get_valid_response(self.request_buff)
             if msg is not None:
-                self.request_buff = ''
+                self.request_buff = b''
                 d = self.handle_request(msg)
                 d.addErrback(self.handle_error)
                 if self.receiving_blob and extra_data:
@@ -134,7 +134,7 @@ class ReflectorServer(Protocol):
         response = None
         curr_pos = 0
         while not self.receiving_blob:
-            next_close_paren = response_msg.find('}', curr_pos)
+            next_close_paren = response_msg.find(b'}', curr_pos)
             if next_close_paren != -1:
                 curr_pos = next_close_paren + 1
                 try:
