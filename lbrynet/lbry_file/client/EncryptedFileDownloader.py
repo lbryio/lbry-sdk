@@ -1,13 +1,13 @@
-import binascii
+import os
+import logging
+import traceback
+from binascii import hexlify, unhexlify
 
 from lbrynet.core.StreamDescriptor import save_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
-import os
 from twisted.internet import defer, threads
-import logging
-import traceback
 
 
 log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class EncryptedFileDownloader(CryptStreamDownloader):
                          payment_rate_manager, wallet, key, stream_name)
         self.stream_hash = stream_hash
         self.storage = storage
-        self.file_name = binascii.unhexlify(os.path.basename(file_name))
+        self.file_name = unhexlify(os.path.basename(file_name)).decode()
         self._calculated_total_bytes = None
 
     @defer.inlineCallbacks
@@ -128,8 +128,8 @@ class EncryptedFileSaver(EncryptedFileDownloader):
         super().__init__(stream_hash, peer_finder, rate_limiter,
                          blob_manager, storage, payment_rate_manager,
                          wallet, key, stream_name, file_name)
-        self.download_directory = binascii.unhexlify(download_directory)
-        self.file_written_to = os.path.join(self.download_directory, binascii.unhexlify(file_name))
+        self.download_directory = unhexlify(download_directory).decode()
+        self.file_written_to = os.path.join(self.download_directory, unhexlify(file_name).decode())
         self.file_handle = None
 
     def __str__(self):
@@ -181,7 +181,7 @@ class EncryptedFileSaver(EncryptedFileDownloader):
 class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
     def __init__(self, peer_finder, rate_limiter, blob_manager, storage, wallet, download_directory):
         super().__init__(peer_finder, rate_limiter, blob_manager, storage, wallet)
-        self.download_directory = binascii.hexlify(download_directory.encode())
+        self.download_directory = hexlify(download_directory.encode())
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
         stream_name = stream_info.raw_info['stream_name']

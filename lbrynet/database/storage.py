@@ -492,9 +492,9 @@ class SQLiteStorage:
     @defer.inlineCallbacks
     def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         # touch the closest available file to the file name
-        file_name = yield open_file_for_writing(unhexlify(download_directory), unhexlify(file_name))
+        file_name = yield open_file_for_writing(unhexlify(download_directory).decode(), unhexlify(file_name).decode())
         result = yield self.save_published_file(
-            stream_hash, hexlify(file_name), download_directory, data_payment_rate
+            stream_hash, hexlify(file_name.encode()), download_directory, data_payment_rate
         )
         defer.returnValue(result)
 

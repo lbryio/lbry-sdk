@@ -162,7 +162,7 @@ class GetStream:
     @defer.inlineCallbacks
     def _initialize(self, stream_info):
         # Set sd_hash and return key_fee from stream_info
-        self.sd_hash = stream_info.source_hash
+        self.sd_hash = stream_info.source_hash.decode()
         key_fee = None
         if stream_info.has_fee:
             key_fee = yield self.check_fee_and_convert(stream_info.source_fee)

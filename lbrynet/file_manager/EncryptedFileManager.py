@@ -188,7 +188,7 @@ class EncryptedFileManager:
         rowid = yield self.storage.save_downloaded_file(
             stream_hash, hexlify(os.path.basename(unhexlify(file_name))), download_directory, blob_data_rate
         )
-        file_name = yield self.storage.get_filename_for_rowid(rowid)
+        file_name = (yield self.storage.get_filename_for_rowid(rowid)).decode()
         lbry_file = self._get_lbry_file(
             rowid, stream_hash, payment_rate_manager, sd_hash, key, stream_name, file_name, download_directory,
             stream_metadata['suggested_file_name'], download_mirrors
