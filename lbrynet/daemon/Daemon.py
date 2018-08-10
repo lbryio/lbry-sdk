@@ -2633,7 +2633,7 @@ class Daemon(AuthJSONRPCServer):
         peers = yield finished_deferred
         results = [
             {
-                "node_id": node_id.encode('hex'),
+                "node_id": hexlify(node_id).decode(),
                 "host": host,
                 "port": port
             }
@@ -2852,7 +2852,7 @@ class Daemon(AuthJSONRPCServer):
         if not contact:
             defer.returnValue({'error': 'peer not found'})
         try:
-            result = yield contact.ping()
+            result = (yield contact.ping()).decode()
         except TimeoutError:
             result = {'error': 'ping timeout'}
         defer.returnValue(result)
