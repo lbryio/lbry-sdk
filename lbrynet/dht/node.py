@@ -18,15 +18,7 @@ from .peerfinder import DHTPeerFinder
 from .contact import ContactManager
 from .iterativefind import iterativeFind
 
-
 log = logging.getLogger(__name__)
-
-
-def expand_peer(compact_peer_info):
-    host = ".".join([str(ord(d)) for d in compact_peer_info[:4]])
-    port, = struct.unpack('>H', compact_peer_info[4:6])
-    peer_node_id = compact_peer_info[6:]
-    return peer_node_id, host, port
 
 
 def rpcmethod(func):
@@ -422,22 +414,15 @@ class Node(MockKademliaHelper):
             else:
                 pass
 
-        expanded_peers = []
-        if find_result:
-            if key in find_result:
-                for peer in find_result[key]:
-                    expanded = expand_peer(peer)
-                    if expanded not in expanded_peers:
-                        expanded_peers.append(expanded)
-            # TODO: get this working
-            # if 'closestNodeNoValue' in find_result:
-            #     closest_node_without_value = find_result['closestNodeNoValue']
-            #     try:
-            #         response, address = yield closest_node_without_value.findValue(key, rawResponse=True)
-            #         yield closest_node_without_value.store(key, response.response['token'], self.peerPort)
-            #     except TimeoutError:
-            #         pass
-        defer.returnValue(expanded_peers)
+        defer.returnValue(list(set(find_result.get(key, []) if find_result else [])))
+        # TODO: get this working
+        # if 'closestNodeNoValue' in find_result:
+        #     closest_node_without_value = find_result['closestNodeNoValue']
+        #     try:
+        #         response, address = yield closest_node_without_value.findValue(key, rawResponse=True)
+        #         yield closest_node_without_value.store(key, response.response['token'], self.peerPort)
+        #     except TimeoutError:
+        #         pass
 
     def addContact(self, contact):
         """ Add/update the given contact; simple wrapper for the same method

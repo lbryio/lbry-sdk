@@ -16,7 +16,7 @@ def get_contact(contact_list, node_id, address, port):
 
 
 def expand_peer(compact_peer_info):
-    host = ".".join([str(ord(d)) for d in compact_peer_info[:4]])
+    host = ".".join([str(d) for d in compact_peer_info[:4]])
     port, = struct.unpack('>H', compact_peer_info[4:6])
     peer_node_id = compact_peer_info[6:]
     return (peer_node_id, host, port)
@@ -103,9 +103,9 @@ class _IterativeFind:
         if self.is_find_value_request and self.key in result:
             # We have found the value
             for peer in result[self.key]:
-                _, host, port = expand_peer(peer)
+                node_id, host, port = expand_peer(peer)
                 if (host, port) not in self.exclude:
-                    self.find_value_result.setdefault(self.key, []).append(peer)
+                    self.find_value_result.setdefault(self.key, []).append((node_id, host, port))
             if self.find_value_result:
                 self.finished_deferred.callback(self.find_value_result)
         else:
