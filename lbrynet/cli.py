@@ -16,7 +16,7 @@ from lbrynet.core.system_info import get_platform
 async def execute_command(method, params, conf_path=None):
     # this check if the daemon is running or not
     try:
-        api = LBRYAPIClient.get_client(conf_path)
+        api = await LBRYAPIClient.get_client(conf_path)
         await api.status()
     except (ClientConnectorError, ConnectionError):
         print("Could not connect to daemon. Are you sure it's running?")
@@ -25,6 +25,8 @@ async def execute_command(method, params, conf_path=None):
     # this actually executes the method
     try:
         resp = await api.call(method, params)
+        if not api.session.closed:
+            await api.session.close()
         print(json.dumps(resp["result"], indent=2))
     except KeyError:
         if resp["error"]["code"] == -32500:
