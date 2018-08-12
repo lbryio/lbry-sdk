@@ -47,7 +47,7 @@ class UnAuthAPIClient:
                 return await resp.json()
 
 
-class AsyncAuthAPIClient:
+class AuthAPIClient:
     def __init__(self, key, session, cookies, url, login_url):
         self.session = session
         self.__api_key = key
@@ -131,5 +131,5 @@ class LBRYAPIClient:
         conf.conf_file = conf_path
         if not conf.settings:
             conf.initialize_settings()
-        return AsyncAuthAPIClient.get_client() if conf.settings['use_auth_http'] else \
+        return AuthAPIClient.get_client() if conf.settings['use_auth_http'] else \
             UnAuthAPIClient.from_url(conf.settings.get_api_connection_string())
