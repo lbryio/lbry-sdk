@@ -256,7 +256,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         # ignore INT/TERM signals once shutdown has started
         signal.signal(signal.SIGINT, self._already_shutting_down)
         signal.signal(signal.SIGTERM, self._already_shutting_down)
-        self.listening_port.stopListening()
+        if self.listening_port:
+            self.listening_port.stopListening()
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
