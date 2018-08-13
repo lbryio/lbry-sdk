@@ -190,33 +190,32 @@ class HeadersComponent(Component):
 
     @defer.inlineCallbacks
     def fetch_headers_from_s3(self):
-        def collector(data, h_file):
-            h_file.write(data)
-            local_size = float(h_file.tell())
-            final_size = float(final_size_after_download)
-            self._headers_progress_percent = math.ceil(local_size / final_size * 100)
-
         local_header_size = self.local_header_file_size()
         self._headers_progress_percent = 0.0
         resume_header = {"Range": "bytes={}-".format(local_header_size)}
         response = yield treq.get(HEADERS_URL, headers=resume_header)
-        got_406 = response.code == 406  # our file is bigger
         final_size_after_download = response.length + local_header_size
-        if got_406:
+
+        def collector(data, h_file, start_size):
+            h_file.write(data)
+            local_size = float(h_file.tell())
+            final_size = float(final_size_after_download)
+            self._headers_progress_percent = math.ceil((local_size - start_size) / (final_size - start_size) * 100)
+
+        if response.code == 406:  # our file is bigger
             log.warning("s3 is more out of date than we are")
         # should have something to download and a final length divisible by the header size
         elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
             s3_height = (final_size_after_download / HEADER_SIZE) - 1
             local_height = self.local_header_file_height()
-            self._headers_progress_percent = math.ceil(float(local_height) / float(s3_height) * 100.0)
             if s3_height > local_height:
                 if local_header_size:
                     log.info("Resuming download of %i bytes from s3", response.length)
                     with open(os.path.join(self.config.path, "blockchain_headers"), "a+b") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
+                        yield treq.collect(response, lambda d: collector(d, headers_file, local_header_size))
                 else:
                     with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
+                        yield treq.collect(response, lambda d: collector(d, headers_file, 0))
                 log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
                 self._check_header_file_integrity()
             else:
@@ -321,8 +320,8 @@ class WalletComponent(Component):
             remote_height = self.wallet.network.get_server_height()
             best_hash = yield self.wallet.get_best_blockhash()
             defer.returnValue({
-                'blocks': local_height,
-                'blocks_behind': remote_height - local_height,
+                'blocks': max(local_height, 0),
+                'blocks_behind': max(remote_height - local_height, 0),
                 'best_blockhash': best_hash,
                 'is_encrypted': self.wallet.wallet.use_encryption,
                 'is_locked': not self.wallet.is_wallet_unlocked,
