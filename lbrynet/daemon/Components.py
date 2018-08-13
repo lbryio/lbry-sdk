@@ -197,6 +197,7 @@ class HeadersComponent(Component):
             self._headers_progress_percent = math.ceil(local_size / final_size * 100)
 
         local_header_size = self.local_header_file_size()
+        self._headers_progress_percent = 0.0
         resume_header = {"Range": "bytes={}-".format(local_header_size)}
         response = yield treq.get(HEADERS_URL, headers=resume_header)
         got_406 = response.code == 406  # our file is bigger
@@ -207,6 +208,7 @@ class HeadersComponent(Component):
         elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
             s3_height = (final_size_after_download / HEADER_SIZE) - 1
             local_height = self.local_header_file_height()
+            self._headers_progress_percent = math.ceil(float(local_height) / float(s3_height) * 100.0)
             if s3_height > local_height:
                 if local_header_size:
                     log.info("Resuming download of %i bytes from s3", response.length)
