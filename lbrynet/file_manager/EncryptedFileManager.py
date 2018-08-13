@@ -147,11 +147,10 @@ class EncryptedFileManager(object):
         finally:
             defer.returnValue(None)
 
+    @defer.inlineCallbacks
     def _stop_lbry_files(self):
         log.info("Stopping %i lbry files", len(self.lbry_files))
-        lbry_files = self.lbry_files
-        for lbry_file in lbry_files:
-            yield self._stop_lbry_file(lbry_file)
+        yield defer.DeferredList([self._stop_lbry_file(lbry_file) for lbry_file in list(self.lbry_files)])
 
     @defer.inlineCallbacks
     def add_published_file(self, stream_hash, sd_hash, download_directory, payment_rate_manager, blob_data_rate):
@@ -251,6 +250,6 @@ class EncryptedFileManager(object):
     @defer.inlineCallbacks
     def stop(self):
         safe_stop_looping_call(self.lbry_file_reflector)
-        yield defer.DeferredList(list(self._stop_lbry_files()))
+        yield self._stop_lbry_files()
         log.info("Stopped encrypted file manager")
         defer.returnValue(True)
