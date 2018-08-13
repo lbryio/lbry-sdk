@@ -13,8 +13,8 @@ at anytime.
   *
 
 ### Fixed
-  * `download_progress` field in `blockchain_headers` section of `status` not initializing correctly when resuming a download (https://github.com/lbryio/lbry/issues/1355)
-  * `wallet_send` not accepting decimal amounts (https://github.com/lbryio/lbry/issues/1356 commit https://github.com/lbryio/lbry/commit/1098ca0494ece420c70fc57f69d6d388715a99b8)
+  *
+  *
 
 ### Deprecated
   *
@@ -25,13 +25,24 @@ at anytime.
   *
 
 ### Added
-  * `is_locked` to `wallet` in `status` response (https://github.com/lbryio/lbry/issues/1354, commit https://github.com/lbryio/lbry/commit/153022a1a7122ab6d31d3db433dccbe469bbcb3c)
+  *
   *
 
 ### Removed
   *
   *
 
+
+## [0.21.1] - 2018-08-13
+### Fixed
+ * `download_progress` field in `blockchain_headers` section of `status` not initializing correctly when resuming a download (https://github.com/lbryio/lbry/issues/1355)
+ * `wallet_send` not accepting decimal amounts (https://github.com/lbryio/lbry/issues/1356 commit https://github.com/lbryio/lbry/commit/1098ca0494ece420c70fc57f69d6d388715a99b8)
+
+### Added
+ * `is_locked` to `wallet` in `status` response (https://github.com/lbryio/lbry/issues/1354, commit https://github.com/lbryio/lbry/commit/153022a1a7122ab6d31d3db433dccbe469bbcb3c)
+
+### Changed
+ * Bumped `lbryum` requirement to 3.2.4 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#324---2018-08-13)
 
 ## [0.21.0] - 2018-08-09
 ### Fixed
