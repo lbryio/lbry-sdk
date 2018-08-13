@@ -154,9 +154,8 @@ class TestFileListSorting(unittest.TestCase):
         # faker with seed 66410. This seed was chosen becacuse it produces 3 results
         # 'points_paid' at 6.0 and 2 results at 4.5 to test multiple sort criteria.
         self.test_points_paid = [0.2, 2.9, 4.5, 4.5, 6.0, 6.0, 6.0, 6.8, 7.1, 9.2]
-        self.test_file_names = ['also.mp3', 'better.css', 'call.mp3', 'pay.jpg',
-                                'record.pages', 'sell.css', 'strategy.pages',
-                                'thousand.pages', 'town.mov', 'vote.ppt']
+        self.test_file_names = ['alias.mp3', 'atque.css', 'commodi.mp3', 'nulla.jpg', 'praesentium.pages',
+                                'quidem.css', 'rerum.pages', 'suscipit.pages', 'temporibus.mov', 'velit.ppt']
         self.test_authors = ['angela41', 'edward70', 'fhart', 'johnrosales',
                              'lucasfowler', 'peggytorres', 'qmitchell',
                              'trevoranderson', 'xmitchell', 'zhangsusan']
@@ -187,28 +186,31 @@ class TestFileListSorting(unittest.TestCase):
         self.assertEquals(self.test_file_names, [f['file_name'] for f in file_list])
 
     def test_sort_by_file_name_ascending(self):
-        sort_options = ['file_name,\nasc']
+        sort_options = ['file_name,asc']
         deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
         file_list = self.successResultOf(deferred)
         self.assertEquals(self.test_file_names, [f['file_name'] for f in file_list])
 
     def test_sort_by_file_name_descending(self):
-        sort_options = ['\tfile_name,\n\tdesc']
+        sort_options = ['file_name,desc']
         deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
         file_list = self.successResultOf(deferred)
         self.assertEquals(list(reversed(self.test_file_names)), [f['file_name'] for f in file_list])
 
     def test_sort_by_multiple_criteria(self):
-        expected = ['file_name=record.pages, points_paid=9.2',
-                     'file_name=vote.ppt, points_paid=7.1',
-                     'file_name=strategy.pages, points_paid=6.8',
-                     'file_name=also.mp3, points_paid=6.0',
-                     'file_name=better.css, points_paid=6.0',
-                     'file_name=town.mov, points_paid=6.0',
-                     'file_name=sell.css, points_paid=4.5',
-                     'file_name=thousand.pages, points_paid=4.5',
-                     'file_name=call.mp3, points_paid=2.9',
-                     'file_name=pay.jpg, points_paid=0.2']
+        expected = [
+            'file_name=praesentium.pages, points_paid=9.2',
+            'file_name=velit.ppt, points_paid=7.1',
+            'file_name=rerum.pages, points_paid=6.8',
+            'file_name=alias.mp3, points_paid=6.0',
+            'file_name=atque.css, points_paid=6.0',
+            'file_name=temporibus.mov, points_paid=6.0',
+            'file_name=quidem.css, points_paid=4.5',
+            'file_name=suscipit.pages, points_paid=4.5',
+            'file_name=commodi.mp3, points_paid=2.9',
+            'file_name=nulla.jpg, points_paid=0.2'
+        ]
+
         format_result = lambda f: 'file_name={}, points_paid={}'.format(f['file_name'], f['points_paid'])
 
         sort_options = ['file_name,asc', 'points_paid,desc']
