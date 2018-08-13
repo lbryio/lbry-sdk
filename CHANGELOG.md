@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * `is_locked` to `wallet` in `status` response
   *
 
 ### Removed

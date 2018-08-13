@@ -322,7 +322,8 @@ class WalletComponent(Component):
                 'blocks': local_height,
                 'blocks_behind': remote_height - local_height,
                 'best_blockhash': best_hash,
-                'is_encrypted': self.wallet.wallet.use_encryption
+                'is_encrypted': self.wallet.wallet.use_encryption,
+                'is_locked': not self.wallet.is_wallet_unlocked,
             })
 
     @defer.inlineCallbacks

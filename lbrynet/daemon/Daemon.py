@@ -705,7 +705,8 @@ class Daemon(AuthJSONRPCServer):
                     'blocks': (int) local blockchain height,
                     'blocks_behind': (int) remote_height - local_height,
                     'best_blockhash': (str) block hash of most recent block,
-                    'is_encrypted': (bool)
+                    'is_encrypted': (bool),
+                    'is_locked': (bool),
                 },
                 'dht': {
                     'node_id': (str) lbry dht node id - hex encoded,
