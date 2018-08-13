@@ -2152,7 +2152,8 @@ Returns:
             'blocks': (int) local blockchain height,
             'blocks_behind': (int) remote_height - local_height,
             'best_blockhash': (str) block hash of most recent block,
-            'is_encrypted': (bool)
+            'is_encrypted': (bool),
+            'is_locked': (bool),
         },
         'dht': {
             'node_id': (str) lbry dht node id - hex encoded,
@@ -2474,9 +2475,9 @@ Usage:
 
 
 Options:
-    --amount=&lt;amount&gt;      :  (float)  amount of credit to send
-    --address=&lt;address&gt;    :  (str)    address to send credits to
-    --claim_id=&lt;claim_id&gt;  :  (float)  claim_id of the claim to send to tip to
+    --amount=&lt;amount&gt;      :  (Decimal)  amount of credit to send
+    --address=&lt;address&gt;    :  (str)      address to send credits to
+    --claim_id=&lt;claim_id&gt;  :  (str)      claim_id of the claim to send to tip to
 
 Returns:
     If sending to an address:

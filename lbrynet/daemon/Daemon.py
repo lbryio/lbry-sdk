@@ -2396,9 +2396,9 @@ class Daemon(AuthJSONRPCServer):
                         ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
 
         Options:
-            --amount=<amount>      : (float) amount of credit to send
+            --amount=<amount>      : (Decimal) amount of credit to send
             --address=<address>    : (str) address to send credits to
-            --claim_id=<claim_id>  : (float) claim_id of the claim to send to tip to
+            --claim_id=<claim_id>  : (str) claim_id of the claim to send to tip to
 
         Returns:
             If sending to an address:

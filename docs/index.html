@@ -1951,7 +1951,8 @@ Returns:
             'blocks': (int) local blockchain height,
             'blocks_behind': (int) remote_height - local_height,
             'best_blockhash': (str) block hash of most recent block,
-            'is_encrypted': (bool)
+            'is_encrypted': (bool),
+            'is_locked': (bool),
         },
         'dht': {
             'node_id': (str) lbry dht node id - hex encoded,
@@ -2208,9 +2209,9 @@ to the owner of a claim specified by uri. A tip is a claim support where the rec
 of the support is the claim address for the claim being supported.
 
 Args:
-    'amount' (required)    :  (float)  amount of credit to send
-    'address' (required)   :  (str)    address to send credits to
-    'claim_id' (required)  :  (float)  claim_id of the claim to send to tip to
+    'amount' (required)    :  (Decimal)  amount of credit to send
+    'address' (required)   :  (str)      address to send credits to
+    'claim_id' (required)  :  (str)      claim_id of the claim to send to tip to
 
 Returns:
     If sending to an address:
