@@ -55,6 +55,11 @@ class Output(BaseOutput):
         return cls(amount, script)
 
     @classmethod
+    def purchase_claim_pubkey_hash(cls, amount: int, claim_id: str, pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.purchase_claim_pubkey_hash(unhexlify(claim_id)[::-1], pubkey_hash)
+        return cls(amount, script)
+
+    @classmethod
     def pay_update_claim_pubkey_hash(
             cls, amount: int, claim_name: str, claim_id: str, claim: bytes, pubkey_hash: bytes) -> 'Output':
         script = cls.script_class.pay_update_claim_pubkey_hash(
@@ -73,6 +78,15 @@ class Transaction(BaseTransaction):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
             amount, name, meta.serialized, ledger.address_to_hash160(holding_address)
+        )
+        return cls.create([], [claim_output], funding_accounts, change_account)
+
+    @classmethod
+    def purchase(cls, claim: Output, amount: int, merchant_address: bytes,
+              funding_accounts: List[Account], change_account: Account):
+        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        claim_output = Output.purchase_claim_pubkey_hash(
+            amount, claim.claim_id, ledger.address_to_hash160(merchant_address)
         )
         return cls.create([], [claim_output], funding_accounts, change_account)
 

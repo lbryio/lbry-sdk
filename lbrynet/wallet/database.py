@@ -21,7 +21,8 @@ class WalletDatabase(BaseDatabase):
             claim_name text,
             is_claim boolean not null default 0,
             is_update boolean not null default 0,
-            is_support boolean not null default 0
+            is_support boolean not null default 0,
+            is_purchase boolean not null default 0
         );
     """
 
@@ -38,6 +39,7 @@ class WalletDatabase(BaseDatabase):
             'is_claim': txo.script.is_claim_name,
             'is_update': txo.script.is_update_claim,
             'is_support': txo.script.is_support_claim,
+            'is_purchase': txo.script.is_purchase_claim,
         })
         if txo.script.is_claim_involved:
             row['claim_id'] = txo.claim_id
