@@ -290,7 +290,7 @@ ADJUSTABLE_SETTINGS = {
     # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
     'reflect_uploads': (bool, True),
     'auto_re_reflect_interval': (int, 86400),  # set to 0 to disable
-    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_list, server_list_reverse),
+    'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_list, server_list_reverse),
     'run_reflector_server': (bool, False),  # adds `reflector` to components_to_skip unless True
     'sd_download_timeout': (int, 3),
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
