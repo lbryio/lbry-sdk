@@ -30,6 +30,7 @@ class AuthCLIIntegrationTest(unittest.TestCase):
         yield self.daemon.start_listening()
 
     def test_cli_status_command_with_auth(self):
+        self.assertTrue(self.daemon._use_authentication)
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
             cli.main(["status"])
