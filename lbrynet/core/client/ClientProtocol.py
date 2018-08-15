@@ -73,7 +73,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         log.debug("Connection lost to %s: %s", self.peer, reason)
         self.setTimeout(None)
         self.connection_closed = True
-        if reason.check(error.ConnectionDone) or reason is None:
+        if reason is None or reason.check(error.ConnectionDone):
             err = failure.Failure(ConnectionClosedBeforeResponseError())
         else:
             err = reason
