@@ -6,19 +6,7 @@ import urllib
 import json
 import textwrap
 
-#import sys
-#from twisted.internet import asyncioreactor
-#if 'twisted.internet.reactor' not in sys.modules:
-#    asyncioreactor.install()
-#else:
-#    from twisted.internet import reactor
-#    if not isinstance(reactor, asyncioreactor.AsyncioSelectorReactor):
-#        # pyinstaller hooks install the default reactor before
-#        # any of our code runs, see kivy for similar problem:
-#        #    https://github.com/kivy/kivy/issues/4182
-#        del sys.modules['twisted.internet.reactor']
-#        asyncioreactor.install()
-
+from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
@@ -91,6 +79,7 @@ MAX_UPDATE_FEE_ESTIMATE = 0.3
 DIRECTION_ASCENDING = 'asc'
 DIRECTION_DESCENDING = 'desc'
 DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
+
 
 class IterableContainer:
     def __iter__(self):
@@ -251,7 +240,10 @@ class Daemon(AuthJSONRPCServer):
 
     @property
     def ledger(self):
-        return self.wallet.default_account.ledger
+        try:
+            return self.wallet.default_account.ledger
+        except AttributeError:
+            return None
 
     @defer.inlineCallbacks
     def setup(self):
@@ -395,51 +387,15 @@ class Daemon(AuthJSONRPCServer):
                                log.exception)
         self.analytics_manager.send_claim_action('publish')
         nout = 0
-        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-        defer.returnValue(self._txo_to_response(tx, nout))
-
-    def _txo_to_response(self, tx, nout):
         txo = tx.outputs[nout]
-        return {
+        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
+        defer.returnValue({
             "success": True,
-            "txid": tx.id,
-            "nout": nout,
-            "tx": hexlify(tx.raw),
-            "fee": str(Decimal(tx.fee) / COIN),
+            "tx": tx,
             "claim_id": txo.claim_id,
-            "value": hexlify(txo.claim).decode(),
-            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash'])
-        }
-
-    @defer.inlineCallbacks
-    def _resolve(self, *uris, **kwargs):
-        """Resolves a URI. Can check the cache first before going out to the blockchain and stores the result.
-
-        Args:
-            name: the lbry://<name> to resolve
-            force_refresh: if True, always go out to the blockchain to resolve.
-        """
-
-        page = kwargs.get('page', 0)
-        page_size = kwargs.get('page_size', 10)
-        check_cache = kwargs.get('check_cache', False) # TODO: put caching back (was force_refresh parameter)
-        results = yield self.wallet.resolve(*uris, page=page, page_size=page_size)
-        self.save_claims((value for value in results.values() if 'error' not in value))
-        yield defer.returnValue(results)
-
-    @defer.inlineCallbacks
-    def save_claims(self, claim_infos):
-        to_save = []
-        for info in claim_infos:
-            if 'value' in info:
-                if info['value']:
-                    to_save.append(info)
-            else:
-                if 'certificate' in info and info['certificate']['value']:
-                    to_save.append(info['certificate'])
-                if 'claim' in info and info['claim']['value']:
-                    to_save.append(info['claim'])
-        yield self.storage.save_claims(to_save)
+            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+            "output": tx.outputs[nout]
+        })
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
@@ -484,7 +440,7 @@ class Daemon(AuthJSONRPCServer):
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        resolved = yield self._resolve(uri)
+        resolved = yield self.wallet.resolve(uri)
 
         if uri in resolved and 'claim' in resolved[uri]:
             claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
@@ -531,7 +487,7 @@ class Daemon(AuthJSONRPCServer):
         Resolve a name and return the estimated stream cost
         """
 
-        resolved = (yield self._resolve(uri))[uri]
+        resolved = (yield self.wallet.resolve(uri))[uri]
         if resolved:
             claim_response = resolved[uri]
         else:
@@ -1012,7 +968,8 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (float) amount of lbry credits in wallet
         """
-        assert address is None, "Limiting by address needs to be re-implemented in new wallet."
+        if address is not None:
+            raise NotImplementedError("Limiting by address needs to be re-implemented in new wallet.")
         dewies = yield self.wallet.default_account.get_balance(
             0 if include_unconfirmed else 6
         )
@@ -1046,7 +1003,6 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
     def jsonrpc_wallet_decrypt(self):
         """
         Decrypt an encrypted wallet, this will remove the wallet password
@@ -1060,13 +1016,9 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-
-        result = self.wallet.decrypt_wallet()
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        return defer.succeed(self.wallet.decrypt_wallet())
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
     def jsonrpc_wallet_encrypt(self, new_password):
         """
         Encrypt a wallet with a password, if the wallet is already encrypted this will update
@@ -1081,13 +1033,11 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-
-        self.wallet.encrypt_wallet(new_password)
-        response = yield self._render_response(self.wallet.wallet.use_encryption)
-        defer.returnValue(response)
+        return defer.succeed(self.wallet.encrypt_wallet(new_password))
 
     @defer.inlineCallbacks
-    def jsonrpc_stop(self):
+    @AuthJSONRPCServer.deprecated("stop")
+    def jsonrpc_daemon_stop(self):
         """
         Stop lbrynet-daemon
 
@@ -1100,11 +1050,24 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (string) Shutdown message
         """
+        return self.jsonrpc_stop()
 
+    def jsonrpc_stop(self):
+        """
+        Stop lbrynet
+
+        Usage:
+            stop
+
+        Options:
+            None
+
+        Returns:
+            (string) Shutdown message
+        """
         log.info("Shutting down lbrynet daemon")
-        response = yield self._render_response("Shutting down")
         reactor.callLater(0.1, reactor.fireSystemEvent, "shutdown")
-        defer.returnValue(response)
+        defer.returnValue("Shutting down")
 
     @requires(FILE_MANAGER_COMPONENT)
     @defer.inlineCallbacks
@@ -1198,7 +1161,7 @@ class Daemon(AuthJSONRPCServer):
 
         try:
             name = parse_lbry_uri(name).name
-            metadata = yield self._resolve(name, check_cache=not force)
+            metadata = yield self.wallet.resolve(name, check_cache=not force)
             if name in metadata:
                 metadata = metadata[name]
         except UnknownNameError:
@@ -1337,7 +1300,7 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[u] = {"error": "%s is not a valid uri" % u}
 
-        resolved = yield self._resolve(*valid_uris, check_cache=not force)
+        resolved = yield self.wallet.resolve(*valid_uris, check_cache=not force)
 
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri]
@@ -1398,7 +1361,7 @@ class Daemon(AuthJSONRPCServer):
         if parsed_uri.is_channel and not parsed_uri.path:
             raise Exception("cannot download a channel claim, specify a /path")
 
-        resolved_result = yield self._resolve(uri)
+        resolved_result = yield self.wallet.resolve(uri)
         if resolved_result and uri in resolved_result:
             resolved = resolved_result[uri]
         else:
@@ -1584,13 +1547,30 @@ class Daemon(AuthJSONRPCServer):
                 'claim_id' : (str) claim ID of the resulting claim
             }
         """
+        try:
+            parsed = parse_lbry_uri(channel_name)
+            if not parsed.is_channel:
+                raise Exception("Cannot make a new channel for a non channel name")
+            if parsed.path:
+                raise Exception("Invalid channel uri")
+        except (TypeError, URIParseError):
+            raise Exception("Invalid channel name")
+        if amount <= 0:
+            raise Exception("Invalid amount")
         amount = int(amount * COIN)
         tx = yield self.wallet.claim_new_channel(channel_name, amount)
         self.wallet.save()
-        result = self._txo_to_response(tx, 0)
         self.analytics_manager.send_new_channel()
-        log.info("Claimed a new channel! Result: %s", result)
-        defer.returnValue(result)
+        nout = 0
+        txo = tx.outputs[nout]
+        log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
+        defer.returnValue({
+            "success": True,
+            "tx": tx,
+            "claim_id": txo.claim_id,
+            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+            "output": txo
+        })
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -1764,6 +1744,11 @@ class Daemon(AuthJSONRPCServer):
 
         bid = int(bid * COIN)
 
+        for address in [claim_address, change_address]:
+            if address is not None:
+                # raises an error if the address is invalid
+                decode_address(address)
+
         available = yield self.wallet.default_account.get_balance()
         if bid >= available:
             # TODO: add check for existing claim balance
@@ -1880,8 +1865,7 @@ class Daemon(AuthJSONRPCServer):
 
         result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate,
                                             claim_address, change_address)
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        defer.returnValue(result)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
@@ -2179,7 +2163,7 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
 
-        resolved = yield self._resolve(*valid_uris, page=page, page_size=page_size)
+        resolved = yield self.wallet.resolve(*valid_uris, page=page, page_size=page_size)
         for u in resolved:
             if 'error' in resolved[u]:
                 results[u] = resolved[u]
@@ -2383,6 +2367,32 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(_disp)
         d.addCallback(lambda address: self._render_response(address))
         return d
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @AuthJSONRPCServer.deprecated("wallet_send")
+    @defer.inlineCallbacks
+    def jsonrpc_send_amount_to_address(self, amount, address):
+        """
+        Queue a payment of credits to an address
+         Usage:
+            send_amount_to_address (<amount> | --amount=<amount>) (<address> | --address=<address>)
+         Options:
+            --amount=<amount>     : (float) amount to send
+            --address=<address>   : (str) address to send credits to
+         Returns:
+            (bool) true if payment successfully scheduled
+        """
+        if amount < 0:
+            raise NegativeFundsError()
+        elif not amount:
+            raise NullFundsError()
+
+        reserved_points = self.wallet.reserve_points(address, amount)
+        if reserved_points is None:
+            raise InsufficientFundsError()
+        yield self.wallet.send_points_to_address(reserved_points, amount)
+        self.analytics_manager.send_credits_sent()
+        defer.returnValue(True)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
@@ -2749,7 +2759,7 @@ class Daemon(AuthJSONRPCServer):
         """
         if uri or stream_hash or sd_hash:
             if uri:
-                metadata = (yield self._resolve(uri))[uri]
+                metadata = (yield self.wallet.resolve(uri))[uri]
                 sd_hash = utils.get_sd_hash(metadata)
                 stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
             elif stream_hash:
@@ -2898,7 +2908,7 @@ class Daemon(AuthJSONRPCServer):
         hosts = {}
 
         for k, v in data_store.items():
-            for contact, _ in v:
+            for contact in map(itemgetter(0), v):
                 hosts.setdefault(contact, []).append(hexlify(k).decode())
 
         contact_set = set()
@@ -2907,7 +2917,7 @@ class Daemon(AuthJSONRPCServer):
 
         for i in range(len(self.dht_node._routingTable._buckets)):
             for contact in self.dht_node._routingTable._buckets[i]._contacts:
-                blobs = [hexlify(raw_hash).decode() for raw_hash in hosts.pop(contact)] if contact in hosts else []
+                blobs = list(hosts.pop(contact)) if contact in hosts else []
                 blob_hashes.update(blobs)
                 host = {
                     "address": contact.address,
@@ -2948,6 +2958,24 @@ class Daemon(AuthJSONRPCServer):
         """
 
         return self._blob_availability(blob_hash, search_timeout, blob_timeout)
+
+    @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @AuthJSONRPCServer.deprecated("stream_availability")
+    def jsonrpc_get_availability(self, uri, sd_timeout=None, peer_timeout=None):
+        """
+        Get stream availability for lbry uri
+         Usage:
+            get_availability (<uri> | --uri=<uri>) [<sd_timeout> | --sd_timeout=<sd_timeout>]
+                             [<peer_timeout> | --peer_timeout=<peer_timeout>]
+         Options:
+            --uri=<uri>                    : (str) check availability for this uri
+            --sd_timeout=<sd_timeout>      : (int) sd blob download timeout
+            --peer_timeout=<peer_timeout>  : (int) how long to look for peers
+         Returns:
+            (float) Peers per blob / total blobs
+        """
+
+        return self.jsonrpc_stream_availability(uri, peer_timeout, sd_timeout)
 
     @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
@@ -3002,7 +3030,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
         try:
-            resolved_result = (yield self._resolve(uri))[uri]
+            resolved_result = (yield self.wallet.resolve(uri))[uri]
             response['did_resolve'] = True
         except UnknownNameError:
             response['error'] = "Failed to resolve name"
@@ -3229,10 +3257,9 @@ class Daemon(AuthJSONRPCServer):
                          everything=False, outputs=1, broadcast=False):
         """
         Transfer some amount (or --everything) to an account from another
-        account (can be the same account). Decimal amounts are interpreted
-        as LBC and non-decimal amounts are interpreted as dewies. You can
-        also spread the transfer across a number of --outputs (cannot be
-        used together with --everything).
+        account (can be the same account). Amounts are interpreted as LBC.
+        You can also spread the transfer across a number of --outputs (cannot
+        be used together with --everything).
 
         Usage:
             fund (<to_account> | --to_account=<to_account>)
@@ -3244,7 +3271,7 @@ class Daemon(AuthJSONRPCServer):
         Options:
             --to_account=<to_account>     : (str) send to this account
             --from_account=<from_account> : (str) spend from this account
-            --amount=<amount>             : (str) the amount to transfer (lbc or dewies)
+            --amount=<amount>             : (str) the amount to transfer lbc
             --everything                  : (bool) transfer everything (excluding claims), default: false.
             --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
             --broadcast                   : (bool) actually broadcast the transaction, default: false.
@@ -3263,25 +3290,7 @@ class Daemon(AuthJSONRPCServer):
         return from_account.fund(
             to_account=to_account, amount=amount, everything=everything,
             outputs=outputs, broadcast=broadcast
-        ).addCallback(lambda tx: self.tx_to_json(tx, from_account.ledger))
-
-    @staticmethod
-    def tx_to_json(tx, ledger):
-        return {
-            'txid': tx.id,
-            'inputs': [
-                {'amount': txi.amount, 'address': txi.txo_ref.txo.get_address(ledger)}
-                for txi in tx.inputs
-            ],
-            'outputs': [
-                {'amount': txo.amount, 'address': txo.get_address(ledger)}
-                for txo in tx.outputs
-            ],
-            'total_input': tx.input_sum,
-            'total_output': tx.input_sum,
-            'total_fee': tx.fee,
-            'xhex': hexlify(tx.raw).decode(),
-        }
+        )
 
     def get_account_or_error(self, argument: str, account_name: str, lbc_only=False):
         for account in self.wallet.default_wallet.accounts:
@@ -3306,9 +3315,9 @@ class Daemon(AuthJSONRPCServer):
             if '.' in amount:
                 return int(Decimal(amount) * COIN)
             elif amount.isdigit():
-                return int(amount)
-        elif isinstance(amount, int):
-            return amount
+                amount = int(amount)
+        if isinstance(amount, int):
+            return amount * COIN
         raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
 
 
