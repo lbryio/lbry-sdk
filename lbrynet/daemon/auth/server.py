@@ -22,6 +22,7 @@ from lbrynet.daemon.ComponentManager import ComponentManager
 from .util import APIKey, get_auth_message, LBRY_SECRET
 from .undecorated import undecorated
 from .factory import AuthJSONRPCResource
+from lbrynet.daemon.json_response_encoder import JSONResponseEncoder
 log = logging.getLogger(__name__)
 
 EMPTY_PARAMS = [{}]
@@ -85,11 +86,6 @@ class JSONRPCError:
         return cls(message, code=code, traceback=traceback)
 
 
-def default_decimal(obj):
-    if isinstance(obj, Decimal):
-        return float(obj)
-
-
 class UnknownAPIMethodError(Exception):
     pass
 
@@ -109,7 +105,7 @@ def jsonrpc_dumps_pretty(obj, **kwargs):
     else:
         data = {"jsonrpc": "2.0", "result": obj, "id": id_}
 
-    return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2, **kwargs) + "\n"
+    return json.dumps(data, cls=JSONResponseEncoder, sort_keys=True, indent=2, **kwargs) + "\n"
 
 
 class JSONRPCServerType(type):
@@ -314,7 +310,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
 
-        response_content = jsonrpc_dumps_pretty(error, id=id_)
+        response_content = jsonrpc_dumps_pretty(error, id=id_, ledger=self.ledger)
         self._set_headers(request, response_content)
         request.setResponseCode(200)
         self._render_message(request, response_content)
@@ -575,7 +571,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _callback_render(self, result, request, id_, auth_required=False):
         try:
-            message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal)
+            message = jsonrpc_dumps_pretty(result, id=id_, ledger=self.ledger)
             request.setResponseCode(200)
             self._set_headers(request, message, auth_required)
             self._render_message(request, message)

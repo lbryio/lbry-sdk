@@ -656,6 +656,19 @@ class SQLiteStorage:
         if support_dl:
             yield defer.DeferredList(support_dl)
 
+    def save_claims_for_resolve(self, claim_infos):
+        to_save = []
+        for info in claim_infos:
+            if 'value' in info:
+                if info['value']:
+                    to_save.append(info)
+            else:
+                if 'certificate' in info and info['certificate']['value']:
+                    to_save.append(info['certificate'])
+                if 'claim' in info and info['claim']['value']:
+                    to_save.append(info['claim'])
+        return self.save_claims(to_save)
+
     def get_old_stream_hashes_for_claim_id(self, claim_id, new_stream_hash):
         return self.run_and_return_list(
             "select f.stream_hash from file f "

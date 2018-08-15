@@ -64,15 +64,6 @@ def start(argv=None, conf_path=None):
     log_support.configure_loggly_handler()
     log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
 
-    # fixme: fix that, JSONRPCProxy is gone on py3
-    #try:
-    #    log.debug('Checking for an existing lbrynet daemon instance')
-    #    JSONRPCProxy.from_url(conf.settings.get_api_connection_string()).status()
-    #    log.info("lbrynet-daemon is already running")
-    #    return
-    #except Exception:
-    #    log.debug('No lbrynet instance found, continuing to start')
-
     log.info("Starting lbrynet-daemon from command line")
 
     if test_internet_connection():

@@ -147,11 +147,16 @@ class LbryWalletManager(BaseWalletManager):
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
 
+    @defer.inlineCallbacks
     def resolve(self, *uris, **kwargs):
         page = kwargs.get('page', 0)
         page_size = kwargs.get('page_size', 10)
+        check_cache = kwargs.get('check_cache', False)  # TODO: put caching back (was force_refresh parameter)
         ledger = self.default_account.ledger  # type: MainNetLedger
-        return ledger.resolve(page, page_size, *uris)
+        results = ledger.resolve(page, page_size, *uris)
+        yield self.old_db.save_claims_for_resolve(
+            (value for value in results.values() if 'error' not in value))
+        defer.returnValue(results)
 
     def get_name_claims(self):
         return defer.succeed([])
@@ -214,16 +219,6 @@ class LbryWalletManager(BaseWalletManager):
 
     @defer.inlineCallbacks
     def claim_new_channel(self, channel_name, amount):
-        try:
-            parsed = parse_lbry_uri(channel_name)
-            if not parsed.is_channel:
-                raise Exception("Cannot make a new channel for a non channel name")
-            if parsed.path:
-                raise Exception("Invalid channel uri")
-        except (TypeError, URIParseError):
-            raise Exception("Invalid channel name")
-        if amount <= 0:
-            raise Exception("Invalid amount")
         account = self.default_account
         address = yield account.receiving.get_or_create_usable_address()
         cert, key = generate_certificate()
