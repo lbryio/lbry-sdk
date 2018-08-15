@@ -161,5 +161,5 @@ class Mnemonic:
 
 def is_new_seed(seed, prefix):
     seed = normalize_text(seed)
-    seed_hash = hexlify(hmac_sha512(b"seed version", seed.encode('utf8')))
+    seed_hash = hexlify(hmac_sha512(b"Seed version", seed.encode('utf8')))
     return seed_hash.startswith(prefix)
