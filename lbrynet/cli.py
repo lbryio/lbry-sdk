@@ -25,8 +25,10 @@ async def execute_command(method, params, conf_path=None):
     # this actually executes the method
     try:
         resp = await api.call(method, params)
-        if not api.session.closed:
+        try:
             await api.session.close()
+        except AttributeError:
+            pass
         print(json.dumps(resp["result"], indent=2))
     except KeyError:
         if resp["error"]["code"] == -32500:
