@@ -1,7 +1,7 @@
 from twisted.trial import unittest
 from types import GeneratorType
 
-from torba.coin.bitcoinsegwit import MainNetLedger
+from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.coinselection import CoinSelector, MAXIMUM_TRIES
 from torba.constants import CENT
 
@@ -19,8 +19,11 @@ def search(*args, **kwargs):
 class BaseSelectionTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger({'db': MainNetLedger.database_class(':memory:')})
-        return self.ledger.db.start()
+        self.ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
+        return self.ledger.db.open()
 
     def estimates(self, *args):
         txos = args[0] if isinstance(args[0], (GeneratorType, list)) else args

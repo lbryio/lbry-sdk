@@ -1,7 +1,7 @@
 from binascii import unhexlify
 from twisted.trial import unittest
 from torba.bip32 import PubKey, PrivateKey, from_extended_key_string
-from torba.coin.bitcoinsegwit import MainNetLedger
+from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 
 
 class BIP32Tests(unittest.TestCase):
@@ -40,7 +40,10 @@ class BIP32Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'private key must be 32 bytes'):
             PrivateKey(None, b'abcd', b'abcd'*8, 0, 255)
         private_key = PrivateKey(
-            MainNetLedger({'db': True}),
+            ledger_class({
+                'db': ledger_class.database_class(':memory:'),
+                'headers': ledger_class.headers_class(':memory:'),
+            }),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
         )
@@ -57,7 +60,10 @@ class BIP32Tests(unittest.TestCase):
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)
 
     def test_from_extended_keys(self):
-        ledger = MainNetLedger({'db': True})
+        ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
         self.assertIsInstance(
             from_extended_key_string(
                 ledger,
