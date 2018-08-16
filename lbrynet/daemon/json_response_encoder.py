@@ -20,6 +20,8 @@ class JSONResponseEncoder(JSONEncoder):
             return obj.strftime("%Y%m%dT%H:%M:%S")
         if isinstance(obj, Decimal):
             return float(obj)
+        if isinstance(obj, bytes):
+            return obj.decode()
         return super().default(obj)
 
     def encode_transaction(self, tx):
