@@ -1,5 +1,5 @@
 import contextlib
-import unittest
+from twisted.trial import unittest
 from io import StringIO
 from twisted.internet import defer
 
@@ -12,7 +12,9 @@ from lbrynet.daemon.Components import DATABASE_COMPONENT, BLOB_COMPONENT, HEADER
 from lbrynet.daemon.Daemon import Daemon
 
 
-class AuthCLIIntegrationTest(unittest.TestCase):
+class CLIIntegrationTest(unittest.TestCase):
+    USE_AUTH = False
+
     @defer.inlineCallbacks
     def setUp(self):
         skip = [
@@ -22,12 +24,20 @@ class AuthCLIIntegrationTest(unittest.TestCase):
             RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT
         ]
         conf.initialize_settings(load_conf_file=False)
-        conf.settings['use_auth_http'] = True
+        conf.settings['use_auth_http'] = self.USE_AUTH
         conf.settings["components_to_skip"] = skip
         conf.settings.initialize_post_conf_load()
         Daemon.component_attributes = {}
         self.daemon = Daemon()
         yield self.daemon.start_listening()
+
+    @defer.inlineCallbacks
+    def tearDown(self):
+        yield self.daemon._shutdown()
+
+
+class AuthenticatedCLITest(CLIIntegrationTest):
+    USE_AUTH = True
 
     def test_cli_status_command_with_auth(self):
         self.assertTrue(self.daemon._use_authentication)
@@ -37,26 +47,9 @@ class AuthCLIIntegrationTest(unittest.TestCase):
         actual_output = actual_output.getvalue()
         self.assertIn("connection_status", actual_output)
 
-    @defer.inlineCallbacks
-    def tearDown(self):
-        yield self.daemon._shutdown()
 
-
-class UnAuthCLIIntegrationTest(unittest.TestCase):
-    @defer.inlineCallbacks
-    def setUp(self):
-        skip = [
-            DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT,
-            DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT,
-            RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT
-        ]
-        conf.initialize_settings(load_conf_file=False)
-        conf.settings["components_to_skip"] = skip
-        conf.settings.initialize_post_conf_load()
-        Daemon.component_attributes = {}
-        self.daemon = Daemon()
-        yield self.daemon.start_listening()
+class UnauthenticatedCLITest(CLIIntegrationTest):
+    USE_AUTH = False
 
     def test_cli_status_command_with_auth(self):
         self.assertFalse(self.daemon._use_authentication)
@@ -65,7 +58,3 @@ class UnAuthCLIIntegrationTest(unittest.TestCase):
             cli.main(["status"])
         actual_output = actual_output.getvalue()
         self.assertIn("connection_status", actual_output)
-
-    @defer.inlineCallbacks
-    def tearDown(self):
-        yield self.daemon._shutdown()

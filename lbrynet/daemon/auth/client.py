@@ -22,9 +22,10 @@ class JSONRPCException(Exception):
 
 
 class UnAuthAPIClient:
-    def __init__(self, host, port):
+    def __init__(self, host, port, session):
         self.host = host
         self.port = port
+        self.session = session
         self.scheme = SCHEME
 
     def __getattr__(self, method):
@@ -38,13 +39,13 @@ class UnAuthAPIClient:
         url_fragment = urlparse(url)
         host = url_fragment.hostname
         port = url_fragment.port
-        return cls(host, port)
+        session = aiohttp.ClientSession()
+        return cls(host, port, session)
 
     async def call(self, method, params=None):
         message = {'method': method, 'params': params}
-        async with aiohttp.ClientSession() as session:
-            async with session.get('{}://{}:{}'.format(self.scheme, self.host, self.port), json=message) as resp:
-                return await resp.json()
+        async with self.session.get('{}://{}:{}'.format(self.scheme, self.host, self.port), json=message) as resp:
+            return await resp.json()
 
 
 class AuthAPIClient:
