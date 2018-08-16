@@ -32,7 +32,10 @@ def get_transaction(txo=None):
 class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
+        self.ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
 
     def test_output_size_and_fee(self):
         txo = get_output()
@@ -137,8 +140,11 @@ class TestTransactionSerialization(unittest.TestCase):
 class TestTransactionSigning(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
-        return self.ledger.db.start()
+        self.ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
+        return self.ledger.db.open()
 
     @defer.inlineCallbacks
     def test_sign(self):
@@ -175,8 +181,11 @@ class TransactionIOBalancing(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
-        yield self.ledger.db.start()
+        self.ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
+        yield self.ledger.db.open()
         self.account = self.ledger.account_class.from_dict(
             self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
