@@ -10,93 +10,15 @@ from .resolve import Resolver
 from lbryschema.error import URIParseError
 from lbryschema.uri import parse_lbry_uri
 from torba.baseledger import BaseLedger
-from torba.baseheader import BaseHeaders, _ArithUint256
-from torba.util import int_to_hex, rev_hex, hash_encode
 
 from .account import Account
 from .network import Network
 from .database import WalletDatabase
 from .transaction import Transaction
+from .header import Headers, UnvalidatedHeaders
 
 
 log = logging.getLogger(__name__)
-
-
-class Headers(BaseHeaders):
-
-    header_size = 112
-
-    @staticmethod
-    def _serialize(header):
-        return b''.join([
-            int_to_hex(header['version'], 4),
-            rev_hex(header['prev_block_hash']),
-            rev_hex(header['merkle_root']),
-            rev_hex(header['claim_trie_root']),
-            int_to_hex(int(header['timestamp']), 4),
-            int_to_hex(int(header['bits']), 4),
-            int_to_hex(int(header['nonce']), 4)
-        ])
-
-    @staticmethod
-    def _deserialize(height, header):
-        version, = struct.unpack('<I', header[:4])
-        timestamp, bits, nonce = struct.unpack('<III', header[100:112])
-        return {
-            'version': version,
-            'prev_block_hash': hash_encode(header[4:36]),
-            'merkle_root': hash_encode(header[36:68]),
-            'claim_trie_root': hash_encode(header[68:100]),
-            'timestamp': timestamp,
-            'bits': bits,
-            'nonce': nonce,
-            'block_height': height,
-        }
-
-    @property
-    def claim_trie_root(self, height=None):
-        height = self.height if height is None else height
-        return self[height]['claim_trie_root']
-
-    def _calculate_next_work_required(self, height, first, last):
-        """ See: lbrycrd/src/lbry.cpp """
-
-        if height == 0:
-            return self.ledger.genesis_bits, self.ledger.max_target
-
-        if self.verify_bits_to_target:
-            bits = last['bits']
-            bitsN = (bits >> 24) & 0xff
-            assert 0x03 <= bitsN <= 0x1f, \
-                "First part of bits should be in [0x03, 0x1d], but it was {}".format(hex(bitsN))
-            bitsBase = bits & 0xffffff
-            assert 0x8000 <= bitsBase <= 0x7fffff, \
-                "Second part of bits should be in [0x8000, 0x7fffff] but it was {}".format(bitsBase)
-
-        # new target
-        retargetTimespan = self.ledger.target_timespan
-        nActualTimespan = last['timestamp'] - first['timestamp']
-
-        nModulatedTimespan = retargetTimespan + (nActualTimespan - retargetTimespan) // 8
-
-        nMinTimespan = retargetTimespan - (retargetTimespan // 8)
-        nMaxTimespan = retargetTimespan + (retargetTimespan // 2)
-
-        # Limit adjustment step
-        if nModulatedTimespan < nMinTimespan:
-            nModulatedTimespan = nMinTimespan
-        elif nModulatedTimespan > nMaxTimespan:
-            nModulatedTimespan = nMaxTimespan
-
-        # Retarget
-        bnPowLimit = _ArithUint256(self.ledger.max_target)
-        bnNew = _ArithUint256.set_compact(last['bits'])
-        bnNew *= nModulatedTimespan
-        bnNew //= nModulatedTimespan
-        if bnNew > bnPowLimit:
-            bnNew = bnPowLimit
-
-        return bnNew.get_compact(), bnNew._value
 
 
 class MainNetLedger(BaseLedger):
@@ -156,13 +78,9 @@ class TestNetLedger(MainNetLedger):
     extended_private_key_prefix = unhexlify('04358394')
 
 
-class UnverifiedHeaders(Headers):
-    verify_bits_to_target = False
-
-
 class RegTestLedger(MainNetLedger):
     network_name = 'regtest'
-    headers_class = UnverifiedHeaders
+    headers_class = UnvalidatedHeaders
     pubkey_address_prefix = int2byte(111)
     script_address_prefix = int2byte(196)
     extended_public_key_prefix = unhexlify('043587cf')
