@@ -2374,14 +2374,18 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_send_amount_to_address(self, amount, address):
         """
         Queue a payment of credits to an address
-         Usage:
+
+          Usage:
             send_amount_to_address (<amount> | --amount=<amount>) (<address> | --address=<address>)
-         Options:
+
+          Options:
             --amount=<amount>     : (float) amount to send
             --address=<address>   : (str) address to send credits to
-         Returns:
+
+          Returns:
             (bool) true if payment successfully scheduled
         """
+
         if amount < 0:
             raise NegativeFundsError()
         elif not amount:
@@ -2964,14 +2968,17 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_get_availability(self, uri, sd_timeout=None, peer_timeout=None):
         """
         Get stream availability for lbry uri
-         Usage:
+
+          Usage:
             get_availability (<uri> | --uri=<uri>) [<sd_timeout> | --sd_timeout=<sd_timeout>]
                              [<peer_timeout> | --peer_timeout=<peer_timeout>]
-         Options:
+
+          Options:
             --uri=<uri>                    : (str) check availability for this uri
             --sd_timeout=<sd_timeout>      : (int) sd blob download timeout
             --peer_timeout=<peer_timeout>  : (int) how long to look for peers
-         Returns:
+
+          Returns:
             (float) Peers per blob / total blobs
         """
 
