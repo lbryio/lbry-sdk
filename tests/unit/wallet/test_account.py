@@ -2,6 +2,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from lbrynet.wallet.ledger import MainNetLedger, WalletDatabase
+from lbrynet.wallet.header import Headers
 from lbrynet.wallet.account import Account
 from torba.wallet import Wallet
 
@@ -9,8 +10,11 @@ from torba.wallet import Wallet
 class TestAccount(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger({'db': WalletDatabase(':memory:')})
-        return self.ledger.db.start()
+        self.ledger = MainNetLedger({
+            'db': WalletDatabase(':memory:'),
+            'headers': Headers(':memory:')
+        })
+        return self.ledger.db.open()
 
     @defer.inlineCallbacks
     def test_generate_account(self):
