@@ -2,7 +2,7 @@ from binascii import hexlify
 from twisted.trial import unittest
 from twisted.internet import defer
 
-from torba.coin.bitcoinsegwit import MainNetLedger
+from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.baseaccount import HierarchicalDeterministic, SingleKey
 from torba.wallet import Wallet
 
@@ -11,8 +11,11 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        self.ledger = MainNetLedger({'db': MainNetLedger.database_class(':memory:')})
-        yield self.ledger.db.start()
+        self.ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
+        yield self.ledger.db.open()
         self.account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
 
     @defer.inlineCallbacks
@@ -171,8 +174,11 @@ class TestSingleKeyAccount(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        self.ledger = MainNetLedger({'db': MainNetLedger.database_class(':memory:')})
-        yield self.ledger.db.start()
+        self.ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
+        yield self.ledger.db.open()
         self.account = self.ledger.account_class.generate(
             self.ledger, Wallet(), "torba", {'name': 'single-address'})
 
