@@ -2,7 +2,7 @@ from decimal import Decimal
 from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
-from wallet.transaction import Transaction, Output
+from lbrynet.wallet.transaction import Transaction, Output
 
 
 class JSONResponseEncoder(JSONEncoder):
@@ -11,7 +11,7 @@ class JSONResponseEncoder(JSONEncoder):
         super().__init__(*args, **kwargs)
         self.ledger = ledger
 
-    def default(self, obj):
+    def default(self, obj):  # pylint: disable=method-hidden
         if isinstance(obj, Transaction):
             return self.encode_transaction(obj)
         if isinstance(obj, Output):
