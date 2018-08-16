@@ -31,6 +31,7 @@ async def execute_command(method, params, conf_path=None):
         api = await LBRYAPIClient.get_client(conf_path)
         await api.status()
     except (ClientConnectorError, ConnectionError):
+        await api.session.close()
         print("Could not connect to daemon. Are you sure it's running?")
         return 1
 
