@@ -1,5 +1,4 @@
 import logging
-import struct
 
 from six import int2byte
 from binascii import unhexlify

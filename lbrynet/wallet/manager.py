@@ -5,8 +5,6 @@ from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
 
-from lbryschema.uri import parse_lbry_uri
-from lbryschema.error import URIParseError
 from lbryschema.claim import ClaimDict
 
 from .ledger import MainNetLedger

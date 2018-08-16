@@ -4,7 +4,6 @@ import json
 import inspect
 import signal
 
-from decimal import Decimal
 from functools import wraps
 from twisted.web import server
 from twisted.internet import defer
