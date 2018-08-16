@@ -5,11 +5,8 @@ from twisted.internet import defer
 from torba.constants import CENT, COIN, NULL_HASH32
 from torba.wallet import Wallet
 
-from lbrynet.wallet.account import Account
 from lbrynet.wallet.ledger import MainNetLedger
-from lbrynet.wallet.database import WalletDatabase
 from lbrynet.wallet.transaction import Transaction, Output, Input
-from lbrynet.wallet.manager import LbryWalletManager
 
 
 FEE_PER_BYTE = 50
@@ -41,7 +38,16 @@ def get_claim_transaction(claim_name, claim=b''):
 class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger({'db': WalletDatabase(':memory:')})
+        super().setUp()
+        self.ledger = MainNetLedger({
+            'db': MainNetLedger.database_class(':memory:'),
+            'headers': MainNetLedger.headers_class(':memory:')
+        })
+        return self.ledger.db.open()
+
+    def tearDown(self):
+        super().tearDown()
+        return self.ledger.db.close()
 
     def test_output_size_and_fee(self):
         txo = get_output()
@@ -216,8 +222,16 @@ class TestTransactionSerialization(unittest.TestCase):
 class TestTransactionSigning(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger({'db': WalletDatabase(':memory:')})
-        return self.ledger.db.start()
+        super().setUp()
+        self.ledger = MainNetLedger({
+            'db': MainNetLedger.database_class(':memory:'),
+            'headers': MainNetLedger.headers_class(':memory:')
+        })
+        return self.ledger.db.open()
+
+    def tearDown(self):
+        super().tearDown()
+        return self.ledger.db.close()
 
     @defer.inlineCallbacks
     def test_sign(self):
