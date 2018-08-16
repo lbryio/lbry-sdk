@@ -151,7 +151,7 @@ class LbryWalletManager(BaseWalletManager):
         page_size = kwargs.get('page_size', 10)
         check_cache = kwargs.get('check_cache', False)  # TODO: put caching back (was force_refresh parameter)
         ledger = self.default_account.ledger  # type: MainNetLedger
-        results = ledger.resolve(page, page_size, *uris)
+        results = yield ledger.resolve(page, page_size, *uris)
         yield self.old_db.save_claims_for_resolve(
             (value for value in results.values() if 'error' not in value))
         defer.returnValue(results)
