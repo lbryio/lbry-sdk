@@ -203,14 +203,16 @@ class AuthJSONRPCServer(AuthorizedBase):
         self._component_setup_deferred = None
         self.announced_startup = False
         self.sessions = {}
+        self.server = None
 
     @defer.inlineCallbacks
     def start_listening(self):
         from twisted.internet import reactor, error as tx_error
 
         try:
+            self.server = self.get_server_factory()
             self.listening_port = reactor.listenTCP(
-                conf.settings['api_port'], self.get_server_factory(), interface=conf.settings['api_host']
+                conf.settings['api_port'], self.server, interface=conf.settings['api_host']
             )
             log.info("lbrynet API listening on TCP %s:%i", conf.settings['api_host'], conf.settings['api_port'])
             yield self.setup()
@@ -254,6 +256,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         if self.listening_port:
             self.listening_port.stopListening()
         self.looping_call_manager.shutdown()
+        for session in list(self.server.sessions.values()):
+            session.expire()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
         try:
@@ -345,7 +349,6 @@ class AuthJSONRPCServer(AuthorizedBase):
                 def expire_session():
                     self._unregister_user_session(session_id)
 
-                session.startCheckingExpiration()
                 session.notifyOnExpire(expire_session)
                 message = "OK"
                 request.setResponseCode(200)
