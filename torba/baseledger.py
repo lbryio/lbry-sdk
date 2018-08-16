@@ -8,10 +8,10 @@ from collections import namedtuple
 from twisted.internet import defer
 
 from torba import baseaccount
-from torba import basedatabase
-from torba import baseheader
 from torba import basenetwork
 from torba import basetransaction
+from torba.basedatabase import BaseDatabase
+from torba.baseheader import BaseHeaders, InvalidHeader
 from torba.coinselection import CoinSelector
 from torba.constants import COIN, NULL_HASH32
 from torba.stream import StreamController
@@ -50,13 +50,13 @@ class BaseLedger(metaclass=LedgerRegistry):
     symbol: str
     network_name: str
 
+    database_class = BaseDatabase
     account_class = baseaccount.BaseAccount
-    database_class = basedatabase.BaseDatabase
-    headers_class = baseheader.BaseHeaders
     network_class = basenetwork.BaseNetwork
     transaction_class = basetransaction.BaseTransaction
 
-    secret_prefix = None
+    headers_class: Type[BaseHeaders]
+
     pubkey_address_prefix: bytes
     script_address_prefix: bytes
     extended_public_key_prefix: bytes
@@ -66,14 +66,16 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     def __init__(self, config=None):
         self.config = config or {}
-        self.db = self.config.get('db') or self.database_class(
+        self.db: BaseDatabase = self.config.get('db') or self.database_class(
             os.path.join(self.path, "blockchain.db")
-        )  # type: basedatabase.BaseDatabase
+        )
+        self.headers: BaseHeaders = self.config.get('headers') or self.headers_class(
+            os.path.join(self.path, "headers")
+        )
         self.network = self.config.get('network') or self.network_class(self)
-        self.network.on_header.listen(self.process_header)
-        self.network.on_status.listen(self.process_status)
+        self.network.on_header.listen(self.receive_header)
+        self.network.on_status.listen(self.receive_status)
         self.accounts = []
-        self.headers = self.config.get('headers') or self.headers_class(self)
         self.fee_per_byte: int = self.config.get('fee_per_byte', self.default_fee_per_byte)
 
         self._on_transaction_controller = StreamController()
@@ -87,6 +89,12 @@ class BaseLedger(metaclass=LedgerRegistry):
 
         self._on_header_controller = StreamController()
         self.on_header = self._on_header_controller.stream
+        self.on_header.listen(
+            lambda change: log.info(
+                '%s: added %s header blocks, final height %s',
+                self.get_id(), change, self.headers.height
+            )
+        )
 
         self._transaction_processing_locks = {}
         self._utxo_reservation_lock = defer.DeferredLock()
@@ -209,11 +217,13 @@ class BaseLedger(metaclass=LedgerRegistry):
     def start(self):
         if not os.path.exists(self.path):
             os.mkdir(self.path)
-        yield self.db.start()
+        yield defer.gatherResults([
+            self.db.open(),
+            self.headers.open()
+        ])
         first_connection = self.network.on_connected.first
         self.network.start()
         yield first_connection
-        self.headers.touch()
         yield self.update_headers()
         yield self.network.subscribe_headers()
         yield self.update_accounts()
@@ -221,30 +231,69 @@ class BaseLedger(metaclass=LedgerRegistry):
     @defer.inlineCallbacks
     def stop(self):
         yield self.network.stop()
-        yield self.db.stop()
+        yield self.db.close()
+        yield self.headers.close()
 
     @defer.inlineCallbacks
-    def update_headers(self):
+    def update_headers(self, height=None, headers=None, count=1, subscription_update=False):
+        rewound = 0
         while True:
-            height_sought = len(self.headers)
-            headers = yield self.network.get_headers(height_sought, 2000)
-            if headers['count'] <= 0:
-                break
-            yield self.headers.connect(height_sought, unhexlify(headers['hex']))
-            self._on_header_controller.add(self.headers.height)
+
+            height = len(self.headers) if height is None else height
+            if headers is None:
+                header_response = yield self.network.get_headers(height, 2001)
+                count = header_response['count']
+                headers = header_response['hex']
+
+            if count <= 0:
+                return
+
+            added = yield self.headers.connect(height, unhexlify(headers))
+            if added > 0:
+                self._on_header_controller.add(added)
+
+            if subscription_update and added == count:
+                # subscription updates are for latest header already
+                # so we don't need to check if there are newer / more
+                return
+
+            if added == 0:
+                # headers were invalid, start rewinding
+                height -= 1
+                rewound += 1
+                log.warning("Experiencing Blockchain Reorganization: Undoing header.")
+            else:
+                # added all headers, see if there are more
+                height += added
+
+            if height < 0:
+                raise IndexError(
+                    "Blockchain reorganization rewound all the way back to genesis hash. "
+                    "Something is very wrong. Maybe you are on the wrong blockchain?"
+                )
+
+            if rewound >= 50:
+                raise IndexError(
+                    "Blockchain reorganization dropped {} headers. This is highly unusual. "
+                    "Will not continue to attempt reorganizing."
+                    .format(rewound)
+                )
+
+            headers = None
+
+            # if we made it this far and this was a subscription_update
+            # it means something was wrong and now we're doing a more
+            # robust sync, turn off subscription update shortcut
+            subscription_update = False
 
     @defer.inlineCallbacks
-    def process_header(self, response):
+    def receive_header(self, response):
         yield self._header_processing_lock.acquire()
         try:
             header = response[0]
-            if header['height'] == len(self.headers):
-                # New header from network directly connects after the last local header.
-                yield self.headers.connect(len(self.headers), unhexlify(header['hex']))
-                self._on_header_controller.add(self.headers.height)
-            elif header['height'] > len(self.headers):
-                # New header is several heights ahead of local, do download instead.
-                yield self.update_headers()
+            yield self.update_headers(
+                height=header['height'], headers=header['hex'], subscription_update=True
+            )
         finally:
             self._header_processing_lock.release()
 
@@ -338,7 +387,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             yield self.update_history(address)
 
     @defer.inlineCallbacks
-    def process_status(self, response):
+    def receive_status(self, response):
         address, remote_status = response
         local_status = yield self.get_local_status(address)
         if local_status != remote_status:

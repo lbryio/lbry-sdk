@@ -45,19 +45,78 @@ def int_to_bytes(value):
     return unhexlify(('0' * (len(s) % 2) + s).zfill(length * 2))
 
 
-def rev_hex(s):
-    return hexlify(unhexlify(s)[::-1])
+class ArithUint256:
+    # https://github.com/bitcoin/bitcoin/blob/master/src/arith_uint256.cpp
 
+    __slots__ = '_value', '_compact'
 
-def int_to_hex(i, length=1):
-    s = hex(i)[2:].rstrip('L')
-    s = "0" * (2 * length - len(s)) + s
-    return rev_hex(s)
+    def __init__(self, value: int) -> None:
+        self._value = value
+        self._compact = None
 
+    @classmethod
+    def from_compact(cls, compact) -> 'ArithUint256':
+        size = compact >> 24
+        word = compact & 0x007fffff
+        if size <= 3:
+            return cls(word >> 8 * (3 - size))
+        else:
+            return cls(word << 8 * (size - 3))
 
-def hex_to_int(x):
-    return int(b'0x' + hexlify(x[::-1]), 16)
+    @property
+    def value(self) -> int:
+        return self._value
 
+    @property
+    def compact(self) -> int:
+        if self._compact is None:
+            self._compact = self._calculate_compact()
+        return self._compact
 
-def hash_encode(x):
-    return hexlify(x[::-1])
+    @property
+    def negative(self) -> int:
+        return self._calculate_compact(negative=True)
+
+    @property
+    def bits(self) -> int:
+        """ Returns the position of the highest bit set plus one. """
+        bn = bin(self._value)[2:]
+        for i, d in enumerate(bn):
+            if d:
+                return (len(bn) - i) + 1
+        return 0
+
+    @property
+    def low64(self) -> int:
+        return self._value & 0xffffffffffffffff
+
+    def _calculate_compact(self, negative=False) -> int:
+        size = (self.bits + 7) // 8
+        if size <= 3:
+            compact = self.low64 << 8 * (3 - size)
+        else:
+            compact = ArithUint256(self._value >> 8 * (size - 3)).low64
+        # The 0x00800000 bit denotes the sign.
+        # Thus, if it is already set, divide the mantissa by 256 and increase the exponent.
+        if compact & 0x00800000:
+            compact >>= 8
+            size += 1
+        assert (compact & ~0x007fffff) == 0
+        assert size < 256
+        compact |= size << 24
+        if negative and compact & 0x007fffff:
+            compact |= 0x00800000
+        return compact
+
+    def __mul__(self, x):
+        # Take the mod because we are limited to an unsigned 256 bit number
+        return ArithUint256((self._value * x) % 2 ** 256)
+
+    def __truediv__(self, x):
+        return ArithUint256(int(self._value / x))
+
+    def __gt__(self, other):
+        return self._value > other
+
+    def __lt__(self, other):
+        return self._value < other

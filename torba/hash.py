@@ -79,14 +79,6 @@ def ripemd160(x):
     return h.digest()
 
 
-def pow_hash(x):
-    h = sha512(double_sha256(x))
-    return double_sha256(
-        ripemd160(h[:len(h) // 2]) +
-        ripemd160(h[len(h) // 2:])
-    )
-
-
 def double_sha256(x):
     """ SHA-256 of SHA-256, as used extensively in bitcoin. """
     return sha256(sha256(x))

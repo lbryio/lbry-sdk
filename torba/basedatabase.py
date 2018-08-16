@@ -47,7 +47,7 @@ class SQLiteMixin:
         self._db_path = path
         self.db: adbapi.ConnectionPool = None
 
-    def start(self):
+    def open(self):
         log.info("connecting to database: %s", self._db_path)
         self.db = adbapi.ConnectionPool(
             'sqlite3', self._db_path, cp_min=1, cp_max=1, check_same_thread=False
@@ -56,7 +56,7 @@ class SQLiteMixin:
             lambda t: t.executescript(self.CREATE_TABLES_QUERY)
         )
 
-    def stop(self):
+    def close(self):
         self.db.close()
         return defer.succeed(True)
 
