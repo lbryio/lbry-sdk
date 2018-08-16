@@ -7,6 +7,7 @@ __node_url__ = (
 __electrumx__ = 'electrumx.lib.coins.BitcoinSegwitRegtest'
 
 import struct
+from typing import Optional
 from binascii import hexlify, unhexlify
 from torba.baseledger import BaseLedger
 from torba.baseheader import BaseHeaders, ArithUint256
@@ -16,7 +17,7 @@ class MainHeaders(BaseHeaders):
     header_size = 80
     chunk_size = 2016
     max_target = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-    genesis_hash = b'000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
+    genesis_hash: Optional[bytes] = b'000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
     target_timespan = 14 * 24 * 60 * 60
 
     @staticmethod

@@ -1,5 +1,5 @@
 from binascii import unhexlify, hexlify
-from typing import TypeVar, Sequence
+from typing import TypeVar, Sequence, Optional
 
 
 T = TypeVar('T')
@@ -52,7 +52,7 @@ class ArithUint256:
 
     def __init__(self, value: int) -> None:
         self._value = value
-        self._compact = None
+        self._compact: Optional[int] = None
 
     @classmethod
     def from_compact(cls, compact) -> 'ArithUint256':
@@ -80,10 +80,10 @@ class ArithUint256:
     @property
     def bits(self) -> int:
         """ Returns the position of the highest bit set plus one. """
-        bn = bin(self._value)[2:]
-        for i, d in enumerate(bn):
+        bits = bin(self._value)[2:]
+        for i, d in enumerate(bits):
             if d:
-                return (len(bn) - i) + 1
+                return (len(bits) - i) + 1
         return 0
 
     @property

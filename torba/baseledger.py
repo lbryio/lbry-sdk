@@ -11,7 +11,7 @@ from torba import baseaccount
 from torba import basenetwork
 from torba import basetransaction
 from torba.basedatabase import BaseDatabase
-from torba.baseheader import BaseHeaders, InvalidHeader
+from torba.baseheader import BaseHeaders
 from torba.coinselection import CoinSelector
 from torba.constants import COIN, NULL_HASH32
 from torba.stream import StreamController

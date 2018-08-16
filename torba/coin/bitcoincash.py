@@ -8,8 +8,8 @@ __electrumx__ = 'electrumx.lib.coins.BitcoinCashRegtest'
 
 from binascii import unhexlify
 from torba.baseledger import BaseLedger
-from torba.baseheader import BaseHeaders
 from torba.basetransaction import BaseTransaction
+from .bitcoinsegwit import MainHeaders, UnverifiedHeaders
 
 
 class Transaction(BaseTransaction):
@@ -23,6 +23,7 @@ class MainNetLedger(BaseLedger):
     symbol = 'BCH'
     network_name = 'mainnet'
 
+    headers_class = MainHeaders
     transaction_class = Transaction
 
     pubkey_address_prefix = bytes((0,))
@@ -31,10 +32,6 @@ class MainNetLedger(BaseLedger):
     extended_private_key_prefix = unhexlify('0488ade4')
 
     default_fee_per_byte = 50
-
-
-class UnverifiedHeaders(BaseHeaders):
-    verify_bits_to_target = False
 
 
 class RegTestLedger(MainNetLedger):

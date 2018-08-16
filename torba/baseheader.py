@@ -27,7 +27,7 @@ class BaseHeaders:
     chunk_size: int
 
     max_target: int
-    genesis_hash: bytes
+    genesis_hash: Optional[bytes]
     target_timespan: int
 
     validate_difficulty: bool = True
@@ -36,7 +36,7 @@ class BaseHeaders:
         if path == ':memory:':
             self.io = BytesIO()
         self.path = path
-        self._size = None
+        self._size: Optional[int] = None
         self._on_change_controller = StreamController()
         self.on_changed = self._on_change_controller.stream
         self._header_connect_lock = defer.DeferredLock()
@@ -61,7 +61,8 @@ class BaseHeaders:
     def get_next_chunk_target(self, chunk: int) -> ArithUint256:
         return ArithUint256(self.max_target)
 
-    def get_next_block_target(self, chunk_target: ArithUint256, previous: Optional[dict],
+    @staticmethod
+    def get_next_block_target(chunk_target: ArithUint256, previous: Optional[dict],
                               current: Optional[dict]) -> ArithUint256:
         return chunk_target
 
