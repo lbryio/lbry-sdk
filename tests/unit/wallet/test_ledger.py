@@ -1,45 +1,25 @@
 from twisted.internet import defer
 from twisted.trial import unittest
-from lbrynet import conf
 from lbrynet.wallet.account import Account
-from lbrynet.wallet.database import WalletDatabase
 from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.ledger import MainNetLedger
 from torba.wallet import Wallet
 
 
-class MockHeaders:
-    def __init__(self, ledger):
-        self.ledger = ledger
-        self.height = 1
-
-    def __len__(self):
-        return self.height
-
-    def __getitem__(self, height):
-        return {'merkle_root': 'abcd04'}
-
-
-class MainNetTestLedger(MainNetLedger):
-    headers_class = MockHeaders
-    network_name = 'unittest'
-
-    def __init__(self):
-        super(MainNetLedger, self).__init__({
-            'db': WalletDatabase(':memory:')
-        })
-
-
 class LedgerTestCase(unittest.TestCase):
 
     def setUp(self):
-        conf.initialize_settings(False)
-        self.ledger = MainNetTestLedger()
+        super().setUp()
+        self.ledger = MainNetLedger({
+            'db': MainNetLedger.database_class(':memory:'),
+            'headers': MainNetLedger.headers_class(':memory:')
+        })
         self.account = Account.generate(self.ledger, Wallet(), "lbryum")
-        return self.ledger.db.start()
+        return self.ledger.db.open()
 
     def tearDown(self):
-        return self.ledger.db.stop()
+        super().tearDown()
+        return self.ledger.db.close()
 
 
 class BasicAccountingTests(LedgerTestCase):
