@@ -31,9 +31,8 @@ class CLIIntegrationTest(unittest.TestCase):
         self.daemon = Daemon()
         yield self.daemon.start_listening()
 
-    @defer.inlineCallbacks
     def tearDown(self):
-        yield self.daemon._shutdown()
+        return self.daemon._shutdown()
 
 
 class AuthenticatedCLITest(CLIIntegrationTest):
