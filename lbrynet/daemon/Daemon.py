@@ -1556,14 +1556,10 @@ class Daemon(AuthJSONRPCServer):
         except (TypeError, URIParseError):
             raise Exception("Invalid channel name")
 
-        try:
-            amount = Decimal(amount)
-        except InvalidOperation:
-            raise TypeError("Amount does not represent a valid decimal")
+        amount = self.get_dewies_or_error("amount", amount)
 
         if amount <= 0.0:
             raise Exception("Invalid amount")
-        amount = int(amount * COIN)
         tx = yield self.wallet.claim_new_channel(channel_name, amount)
         self.wallet.save()
         self.analytics_manager.send_new_channel()
@@ -2475,10 +2471,7 @@ class Daemon(AuthJSONRPCServer):
             (dict) the resulting transaction
         """
 
-        try:
-            amount = Decimal(amount)
-        except InvalidOperation:
-            raise TypeError("Amount does not represent a valid decimal")
+        amount = self.get_dewies_or_error("amount", amount)
 
         if amount < 0.0:
             raise NegativeFundsError()
