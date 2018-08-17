@@ -23,7 +23,7 @@ setup(
     },
     install_requires=[
         'aiohttp',
-        'twisted[tls]',
+        'twisted[tls]>=18.7.0',
         'appdirs',
         'distro',
         'base58',
