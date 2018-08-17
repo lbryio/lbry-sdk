@@ -12,6 +12,19 @@ from lbrynet.daemon.Components import DATABASE_COMPONENT, BLOB_COMPONENT, HEADER
 from lbrynet.daemon.Daemon import Daemon
 
 
+class FakeAnalytics:
+
+    @property
+    def is_started(self):
+        return True
+
+    def send_server_startup_success(self):
+        pass
+
+    def shutdown(self):
+        pass
+
+
 class CLIIntegrationTest(unittest.TestCase):
     USE_AUTH = False
 
@@ -28,7 +41,7 @@ class CLIIntegrationTest(unittest.TestCase):
         conf.settings["components_to_skip"] = skip
         conf.settings.initialize_post_conf_load()
         Daemon.component_attributes = {}
-        self.daemon = Daemon()
+        self.daemon = Daemon(analytics_manager=FakeAnalytics())
         yield self.daemon.start_listening()
 
     def tearDown(self):
