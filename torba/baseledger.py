@@ -281,8 +281,8 @@ class BaseLedger(metaclass=LedgerRegistry):
                 height -= 1
                 rewound += 1
                 log.warning(
-                    "Blockchain Reorganization: attempting rewind to height {} from starting height {}"
-                    .format(height, height+rewound)
+                    "Blockchain Reorganization: attempting rewind to height %s from starting height %s",
+                    height, height+rewound
                 )
 
             else:

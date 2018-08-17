@@ -241,7 +241,7 @@ class BaseDatabase(SQLiteMixin):
     def release_outputs(self, txos):
         return self.reserve_outputs(txos, is_reserved=False)
 
-    def rewind_blockchain(self, above_height):
+    def rewind_blockchain(self, above_height):  # pylint: disable=no-self-use
         # TODO:
         # 1. delete transactions above_height
         # 2. update address histories removing deleted TXs
