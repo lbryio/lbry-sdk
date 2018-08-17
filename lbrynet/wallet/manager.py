@@ -58,6 +58,53 @@ class LbryWalletManager(BaseWalletManager):
     def check_locked(self):
         return defer.succeed(False)
 
+    @staticmethod
+    def migrate_lbryum_to_torba(path):
+        if not os.path.exists(path):
+            return
+        with open(path, 'r') as f:
+            unmigrated_json = f.read()
+            unmigrated = json.loads(unmigrated_json)
+        # TODO: After several public releases of new torba based wallet, we can delete
+        #       this lbryum->torba conversion code and require that users who still
+        #       have old structured wallets install one of the earlier releases that
+        #       still has the below conversion code.
+        if 'master_public_keys' not in unmigrated:
+            return
+        migrated_json = json.dumps({
+            'version': 1,
+            'name': 'My Wallet',
+            'accounts': [{
+                'version': 1,
+                'name': 'Main Account',
+                'ledger': 'lbc_mainnet',
+                'encrypted': unmigrated['use_encryption'],
+                'seed': unmigrated['seed'],
+                'seed_version': unmigrated['seed_version'],
+                'private_key': unmigrated['master_private_keys']['x/'],
+                'public_key': unmigrated['master_public_keys']['x/'],
+                'certificates': unmigrated.get('claim_certificates', {}),
+                'address_generator': {
+                    'name': 'deterministic-chain',
+                    'receiving': {'gap': 20, 'maximum_uses_per_address': 2},
+                    'change': {'gap': 6, 'maximum_uses_per_address': 2}
+                }
+            }]
+        }, indent=4, sort_keys=True)
+        mode = os.stat(path).st_mode
+        i = 1
+        backup_path_template = os.path.join(os.path.dirname(path), "old_lbryum_wallet") + "_%i"
+        while os.path.isfile(backup_path_template % i):
+            i += 1
+        os.rename(path, backup_path_template % i)
+        temp_path = "%s.tmp.%s" % (path, os.getpid())
+        with open(temp_path, "w") as f:
+            f.write(migrated_json)
+            f.flush()
+            os.fsync(f.fileno())
+        os.rename(temp_path, path)
+        os.chmod(path, mode)
+
     @classmethod
     def from_lbrynet_config(cls, settings, db):
 
@@ -75,38 +122,9 @@ class LbryWalletManager(BaseWalletManager):
             #'db': db
         }
 
-        wallet_file_path = os.path.join(settings['lbryum_wallet_dir'], 'default_wallet')
-        if os.path.exists(wallet_file_path):
-            with open(wallet_file_path, 'r') as f:
-                json_data = f.read()
-                json_dict = json.loads(json_data)
-            # TODO: After several public releases of new torba based wallet, we can delete
-            #       this lbryum->torba conversion code and require that users who still
-            #       have old structured wallets install one of the earlier releases that
-            #       still has the below conversion code.
-            if 'master_public_keys' in json_dict:
-                json_data = json.dumps({
-                    'version': 1,
-                    'name': 'My Wallet',
-                    'accounts': [{
-                        'version': 1,
-                        'name': 'Main Account',
-                        'ledger': 'lbc_mainnet',
-                        'encrypted': json_dict['use_encryption'],
-                        'seed': json_dict['seed'],
-                        'seed_version': json_dict['seed_version'],
-                        'private_key': json_dict['master_private_keys']['x/'],
-                        'public_key': json_dict['master_public_keys']['x/'],
-                        'certificates': json_dict.get('claim_certificates', {}),
-                        'address_generator': {
-                            'name': 'deterministic-chain',
-                            'receiving': {'gap': 20, 'maximum_uses_per_address': 2},
-                            'change': {'gap': 6, 'maximum_uses_per_address': 2}
-                        }
-                    }]
-                }, indent=4, sort_keys=True)
-                with open(wallet_file_path, 'w') as f:
-                    f.write(json_data)
+        wallet_file_path = os.path.join(settings['lbryum_wallet_dir'], 'wallets', 'default_wallet')
+
+        cls.migrate_lbryum_to_torba(wallet_file_path)
 
         manager = cls.from_config({
             'ledgers': {ledger_id: ledger_config},
