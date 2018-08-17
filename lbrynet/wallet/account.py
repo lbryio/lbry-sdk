@@ -51,7 +51,11 @@ class Account(BaseAccount):
             if ':' not in maybe_claim_id:
                 claims = yield self.ledger.network.get_claims_by_ids(maybe_claim_id)
                 claim = claims[maybe_claim_id]
-                tx = yield self.ledger.get_transaction(claim['txid'])
+                tx = None
+                if claim:
+                    tx = yield self.ledger.get_transaction(claim['txid'])
+                else:
+                    log.warning(maybe_claim_id)
                 if tx is not None:
                     txo = tx.outputs[claim['nout']]
                     if not txo.script.is_claim_involved:
@@ -69,12 +73,18 @@ class Account(BaseAccount):
                     )
                     results['migrate-success'] += 1
                 else:
-                    addresses.setdefault(claim['address'], 0)
-                    addresses[claim['address']] += 1
-                    log.warning(
-                        "Failed to migrate claim '%s', it's not associated with any of your addresses.",
-                        maybe_claim_id
-                    )
+                    if claim:
+                        addresses.setdefault(claim['address'], 0)
+                        addresses[claim['address']] += 1
+                        log.warning(
+                            "Failed to migrate claim '%s', it's not associated with any of your addresses.",
+                            maybe_claim_id
+                        )
+                    else:
+                        log.warning(
+                            "Failed to migrate claim '%s', it appears abandoned.",
+                            maybe_claim_id
+                        )
                     results['migrate-failed'] += 1
             else:
                 try:
