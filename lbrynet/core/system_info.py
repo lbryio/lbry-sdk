@@ -36,9 +36,12 @@ def get_platform(get_ip=True):
         "build": build_type.BUILD,  # CI server sets this during build step
     }
     if p["os_system"] == "Linux":
-        import distro
-        p["distro"] = distro.info()
-        p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
+        try:
+            import distro
+            p["distro"] = distro.info()
+            p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
+        except ModuleNotFoundError:
+            pass
 
     # TODO: remove this from get_platform and add a get_external_ip function using treq
     if get_ip:
