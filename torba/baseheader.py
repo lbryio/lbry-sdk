@@ -6,7 +6,6 @@ from binascii import hexlify
 
 from twisted.internet import threads, defer
 
-from torba.stream import StreamController
 from torba.util import ArithUint256
 from torba.hash import double_sha256
 
@@ -37,8 +36,6 @@ class BaseHeaders:
             self.io = BytesIO()
         self.path = path
         self._size: Optional[int] = None
-        self._on_change_controller = StreamController()
-        self.on_changed = self._on_change_controller.stream
         self._header_connect_lock = defer.DeferredLock()
 
     def open(self):
@@ -106,7 +103,7 @@ class BaseHeaders:
         try:
             for height, chunk in self._iterate_chunks(start, headers):
                 try:
-                    # validate_chunk() is CPU bound on large chunks
+                    # validate_chunk() is CPU bound and reads previous chunks from file system
                     yield threads.deferToThread(self.validate_chunk, height, chunk)
                 except InvalidHeader as e:
                     bail = True
@@ -120,7 +117,6 @@ class BaseHeaders:
                     # the goal here is mainly to ensure we're definitely flush()'ing
                     yield threads.deferToThread(self.io.flush)
                     self._size = None
-                    self._on_change_controller.add(written)
                 added += written
                 if bail:
                     break

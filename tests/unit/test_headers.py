@@ -27,9 +27,12 @@ class BitcoinHeadersTestCase(unittest.TestCase):
             req.add_header('Range', 'bytes=0-{}'.format(self.HEADER_BYTES-1))
             with urlopen(req) as response, open(self.header_file_name, 'wb') as header_file:
                 header_file.write(response.read())
-            if os.path.getsize(self.header_file_name) != self.HEADER_BYTES:
-                os.remove(self.header_file_name)
-                raise Exception("Downloaded headers for testing are not the correct number of bytes.")
+        if os.path.getsize(self.header_file_name) != self.HEADER_BYTES:
+            os.remove(self.header_file_name)
+            raise Exception(
+                "Downloaded headers for testing are not the correct number of bytes. "
+                "They were deleted. Try running the tests again."
+            )
 
     def get_bytes(self, upto: int = -1, after: int = 0) -> bytes:
         with open(self.header_file_name, 'rb') as headers:
