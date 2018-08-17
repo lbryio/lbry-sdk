@@ -1,8 +1,8 @@
+import json
 import tempfile
 import logging
 import asyncio
 from types import SimpleNamespace
-
 
 from twisted.internet import defer
 from orchstr8.testcase import IntegrationTestCase, d2f
@@ -16,10 +16,10 @@ from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, ExchangeRateManagerComponent
 from lbrynet.daemon.Components import UPnPComponent
-from lbrynet.daemon.Components import REFLECTOR_COMPONENT, HASH_ANNOUNCER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.daemon.Components import UPNP_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT, DHT_COMPONENT
-from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, HEADERS_COMPONENT, RATE_LIMITER_COMPONENT
+from lbrynet.daemon.Components import REFLECTOR_COMPONENT
+from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT
 from lbrynet.daemon.ComponentManager import ComponentManager
+from lbrynet.daemon.auth.server import jsonrpc_dumps_pretty
 
 
 log = logging.getLogger(__name__)
@@ -156,6 +156,12 @@ class CommandTestCase(IntegrationTestCase):
     def d_generate(self, blocks):
         return defer.Deferred.fromFuture(asyncio.ensure_future(self.generate(blocks)))
 
+    def out(self, d):
+        """ Converts Daemon API call results (dictionary)
+            to JSON and then back to a dictionary. """
+        d.addCallback(lambda o: json.loads(jsonrpc_dumps_pretty(o, ledger=self.ledger))['result'])
+        return d
+
 
 class EpicAdventuresOfChris45(CommandTestCase):
 
@@ -177,12 +183,12 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # While making the spamdwich he wonders... has anyone on LBRY
         # registered the @spam channel yet? "I should do that!" he
         # exclaims and goes back to his computer to do just that!
-        channel = yield self.daemon.jsonrpc_channel_new('@spam', 1)
+        channel = yield self.out(self.daemon.jsonrpc_channel_new('@spam', 1))
         self.assertTrue(channel['success'])
-        yield self.d_confirm_tx(channel['txid'])
+        yield self.d_confirm_tx(channel['tx']['txid'])
 
         # Do we have it locally?
-        channels = yield self.daemon.jsonrpc_channel_list()
+        channels = yield self.out(self.daemon.jsonrpc_channel_list())
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@spam')
         self.assertTrue(channels[0]['have_certificate'])
@@ -228,7 +234,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # at 6 confirmations and the total is correct.
 
         # And is the channel resolvable and empty?
-        response = yield self.daemon.jsonrpc_resolve(uri='lbry://@spam')
+        response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam'))
         self.assertIn('lbry://@spam', response)
         self.assertIn('certificate', response['lbry://@spam'])
 
@@ -245,11 +251,11 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'yada yada yada!')
             file.write(b'the end')
             file.flush()
-            claim1 = yield self.daemon.jsonrpc_publish(
+            claim1 = yield self.out(self.daemon.jsonrpc_publish(
                 'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
-            )
+            ))
             self.assertTrue(claim1['success'])
-            yield self.d_confirm_tx(claim1['txid'])
+            yield self.d_confirm_tx(claim1['tx']['txid'])
 
         # He quickly checks the unconfirmed balance to make sure everything looks
         # correct.
@@ -258,7 +264,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # Also checks that his new story can be found on the blockchain before
         # giving the link to all his friends.
-        response = yield self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft')
+        response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
         self.assertIn('lbry://@spam/hovercraft', response)
         self.assertIn('claim', response['lbry://@spam/hovercraft'])
 
@@ -276,19 +282,19 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'[typo fixing sounds being made]')
             file.write(b'yada yada yada!')
             file.flush()
-            claim2 = yield self.daemon.jsonrpc_publish(
+            claim2 = yield self.out(self.daemon.jsonrpc_publish(
                 'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
-            )
+            ))
             self.assertTrue(claim2['success'])
             self.assertEqual(claim2['claim_id'], claim1['claim_id'])
-            yield self.d_confirm_tx(claim2['txid'])
+            yield self.d_confirm_tx(claim2['tx']['txid'])
 
         # After some soul searching Chris decides that his story needs more
         # heart and a better ending. He takes down the story and begins the rewrite.
-        abandon = yield self.daemon.jsonrpc_claim_abandon(claim1['claim_id'])
+        abandon = yield self.out(self.daemon.jsonrpc_claim_abandon(claim1['claim_id']))
         self.assertTrue(abandon['success'])
-        yield self.d_confirm_tx(abandon['txid'])
+        yield self.d_confirm_tx(abandon['tx']['txid'])
 
         # And now check that the claim doesn't resolve anymore.
-        response = yield self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft')
+        response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])

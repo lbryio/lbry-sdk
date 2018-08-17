@@ -1896,16 +1896,12 @@ class Daemon(AuthJSONRPCServer):
             raise Exception('Must specify nout')
 
         tx = yield self.wallet.abandon_claim(claim_id, txid, nout)
-        result = {
-            "success": True,
-            "txid": tx.id,
-            "nout": 0,
-            "tx": hexlify(tx.raw),
-            "fee": str(Decimal(tx.fee) / COIN),
-            "claim_id": claim_id
-        }
         self.analytics_manager.send_claim_action('abandon')
-        defer.returnValue(result)
+        defer.returnValue({
+            "success": True,
+            "tx": tx,
+            "claim_id": claim_id
+        })
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
