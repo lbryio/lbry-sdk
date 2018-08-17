@@ -256,8 +256,9 @@ class AuthJSONRPCServer(AuthorizedBase):
         if self.listening_port:
             self.listening_port.stopListening()
         self.looping_call_manager.shutdown()
-        for session in list(self.server.sessions.values()):
-            session.expire()
+        if self.server is not None:
+            for session in list(self.server.sessions.values()):
+                session.expire()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
         try:
