@@ -2448,7 +2448,7 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
         """
-        Create new addresses, each containing `amount` credits
+        Create new UTXOs, each containing `amount` credits
 
         Usage:
             wallet_prefill_addresses [--no_broadcast]
@@ -2463,19 +2463,12 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) the resulting transaction
         """
-
-        amount = self.get_dewies_or_error("amount", amount)
-
-        if amount < 0.0:
-            raise NegativeFundsError()
-        elif not amount:
-            raise NullFundsError()
-
         broadcast = not no_broadcast
-        tx = yield self.wallet.create_addresses_with_balance(
-            num_addresses, amount, broadcast=broadcast)
-        tx['broadcast'] = broadcast
-        defer.returnValue(tx)
+        return self.jsonrpc_fund(self.wallet.default_account.name,
+                                 self.wallet.default_account.name,
+                                 amount=amount,
+                                 outputs=num_addresses,
+                                 broadcast=broadcast)
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
