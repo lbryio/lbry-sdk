@@ -113,10 +113,9 @@ def address_generator(address=(10, 42, 42, 1)):
         address = increment(address)
 
 
-def mock_node_generator(count=None, mock_node_ids=MOCK_DHT_NODES):
+def mock_node_generator(count=None, mock_node_ids=None):
     if mock_node_ids is None:
         mock_node_ids = MOCK_DHT_NODES
-    mock_node_ids = list(mock_node_ids)
 
     for num, node_ip in enumerate(address_generator()):
         if count and num >= count:

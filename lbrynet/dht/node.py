@@ -149,9 +149,6 @@ class Node(MockKademliaHelper):
         return '<%s.%s object; ID: %s, IP address: %s, UDP port: %d>' % (
             self.__module__, self.__class__.__name__, binascii.hexlify(self.node_id), self.externalIP, self.port)
 
-    def __hash__(self):
-        return int(binascii.hexlify(self.node_id), 16)
-
     @defer.inlineCallbacks
     def stop(self):
         # stop LoopingCalls:

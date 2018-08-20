@@ -1,7 +1,6 @@
 import ipaddress
 from binascii import hexlify
 from functools import reduce
-
 from lbrynet.dht import constants
 
 
@@ -99,22 +98,20 @@ class _Contact:
 
     def __eq__(self, other):
         if isinstance(other, _Contact):
-            return self.id == other.id
-        elif isinstance(other, str):
-            return self.id == other
-        else:
-            return False
+            return (self.id, self.address, self.port) == (other.id, other.address, other.port)
+        raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
 
     def __ne__(self, other):
         if isinstance(other, _Contact):
-            return self.id != other.id
-        elif isinstance(other, str):
-            return self.id != other
-        else:
-            return True
+            return (self.id, self.address, self.port) != (other.id, other.address, other.port)
+        raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
 
     def __hash__(self):
-        return int(hexlify(self.id), 16) if self.id else int(sum(int(x) for x in self.address.split('.')) + self.port)
+        return int.from_bytes(
+            sum(int(c.encode()) * (2**(8*i))
+                for i, c in enumerate(self.address.split('.'))).to_bytes(4, 'big') + self.port.to_bytes(2, 'big'),
+            'big'
+        )
 
     def compact_ip(self):
         compact_ip = reduce(
