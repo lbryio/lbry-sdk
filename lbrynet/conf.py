@@ -294,7 +294,7 @@ class Config:
                  environment=None, cli_settings=None):
 
         self._installation_id = None
-        self._session_id = base58.b58encode(utils.generate_id())
+        self._session_id = base58.b58encode(utils.generate_id()).decode()
         self._node_id = None
 
         self._fixed_defaults = fixed_defaults
