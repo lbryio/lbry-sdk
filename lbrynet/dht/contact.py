@@ -107,11 +107,7 @@ class _Contact:
         raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
 
     def __hash__(self):
-        return int.from_bytes(
-            sum(int(c.encode()) * (2**(8*i))
-                for i, c in enumerate(self.address.split('.'))).to_bytes(4, 'big') + self.port.to_bytes(2, 'big'),
-            'big'
-        )
+        return id(self)
 
     def compact_ip(self):
         compact_ip = reduce(
