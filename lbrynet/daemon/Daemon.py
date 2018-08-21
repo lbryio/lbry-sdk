@@ -3136,10 +3136,10 @@ class Daemon(AuthJSONRPCServer):
                     'name': HierarchicalDeterministic.name,
                     'receiving': {
                         'gap': receiving_gap or 20,
-                        'maximum_uses_per_address': receiving_max_uses or 2},
+                        'maximum_uses_per_address': receiving_max_uses or 1},
                     'change': {
                         'gap': change_gap or 6,
-                        'maximum_uses_per_address': change_max_uses or 2}
+                        'maximum_uses_per_address': change_max_uses or 1}
                 }
             ledger = self.wallet.get_or_create_ledger('lbc_mainnet')
             if seed or private_key or public_key:
