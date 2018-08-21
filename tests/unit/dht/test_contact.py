@@ -31,6 +31,25 @@ class ContactTest(unittest.TestCase):
         self.assertTrue(self.second_contact is self.second_contact_second_reference)
         self.assertTrue(self.first_contact is not self.first_contact_different_values)
 
+    def test_boolean(self):
+        """ Test "equals" and "not equals" comparisons """
+        self.assertNotEqual(
+            self.first_contact, self.contact_manager.make_contact(
+                self.first_contact.id, self.first_contact.address, self.first_contact.port + 1, None, 32
+            )
+        )
+        self.assertNotEqual(
+            self.first_contact, self.contact_manager.make_contact(
+                self.first_contact.id, '193.168.1.1', self.first_contact.port, None, 32
+            )
+        )
+        self.assertNotEqual(
+            self.first_contact, self.contact_manager.make_contact(
+                generate_id(), self.first_contact.address, self.first_contact.port, None, 32
+            )
+        )
+        self.assertEqual(self.second_contact, self.second_contact_second_reference)
+
     def test_compact_ip(self):
         self.assertEqual(self.first_contact.compact_ip(), b'\x7f\x00\x00\x01')
         self.assertEqual(self.second_contact.compact_ip(), b'\xc0\xa8\x00\x01')
@@ -38,7 +57,6 @@ class ContactTest(unittest.TestCase):
     def test_id_log(self):
         self.assertEqual(self.first_contact.log_id(False), hexlify(self.node_ids[1]))
         self.assertEqual(self.first_contact.log_id(True),  hexlify(self.node_ids[1])[:8])
-
 
 
 class TestContactLastReplied(unittest.TestCase):
