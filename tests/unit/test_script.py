@@ -3,7 +3,7 @@ from twisted.trial import unittest
 
 from torba.bcd_data_stream import BCDataStream
 from torba.basescript import Template, ParseError, tokenize, push_data
-from torba.basescript import PUSH_SINGLE, PUSH_MANY, OP_HASH160, OP_EQUAL
+from torba.basescript import PUSH_SINGLE, PUSH_INTEGER, PUSH_MANY, OP_HASH160, OP_EQUAL
 from torba.basescript import BaseInputScript, BaseOutputScript
 
 
@@ -32,11 +32,11 @@ class TestScriptTemplates(unittest.TestCase):
             }
         )
         self.assertEqual(parse(
-                (PUSH_SINGLE('first'), PUSH_SINGLE('last')),
-                (b'Satoshi', b'Nakamoto')
+                (PUSH_SINGLE('first'), PUSH_INTEGER('rating')),
+                (b'Satoshi', (1000).to_bytes(2, 'little'))
             ), {
                 'first': b'Satoshi',
-                'last': b'Nakamoto'
+                'rating': 1000,
             }
         )
         self.assertEqual(parse(

@@ -10,6 +10,7 @@ from torba.util import subclass_tuple
 OP_0 = 0x00
 OP_1 = 0x51
 OP_16 = 0x60
+OP_VERIFY = 0x69
 OP_DUP = 0x76
 OP_HASH160 = 0xa9
 OP_EQUALVERIFY = 0x88
@@ -31,6 +32,9 @@ PUSH_DATA_OP = namedtuple('PUSH_DATA_OP', 'name')
 # opcode for variable length strings
 # pylint: disable=invalid-name
 PUSH_SINGLE = subclass_tuple('PUSH_SINGLE', PUSH_DATA_OP)
+# opcode for variable size integers
+# pylint: disable=invalid-name
+PUSH_INTEGER = subclass_tuple('PUSH_INTEGER', PUSH_DATA_OP)
 # opcode for variable number of variable length strings
 # pylint: disable=invalid-name
 PUSH_MANY = subclass_tuple('PUSH_MANY', PUSH_DATA_OP)
@@ -155,7 +159,7 @@ class Parser:
             token = self.tokens[self.token_index]
             opcode = self.opcodes[self.opcode_index]
             if isinstance(token, DataToken):
-                if isinstance(opcode, (PUSH_SINGLE, PUSH_SUBSCRIPT)):
+                if isinstance(opcode, (PUSH_SINGLE, PUSH_INTEGER, PUSH_SUBSCRIPT)):
                     self.push_single(opcode, token.value)
                 elif isinstance(opcode, PUSH_MANY):
                     self.consume_many_non_greedy()
@@ -232,6 +236,8 @@ class Parser:
     def push_single(self, opcode, value):
         if isinstance(opcode, PUSH_SINGLE):
             self.values[opcode.name] = value
+        elif isinstance(opcode, PUSH_INTEGER):
+            self.values[opcode.name] = int.from_bytes(value, 'little')
         elif isinstance(opcode, PUSH_SUBSCRIPT):
             self.values[opcode.name] = Script.from_source_with_template(value, opcode.template)
         else:
@@ -255,6 +261,11 @@ class Template:
             if isinstance(opcode, PUSH_SINGLE):
                 data = values[opcode.name]
                 source.write_many(push_data(data))
+            elif isinstance(opcode, PUSH_INTEGER):
+                data = values[opcode.name]
+                source.write_many(push_data(
+                    data.to_bytes((data.bit_length() + 7) // 8, byteorder='little')
+                ))
             elif isinstance(opcode, PUSH_SUBSCRIPT):
                 data = values[opcode.name]
                 source.write_many(push_data(data.source))
