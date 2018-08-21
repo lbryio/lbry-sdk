@@ -1558,7 +1558,7 @@ class Daemon(AuthJSONRPCServer):
 
         amount = self.get_dewies_or_error("amount", amount)
 
-        if amount <= 0.0:
+        if amount <= 0:
             raise Exception("Invalid amount")
         tx = yield self.wallet.claim_new_channel(channel_name, amount)
         self.wallet.save()
