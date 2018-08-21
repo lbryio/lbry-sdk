@@ -18,55 +18,34 @@ jobs:
     - &tests
       stage: test
       name: "Unit Tests w/ Python 3.7"
-      install:
-        - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git
-        - pip install git+https://github.com/lbryio/lbryschema.git
-        - pip install -e .[test]
       script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.unit
-      after_success:
-        - bash <(curl -s https://codecov.io/bash)
 
     - <<: *tests
-        name: "Unit Tests w/ Python 3.6"
-        python: "3.6"
+      name: "Unit Tests w/ Python 3.6"
+      python: "3.6"
 
-    - name: "Integration Tests"
+    - <<: *tests
+      name: "Functional Tests w/ Python 3.7"
+      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
+
+    - <<: *tests
+      name: "Functional Tests w/ Python 3.6"
+      python: "3.6"
+      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
+
+    - <<: *tests
+      name: "Integration Tests"
       install:
-      - pip install tox-travis coverage
-      - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
-      - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
-      - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
-      - pushd .. && git clone https://github.com/lbryio/lbryumx.git && popd
-      - pushd .. && git clone https://github.com/lbryio/torba.git && popd
+        - pip install tox-travis coverage
+        - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
+        - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+        - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
+        - pushd .. && git clone https://github.com/lbryio/lbryumx.git && popd
+        - pushd .. && git clone https://github.com/lbryio/torba.git && popd
       script: tox
       after_success:
       - coverage combine tests/
       - bash <(curl -s https://codecov.io/bash)
-
-    - <<: *tests
-      name: "Functional Tests w/ Python 3.7"
-      install:
-      - pip install coverage
-      - pip install git+https://github.com/lbryio/torba.git
-      - pip install git+https://github.com/lbryio/lbryschema.git
-      - pip install -e .[test]
-      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
-      after_success:
-      - bash <(curl -s https://codecov.io/bash)
-      
-    - <<: *tests
-      name: "Functional Tests w/ Python 3.6"
-      python: "3.6"
-      install:
-      - pip install coverage
-      - pip install git+https://github.com/lbryio/torba.git
-      - pip install git+https://github.com/lbryio/lbryschema.git
-      - pip install -e .[test]
-      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
-      after_success:
-      - bash <(curl -s https://codecov.io/bash)
-
 
     - stage: build
       name: "Windows"
