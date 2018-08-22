@@ -30,7 +30,7 @@ class PingQueue:
         self._process_lc = node.get_looping_call(self._semaphore.run, self._process)
 
     def _add_contact(self, contact, delay=None):
-        if (contact.address, contact.port) in map(lambda c: (c.address, c.port), self._enqueued_contacts):
+        if (contact.address, contact.port) in [(c.address, c.port) for c in self._enqueued_contacts]:
             return defer.succeed(None)
         delay = delay or constants.checkRefreshInterval
         self._enqueued_contacts[contact] = self._get_time() + delay

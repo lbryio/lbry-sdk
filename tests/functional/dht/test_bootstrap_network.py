@@ -12,7 +12,6 @@ class TestKademliaBootstrap(TestKademliaBase):
         pass
 
 
-# @unittest.SkipTest
 class TestKademliaBootstrap40Nodes(TestKademliaBase):
     network_size = 40
 
