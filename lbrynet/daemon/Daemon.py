@@ -2406,15 +2406,15 @@ class Daemon(AuthJSONRPCServer):
         """
 
         amount = self.get_dewies_or_error("amount", amount)
-        if address and claim_id:
-            raise Exception("Given both an address and a claim id")
-        elif not address and not claim_id:
-            raise Exception("Not given an address or a claim id")
-
         if not amount:
             raise NullFundsError
         elif amount < 0:
             raise NegativeFundsError()
+
+        if address and claim_id:
+            raise Exception("Given both an address and a claim id")
+        elif not address and not claim_id:
+            raise Exception("Not given an address or a claim id")
 
         if address:
             # raises an error if the address is invalid
@@ -2423,7 +2423,7 @@ class Daemon(AuthJSONRPCServer):
             reserved_points = self.wallet.reserve_points(address, amount)
             if reserved_points is None:
                 raise InsufficientFundsError()
-            tx = yield self.wallet.send_points_to_address(reserved_points, amount)
+            result = yield self.wallet.send_points_to_address(reserved_points, amount)
             self.analytics_manager.send_credits_sent()
         else:
             validate_claim_id(claim_id)
