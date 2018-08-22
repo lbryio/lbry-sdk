@@ -11,9 +11,10 @@ from lbrynet.core import looping_call_manager, utils, system_info
 SERVER_STARTUP = 'Server Startup'
 SERVER_STARTUP_SUCCESS = 'Server Startup Success'
 SERVER_STARTUP_ERROR = 'Server Startup Error'
-DOWNLOAD_STARTED = 'Download Started'
-DOWNLOAD_ERRORED = 'Download Errored'
-DOWNLOAD_FINISHED = 'Download Finished'
+DOWNLOAD = 'Download'
+DOWNLOAD_STARTED = 'Started'
+DOWNLOAD_ERRORED = 'Errored'
+DOWNLOAD_FINISHED = 'Finished'
 HEARTBEAT = 'Heartbeat'
 CLAIM_ACTION = 'Claim Action'  # publish/create/update/abandon
 NEW_CHANNEL = 'New Channel'
@@ -53,17 +54,17 @@ class Manager(object):
 
     def send_download_started(self, id_, name, claim_dict=None):
         self.analytics_api.track(
-            self._event(DOWNLOAD_STARTED, self._download_properties(id_, name, claim_dict))
+            self._event(DOWNLOAD, self._download_properties(id_, name, DOWNLOAD_STARTED, claim_dict))
         )
 
     def send_download_errored(self, err, id_, name, claim_dict, report):
         download_error_properties = self._download_error_properties(err, id_, name, claim_dict,
                                                                     report)
-        self.analytics_api.track(self._event(DOWNLOAD_ERRORED, download_error_properties))
+        self.analytics_api.track(self._event(DOWNLOAD, download_error_properties))
 
     def send_download_finished(self, id_, name, report, claim_dict=None):
-        download_properties = self._download_properties(id_, name, claim_dict, report)
-        self.analytics_api.track(self._event(DOWNLOAD_FINISHED, download_properties))
+        download_properties = self._download_properties(id_, name, DOWNLOAD_FINISHED, claim_dict, report)
+        self.analytics_api.track(self._event(DOWNLOAD, download_properties))
 
     def send_claim_action(self, action):
         self.analytics_api.track(self._event(CLAIM_ACTION, {'action': action}))
@@ -157,12 +158,13 @@ class Manager(object):
         return properties
 
     @staticmethod
-    def _download_properties(id_, name, claim_dict=None, report=None):
+    def _download_properties(id_, name, status, claim_dict=None, report=None):
         sd_hash = None if not claim_dict else claim_dict.source_hash
         p = {
             'download_id': id_,
             'name': name,
-            'stream_info': sd_hash
+            'stream_info': sd_hash,
+            'status': status
         }
         if report:
             p['report'] = report
@@ -178,6 +180,7 @@ class Manager(object):
             'download_id': id_,
             'name': name,
             'stream_info': claim_dict.source_hash,
+            'status': DOWNLOAD_ERRORED,
             'error': error_name(error),
             'reason': error.message,
             'report': report
