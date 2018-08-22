@@ -1,5 +1,4 @@
 import logging
-import struct
 from twisted.internet import defer
 from .distance import Distance
 from .error import TimeoutError
@@ -17,7 +16,7 @@ def get_contact(contact_list, node_id, address, port):
 
 def expand_peer(compact_peer_info):
     host = "{}.{}.{}.{}".format(*compact_peer_info[:4])
-    port, = struct.unpack('>H', compact_peer_info[4:6])
+    port = int.from_bytes(compact_peer_info[4:6], 'big')
     peer_node_id = compact_peer_info[6:]
     return (peer_node_id, host, port)
 

@@ -1,5 +1,4 @@
 import logging
-from binascii import hexlify
 
 from . import constants
 from .distance import Distance
@@ -138,7 +137,7 @@ class KBucket:
         @rtype: bool
         """
         if isinstance(key, bytes):
-            key = int(hexlify(key), 16)
+            key = int.from_bytes(key, 'big')
         return self.rangeMin <= key < self.rangeMax
 
     def __len__(self):
