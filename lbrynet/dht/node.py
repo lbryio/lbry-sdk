@@ -508,7 +508,7 @@ class Node(MockKademliaHelper):
         elif not self.verify_token(token, compact_ip):
             raise ValueError("Invalid token")
         if 0 <= port <= 65536:
-            compact_port = port.to_bytes(2, byteorder='big', signed=False)
+            compact_port = port.to_bytes(2, 'big')
         else:
             raise TypeError('Invalid port: {}'.format(port))
         compact_address = compact_ip + compact_port + rpc_contact.id
@@ -573,7 +573,7 @@ class Node(MockKademliaHelper):
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
         if len(peers) < constants.k and key in self._dataStore.completed_blobs:
             compact_ip = reduce(lambda buff, x: buff + bytearray([int(x)]), self.externalIP.split('.'), bytearray())
-            compact_port = self.peerPort.to_bytes(2, byteorder='big', signed=False)
+            compact_port = self.peerPort.to_bytes(2, 'big')
             compact_address = compact_ip + compact_port + self.node_id
             peers.append(compact_address)
 

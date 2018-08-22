@@ -137,7 +137,7 @@ class KBucket:
         @rtype: bool
         """
         if isinstance(key, bytes):
-            key = int.from_bytes(key, byteorder='big', signed=False)
+            key = int.from_bytes(key, 'big')
         return self.rangeMin <= key < self.rangeMax
 
     def __len__(self):
