@@ -29,7 +29,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * deprecated `send_amount_to_address` command from daemon
   *
 
 

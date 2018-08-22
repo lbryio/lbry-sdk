@@ -2367,37 +2367,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @AuthJSONRPCServer.deprecated("wallet_send")
-    @defer.inlineCallbacks
-    def jsonrpc_send_amount_to_address(self, amount, address):
-        """
-        Queue a payment of credits to an address
-
-        Usage:
-            send_amount_to_address (<amount> | --amount=<amount>) (<address> | --address=<address>)
-
-        Options:
-            --amount=<amount>     : (float) amount to send
-            --address=<address>   : (str) address to send credits to
-
-        Returns:
-            (bool) true if payment successfully scheduled
-        """
-
-        if amount < 0:
-            raise NegativeFundsError()
-        elif not amount:
-            raise NullFundsError()
-
-        amount = self.get_dewies_or_error("amount", amount)
-        reserved_points = self.wallet.reserve_points(address, amount)
-        if reserved_points is None:
-            raise InsufficientFundsError()
-        tx = yield self.wallet.send_points_to_address(reserved_points, amount)
-        self.analytics_manager.send_credits_sent()
-        defer.returnValue(tx)
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_wallet_send(self, amount, address=None, claim_id=None):
         """
@@ -2416,7 +2385,16 @@ class Daemon(AuthJSONRPCServer):
 
         Returns:
             If sending to an address:
-            (bool) true if payment successfully scheduled
+            (dict) true if payment successfully scheduled
+            {
+                "hex": (str) raw transaction,
+                "inputs": (list) inputs(dict) used for the transaction,
+                "outputs": (list) outputs(dict) for the transaction,
+                "total_fee": (int) fee in dewies,
+                "total_input": (int) total of inputs in dewies,
+                "total_output": (int) total of outputs in dewies(input - fees),
+                "txid": (str) txid of the transaction,
+            }
 
             If sending a claim tip:
             (dict) Dictionary containing the result of the support
@@ -2427,19 +2405,26 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        amount = self.get_dewies_or_error("amount", amount)
         if address and claim_id:
             raise Exception("Given both an address and a claim id")
         elif not address and not claim_id:
             raise Exception("Not given an address or a claim id")
-        if amount < 0.0:
+
+        if not amount:
+            raise NullFundsError
+        elif amount < 0:
             raise NegativeFundsError()
-        elif not amount:
-            raise NullFundsError()
 
         if address:
             # raises an error if the address is invalid
             decode_address(address)
-            result = yield self.jsonrpc_send_amount_to_address(amount, address)
+
+            reserved_points = self.wallet.reserve_points(address, amount)
+            if reserved_points is None:
+                raise InsufficientFundsError()
+            tx = yield self.wallet.send_points_to_address(reserved_points, amount)
+            self.analytics_manager.send_credits_sent()
         else:
             validate_claim_id(claim_id)
             result = yield self.wallet.tip_claim(claim_id, amount)
