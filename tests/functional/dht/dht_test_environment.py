@@ -1,4 +1,5 @@
 import logging
+import binascii
 
 from twisted.trial import unittest
 from twisted.internet import defer, task
@@ -91,7 +92,7 @@ class TestKademliaBase(unittest.TestCase):
             online.add(n.externalIP)
         return online
 
-    def show_info(self):
+    def show_info(self, show_contacts=False):
         known = set()
         for n in self._seeds:
             known.update([(c.id, c.address, c.port) for c in n.contacts])
@@ -99,12 +100,13 @@ class TestKademliaBase(unittest.TestCase):
             known.update([(c.id, c.address, c.port) for c in n.contacts])
 
         log.info("Routable: %i/%i", len(known), len(self.nodes) + len(self._seeds))
-        for n in self._seeds:
-            log.info("seed %s has %i contacts in %i buckets", n.externalIP, len(n.contacts),
-                     len([b for b in n._routingTable._buckets if b.getContacts()]))
-        for n in self.nodes:
-            log.info("node %s has %i contacts in %i buckets", n.externalIP, len(n.contacts),
-                     len([b for b in n._routingTable._buckets if b.getContacts()]))
+        if show_contacts:
+            for n in self._seeds:
+                log.info("seed %s (%s) has %i contacts in %i buckets", n.externalIP, binascii.hexlify(n.node_id)[:8], len(n.contacts),
+                         len([b for b in n._routingTable._buckets if b.getContacts()]))
+            for n in self.nodes:
+                log.info("node %s (%s) has %i contacts in %i buckets", n.externalIP, binascii.hexlify(n.node_id)[:8], len(n.contacts),
+                         len([b for b in n._routingTable._buckets if b.getContacts()]))
 
     @defer.inlineCallbacks
     def setUp(self):
@@ -128,13 +130,10 @@ class TestKademliaBase(unittest.TestCase):
         yield self.run_reactor(constants.checkRefreshInterval+1, seed_dl)
         while len(self.nodes + self._seeds) < self.network_size:
             network_dl = []
-            # fixme: We are starting one by one to reduce flakiness on time advance.
-            # fixme: When that improves, get back to 10+!
-            for i in range(min(1, self.network_size - len(self._seeds) - len(self.nodes))):
+            for i in range(min(10, self.network_size - len(self._seeds) - len(self.nodes))):
                 network_dl.append(self.add_node(known_addresses))
             yield self.run_reactor(constants.checkRefreshInterval*2+1, network_dl)
         self.assertEqual(len(self.nodes + self._seeds), self.network_size)
-        self.pump_clock(3600)
         self.verify_all_nodes_are_routable()
         self.verify_all_nodes_are_pingable()
 
