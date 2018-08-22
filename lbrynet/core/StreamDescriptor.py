@@ -446,7 +446,7 @@ def download_sd_blob(blob_hash, blob_manager, peer_finder, rate_limiter, payment
                                           payment_rate_manager,
                                           wallet,
                                           timeout)
-    mirror = HTTPBlobDownloader(blob_manager, [blob_hash], download_mirrors or [], sd_hashes=[blob_hash])
+    mirror = HTTPBlobDownloader(blob_manager, [blob_hash], download_mirrors or [], sd_hashes=[blob_hash], retry=False)
     mirror.start()
     sd_blob = yield downloader.download()
     mirror.stop()
