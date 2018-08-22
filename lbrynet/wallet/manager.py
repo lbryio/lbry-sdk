@@ -55,6 +55,10 @@ class LbryWalletManager(BaseWalletManager):
     def is_first_run(self):
         return True
 
+    @property
+    def is_wallet_unlocked(self):
+        return True
+
     def check_locked(self):
         return defer.succeed(False)
 
