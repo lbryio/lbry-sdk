@@ -2389,12 +2389,13 @@ class Daemon(AuthJSONRPCServer):
         elif not amount:
             raise NullFundsError()
 
+        amount = self.get_dewies_or_error("amount", amount)
         reserved_points = self.wallet.reserve_points(address, amount)
         if reserved_points is None:
             raise InsufficientFundsError()
-        yield self.wallet.send_points_to_address(reserved_points, amount)
+        tx = yield self.wallet.send_points_to_address(reserved_points, amount)
         self.analytics_manager.send_credits_sent()
-        defer.returnValue(True)
+        defer.returnValue(tx)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
@@ -2430,13 +2431,7 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Given both an address and a claim id")
         elif not address and not claim_id:
             raise Exception("Not given an address or a claim id")
-
-        try:
-            amount = Decimal(str(amount))
-        except InvalidOperation:
-            raise TypeError("Amount does not represent a valid decimal.")
-
-        if amount < 0:
+        if amount < 0.0:
             raise NegativeFundsError()
         elif not amount:
             raise NullFundsError()

@@ -73,6 +73,15 @@ class Transaction(BaseTransaction):
     output_class = Output
 
     @classmethod
+    def pay(cls, amount: int, address: bytes, funding_accounts: List[Account], change_account: Account):
+        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        hash_of_address = ledger.address_to_hash160(address)
+
+        output = Output.pay_pubkey_hash(amount, hash_of_address)
+
+        return cls.create([], [output], funding_accounts, change_account)
+
+    @classmethod
     def claim(cls, name: str, meta: ClaimDict, amount: int, holding_address: bytes,
               funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
