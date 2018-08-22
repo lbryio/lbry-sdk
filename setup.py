@@ -24,7 +24,7 @@ requires = [
     'lbryschema==0.0.16',
     'lbryum==3.2.4',
     'miniupnpc',
-    'txupnp==0.0.1a10',
+    'txupnp==0.0.1a11',
     'pyyaml',
     'requests',
     'txJSON-RPC',
