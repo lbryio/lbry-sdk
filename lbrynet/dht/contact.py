@@ -97,14 +97,9 @@ class _Contact:
         return None
 
     def __eq__(self, other):
-        if isinstance(other, _Contact):
-            return (self.id, self.address, self.port) == (other.id, other.address, other.port)
-        raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
-
-    def __ne__(self, other):
-        if isinstance(other, _Contact):
-            return (self.id, self.address, self.port) != (other.id, other.address, other.port)
-        raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
+        if not isinstance(other, _Contact):
+            raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
+        return (self.id, self.address, self.port) == (other.id, other.address, other.port)
 
     def __hash__(self):
         return hash((self.id, self.address, self.port))
