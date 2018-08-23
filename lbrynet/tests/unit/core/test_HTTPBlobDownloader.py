@@ -19,10 +19,11 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.blob_manager.get_blob.side_effect = lambda _: defer.succeed(self.blob)
         self.response = MagicMock(code=200, length=400)
         self.client.get.side_effect = lambda uri: defer.succeed(self.response)
-        self.downloader = HTTPBlobDownloader(self.blob_manager, [self.blob_hash], ['server1'], self.client)
+        self.downloader = HTTPBlobDownloader(self.blob_manager, [self.blob_hash], ['server1'], self.client, retry=False)
         self.downloader.interval = 0
 
     def tearDown(self):
+        self.downloader.stop()
         rm_db_and_blob_dir(self.db_dir, self.blob_dir)
 
     @defer.inlineCallbacks
@@ -33,7 +34,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
         self.client.collect.assert_called()
         self.assertEqual(self.blob.get_length(), self.response.length)
-        self.assertEqual(self.blob.get_is_verified(), True)
+        self.assertTrue(self.blob.get_is_verified())
         self.assertEqual(self.blob.writers, {})
 
     @defer.inlineCallbacks
