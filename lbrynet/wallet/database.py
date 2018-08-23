@@ -22,7 +22,8 @@ class WalletDatabase(BaseDatabase):
             is_claim boolean not null default 0,
             is_update boolean not null default 0,
             is_support boolean not null default 0,
-            is_purchase boolean not null default 0
+            is_buy boolean not null default 0,
+            is_sell boolean not null default 0
         );
     """
 
@@ -39,7 +40,8 @@ class WalletDatabase(BaseDatabase):
             'is_claim': txo.script.is_claim_name,
             'is_update': txo.script.is_update_claim,
             'is_support': txo.script.is_support_claim,
-            'is_purchase': txo.script.is_purchase_claim,
+            'is_buy': txo.script.is_buy_claim,
+            'is_sell': txo.script.is_sell_claim,
         })
         if txo.script.is_claim_involved:
             row['claim_id'] = txo.claim_id
