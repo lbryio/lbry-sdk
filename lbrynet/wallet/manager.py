@@ -132,7 +132,11 @@ class LbryWalletManager(BaseWalletManager):
             #'db': db
         }
 
-        wallet_file_path = os.path.join(settings['lbryum_wallet_dir'], 'wallets', 'default_wallet')
+        wallets_directory = os.path.join(settings['lbryum_wallet_dir'], 'wallets')
+        if not os.path.exists(wallets_directory):
+            os.mkdir(wallets_directory)
+
+        wallet_file_path = os.path.join(wallets_directory, 'default_wallet')
 
         cls.migrate_lbryum_to_torba(wallet_file_path)
 
