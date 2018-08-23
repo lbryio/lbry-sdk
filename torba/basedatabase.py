@@ -200,9 +200,9 @@ class BaseDatabase(SQLiteMixin):
                     'height': height, 'is_verified': is_verified
                 }, 'txid = ?', (tx.id,)))
 
-            existing_txos = list(map(itemgetter(0), self.execute(
+            existing_txos = [r[0] for r in self.execute(
                 t, "SELECT position FROM txo WHERE txid = ?", (tx.id,)
-            ).fetchall()))
+            ).fetchall()]
 
             for txo in tx.outputs:
                 if txo.position in existing_txos:
@@ -213,13 +213,23 @@ class BaseDatabase(SQLiteMixin):
                     # TODO: implement script hash payments
                     print('Database.save_transaction_io: pay script hash is not implemented!')
 
-            spent_txoids = [txi[0] for txi in self.execute(
-                t, "SELECT txoid FROM txi WHERE txid = ? AND address = ?", (tx.id, address)
+            # lookup the address associated with each TXI (via its TXO)
+            txoids = [txi.txo_ref.id for txi in tx.inputs]
+            txoid_place_holders = ','.join(['?']*len(txoids))
+            txoid_to_address = {r[0]: r[1] for r in self.execute(
+                t, "SELECT txoid, address FROM txo WHERE txoid in ({})".format(txoid_place_holders), txoids
+            ).fetchall()}
+
+            # list of TXIs that have already been added
+            existing_txis = [r[0] for r in self.execute(
+                t, "SELECT txoid FROM txi WHERE txid = ?", (tx.id,)
             ).fetchall()]
 
             for txi in tx.inputs:
                 txoid = txi.txo_ref.id
-                if txoid not in spent_txoids:
+                new_txi = txoid not in existing_txis
+                address_matches = txoid_to_address.get(txoid) == address
+                if new_txi and address_matches:
                     self.execute(t, *self._insert_sql("txi", {
                         'txid': tx.id,
                         'txoid': txoid,
