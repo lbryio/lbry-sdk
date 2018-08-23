@@ -1,6 +1,5 @@
 import logging
 from typing import Tuple, List, Sequence
-from operator import itemgetter
 
 import sqlite3
 from twisted.internet import defer
