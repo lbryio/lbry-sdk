@@ -15,6 +15,12 @@ from .database import WalletDatabase
 log = logging.getLogger(__name__)
 
 
+class ReservedPoints:
+    def __init__(self, identifier, amount):
+        self.identifier = identifier
+        self.amount = amount
+
+
 class BackwardsCompatibleNetwork:
     def __init__(self, manager):
         self.manager = manager
@@ -157,8 +163,15 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: check if we have enough to cover amount
         return ReservedPoints(address, amount)
 
-    def send_points_to_address(self, reserved, amount):
-        destination_address = reserved.identifier.encode('latin1')
+    @defer.inlineCallbacks
+    def send_amount_to_address(self, amount: int, destination_address: bytes):
+        account = self.default_account
+        tx = yield Transaction.pay(amount, destination_address, [account], account)
+        yield account.ledger.broadcast(tx)
+        return tx
+
+    def send_points_to_address(self, reserved: ReservedPoints, amount: int):
+        destination_address: bytes = reserved.identifier.encode('latin1')
         return self.send_amount_to_address(amount, destination_address)
 
     def get_wallet_info_query_handler_factory(self):
@@ -273,12 +286,6 @@ class LbryWalletManager(BaseWalletManager):
     def save(self):
         for wallet in self.wallets:
             wallet.save()
-
-
-class ReservedPoints:
-    def __init__(self, identifier, amount):
-        self.identifier = identifier
-        self.amount = amount
 
 
 class ClientRequest:
