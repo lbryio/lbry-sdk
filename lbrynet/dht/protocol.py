@@ -73,8 +73,10 @@ class PingQueue(object):
         yield defer.DeferredList([_ping(contact) for contact in pinged])
 
         for contact in checked:
-            if contact in self._enqueued_contacts:
+            if contact in self._enqueued_contacts and contact in pinged:
                 del self._enqueued_contacts[contact]
+            elif contact not in self._queue:
+                self._queue.appendleft(contact)
 
         defer.returnValue(None)
 
