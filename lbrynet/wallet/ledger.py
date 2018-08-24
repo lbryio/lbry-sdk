@@ -61,6 +61,14 @@ class MainNetLedger(BaseLedger):
                             hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
         defer.returnValue((yield resolver._handle_resolutions(resolutions, uris, page, page_size)))
 
+    def get_claim_by_claim_id(self, claim_id):
+        d = self.network.get_claims_by_ids(claim_id)
+        d.addCallback(lambda result: result.pop(claim_id) if result else {})
+        resolver = Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
+                            hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
+        d.addCallback(resolver.get_cert_and_validate_result)
+        return d
+
     @defer.inlineCallbacks
     def start(self):
         yield super().start()

@@ -5,6 +5,7 @@ from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
 
+from lbrynet.wallet.resolve import _handle_claim_result
 from lbryschema.claim import ClaimDict
 
 from .ledger import MainNetLedger
@@ -297,6 +298,9 @@ class LbryWalletManager(BaseWalletManager):
     def get_block_info(self, height):
         block_hash = self.ledger.headers.hash(height).decode()
         return self.get_block(block_hash)
+
+    def get_claim_by_claim_id(self, claim_id):
+        return self.ledger.get_claim_by_claim_id(claim_id)
 
 
 class ClientRequest:
