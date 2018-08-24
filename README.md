@@ -4,7 +4,7 @@ LBRY is an open-source protocol providing distribution, discovery, and purchase 
 
 This project aims to provide a daemon that can interact with the network via a json-rpc interface over HTTP.
 
-The project is written in python2.7 and extensively uses Twisted framework.
+The project is written in Python 3.7+ and extensively uses Twisted framework.
 
 ## Installation
 
@@ -43,7 +43,7 @@ We take security seriously. Please contact security@lbry.io regarding any securi
 
 ## Contact
 
-The primary contact for this project is @jackrobison(jack@lbry.io)
+The primary contact for this project is [@jackrobison](mailto:jack@lbry.io)
 
 ## Additional information and links
 
