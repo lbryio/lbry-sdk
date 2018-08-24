@@ -487,7 +487,7 @@ class Daemon(AuthJSONRPCServer):
         Resolve a name and return the estimated stream cost
         """
 
-        resolved = (yield self.wallet.resolve(uri))[uri]
+        resolved = (yield self.wallet.resolve(uri))
         if resolved:
             claim_response = resolved[uri]
         else:
