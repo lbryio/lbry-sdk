@@ -23,10 +23,10 @@ setup(
     },
     install_requires=[
         'aiohttp',
-        'twisted[tls]>=18.7.0',
+        'twisted[tls]==18.7.0',
         'appdirs',
         'distro',
-        'base58',
+        'base58==1.0.0',
         'envparse',
         'jsonrpc',
         'cryptography',
@@ -44,7 +44,8 @@ setup(
     extras_require={
         'test': (
             'mock>=2.0,<3.0',
-            'faker==0.8.17'
+            'faker==0.8.17',
+            'orchstr8>=0.0.4'
         )
     }
 )

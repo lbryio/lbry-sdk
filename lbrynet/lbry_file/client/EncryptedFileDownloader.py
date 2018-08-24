@@ -22,7 +22,7 @@ class EncryptedFileDownloader(CryptStreamDownloader):
                          payment_rate_manager, wallet, key, stream_name)
         self.stream_hash = stream_hash
         self.storage = storage
-        self.file_name = os.path.basename(unhexlify(file_name))
+        self.file_name = os.path.basename(unhexlify(file_name).decode())
         self._calculated_total_bytes = None
 
     @defer.inlineCallbacks
