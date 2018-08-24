@@ -13,8 +13,8 @@ at anytime.
   *
 
 ### Fixed
-  * issue in dht ping queue where enqueued pings that aren't yet due wouldn't be rescheduled
-  * blob mirror downloader not finishing streams that were partially uploaded at the time of the download attempt (https://github.com/lbryio/lbry/issues/1376)
+  *
+  *
 
 ### Deprecated
   *
@@ -31,6 +31,12 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.21.2] - 2018-08-23
+### Fixed
+ * issue in dht ping queue where enqueued pings that aren't yet due wouldn't be rescheduled
+ * blob mirror downloader not finishing streams that were partially uploaded at the time of the download attempt (https://github.com/lbryio/lbry/issues/1376)
 
 
 ## [0.21.1] - 2018-08-13
