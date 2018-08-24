@@ -2517,7 +2517,6 @@ class Daemon(AuthJSONRPCServer):
             d = self.wallet.get_block(blockhash)
         elif height is not None:
             d = self.wallet.get_block_info(height)
-            d.addCallback(lambda b: self.wallet.get_block(b))
         else:
             # TODO: return a useful error message
             return server.failure
