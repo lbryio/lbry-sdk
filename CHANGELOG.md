@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Security
-  *
+  * Upgraded `cryptography` package.
   *
 
 ### Fixed
@@ -21,15 +21,18 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
+  * Ported to Python 3 without backwards compatibility with Python 2.
+  * Switched to a brand new wallet implementation: torba.
+  * Format of wallet has changed to support multiple accounts in one wallet.
 
 ### Added
-  *
-  *
+  * `fund` command, used to move funds between or within an account in various ways.
+  * `max_address_gap` command, for finding large gaps of unused addresses
+  * `balance` command, a more detailed version `wallet_balace` which includes all accounts.
+  * `account` command, adding/deleting/modifying accounts including setting the default account.
 
 ### Removed
-  * removed command send_amount_to_address which was previously marked as deprecated
+  * `send_amount_to_address` command, which was previously marked as deprecated
   *
 
 
