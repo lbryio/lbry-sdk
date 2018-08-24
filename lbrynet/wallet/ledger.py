@@ -49,6 +49,11 @@ class MainNetLedger(BaseLedger):
         super().__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
 
+    @property
+    def resolver(self):
+        return Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
+                        hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
+
     @defer.inlineCallbacks
     def resolve(self, page, page_size, *uris):
         for uri in uris:
@@ -57,17 +62,21 @@ class MainNetLedger(BaseLedger):
             except URIParseError as err:
                 defer.returnValue({'error': err.message})
         resolutions = yield self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
-        resolver = Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
-                            hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
-        defer.returnValue((yield resolver._handle_resolutions(resolutions, uris, page, page_size)))
+        defer.returnValue((yield self.resolver._handle_resolutions(resolutions, uris, page, page_size)))
 
     def get_claim_by_claim_id(self, claim_id):
         d = self.network.get_claims_by_ids(claim_id)
         d.addCallback(lambda result: result.pop(claim_id) if result else {})
-        resolver = Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
-                            hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
-        d.addCallback(resolver.get_cert_and_validate_result)
+        d.addCallback(self.resolver.get_cert_and_validate_result)
         return d
+
+    @defer.inlineCallbacks
+    def get_claim_by_outpoint(self, txid, nout):
+        claims = (yield self.network.get_claims_in_tx(txid)) or []
+        for claim in claims:
+            if claim['nout'] == nout:
+                return (yield self.resolver.get_cert_and_validate_result(claim))
+        return 'claim not found'
 
     @defer.inlineCallbacks
     def start(self):

@@ -5,7 +5,6 @@ from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
 
-from lbrynet.wallet.resolve import _handle_claim_result
 from lbryschema.claim import ClaimDict
 
 from .ledger import MainNetLedger
@@ -301,6 +300,9 @@ class LbryWalletManager(BaseWalletManager):
 
     def get_claim_by_claim_id(self, claim_id):
         return self.ledger.get_claim_by_claim_id(claim_id)
+
+    def get_claim_by_outpoint(self, txid, nout):
+        return self.ledger.get_claim_by_outpoint(txid, nout)
 
 
 class ClientRequest:

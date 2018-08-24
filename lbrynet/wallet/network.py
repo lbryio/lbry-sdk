@@ -14,3 +14,6 @@ class Network(BaseNetwork):
 
     def get_claims_by_ids(self, *claim_ids):
         return self.rpc('blockchain.claimtrie.getclaimsbyids', *claim_ids)
+
+    def get_claims_in_tx(self, txid):
+        return self.rpc('blockchain.claimtrie.getclaimsintx', txid)
