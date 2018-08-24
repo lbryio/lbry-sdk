@@ -14,7 +14,7 @@ at anytime.
 
 ### Fixed
   * issue in dht ping queue where enqueued pings that aren't yet due wouldn't be rescheduled
-  * blob mirror downloader not finishing streams that were partially uploaded
+  * blob mirror downloader not finishing streams that were partially uploaded at the time of the download attempt (https://github.com/lbryio/lbry/issues/1376)
 
 ### Deprecated
   *
