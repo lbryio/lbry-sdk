@@ -3,11 +3,11 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 """
 import os
 import logging
+from binascii import hexlify, unhexlify
 
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 from lbrynet.reflector.reupload import reflect_file
-# from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info
@@ -20,7 +20,7 @@ from lbrynet import conf
 log = logging.getLogger(__name__)
 
 
-class EncryptedFileManager(object):
+class EncryptedFileManager:
     """
     Keeps track of currently opened LBRY Files, their options, and
     their LBRY File specific metadata.
@@ -186,9 +186,9 @@ class EncryptedFileManager(object):
         # when we save the file we'll atomic touch the nearest file to the suggested file name
         # that doesn't yet exist in the download directory
         rowid = yield self.storage.save_downloaded_file(
-            stream_hash, os.path.basename(file_name.decode('hex')).encode('hex'), download_directory, blob_data_rate
+            stream_hash, hexlify(os.path.basename(unhexlify(file_name))), download_directory, blob_data_rate
         )
-        file_name = yield self.storage.get_filename_for_rowid(rowid)
+        file_name = (yield self.storage.get_filename_for_rowid(rowid)).decode()
         lbry_file = self._get_lbry_file(
             rowid, stream_hash, payment_rate_manager, sd_hash, key, stream_name, file_name, download_directory,
             stream_metadata['suggested_file_name'], download_mirrors

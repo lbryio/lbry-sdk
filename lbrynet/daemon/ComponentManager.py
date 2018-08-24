@@ -6,7 +6,7 @@ from lbrynet.core.Error import ComponentStartConditionNotMet
 log = logging.getLogger(__name__)
 
 
-class RegisteredConditions(object):
+class RegisteredConditions:
     conditions = {}
 
 
@@ -20,7 +20,7 @@ class RequiredConditionType(type):
         return klass
 
 
-class RequiredCondition(object):
+class RequiredCondition(metaclass=RequiredConditionType):
     name = ""
     component = ""
     message = ""
@@ -29,10 +29,8 @@ class RequiredCondition(object):
     def evaluate(component):
         raise NotImplementedError()
 
-    __metaclass__ = RequiredConditionType
 
-
-class ComponentManager(object):
+class ComponentManager:
     default_component_classes = {}
 
     def __init__(self, reactor=None, analytics_manager=None, skip_components=None, **override_components):
@@ -43,7 +41,7 @@ class ComponentManager(object):
         self.components = set()
         self.analytics_manager = analytics_manager
 
-        for component_name, component_class in self.default_component_classes.iteritems():
+        for component_name, component_class in self.default_component_classes.items():
             if component_name in override_components:
                 component_class = override_components.pop(component_name)
             if component_name not in self.skip_components:
@@ -52,7 +50,7 @@ class ComponentManager(object):
         if override_components:
             raise SyntaxError("unexpected components: %s" % override_components)
 
-        for component_class in self.component_classes.itervalues():
+        for component_class in self.component_classes.values():
             self.components.add(component_class(self))
 
     @defer.inlineCallbacks
@@ -117,7 +115,7 @@ class ComponentManager(object):
         :return: (defer.Deferred)
         """
 
-        for component_name, cb in callbacks.iteritems():
+        for component_name, cb in callbacks.items():
             if component_name not in self.component_classes:
                 raise NameError("unknown component: %s" % component_name)
             if not callable(cb):
@@ -132,7 +130,7 @@ class ComponentManager(object):
 
         stages = self.sort_components()
         for stage in stages:
-            yield defer.DeferredList([_setup(component) for component in stage])
+            yield defer.DeferredList([_setup(component) for component in stage if not component.running])
 
     @defer.inlineCallbacks
     def stop(self):

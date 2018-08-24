@@ -1,16 +1,14 @@
 import binascii
 import logging
 
-from zope.interface import implements
 from twisted.internet import defer
-from lbrynet.interfaces import IPeerFinder
 from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
 
 
-class DummyPeerFinder(object):
+class DummyPeerFinder:
     """This class finds peers which have announced to the DHT that they have certain blobs"""
 
     def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=True):
@@ -19,7 +17,7 @@ class DummyPeerFinder(object):
 
 class DHTPeerFinder(DummyPeerFinder):
     """This class finds peers which have announced to the DHT that they have certain blobs"""
-    implements(IPeerFinder)
+    #implements(IPeerFinder)
 
     def __init__(self, dht_node, peer_manager):
         """

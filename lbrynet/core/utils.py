@@ -1,4 +1,5 @@
 import base64
+import codecs
 import datetime
 import random
 import socket
@@ -62,9 +63,9 @@ def safe_stop_looping_call(looping_call):
 def generate_id(num=None):
     h = get_lbry_hash_obj()
     if num is not None:
-        h.update(str(num))
+        h.update(str(num).encode())
     else:
-        h.update(str(random.getrandbits(512)))
+        h.update(str(random.getrandbits(512)).encode())
     return h.digest()
 
 
@@ -88,15 +89,19 @@ def version_is_greater_than(a, b):
     return pkg_resources.parse_version(a) > pkg_resources.parse_version(b)
 
 
+def rot13(some_str):
+    return codecs.encode(some_str, 'rot_13')
+
+
 def deobfuscate(obfustacated):
-    return base64.b64decode(obfustacated.decode('rot13'))
+    return base64.b64decode(rot13(obfustacated))
 
 
 def obfuscate(plain):
-    return base64.b64encode(plain).encode('rot13')
+    return rot13(base64.b64encode(plain).decode())
 
 
-def check_connection(server="lbry.io", port=80, timeout=2):
+def check_connection(server="lbry.io", port=80, timeout=5):
     """Attempts to open a socket to server:port and returns True if successful."""
     log.debug('Checking connection to %s:%s', server, port)
     try:
@@ -142,7 +147,7 @@ def get_sd_hash(stream_info):
         get('source', {}).\
         get('source')
     if not result:
-        log.warn("Unable to get sd_hash")
+        log.warning("Unable to get sd_hash")
     return result
 
 
@@ -150,7 +155,7 @@ def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
 
 
-class DeferredLockContextManager(object):
+class DeferredLockContextManager:
     def __init__(self, lock):
         self._lock = lock
 
@@ -166,7 +171,7 @@ def DeferredDict(d, consumeErrors=False):
     keys = []
     dl = []
     response = {}
-    for k, v in d.iteritems():
+    for k, v in d.items():
         keys.append(k)
         dl.append(v)
     results = yield defer.DeferredList(dl, consumeErrors=consumeErrors)
@@ -176,7 +181,7 @@ def DeferredDict(d, consumeErrors=False):
     defer.returnValue(response)
 
 
-class DeferredProfiler(object):
+class DeferredProfiler:
     def __init__(self):
         self.profile_results = {}
 

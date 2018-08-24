@@ -24,7 +24,7 @@ BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 log = logging.getLogger(__name__)
 
 
-class Manager(object):
+class Manager:
     def __init__(self, analytics_api, context=None, installation_id=None, session_id=None):
         self.analytics_api = analytics_api
         self._tracked_data = collections.defaultdict(list)
@@ -158,7 +158,7 @@ class Manager(object):
 
     @staticmethod
     def _download_properties(id_, name, claim_dict=None, report=None):
-        sd_hash = None if not claim_dict else claim_dict.source_hash
+        sd_hash = None if not claim_dict else claim_dict.source_hash.decode()
         p = {
             'download_id': id_,
             'name': name,
@@ -177,9 +177,9 @@ class Manager(object):
         return {
             'download_id': id_,
             'name': name,
-            'stream_info': claim_dict.source_hash,
+            'stream_info': claim_dict.source_hash.decode(),
             'error': error_name(error),
-            'reason': error.message,
+            'reason': str(error),
             'report': report
         }
 
@@ -193,7 +193,7 @@ class Manager(object):
                 'build': platform['build'],
                 'wallet': {
                     'name': wallet,
-                    'version': platform['lbryum_version'] if wallet == conf.LBRYUM_WALLET else None
+                    'version': platform['lbrynet_version']
                 },
             },
             # TODO: expand os info to give linux/osx specific info
@@ -219,7 +219,7 @@ class Manager(object):
             callback(maybe_deferred, *args, **kwargs)
 
 
-class Api(object):
+class Api:
     def __init__(self, cookies, url, write_key, enabled):
         self.cookies = cookies
         self.url = url

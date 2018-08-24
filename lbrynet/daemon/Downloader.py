@@ -29,7 +29,7 @@ STREAM_STAGES = [
 log = logging.getLogger(__name__)
 
 
-class GetStream(object):
+class GetStream:
     def __init__(self, sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, rate_limiter,
                  payment_rate_manager, storage, max_key_fee, disable_max_key_fee, data_rate=None, timeout=None):
 
@@ -162,7 +162,7 @@ class GetStream(object):
     @defer.inlineCallbacks
     def _initialize(self, stream_info):
         # Set sd_hash and return key_fee from stream_info
-        self.sd_hash = stream_info.source_hash
+        self.sd_hash = stream_info.source_hash.decode()
         key_fee = None
         if stream_info.has_fee:
             key_fee = yield self.check_fee_and_convert(stream_info.source_fee)

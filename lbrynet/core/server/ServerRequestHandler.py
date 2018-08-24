@@ -1,25 +1,23 @@
 import json
 import logging
-from twisted.internet import interfaces, defer
-from zope.interface import implements
-from lbrynet.interfaces import IRequestHandler
+from twisted.internet import defer
 
 
 log = logging.getLogger(__name__)
 
 
-class ServerRequestHandler(object):
+class ServerRequestHandler:
     """This class handles requests from clients. It can upload blobs and
     return request for information about more blobs that are
     associated with streams.
     """
-    implements(interfaces.IPushProducer, interfaces.IConsumer, IRequestHandler)
+    #implements(interfaces.IPushProducer, interfaces.IConsumer, IRequestHandler)
 
     def __init__(self, consumer):
         self.consumer = consumer
         self.production_paused = False
-        self.request_buff = ''
-        self.response_buff = ''
+        self.request_buff = b''
+        self.response_buff = b''
         self.producer = None
         self.request_received = False
         self.CHUNK_SIZE = 2**14
@@ -56,7 +54,7 @@ class ServerRequestHandler(object):
             return
         chunk = self.response_buff[:self.CHUNK_SIZE]
         self.response_buff = self.response_buff[self.CHUNK_SIZE:]
-        if chunk == '':
+        if chunk == b'':
             return
         log.trace("writing %s bytes to the client", len(chunk))
         self.consumer.write(chunk)
@@ -101,7 +99,7 @@ class ServerRequestHandler(object):
         self.request_buff = self.request_buff + data
         msg = self.try_to_parse_request(self.request_buff)
         if msg:
-            self.request_buff = ''
+            self.request_buff = b''
             self._process_msg(msg)
         else:
             log.debug("Request buff not a valid json message")
@@ -134,7 +132,7 @@ class ServerRequestHandler(object):
         self._produce_more()
 
     def send_response(self, msg):
-        m = json.dumps(msg)
+        m = json.dumps(msg).encode()
         log.debug("Sending a response of length %s", str(len(m)))
         log.debug("Response: %s", str(m))
         self.response_buff = self.response_buff + m
@@ -167,7 +165,7 @@ class ServerRequestHandler(object):
             return True
 
         ds = []
-        for query_handler, query_identifiers in self.query_handlers.iteritems():
+        for query_handler, query_identifiers in self.query_handlers.items():
             queries = {q_i: msg[q_i] for q_i in query_identifiers if q_i in msg}
             d = query_handler.handle_queries(queries)
             d.addErrback(log_errors)

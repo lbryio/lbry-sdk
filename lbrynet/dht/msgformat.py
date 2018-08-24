@@ -7,10 +7,10 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
-import msgtypes
+from . import msgtypes
 
 
-class MessageTranslator(object):
+class MessageTranslator:
     """ Interface for RPC message translators/formatters
 
     Classes inheriting from this should provide a translation services between

@@ -1,4 +1,4 @@
-class EncryptedFileStatusReport(object):
+class EncryptedFileStatusReport:
     def __init__(self, name, num_completed, num_known, running_status):
         self.name = name
         self.num_completed = num_completed

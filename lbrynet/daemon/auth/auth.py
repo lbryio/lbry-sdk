@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 
 @implementer(portal.IRealm)
-class HttpPasswordRealm(object):
+class HttpPasswordRealm:
     def __init__(self, resource):
         self.resource = resource
 
@@ -21,7 +21,7 @@ class HttpPasswordRealm(object):
 
 
 @implementer(checkers.ICredentialsChecker)
-class PasswordChecker(object):
+class PasswordChecker:
     credentialInterfaces = (credentials.IUsernamePassword,)
 
     def __init__(self, passwords):
@@ -39,8 +39,12 @@ class PasswordChecker(object):
         return cls(passwords)
 
     def requestAvatarId(self, creds):
-        if creds.username in self.passwords:
-            pw = self.passwords.get(creds.username)
+        password_dict_bytes = {}
+        for api in self.passwords:
+            password_dict_bytes.update({api.encode(): self.passwords[api].encode()})
+
+        if creds.username in password_dict_bytes:
+            pw = password_dict_bytes.get(creds.username)
             pw_match = creds.checkPassword(pw)
             if pw_match:
                 return defer.succeed(creds.username)

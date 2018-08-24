@@ -29,6 +29,7 @@ ENV_NAMESPACE = 'LBRY_'
 LBRYCRD_WALLET = 'lbrycrd'
 LBRYUM_WALLET = 'lbryum'
 PTC_WALLET = 'ptc'
+TORBA_WALLET = 'torba'
 
 PROTOCOL_PREFIX = 'lbry'
 APP_NAME = 'LBRY'
@@ -60,22 +61,6 @@ settings_encoders = {
 
 # set by CLI when the user specifies an alternate config file path
 conf_file = None
-
-
-def _win_path_to_bytes(path):
-    """
-    Encode Windows paths to string. appdirs.user_data_dir()
-    on windows will return unicode path, unlike other platforms
-    which returns string. This will cause problems
-    because we use strings for filenames and combining them with
-    os.path.join() will result in errors.
-    """
-    for encoding in ('ASCII', 'MBCS'):
-        try:
-            return path.encode(encoding)
-        except (UnicodeEncodeError, LookupError):
-            pass
-    return path
 
 
 def _get_old_directories(platform_type):
@@ -142,9 +127,6 @@ elif 'win' in sys.platform:
         dirs = _get_old_directories(WINDOWS)
     else:
         dirs = _get_new_directories(WINDOWS)
-    dirs['data'] = _win_path_to_bytes(dirs['data'])
-    dirs['lbryum'] = _win_path_to_bytes(dirs['lbryum'])
-    dirs['download'] = _win_path_to_bytes(dirs['download'])
 else:
     platform = LINUX
     if os.path.isdir(_get_old_directories(LINUX)['data']) or \
@@ -182,11 +164,11 @@ class Env(envparse.Env):
             self._convert_key(key): self._convert_value(value)
             for key, value in schema.items()
             }
-        envparse.Env.__init__(self, **my_schema)
+        super().__init__(**my_schema)
 
     def __call__(self, key, *args, **kwargs):
         my_key = self._convert_key(key)
-        return super(Env, self).__call__(my_key, *args, **kwargs)
+        return super().__call__(my_key, *args, **kwargs)
 
     @staticmethod
     def _convert_key(key):
@@ -307,12 +289,12 @@ ADJUSTABLE_SETTINGS = {
 }
 
 
-class Config(object):
+class Config:
     def __init__(self, fixed_defaults, adjustable_defaults, persisted_settings=None,
                  environment=None, cli_settings=None):
 
         self._installation_id = None
-        self._session_id = base58.b58encode(utils.generate_id())
+        self._session_id = base58.b58encode(utils.generate_id()).decode()
         self._node_id = None
 
         self._fixed_defaults = fixed_defaults
@@ -338,7 +320,7 @@ class Config(object):
 
         self._data[TYPE_DEFAULT].update(self._fixed_defaults)
         self._data[TYPE_DEFAULT].update(
-            {k: v[1] for (k, v) in self._adjustable_defaults.iteritems()})
+            {k: v[1] for (k, v) in self._adjustable_defaults.items()})
 
         if persisted_settings is None:
             persisted_settings = {}
@@ -358,7 +340,7 @@ class Config(object):
         return self.get_current_settings_dict().__repr__()
 
     def __iter__(self):
-        for k in self._data[TYPE_DEFAULT].iterkeys():
+        for k in self._data[TYPE_DEFAULT].keys():
             yield k
 
     def __getitem__(self, name):
@@ -481,7 +463,7 @@ class Config(object):
             self._data[data_type][name] = value
 
     def update(self, updated_settings, data_types=(TYPE_RUNTIME,)):
-        for k, v in updated_settings.iteritems():
+        for k, v in updated_settings.items():
             try:
                 self.set(k, v, data_types=data_types)
             except (KeyError, AssertionError):
@@ -495,7 +477,7 @@ class Config(object):
 
     def get_adjustable_settings_dict(self):
         return {
-            key: val for key, val in self.get_current_settings_dict().iteritems()
+            key: val for key, val in self.get_current_settings_dict().items()
             if key in self._adjustable_defaults
             }
 
@@ -516,7 +498,7 @@ class Config(object):
     @staticmethod
     def _convert_conf_file_lists_reverse(converted):
         rev = {}
-        for k in converted.iterkeys():
+        for k in converted.keys():
             if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) == 4:
                 rev[k] = ADJUSTABLE_SETTINGS[k][3](converted[k])
             else:
@@ -526,7 +508,7 @@ class Config(object):
     @staticmethod
     def _convert_conf_file_lists(decoded):
         converted = {}
-        for k, v in decoded.iteritems():
+        for k, v in decoded.items():
             if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) >= 3:
                 converted[k] = ADJUSTABLE_SETTINGS[k][2](v)
             else:
@@ -570,7 +552,7 @@ class Config(object):
         if 'share_debug_info' in settings_dict:
             settings_dict['share_usage_data'] = settings_dict['share_debug_info']
             del settings_dict['share_debug_info']
-        for key in settings_dict.keys():
+        for key in list(settings_dict.keys()):
             if not self._is_valid_setting(key):
                 log.warning('Ignoring invalid conf file setting: %s', key)
                 del settings_dict[key]
@@ -618,7 +600,7 @@ class Config(object):
                 with open(install_id_filename, "r") as install_id_file:
                     self._installation_id = str(install_id_file.read()).strip()
         if not self._installation_id:
-            self._installation_id = base58.b58encode(utils.generate_id())
+            self._installation_id = base58.b58encode(utils.generate_id()).decode()
             with open(install_id_filename, "w") as install_id_file:
                 install_id_file.write(self._installation_id)
         return self._installation_id
@@ -632,20 +614,19 @@ class Config(object):
         if not self._node_id:
             self._node_id = utils.generate_id()
             with open(node_id_filename, "w") as node_id_file:
-                node_id_file.write(base58.b58encode(self._node_id))
+                node_id_file.write(base58.b58encode(self._node_id).decode())
         return self._node_id
 
     def get_session_id(self):
         return self._session_id
 
 
-# type: Config
-settings = None
+settings = None  # type: Config
 
 
 def get_default_env():
     env_defaults = {}
-    for k, v in ADJUSTABLE_SETTINGS.iteritems():
+    for k, v in ADJUSTABLE_SETTINGS.items():
         if len(v) == 3:
             env_defaults[k] = (v[0], None, v[2])
         elif len(v) == 4:

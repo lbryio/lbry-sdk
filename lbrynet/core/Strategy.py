@@ -10,7 +10,7 @@ def get_default_strategy(blob_tracker, **kwargs):
     return BasicAvailabilityWeightedStrategy(blob_tracker, **kwargs)
 
 
-class Strategy(object):
+class Strategy:
     """
     Base for negotiation strategies
     """
@@ -109,7 +109,7 @@ class BasicAvailabilityWeightedStrategy(Strategy):
                  base_price=0.0001, alpha=1.0):
         price_model = MeanAvailabilityWeightedPrice(
             blob_tracker, base_price=base_price, alpha=alpha)
-        Strategy.__init__(self, price_model, max_rate, min_rate, is_generous)
+        super().__init__(price_model, max_rate, min_rate, is_generous)
         self._acceleration = Decimal(acceleration)  # rate of how quickly to ramp offer
         self._deceleration = Decimal(deceleration)
 
@@ -140,7 +140,7 @@ class OnlyFreeStrategy(Strategy):
     implementer(INegotiationStrategy)
     def __init__(self, *args, **kwargs):
         price_model = ZeroPrice()
-        Strategy.__init__(self, price_model, 0.0, 0.0, True)
+        super().__init__(price_model, 0.0, 0.0, True)
 
     def _get_mean_rate(self, rates):
         return 0.0

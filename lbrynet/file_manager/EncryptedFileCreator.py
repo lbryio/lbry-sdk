@@ -2,9 +2,9 @@
 Utilities for turning plain files into LBRY Files.
 """
 
-import binascii
 import logging
 import os
+from binascii import hexlify
 
 from twisted.internet import defer
 from twisted.protocols.basic import FileSender
@@ -23,7 +23,7 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 
     def __init__(self, blob_manager, lbry_file_manager, stream_name=None,
                  key=None, iv_generator=None):
-        CryptStreamCreator.__init__(self, blob_manager, stream_name, key, iv_generator)
+        super().__init__(blob_manager, stream_name, key, iv_generator)
         self.lbry_file_manager = lbry_file_manager
         self.stream_hash = None
         self.blob_infos = []
@@ -37,14 +37,14 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
     def _finished(self):
         # calculate the stream hash
         self.stream_hash = get_stream_hash(
-            hexlify(self.name), hexlify(self.key), hexlify(self.name),
+            hexlify(self.name.encode()).decode(), hexlify(self.key).decode(), hexlify(self.name.encode()).decode(),
             self.blob_infos
         )
 
         # generate the sd info
         self.sd_info = format_sd_info(
-            EncryptedFileStreamType, hexlify(self.name), hexlify(self.key),
-            hexlify(self.name), self.stream_hash, self.blob_infos
+            EncryptedFileStreamType, hexlify(self.name.encode()).decode(), hexlify(self.key).decode(),
+            hexlify(self.name.encode()).decode(), self.stream_hash, self.blob_infos
         )
 
         # sanity check
@@ -125,15 +125,7 @@ def create_lbry_file(blob_manager, storage, payment_rate_manager, lbry_file_mana
     )
     log.debug("adding to the file manager")
     lbry_file = yield lbry_file_manager.add_published_file(
-        sd_info['stream_hash'], sd_hash, binascii.hexlify(file_directory), payment_rate_manager,
+        sd_info['stream_hash'], sd_hash, hexlify(file_directory.encode()), payment_rate_manager,
         payment_rate_manager.min_blob_data_payment_rate
     )
     defer.returnValue(lbry_file)
-
-
-def hexlify(str_or_unicode):
-    if isinstance(str_or_unicode, unicode):
-        strng = str_or_unicode.encode('utf-8')
-    else:
-        strng = str_or_unicode
-    return binascii.hexlify(strng)

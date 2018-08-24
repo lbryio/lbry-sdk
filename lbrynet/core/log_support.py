@@ -14,7 +14,7 @@ from lbrynet.core import utils
 
 class HTTPSHandler(logging.Handler):
     def __init__(self, url, fqdn=False, localname=None, facility=None, cookies=None):
-        logging.Handler.__init__(self)
+        super().__init__()
         self.url = url
         self.fqdn = fqdn
         self.localname = localname
@@ -243,7 +243,7 @@ def configure_twisted():
     observer.start()
 
 
-class LoggerNameFilter(object):
+class LoggerNameFilter:
     """Filter a log record based on its name.
 
     Allows all info level and higher records to pass thru.

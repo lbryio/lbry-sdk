@@ -8,7 +8,7 @@ from lbrynet import conf
 log = logging.getLogger(__name__)
 
 
-class DHTHashAnnouncer(object):
+class DHTHashAnnouncer:
     def __init__(self, dht_node, storage, concurrent_announcers=None):
         self.dht_node = dht_node
         self.storage = storage

@@ -121,7 +121,11 @@ disable=
   unidiomatic-typecheck,
   global-at-module-level,
   inconsistent-return-statements,
-  keyword-arg-before-vararg
+  keyword-arg-before-vararg,
+  assignment-from-no-return,
+  useless-return,
+  assignment-from-none,
+  stop-iteration-return
 
 
 [REPORTS]
@@ -386,7 +390,7 @@ int-import-graph=
 [DESIGN]
 
 # Maximum number of arguments for function / method
-max-args=5
+max-args=10
 
 # Argument names that match this expression will be ignored. Default to name
 # with leading underscore
@@ -405,7 +409,7 @@ max-branches=12
 max-statements=50
 
 # Maximum number of parents for a class (see R0901).
-max-parents=7
+max-parents=8
 
 # Maximum number of attributes for a class (see R0902).
 max-attributes=7

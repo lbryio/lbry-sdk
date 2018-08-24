@@ -1,9 +1,8 @@
 import logging
 from twisted.internet import defer
-from distance import Distance
-from error import TimeoutError
-import constants
-import struct
+from .distance import Distance
+from .error import TimeoutError
+from . import constants
 
 log = logging.getLogger(__name__)
 
@@ -16,13 +15,13 @@ def get_contact(contact_list, node_id, address, port):
 
 
 def expand_peer(compact_peer_info):
-    host = ".".join([str(ord(d)) for d in compact_peer_info[:4]])
-    port, = struct.unpack('>H', compact_peer_info[4:6])
+    host = "{}.{}.{}.{}".format(*compact_peer_info[:4])
+    port = int.from_bytes(compact_peer_info[4:6], 'big')
     peer_node_id = compact_peer_info[6:]
     return (peer_node_id, host, port)
 
 
-class _IterativeFind(object):
+class _IterativeFind:
     # TODO: use polymorphism to search for a value or node
     #       instead of using a find_value flag
     def __init__(self, node, shortlist, key, rpc, exclude=None):
@@ -38,7 +37,7 @@ class _IterativeFind(object):
         # Shortlist of contact objects (the k closest known contacts to the key from the routing table)
         self.shortlist = shortlist
         # The search key
-        self.key = str(key)
+        self.key = key
         # The rpc method name (findValue or findNode)
         self.rpc = rpc
         # List of active queries; len() indicates number of active probes
@@ -74,22 +73,22 @@ class _IterativeFind(object):
         for contact_tup in contact_triples:
             if not isinstance(contact_tup, (list, tuple)) or len(contact_tup) != 3:
                 raise ValueError("invalid contact triple")
+            contact_tup[1] = contact_tup[1].decode()  # ips are strings
         return contact_triples
 
     def sortByDistance(self, contact_list):
         """Sort the list of contacts in order by distance from key"""
         contact_list.sort(key=lambda c: self.distance(c.id))
 
-    @defer.inlineCallbacks
     def extendShortlist(self, contact, result):
         # The "raw response" tuple contains the response message and the originating address info
         originAddress = (contact.address, contact.port)
         if self.finished_deferred.called:
-            defer.returnValue(contact.id)
+            return contact.id
         if self.node.contact_manager.is_ignored(originAddress):
             raise ValueError("contact is ignored")
         if contact.id == self.node.node_id:
-            defer.returnValue(contact.id)
+            return contact.id
 
         if contact not in self.active_contacts:
             self.active_contacts.append(contact)
@@ -103,9 +102,9 @@ class _IterativeFind(object):
         if self.is_find_value_request and self.key in result:
             # We have found the value
             for peer in result[self.key]:
-                _, host, port = expand_peer(peer)
+                node_id, host, port = expand_peer(peer)
                 if (host, port) not in self.exclude:
-                    self.find_value_result.setdefault(self.key, []).append(peer)
+                    self.find_value_result.setdefault(self.key, []).append((node_id, host, port))
             if self.find_value_result:
                 self.finished_deferred.callback(self.find_value_result)
         else:
@@ -134,14 +133,14 @@ class _IterativeFind(object):
                 self.sortByDistance(self.active_contacts)
                 self.finished_deferred.callback(self.active_contacts[:min(constants.k, len(self.active_contacts))])
 
-        defer.returnValue(contact.id)
+        return contact.id
 
     @defer.inlineCallbacks
     def probeContact(self, contact):
         fn = getattr(contact, self.rpc)
         try:
             response = yield fn(self.key)
-            result = yield self.extendShortlist(contact, response)
+            result = self.extendShortlist(contact, response)
             defer.returnValue(result)
         except (TimeoutError, defer.CancelledError, ValueError, IndexError):
             defer.returnValue(contact.id)

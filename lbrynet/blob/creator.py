@@ -8,7 +8,7 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj
 log = logging.getLogger(__name__)
 
 
-class BlobFileCreator(object):
+class BlobFileCreator:
     """
     This class is used to create blobs on the local filesystem
     when we do not know the blob hash beforehand (i.e, when creating

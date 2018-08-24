@@ -10,8 +10,6 @@ from lbrynet.core import utils
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError, NoResponseError
 from lbrynet.core.Error import DownloadCanceledError, MisbehavingPeerError
 from lbrynet.core.Error import RequestCanceledError
-from lbrynet.interfaces import IRequestSender, IRateLimited
-from zope.interface import implements
 
 
 log = logging.getLogger(__name__)
@@ -24,7 +22,7 @@ def encode_decimal(obj):
 
 
 class ClientProtocol(Protocol, TimeoutMixin):
-    implements(IRequestSender, IRateLimited)
+    #implements(IRequestSender, IRateLimited)
     ######### Protocol #########
     PROTOCOL_TIMEOUT = 30
 
@@ -34,7 +32,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self._rate_limiter = self.factory.rate_limiter
         self.peer = self.factory.peer
         self._response_deferreds = {}
-        self._response_buff = ''
+        self._response_buff = b''
         self._downloading_blob = False
         self._blob_download_request = None
         self._next_request = {}
@@ -61,7 +59,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
                 self.transport.loseConnection()
             response, extra_data = self._get_valid_response(self._response_buff)
             if response is not None:
-                self._response_buff = ''
+                self._response_buff = b''
                 self._handle_response(response)
                 if self._downloading_blob is True and len(extra_data) != 0:
                     self._blob_download_request.write(extra_data)
@@ -71,17 +69,17 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self.peer.report_down()
         self.transport.abortConnection()
 
-    def connectionLost(self, reason):
+    def connectionLost(self, reason=None):
         log.debug("Connection lost to %s: %s", self.peer, reason)
         self.setTimeout(None)
         self.connection_closed = True
-        if reason.check(error.ConnectionDone):
+        if reason is None or reason.check(error.ConnectionDone):
             err = failure.Failure(ConnectionClosedBeforeResponseError())
         else:
             err = reason
         for key, d in self._response_deferreds.items():
-            del self._response_deferreds[key]
             d.errback(err)
+        self._response_deferreds.clear()
         if self._blob_download_request is not None:
             self._blob_download_request.cancel(err)
         self.factory.connection_was_made_deferred.callback(True)
@@ -111,7 +109,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self.connection_closing = True
         ds = []
         err = RequestCanceledError()
-        for key, d in self._response_deferreds.items():
+        for key, d in list(self._response_deferreds.items()):
             del self._response_deferreds[key]
             d.errback(err)
             ds.append(d)
@@ -126,7 +124,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
 
     def _handle_request_error(self, err):
         log.error("An unexpected error occurred creating or sending a request to %s. %s: %s",
-                  self.peer, err.type, err.message)
+                  self.peer, err.type, err)
         self.transport.loseConnection()
 
     def _ask_for_request(self):
@@ -151,7 +149,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self.setTimeout(self.PROTOCOL_TIMEOUT)
         # TODO: compare this message to the last one. If they're the same,
         # TODO: incrementally delay this message.
-        m = json.dumps(request_msg, default=encode_decimal)
+        m = json.dumps(request_msg, default=encode_decimal).encode()
         self.transport.write(m)
 
     def _get_valid_response(self, response_msg):
@@ -159,7 +157,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         response = None
         curr_pos = 0
         while 1:
-            next_close_paren = response_msg.find('}', curr_pos)
+            next_close_paren = response_msg.find(b'}', curr_pos)
             if next_close_paren != -1:
                 curr_pos = next_close_paren + 1
                 try:

@@ -2,9 +2,8 @@
 Download LBRY Files from LBRYnet and save them to disk.
 """
 import logging
-import binascii
+from binascii import hexlify, unhexlify
 
-from zope.interface import implements
 from twisted.internet import defer
 from lbrynet import conf
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
@@ -13,7 +12,6 @@ from lbrynet.core.utils import short_hash
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.core.StreamDescriptor import save_sd_info
 
 log = logging.getLogger(__name__)
@@ -39,13 +37,13 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, storage, lbry_file_manager,
                  payment_rate_manager, wallet, download_directory, file_name, stream_name, sd_hash, key,
                  suggested_file_name, download_mirrors=None):
-        EncryptedFileSaver.__init__(
-            self, stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
+        super().__init__(
+            stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
             download_directory, key, stream_name, file_name
         )
         self.sd_hash = sd_hash
         self.rowid = rowid
-        self.suggested_file_name = binascii.unhexlify(suggested_file_name)
+        self.suggested_file_name = unhexlify(suggested_file_name).decode()
         self.lbry_file_manager = lbry_file_manager
         self._saving_status = False
         self.claim_id = None
@@ -162,8 +160,8 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                                          self.blob_manager, download_manager)
 
 
-class ManagedEncryptedFileDownloaderFactory(object):
-    implements(IStreamDownloaderFactory)
+class ManagedEncryptedFileDownloaderFactory:
+    #implements(IStreamDownloaderFactory)
 
     def __init__(self, lbry_file_manager, blob_manager):
         self.lbry_file_manager = lbry_file_manager
@@ -180,9 +178,10 @@ class ManagedEncryptedFileDownloaderFactory(object):
                                          metadata.source_blob_hash,
                                          metadata.validator.raw_info)
         if file_name:
-            file_name = binascii.hexlify(file_name)
+            file_name = hexlify(file_name.encode())
+        hex_download_directory = hexlify(download_directory.encode())
         lbry_file = yield self.lbry_file_manager.add_downloaded_file(
-            stream_hash, metadata.source_blob_hash, binascii.hexlify(download_directory), payment_rate_manager,
+            stream_hash, metadata.source_blob_hash, hex_download_directory, payment_rate_manager,
             data_rate, file_name=file_name, download_mirrors=download_mirrors
         )
         defer.returnValue(lbry_file)

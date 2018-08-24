@@ -1,25 +1,9 @@
-*.pyc
-*.egg
-*.so
-*.xml
-*.iml
-*.log
-*.pem
-*.decTest
-*.prof
-.#*
+/build
+/dist
+/.tox
+/.idea
+/.coverage
 
-/build/build
-/build/dist
-/bulid/requirements_base.txt
-
-/lbrynet.egg-info
-/docs_build
-/lbry-venv
-
-.idea/
-.coverage
-.DS_Store
-
-# temporary files from the twisted.trial test runner
+lbrynet.egg-info
+__pycache__
 _trial_temp/

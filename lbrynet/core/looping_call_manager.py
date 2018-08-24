@@ -1,4 +1,4 @@
-class LoopingCallManager(object):
+class LoopingCallManager:
     def __init__(self, calls=None):
         self.calls = calls or {}
 
@@ -15,6 +15,6 @@ class LoopingCallManager(object):
         self.calls[name].stop()
 
     def shutdown(self):
-        for lcall in self.calls.itervalues():
+        for lcall in self.calls.values():
             if lcall.running:
                 lcall.stop()

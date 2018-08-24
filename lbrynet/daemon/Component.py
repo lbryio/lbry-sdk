@@ -1,7 +1,7 @@
 import logging
 from twisted.internet import defer
 from twisted._threads import AlreadyQuit
-from ComponentManager import ComponentManager
+from .ComponentManager import ComponentManager
 
 log = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class ComponentType(type):
         return klass
 
 
-class Component(object):
+class Component(metaclass=ComponentType):
     """
     lbrynet-daemon component helper
 
@@ -22,7 +22,6 @@ class Component(object):
     methods
     """
 
-    __metaclass__ = ComponentType
     depends_on = []
     component_name = None
 

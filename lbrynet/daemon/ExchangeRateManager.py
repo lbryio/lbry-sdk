@@ -15,7 +15,7 @@ BITTREX_FEE = 0.0025
 COINBASE_FEE = 0.0  # add fee
 
 
-class ExchangeRate(object):
+class ExchangeRate:
     def __init__(self, market, spot, ts):
         if not int(time.time()) - ts < 600:
             raise ValueError('The timestamp is too dated.')
@@ -34,7 +34,7 @@ class ExchangeRate(object):
         return {'spot': self.spot, 'ts': self.ts}
 
 
-class MarketFeed(object):
+class MarketFeed:
     REQUESTS_TIMEOUT = 20
     EXCHANGE_RATE_UPDATE_RATE_SEC = 300
 
@@ -96,8 +96,7 @@ class MarketFeed(object):
 
 class BittrexFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "BTCLBC",
             "Bittrex",
             "https://bittrex.com/api/v1.1/public/getmarkethistory",
@@ -122,8 +121,7 @@ class BittrexFeed(MarketFeed):
 
 class LBRYioFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "BTCLBC",
             "lbry.io",
             "https://api.lbry.io/lbc/exchange_rate",
@@ -140,8 +138,7 @@ class LBRYioFeed(MarketFeed):
 
 class LBRYioBTCFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "USDBTC",
             "lbry.io",
             "https://api.lbry.io/lbc/exchange_rate",
@@ -161,8 +158,7 @@ class LBRYioBTCFeed(MarketFeed):
 
 class CryptonatorBTCFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "USDBTC",
             "cryptonator.com",
             "https://api.cryptonator.com/api/ticker/usd-btc",
@@ -183,8 +179,7 @@ class CryptonatorBTCFeed(MarketFeed):
 
 class CryptonatorFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "BTCLBC",
             "cryptonator.com",
             "https://api.cryptonator.com/api/ticker/btc-lbc",
@@ -203,7 +198,7 @@ class CryptonatorFeed(MarketFeed):
         return defer.succeed(float(json_response['ticker']['price']))
 
 
-class ExchangeRateManager(object):
+class ExchangeRateManager:
     def __init__(self):
         self.market_feeds = [
             LBRYioBTCFeed(),
