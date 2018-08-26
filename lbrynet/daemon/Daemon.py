@@ -2308,7 +2308,7 @@ class Daemon(AuthJSONRPCServer):
 
         certificate = None
         if channel_name:
-            certificates = yield self.default_wallet.get_certificates(channel_name)
+            certificates = yield self.wallet_manager.get_certificates(channel_name)
             for cert in certificates:
                 if cert.claim_id == channel_id:
                     certificate = cert
