@@ -385,7 +385,8 @@ class Daemon(AuthJSONRPCServer):
     def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate=None,
                         claim_address=None, change_address=None):
         publisher = Publisher(
-            self.blob_manager, self.payment_rate_manager, self.storage, self.file_manager, self.wallet_manager, certificate
+            self.blob_manager, self.payment_rate_manager, self.storage,
+            self.file_manager, self.wallet_manager, certificate
         )
         parse_lbry_uri(name)
         if not file_path:
@@ -414,8 +415,9 @@ class Daemon(AuthJSONRPCServer):
         if blob:
             return self.blob_manager.get_blob(blob[0])
         return download_sd_blob(
-            sd_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager,
-            self.wallet_manager, timeout=conf.settings['search_timeout'], download_mirrors=conf.settings['download_mirrors']
+            sd_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
+            self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['search_timeout'],
+            download_mirrors=conf.settings['download_mirrors']
         )
 
     def get_or_download_sd_blob(self, sd_hash):
