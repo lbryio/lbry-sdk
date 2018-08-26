@@ -92,9 +92,9 @@ class CLITest(unittest.TestCase):
     def test_deprecated_command_daemon_not_started(self):
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
-            main(["channel_list_mine"])
+            main(["wallet_balance"])
         self.assertEqual(
             actual_output.getvalue().strip(),
-            "channel_list_mine is deprecated, using channel_list.\n"
+            "wallet_balance is deprecated, using account_balance.\n"
             "Could not connect to daemon. Are you sure it's running?"
         )
