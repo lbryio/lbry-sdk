@@ -131,7 +131,7 @@ class CommandTestCase(IntegrationTestCase):
         #for component in skip:
         #    self.daemon.component_attributes.pop(component, None)
         await d2f(self.daemon.setup())
-        self.daemon.wallet_manager = self.wallet_component.wallet
+        self.daemon.wallet_manager = self.wallet_component.wallet_manager
         self.manager.old_db = self.daemon.storage
 
     async def tearDown(self):
@@ -174,7 +174,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # integration tests.
 
         # Chris45 starts everyday by checking his balance.
-        result = yield self.daemon.jsonrpc_wallet_balance()
+        result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(result, 10)
         # "10 LBC, yippy! I can do a lot with that.", he thinks to himself,
         # enthusiastically. But he is hungry so he goes into the kitchen
@@ -197,7 +197,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # way into the mempool and then a block and then into the claimtrie,
         # Chris doesn't sit idly by: he checks his balance!
 
-        result = yield self.daemon.jsonrpc_wallet_balance()
+        result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(result, 0)
 
         # "Oh! No! It's all gone? Did I make a mistake in entering the amount?"
@@ -207,28 +207,28 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # To get the unconfirmed balance he has to pass the '--include-unconfirmed'
         # flag to lbrynet:
-        result = yield self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True)
+        result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
         self.assertEqual(result, 8.99)
         # "Well, that's a relief." he thinks to himself as he exhales a sigh of relief.
 
         # He waits for a block
         yield self.d_generate(1)
         # and checks the confirmed balance again.
-        result = yield self.daemon.jsonrpc_wallet_balance()
+        result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(result, 0)
         # Still zero.
 
         # But it's only at 2 confirmations, so he waits another 3
         yield self.d_generate(3)
         # and checks again.
-        result = yield self.daemon.jsonrpc_wallet_balance()
+        result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(result, 0)
         # Still zero.
 
         # Just one more confirmation
         yield self.d_generate(1)
         # and it should be 6 total, enough to get the correct balance!
-        result = yield self.daemon.jsonrpc_wallet_balance()
+        result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(result, 8.99)
         # Like a Swiss watch (right niko?) the blockchain never disappoints! We're
         # at 6 confirmations and the total is correct.
@@ -259,7 +259,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # He quickly checks the unconfirmed balance to make sure everything looks
         # correct.
-        result = yield self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True)
+        result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
         self.assertEqual(round(result, 2), 7.97)
 
         # Also checks that his new story can be found on the blockchain before
@@ -271,7 +271,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # He goes to tell everyone about it and in the meantime 5 blocks are confirmed.
         yield self.d_generate(5)
         # When he comes back he verifies the confirmed balance.
-        result = yield self.daemon.jsonrpc_wallet_balance()
+        result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(round(result, 2), 7.97)
 
         # As people start reading his story they discover some typos and notify

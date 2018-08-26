@@ -1161,6 +1161,7 @@ class Daemon(AuthJSONRPCServer):
             return self.wallet_manager.get_balances(confirmations)
 
     @requires("wallet")
+    @defer.inlineCallbacks
     def jsonrpc_account_balance(self, address=None, include_unconfirmed=False):
         """
         Return the balance of an account
