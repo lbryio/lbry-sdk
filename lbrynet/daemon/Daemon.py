@@ -194,7 +194,7 @@ class Daemon(AuthJSONRPCServer):
     component_attributes = {
         DATABASE_COMPONENT: "storage",
         DHT_COMPONENT: "dht_node",
-        WALLET_COMPONENT: "wallet",
+        WALLET_COMPONENT: "wallet_manager",
         STREAM_IDENTIFIER_COMPONENT: "sd_identifier",
         FILE_MANAGER_COMPONENT: "file_manager",
         EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
@@ -225,7 +225,7 @@ class Daemon(AuthJSONRPCServer):
         # TODO: delete these, get the components where needed
         self.storage = None
         self.dht_node = None
-        self.wallet = None
+        self.wallet_manager = None
         self.sd_identifier = None
         self.file_manager = None
         self.exchange_rate_manager = None
@@ -238,9 +238,23 @@ class Daemon(AuthJSONRPCServer):
         self.streams = {}
 
     @property
+    def wallet(self):
+        try:
+            return self.wallet_manager.default_wallet
+        except AttributeError:
+            return None
+
+    @property
+    def account(self):
+        try:
+            return self.wallet_manager.default_account
+        except AttributeError:
+            return None
+
+    @property
     def ledger(self):
         try:
-            return self.wallet.default_account.ledger
+            return self.wallet_manager.default_account.ledger
         except AttributeError:
             return None
 
@@ -277,7 +291,7 @@ class Daemon(AuthJSONRPCServer):
         timeout = timeout or 30
         downloader = StandaloneBlobDownloader(
             blob_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
-            rate_manager, self.wallet, timeout
+            rate_manager, self.wallet_manager, timeout
         )
         return downloader.download()
 
@@ -340,7 +354,7 @@ class Daemon(AuthJSONRPCServer):
             download_id = utils.random_string()
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
             self.streams[sd_hash] = GetStream(
-                self.sd_identifier, self.wallet, self.exchange_rate_manager, self.blob_manager,
+                self.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
                 self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
                 conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
                 timeout
@@ -371,7 +385,7 @@ class Daemon(AuthJSONRPCServer):
     def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate=None,
                         claim_address=None, change_address=None):
         publisher = Publisher(
-            self.blob_manager, self.payment_rate_manager, self.storage, self.file_manager, self.wallet, certificate
+            self.blob_manager, self.payment_rate_manager, self.storage, self.file_manager, self.wallet_manager, certificate
         )
         parse_lbry_uri(name)
         if not file_path:
@@ -401,7 +415,7 @@ class Daemon(AuthJSONRPCServer):
             return self.blob_manager.get_blob(blob[0])
         return download_sd_blob(
             sd_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager,
-            self.wallet, timeout=conf.settings['search_timeout'], download_mirrors=conf.settings['download_mirrors']
+            self.wallet_manager, timeout=conf.settings['search_timeout'], download_mirrors=conf.settings['download_mirrors']
         )
 
     def get_or_download_sd_blob(self, sd_hash):
@@ -439,7 +453,7 @@ class Daemon(AuthJSONRPCServer):
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        resolved = yield self.wallet.resolve(uri)
+        resolved = yield self.wallet_manager.resolve(uri)
 
         if uri in resolved and 'claim' in resolved[uri]:
             claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
@@ -614,7 +628,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
-        downloader.setup(self.wallet)
+        downloader.setup(self.wallet_manager)
         return downloader
 
     @defer.inlineCallbacks
@@ -663,6 +677,27 @@ class Daemon(AuthJSONRPCServer):
     #                JSON-RPC API methods start here                           #
     #                                                                          #
     ############################################################################
+
+    @AuthJSONRPCServer.deprecated("stop")
+    def jsonrpc_daemon_stop(self):
+        pass
+
+    def jsonrpc_stop(self):
+        """
+        Stop lbrynet
+
+        Usage:
+            stop
+
+        Options:
+            None
+
+        Returns:
+            (string) Shutdown message
+        """
+        log.info("Shutting down lbrynet daemon")
+        reactor.callLater(0.1, reactor.fireSystemEvent, "shutdown")
+        defer.returnValue("Shutting down")
 
     @defer.inlineCallbacks
     def jsonrpc_status(self):
@@ -950,14 +985,186 @@ class Daemon(AuthJSONRPCServer):
         """
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
-    @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
+    @AuthJSONRPCServer.deprecated("account_balance")
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
+        pass
+
+    @AuthJSONRPCServer.deprecated("account_unlock")
+    def jsonrpc_wallet_unlock(self, password):
+        pass
+
+    @AuthJSONRPCServer.deprecated("account_decrypt")
+    def jsonrpc_wallet_decrypt(self):
+        pass
+
+    @AuthJSONRPCServer.deprecated("account_encrypt")
+    def jsonrpc_wallet_encrypt(self, new_password):
+        pass
+
+    @AuthJSONRPCServer.deprecated("address_is_mine")
+    def jsonrpc_wallet_is_address_mine(self, address):
+        pass
+
+    @AuthJSONRPCServer.deprecated("address_public_key")
+    def jsonrpc_wallet_public_key(self, address):
+        pass
+
+    @AuthJSONRPCServer.deprecated("address_list")
+    def jsonrpc_wallet_list(self):
+        pass
+
+    @AuthJSONRPCServer.deprecated("address_generate")
+    def jsonrpc_wallet_new_address(self):
+        pass
+
+    @AuthJSONRPCServer.deprecated("address_unused")
+    def jsonrpc_wallet_unused_address(self):
+        pass
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_send(self, amount, address=None, claim_id=None):
         """
-        Return the balance of the wallet
+        Send credits. If given an address, send credits to it. If given a claim id, send a tip
+        to the owner of a claim specified by uri. A tip is a claim support where the recipient
+        of the support is the claim address for the claim being supported.
 
         Usage:
-            wallet_balance [<address> | --address=<address>] [--include_unconfirmed]
+            wallet_send (<amount> | --amount=<amount>)
+                        ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
+
+        Options:
+            --amount=<amount>      : (Decimal) amount of credit to send
+            --address=<address>    : (str) address to send credits to
+            --claim_id=<claim_id>  : (str) claim_id of the claim to send to tip to
+
+        Returns:
+            If sending to an address:
+            (dict) true if payment successfully scheduled
+            {
+                "hex": (str) raw transaction,
+                "inputs": (list) inputs(dict) used for the transaction,
+                "outputs": (list) outputs(dict) for the transaction,
+                "total_fee": (int) fee in dewies,
+                "total_input": (int) total of inputs in dewies,
+                "total_output": (int) total of outputs in dewies(input - fees),
+                "txid": (str) txid of the transaction,
+            }
+
+            If sending a claim tip:
+            (dict) Dictionary containing the result of the support
+            {
+                txid : (str) txid of resulting support claim
+                nout : (int) nout of the resulting support claim
+                fee : (float) fee paid for the transaction
+            }
+        """
+
+        amount = self.get_dewies_or_error("amount", amount)
+        if not amount:
+            raise NullFundsError
+        elif amount < 0:
+            raise NegativeFundsError()
+
+        if address and claim_id:
+            raise Exception("Given both an address and a claim id")
+        elif not address and not claim_id:
+            raise Exception("Not given an address or a claim id")
+
+        if address:
+            # raises an error if the address is invalid
+            decode_address(address)
+
+            reserved_points = self.wallet_manager.reserve_points(address, amount)
+            if reserved_points is None:
+                raise InsufficientFundsError()
+            result = yield self.wallet_manager.send_points_to_address(reserved_points, amount)
+            self.analytics_manager.send_credits_sent()
+        else:
+            validate_claim_id(claim_id)
+            result = yield self.wallet_manager.tip_claim(claim_id, amount)
+            self.analytics_manager.send_claim_action('new_support')
+        defer.returnValue(result)
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    # @AuthJSONRPCServer.deprecated("account_fund"), API has changed as well, so we forward for now
+    # marked as deprecated in changelog and will be removed after subsequent release
+    def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
+        """
+        Create new UTXOs, each containing `amount` credits
+
+        Usage:
+            wallet_prefill_addresses [--no_broadcast]
+                                     (<num_addresses> | --num_addresses=<num_addresses>)
+                                     (<amount> | --amount=<amount>)
+
+        Options:
+            --no_broadcast                    : (bool) whether to broadcast or not
+            --num_addresses=<num_addresses>   : (int) num of addresses to create
+            --amount=<amount>                 : (float) initial amount in each address
+
+        Returns:
+            (dict) the resulting transaction
+        """
+        broadcast = not no_broadcast
+        return self.jsonrpc_account_fund(
+            self.wallet_manager.default_account.name,
+            self.wallet_manager.default_account.name,
+            amount=amount,
+            outputs=num_addresses,
+            broadcast=broadcast
+        )
+
+    @requires("wallet")
+    def jsonrpc_account_list(self, account_name=None, confirmations=6, include_reserved=False,
+                             include_claims=False):
+        """
+        Return details of an individual account or all of the accounts.
+
+        Usage:
+            account_list [<account_name>] [--confirmations=<confirmations>]
+                    [--include_reserved] [--include_claims]
+
+        Options:
+            --account=<account_name>        : (str) If provided only the balance for this
+                                                    account will be given
+            --confirmations=<confirmations> : (int) required confirmations (default: 6)
+            --include_reserved              : (bool) include reserved UTXOs (default: false)
+            --include_claims                : (bool) include claims, requires than a
+                                                     LBC account is specified (default: false)
+
+        Returns:
+            (map) balance of account(s)
+        """
+        if account_name:
+            for account in self.wallet_manager.accounts:
+                if account.name == account_name:
+                    if include_claims and not isinstance(account, LBCAccount):
+                        raise Exception(
+                            "'--include-claims' requires specifying an LBC ledger account. "
+                            "Found '{}', but it's an {} ledger account."
+                                .format(account_name, account.ledger.symbol)
+                        )
+                    args = {
+                        'confirmations': confirmations,
+                        'include_reserved': include_reserved
+                    }
+                    if include_claims:
+                        args['include_claims'] = True
+                    return account.get_balance(**args)
+            raise Exception("Couldn't find an account named: '{}'.".format(account_name))
+        else:
+            if include_claims:
+                raise Exception("'--include-claims' requires specifying an LBC account.")
+            return self.wallet_manager.get_balances(confirmations)
+
+    @requires("wallet")
+    def jsonrpc_account_balance(self, address=None, include_unconfirmed=False):
+        """
+        Return the balance of an account
+
+        Usage:
+            account_balance [<address> | --address=<address>] [--include_unconfirmed]
 
         Options:
             --address=<address>     : (str) If provided only the balance for this
@@ -969,31 +1176,185 @@ class Daemon(AuthJSONRPCServer):
         """
         if address is not None:
             raise NotImplementedError("Limiting by address needs to be re-implemented in new wallet.")
-        dewies = yield self.wallet.default_account.get_balance(
+        dewies = yield self.wallet_manager.default_account.get_balance(
             0 if include_unconfirmed else 6
         )
         defer.returnValue(round(dewies / COIN, 3))
 
-    @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_wallet_unlock(self, password):
+    @requires("wallet")
+    def jsonrpc_account_add(
+            self, account_name, single_key=False, seed=None, private_key=None, public_key=None):
         """
-        Unlock an encrypted wallet
+        Add a previously created account from a seed, private key or public key (read-only).
+        Specify --single_key for single address or vanity address accounts.
 
         Usage:
-            wallet_unlock (<password> | --password=<password>)
+            account_add (<account_name> | --account_name=<account_name>)
+                 (--seed=<seed> | --private_key=<private_key> | --public_key=<public_key>)
+                 [--single_key]
+
+        Options:
+            --account_name=<account_name>   : (str) name of the account to add
+            --seed=<seed>                   : (str) seed to generate new account from
+            --private_key=<private_key>     : (str) private key for new account
+            --public_key=<public_key>       : (str) public key for new account
+            --single_key                    : (bool) create single key account, default is multi-key
+
+        Returns:
+            (map) added account details
+
+        """
+        self.error_if_account_exists(account_name)
+        account = LBCAccount.from_dict(
+            self.wallet_manager.get_or_create_ledger('lbc_mainnet'),
+            self.wallet_manager, {
+                'name': account_name,
+                'seed': seed,
+                'private_key': private_key,
+                'public_key': public_key,
+                'address_generator': {
+                    'name': SingleKey.name if single_key else HierarchicalDeterministic.name
+                }
+            }
+        )
+        self.wallet_manager.save()
+
+        result = account.to_dict()
+        result['status'] = 'added'
+        result.pop('certificates', None)
+        result['is_default'] = self.wallet_manager.accounts[0] == account
+        return result
+
+    @requires("wallet")
+    def jsonrpc_account_create(self, account_name, single_key=False):
+        """
+        Create a new account. Specify --single_key if you want to use
+        the same address for all transactions (not recommended).
+
+        Usage:
+            account_create (<account_name> | --account_name=<account_name>) [--single_key]
+
+        Options:
+            --account_name=<account_name>   : (str) name of the account to create
+            --single_key                    : (bool) create single key account, default is multi-key
+
+        Returns:
+            (map) new account details
+
+        """
+        self.error_if_account_exists(account_name)
+        account = LBCAccount.generate(
+            self.wallet_manager.get_or_create_ledger('lbc_mainnet'),
+            self.wallet_manager, account_name, {
+                'name': SingleKey.name if single_key else HierarchicalDeterministic.name
+            }
+        )
+        self.wallet_manager.save()
+
+        result = account.to_dict()
+        result['status'] = 'created'
+        result.pop('certificates', None)
+        result['is_default'] = self.wallet_manager.accounts[0] == account
+        return result
+
+    @requires("wallet")
+    def jsonrpc_account_remove(self, account_name):
+        """
+        Remove an existing account.
+
+        Usage:
+            account (<account_name> | --account_name=<account_name>)
+
+        Options:
+            --account_name=<account_name>   : (str) name of the account to remove
+
+        Returns:
+            (map) removed account details
+
+        """
+        wallet = self.wallet_manager.default_wallet
+        account = self.get_account_or_error('account_name', account_name)
+        wallet.accounts.remove(account)
+        wallet.save()
+        result = account.to_dict()
+        result['status'] = 'removed'
+        result.pop('certificates', None)
+        return result
+
+    @requires("wallet")
+    def jsonrpc_account_set(
+            self, account_name, default=False,
+            change_gap=None, change_max_uses=None, receiving_gap=None, receiving_max_uses=None):
+        """
+        Change various settings on an account.
+
+        Usage:
+            account (<account_name> | --account_name=<account_name>) [--default]
+                 [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
+                 [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
+
+        Options:
+            --account_name=<account_name>   : (str) name of the account to change
+            --default                       : (bool) make this account the default
+            --receiving_gap=<receiving_gap> : (int) set the gap for receiving addresses
+            --receiving_max_uses=<receiving_max_uses> : (int) set the maximum number of times to
+                                                              use a receiving address
+            --change_gap=<change_gap>           : (int) set the gap for change addresses
+            --change_max_uses=<change_max_uses> : (int) set the maximum number of times to
+                                                        use a change address
+
+        Returns:
+            (map) updated account details
+
+        """
+        account = self.get_account_or_error('account_name', account_name)
+        change_made = False
+
+        if account.receiving.name == HierarchicalDeterministic.name:
+            address_changes = {
+                'change': {'gap': change_gap, 'maximum_uses_per_address': change_max_uses},
+                'receiving': {'gap': receiving_gap, 'maximum_uses_per_address': receiving_max_uses},
+            }
+            for chain_name in address_changes:
+                chain = getattr(account, chain_name)
+                for attr, value in address_changes[chain_name].items():
+                    if value is not None:
+                        setattr(chain, attr, value)
+                        change_made = True
+
+        if default:
+            self.wallet_manager.accounts.remove(account)
+            self.wallet_manager.accounts.insert(0, account)
+            change_made = True
+
+        if change_made:
+            self.wallet_manager.save()
+
+        result = account.to_dict()
+        result.pop('certificates', None)
+        result['is_default'] = self.wallet_manager.accounts[0] == account
+        return result
+
+    @requires(WALLET_COMPONENT)
+    @defer.inlineCallbacks
+    def jsonrpc_account_unlock(self, password):
+        """
+        Unlock an encrypted account
+
+        Usage:
+            account_unlock (<password> | --password=<password>)
 
         Options:
             --password=<password> : (str) password for unlocking wallet
 
         Returns:
-            (bool) true if wallet is unlocked, otherwise false
+            (bool) true if account is unlocked, otherwise false
         """
 
         # the check_locked() in the if statement is needed because that is what sets
         # the wallet_unlocked_d deferred ¯\_(ツ)_/¯
-        if not self.wallet.check_locked():
-            d = self.wallet.wallet_unlocked_d
+        if not self.wallet_manager.check_locked():
+            d = self.wallet_manager.wallet_unlocked_d
             d.callback(password)
             result = yield d
         else:
@@ -1002,12 +1363,12 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_wallet_decrypt(self):
+    def jsonrpc_account_decrypt(self):
         """
-        Decrypt an encrypted wallet, this will remove the wallet password
+        Decrypt an encrypted account, this will remove the wallet password
 
         Usage:
-            wallet_decrypt
+            account_decrypt
 
         Options:
             None
@@ -1015,10 +1376,10 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        return defer.succeed(self.wallet.decrypt_wallet())
+        return self.wallet_manager.decrypt_wallet()
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_wallet_encrypt(self, new_password):
+    def jsonrpc_account_encrypt(self, new_password):
         """
         Encrypt a wallet with a password, if the wallet is already encrypted this will update
         the password
@@ -1032,41 +1393,148 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        return defer.succeed(self.wallet.encrypt_wallet(new_password))
+        return self.wallet_manager.encrypt_wallet(new_password)
 
-    @defer.inlineCallbacks
-    @AuthJSONRPCServer.deprecated("stop")
-    def jsonrpc_daemon_stop(self):
+    @requires("wallet")
+    def jsonrpc_account_max_address_gap(self, account_name):
         """
-        Stop lbrynet-daemon
+        Finds ranges of consecutive addresses that are unused and returns the length
+        of the longest such range: for change and receiving address chains. This is
+        useful to figure out ideal values to set for 'receiving_gap' and 'change_gap'
+        account settings.
 
         Usage:
-            daemon_stop
+            account_max_address_gap (<account_name> | --account=<account_name>)
+
+        Options:
+            --account=<account_name>        : (str) account for which to get max gaps
+
+        Returns:
+            (map) maximum gap for change and receiving addresses
+        """
+        return self.get_account_or_error('account', account_name).get_max_gap()
+
+    @requires("wallet")
+    def jsonrpc_account_fund(self, to_account, from_account, amount=0,
+                             everything=False, outputs=1, broadcast=False):
+        """
+        Transfer some amount (or --everything) to an account from another
+        account (can be the same account). Amounts are interpreted as LBC.
+        You can also spread the transfer across a number of --outputs (cannot
+        be used together with --everything).
+
+        Usage:
+            account_fund (<to_account> | --to_account=<to_account>)
+                (<from_account> | --from_account=<from_account>)
+                (<amount> | --amount=<amount> | --everything)
+                [<outputs> | --outputs=<outputs>]
+                [--broadcast]
+
+        Options:
+            --to_account=<to_account>     : (str) send to this account
+            --from_account=<from_account> : (str) spend from this account
+            --amount=<amount>             : (str) the amount to transfer lbc
+            --everything                  : (bool) transfer everything (excluding claims), default: false.
+            --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
+            --broadcast                   : (bool) actually broadcast the transaction, default: false.
+
+        Returns:
+            (map) transaction performing requested action
+
+        """
+        to_account = self.get_account_or_error('to_account', to_account)
+        from_account = self.get_account_or_error('from_account', from_account)
+        amount = self.get_dewies_or_error('amount', amount) if amount else None
+        if not isinstance(outputs, int):
+            raise ValueError("--outputs must be an integer.")
+        if everything and outputs > 1:
+            raise ValueError("Using --everything along with --outputs is not supported.")
+        return from_account.fund(
+            to_account=to_account, amount=amount, everything=everything,
+            outputs=outputs, broadcast=broadcast
+        )
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_address_is_mine(self, address):
+        """
+        Checks if an address is associated with the current wallet.
+
+        Usage:
+            wallet_is_address_mine (<address> | --address=<address>)
+
+        Options:
+            --address=<address>  : (str) address to check
+
+        Returns:
+            (bool) true, if address is associated with current wallet
+        """
+        return self.wallet_manager.address_is_mine(address)
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_address_public_key(self, address):
+        """
+        Get public key from wallet address
+
+        Usage:
+            wallet_public_key (<address> | --address=<address>)
+
+        Options:
+            --address=<address>  : (str) address for which to get the public key
+
+        Returns:
+            (list) list of public keys associated with address.
+                Could contain more than one public key if multisig.
+        """
+        return self.wallet_manager.get_pub_keys(address)
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_address_list(self):
+        """
+        List wallet addresses
+
+        Usage:
+            wallet_list
 
         Options:
             None
 
         Returns:
-            (string) Shutdown message
+            List of wallet addresses
         """
-        return self.jsonrpc_stop()
+        return self.wallet_manager.list_addresses()
 
-    def jsonrpc_stop(self):
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_address_generate(self):
         """
-        Stop lbrynet
+        Generate a new wallet address
 
         Usage:
-            stop
+            wallet_new_address
 
         Options:
             None
 
         Returns:
-            (string) Shutdown message
+            (str) New wallet address in base58
         """
-        log.info("Shutting down lbrynet daemon")
-        reactor.callLater(0.1, reactor.fireSystemEvent, "shutdown")
-        defer.returnValue("Shutting down")
+        return self.wallet_manager.get_new_address()
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_address_unused(self):
+        """
+        Return an address containing no balance, will create
+        a new address if there is none.
+
+        Usage:
+            wallet_unused_address
+
+        Options:
+            None
+
+        Returns:
+            (str) Unused wallet address in base58
+        """
+        return self.wallet_manager.get_unused_address()
 
     @requires(FILE_MANAGER_COMPONENT)
     @defer.inlineCallbacks
@@ -1160,7 +1628,7 @@ class Daemon(AuthJSONRPCServer):
 
         try:
             name = parse_lbry_uri(name).name
-            metadata = yield self.wallet.resolve(name, check_cache=not force)
+            metadata = yield self.wallet_manager.resolve(name, check_cache=not force)
             if name in metadata:
                 metadata = metadata[name]
         except UnknownNameError:
@@ -1207,9 +1675,9 @@ class Daemon(AuthJSONRPCServer):
 
         """
         if claim_id is not None and txid is None and nout is None:
-            claim_results = yield self.wallet.get_claim_by_claim_id(claim_id)
+            claim_results = yield self.wallet_manager.get_claim_by_claim_id(claim_id)
         elif txid is not None and nout is not None and claim_id is None:
-            claim_results = yield self.wallet.get_claim_by_outpoint(txid, int(nout))
+            claim_results = yield self.wallet_manager.get_claim_by_outpoint(txid, int(nout))
         else:
             raise Exception("Must specify either txid/nout, or claim_id")
         response = yield self._render_response(claim_results)
@@ -1299,7 +1767,7 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[u] = {"error": "%s is not a valid uri" % u}
 
-        resolved = yield self.wallet.resolve(*valid_uris, check_cache=not force)
+        resolved = yield self.wallet_manager.resolve(*valid_uris, check_cache=not force)
 
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri]
@@ -1360,7 +1828,7 @@ class Daemon(AuthJSONRPCServer):
         if parsed_uri.is_channel and not parsed_uri.path:
             raise Exception("cannot download a channel claim, specify a /path")
 
-        resolved_result = yield self.wallet.resolve(uri)
+        resolved_result = yield self.wallet_manager.resolve(uri)
         if resolved_result and uri in resolved_result:
             resolved = resolved_result[uri]
         else:
@@ -1559,8 +2027,8 @@ class Daemon(AuthJSONRPCServer):
 
         if amount <= 0:
             raise Exception("Invalid amount")
-        tx = yield self.wallet.claim_new_channel(channel_name, amount)
-        self.wallet.save()
+        tx = yield self.wallet_manager.claim_new_channel(channel_name, amount)
+        self.wallet_manager.save()
         self.analytics_manager.send_new_channel()
         nout = 0
         txo = tx.outputs[nout]
@@ -1590,27 +2058,9 @@ class Daemon(AuthJSONRPCServer):
             is in the wallet.
         """
 
-        result = yield self.wallet.channel_list()
+        result = yield self.wallet_manager.channel_list()
         response = yield self._render_response(result)
         defer.returnValue(response)
-
-    @requires(WALLET_COMPONENT)
-    @AuthJSONRPCServer.deprecated("channel_list")
-    def jsonrpc_channel_list_mine(self):
-        """
-        Get certificate claim infos for channels that can be published to (deprecated)
-
-        Usage:
-            channel_list_mine
-
-        Options:
-            None
-
-        Returns:
-            (list) ClaimDict
-        """
-
-        return self.jsonrpc_channel_list()
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -1628,7 +2078,7 @@ class Daemon(AuthJSONRPCServer):
             (str) Serialized certificate information
         """
 
-        result = yield self.wallet.export_certificate_info(claim_id)
+        result = yield self.wallet_manager.export_certificate_info(claim_id)
         defer.returnValue(result)
 
     @requires(WALLET_COMPONENT)
@@ -1647,7 +2097,7 @@ class Daemon(AuthJSONRPCServer):
             (dict) Result dictionary
         """
 
-        result = yield self.wallet.import_certificate_info(serialized_certificate_info)
+        result = yield self.wallet_manager.import_certificate_info(serialized_certificate_info)
         defer.returnValue(result)
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
@@ -1750,7 +2200,7 @@ class Daemon(AuthJSONRPCServer):
                 # raises an error if the address is invalid
                 decode_address(address)
 
-        available = yield self.wallet.default_account.get_balance()
+        available = yield self.wallet_manager.default_account.get_balance()
         if bid >= available:
             # TODO: add check for existing claim balance
             #balance = yield self.wallet.get_max_usable_balance_for_claim(name)
@@ -1802,7 +2252,7 @@ class Daemon(AuthJSONRPCServer):
                     log.warning("Stripping empty fee from published metadata")
                     del metadata['fee']
                 elif 'address' not in metadata['fee']:
-                    address = yield self.wallet.default_account.receiving.get_or_create_usable_address()
+                    address = yield self.wallet_manager.default_account.receiving.get_or_create_usable_address()
                     metadata['fee']['address'] = address
             if 'fee' in metadata and 'version' not in metadata['fee']:
                 metadata['fee']['version'] = '_0_0_1'
@@ -1856,7 +2306,7 @@ class Daemon(AuthJSONRPCServer):
 
         certificate = None
         if channel_name:
-            certificates = yield self.wallet.get_certificates(channel_name)
+            certificates = yield self.wallet_manager.get_certificates(channel_name)
             for cert in certificates:
                 if cert.claim_id == channel_id:
                     certificate = cert
@@ -1897,7 +2347,7 @@ class Daemon(AuthJSONRPCServer):
         if nout is None and txid is not None:
             raise Exception('Must specify nout')
 
-        tx = yield self.wallet.abandon_claim(claim_id, txid, nout)
+        tx = yield self.wallet_manager.abandon_claim(claim_id, txid, nout)
         self.analytics_manager.send_claim_action('abandon')
         defer.returnValue({
             "success": True,
@@ -1929,7 +2379,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        result = yield self.wallet.support_claim(name, claim_id, amount)
+        result = yield self.wallet_manager.support_claim(name, claim_id, amount)
         self.analytics_manager.send_claim_action('new_support')
         defer.returnValue(result)
 
@@ -1969,11 +2419,11 @@ class Daemon(AuthJSONRPCServer):
                 nout = int(nout)
             else:
                 raise Exception("invalid outpoint")
-            result = yield self.wallet.claim_renew(txid, nout)
+            result = yield self.wallet_manager.claim_renew(txid, nout)
             result = {outpoint: result}
         else:
             height = int(height)
-            result = yield self.wallet.claim_renew_all_before_expiration(height)
+            result = yield self.wallet_manager.claim_renew_all_before_expiration(height)
         defer.returnValue(result)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -2004,7 +2454,7 @@ class Daemon(AuthJSONRPCServer):
             }
 
         """
-        result = yield self.wallet.send_claim_to_address(claim_id, address, amount)
+        result = yield self.wallet_manager.send_claim_to_address(claim_id, address, amount)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
@@ -2043,7 +2493,7 @@ class Daemon(AuthJSONRPCServer):
            ]
         """
 
-        d = self.wallet.get_name_claims()
+        d = self.wallet_manager.get_name_claims()
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
@@ -2082,7 +2532,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        claims = yield self.wallet.get_claims_for_name(name)  # type: dict
+        claims = yield self.wallet_manager.get_claims_for_name(name)  # type: dict
         sort_claim_results(claims['claims'])
         defer.returnValue(claims)
 
@@ -2160,7 +2610,7 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
 
-        resolved = yield self.wallet.resolve(*valid_uris, page=page, page_size=page_size)
+        resolved = yield self.wallet_manager.resolve(*valid_uris, page=page, page_size=page_size)
         for u in resolved:
             if 'error' in resolved[u]:
                 results[u] = resolved[u]
@@ -2233,7 +2683,7 @@ class Daemon(AuthJSONRPCServer):
 
         """
 
-        d = self.wallet.get_history()
+        d = self.wallet_manager.get_history()
         d.addCallback(lambda r: self._render_response(r))
         return d
 
@@ -2252,208 +2702,9 @@ class Daemon(AuthJSONRPCServer):
             (dict) JSON formatted transaction
         """
 
-        d = self.wallet.get_transaction(txid)
+        d = self.wallet_manager.get_transaction(txid)
         d.addCallback(lambda r: self._render_response(r))
         return d
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_wallet_is_address_mine(self, address):
-        """
-        Checks if an address is associated with the current wallet.
-
-        Usage:
-            wallet_is_address_mine (<address> | --address=<address>)
-
-        Options:
-            --address=<address>  : (str) address to check
-
-        Returns:
-            (bool) true, if address is associated with current wallet
-        """
-
-        d = self.wallet.address_is_mine(address)
-        d.addCallback(lambda is_mine: self._render_response(is_mine))
-        return d
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_wallet_public_key(self, address):
-        """
-        Get public key from wallet address
-
-        Usage:
-            wallet_public_key (<address> | --address=<address>)
-
-        Options:
-            --address=<address>  : (str) address for which to get the public key
-
-        Returns:
-            (list) list of public keys associated with address.
-                Could contain more than one public key if multisig.
-        """
-
-        d = self.wallet.get_pub_keys(address)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
-
-    @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_wallet_list(self):
-        """
-        List wallet addresses
-
-        Usage:
-            wallet_list
-
-        Options:
-            None
-
-        Returns:
-            List of wallet addresses
-        """
-
-        addresses = yield self.wallet.list_addresses()
-        response = yield self._render_response(addresses)
-        defer.returnValue(response)
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_wallet_new_address(self):
-        """
-        Generate a new wallet address
-
-        Usage:
-            wallet_new_address
-
-        Options:
-            None
-
-        Returns:
-            (str) New wallet address in base58
-        """
-
-        def _disp(address):
-            log.info("Got new wallet address: " + address)
-            return defer.succeed(address)
-
-        d = self.wallet.get_new_address()
-        d.addCallback(_disp)
-        d.addCallback(lambda address: self._render_response(address))
-        return d
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_wallet_unused_address(self):
-        """
-        Return an address containing no balance, will create
-        a new address if there is none.
-
-        Usage:
-            wallet_unused_address
-
-        Options:
-            None
-
-        Returns:
-            (str) Unused wallet address in base58
-        """
-
-        def _disp(address):
-            address = str(address)
-            log.info("Got unused wallet address: " + address)
-            return defer.succeed(address)
-
-        d = self.wallet.get_unused_address()
-        d.addCallback(_disp)
-        d.addCallback(lambda address: self._render_response(address))
-        return d
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_wallet_send(self, amount, address=None, claim_id=None):
-        """
-        Send credits. If given an address, send credits to it. If given a claim id, send a tip
-        to the owner of a claim specified by uri. A tip is a claim support where the recipient
-        of the support is the claim address for the claim being supported.
-
-        Usage:
-            wallet_send (<amount> | --amount=<amount>)
-                        ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
-
-        Options:
-            --amount=<amount>      : (Decimal) amount of credit to send
-            --address=<address>    : (str) address to send credits to
-            --claim_id=<claim_id>  : (str) claim_id of the claim to send to tip to
-
-        Returns:
-            If sending to an address:
-            (dict) true if payment successfully scheduled
-            {
-                "hex": (str) raw transaction,
-                "inputs": (list) inputs(dict) used for the transaction,
-                "outputs": (list) outputs(dict) for the transaction,
-                "total_fee": (int) fee in dewies,
-                "total_input": (int) total of inputs in dewies,
-                "total_output": (int) total of outputs in dewies(input - fees),
-                "txid": (str) txid of the transaction,
-            }
-
-            If sending a claim tip:
-            (dict) Dictionary containing the result of the support
-            {
-                txid : (str) txid of resulting support claim
-                nout : (int) nout of the resulting support claim
-                fee : (float) fee paid for the transaction
-            }
-        """
-
-        amount = self.get_dewies_or_error("amount", amount)
-        if not amount:
-            raise NullFundsError
-        elif amount < 0:
-            raise NegativeFundsError()
-
-        if address and claim_id:
-            raise Exception("Given both an address and a claim id")
-        elif not address and not claim_id:
-            raise Exception("Not given an address or a claim id")
-
-        if address:
-            # raises an error if the address is invalid
-            decode_address(address)
-
-            reserved_points = self.wallet.reserve_points(address, amount)
-            if reserved_points is None:
-                raise InsufficientFundsError()
-            result = yield self.wallet.send_points_to_address(reserved_points, amount)
-            self.analytics_manager.send_credits_sent()
-        else:
-            validate_claim_id(claim_id)
-            result = yield self.wallet.tip_claim(claim_id, amount)
-            self.analytics_manager.send_claim_action('new_support')
-        defer.returnValue(result)
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
-        """
-        Create new UTXOs, each containing `amount` credits
-
-        Usage:
-            wallet_prefill_addresses [--no_broadcast]
-                                     (<num_addresses> | --num_addresses=<num_addresses>)
-                                     (<amount> | --amount=<amount>)
-
-        Options:
-            --no_broadcast                    : (bool) whether to broadcast or not
-            --num_addresses=<num_addresses>   : (int) num of addresses to create
-            --amount=<amount>                 : (float) initial amount in each address
-
-        Returns:
-            (dict) the resulting transaction
-        """
-        broadcast = not no_broadcast
-        return self.jsonrpc_fund(self.wallet.default_account.name,
-                                 self.wallet.default_account.name,
-                                 amount=amount * num_addresses,
-                                 outputs=num_addresses,
-                                 broadcast=broadcast)
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2485,7 +2736,7 @@ class Daemon(AuthJSONRPCServer):
             ]
         """
 
-        unspent = yield self.wallet.list_unspent()
+        unspent = yield self.wallet_manager.list_unspent()
         for i, utxo in enumerate(unspent):
             utxo['txid'] = utxo.pop('prevout_hash')
             utxo['nout'] = utxo.pop('prevout_n')
@@ -2723,7 +2974,7 @@ class Daemon(AuthJSONRPCServer):
         """
         if uri or stream_hash or sd_hash:
             if uri:
-                metadata = (yield self.wallet.resolve(uri))[uri]
+                metadata = (yield self.wallet_manager.resolve(uri))[uri]
                 sd_hash = utils.get_sd_hash(metadata)
                 stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
             elif stream_hash:
@@ -2924,27 +3175,6 @@ class Daemon(AuthJSONRPCServer):
         return self._blob_availability(blob_hash, search_timeout, blob_timeout)
 
     @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @AuthJSONRPCServer.deprecated("stream_availability")
-    def jsonrpc_get_availability(self, uri, sd_timeout=None, peer_timeout=None):
-        """
-        Get stream availability for lbry uri
-
-        Usage:
-            get_availability (<uri> | --uri=<uri>) [<sd_timeout> | --sd_timeout=<sd_timeout>]
-                             [<peer_timeout> | --peer_timeout=<peer_timeout>]
-
-        Options:
-            --uri=<uri>                    : (str) check availability for this uri
-            --sd_timeout=<sd_timeout>      : (int) sd blob download timeout
-            --peer_timeout=<peer_timeout>  : (int) how long to look for peers
-
-        Returns:
-            (float) Peers per blob / total blobs
-        """
-
-        return self.jsonrpc_stream_availability(uri, peer_timeout, sd_timeout)
-
-    @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_stream_availability(self, uri, search_timeout=None, blob_timeout=None):
         """
@@ -2997,7 +3227,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
         try:
-            resolved_result = (yield self.wallet.resolve(uri))[uri]
+            resolved_result = (yield self.wallet_manager.resolve(uri))[uri]
             response['did_resolve'] = True
         except UnknownNameError:
             response['error'] = "Failed to resolve name"
@@ -3047,220 +3277,9 @@ class Daemon(AuthJSONRPCServer):
                                    response['head_blob_availability'].get('is_available')
         defer.returnValue(response)
 
-    #######################
-    # New Wallet Commands #
-    #######################
-    # TODO:
-    # Delete this after all commands have been migrated
-    # and refactored.
 
-    @requires("wallet")
-    def jsonrpc_account(self, account_name, create=False, delete=False, single_key=False,
-                        seed=None, private_key=None, public_key=None,
-                        change_gap=None, change_max_uses=None,
-                        receiving_gap=None, receiving_max_uses=None,
-                        rename=None, default=False):
-        """
-        Create new account or update some settings on an existing account. If no
-        creation or modification options are provided but the account exists then
-        it will just displayed the unmodified settings for the account.
-
-        Usage:
-            account [--create | --delete] (<account_name> | --account_name=<account_name>) [--single_key]
-                 [--seed=<seed> | --private_key=<private_key> | --public_key=<public_key>]
-                 [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
-                 [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
-                 [--rename=<rename>] [--default]
-
-        Options:
-            --account_name=<account_name>   : (str) name of the account to create or update
-            --create                        : (bool) create the account
-            --delete                        : (bool) delete the account
-            --single_key                    : (bool) create single key account, default is multi-key
-            --seed=<seed>                   : (str) seed to generate new account from
-            --private_key=<private_key>     : (str) private key for new account
-            --public_key=<public_key>       : (str) public key for new account
-            --receiving_gap=<receiving_gap> : (int) set the gap for receiving addresses
-            --receiving_max_uses=<receiving_max_uses> : (int) set the maximum number of times to
-                                                              use a receiving address
-            --change_gap=<change_gap>           : (int) set the gap for change addresses
-            --change_max_uses=<change_max_uses> : (int) set the maximum number of times to
-                                                        use a change address
-            --rename=<rename>               : (str) change name of existing account
-            --default                       : (bool) make this account the default
-
-        Returns:
-            (map) new or updated account details
-
-        """
-        wallet = self.wallet.default_wallet
-        if create:
-            self.error_if_account_exists(account_name)
-            if single_key:
-                address_generator = {'name': SingleKey.name}
-            else:
-                address_generator = {
-                    'name': HierarchicalDeterministic.name,
-                    'receiving': {
-                        'gap': receiving_gap or 20,
-                        'maximum_uses_per_address': receiving_max_uses or 1},
-                    'change': {
-                        'gap': change_gap or 6,
-                        'maximum_uses_per_address': change_max_uses or 1}
-                }
-            ledger = self.wallet.get_or_create_ledger('lbc_mainnet')
-            if seed or private_key or public_key:
-                account = LBCAccount.from_dict(ledger, wallet, {
-                    'name': account_name,
-                    'seed': seed,
-                    'private_key': private_key,
-                    'public_key': public_key,
-                    'address_generator': address_generator
-                })
-            else:
-                account = LBCAccount.generate(
-                    ledger, wallet, account_name, address_generator)
-            wallet.save()
-        elif delete:
-            account = self.get_account_or_error('account_name', account_name)
-            wallet.accounts.remove(account)
-            wallet.save()
-            return "Account '{}' deleted.".format(account_name)
-        else:
-            change_made = False
-            account = self.get_account_or_error('account_name', account_name)
-            if rename is not None:
-                self.error_if_account_exists(rename)
-                account.name = rename
-                change_made = True
-            if account.receiving.name == HierarchicalDeterministic.name:
-                address_changes = {
-                    'change': {'gap': change_gap, 'maximum_uses_per_address': change_max_uses},
-                    'receiving': {'gap': receiving_gap, 'maximum_uses_per_address': receiving_max_uses},
-                }
-                for chain_name in address_changes:
-                    chain = getattr(account, chain_name)
-                    for attr, value in address_changes[chain_name].items():
-                        if value is not None:
-                            setattr(chain, attr, value)
-                            change_made = True
-            if change_made:
-                wallet.save()
-
-        if default:
-            wallet.accounts.remove(account)
-            wallet.accounts.insert(0, account)
-            wallet.save()
-
-        result = account.to_dict()
-        result.pop('certificates', None)
-        result['is_default'] = wallet.accounts[0] == account
-        return result
-
-    @requires("wallet")
-    def jsonrpc_balance(self, account_name=None, confirmations=6, include_reserved=False,
-                        include_claims=False):
-        """
-        Return the balance of an individual account or all of the accounts.
-
-        Usage:
-            balance [<account_name>] [--confirmations=<confirmations>]
-                    [--include_reserved] [--include_claims]
-
-        Options:
-            --account=<account_name>        : (str) If provided only the balance for this
-                                                    account will be given
-            --confirmations=<confirmations> : (int) required confirmations (default: 6)
-            --include_reserved              : (bool) include reserved UTXOs (default: false)
-            --include_claims                : (bool) include claims, requires than a
-                                                     LBC account is specified (default: false)
-
-        Returns:
-            (map) balance of account(s)
-        """
-        if account_name:
-            for account in self.wallet.accounts:
-                if account.name == account_name:
-                    if include_claims and not isinstance(account, LBCAccount):
-                        raise Exception(
-                            "'--include-claims' requires specifying an LBC ledger account. "
-                            "Found '{}', but it's an {} ledger account."
-                            .format(account_name, account.ledger.symbol)
-                        )
-                    args = {
-                        'confirmations': confirmations,
-                        'include_reserved': include_reserved
-                    }
-                    if include_claims:
-                        args['include_claims'] = True
-                    return account.get_balance(**args)
-            raise Exception("Couldn't find an account named: '{}'.".format(account_name))
-        else:
-            if include_claims:
-                raise Exception("'--include-claims' requires specifying an LBC account.")
-            return self.wallet.get_balances(confirmations)
-
-    @requires("wallet")
-    def jsonrpc_max_address_gap(self, account_name):
-        """
-        Finds ranges of consecutive addresses that are unused and returns the length
-        of the longest such range: for change and receiving address chains. This is
-        useful to figure out ideal values to set for 'receiving_gap' and 'change_gap'
-        account settings.
-
-        Usage:
-            max_address_gap (<account_name> | --account=<account_name>)
-
-        Options:
-            --account=<account_name>        : (str) account for which to get max gaps
-
-        Returns:
-            (map) maximum gap for change and receiving addresses
-        """
-        return self.get_account_or_error('account', account_name).get_max_gap()
-
-    @requires("wallet")
-    def jsonrpc_fund(self, to_account, from_account, amount=0,
-                         everything=False, outputs=1, broadcast=False):
-        """
-        Transfer some amount (or --everything) to an account from another
-        account (can be the same account). Amounts are interpreted as LBC.
-        You can also spread the transfer across a number of --outputs (cannot
-        be used together with --everything).
-
-        Usage:
-            fund (<to_account> | --to_account=<to_account>)
-                 (<from_account> | --from_account=<from_account>)
-                 (<amount> | --amount=<amount> | --everything)
-                 [<outputs> | --outputs=<outputs>]
-                 [--broadcast]
-
-        Options:
-            --to_account=<to_account>     : (str) send to this account
-            --from_account=<from_account> : (str) spend from this account
-            --amount=<amount>             : (str) the amount to transfer lbc
-            --everything                  : (bool) transfer everything (excluding claims), default: false.
-            --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
-            --broadcast                   : (bool) actually broadcast the transaction, default: false.
-
-        Returns:
-            (map) maximum gap for change and receiving addresses
-
-        """
-        to_account = self.get_account_or_error('to_account', to_account)
-        from_account = self.get_account_or_error('from_account', from_account)
-        amount = self.get_dewies_or_error('amount', amount) if amount else None
-        if not isinstance(outputs, int):
-            raise ValueError("--outputs must be an integer.")
-        if everything and outputs > 1:
-            raise ValueError("Using --everything along with --outputs is not supported.")
-        return from_account.fund(
-            to_account=to_account, amount=amount, everything=everything,
-            outputs=outputs, broadcast=broadcast
-        )
-
-    def get_account_or_error(self, argument: str, account_name: str, lbc_only=False):
-        for account in self.wallet.default_wallet.accounts:
+    def get_account_or_error(self, argument: str, account_name: str, lbc_only=True):
+        for account in self.wallet_manager.default_wallet.accounts:
             if account.name == account_name:
                 if lbc_only and not isinstance(account, LBCAccount):
                     raise ValueError(
@@ -3272,7 +3291,7 @@ class Daemon(AuthJSONRPCServer):
         raise ValueError("Couldn't find an account named: '{}'.".format(account_name))
 
     def error_if_account_exists(self, account_name: str):
-        for account in self.wallet.default_wallet.accounts:
+        for account in self.wallet_manager.default_wallet.accounts:
             if account.name == account_name:
                 raise ValueError("Account with name '{}' already exists.".format(account_name))
 

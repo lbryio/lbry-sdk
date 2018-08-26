@@ -8,33 +8,63 @@ can and probably will change functionality and break backwards compatibility
 at anytime.
 
 ## [Unreleased]
+Python 3 upgrade of the entire code base and switching to a brand new wallet
+implementation are the major changes in this release.
+
 ### Security
-  * Upgraded `cryptography` package.
-  *
+  * upgraded `cryptography` package.
 
-### Fixed
-  *
-  *
+### API
+  * unified all command line executables into a single `lbrynet` executable.
+  * deprecated `daemon_stop` command, use `stop` instead.
+  * deprecated `wallet_balance` command, use `account_balance` instead.
+  * deprecated `wallet_unlock` command, use `account_unlock` instead.
+  * deprecated `wallet_decrypt` command, use `account_decrypt` instead.
+  * deprecated `wallet_encrypt` command, use `account_encrypt` instead.
+  * deprecated `wallet_prefill_addresses` command, use `account_fund` instead.
+  * deprecated `wallet_list` command, use `address_list` instead.
+  * deprecated `wallet_is_address_mine` command, use `address_is_mine` instead.
+  * deprecated `wallet_public_key` command, use `address_public_key` instead.
+  * deprecated `wallet_new_address` command, use `address_generate` instead.
+  * deprecated `wallet_unused_address` command, use `address_unused` instead.
+  * added `account_list` command to list accounts including their balance.
+  * added `account_add` command to add a previously created account from seed or private key.
+  * added `account_create` command to generate a new account.
+  * added `account_remove` command to remove an account from wallet.
+  * added `account_set` command to change a setting on an account.
+  * added `account_balance` command to get just the account balance.
+  * added `account_unlock` command to unlock an account.
+  * added `account_encrypt` command to encrypt an account.
+  * added `account_decrypt` command to decrypt an account.
+  * added `account_fund` command to move funds between or within an account in various ways.
+  * added `account_max_address_gap` command to find large gaps of unused addresses.
+  * added `address_list` command to list addresses.
+  * added `address_is_mine` command to check if an address is one of your addresses.
+  * added `address_public_key` command to get public key of an address.
+  * added `address_generate` command to generate a new address.
+  * added `address_unused` command to get existing or generate a new unused address.
+  * removed `send_amount_to_address` command previously marked as deprecated
+  * removed `channel_list_mine` command previously marked as deprecated
+  * removed `get_availability` command previously marked as deprecated
 
-### Deprecated
+### Wallet
+  * changed to a new wallet implementation: torba.
+  * changed wallet file format to support multiple accounts in one wallet.
+  * moved transaction data from wallet file into an sqlite database.
+  * changed channel certificates to be keyed by txid:nout instead of claim_id which
+    makes it possible to recover old certificates.
+
+### DHT
+  * Extensive internal changes as a result of porting to Python 3.
+
+### P2P & File Manager
+  * Extensive internal changes as a result of porting to Python 3.
+
+### Database
+  * 
+
+### Reflector
   *
-  *
-
-### Changed
-  * Ported to Python 3 without backwards compatibility with Python 2.
-  * Switched to a brand new wallet implementation: torba.
-  * Format of wallet has changed to support multiple accounts in one wallet.
-
-### Added
-  * `fund` command, used to move funds between or within an account in various ways.
-  * `max_address_gap` command, for finding large gaps of unused addresses
-  * `balance` command, a more detailed version `wallet_balace` which includes all accounts.
-  * `account` command, adding/deleting/modifying accounts including setting the default account.
-
-### Removed
-  * `send_amount_to_address` command, which was previously marked as deprecated
-  *
-
 
 ## [0.21.2] - 2018-08-23
 ### Fixed
