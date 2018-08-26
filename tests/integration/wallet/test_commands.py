@@ -111,7 +111,7 @@ class CommandTestCase(IntegrationTestCase):
 
         def wallet_maker(component_manager):
             self.wallet_component = WalletComponent(component_manager)
-            self.wallet_component.wallet = self.manager
+            self.wallet_component.wallet_manager = self.manager
             self.wallet_component._running = True
             return self.wallet_component
 
@@ -131,7 +131,7 @@ class CommandTestCase(IntegrationTestCase):
         #for component in skip:
         #    self.daemon.component_attributes.pop(component, None)
         await d2f(self.daemon.setup())
-        self.daemon.wallet = self.wallet_component.wallet
+        self.daemon.wallet_manager = self.wallet_component.wallet
         self.manager.old_db = self.daemon.storage
 
     async def tearDown(self):

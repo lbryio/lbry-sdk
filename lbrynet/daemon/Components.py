@@ -314,24 +314,24 @@ class WalletComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.wallet = None
+        self.wallet_manager = None
 
     @property
     def component(self):
-        return self.wallet
+        return self.wallet_manager
 
     @defer.inlineCallbacks
     def get_status(self):
-        if self.wallet:
-            local_height = self.wallet.network.get_local_height()
-            remote_height = self.wallet.network.get_server_height()
-            best_hash = yield self.wallet.get_best_blockhash()
+        if self.wallet_manager:
+            local_height = self.wallet_manager.network.get_local_height()
+            remote_height = self.wallet_manager.network.get_server_height()
+            best_hash = yield self.wallet_manager.get_best_blockhash()
             defer.returnValue({
                 'blocks': max(local_height, 0),
                 'blocks_behind': max(remote_height - local_height, 0),
                 'best_blockhash': best_hash,
-                'is_encrypted': self.wallet.wallet.use_encryption,
-                'is_locked': not self.wallet.is_wallet_unlocked,
+                'is_encrypted': self.wallet_manager.wallet.use_encryption,
+                'is_locked': not self.wallet_manager.is_wallet_unlocked,
             })
 
     @defer.inlineCallbacks
@@ -339,14 +339,14 @@ class WalletComponent(Component):
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet = LbryWalletManager.from_lbrynet_config(conf.settings, storage)
-        self.wallet.old_db = storage
-        yield self.wallet.start()
+        self.wallet_manager = LbryWalletManager.from_lbrynet_config(conf.settings, storage)
+        self.wallet_manager.old_db = storage
+        yield self.wallet_manager.start()
 
     @defer.inlineCallbacks
     def stop(self):
-        yield self.wallet.stop()
-        self.wallet = None
+        yield self.wallet_manager.stop()
+        self.wallet_manager = None
 
 
 class BlobComponent(Component):
