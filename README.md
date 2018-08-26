@@ -8,12 +8,7 @@ The project is written in Python 3.7+ and extensively uses Twisted framework.
 
 ## Installation
 
-|                       | Windows                                      | macOS                                        | Linux                                        |
-| --------------------- | -------------------------------------------- | -------------------------------------------- | -------------------------------------------- |
-| Latest Stable Release | [Download](https://github.com/lbryio/lbry/releases/download/v0.20.0/lbrynet-daemon-v0.20.0-windows.zip)     | [Download](https://github.com/lbryio/lbry/releases/download/v0.20.0/lbrynet-daemon-v0.20.0-macos.zip)     | [Download](https://github.com/lbryio/lbry/releases/download/v0.20.0/lbrynet-daemon-v0.20.0-linux.zip)     |
-| Latest Pre-release     | [Download](https://github.com/lbryio/lbry/releases/download/untagged-99114fa31abbfe3a5ef4/lbrynet-daemon-v0.20.1rc3-windows.zip) | [Download](https://github.com/lbryio/lbry/releases/download/untagged-99114fa31abbfe3a5ef4/lbrynet-daemon-v0.20.1rc3-macos.zip) | [Download](https://github.com/lbryio/lbry/releases/download/v0.20.1rc4/lbrynet-daemon-v0.20.1rc4-linux.zip) |
-
-Our [releases page](https://github.com/lbryio/lbry/releases) contains pre-built binaries of the latest release, pre-releases, and past releases, for macOS, Debian-based Linux, and Windows.
+Our [releases page](https://github.com/lbryio/lbry/releases) contains pre-built binaries of the latest release, pre-releases, and past releases, for macOS, Debian-based Linux, and Windows. [Automated travis builds](http://build.lbry.io/daemon/) are also available for testing.
 
 ## Usage
 
