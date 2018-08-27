@@ -3297,7 +3297,7 @@ class Daemon(AuthJSONRPCServer):
                 raise ValueError("Account with name '{}' already exists.".format(account_name))
 
     @staticmethod
-    def get_dewies_or_error(argument: str, amount: Union[str, int]):
+    def get_dewies_or_error(argument: str, amount: Union[str, int, float]):
         if isinstance(amount, str):
             if '.' in amount:
                 return int(Decimal(amount) * COIN)
@@ -3305,6 +3305,8 @@ class Daemon(AuthJSONRPCServer):
                 amount = int(amount)
         if isinstance(amount, int):
             return amount * COIN
+        if isinstance(amount, float):
+            return int(amount * COIN)
         raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
 
 
