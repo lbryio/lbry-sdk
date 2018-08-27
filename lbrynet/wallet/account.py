@@ -50,6 +50,13 @@ class Account(BaseAccount):
             results['total'] += 1
             if ':' not in maybe_claim_id:
                 claims = yield self.ledger.network.get_claims_by_ids(maybe_claim_id)
+                if maybe_claim_id not in claims:
+                    log.warning(
+                        "Failed to migrate claim '%s', server did not return any claim information.",
+                        maybe_claim_id
+                    )
+                    results['migrate-failed'] += 1
+                    continue
                 claim = claims[maybe_claim_id]
                 tx = None
                 if claim:
