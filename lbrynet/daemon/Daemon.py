@@ -3294,7 +3294,10 @@ class Daemon(AuthJSONRPCServer):
     def get_dewies_or_error(argument: str, amount: Union[str, int, float]):
         if isinstance(amount, str):
             if '.' in amount:
-                return int(Decimal(amount) * COIN)
+                try:
+                    return int(Decimal(amount) * COIN)
+                except InvalidOperation:
+                    raise ValueError("Invalid decimal for '{}' argument: {}".format(argument, amount))
             elif amount.isdigit():
                 amount = int(amount)
         if isinstance(amount, (float, int)):
