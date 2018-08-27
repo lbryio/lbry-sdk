@@ -52,7 +52,7 @@ class MainNetLedger(BaseLedger):
     @property
     def resolver(self):
         return Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
-                        hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
+                        hash160_to_address=self.hash160_to_address, network=self.network)
 
     @defer.inlineCallbacks
     def resolve(self, page, page_size, *uris):
@@ -62,20 +62,19 @@ class MainNetLedger(BaseLedger):
             except URIParseError as err:
                 defer.returnValue({'error': err.message})
         resolutions = yield self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
-        defer.returnValue((yield self.resolver._handle_resolutions(resolutions, uris, page, page_size)))
+        return (yield self.resolver._handle_resolutions(resolutions, uris, page, page_size))
 
+    @defer.inlineCallbacks
     def get_claim_by_claim_id(self, claim_id):
-        d = self.network.get_claims_by_ids(claim_id)
-        d.addCallback(lambda result: result.pop(claim_id) if result else {})
-        d.addCallback(self.resolver.get_cert_and_validate_result)
-        return d
+        result = (yield self.network.get_claims_by_ids(claim_id)).pop(claim_id, {})
+        return (yield self.resolver.get_certificate_and_validate_result(result))
 
     @defer.inlineCallbacks
     def get_claim_by_outpoint(self, txid, nout):
         claims = (yield self.network.get_claims_in_tx(txid)) or []
         for claim in claims:
             if claim['nout'] == nout:
-                return (yield self.resolver.get_cert_and_validate_result(claim))
+                return (yield self.resolver.get_certificate_and_validate_result(claim))
         return 'claim not found'
 
     @defer.inlineCallbacks

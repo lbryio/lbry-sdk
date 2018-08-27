@@ -487,7 +487,7 @@ class Daemon(AuthJSONRPCServer):
         Resolve a name and return the estimated stream cost
         """
 
-        resolved = (yield self.wallet.resolve(uri))
+        resolved = yield self.wallet.resolve(uri)
         if resolved:
             claim_response = resolved[uri]
         else:
@@ -2514,15 +2514,12 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if blockhash is not None:
-            d = self.wallet.get_block(blockhash)
+            return self.wallet.get_block(blockhash)
         elif height is not None:
-            d = self.wallet.get_block_info(height)
+            return self.wallet.get_block_info(height)
         else:
             # TODO: return a useful error message
             return server.failure
-
-        d.addCallback(lambda r: self._render_response(r))
-        return d
 
     @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])

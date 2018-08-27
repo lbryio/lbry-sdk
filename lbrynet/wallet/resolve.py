@@ -146,7 +146,7 @@ class Resolver:
         defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def get_cert_and_validate_result(self, claim_result):
+    def get_certificate_and_validate_result(self, claim_result):
         if not claim_result or 'value' not in claim_result:
             return claim_result
         certificate = None
