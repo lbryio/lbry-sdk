@@ -2187,15 +2187,9 @@ class Daemon(AuthJSONRPCServer):
         except (TypeError, URIParseError):
             raise Exception("Invalid name given to publish")
 
-        try:
-            bid = Decimal(str(bid))
-        except InvalidOperation:
-            raise TypeError("Bid does not represent a valid decimal.")
-
-        if bid <= 0.0:
+        amount = self.get_dewies_or_error('bid', bid)
+        if amount <= 0:
             raise ValueError("Bid value must be greater than 0.0")
-
-        bid = int(bid * COIN)
 
         for address in [claim_address, change_address]:
             if address is not None:
@@ -2203,14 +2197,14 @@ class Daemon(AuthJSONRPCServer):
                 decode_address(address)
 
         available = yield self.default_account.get_balance()
-        if bid >= available:
+        if amount >= available:
             # TODO: add check for existing claim balance
             #balance = yield self.wallet.get_max_usable_balance_for_claim(name)
             #max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
             #if balance <= MAX_UPDATE_FEE_ESTIMATE:
             raise InsufficientFundsError(
                 "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
-                .format(round((bid - available)/COIN + 0.01, 2))
+                .format(round((amount - available) / COIN + 0.01, 2))
             )
             #       .format(MAX_UPDATE_FEE_ESTIMATE - balance))
             #elif bid > max_bid_amount:
@@ -2298,7 +2292,7 @@ class Daemon(AuthJSONRPCServer):
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
-            'bid': bid,
+            'bid': amount,
             'claim_address': claim_address,
             'change_address': change_address,
             'claim_dict': claim_dict,
@@ -2316,7 +2310,7 @@ class Daemon(AuthJSONRPCServer):
             if certificate is None:
                 raise Exception("Cannot publish using channel %s" % channel_name)
 
-        result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate,
+        result = yield self._publish_stream(name, amount, claim_dict, file_path, certificate,
                                             claim_address, change_address)
         defer.returnValue(result)
 
@@ -3303,9 +3297,7 @@ class Daemon(AuthJSONRPCServer):
                 return int(Decimal(amount) * COIN)
             elif amount.isdigit():
                 amount = int(amount)
-        if isinstance(amount, int):
-            return amount * COIN
-        if isinstance(amount, float):
+        if isinstance(amount, (float, int)):
             return int(amount * COIN)
         raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
 
