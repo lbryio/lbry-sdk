@@ -11,9 +11,13 @@ from orchstr8.testcase import IntegrationTestCase, d2f
 import lbryschema
 lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
+from torba.constants import COIN
+
+
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
 from lbrynet.daemon.Daemon import Daemon
+from lbrynet.wallet.account import Account
 from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, ExchangeRateManagerComponent
 from lbrynet.daemon.Components import UPnPComponent
@@ -80,9 +84,13 @@ class FakeAnalytics:
     def send_claim_action(self, action):
         pass
 
+    def send_credits_sent(self):
+        pass
+
 
 class CommandTestCase(IntegrationTestCase):
 
+    timeout = 300
     WALLET_MANAGER = LbryWalletManager
 
     async def setUp(self):
@@ -297,6 +305,32 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And now check that the claim doesn't resolve anymore.
         response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])
+
+        # After abandoning he just waits for his LBCs to be returned to his account
+        yield  self.d_generate(5)
+        result = yield self.daemon.jsonrpc_wallet_balance()
+        self.assertEqual(round(result, 2), 8.97)
+
+        # Amidst all this Chris45 receives a call from his friend Ramsey54
+        # who says that it is of utmost urgency that Chris45 transfer him
+        # 1 LBC to which Chris45 ready obliges
+        ramsey_account = Account.generate(self.ledger, self.wallet, "Ramsey54")
+        yield self.ledger.update_account(ramsey_account)
+        ramsey_address = yield ramsey_account.receiving.get_or_create_usable_address()
+        result = yield self.out(self.daemon.jsonrpc_wallet_send(1, ramsey_address))
+        self.assertIn("txid", result)
+        yield self.d_confirm_tx(result['txid'])
+
+        # Chris45 then eagerly waits for 6 confirmations to check his balance and then calls Ramsey54 to verify whether
+        # he received it or not
+        yield self.d_generate(5)
+        result = yield self.daemon.jsonrpc_wallet_balance()
+        # Chris45's balance was correct
+        self.assertEqual(round(result, 2), 7.97)
+
+        # Ramsey54 too assured him that he had received the 1 LBC and thanks him
+        result_ramsey = yield ramsey_account.get_balance()
+        self.assertEqual(result_ramsey / COIN, 1)
 
 
 class AccountManagement(CommandTestCase):
