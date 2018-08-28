@@ -52,13 +52,13 @@ def open_file_for_writing(download_directory, suggested_file_name):
 
 
 def rerun_if_locked(f):
-    max_attempts = 3
+    max_attempts = 5
 
     def rerun(err, rerun_count, *args, **kwargs):
         connection = args[0]
         reactor = connection.reactor
         log.debug("Failed to execute (%s): %s", err, args)
-        if err.check(sqlite3.OperationalError) and err.value.message == "database is locked":
+        if err.check(sqlite3.OperationalError) and "database is locked" in str(err.value):
             log.warning("database was locked. rerunning %s with args %s, kwargs %s",
                         str(f), str(args), str(kwargs))
             if rerun_count < max_attempts:
