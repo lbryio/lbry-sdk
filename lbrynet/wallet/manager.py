@@ -291,6 +291,19 @@ class LbryWalletManager(BaseWalletManager):
         for wallet in self.wallets:
             wallet.save()
 
+    def get_block(self, block_hash):
+        return self.ledger.network.get_block(block_hash)
+
+    def get_block_info(self, height):
+        block_hash = self.ledger.headers.hash(height).decode()
+        return self.get_block(block_hash)
+
+    def get_claim_by_claim_id(self, claim_id):
+        return self.ledger.get_claim_by_claim_id(claim_id)
+
+    def get_claim_by_outpoint(self, txid, nout):
+        return self.ledger.get_claim_by_outpoint(txid, nout)
+
 
 class ClientRequest:
     def __init__(self, request_dict, response_identifier=None):

@@ -145,6 +145,17 @@ class Resolver:
 
         defer.returnValue(result)
 
+    @defer.inlineCallbacks
+    def get_certificate_and_validate_result(self, claim_result):
+        if not claim_result or 'value' not in claim_result:
+            return claim_result
+        certificate = None
+        certificate_id = smart_decode(claim_result['value']).certificate_id
+        if certificate_id:
+            certificate = yield self.network.get_claims_by_ids(certificate_id.decode())
+            certificate = certificate.pop(certificate_id.decode()) if certificate else None
+        return self.parse_and_validate_claim_result(claim_result, certificate=certificate)
+
     def parse_and_validate_claim_result(self, claim_result, certificate=None, raw=False):
         if not claim_result or 'value' not in claim_result:
             return claim_result
