@@ -97,6 +97,14 @@ class OutputScript(BaseOutputScript):
         })
 
     @classmethod
+    def pay_support_pubkey_hash(cls, claim_name: bytes, claim_id: bytes, pubkey_hash: bytes):
+        return cls(template=cls.SUPPORT_CLAIM_PUBKEY, values={
+            'claim_name': claim_name,
+            'claim_id': claim_id,
+            'pubkey_hash': pubkey_hash
+        })
+
+    @classmethod
     def sell_script(cls, price):
         return cls(template=cls.SELL_SCRIPT, values={
             'price': price,
