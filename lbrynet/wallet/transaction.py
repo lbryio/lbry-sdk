@@ -66,6 +66,11 @@ class Output(BaseOutput):
             claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
         return cls(amount, script)
 
+    @classmethod
+    def pay_support_pubkey_hash(cls, amount: int, claim_name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.pay_support_pubkey_hash(claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash)
+        return cls(amount, script)
+
 
 class Transaction(BaseTransaction):
 
@@ -105,6 +110,15 @@ class Transaction(BaseTransaction):
             meta.serialized, ledger.address_to_hash160(holding_address)
         )
         return cls.create([Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account)
+
+    @classmethod
+    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: bytes,
+                funding_accounts: List[Account], change_account: Account):
+        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        output = Output.pay_support_pubkey_hash(
+            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
+        )
+        return cls.create([], [output], funding_accounts, change_account)
 
     @classmethod
     def abandon(cls, claims: Iterable[Output], funding_accounts: Iterable[Account], change_account: Account):

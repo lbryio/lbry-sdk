@@ -246,6 +246,14 @@ class LbryWalletManager(BaseWalletManager):
         }
 
     @defer.inlineCallbacks
+    def support_claim(self, claim_name, claim_id, amount):
+        account = self.default_account
+        holding_address = yield account.receiving.get_or_create_usable_address()
+        tx = yield Transaction.support(claim_name, claim_id, amount, holding_address, [account], account)
+        yield account.ledger.broadcast(tx)
+        return tx
+
+    @defer.inlineCallbacks
     def abandon_claim(self, claim_id, txid, nout):
         account = self.default_account
         claim = yield account.get_claim(claim_id)
