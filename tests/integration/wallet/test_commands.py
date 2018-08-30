@@ -128,8 +128,6 @@ class CommandTestCase(IntegrationTestCase):
             exchange_rate_manager=FakeExchangeRateComponent,
             upnp=FakeUPnP
         ))
-        #for component in skip:
-        #    self.daemon.component_attributes.pop(component, None)
         await d2f(self.daemon.setup())
         self.daemon.wallet_manager = self.wallet_component.wallet_manager
         self.manager.old_db = self.daemon.storage
