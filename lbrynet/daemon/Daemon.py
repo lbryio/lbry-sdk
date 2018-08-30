@@ -2167,7 +2167,11 @@ class Daemon(AuthJSONRPCServer):
                                               automatically generated. Default fee is zero.
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
-            --author=<author>              : (str) author of the publication
+            --author=<author>              : (str) author of the publication. The usage for this field is not
+                                             the same as for channels. The author field is used to credit an author
+                                             who is not the publisher and is not represented by the channel. For
+                                             example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
+                                             by published to a channel such as '@classics', or to no channel at all
             --language=<language>          : (str) language of the publication
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
