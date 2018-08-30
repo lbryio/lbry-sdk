@@ -4,7 +4,6 @@ from twisted.internet import defer
 
 from torba.baseledger import BaseLedger, LedgerRegistry
 from torba.wallet import Wallet, WalletStorage
-from torba.constants import COIN
 
 log = logging.getLogger(__name__)
 
