@@ -1666,19 +1666,18 @@ class Daemon(AuthJSONRPCServer):
         Fields required in the final Metadata are:
             'title'
             'description'
-            'author'
             'language'
             'license'
             'nsfw'
 
         Metadata can be set by either using the metadata argument or by setting individual arguments
-        fee, title, description, author, language, license, license_url, thumbnail, preview, nsfw,
+        fee, title, description, language, license, license_url, thumbnail, preview, nsfw,
         or sources. Individual arguments will overwrite the fields specified in metadata argument.
 
         Usage:
             publish (<name> | --name=<name>) (<bid> | --bid=<bid>) [--metadata=<metadata>]
                     [--file_path=<file_path>] [--fee=<fee>] [--title=<title>]
-                    [--description=<description>] [--author=<author>] [--language=<language>]
+                    [--description=<description>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail=<thumbnail>]
                     [--preview=<preview>] [--nsfw=<nsfw>] [--sources=<sources>]
                     [--channel_name=<channel_name>] [--channel_id=<channel_id>]
@@ -1704,7 +1703,6 @@ class Daemon(AuthJSONRPCServer):
                                               automatically generated. Default fee is zero.
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
-            --author=<author>              : (str) author of the publication
             --language=<language>          : (str) language of the publication
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
