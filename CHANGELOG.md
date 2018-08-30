@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  * `jsonrpc_wallet_prefill_addresses` now follows expected behaviour
+  *
   *
 
 ### Deprecated
