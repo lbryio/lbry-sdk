@@ -9,7 +9,6 @@ class BasicTransactionTests(IntegrationTestCase):
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)
-        yield self.ledger.update_account(account1)
         yield self.ledger.update_account(account2)
 
         self.assertEqual(await self.get_balance(account1), 0)
