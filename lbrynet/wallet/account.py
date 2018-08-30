@@ -160,5 +160,11 @@ class Account(BaseAccount):
         d['certificates'] = self.certificates
         return d
 
+    @defer.inlineCallbacks
+    def get_details(self, **kwargs):
+        details = yield super().get_details(**kwargs)
+        details['certificates'] = len(self.certificates)
+        return details
+
     def get_claim(self, claim_id):
         return self.ledger.db.get_claim(self, claim_id)

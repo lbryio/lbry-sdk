@@ -1118,47 +1118,50 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires("wallet")
-    def jsonrpc_account_list(self, account_name=None, confirmations=6, include_reserved=False,
-                             include_claims=False):
+    def jsonrpc_account_list(self, account_id=None, confirmations=6, include_reserved=False,
+                             include_claims=False, show_seed=False):
         """
-        Return details of an individual account or all of the accounts.
+        List details of all of the accounts or a specific account.
 
         Usage:
-            account_list [<account_name>] [--confirmations=<confirmations>]
-                    [--include_reserved] [--include_claims]
+            account_list [<account_id>] [--confirmations=<confirmations>]
+                [--include_reserved] [--include_claims] [--show_seed]
 
         Options:
-            --account=<account_name>        : (str) If provided only the balance for this
+            --account=<account_id>          : (str) If provided only the balance for this
                                                     account will be given
             --confirmations=<confirmations> : (int) required confirmations (default: 6)
             --include_reserved              : (bool) include reserved UTXOs (default: false)
             --include_claims                : (bool) include claims, requires than a
                                                      LBC account is specified (default: false)
+            --show_seed                     : (bool) show the seed for the account
 
         Returns:
             (map) balance of account(s)
         """
-        if account_name:
+        if account_id:
             for account in self.wallet_manager.accounts:
-                if account.name == account_name:
+                if account.id == account_id:
                     if include_claims and not isinstance(account, LBCAccount):
                         raise Exception(
                             "'--include-claims' requires specifying an LBC ledger account. "
                             "Found '{}', but it's an {} ledger account."
-                                .format(account_name, account.ledger.symbol)
+                            .format(account_id, account.ledger.symbol)
                         )
                     args = {
                         'confirmations': confirmations,
-                        'include_reserved': include_reserved
+                        'include_reserved': include_reserved,
+                        'include_seed': show_seed
                     }
                     if include_claims:
                         args['include_claims'] = True
-                    return account.get_balance(**args)
-            raise Exception("Couldn't find an account named: '{}'.".format(account_name))
+                    return account.get_details(**args)
+            raise Exception("Couldn't find an account: '{}'.".format(account_id))
         else:
             if include_claims:
-                raise Exception("'--include-claims' requires specifying an LBC account.")
-            return self.wallet_manager.get_balances(confirmations)
+                raise Exception("'--include-claims' requires specifying an LBC account by id.")
+            return self.wallet_manager.get_detailed_accounts(
+                confirmations=confirmations, show_seed=show_seed)
 
     @requires("wallet")
     @defer.inlineCallbacks
@@ -1182,9 +1185,10 @@ class Daemon(AuthJSONRPCServer):
         dewies = yield self.default_account.get_balance(
             0 if include_unconfirmed else 6
         )
-        defer.returnValue(round(dewies / COIN, 3))
+        return round(dewies / COIN, 3)
 
     @requires("wallet")
+    @defer.inlineCallbacks
     def jsonrpc_account_add(
             self, account_name, single_key=False, seed=None, private_key=None, public_key=None):
         """
@@ -1207,10 +1211,8 @@ class Daemon(AuthJSONRPCServer):
             (map) added account details
 
         """
-        self.error_if_account_exists(account_name)
         account = LBCAccount.from_dict(
-            self.wallet_manager.get_or_create_ledger('lbc_mainnet'),
-            self.default_wallet, {
+            self.ledger, self.default_wallet, {
                 'name': account_name,
                 'seed': seed,
                 'private_key': private_key,
@@ -1220,6 +1222,10 @@ class Daemon(AuthJSONRPCServer):
                 }
             }
         )
+
+        if self.ledger.network.is_connected:
+            yield self.ledger.update_account(account)
+
         self.default_wallet.save()
 
         result = account.to_dict()
@@ -1229,6 +1235,7 @@ class Daemon(AuthJSONRPCServer):
         return result
 
     @requires("wallet")
+    @defer.inlineCallbacks
     def jsonrpc_account_create(self, account_name, single_key=False):
         """
         Create a new account. Specify --single_key if you want to use
@@ -1245,13 +1252,15 @@ class Daemon(AuthJSONRPCServer):
             (map) new account details
 
         """
-        self.error_if_account_exists(account_name)
         account = LBCAccount.generate(
-            self.wallet_manager.get_or_create_ledger('lbc_mainnet'),
-            self.default_wallet, account_name, {
+            self.ledger, self.default_wallet, account_name, {
                 'name': SingleKey.name if single_key else HierarchicalDeterministic.name
             }
         )
+
+        if self.ledger.network.is_connected:
+            yield self.ledger.update_account(account)
+
         self.default_wallet.save()
 
         result = account.to_dict()
@@ -1261,21 +1270,21 @@ class Daemon(AuthJSONRPCServer):
         return result
 
     @requires("wallet")
-    def jsonrpc_account_remove(self, account_name):
+    def jsonrpc_account_remove(self, account_id):
         """
         Remove an existing account.
 
         Usage:
-            account (<account_name> | --account_name=<account_name>)
+            account (<account_id> | --account_id=<account_id>)
 
         Options:
-            --account_name=<account_name>   : (str) name of the account to remove
+            --account_id=<account_id>   : (str) id of the account to remove
 
         Returns:
-            (map) removed account details
+            (map) details of removed account
 
         """
-        account = self.get_account_or_error('account_name', account_name)
+        account = self.get_account_or_error('account_id', account_id)
         self.default_wallet.accounts.remove(account)
         self.default_wallet.save()
         result = account.to_dict()
@@ -1285,19 +1294,21 @@ class Daemon(AuthJSONRPCServer):
 
     @requires("wallet")
     def jsonrpc_account_set(
-            self, account_name, default=False,
+            self, account_id, default=False, new_name=None,
             change_gap=None, change_max_uses=None, receiving_gap=None, receiving_max_uses=None):
         """
         Change various settings on an account.
 
         Usage:
-            account (<account_name> | --account_name=<account_name>) [--default]
-                 [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
-                 [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
+            account (<account_id> | --account_id=<account_id>)
+                [--default] [--new_name=<new_name>]
+                [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
+                [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
 
         Options:
-            --account_name=<account_name>   : (str) name of the account to change
+            --account_id=<account_id>       : (str) id of the account to change
             --default                       : (bool) make this account the default
+            --new_name=<new_name>           : (str) new name for the account
             --receiving_gap=<receiving_gap> : (int) set the gap for receiving addresses
             --receiving_max_uses=<receiving_max_uses> : (int) set the maximum number of times to
                                                               use a receiving address
@@ -1309,7 +1320,7 @@ class Daemon(AuthJSONRPCServer):
             (map) updated account details
 
         """
-        account = self.get_account_or_error('account_name', account_name)
+        account = self.get_account_or_error('account_id', account_id)
         change_made = False
 
         if account.receiving.name == HierarchicalDeterministic.name:
@@ -1323,6 +1334,10 @@ class Daemon(AuthJSONRPCServer):
                     if value is not None:
                         setattr(chain, attr, value)
                         change_made = True
+
+        if new_name is not None:
+            account.name = new_name
+            change_made = True
 
         if default:
             self.default_wallet.accounts.remove(account)
@@ -3273,22 +3288,17 @@ class Daemon(AuthJSONRPCServer):
                                    response['head_blob_availability'].get('is_available')
         defer.returnValue(response)
 
-    def get_account_or_error(self, argument: str, account_name: str, lbc_only=True):
+    def get_account_or_error(self, argument: str, account_id: str, lbc_only=True):
         for account in self.default_wallet.accounts:
-            if account.name == account_name:
+            if account.id == account_id:
                 if lbc_only and not isinstance(account, LBCAccount):
                     raise ValueError(
                         "Found '{}', but it's an {} ledger account. "
                         "'{}' requires specifying an LBC ledger account."
-                        .format(account_name, account.ledger.symbol, argument)
+                        .format(account_id, account.ledger.symbol, argument)
                     )
                 return account
-        raise ValueError("Couldn't find an account named: '{}'.".format(account_name))
-
-    def error_if_account_exists(self, account_name: str):
-        for account in self.default_wallet.accounts:
-            if account.name == account_name:
-                raise ValueError("Account with name '{}' already exists.".format(account_name))
+        raise ValueError("Couldn't find account: {}.".format(account_id))
 
     @staticmethod
     def get_dewies_or_error(argument: str, amount: Union[str, int, float]):
