@@ -699,7 +699,7 @@ class Daemon(AuthJSONRPCServer):
         """
         log.info("Shutting down lbrynet daemon")
         reactor.callLater(0.1, reactor.fireSystemEvent, "shutdown")
-        defer.returnValue("Shutting down")
+        return "Shutting down"
 
     @defer.inlineCallbacks
     def jsonrpc_status(self):
