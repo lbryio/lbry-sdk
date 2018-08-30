@@ -1140,23 +1140,21 @@ class Daemon(AuthJSONRPCServer):
             (map) balance of account(s)
         """
         if account_id:
-            for account in self.wallet_manager.accounts:
-                if account.id == account_id:
-                    if include_claims and not isinstance(account, LBCAccount):
-                        raise Exception(
-                            "'--include-claims' requires specifying an LBC ledger account. "
-                            "Found '{}', but it's an {} ledger account."
-                            .format(account_id, account.ledger.symbol)
-                        )
-                    args = {
-                        'confirmations': confirmations,
-                        'include_reserved': include_reserved,
-                        'include_seed': show_seed
-                    }
-                    if include_claims:
-                        args['include_claims'] = True
-                    return account.get_details(**args)
-            raise Exception("Couldn't find an account: '{}'.".format(account_id))
+            account = self.get_account_or_error('account', account_id)
+            args = {
+                'confirmations': confirmations,
+                'include_reserved': include_reserved,
+                'include_seed': show_seed
+            }
+            if include_claims:
+                args['include_claims'] = True
+                if not isinstance(account, LBCAccount):
+                    raise Exception(
+                        "'--include-claims' requires specifying an LBC ledger account. "
+                        "Found '{}', but it's an {} ledger account."
+                        .format(account_id, account.ledger.symbol)
+                    )
+            return account.get_details(**args)
         else:
             if include_claims:
                 raise Exception("'--include-claims' requires specifying an LBC account by id.")
@@ -1185,7 +1183,7 @@ class Daemon(AuthJSONRPCServer):
         dewies = yield self.default_account.get_balance(
             0 if include_unconfirmed else 6
         )
-        return round(dewies / COIN, 3)
+        return Decimal(dewies) / COIN
 
     @requires("wallet")
     @defer.inlineCallbacks

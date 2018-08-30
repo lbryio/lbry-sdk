@@ -2,6 +2,7 @@ import json
 import tempfile
 import logging
 import asyncio
+from decimal import Decimal
 from types import SimpleNamespace
 
 from twisted.internet import defer
@@ -206,7 +207,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # To get the unconfirmed balance he has to pass the '--include-unconfirmed'
         # flag to lbrynet:
         result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
-        self.assertEqual(result, 8.99)
+        self.assertEqual(result, Decimal('8.989893'))
         # "Well, that's a relief." he thinks to himself as he exhales a sigh of relief.
 
         # He waits for a block
@@ -227,7 +228,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         yield self.d_generate(1)
         # and it should be 6 total, enough to get the correct balance!
         result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, 8.99)
+        self.assertEqual(result, Decimal('8.989893'))
         # Like a Swiss watch (right niko?) the blockchain never disappoints! We're
         # at 6 confirmations and the total is correct.
 
@@ -258,7 +259,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # He quickly checks the unconfirmed balance to make sure everything looks
         # correct.
         result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
-        self.assertEqual(round(result, 2), 7.97)
+        self.assertEqual(result, Decimal('7.969786'))
 
         # Also checks that his new story can be found on the blockchain before
         # giving the link to all his friends.
@@ -270,7 +271,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         yield self.d_generate(5)
         # When he comes back he verifies the confirmed balance.
         result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(round(result, 2), 7.97)
+        self.assertEqual(result, Decimal('7.969786'))
 
         # As people start reading his story they discover some typos and notify
         # Chris who explains in despair "Oh! Noooooos!" but then remembers
