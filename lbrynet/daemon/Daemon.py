@@ -2432,7 +2432,6 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(result)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
     def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
         """
         Create new UTXOs, each containing `amount` credits
@@ -2453,7 +2452,7 @@ class Daemon(AuthJSONRPCServer):
         broadcast = not no_broadcast
         return self.jsonrpc_fund(self.wallet.default_account.name,
                                  self.wallet.default_account.name,
-                                 amount=amount,
+                                 amount=amount * num_addresses,
                                  outputs=num_addresses,
                                  broadcast=broadcast)
 
