@@ -298,3 +298,45 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And now check that the claim doesn't resolve anymore.
         response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])
+
+
+class AccountManagement(CommandTestCase):
+
+    VERBOSE = False
+
+    @defer.inlineCallbacks
+    def test_performing_account_management_commands(self):
+        # check initial account
+        response = yield self.daemon.jsonrpc_account_list()
+        self.assertEqual(len(response['lbc_regtest']), 1)
+
+        # change account name
+        account_id = response['lbc_regtest'][0]['id']
+        yield self.daemon.jsonrpc_account_set(account_id=account_id, new_name='test account')
+        response = yield self.daemon.jsonrpc_account_list()
+        self.assertEqual(response['lbc_regtest'][0]['name'], 'test account')
+
+        # create another account
+        yield self.daemon.jsonrpc_account_create('second account')
+        response = yield self.daemon.jsonrpc_account_list()
+        self.assertEqual(len(response['lbc_regtest']), 2)
+        self.assertEqual(response['lbc_regtest'][1]['name'], 'second account')
+        account_id2 = response['lbc_regtest'][1]['id']
+
+        # make new account the default
+        self.daemon.jsonrpc_account_set(account_id=account_id2, default=True)
+        response = yield self.daemon.jsonrpc_account_list(show_seed=True)
+        self.assertEqual(response['lbc_regtest'][0]['name'], 'second account')
+
+        account_seed = response['lbc_regtest'][1]['seed']
+
+        # remove account
+        yield self.daemon.jsonrpc_account_remove(response['lbc_regtest'][1]['id'])
+        response = yield self.daemon.jsonrpc_account_list()
+        self.assertEqual(len(response['lbc_regtest']), 1)
+
+        # add account
+        yield self.daemon.jsonrpc_account_add('recreated account', seed=account_seed)
+        response = yield self.daemon.jsonrpc_account_list()
+        self.assertEqual(len(response['lbc_regtest']), 2)
+        self.assertEqual(response['lbc_regtest'][1]['name'], 'recreated account')
