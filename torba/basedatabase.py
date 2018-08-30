@@ -86,25 +86,25 @@ class SQLiteMixin:
     def query_one_value(self, query, params=None, default=None):
         result = yield self.run_query(query, params)
         if result:
-            defer.returnValue(result[0][0] or default)
+            return result[0][0] or default
         else:
-            defer.returnValue(default)
+            return default
 
     @defer.inlineCallbacks
     def query_dict_value_list(self, query, fields, params=None):
         result = yield self.run_query(query.format(', '.join(fields)), params)
         if result:
-            defer.returnValue([dict(zip(fields, r)) for r in result])
+            return [dict(zip(fields, r)) for r in result]
         else:
-            defer.returnValue([])
+            return []
 
     @defer.inlineCallbacks
     def query_dict_value(self, query, fields, params=None, default=None):
         result = yield self.query_dict_value_list(query, fields, params)
         if result:
-            defer.returnValue(result[0])
+            return result[0]
         else:
-            defer.returnValue(default)
+            return default
 
     @staticmethod
     def execute(t, sql, values):
@@ -262,9 +262,9 @@ class BaseDatabase(SQLiteMixin):
             "SELECT raw, height, is_verified FROM tx WHERE txid = ?", (txid,)
         )
         if result:
-            defer.returnValue(result[0])
+            return result[0]
         else:
-            defer.returnValue((None, None, False))
+            return None, None, False
 
     def get_balance_for_account(self, account, include_reserved=False, **constraints):
         if not include_reserved:
@@ -294,14 +294,34 @@ class BaseDatabase(SQLiteMixin):
             """+constraints_to_sql(constraints), constraints
         )
         output_class = account.ledger.transaction_class.output_class
-        defer.returnValue([
+        return [
             output_class(
                 values[0],
                 output_class.script_class(values[1]),
                 TXRefImmutable.from_id(values[2]),
                 position=values[3]
             ) for values in utxos
-        ])
+        ]
+
+    @defer.inlineCallbacks
+    def get_txios_for_account(self, account, **constraints):
+        constraints['account'] = account.public_key.address
+        utxos = yield self.run_query(
+            """
+            SELECT amount, script, txid, txo.position
+            FROM txo JOIN pubkey_address ON pubkey_address.address=txo.address
+            WHERE account=:account AND txo.is_reserved=0 AND txoid NOT IN (SELECT txoid FROM txi)
+            """+constraints_to_sql(constraints), constraints
+        )
+        output_class = account.ledger.transaction_class.output_class
+        return [
+            output_class(
+                values[0],
+                output_class.script_class(values[1]),
+                TXRefImmutable.from_id(values[2]),
+                position=values[3]
+            ) for values in utxos
+        ]
 
     def add_keys(self, account, chain, keys):
         sql = (

@@ -5,6 +5,7 @@ from twisted.internet import defer
 from torba.mnemonic import Mnemonic
 from torba.bip32 import PrivateKey, PubKey, from_extended_key_string
 from torba.hash import double_sha256, aes_encrypt, aes_decrypt
+from torba.constants import COIN
 
 if typing.TYPE_CHECKING:
     from torba import baseledger
@@ -65,15 +66,15 @@ class AddressManager:
     @defer.inlineCallbacks
     def get_addresses(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
         records = yield self.get_address_records(limit=limit, only_usable=only_usable)
-        defer.returnValue([r['address'] for r in records])
+        return [r['address'] for r in records]
 
     @defer.inlineCallbacks
     def get_or_create_usable_address(self) -> defer.Deferred:
         addresses = yield self.get_addresses(limit=1, only_usable=True)
         if addresses:
-            defer.returnValue(addresses[0])
+            return addresses[0]
         addresses = yield self.ensure_address_gap()
-        defer.returnValue(addresses[0])
+        return addresses[0]
 
 
 class HierarchicalDeterministic(AddressManager):
@@ -109,7 +110,7 @@ class HierarchicalDeterministic(AddressManager):
         yield self.db.add_keys(
             self.account, self.chain_number, new_keys
         )
-        defer.returnValue([key[1].address for key in new_keys])
+        return [key[1].address for key in new_keys]
 
     @defer.inlineCallbacks
     def get_max_gap(self) -> defer.Deferred:
@@ -122,7 +123,7 @@ class HierarchicalDeterministic(AddressManager):
             else:
                 max_gap = max(max_gap, current_gap)
                 current_gap = 0
-        defer.returnValue(max_gap)
+        return max_gap
 
     @defer.inlineCallbacks
     def ensure_address_gap(self) -> defer.Deferred:
@@ -136,12 +137,12 @@ class HierarchicalDeterministic(AddressManager):
                 break
 
         if existing_gap == self.gap:
-            defer.returnValue([])
+            return []
 
         start = addresses[0]['position']+1 if addresses else 0
         end = start + (self.gap - existing_gap)
         new_keys = yield self.generate_keys(start, end-1)
-        defer.returnValue(new_keys)
+        return new_keys
 
     def get_address_records(self, limit: int = None, only_usable: bool = False):
         return self._query_addresses(
@@ -179,8 +180,8 @@ class SingleKey(AddressManager):
             yield self.db.add_keys(
                 self.account, self.chain_number, [(0, self.public_key)]
             )
-            defer.returnValue([self.public_key.address])
-        defer.returnValue([])
+            return [self.public_key.address]
+        return []
 
     def get_address_records(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
         return self._query_addresses()
@@ -201,6 +202,7 @@ class BaseAccount:
                  address_generator: dict) -> None:
         self.ledger = ledger
         self.wallet = wallet
+        self.id = public_key.address
         self.name = name
         self.seed = seed
         self.encrypted = encrypted
@@ -271,6 +273,22 @@ class BaseAccount:
             'address_generator': self.address_generator.to_dict(self.receiving, self.change)
         }
 
+    @defer.inlineCallbacks
+    def get_details(self, show_seed=False, **kwargs):
+        satoshis = yield self.get_balance(**kwargs)
+        details = {
+            'id': self.id,
+            'name': self.name,
+            'coins': round(satoshis/COIN, 2),
+            'satoshis': satoshis,
+            'encrypted': self.encrypted,
+            'public_key': self.public_key.extended_key_string(),
+            'address_generator': self.address_generator.to_dict(self.receiving, self.change)
+        }
+        if show_seed:
+            details['seed'] = self.seed
+        return details
+
     def decrypt(self, password):
         assert self.encrypted, "Key is not encrypted."
         secret = double_sha256(password)
@@ -291,12 +309,12 @@ class BaseAccount:
         for address_manager in self.address_managers:
             new_addresses = yield address_manager.ensure_address_gap()
             addresses.extend(new_addresses)
-        defer.returnValue(addresses)
+        return addresses
 
     @defer.inlineCallbacks
     def get_addresses(self, limit: int = None, max_used_times: int = None) -> defer.Deferred:
         records = yield self.get_address_records(limit, max_used_times)
-        defer.returnValue([r['address'] for r in records])
+        return [r['address'] for r in records]
 
     def get_address_records(self, limit: int = None, max_used_times: int = None) -> defer.Deferred:
         return self.ledger.db.get_addresses(self, None, limit, max_used_times)
@@ -316,13 +334,16 @@ class BaseAccount:
     def get_max_gap(self):
         change_gap = yield self.change.get_max_gap()
         receiving_gap = yield self.receiving.get_max_gap()
-        defer.returnValue({
+        return {
             'max_change_gap': change_gap,
             'max_receiving_gap': receiving_gap,
-        })
+        }
 
     def get_unspent_outputs(self, **constraints):
         return self.ledger.db.get_utxos_for_account(self, **constraints)
+
+    def get_inputs_outputs(self, **constraints):
+        return self.ledger.db.get_txios_for_account(self, **constraints)
 
     @defer.inlineCallbacks
     def fund(self, to_account, amount=None, everything=False,
@@ -360,4 +381,4 @@ class BaseAccount:
                 [txi.txo_ref.txo for txi in tx.inputs]
             )
 
-        defer.returnValue(tx)
+        return tx

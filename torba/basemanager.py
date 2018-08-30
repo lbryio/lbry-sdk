@@ -43,20 +43,15 @@ class BaseWalletManager:
         return wallet
 
     @defer.inlineCallbacks
-    def get_balances(self, confirmations=6):
-        balances = {}
-        for i, ledger in enumerate(self.ledgers.values()):
-            ledger_balances = balances[ledger.get_id()] = []
-            for j, account in enumerate(ledger.accounts):
-                satoshis = yield account.get_balance(confirmations)
-                ledger_balances.append({
-                    'account': account.name,
-                    'coins': round(satoshis/COIN, 2),
-                    'satoshis': satoshis,
-                    'is_default_account': i == j == 0,
-                    'id': account.public_key.address
-                })
-        defer.returnValue(balances)
+    def get_detailed_accounts(self, confirmations=6, show_seed=False):
+        ledgers = {}
+        for i, account in enumerate(self.accounts):
+            details = yield account.get_details(confirmations=confirmations, show_seed=True)
+            details['is_default_account'] = i == 0
+            ledger_id = account.ledger.get_id()
+            ledgers.setdefault(ledger_id, [])
+            ledgers[ledger_id].append(details)
+        return ledgers
 
     @property
     def default_wallet(self):

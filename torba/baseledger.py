@@ -129,11 +129,8 @@ class BaseLedger(metaclass=LedgerRegistry):
     def path(self):
         return os.path.join(self.config['data_path'], self.get_id())
 
-    @defer.inlineCallbacks
-    def add_account(self, account: baseaccount.BaseAccount) -> defer.Deferred:
+    def add_account(self, account: baseaccount.BaseAccount):
         self.accounts.append(account)
-        if self.network.is_connected:
-            yield self.update_account(account)
 
     @defer.inlineCallbacks
     def get_transaction(self, txhash):
