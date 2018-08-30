@@ -48,7 +48,7 @@ implementation are the major changes in this release.
   * removed `get_availability` command previously marked as deprecated
 
 ### Wallet
-  * changed to a new wallet implementation: torba.
+  * changed to a new wallet implementation: [torba](https://github.com/lbryio/torba).
   * changed wallet file format to support multiple accounts in one wallet.
   * moved transaction data from wallet file into an sqlite database.
   * changed channel certificates to be keyed by txid:nout instead of claim_id which
