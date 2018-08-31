@@ -13,7 +13,6 @@ lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 from torba.constants import COIN
 
-
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
 from lbrynet.daemon.Daemon import Daemon
@@ -90,7 +89,7 @@ class FakeAnalytics:
 
 class CommandTestCase(IntegrationTestCase):
 
-    timeout = 300
+    timeout = 180
     WALLET_MANAGER = LbryWalletManager
 
     async def setUp(self):
