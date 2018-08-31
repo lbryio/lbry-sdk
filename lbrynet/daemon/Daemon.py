@@ -10,7 +10,6 @@ from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
-from twisted.web import server
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
@@ -2511,14 +2510,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) Requested block
         """
-
-        if blockhash is not None:
-            return self.wallet.get_block(blockhash)
-        elif height is not None:
-            return self.wallet.get_block_info(height)
-        else:
-            # TODO: return a useful error message
-            return server.failure
+        return self.wallet.get_block(blockhash, height)
 
     @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
