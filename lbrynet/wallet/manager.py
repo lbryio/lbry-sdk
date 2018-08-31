@@ -291,12 +291,12 @@ class LbryWalletManager(BaseWalletManager):
         for wallet in self.wallets:
             wallet.save()
 
-    def get_block(self, block_hash):
+    def get_block(self, block_hash=None, height=None):
+        if height is None:
+            height = self.ledger.headers.height
+        if block_hash is None:
+            block_hash = self.ledger.headers.hash(height).decode()
         return self.ledger.network.get_block(block_hash)
-
-    def get_block_info(self, height):
-        block_hash = self.ledger.headers.hash(height).decode()
-        return self.get_block(block_hash)
 
     def get_claim_by_claim_id(self, claim_id):
         return self.ledger.get_claim_by_claim_id(claim_id)
