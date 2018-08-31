@@ -1144,7 +1144,7 @@ class Daemon(AuthJSONRPCServer):
             args = {
                 'confirmations': confirmations,
                 'include_reserved': include_reserved,
-                'include_seed': show_seed
+                'show_seed': show_seed
             }
             if include_claims:
                 args['include_claims'] = True

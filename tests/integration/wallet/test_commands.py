@@ -339,3 +339,7 @@ class AccountManagement(CommandTestCase):
         response = yield self.daemon.jsonrpc_account_list()
         self.assertEqual(len(response['lbc_regtest']), 2)
         self.assertEqual(response['lbc_regtest'][1]['name'], 'recreated account')
+
+        # list specific account
+        response = yield self.daemon.jsonrpc_account_list(account_id)
+        self.assertEqual(response['name'], 'recreated account')
