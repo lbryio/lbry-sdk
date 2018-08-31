@@ -309,11 +309,23 @@ class AccountManagement(CommandTestCase):
         response = yield self.daemon.jsonrpc_account_list()
         self.assertEqual(len(response['lbc_regtest']), 1)
 
-        # change account name
+        # change account name and gap
         account_id = response['lbc_regtest'][0]['id']
-        yield self.daemon.jsonrpc_account_set(account_id=account_id, new_name='test account')
-        response = yield self.daemon.jsonrpc_account_list()
-        self.assertEqual(response['lbc_regtest'][0]['name'], 'test account')
+        yield self.daemon.jsonrpc_account_set(
+            account_id=account_id, new_name='test account',
+            receiving_gap=95, receiving_max_uses=96,
+            change_gap=97, change_max_uses=98
+        )
+        response = (yield self.daemon.jsonrpc_account_list())['lbc_regtest'][0]
+        self.assertEqual(response['name'], 'test account')
+        self.assertEqual(
+            response['address_generator']['receiving'],
+            {'gap': 95, 'maximum_uses_per_address': 96}
+        )
+        self.assertEqual(
+            response['address_generator']['change'],
+            {'gap': 97, 'maximum_uses_per_address': 98}
+        )
 
         # create another account
         yield self.daemon.jsonrpc_account_create('second account')
@@ -341,5 +353,5 @@ class AccountManagement(CommandTestCase):
         self.assertEqual(response['lbc_regtest'][1]['name'], 'recreated account')
 
         # list specific account
-        response = yield self.daemon.jsonrpc_account_list(account_id)
+        response = yield self.daemon.jsonrpc_account_list(account_id, include_claims=True)
         self.assertEqual(response['name'], 'recreated account')
