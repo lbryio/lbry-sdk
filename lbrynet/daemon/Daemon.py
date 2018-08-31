@@ -1080,10 +1080,9 @@ class Daemon(AuthJSONRPCServer):
             result = yield self.wallet_manager.send_points_to_address(reserved_points, amount)
             self.analytics_manager.send_credits_sent()
         else:
-            validate_claim_id(claim_id)
-            result = yield self.wallet_manager.tip_claim(claim_id, amount)
-            self.analytics_manager.send_claim_action('new_support')
-        defer.returnValue(result)
+            log.info("This command is deprecated for sending tips, please use the newer tip_claim command")
+            result = yield self.jsonrpc_claim_tip(claim_id, amount)
+        return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     # @AuthJSONRPCServer.deprecated("account_fund"), API has changed as well, so we forward for now
@@ -2380,18 +2379,54 @@ class Daemon(AuthJSONRPCServer):
             --amount=<amount> : (float) amount of support
 
         Returns:
-            (dict) Dictionary containing result of the claim
+            (dict) Dictionary containing the transaction information
             {
-                txid : (str) txid of resulting support claim
-                nout : (int) nout of the resulting support claim
-                fee : (float) fee paid for the transaction
+                "hex": (str) raw transaction,
+                "inputs": (list) inputs(dict) used for the transaction,
+                "outputs": (list) outputs(dict) for the transaction,
+                "total_fee": (int) fee in dewies,
+                "total_input": (int) total of inputs in dewies,
+                "total_output": (int) total of outputs in dewies(input - fees),
+                "txid": (str) txid of the transaction,
             }
         """
 
         amount = self.get_dewies_or_error("amount", amount)
         result = yield self.wallet_manager.support_claim(name, claim_id, amount)
         self.analytics_manager.send_claim_action('new_support')
-        defer.returnValue(result)
+        return result
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @defer.inlineCallbacks
+    def jsonrpc_claim_tip(self, claim_id, amount):
+        """
+        Tip a claim
+
+        Usage:
+            claim_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
+
+        Options:
+            --claim_id=<claim_id> : (str) claim_id of the claim to support
+            --amount=<amount> : (float) amount of support
+
+        Returns:
+            (dict) Dictionary containing the transaction information
+            {
+                "hex": (str) raw transaction,
+                "inputs": (list) inputs(dict) used for the transaction,
+                "outputs": (list) outputs(dict) for the transaction,
+                "total_fee": (int) fee in dewies,
+                "total_input": (int) total of inputs in dewies,
+                "total_output": (int) total of outputs in dewies(input - fees),
+                "txid": (str) txid of the transaction,
+            }
+        """
+
+        amount = self.get_dewies_or_error("amount", amount)
+        validate_claim_id(claim_id)
+        result = yield self.wallet.tip_claim(amount, claim_id)
+        self.analytics_manager.send_claim_action('new_support')
+        return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
