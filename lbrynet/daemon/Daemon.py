@@ -1853,19 +1853,14 @@ class Daemon(AuthJSONRPCServer):
         if parsed_uri.is_channel and not parsed_uri.path:
             raise Exception("cannot download a channel claim, specify a /path")
 
-        resolved_result = yield self.wallet_manager.resolve(uri)
-        if resolved_result and uri in resolved_result:
-            resolved = resolved_result[uri]
-        else:
-            resolved = None
+        resolved = (yield self.wallet.resolve(uri)).get(uri, {})
+        resolved = resolved if 'value' in resolved else resolved.get('claim')
 
-        if not resolved or 'value' not in resolved:
-            if 'claim' not in resolved:
-                raise Exception(
-                    "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
-                )
-            else:
-                resolved = resolved['claim']
+        if not resolved:
+            raise Exception(
+                "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
+            )
+
         txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
         claim_dict = ClaimDict.load_dict(resolved['value'])
         sd_hash = claim_dict.source_hash.decode()
