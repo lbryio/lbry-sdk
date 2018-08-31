@@ -86,7 +86,7 @@ class BaseHeaders:
 
     def hash(self, height=None) -> bytes:
         return self.hash_header(
-            self.get_raw_header(height or self.height)
+            self.get_raw_header(height if height is not None else self.height)
         )
 
     @staticmethod
