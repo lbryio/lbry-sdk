@@ -1042,7 +1042,7 @@ class Daemon(AuthJSONRPCServer):
 
         Returns:
             If sending to an address:
-            (dict) true if payment successfully scheduled
+            (dict) Dictionary containing the transaction information
             {
                 "hex": (str) raw transaction,
                 "inputs": (list) inputs(dict) used for the transaction,
