@@ -254,6 +254,16 @@ class LbryWalletManager(BaseWalletManager):
         return tx
 
     @defer.inlineCallbacks
+    def tip_claim(self, amount, claim_id):
+        account = self.default_account
+        claim_to_tip = yield self.get_claim_by_claim_id(claim_id)
+        tx = yield Transaction.support(
+            claim_to_tip['name'], claim_id, amount, claim_to_tip['address'], [account], account
+        )
+        yield account.ledger.broadcast(tx)
+        return tx
+
+    @defer.inlineCallbacks
     def abandon_claim(self, claim_id, txid, nout):
         account = self.default_account
         claim = yield account.get_claim(claim_id)
