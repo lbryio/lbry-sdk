@@ -16,7 +16,6 @@ from torba.constants import COIN
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
 from lbrynet.daemon.Daemon import Daemon
-from lbrynet.wallet.account import Account
 from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, ExchangeRateManagerComponent
 from lbrynet.daemon.Components import UPnPComponent
@@ -306,15 +305,15 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])
 
         # After abandoning he just waits for his LBCs to be returned to his account
-        yield  self.d_generate(5)
-        result = yield self.daemon.jsonrpc_wallet_balance()
-        self.assertEqual(round(result, 2), 8.97)
+        yield self.d_generate(5)
+        result = yield self.daemon.jsonrpc_account_balance()
+        self.assertEqual(result, Decimal('8.9693585'))
 
         # Amidst all this Chris45 receives a call from his friend Ramsey54
         # who says that it is of utmost urgency that Chris45 transfer him
-        # 1 LBC to which Chris45 ready obliges
-        ramsey_account = Account.generate(self.ledger, self.wallet, "Ramsey54")
-        yield self.ledger.update_account(ramsey_account)
+        # 1 LBC to which Chris45 readily obliges
+        ramsey_account_id = (yield self.daemon.jsonrpc_account_create("Ramsey54"))['id']
+        ramsey_account = self.daemon.get_account_or_error('', ramsey_account_id)
         ramsey_address = yield ramsey_account.receiving.get_or_create_usable_address()
         result = yield self.out(self.daemon.jsonrpc_wallet_send(1, ramsey_address))
         self.assertIn("txid", result)
@@ -323,13 +322,13 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Chris45 then eagerly waits for 6 confirmations to check his balance and then calls Ramsey54 to verify whether
         # he received it or not
         yield self.d_generate(5)
-        result = yield self.daemon.jsonrpc_wallet_balance()
+        result = yield self.daemon.jsonrpc_account_balance()
         # Chris45's balance was correct
-        self.assertEqual(round(result, 2), 7.97)
+        self.assertEqual(result, Decimal('7.9692345'))
 
         # Ramsey54 too assured him that he had received the 1 LBC and thanks him
-        result_ramsey = yield ramsey_account.get_balance()
-        self.assertEqual(result_ramsey / COIN, 1)
+        result = yield self.daemon.jsonrpc_account_balance(ramsey_account_id)
+        self.assertEqual(result, Decimal('1.0'))
 
 
 class AccountManagement(CommandTestCase):

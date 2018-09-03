@@ -1163,14 +1163,16 @@ class Daemon(AuthJSONRPCServer):
 
     @requires("wallet")
     @defer.inlineCallbacks
-    def jsonrpc_account_balance(self, address=None, include_unconfirmed=False):
+    def jsonrpc_account_balance(self, account_id=None, address=None, include_unconfirmed=False):
         """
         Return the balance of an account
 
         Usage:
-            account_balance [<address> | --address=<address>] [--include_unconfirmed]
+            account_balance [<account_id>] [<address> | --address=<address>] [--include_unconfirmed]
 
         Options:
+            --account=<account_id>  : (str) If provided only the balance for this
+                                      account will be given
             --address=<address>     : (str) If provided only the balance for this
                                       address will be given
             --include_unconfirmed   : (bool) Include unconfirmed
@@ -1180,7 +1182,11 @@ class Daemon(AuthJSONRPCServer):
         """
         if address is not None:
             raise NotImplementedError("Limiting by address needs to be re-implemented in new wallet.")
-        dewies = yield self.default_account.get_balance(
+        if account_id is not None:
+            account = self.get_account_or_error('account', account_id)
+        else:
+            account = self.default_account
+        dewies = yield account.get_balance(
             0 if include_unconfirmed else 6
         )
         return Decimal(dewies) / COIN
@@ -1227,6 +1233,7 @@ class Daemon(AuthJSONRPCServer):
         self.default_wallet.save()
 
         result = account.to_dict()
+        result['id'] = account.id
         result['status'] = 'added'
         result.pop('certificates', None)
         result['is_default'] = self.default_wallet.accounts[0] == account
@@ -1262,6 +1269,7 @@ class Daemon(AuthJSONRPCServer):
         self.default_wallet.save()
 
         result = account.to_dict()
+        result['id'] = account.id
         result['status'] = 'created'
         result.pop('certificates', None)
         result['is_default'] = self.default_wallet.accounts[0] == account
@@ -1286,6 +1294,7 @@ class Daemon(AuthJSONRPCServer):
         self.default_wallet.accounts.remove(account)
         self.default_wallet.save()
         result = account.to_dict()
+        result['id'] = account.id
         result['status'] = 'removed'
         result.pop('certificates', None)
         return result
@@ -1346,6 +1355,7 @@ class Daemon(AuthJSONRPCServer):
             self.default_wallet.save()
 
         result = account.to_dict()
+        result['id'] = account.id
         result.pop('certificates', None)
         result['is_default'] = self.default_wallet.accounts[0] == account
         return result
