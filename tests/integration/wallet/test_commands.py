@@ -80,9 +80,13 @@ class FakeAnalytics:
     def send_claim_action(self, action):
         pass
 
+    def send_credits_sent(self):
+        pass
+
 
 class CommandTestCase(IntegrationTestCase):
 
+    timeout = 180
     WALLET_MANAGER = LbryWalletManager
 
     async def setUp(self):
@@ -297,6 +301,32 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And now check that the claim doesn't resolve anymore.
         response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])
+
+        # After abandoning he just waits for his LBCs to be returned to his account
+        yield self.d_generate(5)
+        result = yield self.daemon.jsonrpc_account_balance()
+        self.assertEqual(result, Decimal('8.9693585'))
+
+        # Amidst all this Chris45 receives a call from his friend Ramsey54
+        # who says that it is of utmost urgency that Chris45 transfer him
+        # 1 LBC to which Chris45 readily obliges
+        ramsey_account_id = (yield self.daemon.jsonrpc_account_create("Ramsey54"))['id']
+        ramsey_account = self.daemon.get_account_or_error('', ramsey_account_id)
+        ramsey_address = yield ramsey_account.receiving.get_or_create_usable_address()
+        result = yield self.out(self.daemon.jsonrpc_wallet_send(1, ramsey_address))
+        self.assertIn("txid", result)
+        yield self.d_confirm_tx(result['txid'])
+
+        # Chris45 then eagerly waits for 6 confirmations to check his balance and then calls Ramsey54 to verify whether
+        # he received it or not
+        yield self.d_generate(5)
+        result = yield self.daemon.jsonrpc_account_balance()
+        # Chris45's balance was correct
+        self.assertEqual(result, Decimal('7.9692345'))
+
+        # Ramsey54 too assured him that he had received the 1 LBC and thanks him
+        result = yield self.daemon.jsonrpc_account_balance(ramsey_account_id)
+        self.assertEqual(result, Decimal('1.0'))
 
 
 class AccountManagement(CommandTestCase):
