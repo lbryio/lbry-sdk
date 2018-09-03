@@ -2365,18 +2365,19 @@ class Daemon(AuthJSONRPCServer):
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
-    def jsonrpc_claim_new_support(self, name, claim_id, amount):
+    def jsonrpc_claim_new_support(self, name, claim_id, amount, account_id=None):
         """
         Support a name claim
 
         Usage:
             claim_new_support (<name> | --name=<name>) (<claim_id> | --claim_id=<claim_id>)
-                              (<amount> | --amount=<amount>)
+                              (<amount> | --amount=<amount>) [--account_id=<account_id>]
 
         Options:
             --name=<name> : (str) name of the claim to support
             --claim_id=<claim_id> : (str) claim_id of the claim to support
             --amount=<amount> : (float) amount of support
+            --account_id=<account_id> : (str) id of the account to use
 
         Returns:
             (dict) Dictionary containing the transaction information
@@ -2391,23 +2392,27 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        if account_id is not None:
+            account = self.get_account_or_error("account_id", account_id, lbc_only=True)
+
         amount = self.get_dewies_or_error("amount", amount)
-        result = yield self.wallet_manager.support_claim(name, claim_id, amount)
+        result = yield self.wallet_manager.support_claim(name, claim_id, amount, account)
         self.analytics_manager.send_claim_action('new_support')
         return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
-    def jsonrpc_claim_tip(self, claim_id, amount):
+    def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
         """
         Tip a claim
 
         Usage:
-            claim_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
+            claim_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>) [--account_id=<account_id>]
 
         Options:
             --claim_id=<claim_id> : (str) claim_id of the claim to support
             --amount=<amount> : (float) amount of support
+            --account_id=<account_id> : (str) id of the account to use
 
         Returns:
             (dict) Dictionary containing the transaction information
@@ -2422,9 +2427,12 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        if account_id is not None:
+            account = self.get_account_or_error("account_id", account_id, lbc_only=True)
+
         amount = self.get_dewies_or_error("amount", amount)
         validate_claim_id(claim_id)
-        result = yield self.wallet.tip_claim(amount, claim_id)
+        result = yield self.wallet_manager.tip_claim(amount, claim_id, account)
         self.analytics_manager.send_claim_action('new_support')
         return result
 
