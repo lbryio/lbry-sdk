@@ -15,7 +15,8 @@ from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, ExchangeRateManagerComponent
+from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
+    ExchangeRateManagerComponent
 from lbrynet.daemon.Components import UPnPComponent
 from lbrynet.daemon.Components import REFLECTOR_COMPONENT
 from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT
@@ -167,7 +168,6 @@ class CommandTestCase(IntegrationTestCase):
 
 
 class EpicAdventuresOfChris45(CommandTestCase):
-
     VERBOSE = False
 
     @defer.inlineCallbacks
@@ -307,26 +307,71 @@ class EpicAdventuresOfChris45(CommandTestCase):
         result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(result, Decimal('8.9693585'))
 
-        # Amidst all this Chris45 receives a call from his friend Ramsey54
-        # who says that it is of utmost urgency that Chris45 transfer him
-        # 1 LBC to which Chris45 readily obliges
-        ramsey_account_id = (yield self.daemon.jsonrpc_account_create("Ramsey54"))['id']
+        # Amidst all this Chris receives a call from his friend Ramsey
+        # who says that it is of utmost urgency that Chris transfer him
+        # 1 LBC to which Chris readily obliges
+        ramsey_account_id = (yield self.daemon.jsonrpc_account_create("Ramsey"))['id']
         ramsey_account = self.daemon.get_account_or_error('', ramsey_account_id)
         ramsey_address = yield ramsey_account.receiving.get_or_create_usable_address()
         result = yield self.out(self.daemon.jsonrpc_wallet_send(1, ramsey_address))
         self.assertIn("txid", result)
         yield self.d_confirm_tx(result['txid'])
 
-        # Chris45 then eagerly waits for 6 confirmations to check his balance and then calls Ramsey54 to verify whether
+        # Chris then eagerly waits for 6 confirmations to check his balance and then calls Ramsey to verify whether
         # he received it or not
         yield self.d_generate(5)
         result = yield self.daemon.jsonrpc_account_balance()
-        # Chris45's balance was correct
+        # Chris' balance was correct
         self.assertEqual(result, Decimal('7.9692345'))
 
-        # Ramsey54 too assured him that he had received the 1 LBC and thanks him
+        # Ramsey too assured him that he had received the 1 LBC and thanks him
         result = yield self.daemon.jsonrpc_account_balance(ramsey_account_id)
         self.assertEqual(result, Decimal('1.0'))
+
+        # After Chris is done with all the "helping other people" stuff he decides that it's time to
+        # write a new story and publish it to lbry. All he needed was a fresh start and he came up with:
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'Amazingly Original First Line')
+            file.write(b'Super plot for the grand novel')
+            file.write(b'Totally un-cliched ending')
+            file.write(b'**Audience Gasps**')
+            file.flush()
+            claim3 = yield self.out(self.daemon.jsonrpc_publish(
+                'fresh-start', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+            ))
+            self.assertTrue(claim3['success'])
+            yield self.d_confirm_tx(claim3['tx']['txid'])
+
+        yield self.d_generate(5)
+
+        # He gives the link of his story to all his friends and hopes that this is the much needed break for him
+        uri = 'lbry://@spam/fresh-start'
+
+        # And voila, and bravo and encore! His Best Friend Ramsey read the story and immediately knew this was a hit
+        # Now to keep this claim winning on the lbry blockchain he immediately supports the claim
+        tx = yield self.out(self.daemon.jsonrpc_claim_new_support(
+            'fresh-start', claim3['claim_id'], '0.2', account_id=ramsey_account_id
+        ))
+        yield self.d_confirm_tx(tx['txid'])
+
+        # And check if his support showed up
+        resolve_result = yield self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        # It obviously did! Because, blockchain baby \O/
+        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['amount'], 0.2)
+        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['txid'], tx['txid'])
+        yield self.d_generate(5)
+
+        # Now he also wanted to support the original creator of the Award Winning Novel
+        # So he quickly decides to send a tip to him
+        tx = yield self.out(
+            self.daemon.jsonrpc_claim_tip(claim3['claim_id'], '0.3', account_id=ramsey_account_id))
+        yield self.d_confirm_tx(tx['txid'])
+
+        # And again checks if it went to the just right place
+        resolve_result = yield self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        # Which it obviously did. Because....?????
+        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], 0.3)
+        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['txid'], tx['txid'])
 
 
 class AccountManagement(CommandTestCase):
