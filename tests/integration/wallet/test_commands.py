@@ -350,7 +350,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And voila, and bravo and encore! His Best Friend Ramsey read the story and immediately knew this was a hit
         # Now to keep this claim winning on the lbry blockchain he immediately supports the claim
         tx = yield self.out(self.daemon.jsonrpc_claim_new_support(
-            'fresh-start', claim3['claim_id'], '0.2', account_id=ramsey_account_id
+            'fresh-start', claim3['claim_id'], 0.2, account_id=ramsey_account_id
         ))
         yield self.d_confirm_tx(tx['txid'])
 
@@ -364,7 +364,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Now he also wanted to support the original creator of the Award Winning Novel
         # So he quickly decides to send a tip to him
         tx = yield self.out(
-            self.daemon.jsonrpc_claim_tip(claim3['claim_id'], '0.3', account_id=ramsey_account_id))
+            self.daemon.jsonrpc_claim_tip(claim3['claim_id'], 0.3, account_id=ramsey_account_id))
         yield self.d_confirm_tx(tx['txid'])
 
         # And again checks if it went to the just right place
@@ -372,6 +372,18 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Which it obviously did. Because....?????
         self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], 0.3)
         self.assertEqual(resolve_result[uri]['claim']['supports'][1]['txid'], tx['txid'])
+        yield self.d_generate(5)
+
+        # Seeing the ravishing success of his novel Chris adds support to his claim too
+        tx = yield self.out(self.daemon.jsonrpc_claim_new_support('fresh-start', claim3['claim_id'], 0.4))
+        yield self.d_confirm_tx(tx['txid'])
+
+        # And check if his support showed up
+        resolve_result = yield self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        # It did!
+        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], 0.4)
+        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['txid'], tx['txid'])
+        yield self.d_generate(5)
 
 
 class AccountManagement(CommandTestCase):

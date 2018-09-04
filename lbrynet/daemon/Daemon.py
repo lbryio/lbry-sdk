@@ -1083,7 +1083,7 @@ class Daemon(AuthJSONRPCServer):
             result = yield self.wallet_manager.send_points_to_address(reserved_points, amount)
             self.analytics_manager.send_credits_sent()
         else:
-            log.info("This command is deprecated for sending tips, please use the newer tip_claim command")
+            log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
             result = yield self.jsonrpc_claim_tip(claim_id, amount)
         return result
 
@@ -2397,6 +2397,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        account = self.default_account
         if account_id is not None:
             account = self.get_account_or_error("account_id", account_id, lbc_only=True)
 
@@ -2409,7 +2410,7 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
         """
-        Tip a claim
+        Tip the owner of the claim
 
         Usage:
             claim_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>) [--account_id=<account_id>]
@@ -2432,6 +2433,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        account = self.default_account
         if account_id is not None:
             account = self.get_account_or_error("account_id", account_id, lbc_only=True)
 
