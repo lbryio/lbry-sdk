@@ -502,7 +502,7 @@ class Daemon(AuthJSONRPCServer):
         Resolve a name and return the estimated stream cost
         """
 
-        resolved = yield self.wallet.resolve(uri)
+        resolved = yield self.wallet_manager.resolve(uri)
         if resolved:
             claim_response = resolved[uri]
         else:
@@ -1848,7 +1848,7 @@ class Daemon(AuthJSONRPCServer):
         if parsed_uri.is_channel and not parsed_uri.path:
             raise Exception("cannot download a channel claim, specify a /path")
 
-        resolved = (yield self.wallet.resolve(uri)).get(uri, {})
+        resolved = (yield self.wallet_manager.resolve(uri)).get(uri, {})
         resolved = resolved if 'value' in resolved else resolved.get('claim')
 
         if not resolved:
@@ -2770,7 +2770,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) Requested block
         """
-        return self.wallet.get_block(blockhash, height)
+        return self.wallet_manager.get_block(blockhash, height)
 
     @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
