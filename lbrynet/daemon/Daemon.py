@@ -367,7 +367,7 @@ class Daemon(AuthJSONRPCServer):
                     lambda _: _download_finished(download_id, name, claim_dict),
                     lambda e: _download_failed(e, download_id, name, claim_dict)
                 )
-                result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
+                result = yield self._get_lbry_file_dict(lbry_file)
             except Exception as err:
                 yield _download_failed(err, download_id, name, claim_dict)
                 if isinstance(err, (DownloadDataTimeout, DownloadSDTimeout)):
@@ -529,7 +529,7 @@ class Daemon(AuthJSONRPCServer):
         return self.get_est_cost_from_uri(uri)
 
     @defer.inlineCallbacks
-    def _get_lbry_file_dict(self, lbry_file, full_status=False):
+    def _get_lbry_file_dict(self, lbry_file):
         key = hexlify(lbry_file.key) if lbry_file.key else None
         full_path = os.path.join(lbry_file.download_directory, lbry_file.file_name)
         mime_type = mimetypes.guess_type(full_path)[0]
@@ -540,14 +540,11 @@ class Daemon(AuthJSONRPCServer):
         else:
             written_bytes = 0
 
-        size = num_completed = num_known = status = None
-
-        if full_status:
-            size = yield lbry_file.get_total_bytes()
-            file_status = yield lbry_file.status()
-            num_completed = file_status.num_completed
-            num_known = file_status.num_known
-            status = file_status.running_status
+        size = yield lbry_file.get_total_bytes()
+        file_status = yield lbry_file.status()
+        num_completed = file_status.num_completed
+        num_known = file_status.num_known
+        status = file_status.running_status
 
         result = {
             'completed': lbry_file.completed,
@@ -579,7 +576,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def _get_lbry_file(self, search_by, val, return_json=False, full_status=False):
+    def _get_lbry_file(self, search_by, val, return_json=False):
         lbry_file = None
         if search_by in FileID:
             for l_f in self.file_manager.lbry_files:
@@ -589,11 +586,11 @@ class Daemon(AuthJSONRPCServer):
         else:
             raise NoValidSearch('{} is not a valid search operation'.format(search_by))
         if return_json and lbry_file:
-            lbry_file = yield self._get_lbry_file_dict(lbry_file, full_status=full_status)
+            lbry_file = yield self._get_lbry_file_dict(lbry_file)
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
-    def _get_lbry_files(self, return_json=False, full_status=True, **kwargs):
+    def _get_lbry_files(self, return_json=False, **kwargs):
         lbry_files = list(self.file_manager.lbry_files)
         if kwargs:
             for search_type, value in iter_lbry_file_search_values(kwargs):
@@ -601,7 +598,7 @@ class Daemon(AuthJSONRPCServer):
         if return_json:
             file_dicts = []
             for lbry_file in lbry_files:
-                lbry_file_dict = yield self._get_lbry_file_dict(lbry_file, full_status=full_status)
+                lbry_file_dict = yield self._get_lbry_file_dict(lbry_file)
                 file_dicts.append(lbry_file_dict)
             lbry_files = file_dicts
         log.debug("Collected %i lbry files", len(lbry_files))
@@ -1571,7 +1568,7 @@ class Daemon(AuthJSONRPCServer):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--full_status] [--sort=<sort_method>...]
+                      [--claim_name=<claim_name>] [--sort=<sort_method>...]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1586,8 +1583,6 @@ class Daemon(AuthJSONRPCServer):
             --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id
             --channel_name=<channel_name>  : (str) get file with matching channel name
             --claim_name=<claim_name>              : (str) get file with matching claim name
-            --full_status                          : (bool) full status, populate the
-                                                     'message' and 'size' fields
             --sort=<sort_method>                   : (str) sort by any property, like 'file_name'
                                                      or 'metadata.author'; to specify direction
                                                      append ',asc' or ',desc'
@@ -1609,19 +1604,19 @@ class Daemon(AuthJSONRPCServer):
                     'download_path': (str) download path of file,
                     'mime_type': (str) mime type of file,
                     'key': (str) key attached to file,
-                    'total_bytes': (int) file size in bytes, None if full_status is false,
+                    'total_bytes': (int) file size in bytes,
                     'written_bytes': (int) written size in bytes,
-                    'blobs_completed': (int) num_completed, None if full_status is false,
-                    'blobs_in_stream': (int) None if full_status is false,
-                    'status': (str) downloader status, None if full_status is false,
-                    'claim_id': (str) None if full_status is false or if claim is not found,
-                    'outpoint': (str) None if full_status is false or if claim is not found,
-                    'txid': (str) None if full_status is false or if claim is not found,
-                    'nout': (int) None if full_status is false or if claim is not found,
-                    'metadata': (dict) None if full_status is false or if claim is not found,
-                    'channel_claim_id': (str) None if full_status is false or if claim is not found or signed,
-                    'channel_name': (str) None if full_status is false or if claim is not found or signed,
-                    'claim_name': (str) None if full_status is false or if claim is not found
+                    'blobs_completed': (int) number of fully downloaded blobs,
+                    'blobs_in_stream': (int) total blobs on stream,
+                    'status': (str) downloader status
+                    'claim_id': (str) None if claim is not found else the claim id,
+                    'outpoint': (str) None if claim is not found else the tx and output,
+                    'txid': (str) None if claim is not found else the transaction id,
+                    'nout': (int) None if claim is not found else the transaction output index,
+                    'metadata': (dict) None if claim is not found else the claim metadata,
+                    'channel_claim_id': (str) None if claim is not found or not signed,
+                    'channel_name': (str) None if claim is not found or not signed,
+                    'claim_name': (str) None if claim is not found else the claim name
                 },
             ]
         """
@@ -1831,11 +1826,11 @@ class Daemon(AuthJSONRPCServer):
                 'download_path': (str) download path of file,
                 'mime_type': (str) mime type of file,
                 'key': (str) key attached to file,
-                'total_bytes': (int) file size in bytes, None if full_status is false,
+                'total_bytes': (int) file size in bytes,
                 'written_bytes': (int) written size in bytes,
-                'blobs_completed': (int) num_completed, None if full_status is false,
-                'blobs_in_stream': (int) None if full_status is false,
-                'status': (str) downloader status, None if full_status is false,
+                'blobs_completed': (int) number of fully downloaded blobs,
+                'blobs_in_stream': (int) total blobs on stream,
+                'status': (str) downloader status,
                 'claim_id': (str) claim id,
                 'outpoint': (str) claim outpoint string,
                 'txid': (str) claim txid,
@@ -1878,7 +1873,7 @@ class Daemon(AuthJSONRPCServer):
                 yield lbry_file.start()
             else:
                 log.info('Already have a file for %s', name)
-            result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
+            result = yield self._get_lbry_file_dict(lbry_file)
         else:
             result = yield self._download_name(name, claim_dict, sd_hash, txid, nout,
                                                timeout=timeout, file_name=file_name)
