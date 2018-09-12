@@ -5,6 +5,7 @@ import requests
 import urllib
 import json
 import textwrap
+import re
 
 from operator import itemgetter
 from binascii import hexlify, unhexlify
@@ -3325,17 +3326,12 @@ class Daemon(AuthJSONRPCServer):
         raise ValueError("Couldn't find account: {}.".format(account_id))
 
     @staticmethod
-    def get_dewies_or_error(argument: str, amount: Union[str, int, float]):
+    def get_dewies_or_error(argument: str, amount: str):
         if isinstance(amount, str):
-            if '.' in amount:
-                try:
-                    return int(Decimal(amount) * COIN)
-                except InvalidOperation:
-                    raise ValueError("Invalid decimal for '{}' argument: {}".format(argument, amount))
-            elif amount.isdigit():
-                amount = int(amount)
-        if isinstance(amount, (float, int)):
-            return int(amount * COIN)
+            result = re.search(r'^(\d{1,10})\.(\d{1,8})$', amount)
+            if result is not None:
+                whole, fractional = result.groups()
+                return int(whole+fractional.ljust(8,"0"))
         raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
 
 
