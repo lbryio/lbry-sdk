@@ -313,3 +313,29 @@ class TestFileListSorting(unittest.TestCase):
             setattr(lbry_file, key, faked_attributes[key])
 
         return lbry_file
+
+
+class TestDeweyInputOutput(unittest.TestCase):
+
+    def test_input(self):
+        self.assertEqual(LBRYDaemon.get_dewies_or_error("", "1.0"), 100000000)
+        self.assertEqual(LBRYDaemon.get_dewies_or_error("", "2.00000000"), 200000000)
+        self.assertEqual(LBRYDaemon.get_dewies_or_error("", "2000000000.0"), 200000000000000000)
+
+    def test_invalid_input(self):
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", "1")
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", "-1.0")
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", "10000000000.0")
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", "1.000000000")
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", "-0")
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", "1")
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", ".1")
+        with self.assertRaises(ValueError):
+            LBRYDaemon.get_dewies_or_error("", "1e-7")
