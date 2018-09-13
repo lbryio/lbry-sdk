@@ -3331,7 +3331,7 @@ class Daemon(AuthJSONRPCServer):
             result = re.search(r'^(\d{1,10})\.(\d{1,8})$', amount)
             if result is not None:
                 whole, fractional = result.groups()
-                return int(whole+fractional.ljust(8,"0"))
+                return int(whole+fractional.ljust(8, "0"))
         raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
 
 
