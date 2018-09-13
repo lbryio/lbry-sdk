@@ -10,11 +10,10 @@ import re
 from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
-from typing import Union
 
 from torba.constants import COIN
 
