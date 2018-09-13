@@ -2148,7 +2148,7 @@ class Daemon(AuthJSONRPCServer):
                     [--claim_address=<claim_address>] [--change_address=<change_address>]
 
         Options:
-            --name=<name>                  : (str) name of the content
+            --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --metadata=<metadata>          : (dict) ClaimDict to associate with the claim.
             --file_path=<file_path>        : (str) path to file to be associated with name. If provided,
