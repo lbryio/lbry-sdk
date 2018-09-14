@@ -163,7 +163,7 @@ class LbryWalletManager(BaseWalletManager):
     def list_addresses(self):
         return self.default_account.get_addresses()
 
-    def reserve_points(self, address, amount):
+    def reserve_points(self, address, amount: int):
         # TODO: check if we have enough to cover amount
         return ReservedPoints(address, amount)
 

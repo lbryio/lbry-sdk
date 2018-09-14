@@ -11,6 +11,7 @@ from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet import conf
+from torba.constants import COIN
 
 INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
@@ -96,11 +97,12 @@ class GetStream:
         log.info("Download lbry://%s status changed to %s" % (name, status))
         self.code = next(s for s in STREAM_STAGES if s[0] == status)
 
+    @defer.inlineCallbacks
     def check_fee_and_convert(self, fee):
         max_key_fee_amount = self.convert_max_fee()
         converted_fee_amount = self.exchange_rate_manager.convert_currency(fee.currency, "LBC",
                                                                            fee.amount)
-        if converted_fee_amount > self.wallet.get_balance():
+        if converted_fee_amount > (yield self.wallet.default_account.get_balance()):
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
         if converted_fee_amount > max_key_fee_amount and not self.disable_max_key_fee:
             raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee_amount,
@@ -141,7 +143,7 @@ class GetStream:
     @defer.inlineCallbacks
     def pay_key_fee(self, fee, name):
         if fee is not None:
-            yield self._pay_key_fee(fee.address, fee.amount, name)
+            yield self._pay_key_fee(fee.address.decode(), int(fee.amount * COIN), name)
         else:
             defer.returnValue(None)
 
