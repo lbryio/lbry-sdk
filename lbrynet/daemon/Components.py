@@ -7,7 +7,7 @@ import binascii
 from hashlib import sha256
 from types import SimpleNamespace
 from twisted.internet import defer, threads, reactor, error, task
-import lbryschema
+import lbrynet.schema
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
@@ -353,7 +353,7 @@ class WalletComponent(Component):
         conf.settings.ensure_wallet_dir()
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
+        lbrynet.schema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
         self.wallet_manager = yield f2d(LbryWalletManager.from_lbrynet_config(conf.settings, storage))
         self.wallet_manager.old_db = storage
         yield f2d(self.wallet_manager.start())

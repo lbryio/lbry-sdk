@@ -2,13 +2,13 @@ import logging
 import asyncio
 
 from torba.testcase import IntegrationTestCase
-from lbryschema.claim import ClaimDict
+from lbrynet.schema.claim import ClaimDict
 from lbrynet.wallet.transaction import Transaction
 from lbrynet.wallet.account import generate_certificate
 from lbrynet.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
 
-import lbryschema
-lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
+import lbrynet.schema
+lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 
 example_claim_dict = {

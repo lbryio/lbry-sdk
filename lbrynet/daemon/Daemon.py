@@ -17,12 +17,12 @@ from twisted.python.failure import Failure
 from torba.client.constants import COIN
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
-from lbryschema.claim import ClaimDict
-from lbryschema.uri import parse_lbry_uri
-from lbryschema.error import URIParseError, DecodeError
-from lbryschema.validator import validate_claim_id
-from lbryschema.address import decode_address
-from lbryschema.decode import smart_decode
+from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.uri import parse_lbry_uri
+from lbrynet.schema.error import URIParseError, DecodeError
+from lbrynet.schema.validator import validate_claim_id
+from lbrynet.schema.address import decode_address
+from lbrynet.schema.decode import smart_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
@@ -820,7 +820,7 @@ class Daemon(AuthJSONRPCServer):
                 'ip': (str) remote ip, if available,
                 'lbrynet_version': (str) lbrynet_version,
                 'lbryum_version': (str) lbryum_version,
-                'lbryschema_version': (str) lbryschema_version,
+                'lbrynet.schema_version': (str) lbrynet.schema_version,
                 'os_release': (str) os release string
                 'os_system': (str) os name
                 'platform': (str) platform string
@@ -2271,7 +2271,7 @@ class Daemon(AuthJSONRPCServer):
             }
         }
 
-        # this will be used to verify the format with lbryschema
+        # this will be used to verify the format with lbrynet.schema
         claim_copy = deepcopy(claim_dict)
         if sources is not None:
             claim_dict['stream']['source'] = sources
@@ -2292,7 +2292,7 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("no source provided to publish")
         try:
             ClaimDict.load_dict(claim_copy)
-            # the metadata to use in the claim can be serialized by lbryschema
+            # the metadata to use in the claim can be serialized by lbrynet.schema
         except DecodeError as err:
             # there was a problem with a metadata field, raise an error here rather than
             # waiting to find out when we go to publish the claim (after having made the stream)

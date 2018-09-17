@@ -1,9 +1,9 @@
 import six
-import lbryschema
-from lbryschema.base import b58encode, b58decode, validate_b58_checksum
-from lbryschema.hashing import double_sha256, hash160
-from lbryschema.error import InvalidAddress
-from lbryschema.schema import ADDRESS_LENGTH, ADDRESS_PREFIXES, PUBKEY_ADDRESS, SCRIPT_ADDRESS
+import lbrynet.schema
+from lbrynet.schema.base import b58encode, b58decode, validate_b58_checksum
+from lbrynet.schema.hashing import double_sha256, hash160
+from lbrynet.schema.error import InvalidAddress
+from lbrynet.schema.schema import ADDRESS_LENGTH, ADDRESS_PREFIXES, PUBKEY_ADDRESS, SCRIPT_ADDRESS
 
 
 def validate_address_length(addr_bytes):
@@ -16,7 +16,7 @@ def validate_address_prefix(addr_bytes):
         prefix = addr_bytes[0]
     else:
         prefix = ord(addr_bytes[0])
-    if prefix not in ADDRESS_PREFIXES[lbryschema.BLOCKCHAIN_NAME].values():
+    if prefix not in ADDRESS_PREFIXES[lbrynet.schema.BLOCKCHAIN_NAME].values():
         raise InvalidAddress("Invalid address prefix: %.2X" % prefix)
 
 
@@ -40,9 +40,9 @@ def encode_address(addr_bytes):
 
 def hash_160_bytes_to_address(h160, addrtype=PUBKEY_ADDRESS):
     if addrtype == PUBKEY_ADDRESS:
-        prefix = chr(ADDRESS_PREFIXES[lbryschema.BLOCKCHAIN_NAME][PUBKEY_ADDRESS])
+        prefix = chr(ADDRESS_PREFIXES[lbrynet.schema.BLOCKCHAIN_NAME][PUBKEY_ADDRESS])
     elif addrtype == SCRIPT_ADDRESS:
-        prefix = chr(ADDRESS_PREFIXES[lbryschema.BLOCKCHAIN_NAME][SCRIPT_ADDRESS])
+        prefix = chr(ADDRESS_PREFIXES[lbrynet.schema.BLOCKCHAIN_NAME][SCRIPT_ADDRESS])
     else:
         raise Exception("Invalid address prefix")
     return b58encode(prefix + h160 + double_sha256(prefix + h160)[0:4])
@@ -55,7 +55,7 @@ def public_key_to_address(public_key):
 def address_to_hash_160(addr):
     bytes = decode_address(addr)
     prefix, pubkey_bytes, addr_checksum = bytes[0], bytes[1:21], bytes[21:]
-    if prefix == chr(ADDRESS_PREFIXES[lbryschema.BLOCKCHAIN_NAME][PUBKEY_ADDRESS]):
+    if prefix == chr(ADDRESS_PREFIXES[lbrynet.schema.BLOCKCHAIN_NAME][PUBKEY_ADDRESS]):
         return PUBKEY_ADDRESS, pubkey_bytes
     return SCRIPT_ADDRESS, pubkey_bytes
 

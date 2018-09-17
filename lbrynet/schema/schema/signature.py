@@ -1,8 +1,8 @@
 from copy import deepcopy
 
-from lbryschema.proto import signature_pb2 as signature_pb
-from lbryschema.schema import VERSION_MAP, ECDSA_CURVES
-from lbryschema.schema.schema import Schema
+from lbrynet.schema.proto import signature_pb2 as signature_pb
+from lbrynet.schema.schema import VERSION_MAP, ECDSA_CURVES
+from lbrynet.schema.schema.schema import Schema
 
 
 class Signature(Schema):

@@ -1,9 +1,9 @@
 from copy import deepcopy
 
-from lbryschema.proto import certificate_pb2 as cert_pb
-from lbryschema.schema.schema import Schema
-from lbryschema.schema import VERSION_MAP, V_0_0_1, ECDSA_CURVES, CURVE_NAMES
-from lbryschema.validator import get_key_type_from_dem
+from lbrynet.schema.proto import certificate_pb2 as cert_pb
+from lbrynet.schema.schema.schema import Schema
+from lbrynet.schema.schema import VERSION_MAP, V_0_0_1, ECDSA_CURVES, CURVE_NAMES
+from lbrynet.schema.validator import get_key_type_from_dem
 
 
 class _ECDSAKeyHelper(object):

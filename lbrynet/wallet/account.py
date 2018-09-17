@@ -4,8 +4,8 @@ import logging
 from torba.client.baseaccount import BaseAccount
 from torba.client.basetransaction import TXORef
 
-from lbryschema.claim import ClaimDict
-from lbryschema.signer import SECP256k1, get_signer
+from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.signer import SECP256k1, get_signer
 
 
 log = logging.getLogger(__name__)

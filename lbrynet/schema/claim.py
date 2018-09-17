@@ -5,14 +5,14 @@ from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: dis
 
 from collections import OrderedDict
 
-from lbryschema.schema.claim import Claim
-from lbryschema.proto import claim_pb2
-from lbryschema.validator import get_validator
-from lbryschema.signer import get_signer
-from lbryschema.schema import NIST256p, CURVE_NAMES, CLAIM_TYPE_NAMES
-from lbryschema.encoding import decode_fields, decode_b64_fields, encode_fields
-from lbryschema.error import DecodeError
-from lbryschema.fee import Fee
+from lbrynet.schema.schema.claim import Claim
+from lbrynet.schema.proto import claim_pb2
+from lbrynet.schema.validator import get_validator
+from lbrynet.schema.signer import get_signer
+from lbrynet.schema.schema import NIST256p, CURVE_NAMES, CLAIM_TYPE_NAMES
+from lbrynet.schema.encoding import decode_fields, decode_b64_fields, encode_fields
+from lbrynet.schema.error import DecodeError
+from lbrynet.schema.fee import Fee
 
 
 class ClaimDict(OrderedDict):
@@ -180,10 +180,10 @@ class ClaimDict(OrderedDict):
 
     def get_validator(self, certificate_id):
         """
-        Get a lbryschema.validator.Validator object for a certificate claim
+        Get a lbrynet.schema.validator.Validator object for a certificate claim
 
         :param certificate_id: claim id of this certificate claim
-        :return: None or lbryschema.validator.Validator object
+        :return: None or lbrynet.schema.validator.Validator object
         """
 
         claim = self.protobuf

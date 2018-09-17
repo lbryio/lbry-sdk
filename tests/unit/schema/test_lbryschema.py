@@ -6,22 +6,22 @@ import binascii
 from copy import deepcopy
 import unittest
 
-from test_data import example_003, example_010, example_010_serialized
-from test_data import claim_id_1, claim_address_1, claim_address_2
-from test_data import binary_claim, expected_binary_claim_decoded
-from test_data import nist256p_private_key, claim_010_signed_nist256p, nist256p_cert
-from test_data import nist384p_private_key, claim_010_signed_nist384p, nist384p_cert
-from test_data import secp256k1_private_key, claim_010_signed_secp256k1, secp256k1_cert
-from test_data import hex_encoded_003, decoded_hex_encoded_003, malformed_secp256k1_cert
-import lbryschema
-from lbryschema.claim import ClaimDict
-from lbryschema.schema import NIST256p, NIST384p, SECP256k1
-from lbryschema.legacy.migrate import migrate
-from lbryschema.signer import get_signer
-from lbryschema.uri import URI, URIParseError
-from lbryschema.decode import smart_decode
-from lbryschema.error import DecodeError, InvalidAddress
-from lbryschema.address import decode_address, encode_address
+from .test_data import example_003, example_010, example_010_serialized
+from .test_data import claim_id_1, claim_address_1, claim_address_2
+from .test_data import binary_claim, expected_binary_claim_decoded
+from .test_data import nist256p_private_key, claim_010_signed_nist256p, nist256p_cert
+from .test_data import nist384p_private_key, claim_010_signed_nist384p, nist384p_cert
+from .test_data import secp256k1_private_key, claim_010_signed_secp256k1, secp256k1_cert
+from .test_data import hex_encoded_003, decoded_hex_encoded_003, malformed_secp256k1_cert
+from lbrynet import schema
+from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.schema import NIST256p, NIST384p, SECP256k1
+from lbrynet.schema.legacy.migrate import migrate
+from lbrynet.schema.signer import get_signer
+from lbrynet.schema.uri import URI, URIParseError
+from lbrynet.schema.decode import smart_decode
+from lbrynet.schema.error import DecodeError, InvalidAddress
+from lbrynet.schema.address import decode_address, encode_address
 
 
 parsed_uri_matches = [
@@ -372,10 +372,10 @@ class TestMainnetAddressValidation(UnitTest):
 
 class TestRegtestAddressValidation(UnitTest):
     def setUp(self):
-        lbryschema.BLOCKCHAIN_NAME = "lbrycrd_regtest"
+        schema.BLOCKCHAIN_NAME = "lbrycrd_regtest"
 
     def tearDown(self):
-        lbryschema.BLOCKCHAIN_NAME = "lbrycrd_main"
+        schema.BLOCKCHAIN_NAME = "lbrycrd_main"
 
     def test_regtest_address_encode_decode(self):
         valid_addr_hex = "6fcdac187757dbf05500f613ada6fdd953d59b9acbf3c9343f"

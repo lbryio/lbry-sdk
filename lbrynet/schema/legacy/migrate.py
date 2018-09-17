@@ -2,8 +2,8 @@
 migrate claim json schema (0.0.1-3) to protobuf (0.1.0)
 """
 
-from lbryschema.legacy import metadata_schemas
-from lbryschema.claim import ClaimDict
+from lbrynet.schema.legacy import metadata_schemas
+from lbrynet.schema.claim import ClaimDict
 from .StructuredDict import StructuredDict
 
 

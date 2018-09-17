@@ -1,7 +1,7 @@
 import six
-from lbryschema.schema import ADDRESS_CHECKSUM_LENGTH
-from lbryschema.hashing import double_sha256
-from lbryschema.error import InvalidAddress
+from lbrynet.schema.schema import ADDRESS_CHECKSUM_LENGTH
+from lbrynet.schema.hashing import double_sha256
+from lbrynet.schema.error import InvalidAddress
 
 
 alphabet = b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'

@@ -4,11 +4,11 @@ from ecdsa import BadSignatureError
 from binascii import unhexlify, hexlify
 
 from lbrynet.core.Error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
-from lbryschema.address import is_address
-from lbryschema.claim import ClaimDict
-from lbryschema.decode import smart_decode
-from lbryschema.error import DecodeError
-from lbryschema.uri import parse_lbry_uri
+from lbrynet.schema.address import is_address
+from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.decode import smart_decode
+from lbrynet.schema.error import DecodeError
+from lbrynet.schema.uri import parse_lbry_uri
 
 from .claim_proofs import verify_proof, InvalidProofError
 log = logging.getLogger(__name__)
@@ -235,7 +235,7 @@ class Resolver:
         # these results can include those where `signature_is_valid` is False. if they are skipped,
         # page indexing becomes tricky, as the number of results isn't known until after having
         # processed them.
-        # TODO: fix ^ in lbryschema
+        # TODO: fix ^ in lbrynet.schema
 
         async def iter_validate_channel_claims():
             formatted_claims = []

@@ -1,8 +1,8 @@
 syntax = "proto2";
 
-import "lbryschema/proto/stream.proto";
-import "lbryschema/proto/certificate.proto";
-import "lbryschema/proto/signature.proto";
+import "lbrynet.schema/proto/stream.proto";
+import "lbrynet.schema/proto/certificate.proto";
+import "lbrynet.schema/proto/signature.proto";
 
 message Claim {
     enum Version {

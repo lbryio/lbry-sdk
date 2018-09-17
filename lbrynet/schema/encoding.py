@@ -1,9 +1,9 @@
 import base64, binascii
 from copy import deepcopy
-from lbryschema.address import decode_address, encode_address
-from lbryschema.schema import CLAIM_TYPES, CLAIM_TYPE, STREAM_TYPE, CERTIFICATE_TYPE
-from lbryschema.schema import SIGNATURE
-from lbryschema.error import DecodeError, InvalidAddress
+from lbrynet.schema.address import decode_address, encode_address
+from lbrynet.schema.schema import CLAIM_TYPES, CLAIM_TYPE, STREAM_TYPE, CERTIFICATE_TYPE
+from lbrynet.schema.schema import SIGNATURE
+from lbrynet.schema.error import DecodeError, InvalidAddress
 
 
 def encode_fields(claim_dictionary):
