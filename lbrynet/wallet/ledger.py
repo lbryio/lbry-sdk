@@ -2,8 +2,8 @@ import asyncio
 import logging
 from binascii import unhexlify
 
-from lbryschema.error import URIParseError
-from lbryschema.uri import parse_lbry_uri
+from lbrynet.schema.error import URIParseError
+from lbrynet.schema.uri import parse_lbry_uri
 from torba.client.baseledger import BaseLedger
 
 from .resolve import Resolver

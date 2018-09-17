@@ -3,9 +3,9 @@ import binascii
 
 import six
 
-from lbryschema.error import DecodeError, InvalidAddress
-from lbryschema.legacy.migrate import migrate as schema_migrator
-from lbryschema.claim import ClaimDict
+from lbrynet.schema.error import DecodeError, InvalidAddress
+from lbrynet.schema.legacy.migrate import migrate as schema_migrator
+from lbrynet.schema.claim import ClaimDict
 
 from google.protobuf import json_format  # pylint: disable=no-name-in-module
 

@@ -7,8 +7,8 @@ from decimal import Decimal
 from twisted.internet import defer, task, threads
 from twisted.enterprise import adbapi
 
-from lbryschema.claim import ClaimDict
-from lbryschema.decode import smart_decode
+from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.dht.constants import dataExpireTimeout

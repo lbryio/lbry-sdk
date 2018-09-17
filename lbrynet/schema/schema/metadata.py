@@ -1,8 +1,8 @@
 from copy import deepcopy
-from lbryschema.proto import metadata_pb2 as metadata_pb
-from lbryschema.schema.fee import Fee
-from lbryschema.schema.schema import Schema
-from lbryschema.schema import VERSION_MAP
+from lbrynet.schema.proto import metadata_pb2 as metadata_pb
+from lbrynet.schema.schema.fee import Fee
+from lbrynet.schema.schema.schema import Schema
+from lbrynet.schema.schema import VERSION_MAP
 
 
 class Metadata(Schema):

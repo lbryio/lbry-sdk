@@ -13,7 +13,7 @@ from lbrynet.core.Error import InsufficientFundsError
 #from lbrynet.core.Wallet import LBRYumWallet, ReservedPoints
 #from lbryum.commands import Commands
 #from lbryum.simple_config import SimpleConfig
-from lbryschema.claim import ClaimDict
+from lbrynet.schema.claim import ClaimDict
 
 test_metadata = {
     'license': 'NASA',

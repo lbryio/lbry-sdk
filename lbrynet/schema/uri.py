@@ -1,5 +1,5 @@
 import re
-from lbryschema.error import URIParseError
+from lbrynet.schema.error import URIParseError
 
 PROTOCOL = 'lbry://'
 CHANNEL_CHAR = '@'

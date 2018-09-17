@@ -2,7 +2,7 @@ import sqlite3
 import os
 import json
 import logging
-from lbryschema.decode import smart_decode
+from lbrynet.schema.decode import smart_decode
 from lbrynet import conf
 
 log = logging.getLogger(__name__)

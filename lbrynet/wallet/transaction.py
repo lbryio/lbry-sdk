@@ -2,12 +2,12 @@ import struct
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional
 
-from lbryschema.decode import smart_decode
+from lbrynet.schema.decode import smart_decode
 from .account import Account
 from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput
 from torba.client.hash import hash160
 
-from lbryschema.claim import ClaimDict
+from lbrynet.schema.claim import ClaimDict
 from .script import InputScript, OutputScript
 
 

@@ -13,8 +13,8 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.exceptions import InvalidSignature
 from ecdsa.util import sigencode_der
 
-from lbryschema.address import decode_address
-from lbryschema.schema import NIST256p, NIST384p, SECP256k1, ECDSA_CURVES, CURVE_NAMES
+from lbrynet.schema.address import decode_address
+from lbrynet.schema.schema import NIST256p, NIST384p, SECP256k1, ECDSA_CURVES, CURVE_NAMES
 
 
 def validate_claim_id(claim_id):

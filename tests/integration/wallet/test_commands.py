@@ -10,8 +10,8 @@ from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
 
 from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
-import lbryschema
-lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
+import lbrynet.schema
+lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node

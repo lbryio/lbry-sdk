@@ -8,7 +8,7 @@ from twisted.trial import unittest
 
 from faker import Faker
 
-from lbryschema.decode import smart_decode
+from lbrynet.schema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.daemon.ComponentManager import ComponentManager
