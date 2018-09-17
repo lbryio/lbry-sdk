@@ -138,6 +138,7 @@ class BaseNetwork:
 
     @defer.inlineCallbacks
     def start(self):
+        self.running = True
         for server in cycle(self.config['default_servers']):
             connection_string = 'tcp:{}:{}'.format(*server)
             endpoint = clientFromString(reactor, connection_string)
