@@ -1,0 +1,22 @@
+syntax = "proto2";
+
+import "lbryschema/proto/stream.proto";
+import "lbryschema/proto/certificate.proto";
+import "lbryschema/proto/signature.proto";
+
+message Claim {
+    enum Version {
+        UNKNOWN_VERSION = 0;
+        _0_0_1 = 1;
+    }
+    required Version version = 1;
+    enum ClaimType {
+        UNKNOWN_CLAIM_TYPE = 0;
+        streamType = 1;
+        certificateType = 2;
+    }
+    required ClaimType claimType = 2;
+    optional Stream stream = 3;
+    optional Certificate certificate = 4;
+    optional Signature publisherSignature = 5;
+}

@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+import "lbryschema/proto/certificate.proto";
+
+message Signature {
+    enum Version {
+        UNKNOWN_VERSION = 0;
+        _0_0_1 = 1;
+    }
+    required Version version = 1;
+    required KeyType signatureType = 2;
+    required bytes signature = 3;
+    required bytes certificateId = 4;
+}

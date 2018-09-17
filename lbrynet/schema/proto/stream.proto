@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+import "lbryschema/proto/metadata.proto";
+import "lbryschema/proto/source.proto";
+
+
+message Stream {
+    enum Version {
+        UNKNOWN_VERSION = 0;
+        _0_0_1 = 1;
+    }
+    required Version version = 1;
+    required Metadata metadata = 2;
+    required Source source = 3;
+}

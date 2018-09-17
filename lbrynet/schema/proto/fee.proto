@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+message Fee {
+    enum Version {
+        UNKNOWN_VERSION = 0;
+        _0_0_1 = 1;
+    }
+    enum Currency {
+        UNKNOWN_CURRENCY = 0;
+        LBC = 1;
+        BTC = 2;
+        USD = 3;
+    }
+    required Version version = 1;
+    required Currency currency = 2;
+    required bytes address = 3;
+    required float amount = 4;
+}
