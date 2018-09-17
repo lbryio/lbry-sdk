@@ -1,0 +1,16 @@
+syntax = "proto2";
+
+message Source {
+    enum Version {
+        UNKNOWN_VERSION = 0;
+        _0_0_1 = 1;
+    }
+    required Version version = 1;
+    enum SourceTypes {
+        UNKNOWN_SOURCE_TYPE = 0;
+        lbry_sd_hash = 1;
+    }
+    required SourceTypes sourceType = 2;
+    required bytes source = 3;
+    required string contentType = 4;
+}
