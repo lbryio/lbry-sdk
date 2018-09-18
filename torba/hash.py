@@ -106,14 +106,17 @@ def hex_str_to_hash(x):
     return reversed(unhexlify(x))
 
 
-def aes_encrypt(secret, value):
+def aes_encrypt(secret, value, iv=None):
+    if iv:
+        assert len(iv) == 16
+    else:
+        iv = os.urandom(16)
     key = double_sha256(secret)
-    init_vector = os.urandom(16)
-    encryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).encryptor()
+    encryptor = Cipher(AES(key), modes.CBC(iv), default_backend()).encryptor()
     padder = PKCS7(AES.block_size).padder()
     padded_data = padder.update(value) + padder.finalize()
-    encrypted_data2 = encryptor.update(padded_data) + encryptor.finalize()
-    return base64.b64encode(encrypted_data2)
+    encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
+    return base64.b64encode(iv + encrypted_data)
 
 
 def aes_decrypt(secret, value):
