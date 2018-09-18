@@ -2651,6 +2651,8 @@ class Daemon(AuthJSONRPCServer):
         """
 
         uris = tuple(uris)
+        page = int(page)
+        page_size = int(page_size)
         if uri is not None:
             uris += (uri,)
 
