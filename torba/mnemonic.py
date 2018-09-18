@@ -1,11 +1,10 @@
 # Copyright (C) 2014 Thomas Voegtlin
 # Copyright (C) 2018 LBRY Inc.
 
-import os
-import io
 import hmac
 import math
 import hashlib
+import importlib
 import unicodedata
 import string
 from binascii import hexlify
@@ -77,28 +76,20 @@ def normalize_text(seed):
     return seed
 
 
-def load_words(filename):
-    path = os.path.join(os.path.dirname(__file__), 'words', filename)
-    with io.open(path, 'r', encoding='utf-8') as f:
-        s = f.read().strip()
-    s = unicodedata.normalize('NFKD', s)
-    lines = s.split('\n')
-    words = []
-    for line in lines:
-        line = line.split('#')[0]
-        line = line.strip(' \r')
-        assert ' ' not in line
-        if line:
-            words.append(line)
-    return words
+def load_words(language_name):
+    language_module = importlib.import_module('torba.words.'+language_name)
+    return list(map(
+        lambda s: unicodedata.normalize('NFKD', s),
+        language_module.words
+    ))
 
 
-FILE_NAMES = {
-    'en': 'english.txt',
-    'es': 'spanish.txt',
-    'ja': 'japanese.txt',
-    'pt': 'portuguese.txt',
-    'zh': 'chinese_simplified.txt'
+LANGUAGE_NAMES = {
+    'en': 'english',
+    'es': 'spanish',
+    'ja': 'japanese',
+    'pt': 'portuguese',
+    'zh': 'chinese_simplified'
 }
 
 
@@ -107,8 +98,8 @@ class Mnemonic:
     # Mnemonic phrase uses a hash based checksum, instead of a words-dependent checksum
 
     def __init__(self, lang='en'):
-        filename = FILE_NAMES.get(lang, 'english.txt')
-        self.words = load_words(filename)
+        language_name = LANGUAGE_NAMES.get(lang, 'english')
+        self.words = load_words(language_name)
 
     @staticmethod
     def mnemonic_to_seed(mnemonic, passphrase=u''):

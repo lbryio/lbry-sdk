@@ -1,5 +1,3 @@
-import os
-import re
 from setuptools import setup, find_packages
 
 import torba
@@ -26,7 +24,6 @@ setup(
         'Topic :: Utilities',
     ),
     packages=find_packages(exclude=('tests',)),
-    include_package_data=True,
     python_requires='>=3.6',
     install_requires=(
         'twisted',
