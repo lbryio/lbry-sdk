@@ -2342,8 +2342,8 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) Dictionary containing result of the claim
             {
+                success: (bool) True if txn is successful
                 txid : (str) txid of resulting transaction
-                fee : (float) fee paid for the transaction
             }
         """
         if claim_id is None and txid is None and nout is None:
@@ -2358,7 +2358,6 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue({
             "success": True,
             "tx": tx,
-            "claim_id": claim_id
         })
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
