@@ -218,8 +218,8 @@ class AuthJSONRPCServer(AuthorizedBase):
             yield self.setup()
             self.analytics_manager.send_server_startup_success()
         except tx_error.CannotListenError:
-            log.error('lbrynet API failed to bind TCP %s:%i for listening', conf.settings['api_host'],
-                      conf.settings['api_port'])
+            log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
+                      'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
             reactor.fireSystemEvent("shutdown")
         except defer.CancelledError:
             log.info("shutting down before finished starting")
