@@ -166,5 +166,5 @@ class Account(BaseAccount):
         details['certificates'] = len(self.certificates)
         return details
 
-    def get_claim(self, claim_id):
-        return self.ledger.db.get_claim(self, claim_id)
+    def get_claim(self, claim_id=None, txid=None, nout=None):
+        return self.ledger.db.get_claim(self, claim_id, txid, nout)

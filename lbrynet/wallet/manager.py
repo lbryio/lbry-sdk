@@ -264,7 +264,12 @@ class LbryWalletManager(BaseWalletManager):
     @defer.inlineCallbacks
     def abandon_claim(self, claim_id, txid, nout):
         account = self.default_account
-        claim = yield account.get_claim(claim_id)
+        if claim_id is not None:
+            claim = yield account.get_claim(claim_id=claim_id)
+        elif txid is not None and nout is not None:
+            claim = yield account.get_claim(txid=txid, nout=nout)
+        else:
+            raise Exception('Must specify claim_id, or txid and nout')
         tx = yield Transaction.abandon(claim, [account], account)
         yield account.ledger.broadcast(tx)
         # TODO: release reserved tx outputs in case anything fails by this point

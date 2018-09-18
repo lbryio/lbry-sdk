@@ -84,15 +84,25 @@ class WalletDatabase(BaseDatabase):
         return certificates
 
     @defer.inlineCallbacks
-    def get_claim(self, account, claim_id):
-        utxos = yield self.db.runQuery(
-            """
-            SELECT amount, script, txo.txid, position
-            FROM txo JOIN tx ON tx.txid=txo.txid
-            WHERE claim_id=? AND (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
-            ORDER BY tx.height DESC LIMIT 1;
-            """, (claim_id,)
-        )
+    def get_claim(self, account, claim_id=None, txid=None, nout=None):
+        if claim_id is not None:
+            utxos = yield self.db.runQuery(
+                """
+                SELECT amount, script, txo.txid, position
+                FROM txo JOIN tx ON tx.txid=txo.txid
+                WHERE claim_id=? AND (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
+                ORDER BY tx.height DESC LIMIT 1;
+                """, (claim_id,)
+            )
+        else:
+            utxos = yield self.db.runQuery(
+                """
+                SELECT amount, script, txo.txid, position
+                FROM txo JOIN tx ON tx.txid=txo.txid
+                WHERE txo.txid=? AND position=? AND (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
+                ORDER BY tx.height DESC LIMIT 1;
+                """, (txid, nout)
+            )
         output_class = account.ledger.transaction_class.output_class
         defer.returnValue([
             output_class(
