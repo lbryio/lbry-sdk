@@ -49,13 +49,13 @@ class WalletDatabase(BaseDatabase):
         return row
 
     @defer.inlineCallbacks
-    def get_certificates(self, name=None, claim_id=None, private_key_accounts=None, exclude_without_key=False):
+    def get_certificates(self, name=None, channel_id=None, private_key_accounts=None, exclude_without_key=False):
         if name is not None:
             filter_sql = 'claim_name=?'
             filter_value = name
-        elif claim_id is not None:
+        elif channel_id is not None:
             filter_sql = 'claim_id=?'
-            filter_value = claim_id
+            filter_value = channel_id
         else:
             raise ValueError("'name' or 'claim_id' is required")
 
