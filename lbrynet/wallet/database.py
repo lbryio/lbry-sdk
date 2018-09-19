@@ -86,23 +86,19 @@ class WalletDatabase(BaseDatabase):
     @defer.inlineCallbacks
     def get_claim(self, account, claim_id=None, txid=None, nout=None):
         if claim_id is not None:
-            utxos = yield self.db.runQuery(
-                """
-                SELECT amount, script, txo.txid, position
-                FROM txo JOIN tx ON tx.txid=txo.txid
-                WHERE claim_id=? AND (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
-                ORDER BY tx.height DESC LIMIT 1;
-                """, (claim_id,)
-            )
+            filter_sql = "claim_id=?"
+            filter_value = (claim_id,)
         else:
-            utxos = yield self.db.runQuery(
-                """
-                SELECT amount, script, txo.txid, position
-                FROM txo JOIN tx ON tx.txid=txo.txid
-                WHERE txo.txid=? AND position=? AND (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
-                ORDER BY tx.height DESC LIMIT 1;
-                """, (txid, nout)
-            )
+            filter_sql = "txo.txid=? AND position=?"
+            filter_value = (txid, nout)
+        utxos = yield self.db.runQuery(
+            """
+            SELECT amount, script, txo.txid, position
+            FROM txo JOIN tx ON tx.txid=txo.txid
+            WHERE {} AND (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
+            ORDER BY tx.height DESC LIMIT 1;
+            """.format(filter_sql), filter_value
+        )
         output_class = account.ledger.transaction_class.output_class
         defer.returnValue([
             output_class(
