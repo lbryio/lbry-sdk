@@ -268,8 +268,8 @@ class LbryWalletManager(BaseWalletManager):
     def channel_list(self):
         return self.default_account.get_channels()
 
-    def get_certificates(self, name):
-        return self.db.get_certificates(name, self.accounts, exclude_without_key=True)
+    def get_certificates(self, name=None, claim_id=None):
+        return self.db.get_certificates(name, claim_id, self.accounts, exclude_without_key=True)
 
     def update_peer_address(self, peer, address):
         pass  # TODO: Data payments is disabled

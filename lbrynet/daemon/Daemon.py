@@ -2307,6 +2307,10 @@ class Daemon(AuthJSONRPCServer):
             # waiting to find out when we go to publish the claim (after having made the stream)
             raise Exception("invalid publish metadata: %s" % err.message)
 
+        certificate = None
+        if channel_id or channel_name:
+            certificate = yield self.get_channel_or_error(channel_id, channel_name)
+
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
@@ -2318,19 +2322,9 @@ class Daemon(AuthJSONRPCServer):
             'channel_name': channel_name
         })
 
-        certificate = None
-        if channel_name:
-            certificates = yield self.wallet_manager.get_certificates(channel_name)
-            for cert in certificates:
-                if cert.claim_id == channel_id:
-                    certificate = cert
-                    break
-            if certificate is None:
-                raise Exception("Cannot publish using channel %s" % channel_name)
-
         result = yield self._publish_stream(name, amount, claim_dict, file_path, certificate,
                                             claim_address, change_address)
-        defer.returnValue(result)
+        return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
@@ -3290,6 +3284,20 @@ class Daemon(AuthJSONRPCServer):
         response['is_available'] = response['sd_blob_availability'].get('is_available') and \
                                    response['head_blob_availability'].get('is_available')
         defer.returnValue(response)
+
+    @defer.inlineCallbacks
+    def get_channel_or_error(self, channel_id: str = None, name: str = None):
+        if channel_id is not None:
+            certificates = yield self.wallet_manager.get_certificates(claim_id=channel_id)
+            if not certificates:
+                raise ValueError("Couldn't find channel with claim_id '{}'." .format(channel_id))
+            return certificates[0]
+        if name is not None:
+            certificates = yield self.wallet_manager.get_certificates(name=name)
+            if not certificates:
+                raise ValueError("Couldn't find channel with name '{}'.".format(name))
+            return certificates[0]
+        raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
 
     def get_account_or_error(self, argument: str, account_id: str, lbc_only=True):
         for account in self.default_wallet.accounts:
