@@ -41,22 +41,36 @@ class StratumClientProtocol(LineOnlyReceiver):
         try:
             self.transport.setTcpNoDelay(True)
             self.transport.setTcpKeepAlive(True)
-            self.transport.socket.setsockopt(
-                socket.SOL_TCP, socket.TCP_KEEPIDLE, 120
-                # Seconds before sending keepalive probes
-            )
-            self.transport.socket.setsockopt(
-                socket.SOL_TCP, socket.TCP_KEEPINTVL, 1
-                # Interval in seconds between keepalive probes
-            )
-            self.transport.socket.setsockopt(
-                socket.SOL_TCP, socket.TCP_KEEPCNT, 5
-                # Failed keepalive probles before declaring other end dead
-            )
-        except Exception as err:  # pylint: disable=broad-except
+            if hasattr(socket, "TCP_KEEPIDLE"):
+                self.transport.socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE,
+                                                 120)  # Seconds before sending keepalive probes
+            else:
+                log.debug("TCP_KEEPIDLE not available")
+            if hasattr(socket, "TCP_KEEPINTVL"):
+                self.transport.socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL,
+                                                 1)  # Interval in seconds between keepalive probes
+            else:
+                log.debug("TCP_KEEPINTVL not available")
+            if hasattr(socket, "TCP_KEEPCNT"):
+                self.transport.socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT,
+                                                 5)  # Failed keepalive probles before declaring other end dead
+            else:
+                log.debug("TCP_KEEPCNT not available")
+
+        except Exception as err: # pylint: disable=broad-except
             # Supported only by the socket transport,
             # but there's really no better place in code to trigger this.
             log.warning("Error setting up socket: %s", err)
+
+        self.request_id = 0
+        self.lookup_table = {}
+
+        self._connected.callback(True)
+
+        # Initiate connection session
+        self.session = {}
+
+        log.debug("Connected %s" % self.transport.getPeer().host)
 
     def connectionLost(self, reason=None):
         self.on_disconnected_controller.add(True)
