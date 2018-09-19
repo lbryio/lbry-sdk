@@ -13,6 +13,7 @@ import ecdsa
 import pbkdf2
 
 from torba.hash import hmac_sha512
+from torba.words import english
 
 # The hash of the mnemonic seed must begin with this
 SEED_PREFIX = b'01'       # Standard wallet
@@ -77,6 +78,8 @@ def normalize_text(seed):
 
 
 def load_words(language_name):
+    if language_name == 'english':
+        return english.words
     language_module = importlib.import_module('torba.words.'+language_name)
     return list(map(
         lambda s: unicodedata.normalize('NFKD', s),
