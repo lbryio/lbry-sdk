@@ -8,6 +8,9 @@ from six.moves.urllib.error import URLError
 from lbryschema import __version__ as lbryschema_version
 from lbrynet import build_type, __version__ as lbrynet_version
 from lbrynet.conf import ROOT_DIR
+import logging.handlers
+
+log = logging.getLogger(__name__)
 
 
 def get_lbrynet_version():
@@ -20,7 +23,7 @@ def get_lbrynet_version():
                     stderr=devnull
                 ).decode().strip().lstrip('v')
         except (subprocess.CalledProcessError, OSError):
-            print("failed to get version from git")
+            log.debug("failed to get version from git")
     return lbrynet_version
 
 
