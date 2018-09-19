@@ -49,14 +49,23 @@ class WalletDatabase(BaseDatabase):
         return row
 
     @defer.inlineCallbacks
-    def get_certificates(self, name, private_key_accounts=None, exclude_without_key=False):
+    def get_certificates(self, name=None, claim_id=None, private_key_accounts=None, exclude_without_key=False):
+        if name is not None:
+            filter_sql = 'claim_name=?'
+            filter_value = name
+        elif claim_id is not None:
+            filter_sql = 'claim_id=?'
+            filter_value = claim_id
+        else:
+            raise ValueError("'name' or 'claim_id' is required")
+
         txos = yield self.db.runQuery(
             """
             SELECT tx.txid, txo.position, txo.claim_id
             FROM txo JOIN tx ON tx.txid=txo.txid
-            WHERE claim_name=? AND (is_claim OR is_update)
+            WHERE {} AND (is_claim OR is_update)
             GROUP BY txo.claim_id ORDER BY tx.height DESC;
-            """, (name,)
+            """.format(filter_sql), (filter_value,)
         )
 
         certificates = []
@@ -70,11 +79,9 @@ class WalletDatabase(BaseDatabase):
                     certificates.append(Certificate(txid, nout, claim_id, name, private_key))
 
         if exclude_without_key:
-            defer.returnValue([
-                c for c in certificates if c.private_key is not None
-            ])
+            return [c for c in certificates if c.private_key is not None]
 
-        defer.returnValue(certificates)
+        return certificates
 
     @defer.inlineCallbacks
     def get_claim(self, account, claim_id):
