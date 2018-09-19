@@ -204,8 +204,14 @@ class LbryWalletManager(BaseWalletManager):
     def address_is_mine(self, address):
         return defer.succeed(True)
 
+    def get_transaction(self, txid):
+        return self.default_account.ledger.get_transaction(txid)
+
     def get_history(self):
         return defer.succeed([])
+
+    def get_utxos(self, account):
+        return account.get_unspent_outputs()
 
     @defer.inlineCallbacks
     def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
