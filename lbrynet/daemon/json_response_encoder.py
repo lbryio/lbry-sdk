@@ -37,9 +37,13 @@ class JSONResponseEncoder(JSONEncoder):
 
     def encode_output(self, txo):
         return {
+            'txid': txo.tx_ref.id,
             'nout': txo.position,
             'amount': txo.amount,
-            'address': txo.get_address(self.ledger)
+            'address': txo.get_address(self.ledger),
+            'is_claim': txo.script.is_claim_name,
+            'is_support': txo.script.is_support_claim,
+            'is_update': txo.script.is_update_claim
         }
 
     def encode_input(self, txi):

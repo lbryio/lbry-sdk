@@ -2765,22 +2765,18 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) JSON formatted transaction
         """
-
-        d = self.wallet_manager.get_transaction(txid)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        return self.wallet_manager.get_transaction(txid)
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_utxo_list(self):
+    def jsonrpc_utxo_list(self, account_id=None):
         """
         List unspent transaction outputs
 
         Usage:
-            utxo_list
+            utxo_list [<account_id>]
 
         Options:
-            None
+            --account=<account_id> : (str) id of the account to query
 
         Returns:
             (list) List of unspent transaction outputs (UTXOs)
@@ -2799,16 +2795,9 @@ class Daemon(AuthJSONRPCServer):
                 ...
             ]
         """
-
-        unspent = yield self.wallet_manager.list_unspent()
-        for i, utxo in enumerate(unspent):
-            utxo['txid'] = utxo.pop('prevout_hash')
-            utxo['nout'] = utxo.pop('prevout_n')
-            utxo['amount'] = utxo.pop('value')
-            utxo['is_coinbase'] = utxo.pop('coinbase')
-            unspent[i] = utxo
-
-        defer.returnValue(unspent)
+        return self.wallet_manager.get_utxos(
+            self.get_account_or_default('account', account_id)
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_block_show(self, blockhash=None, height=None):
@@ -3354,6 +3343,11 @@ class Daemon(AuthJSONRPCServer):
                 raise ValueError("Couldn't find channel with name '{}'.".format(name))
             return certificates[0]
         raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
+
+    def get_account_or_default(self, argument: str, account_id: str, lbc_only=True):
+        if account_id is None:
+            return self.default_account
+        return self.get_account_or_error(argument, account_id, lbc_only)
 
     def get_account_or_error(self, argument: str, account_id: str, lbc_only=True):
         for account in self.default_wallet.accounts:
