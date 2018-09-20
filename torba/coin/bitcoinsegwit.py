@@ -1,8 +1,8 @@
 __node_daemon__ = 'bitcoind'
 __node_cli__ = 'bitcoin-cli'
-__node_bin__ = 'bitcoin-0.16.0/bin'
+__node_bin__ = 'bitcoin-0.16.3/bin'
 __node_url__ = (
-    'https://bitcoin.org/bin/bitcoin-core-0.16.0/bitcoin-0.16.0-x86_64-linux-gnu.tar.gz'
+    'https://bitcoin.org/bin/bitcoin-core-0.16.3/bitcoin-0.16.3-x86_64-linux-gnu.tar.gz'
 )
 __electrumx__ = 'electrumx.lib.coins.BitcoinSegwitRegtest'
 
