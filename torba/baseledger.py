@@ -136,7 +136,7 @@ class BaseLedger(metaclass=LedgerRegistry):
     def get_transaction(self, txhash):
         raw, _, _ = yield self.db.get_transaction(txhash)
         if raw is not None:
-            defer.returnValue(self.transaction_class(raw))
+            return self.transaction_class(raw)
 
     @defer.inlineCallbacks
     def get_private_key_for_address(self, address):
@@ -144,7 +144,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         if match:
             for account in self.accounts:
                 if match['account'] == account.public_key.address:
-                    defer.returnValue(account.get_private_key(match['chain'], match['position']))
+                    return account.get_private_key(match['chain'], match['position'])
 
     @defer.inlineCallbacks
     def get_effective_amount_estimators(self, funding_accounts: Iterable[baseaccount.BaseAccount]):
@@ -153,7 +153,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             utxos = yield account.get_unspent_outputs()
             for utxo in utxos:
                 estimators.append(utxo.get_estimator(self))
-        defer.returnValue(estimators)
+        return estimators
 
     @defer.inlineCallbacks
     def get_spendable_utxos(self, amount: int, funding_accounts):
@@ -172,7 +172,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             raise
         finally:
             self._utxo_reservation_lock.release()
-        defer.returnValue(spendables)
+        return spendables
 
     def reserve_outputs(self, txos):
         return self.db.reserve_outputs(txos)
@@ -185,14 +185,14 @@ class BaseLedger(metaclass=LedgerRegistry):
         address_details = yield self.db.get_address(address)
         history = address_details['history'] or ''
         h = sha256(history.encode())
-        defer.returnValue(hexlify(h))
+        return hexlify(h)
 
     @defer.inlineCallbacks
     def get_local_history(self, address):
         address_details = yield self.db.get_address(address)
         history = address_details['history'] or ''
         parts = history.split(':')[:-1]
-        defer.returnValue(list(zip(parts[0::2], map(int, parts[1::2]))))
+        return list(zip(parts[0::2], map(int, parts[1::2])))
 
     @staticmethod
     def get_root_of_merkle_tree(branches, branch_positions, working_branch):
@@ -208,11 +208,12 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     @defer.inlineCallbacks
     def is_valid_transaction(self, tx, height):
-        height <= len(self.headers) or defer.returnValue(False)
+        if not height <= len(self.headers):
+            return False
         merkle = yield self.network.get_merkle(tx.id, height)
         merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
         header = self.headers[height]
-        defer.returnValue(merkle_root == header['merkle_root'])
+        return merkle_root == header['merkle_root']
 
     @defer.inlineCallbacks
     def start(self):
