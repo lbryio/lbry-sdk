@@ -298,7 +298,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertTrue(abandon['success'])
         yield self.d_confirm_tx(abandon['tx']['txid'])
 
-        # And now check that the claim doesn't resolve anymore.
+        # And now checks that the claim doesn't resolve anymore.
         response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])
 
@@ -384,6 +384,38 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], 0.4)
         self.assertEqual(resolve_result[uri]['claim']['supports'][2]['txid'], tx['txid'])
         yield self.d_generate(5)
+
+        # Now Ramsey who is a singer by profession, is preparing for his new "gig". He has everything in place for that
+        # the instruments, the theatre, the ads, everything, EXCEPT lyrics!! He panicked.. But then he remembered
+        # something, so he un-panicked. He quickly calls up his best bud Chris and requests him to write hit lyrics for
+        # his song, seeing as his novel had smashed all the records, he was the perfect candidate!
+        # .......
+        # Chris agrees.. 17 hours 43 minutes and 14 seconds later, he makes his publish
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'The Whale amd The Bookmark')
+            file.write(b'I know right? Totally a hit song')
+            file.write(b'That\'s what goes around for songs these days anyways')
+            file.flush()
+            claim4 = yield self.out(self.daemon.jsonrpc_publish(
+                'hit-song', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+            ))
+            self.assertTrue(claim4['success'])
+            yield self.d_confirm_tx(claim4['tx']['txid'])
+
+        yield self.d_generate(5)
+
+        # He sends the link to Ramsey, all happy and proud
+        uri = 'lbry://@spam/hit-song'
+
+        # But sadly Ramsey wasn't so pleased. It was hard for him to tell Chris...
+        # Chris, though a bit heartbroken, abandoned the claim for now, but instantly started working on new hit lyrics
+        abandon = yield self.out(self.daemon.jsonrpc_claim_abandon(txid=claim4['tx']['txid'], nout=0))
+        self.assertTrue(abandon['success'])
+        yield self.d_confirm_tx(abandon['tx']['txid'])
+
+        # He them checks that the claim doesn't resolve anymore.
+        response = yield self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertNotIn('claim', response[uri])
 
 
 class AccountManagement(CommandTestCase):

@@ -2333,13 +2333,13 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             claim_abandon [<claim_id> | --claim_id=<claim_id>]
                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                          [--account_id=<account_id>]
+                          [--account=<account>]
 
         Options:
             --claim_id=<claim_id> : (str) claim_id of the claim to abandon
             --txid=<txid> : (str) txid of the claim to abandon
             --nout=<nout> : (int) nout of the claim to abandon
-            --account_id=<account_id> : (str) id of the account to use
+            --account=<account> : (str) id of the account to use
 
         Returns:
             (dict) Dictionary containing result of the claim
