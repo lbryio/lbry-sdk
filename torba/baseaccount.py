@@ -291,16 +291,17 @@ class BaseAccount:
 
     def decrypt(self, password):
         assert self.encrypted, "Key is not encrypted."
-        secret = double_sha256(password)
-        self.seed = aes_decrypt(secret, self.seed)
-        self.private_key = from_extended_key_string(self.ledger, aes_decrypt(secret, self.private_key))
+        self.seed = aes_decrypt(password, self.seed.encode()).decode()
+        self.private_key = from_extended_key_string(
+            self.ledger, aes_decrypt(password, self.private_key.encode()).decode()
+        )
         self.encrypted = False
 
     def encrypt(self, password):
         assert not self.encrypted, "Key is already encrypted."
-        secret = double_sha256(password)
-        self.seed = aes_encrypt(secret, self.seed)
-        self.private_key = aes_encrypt(secret, self.private_key.extended_key_string())
+        self.seed = aes_encrypt(password, self.seed.encode()).decode()
+        private_key: PrivateKey = self.private_key
+        self.private_key = aes_encrypt(password, private_key.extended_key_string().encode()).decode()
         self.encrypted = True
 
     @defer.inlineCallbacks
