@@ -1,18 +1,17 @@
-import os
 import json
 import aiohttp
 import logging
 from urllib.parse import urlparse
 
 from lbrynet import conf
-from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
+from lbrynet.daemon.auth.keyring import Keyring, APIKey
 
 log = logging.getLogger(__name__)
 USER_AGENT = "AuthServiceProxy/0.1"
+TWISTED_SECURE_SESSION = "TWISTED_SECURE_SESSION"
 TWISTED_SESSION = "TWISTED_SESSION"
 LBRY_SECRET = "LBRY_SECRET"
 HTTP_TIMEOUT = 30
-SCHEME = "http"
 
 
 class JSONRPCException(Exception):
@@ -26,7 +25,6 @@ class UnAuthAPIClient:
         self.host = host
         self.port = port
         self.session = session
-        self.scheme = SCHEME
 
     def __getattr__(self, method):
         async def f(*args, **kwargs):
@@ -39,12 +37,15 @@ class UnAuthAPIClient:
         url_fragment = urlparse(url)
         host = url_fragment.hostname
         port = url_fragment.port
-        session = aiohttp.ClientSession()
+        connector = aiohttp.TCPConnector(
+            ssl=None if not conf.settings['use_https'] else Keyring.load_from_disk().ssl_context
+        )
+        session = aiohttp.ClientSession(connector=connector)
         return cls(host, port, session)
 
     async def call(self, method, params=None):
         message = {'method': method, 'params': params}
-        async with self.session.get('{}://{}:{}'.format(self.scheme, self.host, self.port), json=message) as resp:
+        async with self.session.get(conf.settings.get_api_connection_string(), json=message) as resp:
             return await resp.json()
 
 
@@ -76,7 +77,7 @@ class AuthAPIClient:
             'params': params,
             'id': self.__id_count
         }
-        to_auth = get_auth_message(pre_auth_post_data)
+        to_auth = json.dumps(pre_auth_post_data, sort_keys=True)
         auth_msg = self.__api_key.get_hmac(to_auth).decode()
         pre_auth_post_data.update({'hmac': auth_msg})
         post_data = json.dumps(pre_auth_post_data)
@@ -100,14 +101,11 @@ class AuthAPIClient:
 
     @classmethod
     async def get_client(cls, key_name=None):
-        api_key_name = key_name or API_KEY_NAME
+        api_key_name = key_name or "api"
+        keyring = Keyring.load_from_disk()
 
-        pw_path = os.path.join(conf.settings['data_dir'], ".api_keys")
-        keys = load_api_keys(pw_path)
-        api_key = keys.get(api_key_name, False)
-
-        login_url = "http://{}:{}@{}:{}".format(api_key_name, api_key.secret, conf.settings['api_host'],
-                                                conf.settings['api_port'])
+        api_key = keyring.api_key
+        login_url = conf.settings.get_api_connection_string(api_key_name, api_key.secret)
         url = urlparse(login_url)
 
         headers = {
@@ -115,14 +113,13 @@ class AuthAPIClient:
             'User-Agent': USER_AGENT,
             'Content-type': 'application/json'
         }
-
-        session = aiohttp.ClientSession()
+        connector = aiohttp.TCPConnector(ssl=None if not conf.settings['use_https'] else keyring.ssl_context)
+        session = aiohttp.ClientSession(connector=connector)
 
         async with session.post(login_url, headers=headers) as r:
             cookies = r.cookies
-
-        uid = cookies.get(TWISTED_SESSION).value
-        api_key = APIKey.new(seed=uid.encode())
+        uid = cookies.get(TWISTED_SECURE_SESSION if conf.settings['use_https'] else TWISTED_SESSION).value
+        api_key = APIKey.create(seed=uid.encode())
         return cls(api_key, session, cookies, url, login_url)
 
 

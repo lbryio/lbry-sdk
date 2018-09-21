@@ -1,5 +1,3 @@
-from unittest import skip
-
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.server.ServerProtocol import ServerProtocol
 from lbrynet.core.client.ClientProtocol import ClientProtocol
@@ -116,8 +114,8 @@ class MocServerProtocolFactory(ServerFactory):
         self.peer_manager = PeerManager()
 
 
-@skip('times out, needs to be refactored to work with py3')
 class TestIntegrationConnectionManager(TestCase):
+    skip = 'times out, needs to be refactored to work with py3'
 
     def setUp(self):
 

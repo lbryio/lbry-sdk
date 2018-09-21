@@ -1,14 +1,26 @@
 import logging
-import os
 
 from twisted.web import server, guard, resource
 from twisted.cred import portal
 
 from lbrynet import conf
 from .auth import PasswordChecker, HttpPasswordRealm
-from .util import initialize_api_key_file
+from ..auth.keyring import Keyring
 
 log = logging.getLogger(__name__)
+
+
+class HTTPJSONRPCFactory(server.Site):
+    def __init__(self, resource, keyring, requestFactory=None, *args, **kwargs):
+        super().__init__(resource, requestFactory=requestFactory, *args, **kwargs)
+        self.use_ssl = False
+
+
+class HTTPSJSONRPCFactory(server.Site):
+    def __init__(self, resource, keyring, requestFactory=None, *args, **kwargs):
+        super().__init__(resource, requestFactory=requestFactory, *args, **kwargs)
+        self.options = keyring.private_certificate.options()
+        self.use_ssl = True
 
 
 class AuthJSONRPCResource(resource.Resource):
@@ -22,17 +34,17 @@ class AuthJSONRPCResource(resource.Resource):
         request.setHeader('expires', '0')
         return self if name == '' else resource.Resource.getChild(self, name, request)
 
-    def getServerFactory(self):
-        if conf.settings['use_auth_http']:
+    def getServerFactory(self, keyring: Keyring, use_authentication: bool, use_https: bool) -> server.Site:
+        factory_class = HTTPSJSONRPCFactory if use_https else HTTPJSONRPCFactory
+        if use_authentication:
             log.info("Using authenticated API")
-            pw_path = os.path.join(conf.settings['data_dir'], ".api_keys")
-            initialize_api_key_file(pw_path)
-            checker = PasswordChecker.load_file(pw_path)
+            checker = PasswordChecker(keyring)
             realm = HttpPasswordRealm(self)
             portal_to_realm = portal.Portal(realm, [checker, ])
-            factory = guard.BasicCredentialFactory('Login to lbrynet api')
-            root = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
+            root = guard.HTTPAuthSessionWrapper(
+                portal_to_realm, [guard.BasicCredentialFactory('Login to lbrynet api'), ]
+            )
         else:
             log.info("Using non-authenticated API")
             root = self
-        return server.Site(root)
+        return factory_class(root, keyring)

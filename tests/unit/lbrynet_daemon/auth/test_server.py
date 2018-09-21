@@ -1,4 +1,5 @@
 import mock
+from twisted.internet import defer, reactor
 from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.daemon.auth import server
@@ -13,6 +14,42 @@ class AuthJSONRPCServerTest(unittest.TestCase):
     def setUp(self):
         conf.initialize_settings(False)
         self.server = server.AuthJSONRPCServer(True, use_authentication=False)
+
+    def test_listen_auth_https(self):
+        self.server._use_https = True
+        self.server._use_authentication = True
+        factory = self.server.get_server_factory()
+        listening_port = reactor.listenSSL(
+            conf.settings['api_port'], factory, factory.options, interface="localhost"
+        )
+        listening_port.stopListening()
+
+    def test_listen_no_auth_https(self):
+        self.server._use_https = True
+        self.server._use_authentication = False
+        factory = self.server.get_server_factory()
+        listening_port = reactor.listenSSL(
+            conf.settings['api_port'], factory, factory.options, interface="localhost"
+        )
+        listening_port.stopListening()
+
+    def test_listen_auth_http(self):
+        self.server._use_https = False
+        self.server._use_authentication = True
+        factory = self.server.get_server_factory()
+        listening_port = reactor.listenTCP(
+            conf.settings['api_port'], factory, interface="localhost"
+        )
+        listening_port.stopListening()
+
+    def test_listen_no_auth_http(self):
+        self.server._use_https = False
+        self.server._use_authentication = False
+        factory = self.server.get_server_factory()
+        listening_port = reactor.listenTCP(
+            conf.settings['api_port'], factory, interface="localhost"
+        )
+        listening_port.stopListening()
 
     def test_get_server_port(self):
         self.assertSequenceEqual(

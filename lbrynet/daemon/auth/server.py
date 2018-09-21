@@ -18,13 +18,14 @@ from lbrynet.core import utils
 from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.daemon.ComponentManager import ComponentManager
-from .util import APIKey, get_auth_message, LBRY_SECRET
+from .keyring import APIKey, Keyring
 from .undecorated import undecorated
 from .factory import AuthJSONRPCResource
 from lbrynet.daemon.json_response_encoder import JSONResponseEncoder
 log = logging.getLogger(__name__)
 
 EMPTY_PARAMS = [{}]
+LBRY_SECRET = "LBRY_SECRET"
 
 
 class JSONRPCError:
@@ -186,8 +187,8 @@ class AuthJSONRPCServer(AuthorizedBase):
     allowed_during_startup = []
     component_attributes = {}
 
-    def __init__(self, analytics_manager=None, component_manager=None, use_authentication=None, to_skip=None,
-                 looping_calls=None, reactor=None):
+    def __init__(self, analytics_manager=None, component_manager=None, use_authentication=None, use_https=None,
+                 to_skip=None, looping_calls=None, reactor=None):
         if not reactor:
             from twisted.internet import reactor
         self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
@@ -199,11 +200,13 @@ class AuthJSONRPCServer(AuthorizedBase):
         self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).items()})
         self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).items()}
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
+        self._use_https = use_https or conf.settings['use_https']
         self.listening_port = None
         self._component_setup_deferred = None
         self.announced_startup = False
         self.sessions = {}
         self.server = None
+        self.keyring = Keyring.generate_and_save()
 
     @defer.inlineCallbacks
     def start_listening(self):
@@ -211,9 +214,16 @@ class AuthJSONRPCServer(AuthorizedBase):
 
         try:
             self.server = self.get_server_factory()
-            self.listening_port = reactor.listenTCP(
-                conf.settings['api_port'], self.server, interface=conf.settings['api_host']
-            )
+            if self.server.use_ssl:
+                log.info("Using SSL")
+                self.listening_port = reactor.listenSSL(
+                    conf.settings['api_port'], self.server, self.server.options, interface=conf.settings['api_host']
+                )
+            else:
+                log.info("Not using SSL")
+                self.listening_port = reactor.listenTCP(
+                    conf.settings['api_port'], self.server, interface=conf.settings['api_host']
+                )
             log.info("lbrynet API listening on TCP %s:%i", conf.settings['api_host'], conf.settings['api_port'])
             yield self.setup()
             self.analytics_manager.send_server_startup_success()
@@ -274,7 +284,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         return d
 
     def get_server_factory(self):
-        return AuthJSONRPCResource(self).getServerFactory()
+        return AuthJSONRPCResource(self).getServerFactory(self.keyring, self._use_authentication, self._use_https)
 
     def _set_headers(self, request, data, update_secret=False):
         if conf.settings['allowed_origin']:
@@ -460,7 +470,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         @return: secret
         """
         log.info("Started new api session")
-        token = APIKey.new(seed=session_id)
+        token = APIKey.create(seed=session_id)
         self.sessions.update({session_id: token})
 
     def _unregister_user_session(self, session_id):
@@ -565,13 +575,13 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _verify_token(self, session_id, message, token):
         if token is None:
             raise InvalidAuthenticationToken('Authentication token not found')
-        to_auth = get_auth_message(message)
+        to_auth = json.dumps(message, sort_keys=True)
         api_key = self.sessions.get(session_id)
         if not api_key.compare_hmac(to_auth, token):
             raise InvalidAuthenticationToken('Invalid authentication token')
 
     def _update_session_secret(self, session_id):
-        self.sessions.update({session_id: APIKey.new(name=session_id)})
+        self.sessions.update({session_id: APIKey.create(name=session_id)})
 
     def _callback_render(self, result, request, id_, auth_required=False):
         try:
