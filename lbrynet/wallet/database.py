@@ -100,11 +100,31 @@ class WalletDatabase(BaseDatabase):
             """.format(filter_sql), filter_value
         )
         output_class = account.ledger.transaction_class.output_class
-        defer.returnValue([
+        return [
             output_class(
                 values[0],
                 output_class.script_class(values[1]),
                 TXRefImmutable.from_id(values[2]),
                 position=values[3]
             ) for values in utxos
-        ])
+        ]
+
+    @defer.inlineCallbacks
+    def get_claims(self, account):
+        utxos = yield self.db.runQuery(
+            """
+            SELECT amount, script, txo.txid, position
+            FROM txo JOIN tx ON tx.txid=txo.txid
+            WHERE (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
+            ORDER BY tx.height DESC;
+            """
+        )
+        output_class = account.ledger.transaction_class.output_class
+        return [
+            output_class(
+                values[0],
+                output_class.script_class(values[1]),
+                TXRefImmutable.from_id(values[2]),
+                position=values[3]
+            ) for values in utxos
+        ]
