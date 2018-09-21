@@ -311,8 +311,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # who says that it is of utmost urgency that Chris transfer him
         # 1 LBC to which Chris readily obliges
         ramsey_account_id = (yield self.daemon.jsonrpc_account_create("Ramsey"))['id']
-        ramsey_account = self.daemon.get_account_or_error('', ramsey_account_id)
-        ramsey_address = yield ramsey_account.receiving.get_or_create_usable_address()
+        ramsey_account = self.daemon.get_account_or_error(ramsey_account_id)
+        ramsey_address = yield self.daemon.jsonrpc_address_unused(ramsey_account_id)
         result = yield self.out(self.daemon.jsonrpc_wallet_send(1, ramsey_address))
         self.assertIn("txid", result)
         yield self.d_confirm_tx(result['txid'])
