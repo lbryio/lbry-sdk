@@ -205,7 +205,9 @@ class BaseAccount:
         self.id = public_key.address
         self.name = name
         self.seed = seed
+        self.password = None
         self.encrypted = encrypted
+        self.encrypted_on_disk = encrypted
         self.private_key = private_key
         self.public_key = public_key
         generator_name = address_generator.get('name', HierarchicalDeterministic.name)
@@ -260,13 +262,17 @@ class BaseAccount:
         )
 
     def to_dict(self):
-        private_key = self.private_key
+        private_key, seed = self.private_key, self.seed
         if not self.encrypted and self.private_key:
             private_key = self.private_key.extended_key_string()
+        if not self.encrypted and self.encrypted_on_disk:
+            private_key = aes_encrypt(self.password, private_key)
+            seed = aes_encrypt(self.password, self.seed)
+
         return {
             'ledger': self.ledger.get_id(),
             'name': self.name,
-            'seed': self.seed,
+            'seed': seed,
             'encrypted': self.encrypted,
             'private_key': private_key,
             'public_key': self.public_key.extended_key_string(),
@@ -295,6 +301,7 @@ class BaseAccount:
         self.private_key = from_extended_key_string(
             self.ledger, aes_decrypt(password, self.private_key.encode()).decode()
         )
+        self.password = password
         self.encrypted = False
 
     def encrypt(self, password):
@@ -302,6 +309,7 @@ class BaseAccount:
         self.seed = aes_encrypt(password, self.seed.encode()).decode()
         private_key: PrivateKey = self.private_key
         self.private_key = aes_encrypt(password, private_key.extended_key_string().encode()).decode()
+        self.password = None
         self.encrypted = True
 
     @defer.inlineCallbacks
