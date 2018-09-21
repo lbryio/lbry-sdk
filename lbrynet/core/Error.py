@@ -49,6 +49,20 @@ class InsufficientFundsError(RPCError):
     code = -310
 
 
+class CurrencyConversionError(Exception):
+    pass
+
+
+class FileOpenError(ValueError):
+    # this extends ValueError because it is replacing a ValueError in EncryptedFileDownloader
+    # and I don't know where it might get caught upstream
+    pass
+
+
+class ResolveError(Exception):
+    pass
+
+
 class ConnectionClosedBeforeResponseError(Exception):
     pass
 

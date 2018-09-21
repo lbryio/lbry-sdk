@@ -40,6 +40,7 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
+from lbrynet.core.Error import ResolveError
 from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
@@ -339,12 +340,14 @@ class Daemon(AuthJSONRPCServer):
         def _download_finished(download_id, name, claim_dict):
             report = yield self._get_stream_analytics_report(claim_dict)
             self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
+            self.analytics_manager.send_new_download_success(download_id, name, claim_dict)
 
         @defer.inlineCallbacks
         def _download_failed(error, download_id, name, claim_dict):
             report = yield self._get_stream_analytics_report(claim_dict)
             self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
                                                          report)
+            self.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
 
         if sd_hash in self.streams:
             downloader = self.streams[sd_hash]
@@ -353,6 +356,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             download_id = utils.random_string()
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
+            self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
             self.streams[sd_hash] = GetStream(
                 self.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
                 self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
@@ -1851,7 +1855,7 @@ class Daemon(AuthJSONRPCServer):
         resolved = resolved if 'value' in resolved else resolved.get('claim')
 
         if not resolved:
-            raise Exception(
+            raise ResolveError(
                 "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
             )
 

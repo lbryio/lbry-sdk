@@ -6,7 +6,7 @@ import treq
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
-from lbrynet.core.Error import InvalidExchangeRateResponse
+from lbrynet.core.Error import InvalidExchangeRateResponse, CurrencyConversionError
 
 log = logging.getLogger(__name__)
 
@@ -233,7 +233,7 @@ class ExchangeRateManager:
                     market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
                     market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
-        raise Exception(
+        raise CurrencyConversionError(
             'Unable to convert {} from {} to {}'.format(amount, from_currency, to_currency))
 
     def fee_dict(self):
