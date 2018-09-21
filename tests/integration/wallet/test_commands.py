@@ -84,6 +84,9 @@ class FakeAnalytics:
     def send_credits_sent(self):
         pass
 
+    def send_server_startup(self):
+        pass
+
 
 class CommandTestCase(IntegrationTestCase):
 
