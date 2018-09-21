@@ -11,7 +11,6 @@ jobs:
       install:
         - pip install pylint
         - pip install git+https://github.com/lbryio/torba.git
-        - pip install git+https://github.com/lbryio/lbryschema.git
         - pip install -e .
       script: pylint lbrynet
 
@@ -20,7 +19,6 @@ jobs:
       name: "Unit Tests w/ Python 3.7"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/lbryschema.git
         - pip install git+https://github.com/lbryio/torba.git
         - pip install git+https://github.com/lbryio/lbryumx.git#latest_rebased
         - pip install -e .[test]
@@ -47,7 +45,6 @@ jobs:
     - name: "Integration Tests"
       install:
         - pip install tox-travis coverage
-        - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
         - pushd .. && git clone https://github.com/lbryio/torba.git && popd
         - pushd .. && git clone https://github.com/lbryio/lbryumx.git && cd lbryumx && git checkout latest_rebased && cd .. && popd
       script: tox
@@ -79,8 +76,6 @@ jobs:
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
-        - pip3 install git+https://github.com/lbryio/lbryschema.git
-        - python scripts/set_build.py
         - pip3 install -e .
       script:
         - pyinstaller -F -n lbrynet lbrynet/cli.py
