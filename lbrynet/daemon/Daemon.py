@@ -3306,12 +3306,12 @@ class Daemon(AuthJSONRPCServer):
             return certificates[0]
         raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
 
-    def get_account_or_default(self, account_id: str, argument_name: str="account", lbc_only=True):
+    def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True):
         if account_id is None:
             return self.default_account
         return self.get_account_or_error(account_id, argument_name, lbc_only)
 
-    def get_account_or_error(self, account_id: str, argument_name: str="account", lbc_only=True):
+    def get_account_or_error(self, account_id: str, argument_name: str = "account", lbc_only=True):
         for account in self.default_wallet.accounts:
             if account.id == account_id:
                 if lbc_only and not isinstance(account, LBCAccount):
