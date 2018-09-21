@@ -3385,7 +3385,7 @@ class Daemon(AuthJSONRPCServer):
 def loggly_time_string(dt):
     formatted_dt = dt.strftime("%Y-%m-%dT%H:%M:%S")
     milliseconds = str(round(dt.microsecond * (10.0 ** -5), 3))
-    return urllib.quote_plus(formatted_dt + milliseconds + "Z")
+    return urllib.parse.quote(formatted_dt + milliseconds + "Z")
 
 
 def get_loggly_query_string(installation_id):
@@ -3397,7 +3397,7 @@ def get_loggly_query_string(installation_id):
         'from': loggly_time_string(yesterday),
         'to': loggly_time_string(now)
     }
-    data = urllib.urlencode(params)
+    data = urllib.parse.urlencode(params)
     return base_loggly_search_url + data
 
 
