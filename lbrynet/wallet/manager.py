@@ -195,6 +195,9 @@ class LbryWalletManager(BaseWalletManager):
             (value for value in results.values() if 'error' not in value))
         defer.returnValue(results)
 
+    def get_claims_for_name(self, name: str):
+        return self.ledger.network.get_claims_for_name(name)
+
     def get_name_claims(self):
         return defer.succeed([])
 
