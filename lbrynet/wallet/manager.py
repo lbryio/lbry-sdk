@@ -160,23 +160,20 @@ class LbryWalletManager(BaseWalletManager):
     def get_new_address(self):
         return self.get_unused_address()
 
-    def list_addresses(self):
-        return self.default_account.get_addresses()
-
     def reserve_points(self, address, amount: int):
         # TODO: check if we have enough to cover amount
         return ReservedPoints(address, amount)
 
     @defer.inlineCallbacks
-    def send_amount_to_address(self, amount: int, destination_address: bytes):
-        account = self.default_account
+    def send_amount_to_address(self, amount: int, destination_address: bytes, account=None):
+        account = account or self.default_account
         tx = yield Transaction.pay(amount, destination_address, [account], account)
         yield account.ledger.broadcast(tx)
         return tx
 
-    def send_points_to_address(self, reserved: ReservedPoints, amount: int):
+    def send_points_to_address(self, reserved: ReservedPoints, amount: int, account=None):
         destination_address: bytes = reserved.identifier.encode('latin1')
-        return self.send_amount_to_address(amount, destination_address)
+        return self.send_amount_to_address(amount, destination_address, account)
 
     def get_wallet_info_query_handler_factory(self):
         return LBRYcrdAddressQueryHandlerFactory(self)
@@ -198,17 +195,18 @@ class LbryWalletManager(BaseWalletManager):
     def get_claims_for_name(self, name: str):
         return self.ledger.network.get_claims_for_name(name)
 
-    def get_name_claims(self):
-        return defer.succeed([])
-
-    def address_is_mine(self, address):
-        return defer.succeed(True)
+    @defer.inlineCallbacks
+    def address_is_mine(self, unknown_address, account):
+        for my_address in (yield account.get_addresses()):
+            if unknown_address == my_address:
+                return True
+        return False
 
     def get_transaction(self, txid):
         return self.default_account.ledger.get_transaction(txid)
 
-    def get_history(self):
-        return defer.succeed([])
+    def get_history(self, account):
+        return account.get_transactions()
 
     def get_utxos(self, account):
         return account.get_unspent_outputs()

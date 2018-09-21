@@ -141,7 +141,7 @@ class Account(BaseAccount):
                 'nout': utxo.position,
                 'have_certificate': utxo.ref.id in self.certificates
             })
-        defer.returnValue(channels)
+        return channels
 
     @classmethod
     def get_private_key_from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str):
@@ -168,3 +168,6 @@ class Account(BaseAccount):
 
     def get_claim(self, claim_id=None, txid=None, nout=None):
         return self.ledger.db.get_claim(self, claim_id, txid, nout)
+
+    def get_claims(self):
+        return self.ledger.db.get_claims(self)
