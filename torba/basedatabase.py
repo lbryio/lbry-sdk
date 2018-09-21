@@ -266,6 +266,26 @@ class BaseDatabase(SQLiteMixin):
         else:
             return None, None, False
 
+    @defer.inlineCallbacks
+    def get_transactions(self, account):
+        txs = self.run_query(
+            """
+            SELECT raw FROM tx where txid in (
+                    SELECT txo.txid
+                    FROM txo
+                    JOIN pubkey_address USING (address)
+                    WHERE pubkey_address.account = :account
+                UNION
+                    SELECT txo.txid
+                    FROM txi
+                    JOIN txo USING (txoid)
+                    JOIN pubkey_address USING (address)
+                    WHERE pubkey_address.account = :account
+            )
+            """, {'account': account.public_key.address}
+        )
+        return [account.ledger.transaction_class(values[0]) for values in txs]
+
     def get_balance_for_account(self, account, include_reserved=False, **constraints):
         if not include_reserved:
             constraints['is_reserved'] = 0

@@ -345,6 +345,9 @@ class BaseAccount:
     def get_inputs_outputs(self, **constraints):
         return self.ledger.db.get_txios_for_account(self, **constraints)
 
+    def get_transactions(self):
+        return self.ledger.db.get_transactions(self)
+
     @defer.inlineCallbacks
     def fund(self, to_account, amount=None, everything=False,
              outputs=1, broadcast=False, **constraints):
