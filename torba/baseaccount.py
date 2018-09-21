@@ -1,10 +1,10 @@
 import typing
-from typing import Dict, Tuple, Type, Optional, Any
+from typing import Dict, Tuple, Type, Optional, Any, Union
 from twisted.internet import defer
 
 from torba.mnemonic import Mnemonic
 from torba.bip32 import PrivateKey, PubKey, from_extended_key_string
-from torba.hash import double_sha256, aes_encrypt, aes_decrypt
+from torba.hash import aes_encrypt, aes_decrypt
 from torba.constants import COIN
 
 if typing.TYPE_CHECKING:
@@ -199,16 +199,18 @@ class BaseAccount:
 
     def __init__(self, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet', name: str,
                  seed: str, encrypted: bool, private_key: PrivateKey, public_key: PubKey,
-                 address_generator: dict) -> None:
+                 address_generator: dict, password: str = None) -> None:
         self.ledger = ledger
         self.wallet = wallet
         self.id = public_key.address
         self.name = name
         self.seed = seed
-        self.password = None
+        self.password = password
+        self.encryption_init_vector = None
         self.encrypted = encrypted
-        self.encrypted_on_disk = encrypted
-        self.private_key = private_key
+        self.serialize_encrypted = encrypted
+
+        self.private_key: Union[PrivateKey, str] = private_key
         self.public_key = public_key
         generator_name = address_generator.get('name', HierarchicalDeterministic.name)
         self.address_generator = self.address_generators[generator_name]
@@ -265,9 +267,9 @@ class BaseAccount:
         private_key, seed = self.private_key, self.seed
         if not self.encrypted and self.private_key:
             private_key = self.private_key.extended_key_string()
-        if not self.encrypted and self.encrypted_on_disk:
-            private_key = aes_encrypt(self.password, private_key)
-            seed = aes_encrypt(self.password, self.seed)
+        if not self.encrypted and self.serialize_encrypted:
+            private_key = aes_encrypt(self.password, private_key, init_vector=self.encryption_init_vector)
+            seed = aes_encrypt(self.password, self.seed, init_vector=self.encryption_init_vector)
 
         return {
             'ledger': self.ledger.get_id(),
@@ -295,20 +297,25 @@ class BaseAccount:
             details['seed'] = self.seed
         return details
 
-    def decrypt(self, password):
+    def decrypt(self, password: str) -> None:
         assert self.encrypted, "Key is not encrypted."
-        self.seed = aes_decrypt(password, self.seed.encode()).decode()
+        self.seed = aes_decrypt(password, self.seed)
+        p_k: Union[PrivateKey, str] = self.private_key
+        assert isinstance(p_k, str)
         self.private_key = from_extended_key_string(
-            self.ledger, aes_decrypt(password, self.private_key.encode()).decode()
+            self.ledger, aes_decrypt(password, str(p_k))
         )
         self.password = password
         self.encrypted = False
 
-    def encrypt(self, password):
+    def encrypt(self, password: str) -> None:
         assert not self.encrypted, "Key is already encrypted."
-        self.seed = aes_encrypt(password, self.seed.encode()).decode()
-        private_key: PrivateKey = self.private_key
-        self.private_key = aes_encrypt(password, private_key.extended_key_string().encode()).decode()
+        assert isinstance(self.private_key, PrivateKey)
+        self.seed = aes_encrypt(password, self.seed, init_vector=self.encryption_init_vector)
+        p_k: PrivateKey = self.private_key  # this is because the type is changing from PrivateKey <-> str
+        extended: str = p_k.extended_key_string()
+        self.private_key = aes_encrypt(password, extended,
+                                       init_vector=self.encryption_init_vector)
         self.password = None
         self.encrypted = True
 
