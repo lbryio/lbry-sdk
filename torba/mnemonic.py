@@ -8,8 +8,8 @@ import importlib
 import unicodedata
 import string
 from binascii import hexlify
+from secrets import randbelow
 
-import ecdsa
 import pbkdf2
 
 from torba.hash import hmac_sha512
@@ -138,9 +138,9 @@ class Mnemonic:
         # rounding
         n = int(math.ceil(num_bits/bpw) * bpw)
         entropy = 1
-        while entropy < pow(2, n - bpw):
+        while 0 < entropy < pow(2, n - bpw):
             # try again if seed would not contain enough words
-            entropy = ecdsa.util.randrange(pow(2, n))
+            entropy = randbelow(pow(2, n))
         nonce = 0
         while True:
             nonce += 1

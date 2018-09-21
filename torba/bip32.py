@@ -7,16 +7,10 @@
 # and warranty status of this software.
 
 """ Logic for BIP32 Hierarchical Key Derivation. """
-
-import struct
-import hashlib
-
-import ecdsa
-import ecdsa.ellipticcurve as EC
-import ecdsa.numbertheory as NT
+from coincurve import PublicKey, PrivateKey as _PrivateKey
 
 from torba.hash import Base58, hmac_sha512, hash160, double_sha256
-from torba.util import cachedproperty, bytes_to_int, int_to_bytes
+from torba.util import cachedproperty
 
 
 class DerivationError(Exception):
@@ -25,8 +19,6 @@ class DerivationError(Exception):
 
 class _KeyBase:
     """ A BIP32 Key, public or private. """
-
-    CURVE = ecdsa.SECP256k1
 
     def __init__(self, ledger, chain_code, n, depth, parent):
         if not isinstance(chain_code, (bytes, bytearray)):
@@ -63,7 +55,7 @@ class _KeyBase:
             raise ValueError('raw_serkey must have length 33')
 
         return (ver_bytes + bytes((self.depth,))
-                + self.parent_fingerprint() + struct.pack('>I', self.n)
+                + self.parent_fingerprint() + self.n.to_bytes(4, 'big')
                 + self.chain_code + raw_serkey)
 
     def identifier(self):
@@ -90,43 +82,26 @@ class PubKey(_KeyBase):
 
     def __init__(self, ledger, pubkey, chain_code, n, depth, parent=None):
         super().__init__(ledger, chain_code, n, depth, parent)
-        if isinstance(pubkey, ecdsa.VerifyingKey):
+        if isinstance(pubkey, PublicKey):
             self.verifying_key = pubkey
         else:
             self.verifying_key = self._verifying_key_from_pubkey(pubkey)
 
     @classmethod
     def _verifying_key_from_pubkey(cls, pubkey):
-        """ Converts a 33-byte compressed pubkey into an ecdsa.VerifyingKey object. """
+        """ Converts a 33-byte compressed pubkey into an PublicKey object. """
         if not isinstance(pubkey, (bytes, bytearray)):
             raise TypeError('pubkey must be raw bytes')
         if len(pubkey) != 33:
             raise ValueError('pubkey must be 33 bytes')
         if pubkey[0] not in (2, 3):
             raise ValueError('invalid pubkey prefix byte')
-        curve = cls.CURVE.curve
-
-        is_odd = pubkey[0] == 3
-        x = bytes_to_int(pubkey[1:])
-
-        # p is the finite field order
-        a, b, p = curve.a(), curve.b(), curve.p()  # pylint: disable=invalid-name
-        y2 = pow(x, 3, p) + b  # pylint: disable=invalid-name
-        assert a == 0  # Otherwise y2 += a * pow(x, 2, p)
-        y = NT.square_root_mod_prime(y2 % p, p)
-        if bool(y & 1) != is_odd:
-            y = p - y
-        point = EC.Point(curve, x, y)
-
-        return ecdsa.VerifyingKey.from_public_point(point, curve=cls.CURVE)
+        return PublicKey(pubkey)
 
     @cachedproperty
     def pubkey_bytes(self):
         """ Return the compressed public key as 33 bytes. """
-        point = self.verifying_key.pubkey.point
-        prefix = bytes((2 + (point.y() & 1),))
-        padded_bytes = _exponent_to_bytes(point.x())
-        return prefix + padded_bytes
+        return self.verifying_key.format(True)
 
     @cachedproperty
     def address(self):
@@ -134,28 +109,17 @@ class PubKey(_KeyBase):
         return self.ledger.public_key_to_address(self.pubkey_bytes)
 
     def ec_point(self):
-        return self.verifying_key.pubkey.point
+        return self.verifying_key.point()
 
-    def child(self, n):
+    def child(self, n: int):
         """ Return the derived child extended pubkey at index N. """
         if not 0 <= n < (1 << 31):
             raise ValueError('invalid BIP32 public key child number')
 
-        msg = self.pubkey_bytes + struct.pack('>I', n)
-        L, R = self._hmac_sha512(msg)  # pylint: disable=invalid-name
-
-        curve = self.CURVE
-        L = bytes_to_int(L)  # pylint: disable=invalid-name
-        if L >= curve.order:
-            raise DerivationError
-
-        point = curve.generator * L + self.ec_point()
-        if point == EC.INFINITY:
-            raise DerivationError
-
-        verkey = ecdsa.VerifyingKey.from_public_point(point, curve=curve)
-
-        return PubKey(self.ledger, verkey, R, n, self.depth + 1, self)
+        msg = self.pubkey_bytes + n.to_bytes(4, 'big')
+        L_b, R_b = self._hmac_sha512(msg)  # pylint: disable=invalid-name
+        derived_key = self.verifying_key.add(L_b)
+        return PubKey(self.ledger, derived_key, R_b, n, self.depth + 1, self)
 
     def identifier(self):
         """ Return the key's identifier as 20 bytes. """
@@ -169,20 +133,6 @@ class PubKey(_KeyBase):
         )
 
 
-class LowSValueSigningKey(ecdsa.SigningKey):
-    """
-    Enforce low S values in signatures
-    BIP-0062: https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures
-    """
-
-    def sign_number(self, number, entropy=None, k=None):
-        order = self.privkey.order
-        r, s = ecdsa.SigningKey.sign_number(self, number, entropy, k)  # pylint: disable=invalid-name
-        if s > order / 2:
-            s = order - s
-        return r, s
-
-
 class PrivateKey(_KeyBase):
     """A BIP32 private key."""
 
@@ -190,16 +140,15 @@ class PrivateKey(_KeyBase):
 
     def __init__(self, ledger, privkey, chain_code, n, depth, parent=None):
         super().__init__(ledger, chain_code, n, depth, parent)
-        if isinstance(privkey, ecdsa.SigningKey):
+        if isinstance(privkey, _PrivateKey):
             self.signing_key = privkey
         else:
             self.signing_key = self._signing_key_from_privkey(privkey)
 
     @classmethod
     def _signing_key_from_privkey(cls, private_key):
-        """ Converts a 32-byte private key into an ecdsa.SigningKey object. """
-        exponent = cls._private_key_secret_exponent(private_key)
-        return LowSValueSigningKey.from_secret_exponent(exponent, curve=cls.CURVE)
+        """ Converts a 32-byte private key into an coincurve.PrivateKey object. """
+        return _PrivateKey.from_int(PrivateKey._private_key_secret_exponent(private_key))
 
     @classmethod
     def _private_key_secret_exponent(cls, private_key):
@@ -208,10 +157,7 @@ class PrivateKey(_KeyBase):
             raise TypeError('private key must be raw bytes')
         if len(private_key) != 32:
             raise ValueError('private key must be 32 bytes')
-        exponent = bytes_to_int(private_key)
-        if not 1 <= exponent < cls.CURVE.order:
-            raise ValueError('private key represents an invalid exponent')
-        return exponent
+        return int.from_bytes(private_key, 'big')
 
     @classmethod
     def from_seed(cls, ledger, seed):
@@ -223,12 +169,12 @@ class PrivateKey(_KeyBase):
     @cachedproperty
     def private_key_bytes(self):
         """ Return the serialized private key (no leading zero byte). """
-        return _exponent_to_bytes(self.secret_exponent())
+        return self.signing_key.secret
 
     @cachedproperty
     def public_key(self):
         """ Return the corresponding extended public key. """
-        verifying_key = self.signing_key.get_verifying_key()
+        verifying_key = self.signing_key.public_key
         parent_pubkey = self.parent.public_key if self.parent else None
         return PubKey(self.ledger, verifying_key, self.chain_code, self.n, self.depth,
                       parent_pubkey)
@@ -238,7 +184,7 @@ class PrivateKey(_KeyBase):
 
     def secret_exponent(self):
         """ Return the private key as a secret exponent. """
-        return self.signing_key.privkey.secret_multiplier
+        return self.signing_key.to_int()
 
     def wif(self):
         """ Return the private key encoded in Wallet Import Format. """
@@ -258,24 +204,14 @@ class PrivateKey(_KeyBase):
         else:
             serkey = self.public_key.pubkey_bytes
 
-        msg = serkey + struct.pack('>I', n)
-        L, R = self._hmac_sha512(msg)  # pylint: disable=invalid-name
-
-        curve = self.CURVE
-        L = bytes_to_int(L)  # pylint: disable=invalid-name
-        exponent = (L + bytes_to_int(self.private_key_bytes)) % curve.order
-        if exponent == 0 or L >= curve.order:
-            raise DerivationError
-
-        privkey = _exponent_to_bytes(exponent)
-
-        return PrivateKey(self.ledger, privkey, R, n, self.depth + 1, self)
+        msg = serkey + n.to_bytes(4, 'big')
+        L_b, R_b = self._hmac_sha512(msg)  # pylint: disable=invalid-name
+        derived_key = self.signing_key.add(L_b)
+        return PrivateKey(self.ledger, derived_key, R_b, n, self.depth + 1, self)
 
     def sign(self, data):
         """ Produce a signature for piece of data by double hashing it and signing the hash. """
-        key = self.signing_key
-        digest = double_sha256(data)
-        return key.sign_digest_deterministic(digest, hashlib.sha256, ecdsa.util.sigencode_der)
+        return self.signing_key.sign(data, hasher=double_sha256)
 
     def identifier(self):
         """Return the key's identifier as 20 bytes."""
@@ -289,11 +225,6 @@ class PrivateKey(_KeyBase):
         )
 
 
-def _exponent_to_bytes(exponent):
-    """Convert an exponent to 32 big-endian bytes"""
-    return (bytes((0,)*32) + int_to_bytes(exponent))[-32:]
-
-
 def _from_extended_key(ledger, ekey):
     """Return a PubKey or PrivateKey from an extended key raw bytes."""
     if not isinstance(ekey, (bytes, bytearray)):
@@ -302,8 +233,7 @@ def _from_extended_key(ledger, ekey):
         raise ValueError('extended key must have length 78')
 
     depth = ekey[4]
-    # fingerprint = ekey[5:9]
-    n, = struct.unpack('>I', ekey[9:13])
+    n = int.from_bytes(ekey[9:13], 'big')
     chain_code = ekey[13:45]
 
     if ekey[:4] == ledger.extended_public_key_prefix:

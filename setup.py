@@ -27,7 +27,7 @@ setup(
     python_requires='>=3.6',
     install_requires=(
         'twisted',
-        'ecdsa',
+        'coincurve',
         'pbkdf2',
         'cryptography'
     ),

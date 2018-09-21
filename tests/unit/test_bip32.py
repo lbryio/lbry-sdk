@@ -1,8 +1,9 @@
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 from twisted.trial import unittest
+
+from .key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
 from torba.bip32 import PubKey, PrivateKey, from_extended_key_string
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
-
 
 class BIP32Tests(unittest.TestCase):
 
@@ -32,7 +33,10 @@ class BIP32Tests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, 'invalid BIP32 public key child number'):
             pubkey.child(-1)
-        self.assertIsInstance(pubkey.child(1), PubKey)
+        for i in range(20):
+            new_key = pubkey.child(i)
+            self.assertIsInstance(new_key, PubKey)
+            self.assertEqual(hexlify(new_key.identifier()), expected_ids[i])
 
     def test_private_key_validation(self):
         with self.assertRaisesRegex(TypeError, 'private key must be raw bytes'):
@@ -49,15 +53,34 @@ class BIP32Tests(unittest.TestCase):
         )
         ec_point = private_key.ec_point()
         self.assertEqual(
-            ec_point.x(), 30487144161998778625547553412379759661411261804838752332906558028921886299019
+            ec_point[0], 30487144161998778625547553412379759661411261804838752332906558028921886299019
         )
         self.assertEqual(
-            ec_point.y(), 86198965946979720220333266272536217633917099472454294641561154971209433250106
+            ec_point[1], 86198965946979720220333266272536217633917099472454294641561154971209433250106
         )
         self.assertEqual(private_key.address(), '1GVM5dEhThbiyCZ9gqBZBv6p9whga7MTXo' )
         with self.assertRaisesRegex(ValueError, 'invalid BIP32 private key child number'):
             private_key.child(-1)
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)
+
+    def test_private_key_derivation(self):
+        private_key = PrivateKey(
+            ledger_class({
+                'db': ledger_class.database_class(':memory:'),
+                'headers': ledger_class.headers_class(':memory:'),
+            }),
+            unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
+            b'abcd'*8, 0, 1
+        )
+        for i in range(20):
+            new_privkey = private_key.child(i)
+            self.assertIsInstance(new_privkey, PrivateKey)
+            self.assertEqual(hexlify(new_privkey.private_key_bytes), expected_privkeys[i])
+        for i in range(PrivateKey.HARDENED + 1, private_key.HARDENED + 20):
+            new_privkey = private_key.child(i)
+            self.assertIsInstance(new_privkey, PrivateKey)
+            self.assertEqual(hexlify(new_privkey.private_key_bytes), expected_hardened_privkeys[i - 1 - PrivateKey.HARDENED])
+
 
     def test_from_extended_keys(self):
         ledger = ledger_class({
