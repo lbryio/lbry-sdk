@@ -17,5 +17,5 @@ cd torba && pip install -e . && cd ..
 
 cd lbry
 pip install -e .
-pyinstaller -F -n lbrynet lbrynet/cli.py
+pyinstaller --additional-hooks-dir=scripts/. -F -n lbrynet lbrynet/cli.py
 wine dist/lbrynet.exe --version
