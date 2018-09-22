@@ -270,7 +270,7 @@ class BaseDatabase(SQLiteMixin):
     @defer.inlineCallbacks
     def get_transactions(self, account, offset=0, limit=100):
         offset, limit = min(offset, 0), max(limit, 100)
-        tx_records = yield self.run_query(
+        tx_rows = yield self.run_query(
             """
             SELECT txid, raw, height FROM tx WHERE txid IN (
                     SELECT txo.txid FROM txo
@@ -285,20 +285,20 @@ class BaseDatabase(SQLiteMixin):
             """, {'account': account.public_key.address, 'offset': offset, 'limit': limit}
         )
         txids, txs = [], []
-        for r in tx_records:
-            txids.append(r[0])
-            txs.append(account.ledger.transaction_class(raw=r[1], height=r[2]))
+        for row in tx_rows:
+            txids.append(row[0])
+            txs.append(account.ledger.transaction_class(raw=row[1], height=row[2]))
 
-        txo_records = yield self.run_query(
+        txo_rows = yield self.run_query(
             """
             SELECT txoid, pubkey_address.chain
             FROM txo JOIN pubkey_address USING (address)
             WHERE txid IN ({})
             """.format(', '.join(['?']*len(txids))), txids
         )
-        txos = dict(txo_records)
+        txos = dict(txo_rows)
 
-        txi_records = yield self.run_query(
+        txi_rows = yield self.run_query(
             """
             SELECT txoid, txo.amount, txo.script, txo.txid, txo.position
             FROM txi JOIN txo USING (txoid)
@@ -307,12 +307,12 @@ class BaseDatabase(SQLiteMixin):
         )
         txis = {}
         output_class = account.ledger.transaction_class.output_class
-        for r in txi_records:
-            txis[r[0]] = output_class(
-                r[1],
-                output_class.script_class(r[2]),
-                TXRefImmutable.from_id(r[3]),
-                position=r[4]
+        for row in txi_rows:
+            txis[row[0]] = output_class(
+                row[1],
+                output_class.script_class(row[2]),
+                TXRefImmutable.from_id(row[3]),
+                position=row[4]
             )
 
         for tx in txs:
