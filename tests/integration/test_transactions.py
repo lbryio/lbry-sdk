@@ -9,7 +9,7 @@ class BasicTransactionTests(IntegrationTestCase):
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)
-        yield self.ledger.update_account(account2)
+        await d2f(self.ledger.update_account(account2))
 
         self.assertEqual(await self.get_balance(account1), 0)
         self.assertEqual(await self.get_balance(account2), 0)
@@ -53,3 +53,12 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.on_transaction(tx)  # mempool
         await self.blockchain.generate(1)
         await self.on_transaction(tx)  # confirmed
+
+        txs = await d2f(account1.get_transactions())
+        tx = txs[1]
+        self.assertEqual(round(tx.inputs[0].txo_ref.txo.amount/COIN, 1), 1.1)
+        self.assertEqual(round(tx.inputs[1].txo_ref.txo.amount/COIN, 1), 1.1)
+        self.assertEqual(round(tx.outputs[0].amount/COIN, 1), 2.0)
+        self.assertEqual(tx.outputs[0].get_address(self.ledger), address2)
+        self.assertEqual(tx.outputs[0].is_change, False)
+        self.assertEqual(tx.outputs[1].is_change, True)

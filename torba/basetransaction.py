@@ -181,13 +181,14 @@ class BaseOutput(InputOutput):
     script_class = BaseOutputScript
     estimator_class = BaseOutputEffectiveAmountEstimator
 
-    __slots__ = 'amount', 'script'
+    __slots__ = 'amount', 'script', 'is_change'
 
     def __init__(self, amount: int, script: BaseOutputScript,
                  tx_ref: TXRef = None, position: int = None) -> None:
         super().__init__(tx_ref, position)
         self.amount = amount
         self.script = script
+        self.is_change = None
 
     @property
     def ref(self):
@@ -226,13 +227,14 @@ class BaseTransaction:
     input_class = BaseInput
     output_class = BaseOutput
 
-    def __init__(self, raw=None, version=1, locktime=0) -> None:
+    def __init__(self, raw=None, version=1, locktime=0, height=None) -> None:
         self._raw = raw
         self.ref = TXRefMutable(self)
         self.version = version  # type: int
         self.locktime = locktime  # type: int
         self._inputs = []  # type: List[BaseInput]
         self._outputs = []  # type: List[BaseOutput]
+        self.height = height
         if raw is not None:
             self._deserialize()
 
@@ -416,6 +418,8 @@ class BaseTransaction:
                     change_address = yield change_account.change.get_or_create_usable_address()
                     change_hash160 = change_account.ledger.address_to_hash160(change_address)
                     change_amount = change - cost_of_change
+                    change_output = cls.output_class.pay_pubkey_hash(change_amount, change_hash160)
+                    change_output.is_change = True
                     tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
 
             yield tx.sign(funding_accounts)
@@ -449,13 +453,3 @@ class BaseTransaction:
             else:
                 raise NotImplementedError("Don't know how to spend this output.")
         self._reset()
-
-    @defer.inlineCallbacks
-    def get_my_addresses(self, ledger):
-        addresses = set()
-        for txo in self.outputs:
-            address = ledger.hash160_to_address(txo.script.values['pubkey_hash'])
-            record = yield ledger.db.get_address(address)
-            if record is not None:
-                addresses.add(address)
-        defer.returnValue(list(addresses))

@@ -6,6 +6,7 @@ from twisted.internet import defer
 from twisted.enterprise import adbapi
 
 from torba.hash import TXRefImmutable
+from torba.basetransaction import TXORefResolvable
 
 log = logging.getLogger(__name__)
 
@@ -267,24 +268,62 @@ class BaseDatabase(SQLiteMixin):
             return None, None, False
 
     @defer.inlineCallbacks
-    def get_transactions(self, account):
-        txs = self.run_query(
+    def get_transactions(self, account, offset=0, limit=100):
+        offset, limit = min(offset, 0), max(limit, 100)
+        tx_records = yield self.run_query(
             """
-            SELECT raw FROM tx where txid in (
-                    SELECT txo.txid
-                    FROM txo
+            SELECT txid, raw, height FROM tx WHERE txid IN (
+                    SELECT txo.txid FROM txo
                     JOIN pubkey_address USING (address)
                     WHERE pubkey_address.account = :account
                 UNION
-                    SELECT txo.txid
-                    FROM txi
+                    SELECT txo.txid FROM txi
                     JOIN txo USING (txoid)
                     JOIN pubkey_address USING (address)
                     WHERE pubkey_address.account = :account
-            )
-            """, {'account': account.public_key.address}
+            ) ORDER BY height DESC LIMIT :offset, :limit
+            """, {'account': account.public_key.address, 'offset': offset, 'limit': limit}
         )
-        return [account.ledger.transaction_class(values[0]) for values in txs]
+        txids, txs = [], []
+        for r in tx_records:
+            txids.append(r[0])
+            txs.append(account.ledger.transaction_class(raw=r[1], height=r[2]))
+
+        txo_records = yield self.run_query(
+            """
+            SELECT txoid, pubkey_address.chain
+            FROM txo JOIN pubkey_address USING (address)
+            WHERE txid IN ({})
+            """.format(', '.join(['?']*len(txids))), txids
+        )
+        txos = dict(txo_records)
+
+        txi_records = yield self.run_query(
+            """
+            SELECT txoid, txo.amount, txo.script, txo.txid, txo.position
+            FROM txi JOIN txo USING (txoid)
+            WHERE txi.txid IN ({})
+            """.format(', '.join(['?']*len(txids))), txids
+        )
+        txis = {}
+        output_class = account.ledger.transaction_class.output_class
+        for r in txi_records:
+            txis[r[0]] = output_class(
+                r[1],
+                output_class.script_class(r[2]),
+                TXRefImmutable.from_id(r[3]),
+                position=r[4]
+            )
+
+        for tx in txs:
+            for txi in tx.inputs:
+                if txi.txo_ref.id in txis:
+                    txi.txo_ref = TXORefResolvable(txis[txi.txo_ref.id])
+            for txo in tx.outputs:
+                if txo.id in txos:
+                    txo.is_change = txos[txo.id] == 1
+
+        return txs
 
     def get_balance_for_account(self, account, include_reserved=False, **constraints):
         if not include_reserved:
@@ -305,26 +344,6 @@ class BaseDatabase(SQLiteMixin):
 
     @defer.inlineCallbacks
     def get_utxos_for_account(self, account, **constraints):
-        constraints['account'] = account.public_key.address
-        utxos = yield self.run_query(
-            """
-            SELECT amount, script, txid, txo.position
-            FROM txo JOIN pubkey_address ON pubkey_address.address=txo.address
-            WHERE account=:account AND txo.is_reserved=0 AND txoid NOT IN (SELECT txoid FROM txi)
-            """+constraints_to_sql(constraints), constraints
-        )
-        output_class = account.ledger.transaction_class.output_class
-        return [
-            output_class(
-                values[0],
-                output_class.script_class(values[1]),
-                TXRefImmutable.from_id(values[2]),
-                position=values[3]
-            ) for values in utxos
-        ]
-
-    @defer.inlineCallbacks
-    def get_txios_for_account(self, account, **constraints):
         constraints['account'] = account.public_key.address
         utxos = yield self.run_query(
             """
