@@ -27,6 +27,7 @@ class JSONResponseEncoder(JSONEncoder):
     def encode_transaction(self, tx):
         return {
             'txid': tx.id,
+            'height': tx.height,
             'inputs': [self.encode_input(txo) for txo in tx.inputs],
             'outputs': [self.encode_output(txo) for txo in tx.outputs],
             'total_input': tx.input_sum,
@@ -36,15 +37,21 @@ class JSONResponseEncoder(JSONEncoder):
         }
 
     def encode_output(self, txo):
-        return {
+        output = {
             'txid': txo.tx_ref.id,
             'nout': txo.position,
             'amount': txo.amount,
             'address': txo.get_address(self.ledger),
             'is_claim': txo.script.is_claim_name,
             'is_support': txo.script.is_support_claim,
-            'is_update': txo.script.is_update_claim
+            'is_update': txo.script.is_update_claim,
         }
+        if txo.is_change is not None:
+            output['is_change'] = txo.is_change
+        return output
 
     def encode_input(self, txi):
-        return self.encode_output(txi.txo_ref.txo)
+        return self.encode_output(txi.txo_ref.txo) if txi.txo_ref.txo is not None else {
+            'txid': txi.txo_ref.tx_ref.id,
+            'nout': txi.txo_ref.position
+        }
