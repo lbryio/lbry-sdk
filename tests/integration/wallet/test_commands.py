@@ -186,7 +186,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # While making the spamdwich he wonders... has anyone on LBRY
         # registered the @spam channel yet? "I should do that!" he
         # exclaims and goes back to his computer to do just that!
-        channel = yield self.out(self.daemon.jsonrpc_channel_new('@spam', 1))
+        channel = yield self.out(self.daemon.jsonrpc_channel_new('@spam', 1.0))
         self.assertTrue(channel['success'])
         yield self.d_confirm_tx(channel['tx']['txid'])
 
