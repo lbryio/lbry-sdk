@@ -367,7 +367,7 @@
             {
                 "is_required": false, 
                 "type": "int", 
-                "name": "amount<amount>", 
+                "name": "amount", 
                 "description": "Amount of credits to claim name for, defaults to the current amount on the claim"
             }
         ], 
@@ -478,7 +478,7 @@
             {
                 "is_required": false, 
                 "type": "str", 
-                "name": "file_name<file_name>", 
+                "name": "file_name", 
                 "description": "delete by file name in downloads folder"
             }, 
             {
@@ -1230,7 +1230,7 @@
         "arguments": [
             {
                 "is_required": true, 
-                "type": "Decimal", 
+                "type": "float", 
                 "name": "amount", 
                 "description": "amount of credit to send"
             }, 
