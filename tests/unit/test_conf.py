@@ -112,11 +112,11 @@ class SettingsTest(unittest.TestCase):
 
         # nonexistent file
         conf.conf_file = 'monkey.yml'
-        with (self.assertRaises(FileNotFoundError)):
+        with self.assertRaises(FileNotFoundError):
             settings.load_conf_file_settings()
 
         # invalid extensions
         for filename in ('monkey.yymmll', 'monkey'):
             conf.conf_file = filename
-            with (self.assertRaises(ValueError)):
+            with self.assertRaises(ValueError):
                 settings.load_conf_file_settings()

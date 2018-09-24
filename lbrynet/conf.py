@@ -49,6 +49,8 @@ DEFAULT_DHT_NODES = [
     ('lbrynet3.lbry.io', 4444)
 ]
 
+DEFAULT_SETTINGS_FILENAME = 'daemon_settings.yml'
+
 settings_decoders = {
     '.json': json.loads,
     '.yml': yaml.load
@@ -483,19 +485,15 @@ class Config:
             }
 
     def save_conf_file_settings(self):
-        if conf_file:
-            path = conf_file
-        else:
-            path = self.get_conf_filename()
+        path = conf_file or self.get_valid_settings_filename() or DEFAULT_SETTINGS_FILENAME
         # reverse the conversions done after loading the settings from the conf
         # file
         rev = self._convert_conf_file_lists_reverse(self._data[TYPE_PERSISTED])
         ext = os.path.splitext(path)[1]
         encoder = settings_encoders.get(ext, False)
-
         if not encoder:
-            raise ValueError('Unknown settings format %s' % ext)
-
+            raise ValueError('Unknown settings format: {}. Available formats: {}'
+                             .format(ext, list(settings_encoders.keys())))
         with open(path, 'w') as settings_file:
             settings_file.write(encoder(rev))
 
@@ -524,34 +522,25 @@ class Config:
         settings.node_id = settings.get_node_id()
 
     def load_conf_file_settings(self):
-        if conf_file:
-            path = conf_file
-        else:
-            path = self.get_conf_filename(default=None)
-
-            # if conf file does not exist
-            if not path:
-                self.initialize_post_conf_load()
-                return
-
-        ext = os.path.splitext(path)[1]
-        decoder = settings_decoders.get(ext, False)
-
-        if not decoder:
-            raise ValueError('Unknown settings format %s' % ext)
-
-        try:
-            with open(path, 'r') as settings_file:
-                data = settings_file.read()
-            decoded = self._fix_old_conf_file_settings(decoder(data))
-            log.info('Loaded settings file: %s', path)
-            self._validate_settings(decoded)
-            self._data[TYPE_PERSISTED].update(self._convert_conf_file_lists(decoded))
-        except FileNotFoundError as err:
-            raise FileNotFoundError('Error while reading settings file \'{}\': {}'.format(os.path.abspath(path), err.strerror))
-
+        path = conf_file or self.get_valid_settings_filename()
+        self._read_conf_file(path)
         # initialize members depending on config file
         self.initialize_post_conf_load()
+
+    def _read_conf_file(self, path):
+        if not path:
+            return
+        ext = os.path.splitext(path)[1]
+        decoder = settings_decoders.get(ext, False)
+        if not decoder:
+            raise ValueError('Unknown settings format: {}. Available formats: {}'
+                             .format(ext, list(settings_decoders.keys())))
+        with open(path, 'r') as settings_file:
+            data = settings_file.read()
+        decoded = self._fix_old_conf_file_settings(decoder(data))
+        log.info('Loaded settings file: %s', path)
+        self._validate_settings(decoded)
+        self._data[TYPE_PERSISTED].update(self._convert_conf_file_lists(decoded))
 
     def _fix_old_conf_file_settings(self, settings_dict):
         if 'API_INTERFACE' in settings_dict:
@@ -602,13 +591,7 @@ class Config:
     def get_db_revision_filename(self):
         return os.path.join(self.ensure_data_dir(), self['DB_REVISION_FILE_NAME'])
 
-    def get_conf_filename(self, default='daemon_settings.yml'):
-        """
-        Return name of configuration file.
-        If file does not exists, return default value.
-        :param default: default filename to return if config file does not exist
-        :return: name of configuration file
-        """
+    def get_valid_settings_filename(self):
         data_dir = self.ensure_data_dir()
         yml_path = os.path.join(data_dir, 'daemon_settings.yml')
         json_path = os.path.join(data_dir, 'daemon_settings.json')
@@ -616,8 +599,6 @@ class Config:
             return yml_path
         elif os.path.isfile(json_path):
             return json_path
-        else:
-            return default
 
     def get_installation_id(self):
         install_id_filename = os.path.join(self.ensure_data_dir(), "install_id")
