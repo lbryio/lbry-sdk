@@ -1035,13 +1035,13 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             wallet_send (<amount> | --amount=<amount>)
                         ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
-                        [--account=<account_id>]
+                        [--account_id=<account_id>]
 
         Options:
-            --amount=<amount>      : (Decimal) amount of credit to send
-            --address=<address>    : (str) address to send credits to
-            --claim_id=<claim_id>  : (str) claim_id of the claim to send to tip to
-            --account=<account_id>  : (str) account to fund the transaction
+            --amount=<amount>          : (decimal) amount of credit to send
+            --address=<address>        : (str) address to send credits to
+            --claim_id=<claim_id>      : (str) claim_id of the claim to send to tip to
+            --account_id=<account_id>  : (str) account to fund the transaction
 
         Returns:
             If sending to an address:
@@ -1106,7 +1106,7 @@ class Daemon(AuthJSONRPCServer):
         Options:
             --no_broadcast                    : (bool) whether to broadcast or not
             --num_addresses=<num_addresses>   : (int) num of addresses to create
-            --amount=<amount>                 : (float) initial amount in each address
+            --amount=<amount>                 : (decimal) initial amount in each address
 
         Returns:
             (dict) the resulting transaction
@@ -1131,7 +1131,7 @@ class Daemon(AuthJSONRPCServer):
                 [--include_reserved] [--include_claims] [--show_seed]
 
         Options:
-            --account=<account_id>          : (str) If provided only the balance for this
+            --account_id=<account_id>       : (str) If provided only the balance for this
                                                     account will be given
             --confirmations=<confirmations> : (int) required confirmations (default: 6)
             --include_reserved              : (bool) include reserved UTXOs (default: false)
@@ -1174,14 +1174,14 @@ class Daemon(AuthJSONRPCServer):
             account_balance [<account_id>] [<address> | --address=<address>] [--include_unconfirmed]
 
         Options:
-            --account=<account_id>  : (str) If provided only the balance for this
-                                      account will be given
-            --address=<address>     : (str) If provided only the balance for this
-                                      address will be given
-            --include_unconfirmed   : (bool) Include unconfirmed
+            --account_id=<account_id> : (str) If provided only the balance for this
+                                        account will be given
+            --address=<address>       : (str) If provided only the balance for this
+                                        address will be given
+            --include_unconfirmed     : (bool) Include unconfirmed
 
         Returns:
-            (float) amount of lbry credits in wallet
+            (decimal) amount of lbry credits in wallet
         """
         if address is not None:
             raise NotImplementedError("Limiting by address needs to be re-implemented in new wallet.")
@@ -1205,11 +1205,11 @@ class Daemon(AuthJSONRPCServer):
                  [--single_key]
 
         Options:
-            --account_name=<account_name>   : (str) name of the account to add
-            --seed=<seed>                   : (str) seed to generate new account from
-            --private_key=<private_key>     : (str) private key for new account
-            --public_key=<public_key>       : (str) public key for new account
-            --single_key                    : (bool) create single key account, default is multi-key
+            --account_name=<account_name>  : (str) name of the account to add
+            --seed=<seed>                  : (str) seed to generate new account from
+            --private_key=<private_key>    : (str) private key for new account
+            --public_key=<public_key>      : (str) public key for new account
+            --single_key                   : (bool) create single key account, default is multi-key
 
         Returns:
             (map) added account details
@@ -1250,8 +1250,8 @@ class Daemon(AuthJSONRPCServer):
             account_create (<account_name> | --account_name=<account_name>) [--single_key]
 
         Options:
-            --account_name=<account_name>   : (str) name of the account to create
-            --single_key                    : (bool) create single key account, default is multi-key
+            --account_name=<account_name>  : (str) name of the account to create
+            --single_key                   : (bool) create single key account, default is multi-key
 
         Returns:
             (map) new account details
@@ -1281,10 +1281,10 @@ class Daemon(AuthJSONRPCServer):
         Remove an existing account.
 
         Usage:
-            account (<account_id> | --account=<account_id>)
+            account (<account_id> | --account_id=<account_id>)
 
         Options:
-            --account=<account_id>   : (str) id of the account to remove
+            --account_id=<account_id>  : (str) id of the account to remove
 
         Returns:
             (map) details of removed account
@@ -1307,13 +1307,13 @@ class Daemon(AuthJSONRPCServer):
         Change various settings on an account.
 
         Usage:
-            account (<account_id> | --account=<account_id>)
+            account (<account_id> | --account_id=<account_id>)
                 [--default] [--new_name=<new_name>]
                 [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
                 [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
 
         Options:
-            --account=<account_id>       : (str) id of the account to change
+            --account_id=<account_id>       : (str) id of the account to change
             --default                       : (bool) make this account the default
             --new_name=<new_name>           : (str) new name for the account
             --receiving_gap=<receiving_gap> : (int) set the gap for receiving addresses
@@ -1429,10 +1429,10 @@ class Daemon(AuthJSONRPCServer):
         account settings.
 
         Usage:
-            account_max_address_gap (<account_id> | --account=<account_id>)
+            account_max_address_gap (<account_id> | --account_id=<account_id>)
 
         Options:
-            --account=<account_id>        : (str) account for which to get max gaps
+            --account_id=<account_id>        : (str) account for which to get max gaps
 
         Returns:
             (map) maximum gap for change and receiving addresses
@@ -1486,11 +1486,11 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             wallet_is_address_mine (<address> | --address=<address>)
-                                   [<account_id> | --account=<account_id>]
+                                   [<account_id> | --account_id=<account_id>]
 
         Options:
-            --address=<address>  : (str) address to check
-            --account=<account_id> : (str) id of the account to use
+            --address=<address>       : (str) address to check
+            --account_id=<account_id> : (str) id of the account to use
 
         Returns:
             (bool) true, if address is associated with current wallet
@@ -1522,10 +1522,10 @@ class Daemon(AuthJSONRPCServer):
         List account addresses
 
         Usage:
-            address_list [<account_id> | --account=<account_id>]
+            address_list [<account_id> | --account_id=<account_id>]
 
         Options:
-            --account=<account_id> : (str) id of the account to use
+            --account_id=<account_id>  : (str) id of the account to use
 
         Returns:
             List of wallet addresses
@@ -1539,10 +1539,10 @@ class Daemon(AuthJSONRPCServer):
         a new address if there is none.
 
         Usage:
-            address_unused [--account=<account_id>]
+            address_unused [--account_id=<account_id>]
 
         Options:
-            --account=<account_id> : (str) id of the account to use
+            --account_id=<account_id> : (str) id of the account to use
 
         Returns:
             (str) Unused wallet address in base58
@@ -1931,7 +1931,7 @@ class Daemon(AuthJSONRPCServer):
                                                      allow the deletion of multiple files.
                                                      Otherwise do not delete anything.
             --sd_hash=<sd_hash>                    : (str) delete by file sd hash
-            --file_name<file_name>                 : (str) delete by file name in downloads folder
+            --file_name=<file_name>                 : (str) delete by file name in downloads folder
             --stream_hash=<stream_hash>            : (str) delete by file stream hash
             --rowid=<rowid>                        : (int) delete by file row id
             --claim_id=<claim_id>                  : (str) delete by file claim id
@@ -2008,7 +2008,7 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --channel_name=<channel_name>    : (str) name of the channel prefixed with '@'
-            --amount=<amount>                : (float) bid amount on the channel
+            --amount=<amount>                : (decimal) bid amount on the channel
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -2325,13 +2325,13 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             claim_abandon [<claim_id> | --claim_id=<claim_id>]
                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                          [--account=<account>]
+                          [--account_id=<account_id>]
 
         Options:
-            --claim_id=<claim_id> : (str) claim_id of the claim to abandon
-            --txid=<txid> : (str) txid of the claim to abandon
-            --nout=<nout> : (int) nout of the claim to abandon
-            --account=<account> : (str) id of the account to use
+            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
+            --txid=<txid>             : (str) txid of the claim to abandon
+            --nout=<nout>             : (int) nout of the claim to abandon
+            --account_id=<account_id> : (str) id of the account to use
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -2364,13 +2364,13 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             claim_new_support (<name> | --name=<name>) (<claim_id> | --claim_id=<claim_id>)
-                              (<amount> | --amount=<amount>) [--account=<account_id>]
+                              (<amount> | --amount=<amount>) [--account_id=<account_id>]
 
         Options:
-            --name=<name> : (str) name of the claim to support
-            --claim_id=<claim_id> : (str) claim_id of the claim to support
-            --amount=<amount> : (float) amount of support
-            --account=<account_id> : (str) id of the account to use
+            --name=<name>             : (str) name of the claim to support
+            --claim_id=<claim_id>     : (str) claim_id of the claim to support
+            --amount=<amount>         : (decimal) amount of support
+            --account_id=<account_id> : (str) id of the account to use
 
         Returns:
             (dict) Dictionary containing the transaction information
@@ -2397,12 +2397,13 @@ class Daemon(AuthJSONRPCServer):
         Tip the owner of the claim
 
         Usage:
-            claim_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>) [--account=<account_id>]
+            claim_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
+                      [--account_id=<account_id>]
 
         Options:
-            --claim_id=<claim_id> : (str) claim_id of the claim to support
-            --amount=<amount> : (float) amount of support
-            --account=<account_id> : (str) id of the account to use
+            --claim_id=<claim_id>     : (str) claim_id of the claim to support
+            --amount=<amount>         : (decimal) amount of support
+            --account_id=<account_id> : (str) id of the account to use
 
         Returns:
             (dict) Dictionary containing the transaction information
@@ -2480,8 +2481,8 @@ class Daemon(AuthJSONRPCServer):
         Options:
             --claim_id=<claim_id>   : (str) claim_id to send
             --address=<address>     : (str) address to send the claim to
-            --amount<amount>        : (int) Amount of credits to claim name for, defaults to the current amount
-                                            on the claim
+            --amount=<amount>       : (int) Amount of credits to claim name for,
+                                      defaults to the current amount on the claim
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -2505,10 +2506,10 @@ class Daemon(AuthJSONRPCServer):
         List my name claims
 
         Usage:
-            claim_list_mine [<account_id> | --account=<account_id>]
+            claim_list_mine [<account_id> | --account_id=<account_id>]
 
         Options:
-            --account=<account_id> : (str) id of the account to query
+            --account_id=<account_id> : (str) id of the account to query
 
         Returns:
             (list) List of name claims owned by user
@@ -2669,10 +2670,10 @@ class Daemon(AuthJSONRPCServer):
         List transactions belonging to wallet
 
         Usage:
-            transaction_list [<account_id> | --account=<account_id>]
+            transaction_list [<account_id> | --account_id=<account_id>]
 
         Options:
-            --account=<account_id> : (str) id of the account to query
+            --account_id=<account_id> : (str) id of the account to query
 
         Returns:
             (list) List of transactions
@@ -2747,7 +2748,7 @@ class Daemon(AuthJSONRPCServer):
             utxo_list [<account_id>]
 
         Options:
-            --account=<account_id> : (str) id of the account to query
+            --account_id=<account_id> : (str) id of the account to query
 
         Returns:
             (list) List of unspent transaction outputs (UTXOs)
