@@ -61,6 +61,7 @@ def write_api(f):
 
 
 if __name__ == '__main__':
-    html_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs', 'api.json')
+    parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    html_file = os.path.join(parent, 'docs', 'api.json')
     with open(html_file, 'w+') as f:
         write_api(f)
