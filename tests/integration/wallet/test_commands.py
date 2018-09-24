@@ -255,7 +255,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'the end')
             file.flush()
             claim1 = yield self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+                'hovercraft', '1.0', file_path=file.name, channel_id=channel['claim_id']
             ))
             self.assertTrue(claim1['success'])
             yield self.d_confirm_tx(claim1['tx']['txid'])
@@ -286,7 +286,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'yada yada yada!')
             file.flush()
             claim2 = yield self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+                'hovercraft', '1.0', file_path=file.name, channel_name='@spam'
             ))
             self.assertTrue(claim2['success'])
             self.assertEqual(claim2['claim_id'], claim1['claim_id'])
@@ -313,7 +313,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         ramsey_account_id = (yield self.daemon.jsonrpc_account_create("Ramsey"))['id']
         ramsey_account = self.daemon.get_account_or_error(ramsey_account_id)
         ramsey_address = yield self.daemon.jsonrpc_address_unused(ramsey_account_id)
-        result = yield self.out(self.daemon.jsonrpc_wallet_send(1, ramsey_address))
+        result = yield self.out(self.daemon.jsonrpc_wallet_send('1.0', ramsey_address))
         self.assertIn("txid", result)
         yield self.d_confirm_tx(result['txid'])
 
@@ -337,7 +337,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'**Audience Gasps**')
             file.flush()
             claim3 = yield self.out(self.daemon.jsonrpc_publish(
-                'fresh-start', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+                'fresh-start', '1.0', file_path=file.name, channel_name='@spam'
             ))
             self.assertTrue(claim3['success'])
             yield self.d_confirm_tx(claim3['tx']['txid'])
@@ -350,7 +350,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And voila, and bravo and encore! His Best Friend Ramsey read the story and immediately knew this was a hit
         # Now to keep this claim winning on the lbry blockchain he immediately supports the claim
         tx = yield self.out(self.daemon.jsonrpc_claim_new_support(
-            'fresh-start', claim3['claim_id'], 0.2, account_id=ramsey_account_id
+            'fresh-start', claim3['claim_id'], '0.2', account_id=ramsey_account_id
         ))
         yield self.d_confirm_tx(tx['txid'])
 
@@ -364,7 +364,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Now he also wanted to support the original creator of the Award Winning Novel
         # So he quickly decides to send a tip to him
         tx = yield self.out(
-            self.daemon.jsonrpc_claim_tip(claim3['claim_id'], 0.3, account_id=ramsey_account_id))
+            self.daemon.jsonrpc_claim_tip(claim3['claim_id'], '0.3', account_id=ramsey_account_id))
         yield self.d_confirm_tx(tx['txid'])
 
         # And again checks if it went to the just right place
@@ -375,7 +375,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         yield self.d_generate(5)
 
         # Seeing the ravishing success of his novel Chris adds support to his claim too
-        tx = yield self.out(self.daemon.jsonrpc_claim_new_support('fresh-start', claim3['claim_id'], 0.4))
+        tx = yield self.out(self.daemon.jsonrpc_claim_new_support('fresh-start', claim3['claim_id'], '0.4'))
         yield self.d_confirm_tx(tx['txid'])
 
         # And check if his support showed up
@@ -397,7 +397,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'That\'s what goes around for songs these days anyways')
             file.flush()
             claim4 = yield self.out(self.daemon.jsonrpc_publish(
-                'hit-song', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+                'hit-song', '1.0', file_path=file.name, channel_id=channel['claim_id']
             ))
             self.assertTrue(claim4['success'])
             yield self.d_confirm_tx(claim4['tx']['txid'])
