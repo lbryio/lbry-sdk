@@ -323,3 +323,95 @@ class TestSingleKeyAccount(unittest.TestCase):
         self.maxDiff = None
         account_data['ledger'] = 'btc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())
+
+
+class AccountEncryptionTests(unittest.TestCase):
+    password = "password"
+    init_vector = b'0000000000000000'
+    unencrypted_account = {
+            'name': 'My Account',
+            'seed':
+                "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
+                "h absent",
+            'encrypted': False,
+            'private_key':
+                'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
+                '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
+            'public_key':
+                'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
+                'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
+            'address_generator': {'name': 'single-address'}
+    }
+    encrypted_account = {
+            'name': 'My Account',
+            'seed':
+                "MDAwMDAwMDAwMDAwMDAwMJ4e4W4pE6nQtPiD6MujNIQ7aFPhUBl63GwPziAgGN"
+                "MBTMoaSjZfyyvw7ELMCqAYTWJ61aV7K4lmd2hR11g9dpdnnpCb9f9j3zLZHRv7+"
+                "bIkZ//trah9AIkmrc/ZvNkC0Q==",
+            'encrypted': True,
+            'private_key':
+                'MDAwMDAwMDAwMDAwMDAwMLkWikOLScA/ZxlFSGU7dl//7Q/1gS9h7vqQyrd8DX+'
+                'jwcp7SwlJ1mkMwuraUaWLq9/LxiaGmqJBUZ50p77YVZbDycaCN1unBr1/i1q6RP'
+                'Ob2MNCaG8nyjxZhQai+V/2JmJ+UnFMp3nHany7F8/Hr0g=',
+            'public_key':
+                'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
+                'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
+            'address_generator': {'name': 'single-address'}
+    }
+
+    def setUp(self):
+        self.ledger = ledger_class({
+            'db': ledger_class.database_class(':memory:'),
+            'headers': ledger_class.headers_class(':memory:'),
+        })
+
+    def test_encrypt_wallet(self):
+        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), self.unencrypted_account)
+        account.encryption_init_vector = self.init_vector
+
+        self.assertFalse(account.serialize_encrypted)
+        self.assertFalse(account.encrypted)
+        account.encrypt(self.password)
+        self.assertFalse(account.serialize_encrypted)
+        self.assertTrue(account.encrypted)
+        self.assertEqual(account.seed, self.encrypted_account['seed'])
+        self.assertEqual(account.private_key, self.encrypted_account['private_key'])
+
+        self.assertEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
+        self.assertEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
+
+        account.serialize_encrypted = True
+        account.decrypt(self.password)
+
+        self.assertEqual(account.seed, self.unencrypted_account['seed'])
+        self.assertEqual(account.private_key.extended_key_string(), self.unencrypted_account['private_key'])
+
+        self.assertEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
+        self.assertEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
+
+        account.encryption_init_vector = None
+        self.assertNotEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
+        self.assertNotEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
+
+        self.assertFalse(account.encrypted)
+        self.assertTrue(account.serialize_encrypted)
+
+    def test_decrypt_wallet(self):
+        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), self.encrypted_account)
+        account.encryption_init_vector = self.init_vector
+
+        self.assertTrue(account.encrypted)
+        self.assertTrue(account.serialize_encrypted)
+        account.decrypt(self.password)
+        self.assertFalse(account.encrypted)
+        self.assertTrue(account.serialize_encrypted)
+
+        self.assertEqual(account.seed, self.unencrypted_account['seed'])
+        self.assertEqual(account.private_key.extended_key_string(), self.unencrypted_account['private_key'])
+
+        self.assertEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
+        self.assertEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
+
+        account.serialize_encrypted = False
+        self.assertEqual(account.to_dict()['seed'], self.unencrypted_account['seed'])
+        self.assertEqual(account.to_dict()['private_key'], self.unencrypted_account['private_key'])
