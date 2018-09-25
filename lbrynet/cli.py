@@ -145,7 +145,12 @@ def main(argv=None):
         if method not in Daemon.deprecated_methods:
             print('{} is not a valid command.'.format(method))
             return 1
+
         new_method = Daemon.deprecated_methods[method].new_command
+        if new_method is None:
+            print("{} is permanently deprecated and will be removed in a future release.".format(method))
+            return 0
+
         print("{} is deprecated, using {}.".format(method, new_method))
         method = new_method
 
