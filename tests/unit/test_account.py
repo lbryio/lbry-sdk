@@ -371,11 +371,13 @@ class AccountEncryptionTests(unittest.TestCase):
 
         self.assertFalse(account.serialize_encrypted)
         self.assertFalse(account.encrypted)
+        self.assertIsNotNone(account.private_key)
         account.encrypt(self.password)
         self.assertFalse(account.serialize_encrypted)
         self.assertTrue(account.encrypted)
         self.assertEqual(account.seed, self.encrypted_account['seed'])
-        self.assertEqual(account.private_key, self.encrypted_account['private_key'])
+        self.assertEqual(account.private_key_string, self.encrypted_account['private_key'])
+        self.assertIsNone(account.private_key)
 
         self.assertEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
         self.assertEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
