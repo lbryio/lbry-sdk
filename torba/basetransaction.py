@@ -137,6 +137,13 @@ class BaseInput(InputOutput):
             raise ValueError('Cannot resolve output to get amount.')
         return self.txo_ref.txo.amount
 
+    @property
+    def is_my_account(self) -> int:
+        """ True if the output this input spends is yours. """
+        if self.txo_ref.txo is None:
+            raise ValueError('Cannot resolve output to determine ownership.')
+        return self.txo_ref.txo.is_my_account
+
     @classmethod
     def deserialize_from(cls, stream):
         tx_ref = TXRefImmutable.from_hash(stream.read(32))
@@ -181,14 +188,17 @@ class BaseOutput(InputOutput):
     script_class = BaseOutputScript
     estimator_class = BaseOutputEffectiveAmountEstimator
 
-    __slots__ = 'amount', 'script', 'is_change'
+    __slots__ = 'amount', 'script', 'is_change', 'is_my_account'
 
     def __init__(self, amount: int, script: BaseOutputScript,
-                 tx_ref: TXRef = None, position: int = None) -> None:
+                 tx_ref: TXRef = None, position: int = None,
+                 is_change: Optional[bool] = None, is_my_account: Optional[bool] = None
+                 ) -> None:
         super().__init__(tx_ref, position)
         self.amount = amount
         self.script = script
-        self.is_change = None
+        self.is_change = is_change
+        self.is_my_account = is_my_account
 
     @property
     def ref(self):
@@ -227,14 +237,16 @@ class BaseTransaction:
     input_class = BaseInput
     output_class = BaseOutput
 
-    def __init__(self, raw=None, version=1, locktime=0, height=None) -> None:
+    def __init__(self, raw=None, version: int=1, locktime: int=0,
+                 height: int=-1, position: int=-1) -> None:
         self._raw = raw
         self.ref = TXRefMutable(self)
-        self.version = version  # type: int
-        self.locktime = locktime  # type: int
-        self._inputs = []  # type: List[BaseInput]
-        self._outputs = []  # type: List[BaseOutput]
+        self.version = version
+        self.locktime = locktime
+        self._inputs: List[BaseInput] = []
+        self._outputs: List[BaseOutput] = []
         self.height = height
+        self.position = position
         if raw is not None:
             self._deserialize()
 
@@ -257,11 +269,11 @@ class BaseTransaction:
         self.ref.reset()
 
     @property
-    def inputs(self):  # type: () -> ReadOnlyList[BaseInput]
+    def inputs(self) -> ReadOnlyList[BaseInput]:
         return ReadOnlyList(self._inputs)
 
     @property
-    def outputs(self):  # type: () -> ReadOnlyList[BaseOutput]
+    def outputs(self) -> ReadOnlyList[BaseOutput]:
         return ReadOnlyList(self._outputs)
 
     def _add(self, new_ios: Iterable[InputOutput], existing_ios: List) -> 'BaseTransaction':
@@ -301,18 +313,39 @@ class BaseTransaction:
         return sum(o.amount for o in self.outputs)
 
     @property
-    def fee(self):
+    def net_account_balance(self) -> int:
+        balance = 0
+        for txi in self.inputs:
+            if txi.is_my_account is None:
+                raise ValueError(
+                    "Cannot access net_account_balance if inputs/outputs do not "
+                    "have is_my_account set properly."
+                )
+            elif txi.is_my_account:
+                balance -= txi.amount
+        for txo in self.outputs:
+            if txo.is_my_account is None:
+                raise ValueError(
+                    "Cannot access net_account_balance if inputs/outputs do not "
+                    "have is_my_account set properly."
+                )
+            elif txo.is_my_account:
+                balance += txo.amount
+        return balance
+
+    @property
+    def fee(self) -> int:
         return self.input_sum - self.output_sum
 
-    def get_base_fee(self, ledger):
+    def get_base_fee(self, ledger) -> int:
         """ Fee for base tx excluding inputs and outputs. """
         return self.base_size * ledger.fee_per_byte
 
-    def get_effective_input_sum(self, ledger):
+    def get_effective_input_sum(self, ledger) -> int:
         """ Sum of input values *minus* the cost involved to spend them. """
         return sum(txi.amount - txi.get_fee(ledger) for txi in self._inputs)
 
-    def get_total_output_sum(self, ledger):
+    def get_total_output_sum(self, ledger) -> int:
         """ Sum of output values *plus* the cost involved to spend them. """
         return sum(txo.amount + txo.get_fee(ledger) for txo in self._outputs)
 

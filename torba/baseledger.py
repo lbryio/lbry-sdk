@@ -40,7 +40,7 @@ class LedgerRegistry(type):
         return mcs.ledgers[ledger_id]
 
 
-class TransactionEvent(namedtuple('TransactionEvent', ('address', 'tx', 'height', 'is_verified'))):
+class TransactionEvent(namedtuple('TransactionEvent', ('address', 'tx', 'is_verified'))):
     pass
 
 
@@ -87,7 +87,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         self.on_transaction.listen(
             lambda e: log.info(
                 '(%s) on_transaction: address=%s, height=%s, is_verified=%s, tx.id=%s',
-                self.get_id(), e.address, e.height, e.is_verified, e.tx.id
+                self.get_id(), e.address, e.tx.height, e.is_verified, e.tx.id
             )
         )
 
@@ -207,12 +207,13 @@ class BaseLedger(metaclass=LedgerRegistry):
         return hexlify(working_branch[::-1])
 
     @defer.inlineCallbacks
-    def is_valid_transaction(self, tx, height):
+    def validate_transaction_and_set_position(self, tx, height):
         if not height <= len(self.headers):
             return False
         merkle = yield self.network.get_merkle(tx.id, height)
         merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
         header = self.headers[height]
+        tx.position = merkle['pos']
         return merkle_root == header['merkle_root']
 
     @defer.inlineCallbacks
@@ -365,23 +366,23 @@ class BaseLedger(metaclass=LedgerRegistry):
             try:
 
                 # see if we have a local copy of transaction, otherwise fetch it from server
-                raw, _, is_verified = yield self.db.get_transaction(hex_id)
+                raw, _, position, is_verified = yield self.db.get_transaction(hex_id)
                 save_tx = None
                 if raw is None:
                     _raw = yield self.network.get_transaction(hex_id)
-                    tx = self.transaction_class(unhexlify(_raw))
+                    tx = self.transaction_class(unhexlify(_raw), height=remote_height)
                     save_tx = 'insert'
                 else:
-                    tx = self.transaction_class(raw)
+                    tx = self.transaction_class(raw, height=remote_height)
 
-                if remote_height > 0 and not is_verified:
-                    is_verified = yield self.is_valid_transaction(tx, remote_height)
+                if remote_height > 0 and (not is_verified or position is None):
+                    is_verified = yield self.validate_transaction_and_set_position(tx, remote_height)
                     is_verified = 1 if is_verified else 0
                     if save_tx is None:
                         save_tx = 'update'
 
                 yield self.db.save_transaction_io(
-                    save_tx, tx, remote_height, is_verified, address, self.address_to_hash160(address),
+                    save_tx, tx, is_verified, address, self.address_to_hash160(address),
                     ''.join('{}:{}:'.format(tx_id, tx_height) for tx_id, tx_height in synced_history)
                 )
 
@@ -390,7 +391,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                     self.get_id(), hex_id, address, remote_height, is_verified
                 )
 
-                self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
+                self._on_transaction_controller.add(TransactionEvent(address, tx, is_verified))
 
             except Exception:
                 log.exception('Failed to synchronize transaction:')

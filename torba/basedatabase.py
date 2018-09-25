@@ -143,6 +143,7 @@ class BaseDatabase(SQLiteMixin):
             txid text primary key,
             raw blob not null,
             height integer not null,
+            position integer not null,
             is_verified boolean not null default 0
         );
     """
@@ -185,19 +186,20 @@ class BaseDatabase(SQLiteMixin):
             'script': sqlite3.Binary(txo.script.source)
         }
 
-    def save_transaction_io(self, save_tx, tx, height, is_verified, address, txhash, history):
+    def save_transaction_io(self, save_tx, tx, is_verified, address, txhash, history):
 
         def _steps(t):
             if save_tx == 'insert':
                 self.execute(t, *self._insert_sql('tx', {
                     'txid': tx.id,
                     'raw': sqlite3.Binary(tx.raw),
-                    'height': height,
+                    'height': tx.height,
+                    'position': tx.position,
                     'is_verified': is_verified
                 }))
             elif save_tx == 'update':
                 self.execute(t, *self._update_sql("tx", {
-                    'height': height, 'is_verified': is_verified
+                    'height': tx.height, 'position': tx.position, 'is_verified': is_verified
                 }, 'txid = ?', (tx.id,)))
 
             existing_txos = [r[0] for r in self.execute(
@@ -260,19 +262,19 @@ class BaseDatabase(SQLiteMixin):
     @defer.inlineCallbacks
     def get_transaction(self, txid):
         result = yield self.run_query(
-            "SELECT raw, height, is_verified FROM tx WHERE txid = ?", (txid,)
+            "SELECT raw, height, position, is_verified FROM tx WHERE txid = ?", (txid,)
         )
         if result:
             return result[0]
         else:
-            return None, None, False
+            return None, None, None, False
 
     @defer.inlineCallbacks
     def get_transactions(self, account, offset=0, limit=100):
-        offset, limit = min(offset, 0), max(limit, 100)
+        account_id = account.public_key.address
         tx_rows = yield self.run_query(
             """
-            SELECT txid, raw, height FROM tx WHERE txid IN (
+            SELECT txid, raw, height, position FROM tx WHERE txid IN (
                     SELECT txo.txid FROM txo
                     JOIN pubkey_address USING (address)
                     WHERE pubkey_address.account = :account
@@ -281,47 +283,67 @@ class BaseDatabase(SQLiteMixin):
                     JOIN txo USING (txoid)
                     JOIN pubkey_address USING (address)
                     WHERE pubkey_address.account = :account
-            ) ORDER BY height DESC LIMIT :offset, :limit
-            """, {'account': account.public_key.address, 'offset': offset, 'limit': limit}
+            ) ORDER BY height DESC, position DESC LIMIT :offset, :limit
+            """, {
+                'account': account_id,
+                'offset': min(offset, 0),
+                'limit': max(limit, 100)
+            }
         )
         txids, txs = [], []
         for row in tx_rows:
             txids.append(row[0])
-            txs.append(account.ledger.transaction_class(raw=row[1], height=row[2]))
+            txs.append(account.ledger.transaction_class(
+                raw=row[1], height=row[2], position=row[3]
+            ))
 
         txo_rows = yield self.run_query(
             """
-            SELECT txoid, pubkey_address.chain
+            SELECT txoid, chain, account
             FROM txo JOIN pubkey_address USING (address)
             WHERE txid IN ({})
             """.format(', '.join(['?']*len(txids))), txids
         )
-        txos = dict(txo_rows)
+        txos = {}
+        for row in txo_rows:
+            txos[row[0]] = {
+                'is_change': row[1] == 1,
+                'is_my_account': row[2] == account_id
+            }
 
-        txi_rows = yield self.run_query(
+        referenced_txo_rows = yield self.run_query(
             """
-            SELECT txoid, txo.amount, txo.script, txo.txid, txo.position
-            FROM txi JOIN txo USING (txoid)
+            SELECT txoid, txo.amount, txo.script, txo.txid, txo.position, chain, account
+            FROM txi
+                JOIN txo USING (txoid)
+                JOIN pubkey_address USING (address)
             WHERE txi.txid IN ({})
             """.format(', '.join(['?']*len(txids))), txids
         )
-        txis = {}
+        referenced_txos = {}
         output_class = account.ledger.transaction_class.output_class
-        for row in txi_rows:
-            txis[row[0]] = output_class(
-                row[1],
-                output_class.script_class(row[2]),
-                TXRefImmutable.from_id(row[3]),
-                position=row[4]
+        for row in referenced_txo_rows:
+            referenced_txos[row[0]] = output_class(
+                amount=row[1],
+                script=output_class.script_class(row[2]),
+                tx_ref=TXRefImmutable.from_id(row[3]),
+                position=row[4],
+                is_change=row[5] == 1,
+                is_my_account=row[6] == account_id
             )
 
         for tx in txs:
             for txi in tx.inputs:
-                if txi.txo_ref.id in txis:
-                    txi.txo_ref = TXORefResolvable(txis[txi.txo_ref.id])
+                if txi.txo_ref.id in referenced_txos:
+                    txi.txo_ref = TXORefResolvable(referenced_txos[txi.txo_ref.id])
             for txo in tx.outputs:
-                if txo.id in txos:
-                    txo.is_change = txos[txo.id] == 1
+                txo_meta = txos.get(txo.id)
+                if txo_meta is not None:
+                    txo.is_change = txo_meta['is_change']
+                    txo.is_my_account = txo_meta['is_my_account']
+                else:
+                    txo.is_change = False
+                    txo.is_my_account = False
 
         return txs
 
