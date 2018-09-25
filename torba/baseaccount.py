@@ -1,5 +1,5 @@
 import typing
-from typing import Dict, Tuple, Type, Optional, Any, Union
+from typing import Dict, Tuple, Type, Optional, Any
 from twisted.internet import defer
 
 from torba.mnemonic import Mnemonic
