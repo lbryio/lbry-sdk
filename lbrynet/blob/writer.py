@@ -7,7 +7,7 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj
 log = logging.getLogger(__name__)
 
 
-class HashBlobWriter(object):
+class HashBlobWriter:
     def __init__(self, length_getter, finished_cb):
         self.write_handle = BytesIO()
         self.length_getter = length_getter
@@ -18,7 +18,7 @@ class HashBlobWriter(object):
 
     def __del__(self):
         if self.finished_cb_d is None:
-            log.warn("Garbage collection was called, but writer was not closed yet")
+            log.warning("Garbage collection was called, but writer was not closed yet")
         self.close()
 
     @property
@@ -27,7 +27,7 @@ class HashBlobWriter(object):
 
     def write(self, data):
         if self.write_handle is None:
-            log.exception("writer has already been closed")
+            log.warning("writer has already been closed")
             raise IOError('I/O operation on closed file')
 
         self._hashsum.update(data)

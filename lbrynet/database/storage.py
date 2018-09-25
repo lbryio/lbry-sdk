@@ -2,6 +2,7 @@ import logging
 import os
 import sqlite3
 import traceback
+from binascii import hexlify, unhexlify
 from decimal import Decimal
 from twisted.internet import defer, task, threads
 from twisted.enterprise import adbapi
@@ -11,7 +12,8 @@ from lbryschema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.dht.constants import dataExpireTimeout
-from lbryum.constants import COIN
+from lbrynet.wallet.database import WalletDatabase
+from torba.constants import COIN
 
 log = logging.getLogger(__name__)
 
@@ -50,13 +52,13 @@ def open_file_for_writing(download_directory, suggested_file_name):
 
 
 def rerun_if_locked(f):
-    max_attempts = 3
+    max_attempts = 5
 
     def rerun(err, rerun_count, *args, **kwargs):
         connection = args[0]
         reactor = connection.reactor
         log.debug("Failed to execute (%s): %s", err, args)
-        if err.check(sqlite3.OperationalError) and err.value.message == "database is locked":
+        if err.check(sqlite3.OperationalError) and "database is locked" in str(err.value):
             log.warning("database was locked. rerunning %s with args %s, kwargs %s",
                         str(f), str(args), str(kwargs))
             if rerun_count < max_attempts:
@@ -83,18 +85,19 @@ def rerun_if_locked(f):
 
 class SqliteConnection(adbapi.ConnectionPool):
     def __init__(self, db_path):
-        adbapi.ConnectionPool.__init__(self, 'sqlite3', db_path, check_same_thread=False)
+        super().__init__('sqlite3', db_path, check_same_thread=False)
 
     @rerun_if_locked
     def runInteraction(self, interaction, *args, **kw):
-        return adbapi.ConnectionPool.runInteraction(self, interaction, *args, **kw)
+        return super().runInteraction(interaction, *args, **kw)
 
     @classmethod
     def set_reactor(cls, reactor):
         cls.reactor = reactor
 
 
-class SQLiteStorage(object):
+class SQLiteStorage:
+
     CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;
             pragma journal_mode=WAL;
@@ -164,7 +167,7 @@ class SQLiteStorage(object):
                 timestamp integer,
                 primary key (sd_hash, reflector_address)
             );
-    """
+    """ + WalletDatabase.CREATE_TABLES_QUERY
 
     def __init__(self, db_dir, reactor=None):
         if not reactor:
@@ -180,11 +183,18 @@ class SQLiteStorage(object):
         # change to the associated content claim occurs. these are added by the file manager
         # when it loads each file
         self.content_claim_callbacks = {}  # {<stream_hash>: <callable returning a deferred>}
+        self.check_should_announce_lc = None
+        if 'reflector' not in conf.settings['components_to_skip']:
+            self.check_should_announce_lc = task.LoopingCall(self.verify_will_announce_all_head_and_sd_blobs)
 
+    @defer.inlineCallbacks
     def setup(self):
         def _create_tables(transaction):
             transaction.executescript(self.CREATE_TABLES_QUERY)
-        return self.db.runInteraction(_create_tables)
+        yield self.db.runInteraction(_create_tables)
+        if self.check_should_announce_lc and not self.check_should_announce_lc.running:
+            self.check_should_announce_lc.start(600)
+        defer.returnValue(None)
 
     @defer.inlineCallbacks
     def run_and_return_one_or_none(self, query, *args):
@@ -202,7 +212,15 @@ class SQLiteStorage(object):
         else:
             defer.returnValue([])
 
+    def run_and_return_id(self, query, *args):
+        def do_save(t):
+            t.execute(query, args)
+            return t.lastrowid
+        return self.db.runInteraction(do_save)
+
     def stop(self):
+        if self.check_should_announce_lc and self.check_should_announce_lc.running:
+            self.check_should_announce_lc.stop()
         self.db.close()
         return defer.succeed(True)
 
@@ -250,7 +268,12 @@ class SQLiteStorage(object):
         blob_hashes = yield self.run_and_return_list(
             "select blob_hash from blob where status='finished'"
         )
-        defer.returnValue([blob_hash.decode('hex') for blob_hash in blob_hashes])
+        defer.returnValue([unhexlify(blob_hash) for blob_hash in blob_hashes])
+
+    def count_finished_blobs(self):
+        return self.run_and_return_one_or_none(
+            "select count(*) from blob where status='finished'"
+        )
 
     def update_last_announced_blob(self, blob_hash, last_announced):
         return self.db.runOperation(
@@ -469,21 +492,17 @@ class SQLiteStorage(object):
     @defer.inlineCallbacks
     def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         # touch the closest available file to the file name
-        file_name = yield open_file_for_writing(download_directory.decode('hex'), file_name.decode('hex'))
+        file_name = yield open_file_for_writing(unhexlify(download_directory).decode(), unhexlify(file_name).decode())
         result = yield self.save_published_file(
-            stream_hash, file_name.encode('hex'), download_directory, data_payment_rate
+            stream_hash, hexlify(file_name.encode()), download_directory, data_payment_rate
         )
         defer.returnValue(result)
 
     def save_published_file(self, stream_hash, file_name, download_directory, data_payment_rate, status="stopped"):
-        def do_save(db_transaction):
-            db_transaction.execute(
-                "insert into file values (?, ?, ?, ?, ?)",
-                (stream_hash, file_name, download_directory, data_payment_rate, status)
-            )
-            file_rowid = db_transaction.lastrowid
-            return file_rowid
-        return self.db.runInteraction(do_save)
+        return self.run_and_return_id(
+            "insert into file values (?, ?, ?, ?, ?)",
+            stream_hash, file_name, download_directory, data_payment_rate, status
+        )
 
     def get_filename_for_rowid(self, rowid):
         return self.run_and_return_one_or_none("select file_name from file where rowid=?", rowid)
@@ -595,7 +614,7 @@ class SQLiteStorage(object):
                         source_hash = None
                 except AttributeError:
                     source_hash = None
-                serialized = claim_info.get('hex') or smart_decode(claim_info['value']).serialized.encode('hex')
+                serialized = claim_info.get('hex') or hexlify(smart_decode(claim_info['value']).serialized)
                 transaction.execute(
                     "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (outpoint, claim_id, name, amount, height, serialized, certificate_id, address, sequence)
@@ -637,6 +656,19 @@ class SQLiteStorage(object):
         if support_dl:
             yield defer.DeferredList(support_dl)
 
+    def save_claims_for_resolve(self, claim_infos):
+        to_save = []
+        for info in claim_infos:
+            if 'value' in info:
+                if info['value']:
+                    to_save.append(info)
+            else:
+                if 'certificate' in info and info['certificate']['value']:
+                    to_save.append(info['certificate'])
+                if 'claim' in info and info['claim']['value']:
+                    to_save.append(info['claim'])
+        return self.save_claims(to_save)
+
     def get_old_stream_hashes_for_claim_id(self, claim_id, new_stream_hash):
         return self.run_and_return_list(
             "select f.stream_hash from file f "
@@ -653,7 +685,7 @@ class SQLiteStorage(object):
         ).fetchone()
         if not claim_info:
             raise Exception("claim not found")
-        new_claim_id, claim = claim_info[0], ClaimDict.deserialize(claim_info[1].decode('hex'))
+        new_claim_id, claim = claim_info[0], ClaimDict.deserialize(unhexlify(claim_info[1]))
 
         # certificate claims should not be in the content_claim table
         if not claim.is_stream:
@@ -666,7 +698,7 @@ class SQLiteStorage(object):
         if not known_sd_hash:
             raise Exception("stream not found")
         # check the claim contains the same sd hash
-        if known_sd_hash[0] != claim.source_hash:
+        if known_sd_hash[0].encode() != claim.source_hash:
             raise Exception("stream mismatch")
 
         # if there is a current claim associated to the file, check that the new claim is an update to it
@@ -814,7 +846,7 @@ class SQLiteStorage(object):
 
     def save_claim_tx_heights(self, claim_tx_heights):
         def _save_claim_heights(transaction):
-            for outpoint, height in claim_tx_heights.iteritems():
+            for outpoint, height in claim_tx_heights.items():
                 transaction.execute(
                     "update claim set height=? where claim_outpoint=? and height=-1",
                     (height, outpoint)
@@ -850,7 +882,7 @@ def _format_claim_response(outpoint, claim_id, name, amount, height, serialized,
         "claim_id": claim_id,
         "address": address,
         "claim_sequence": claim_sequence,
-        "value": ClaimDict.deserialize(serialized.decode('hex')).claim_dict,
+        "value": ClaimDict.deserialize(unhexlify(serialized)).claim_dict,
         "height": height,
         "amount": float(Decimal(amount) / Decimal(COIN)),
         "nout": int(outpoint.split(":")[1]),

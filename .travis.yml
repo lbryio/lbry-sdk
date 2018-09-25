@@ -1,42 +1,105 @@
-os: linux
-dist: trusty
+sudo: required
+dist: xenial
 language: python
-python: 2.7
+python: "3.7"
 
-branches:
-  except:
-    - gh-pages
+jobs:
+  include:
+
+    - stage: code quality
+      name: "pylint lbrynet"
+      install:
+        - pip install pylint
+        - pip install git+https://github.com/lbryio/torba.git
+        - pip install git+https://github.com/lbryio/lbryschema.git
+        - pip install -e .
+      script: pylint lbrynet
+
+    - &tests
+      stage: test
+      name: "Unit Tests w/ Python 3.7"
+      install:
+        - pip install coverage
+        - pip install git+https://github.com/lbryio/torba.git
+        - pip install git+https://github.com/lbryio/lbryschema.git
+        - pip install -e .[test]
+      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.unit
+      after_success:
+        - bash <(curl -s https://codecov.io/bash)
+
+    - <<: *tests
+      name: "Unit Tests w/ Python 3.6"
+      python: "3.6"
+
+    - <<: *tests
+      name: "DHT Tests w/ Python 3.7"
+      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
+
+    - <<: *tests
+      name: "DHT Tests w/ Python 3.6"
+      python: "3.6"
+      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
+
+    - name: "Integration Tests"
+      install:
+        - pip install tox-travis coverage
+        - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
+        - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+        - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
+        - pushd .. && git clone https://github.com/lbryio/lbryumx.git && cd lbryumx && git checkout afd34f323dd94c516108a65240f7d17aea8efe85 && cd .. && popd
+        - pushd .. && git clone https://github.com/lbryio/torba.git && popd
+      script: tox
+      after_success:
+        - coverage combine tests/
+        - bash <(curl -s https://codecov.io/bash)
+
+    - stage: build
+      name: "Windows"
+      language: generic
+      services:
+        - docker
+      install:
+        - docker pull cdrx/pyinstaller-windows:python3-32bit
+      script:
+        - docker run -v "$(pwd):/src/lbry" cdrx/pyinstaller-windows:python3-32bit lbry/scripts/wine_build.sh
+      addons:
+        artifacts:
+          working_dir: dist
+          paths:
+            - lbrynet.exe
+          target_paths:
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win/
+
+    - &build
+      name: "Linux"
+      python: "3.6"
+      install:
+        - pip3 install pyinstaller
+        - pip3 install git+https://github.com/lbryio/torba.git
+        - pip3 install git+https://github.com/lbryio/lbryschema.git
+        - pip3 install -e .
+      script:
+        - pyinstaller -F -n lbrynet lbrynet/cli.py
+        - ./dist/lbrynet --version
+      env: OS=linux
+      addons:
+        artifacts:
+          working_dir: dist
+          paths:
+            - lbrynet
+          # artifact uploader thinks lbrynet is a directory, https://github.com/travis-ci/artifacts/issues/78
+          target_paths:
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/${OS}/lbrynet
+
+    - <<: *build
+      name: "Mac"
+      os: osx
+      osx_image: xcode9.4
+      language: generic
+      env: OS=mac
 
 cache:
   directories:
     - $HOME/.cache/pip
     - $HOME/Library/Caches/pip
-    - $TRAVIS_BUILD_DIR/cache/wheel
-
-addons:
-  #srcclr:
-  #  debug: true
-  apt:
-    packages:
-    - libgmp3-dev
-    - build-essential
-    - git
-    - libssl-dev
-    - libffi-dev
-
-before_install:
-  - virtualenv venv
-  - source venv/bin/activate
-
-install:
-  - pip install -U pip==9.0.3
-  - pip install -r requirements.txt
-  - pip install -r requirements_testing.txt
-  - pip install .
-
-script:
-  - pip install mock pylint
-  - pylint lbrynet
-  - PYTHONPATH=. trial lbrynet.tests
-  - rvm install ruby-2.3.1
-  - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
+    - $TRAVIS_BUILD_DIR/.tox

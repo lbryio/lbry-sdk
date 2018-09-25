@@ -1,12 +1,13 @@
 import logging
-import constants
-from distance import Distance
-from error import BucketFull
+
+from . import constants
+from .distance import Distance
+from .error import BucketFull
 
 log = logging.getLogger(__name__)
 
 
-class KBucket(object):
+class KBucket:
     """ Description - later
     """
 
@@ -135,8 +136,8 @@ class KBucket(object):
                  if not.
         @rtype: bool
         """
-        if isinstance(key, str):
-            key = long(key.encode('hex'), 16)
+        if isinstance(key, bytes):
+            key = int.from_bytes(key, 'big')
         return self.rangeMin <= key < self.rangeMax
 
     def __len__(self):

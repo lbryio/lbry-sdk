@@ -1,14 +1,12 @@
 import logging
 from twisted.internet import defer
-from zope.interface import implements
-from lbrynet import interfaces
 
 
 log = logging.getLogger(__name__)
 
 
-class DownloadManager(object):
-    implements(interfaces.IDownloadManager)
+class DownloadManager:
+    #implements(interfaces.IDownloadManager)
 
     def __init__(self, blob_manager):
         self.blob_manager = blob_manager
@@ -81,14 +79,14 @@ class DownloadManager(object):
         return self.blob_handler.handle_blob(self.blobs[blob_num], self.blob_infos[blob_num])
 
     def calculate_total_bytes(self):
-        return sum([bi.length for bi in self.blob_infos.itervalues()])
+        return sum([bi.length for bi in self.blob_infos.values()])
 
     def calculate_bytes_left_to_output(self):
         if not self.blobs:
             return self.calculate_total_bytes()
         else:
             to_be_outputted = [
-                b for n, b in self.blobs.iteritems()
+                b for n, b in self.blobs.items()
                 if n >= self.progress_manager.last_blob_outputted
             ]
             return sum([b.length for b in to_be_outputted if b.length is not None])

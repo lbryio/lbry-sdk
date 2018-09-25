@@ -1,38 +1,23 @@
-#!/usr/bin/env python
-#
-# This library is free software, distributed under the terms of
-# the GNU Lesser General Public License Version 3, or any later version.
-# See the COPYING file included in this archive
-#
-# The docstrings in this module contain epytext markup; API documentation
-# may be created by processing this file with epydoc: http://epydoc.sf.net
 import binascii
 import hashlib
-import struct
 import logging
+from functools import reduce
+
 from twisted.internet import defer, error, task
 
 from lbrynet.core.utils import generate_id, DeferredDict
 from lbrynet.core.call_later_manager import CallLaterManager
 from lbrynet.core.PeerManager import PeerManager
-from error import TimeoutError
-import constants
-import routingtable
-import datastore
-import protocol
-from peerfinder import DHTPeerFinder
-from contact import ContactManager
-from iterativefind import iterativeFind
-
+from .error import TimeoutError
+from . import constants
+from . import routingtable
+from . import datastore
+from . import protocol
+from .peerfinder import DHTPeerFinder
+from .contact import ContactManager
+from .iterativefind import iterativeFind
 
 log = logging.getLogger(__name__)
-
-
-def expand_peer(compact_peer_info):
-    host = ".".join([str(ord(d)) for d in compact_peer_info[:4]])
-    port, = struct.unpack('>H', compact_peer_info[4:6])
-    peer_node_id = compact_peer_info[6:]
-    return (peer_node_id, host, port)
 
 
 def rpcmethod(func):
@@ -45,7 +30,7 @@ def rpcmethod(func):
     return func
 
 
-class MockKademliaHelper(object):
+class MockKademliaHelper:
     def __init__(self, clock=None, callLater=None, resolve=None, listenUDP=None):
         if not listenUDP or not resolve or not callLater or not clock:
             from twisted.internet import reactor
@@ -99,7 +84,7 @@ class Node(MockKademliaHelper):
                  routingTableClass=None, networkProtocol=None,
                  externalIP=None, peerPort=3333, listenUDP=None,
                  callLater=None, resolve=None, clock=None, peer_finder=None,
-                 peer_manager=None):
+                 peer_manager=None, interface='', externalUDPPort=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -125,9 +110,10 @@ class Node(MockKademliaHelper):
         @param peerPort: the port at which this node announces it has a blob for
         """
 
-        MockKademliaHelper.__init__(self, clock, callLater, resolve, listenUDP)
+        super().__init__(clock, callLater, resolve, listenUDP)
         self.node_id = node_id or self._generateID()
         self.port = udpPort
+        self._listen_interface = interface
         self._change_token_lc = self.get_looping_call(self.change_token)
         self._refresh_node_lc = self.get_looping_call(self._refreshNode)
         self._refresh_contacts_lc = self.get_looping_call(self._refreshContacts)
@@ -148,15 +134,20 @@ class Node(MockKademliaHelper):
         self.old_token_secret = None
         self.externalIP = externalIP
         self.peerPort = peerPort
+        self.externalUDPPort = externalUDPPort or self.port
         self._dataStore = dataStore or datastore.DictDataStore(self.clock.seconds)
         self.peer_manager = peer_manager or PeerManager()
         self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
         self._join_deferred = None
 
-    def __del__(self):
-        log.warning("unclean shutdown of the dht node")
-        if hasattr(self, "_listeningPort") and self._listeningPort is not None:
-            self._listeningPort.stopListening()
+    #def __del__(self):
+    #    log.warning("unclean shutdown of the dht node")
+    #    if hasattr(self, "_listeningPort") and self._listeningPort is not None:
+    #        self._listeningPort.stopListening()
+
+    def __str__(self):
+        return '<%s.%s object; ID: %s, IP address: %s, UDP port: %d>' % (
+            self.__module__, self.__class__.__name__, binascii.hexlify(self.node_id), self.externalIP, self.port)
 
     @defer.inlineCallbacks
     def stop(self):
@@ -171,7 +162,8 @@ class Node(MockKademliaHelper):
     def start_listening(self):
         if not self._listeningPort:
             try:
-                self._listeningPort = self.reactor_listenUDP(self.port, self._protocol)
+                self._listeningPort = self.reactor_listenUDP(self.port, self._protocol,
+                                                             interface=self._listen_interface)
             except error.CannotListenError as e:
                 import traceback
                 log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
@@ -200,7 +192,7 @@ class Node(MockKademliaHelper):
         if not known_node_resolution:
             known_node_resolution = yield _resolve_seeds()
             # we are one of the seed nodes, don't add ourselves
-            if (self.externalIP, self.port) in known_node_resolution.itervalues():
+            if (self.externalIP, self.port) in known_node_resolution.values():
                 del known_node_resolution[(self.externalIP, self.port)]
                 known_node_addresses.remove((self.externalIP, self.port))
 
@@ -213,7 +205,7 @@ class Node(MockKademliaHelper):
         def _initialize_routing():
             bootstrap_contacts = []
             contact_addresses = {(c.address, c.port): c for c in self.contacts}
-            for (host, port), ip_address in known_node_resolution.iteritems():
+            for (host, port), ip_address in known_node_resolution.items():
                 if (host, port) not in contact_addresses:
                     # Create temporary contact information for the list of addresses of known nodes
                     # The contact node id will be set with the responding node id when we initialize it to None
@@ -279,7 +271,9 @@ class Node(MockKademliaHelper):
         yield self._protocol._listening
         # TODO: Refresh all k-buckets further away than this node's closest neighbour
         yield self.joinNetwork(known_node_addresses or [])
+        self.start_looping_calls()
 
+    def start_looping_calls(self):
         self.safe_start_looping_call(self._change_token_lc, constants.tokenSecretChangeInterval)
         # Start refreshing k-buckets periodically, if necessary
         self.safe_start_looping_call(self._refresh_node_lc, constants.checkRefreshInterval)
@@ -308,10 +302,10 @@ class Node(MockKademliaHelper):
             token = contact.token
             if not token:
                 find_value_response = yield contact.findValue(blob_hash)
-                token = find_value_response['token']
+                token = find_value_response[b'token']
                 contact.update_token(token)
             res = yield contact.store(blob_hash, token, self.peerPort, self.node_id, 0)
-            if res != "OK":
+            if res != b"OK":
                 raise ValueError(res)
             defer.returnValue(True)
             log.debug("Stored %s to %s (%s)", binascii.hexlify(blob_hash), contact.log_id(), contact.address)
@@ -319,7 +313,7 @@ class Node(MockKademliaHelper):
             log.debug("Timeout while storing blob_hash %s at %s",
                       binascii.hexlify(blob_hash), contact.log_id())
         except ValueError as err:
-            log.error("Unexpected response: %s" % err.message)
+            log.error("Unexpected response: %s" % err)
         except Exception as err:
             log.error("Unexpected error while storing blob_hash %s at %s: %s",
                       binascii.hexlify(blob_hash), contact, err)
@@ -332,9 +326,7 @@ class Node(MockKademliaHelper):
         if not self.externalIP:
             raise Exception("Cannot determine external IP: %s" % self.externalIP)
         stored_to = yield DeferredDict({contact: self.storeToContact(blob_hash, contact) for contact in contacts})
-        contacted_node_ids = map(
-            lambda contact: contact.id.encode('hex'), filter(lambda contact: stored_to[contact], stored_to.keys())
-        )
+        contacted_node_ids = [binascii.hexlify(contact.id) for contact in stored_to.keys() if stored_to[contact]]
         log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(blob_hash),
                   len(contacted_node_ids), len(contacts))
         defer.returnValue(contacted_node_ids)
@@ -375,7 +367,7 @@ class Node(MockKademliaHelper):
         return self._iterativeFind(key)
 
     @defer.inlineCallbacks
-    def iterativeFindValue(self, key):
+    def iterativeFindValue(self, key, exclude=None):
         """ The Kademlia search operation (deterministic)
 
         Call this to retrieve data from the DHT.
@@ -396,11 +388,11 @@ class Node(MockKademliaHelper):
         @rtype: twisted.internet.defer.Deferred
         """
 
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid key length!")
 
         # Execute the search
-        find_result = yield self._iterativeFind(key, rpc='findValue')
+        find_result = yield self._iterativeFind(key, rpc='findValue', exclude=exclude)
         if isinstance(find_result, dict):
             # We have found the value; now see who was the closest contact without it...
             # ...and store the key/value pair
@@ -418,22 +410,15 @@ class Node(MockKademliaHelper):
             else:
                 pass
 
-        expanded_peers = []
-        if find_result:
-            if key in find_result:
-                for peer in find_result[key]:
-                    expanded = expand_peer(peer)
-                    if expanded not in expanded_peers:
-                        expanded_peers.append(expanded)
-            # TODO: get this working
-            # if 'closestNodeNoValue' in find_result:
-            #     closest_node_without_value = find_result['closestNodeNoValue']
-            #     try:
-            #         response, address = yield closest_node_without_value.findValue(key, rawResponse=True)
-            #         yield closest_node_without_value.store(key, response.response['token'], self.peerPort)
-            #     except TimeoutError:
-            #         pass
-        defer.returnValue(expanded_peers)
+        defer.returnValue(list(set(find_result.get(key, []) if find_result else [])))
+        # TODO: get this working
+        # if 'closestNodeNoValue' in find_result:
+        #     closest_node_without_value = find_result['closestNodeNoValue']
+        #     try:
+        #         response, address = yield closest_node_without_value.findValue(key, rawResponse=True)
+        #         yield closest_node_without_value.store(key, response.response['token'], self.peerPort)
+        #     except TimeoutError:
+        #         pass
 
     def addContact(self, contact):
         """ Add/update the given contact; simple wrapper for the same method
@@ -488,7 +473,7 @@ class Node(MockKademliaHelper):
 
         @rtype: str
         """
-        return 'pong'
+        return b'pong'
 
     @rpcmethod
     def store(self, rpc_contact, blob_hash, token, port, originalPublisherID, age):
@@ -523,15 +508,15 @@ class Node(MockKademliaHelper):
         elif not self.verify_token(token, compact_ip):
             raise ValueError("Invalid token")
         if 0 <= port <= 65536:
-            compact_port = str(struct.pack('>H', port))
+            compact_port = port.to_bytes(2, 'big')
         else:
-            raise TypeError('Invalid port')
+            raise TypeError('Invalid port: {}'.format(port))
         compact_address = compact_ip + compact_port + rpc_contact.id
         now = int(self.clock.seconds())
         originallyPublished = now - age
         self._dataStore.addPeerToBlob(rpc_contact, blob_hash, compact_address, now, originallyPublished,
                                       originalPublisherID)
-        return 'OK'
+        return b'OK'
 
     @rpcmethod
     def findNode(self, rpc_contact, key):
@@ -547,7 +532,7 @@ class Node(MockKademliaHelper):
                  node is returning all of the contacts that it knows of.
         @rtype: list
         """
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid contact id length: %i" % len(key))
 
         contacts = self._routingTable.findCloseNodes(key, sender_node_id=rpc_contact.id)
@@ -569,15 +554,15 @@ class Node(MockKademliaHelper):
         @rtype: dict or list
         """
 
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid blob hash length: %i" % len(key))
 
         response = {
-            'token': self.make_token(rpc_contact.compact_ip()),
+            b'token': self.make_token(rpc_contact.compact_ip()),
         }
 
         if self._protocol._protocolVersion:
-            response['protocolVersion'] = self._protocol._protocolVersion
+            response[b'protocolVersion'] = self._protocol._protocolVersion
 
         # get peers we have stored for this blob
         has_other_peers = self._dataStore.hasPeersForBlob(key)
@@ -587,17 +572,15 @@ class Node(MockKademliaHelper):
 
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
         if len(peers) < constants.k and key in self._dataStore.completed_blobs:
-            compact_ip = str(
-                reduce(lambda buff, x: buff + bytearray([int(x)]), self.externalIP.split('.'), bytearray())
-            )
-            compact_port = str(struct.pack('>H', self.peerPort))
+            compact_ip = reduce(lambda buff, x: buff + bytearray([int(x)]), self.externalIP.split('.'), bytearray())
+            compact_port = self.peerPort.to_bytes(2, 'big')
             compact_address = compact_ip + compact_port + self.node_id
             peers.append(compact_address)
 
         if peers:
             response[key] = peers
         else:
-            response['contacts'] = self.findNode(rpc_contact, key)
+            response[b'contacts'] = self.findNode(rpc_contact, key)
         return response
 
     def _generateID(self):
@@ -611,7 +594,7 @@ class Node(MockKademliaHelper):
     # from lbrynet.core.utils import profile_deferred
     # @profile_deferred()
     @defer.inlineCallbacks
-    def _iterativeFind(self, key, startupShortlist=None, rpc='findNode'):
+    def _iterativeFind(self, key, startupShortlist=None, rpc='findNode', exclude=None):
         """ The basic Kademlia iterative lookup operation (for nodes/values)
 
         This builds a list of k "closest" contacts through iterative use of
@@ -640,7 +623,7 @@ class Node(MockKademliaHelper):
         @rtype: twisted.internet.defer.Deferred
         """
 
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid key length: %i" % len(key))
 
         if startupShortlist is None:
@@ -659,7 +642,7 @@ class Node(MockKademliaHelper):
             # This is used during the bootstrap process
             shortlist = startupShortlist
 
-        result = yield iterativeFind(self, shortlist, key, rpc)
+        result = yield iterativeFind(self, shortlist, key, rpc, exclude=exclude)
         defer.returnValue(result)
 
     @defer.inlineCallbacks

@@ -1,14 +1,12 @@
 import logging
-from lbrynet.interfaces import IProgressManager
 from twisted.internet import defer
-from zope.interface import implements
 
 
 log = logging.getLogger(__name__)
 
 
-class StreamProgressManager(object):
-    implements(IProgressManager)
+class StreamProgressManager:
+    #implements(IProgressManager)
 
     def __init__(self, finished_callback, blob_manager,
                  download_manager, delete_blob_after_finished=False):
@@ -82,8 +80,8 @@ class StreamProgressManager(object):
 class FullStreamProgressManager(StreamProgressManager):
     def __init__(self, finished_callback, blob_manager,
                  download_manager, delete_blob_after_finished=False):
-        StreamProgressManager.__init__(self, finished_callback, blob_manager, download_manager,
-                                       delete_blob_after_finished)
+        super().__init__(finished_callback, blob_manager, download_manager,
+                         delete_blob_after_finished)
         self.outputting_d = None
 
     ######### IProgressManager #########
@@ -103,15 +101,15 @@ class FullStreamProgressManager(StreamProgressManager):
         if not blobs:
             return 0
         else:
-            for i in xrange(max(blobs.iterkeys())):
+            for i in range(max(blobs.keys())):
                 if self._done(i, blobs):
                     return i
-            return max(blobs.iterkeys()) + 1
+            return max(blobs.keys()) + 1
 
     def needed_blobs(self):
         blobs = self.download_manager.blobs
         return [
-            b for n, b in blobs.iteritems()
+            b for n, b in blobs.items()
             if not b.get_is_verified() and not n in self.provided_blob_nums
         ]
 

@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 class SinglePeerFinder(DummyPeerFinder):
     def __init__(self, peer):
-        DummyPeerFinder.__init__(self)
+        super().__init__()
         self.peer = peer
 
     def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=False):
@@ -28,7 +28,7 @@ class SinglePeerFinder(DummyPeerFinder):
 
 class BlobCallback(BlobFile):
     def __init__(self, blob_dir, blob_hash, timeout):
-        BlobFile.__init__(self, blob_dir, blob_hash)
+        super().__init__(blob_dir, blob_hash)
         self.callback = defer.Deferred()
         reactor.callLater(timeout, self._cancel)
 
@@ -43,7 +43,7 @@ class BlobCallback(BlobFile):
         return result
 
 
-class SingleBlobDownloadManager(object):
+class SingleBlobDownloadManager:
     def __init__(self, blob):
         self.blob = blob
 
@@ -57,7 +57,7 @@ class SingleBlobDownloadManager(object):
         return self.blob.blob_hash
 
 
-class SinglePeerDownloader(object):
+class SinglePeerDownloader:
     def __init__(self):
         self._payment_rate_manager = OnlyFreePaymentsManager()
         self._rate_limiter = DummyRateLimiter()

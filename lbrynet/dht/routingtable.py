@@ -6,19 +6,19 @@
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
 import random
-from zope.interface import implements
+from binascii import unhexlify
+
 from twisted.internet import defer
-import constants
-import kbucket
-from error import TimeoutError
-from distance import Distance
-from interface import IRoutingTable
+from . import constants
+from . import kbucket
+from .error import TimeoutError
+from .distance import Distance
 import logging
 
 log = logging.getLogger(__name__)
 
 
-class TreeRoutingTable(object):
+class TreeRoutingTable:
     """ This class implements a routing table used by a Node class.
 
     The Kademlia routing table is a binary tree whFose leaves are k-buckets,
@@ -33,7 +33,7 @@ class TreeRoutingTable(object):
     C{PING} RPC-based k-bucket eviction algorithm described in section 2.2 of
     that paper.
     """
-    implements(IRoutingTable)
+    #implements(IRoutingTable)
 
     def __init__(self, parentNodeID, getTime=None):
         """
@@ -180,12 +180,7 @@ class TreeRoutingTable(object):
                            by this node
         """
         bucketIndex = self._kbucketIndex(contactID)
-        try:
-            contact = self._buckets[bucketIndex].getContact(contactID)
-        except ValueError:
-            raise
-        else:
-            return contact
+        return self._buckets[bucketIndex].getContact(contactID)
 
     def getRefreshList(self, startIndex=0, force=False):
         """ Finds all k-buckets that need refreshing, starting at the
@@ -274,8 +269,8 @@ class TreeRoutingTable(object):
             randomID = randomID[:-1]
         if len(randomID) % 2 != 0:
             randomID = '0' + randomID
-        randomID = randomID.decode('hex')
-        randomID = (constants.key_bits / 8 - len(randomID)) * '\x00' + randomID
+        randomID = unhexlify(randomID)
+        randomID = ((constants.key_bits // 8) - len(randomID)) * b'\x00' + randomID
         return randomID
 
     def _splitBucket(self, oldBucketIndex):

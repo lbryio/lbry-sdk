@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 MAX_BLOB_SIZE = 2 * 2 ** 20
 
 
-class BlobFile(object):
+class BlobFile:
     """
     A chunk of data available on the network which is specified by a hashsum
 
@@ -60,12 +60,12 @@ class BlobFile(object):
         finished_deferred - deferred that is fired when write is finished and returns
             a instance of itself as HashBlob
         """
-        if not peer in self.writers:
+        if peer not in self.writers:
             log.debug("Opening %s to be written by %s", str(self), str(peer))
             finished_deferred = defer.Deferred()
             writer = HashBlobWriter(self.get_length, self.writer_finished)
             self.writers[peer] = (writer, finished_deferred)
-            return (writer, finished_deferred)
+            return writer, finished_deferred
         log.warning("Tried to download the same file twice simultaneously from the same peer")
         return None, None
 
@@ -149,7 +149,7 @@ class BlobFile(object):
     def writer_finished(self, writer, err=None):
         def fire_finished_deferred():
             self._verified = True
-            for p, (w, finished_deferred) in self.writers.items():
+            for p, (w, finished_deferred) in list(self.writers.items()):
                 if w == writer:
                     del self.writers[p]
                     finished_deferred.callback(self)
@@ -160,7 +160,7 @@ class BlobFile(object):
             return False
 
         def errback_finished_deferred(err):
-            for p, (w, finished_deferred) in self.writers.items():
+            for p, (w, finished_deferred) in list(self.writers.items()):
                 if w == writer:
                     del self.writers[p]
                     finished_deferred.errback(err)

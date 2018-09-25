@@ -1,4 +1,4 @@
-class BlobInfo(object):
+class BlobInfo:
     """
     This structure is used to represent the metadata of a blob.
 
@@ -16,4 +16,3 @@ class BlobInfo(object):
         self.blob_hash = blob_hash
         self.blob_num = blob_num
         self.length = length
-

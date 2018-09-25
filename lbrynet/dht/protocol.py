@@ -1,20 +1,20 @@
 import logging
-import socket
 import errno
+from binascii import hexlify
 from collections import deque
 
 from twisted.internet import protocol, defer
-from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
+from .error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
 
-import constants
-import encoding
-import msgtypes
-import msgformat
+from . import constants
+from . import encoding
+from . import msgtypes
+from . import msgformat
 
 log = logging.getLogger(__name__)
 
 
-class PingQueue(object):
+class PingQueue:
     """
     Schedules a 15 minute delayed ping after a new node sends us a query. This is so the new node gets added to the
     routing table after having been given enough time for a pinhole to expire.
@@ -30,7 +30,7 @@ class PingQueue(object):
         self._process_lc = node.get_looping_call(self._semaphore.run, self._process)
 
     def _add_contact(self, contact, delay=None):
-        if contact in self._enqueued_contacts:
+        if (contact.address, contact.port) in [(c.address, c.port) for c in self._enqueued_contacts]:
             return defer.succeed(None)
         delay = delay or constants.checkRefreshInterval
         self._enqueued_contacts[contact] = self._get_time() + delay
@@ -73,8 +73,10 @@ class PingQueue(object):
         yield defer.DeferredList([_ping(contact) for contact in pinged])
 
         for contact in checked:
-            if contact in self._enqueued_contacts:
+            if contact in self._enqueued_contacts and contact in pinged:
                 del self._enqueued_contacts[contact]
+            elif contact not in self._queue:
+                self._queue.appendleft(contact)
 
         defer.returnValue(None)
 
@@ -95,7 +97,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def __init__(self, node):
         self._node = node
-        self._encoder = encoding.Bencode()
         self._translator = msgformat.DefaultFormat()
         self._sentMessages = {}
         self._partialMessages = {}
@@ -106,12 +107,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self.started_listening_time = 0
 
     def _migrate_incoming_rpc_args(self, contact, method, *args):
-        if method == 'store' and contact.protocolVersion == 0:
+        if method == b'store' and contact.protocolVersion == 0:
             if isinstance(args[1], dict):
                 blob_hash = args[0]
-                token = args[1].pop('token', None)
-                port = args[1].pop('port', -1)
-                originalPublisherID = args[1].pop('lbryid', None)
+                token = args[1].pop(b'token', None)
+                port = args[1].pop(b'port', -1)
+                originalPublisherID = args[1].pop(b'lbryid', None)
                 age = 0
                 return (blob_hash, token, port, originalPublisherID, age), {}
         return args, {}
@@ -122,16 +123,21 @@ class KademliaProtocol(protocol.DatagramProtocol):
         protocol version keyword argument to calls to contacts who will accept it
         """
         if contact.protocolVersion == 0:
-            if method == 'store':
+            if method == b'store':
                 blob_hash, token, port, originalPublisherID, age = args
-                args = (blob_hash, {'token': token, 'port': port, 'lbryid': originalPublisherID}, originalPublisherID,
-                        False)
+                args = (
+                    blob_hash, {
+                        b'token': token,
+                        b'port': port,
+                        b'lbryid': originalPublisherID
+                    }, originalPublisherID, False
+                )
                 return args
             return args
         if args and isinstance(args[-1], dict):
-            args[-1]['protocolVersion'] = self._protocolVersion
+            args[-1][b'protocolVersion'] = self._protocolVersion
             return args
-        return args + ({'protocolVersion': self._protocolVersion},)
+        return args + ({b'protocolVersion': self._protocolVersion},)
 
     def sendRPC(self, contact, method, args):
         """
@@ -156,11 +162,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
         msg = msgtypes.RequestMessage(self._node.node_id, method, self._migrate_outgoing_rpc_args(contact, method,
                                                                                                   *args))
         msgPrimitive = self._translator.toPrimitive(msg)
-        encodedMsg = self._encoder.encode(msgPrimitive)
+        encodedMsg = encoding.bencode(msgPrimitive)
 
         if args:
             log.debug("%s:%i SEND CALL %s(%s) TO %s:%i", self._node.externalIP, self._node.port, method,
-                      args[0].encode('hex'), contact.address, contact.port)
+                      hexlify(args[0]), contact.address, contact.port)
         else:
             log.debug("%s:%i SEND CALL %s TO %s:%i", self._node.externalIP, self._node.port, method,
                       contact.address, contact.port)
@@ -177,11 +183,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
         def _update_contact(result):  # refresh the contact in the routing table
             contact.update_last_replied()
-            if method == 'findValue':
-                if 'protocolVersion' not in result:
+            if method == b'findValue':
+                if b'protocolVersion' not in result:
                     contact.update_protocol_version(0)
                 else:
-                    contact.update_protocol_version(result.pop('protocolVersion'))
+                    contact.update_protocol_version(result.pop(b'protocolVersion'))
             d = self._node.addContact(contact)
             d.addCallback(lambda _: result)
             return d
@@ -199,7 +205,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         return df
 
     def startProtocol(self):
-        log.info("DHT listening on UDP %s:%i", self._node.externalIP, self._node.port)
+        log.info("DHT listening on UDP %i (ext port %i)", self._node.port, self._node.externalUDPPort)
         if self._listening.called:
             self._listening = defer.Deferred()
         self._listening.callback(True)
@@ -212,18 +218,17 @@ class KademliaProtocol(protocol.DatagramProtocol):
         @note: This is automatically called by Twisted when the protocol
                receives a UDP datagram
         """
-
-        if datagram[0] == '\x00' and datagram[25] == '\x00':
-            totalPackets = (ord(datagram[1]) << 8) | ord(datagram[2])
+        if chr(datagram[0]) == '\x00' and chr(datagram[25]) == '\x00':
+            totalPackets = (datagram[1] << 8) | datagram[2]
             msgID = datagram[5:25]
-            seqNumber = (ord(datagram[3]) << 8) | ord(datagram[4])
+            seqNumber = (datagram[3] << 8) | datagram[4]
             if msgID not in self._partialMessages:
                 self._partialMessages[msgID] = {}
             self._partialMessages[msgID][seqNumber] = datagram[26:]
             if len(self._partialMessages[msgID]) == totalPackets:
                 keys = self._partialMessages[msgID].keys()
                 keys.sort()
-                data = ''
+                data = b''
                 for key in keys:
                     data += self._partialMessages[msgID][key]
                     datagram = data
@@ -231,7 +236,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             else:
                 return
         try:
-            msgPrimitive = self._encoder.decode(datagram)
+            msgPrimitive = encoding.bdecode(datagram)
             message = self._translator.fromPrimitive(msgPrimitive)
         except (encoding.DecodeError, ValueError) as err:
             # We received some rubbish here
@@ -305,7 +310,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 # the node id of the node we sent a message to (these messages are treated as an error)
                 if remoteContact.id and remoteContact.id != message.nodeID:  # sent_to_id will be None for bootstrap
                     log.debug("mismatch: (%s) %s:%i (%s vs %s)", method, remoteContact.address, remoteContact.port,
-                              remoteContact.log_id(False), message.nodeID.encode('hex'))
+                              remoteContact.log_id(False), hexlify(message.nodeID))
                     df.errback(TimeoutError(remoteContact.id))
                     return
                 elif not remoteContact.id:
@@ -343,7 +348,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             # 1st byte is transmission type id, bytes 2 & 3 are the
             # total number of packets in this transmission, bytes 4 &
             # 5 are the sequence number for this specific packet
-            totalPackets = len(data) / self.msgSizeLimit
+            totalPackets = len(data) // self.msgSizeLimit
             if len(data) % self.msgSizeLimit > 0:
                 totalPackets += 1
             encTotalPackets = chr(totalPackets >> 8) + chr(totalPackets & 0xff)
@@ -368,7 +373,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         if self.transport:
             try:
                 self.transport.write(txData, address)
-            except socket.error as err:
+            except OSError as err:
                 if err.errno == errno.EWOULDBLOCK:
                     # i'm scared this may swallow important errors, but i get a million of these
                     # on Linux and it doesnt seem to affect anything  -grin
@@ -388,15 +393,16 @@ class KademliaProtocol(protocol.DatagramProtocol):
         """
         msg = msgtypes.ResponseMessage(rpcID, self._node.node_id, response)
         msgPrimitive = self._translator.toPrimitive(msg)
-        encodedMsg = self._encoder.encode(msgPrimitive)
+        encodedMsg = encoding.bencode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))
 
     def _sendError(self, contact, rpcID, exceptionType, exceptionMessage):
         """ Send an RPC error message to the specified contact
         """
+        exceptionMessage = exceptionMessage.encode()
         msg = msgtypes.ErrorMessage(rpcID, self._node.node_id, exceptionType, exceptionMessage)
         msgPrimitive = self._translator.toPrimitive(msg)
-        encodedMsg = self._encoder.encode(msgPrimitive)
+        encodedMsg = encoding.bencode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))
 
     def _handleRPC(self, senderContact, rpcID, method, args):
@@ -414,7 +420,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         df.addErrback(handleError)
 
         # Execute the RPC
-        func = getattr(self._node, method, None)
+        func = getattr(self._node, method.decode(), None)
         if callable(func) and hasattr(func, "rpcmethod"):
             # Call the exposed Node method and return the result to the deferred callback chain
             # if args:
@@ -423,18 +429,18 @@ class KademliaProtocol(protocol.DatagramProtocol):
             # else:
             log.debug("%s:%i RECV CALL %s %s:%i", self._node.externalIP, self._node.port, method,
                           senderContact.address, senderContact.port)
-            if args and isinstance(args[-1], dict) and 'protocolVersion' in args[-1]:  # args don't need reformatting
-                senderContact.update_protocol_version(int(args[-1].pop('protocolVersion')))
+            if args and isinstance(args[-1], dict) and b'protocolVersion' in args[-1]:  # args don't need reformatting
+                senderContact.update_protocol_version(int(args[-1].pop(b'protocolVersion')))
                 a, kw = tuple(args[:-1]), args[-1]
             else:
                 senderContact.update_protocol_version(0)
                 a, kw = self._migrate_incoming_rpc_args(senderContact, method, *args)
             try:
-                if method != 'ping':
+                if method != b'ping':
                     result = func(senderContact, *a)
                 else:
                     result = func()
-            except Exception, e:
+            except Exception as e:
                 log.exception("error handling request for %s:%i %s", senderContact.address, senderContact.port, method)
                 df.errback(e)
             else:
@@ -452,7 +458,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             log.error("deferred timed out, but is not present in sent messages list!")
             return
         remoteContact, df, timeout_call, timeout_canceller, method, args = self._sentMessages[messageID]
-        if self._partialMessages.has_key(messageID):
+        if messageID in self._partialMessages:
             # We are still receiving this message
             self._msgTimeoutInProgress(messageID, timeout_canceller, remoteContact, df, method, args)
             return
@@ -478,7 +484,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def _hasProgressBeenMade(self, messageID):
         return (
-            self._partialMessagesProgress.has_key(messageID) and
+            messageID in self._partialMessagesProgress and
             (
                 len(self._partialMessagesProgress[messageID]) !=
                 len(self._partialMessages[messageID])

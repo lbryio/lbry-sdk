@@ -6,16 +6,16 @@ import treq
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
-from lbrynet.core.Error import InvalidExchangeRateResponse
+from lbrynet.core.Error import InvalidExchangeRateResponse, CurrencyConversionError
 
 log = logging.getLogger(__name__)
 
 CURRENCY_PAIRS = ["USDBTC", "BTCLBC"]
 BITTREX_FEE = 0.0025
-COINBASE_FEE = 0.0 #add fee
+COINBASE_FEE = 0.0  # add fee
 
 
-class ExchangeRate(object):
+class ExchangeRate:
     def __init__(self, market, spot, ts):
         if not int(time.time()) - ts < 600:
             raise ValueError('The timestamp is too dated.')
@@ -34,9 +34,10 @@ class ExchangeRate(object):
         return {'spot': self.spot, 'ts': self.ts}
 
 
-class MarketFeed(object):
+class MarketFeed:
     REQUESTS_TIMEOUT = 20
     EXCHANGE_RATE_UPDATE_RATE_SEC = 300
+
     def __init__(self, market, name, url, params, fee):
         self.market = market
         self.name = name
@@ -95,8 +96,7 @@ class MarketFeed(object):
 
 class BittrexFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "BTCLBC",
             "Bittrex",
             "https://bittrex.com/api/v1.1/public/getmarkethistory",
@@ -115,14 +115,13 @@ class BittrexFeed(MarketFeed):
         qtys = sum([i['Quantity'] for i in trades])
         if totals <= 0 or qtys <= 0:
             raise InvalidExchangeRateResponse(self.market, 'quantities were not positive')
-        vwap = totals/qtys
+        vwap = totals / qtys
         return defer.succeed(float(1.0 / vwap))
 
 
 class LBRYioFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "BTCLBC",
             "lbry.io",
             "https://api.lbry.io/lbc/exchange_rate",
@@ -139,8 +138,7 @@ class LBRYioFeed(MarketFeed):
 
 class LBRYioBTCFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "USDBTC",
             "lbry.io",
             "https://api.lbry.io/lbc/exchange_rate",
@@ -160,8 +158,7 @@ class LBRYioBTCFeed(MarketFeed):
 
 class CryptonatorBTCFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "USDBTC",
             "cryptonator.com",
             "https://api.cryptonator.com/api/ticker/usd-btc",
@@ -175,16 +172,14 @@ class CryptonatorBTCFeed(MarketFeed):
         except ValueError:
             raise InvalidExchangeRateResponse(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
-                        'success' not in json_response or json_response['success'] is not True:
+                'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         return defer.succeed(float(json_response['ticker']['price']))
 
 
-
 class CryptonatorFeed(MarketFeed):
     def __init__(self):
-        MarketFeed.__init__(
-            self,
+        super().__init__(
             "BTCLBC",
             "cryptonator.com",
             "https://api.cryptonator.com/api/ticker/btc-lbc",
@@ -198,12 +193,12 @@ class CryptonatorFeed(MarketFeed):
         except ValueError:
             raise InvalidExchangeRateResponse(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
-                        'success' not in json_response or json_response['success'] is not True:
+                'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         return defer.succeed(float(json_response['ticker']['price']))
 
 
-class ExchangeRateManager(object):
+class ExchangeRateManager:
     def __init__(self):
         self.market_feeds = [
             LBRYioBTCFeed(),
@@ -231,14 +226,14 @@ class ExchangeRateManager(object):
 
         for market in self.market_feeds:
             if (market.rate_is_initialized() and market.is_online() and
-                market.rate.currency_pair == (from_currency, to_currency)):
+                    market.rate.currency_pair == (from_currency, to_currency)):
                 return amount * market.rate.spot
         for market in self.market_feeds:
             if (market.rate_is_initialized() and market.is_online() and
-                market.rate.currency_pair[0] == from_currency):
+                    market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
                     market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
-        raise Exception(
+        raise CurrencyConversionError(
             'Unable to convert {} from {} to {}'.format(amount, from_currency, to_currency))
 
     def fee_dict(self):

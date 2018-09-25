@@ -16,7 +16,7 @@ class BlobReflectorClient(Protocol):
 
     def connectionMade(self):
         self.blob_manager = self.factory.blob_manager
-        self.response_buff = ''
+        self.response_buff = b''
         self.outgoing_buff = ''
         self.blob_hashes_to_send = self.factory.blobs
         self.next_blob_to_send = None
@@ -39,7 +39,7 @@ class BlobReflectorClient(Protocol):
         except IncompleteResponse:
             pass
         else:
-            self.response_buff = ''
+            self.response_buff = b''
             d = self.handle_response(msg)
             d.addCallback(lambda _: self.send_next_request())
             d.addErrback(self.response_failure_handler)
@@ -73,7 +73,7 @@ class BlobReflectorClient(Protocol):
 
     def send_handshake(self):
         log.debug('Sending handshake')
-        self.write(json.dumps({'version': self.protocol_version}))
+        self.write(json.dumps({'version': self.protocol_version}).encode())
         return defer.succeed(None)
 
     def parse_response(self, buff):
@@ -150,7 +150,7 @@ class BlobReflectorClient(Protocol):
         self.write(json.dumps({
             'blob_hash': self.next_blob_to_send.blob_hash,
             'blob_size': self.next_blob_to_send.length
-        }))
+        }).encode())
 
     def disconnect(self, err):
         self.transport.loseConnection()

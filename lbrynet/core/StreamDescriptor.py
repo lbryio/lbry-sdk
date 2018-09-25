@@ -1,4 +1,5 @@
-import binascii
+from binascii import unhexlify
+import string
 from collections import defaultdict
 import json
 import logging
@@ -7,12 +8,19 @@ from twisted.internet import threads, defer
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
-
+from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
 
 log = logging.getLogger(__name__)
 
 
-class StreamDescriptorReader(object):
+class JSONBytesEncoder(json.JSONEncoder):
+    def default(self, obj):  # pylint: disable=E0202
+        if isinstance(obj, bytes):
+            return obj.decode()
+        return super().default(obj)
+
+
+class StreamDescriptorReader:
     """Classes which derive from this class read a stream descriptor file return
        a dictionary containing the fields in the file"""
     def __init__(self):
@@ -33,7 +41,7 @@ class StreamDescriptorReader(object):
 class PlainStreamDescriptorReader(StreamDescriptorReader):
     """Read a stream descriptor file which is not a blob but a regular file"""
     def __init__(self, stream_descriptor_filename):
-        StreamDescriptorReader.__init__(self)
+        super().__init__()
         self.stream_descriptor_filename = stream_descriptor_filename
 
     def _get_raw_data(self):
@@ -49,7 +57,7 @@ class PlainStreamDescriptorReader(StreamDescriptorReader):
 class BlobStreamDescriptorReader(StreamDescriptorReader):
     """Read a stream descriptor file which is a blob"""
     def __init__(self, blob):
-        StreamDescriptorReader.__init__(self)
+        super().__init__()
         self.blob = blob
 
     def _get_raw_data(self):
@@ -66,14 +74,16 @@ class BlobStreamDescriptorReader(StreamDescriptorReader):
         return threads.deferToThread(get_data)
 
 
-class StreamDescriptorWriter(object):
+class StreamDescriptorWriter:
     """Classes which derive from this class write fields from a dictionary
        of fields to a stream descriptor"""
     def __init__(self):
         pass
 
     def create_descriptor(self, sd_info):
-        return self._write_stream_descriptor(json.dumps(sd_info))
+        return self._write_stream_descriptor(
+            json.dumps(sd_info, sort_keys=True).encode()
+        )
 
     def _write_stream_descriptor(self, raw_data):
         """This method must be overridden by subclasses to write raw data to
@@ -84,7 +94,7 @@ class StreamDescriptorWriter(object):
 
 class PlainStreamDescriptorWriter(StreamDescriptorWriter):
     def __init__(self, sd_file_name):
-        StreamDescriptorWriter.__init__(self)
+        super().__init__()
         self.sd_file_name = sd_file_name
 
     def _write_stream_descriptor(self, raw_data):
@@ -100,7 +110,7 @@ class PlainStreamDescriptorWriter(StreamDescriptorWriter):
 
 class BlobStreamDescriptorWriter(StreamDescriptorWriter):
     def __init__(self, blob_manager):
-        StreamDescriptorWriter.__init__(self)
+        super().__init__()
         self.blob_manager = blob_manager
 
     @defer.inlineCallbacks
@@ -114,7 +124,7 @@ class BlobStreamDescriptorWriter(StreamDescriptorWriter):
         defer.returnValue(sd_hash)
 
 
-class StreamMetadata(object):
+class StreamMetadata:
     FROM_BLOB = 1
     FROM_PLAIN = 2
 
@@ -127,7 +137,7 @@ class StreamMetadata(object):
         self.source_file = None
 
 
-class StreamDescriptorIdentifier(object):
+class StreamDescriptorIdentifier:
     """Tries to determine the type of stream described by the stream descriptor using the
        'stream_type' field. Keeps a list of StreamDescriptorValidators and StreamDownloaderFactorys
        and returns the appropriate ones based on the type of the stream descriptor given
@@ -254,7 +264,7 @@ def save_sd_info(blob_manager, sd_hash, sd_info):
                                                (sd_hash, calculated_sd_hash))
     stream_hash = yield blob_manager.storage.get_stream_hash_for_sd_hash(sd_hash)
     if not stream_hash:
-        log.debug("Saving info for %s", sd_info['stream_name'].decode('hex'))
+        log.debug("Saving info for %s", unhexlify(sd_info['stream_name']))
         stream_name = sd_info['stream_name']
         key = sd_info['key']
         stream_hash = sd_info['stream_hash']
@@ -272,9 +282,9 @@ def format_blobs(crypt_blob_infos):
     for blob_info in crypt_blob_infos:
         blob = {}
         if blob_info.length != 0:
-            blob['blob_hash'] = str(blob_info.blob_hash)
+            blob['blob_hash'] = blob_info.blob_hash
         blob['blob_num'] = blob_info.blob_num
-        blob['iv'] = str(blob_info.iv)
+        blob['iv'] = blob_info.iv
         blob['length'] = blob_info.length
         formatted_blobs.append(blob)
     return formatted_blobs
@@ -344,18 +354,18 @@ def get_blob_hashsum(b):
     iv = b['iv']
     blob_hashsum = get_lbry_hash_obj()
     if length != 0:
-        blob_hashsum.update(blob_hash)
-    blob_hashsum.update(str(blob_num))
-    blob_hashsum.update(iv)
-    blob_hashsum.update(str(length))
+        blob_hashsum.update(blob_hash.encode())
+    blob_hashsum.update(str(blob_num).encode())
+    blob_hashsum.update(iv.encode())
+    blob_hashsum.update(str(length).encode())
     return blob_hashsum.digest()
 
 
 def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
     h = get_lbry_hash_obj()
-    h.update(hex_stream_name)
-    h.update(key)
-    h.update(hex_suggested_file_name)
+    h.update(hex_stream_name.encode())
+    h.update(key.encode())
+    h.update(hex_suggested_file_name.encode())
     blobs_hashsum = get_lbry_hash_obj()
     for blob in blob_infos:
         blobs_hashsum.update(get_blob_hashsum(blob))
@@ -364,9 +374,8 @@ def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
 
 
 def verify_hex(text, field_name):
-    for c in text:
-        if c not in '0123456789abcdef':
-            raise InvalidStreamDescriptorError("%s is not a hex-encoded string" % field_name)
+    if not set(text).issubset(set(string.hexdigits)):
+        raise InvalidStreamDescriptorError("%s is not a hex-encoded string" % field_name)
 
 
 def validate_descriptor(stream_info):
@@ -397,7 +406,7 @@ def validate_descriptor(stream_info):
     return True
 
 
-class EncryptedFileStreamDescriptorValidator(object):
+class EncryptedFileStreamDescriptorValidator:
     def __init__(self, raw_info):
         self.raw_info = raw_info
 
@@ -406,14 +415,14 @@ class EncryptedFileStreamDescriptorValidator(object):
 
     def info_to_show(self):
         info = []
-        info.append(("stream_name", binascii.unhexlify(self.raw_info.get("stream_name"))))
+        info.append(("stream_name", unhexlify(self.raw_info.get("stream_name"))))
         size_so_far = 0
         for blob_info in self.raw_info.get("blobs", []):
             size_so_far += int(blob_info['length'])
         info.append(("stream_size", str(self.get_length_of_stream())))
         suggested_file_name = self.raw_info.get("suggested_file_name", None)
         if suggested_file_name is not None:
-            suggested_file_name = binascii.unhexlify(suggested_file_name)
+            suggested_file_name = unhexlify(suggested_file_name)
         info.append(("suggested_file_name", suggested_file_name))
         return info
 
@@ -425,7 +434,8 @@ class EncryptedFileStreamDescriptorValidator(object):
 
 
 @defer.inlineCallbacks
-def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
+def download_sd_blob(blob_hash, blob_manager, peer_finder, rate_limiter, payment_rate_manager, wallet, timeout=None,
+                     download_mirrors=None):
     """
     Downloads a single blob from the network
 
@@ -439,21 +449,24 @@ def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
     """
 
     downloader = StandaloneBlobDownloader(blob_hash,
-                                          session.blob_manager,
-                                          session.peer_finder,
-                                          session.rate_limiter,
+                                          blob_manager,
+                                          peer_finder,
+                                          rate_limiter,
                                           payment_rate_manager,
-                                          session.wallet,
+                                          wallet,
                                           timeout)
+    mirror = HTTPBlobDownloader(blob_manager, [blob_hash], download_mirrors or [], sd_hashes=[blob_hash], retry=False)
+    mirror.start()
     sd_blob = yield downloader.download()
+    mirror.stop()
     sd_reader = BlobStreamDescriptorReader(sd_blob)
     sd_info = yield sd_reader.get_info()
     try:
         validate_descriptor(sd_info)
     except InvalidStreamDescriptorError as err:
-        yield session.blob_manager.delete_blobs([blob_hash])
+        yield blob_manager.delete_blobs([blob_hash])
         raise err
     raw_sd = yield sd_reader._get_raw_data()
-    yield session.blob_manager.storage.add_known_blob(blob_hash, len(raw_sd))
-    yield save_sd_info(session.blob_manager, sd_blob.blob_hash, sd_info)
+    yield blob_manager.storage.add_known_blob(blob_hash, len(raw_sd))
+    yield save_sd_info(blob_manager, sd_blob.blob_hash, sd_info)
     defer.returnValue(sd_blob)

@@ -16,8 +16,8 @@ class EncryptedFileReflectorClient(Protocol):
     #  Protocol stuff
     def connectionMade(self):
         log.debug("Connected to reflector")
-        self.response_buff = ''
-        self.outgoing_buff = ''
+        self.response_buff = b''
+        self.outgoing_buff = b''
         self.blob_hashes_to_send = []
         self.failed_blob_hashes = []
         self.next_blob_to_send = None
@@ -50,7 +50,7 @@ class EncryptedFileReflectorClient(Protocol):
         except IncompleteResponse:
             pass
         else:
-            self.response_buff = ''
+            self.response_buff = b''
             d = self.handle_response(msg)
             d.addCallback(lambda _: self.send_next_request())
             d.addErrback(self.response_failure_handler)
@@ -143,7 +143,7 @@ class EncryptedFileReflectorClient(Protocol):
         return d
 
     def send_request(self, request_dict):
-        self.write(json.dumps(request_dict))
+        self.write(json.dumps(request_dict).encode())
 
     def send_handshake(self):
         self.send_request({'version': self.protocol_version})

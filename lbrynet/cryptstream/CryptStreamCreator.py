@@ -5,15 +5,14 @@ import os
 import logging
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from twisted.internet import interfaces, defer
-from zope.interface import implements
+from twisted.internet import defer
 from lbrynet.cryptstream.CryptBlob import CryptStreamBlobMaker
 
 
 log = logging.getLogger(__name__)
 
 
-class CryptStreamCreator(object):
+class CryptStreamCreator:
     """
     Create a new stream with blobs encrypted by a symmetric cipher.
 
@@ -22,7 +21,7 @@ class CryptStreamCreator(object):
     the blob is associated with the stream.
     """
 
-    implements(interfaces.IConsumer)
+    #implements(interfaces.IConsumer)
 
     def __init__(self, blob_manager, name=None, key=None, iv_generator=None):
         """@param blob_manager: Object that stores and provides access to blobs.
@@ -101,13 +100,13 @@ class CryptStreamCreator(object):
     @staticmethod
     def random_iv_generator():
         while 1:
-            yield os.urandom(AES.block_size / 8)
+            yield os.urandom(AES.block_size // 8)
 
     def setup(self):
         """Create the symmetric key if it wasn't provided"""
 
         if self.key is None:
-            self.key = os.urandom(AES.block_size / 8)
+            self.key = os.urandom(AES.block_size // 8)
 
         return defer.succeed(True)
 
@@ -122,7 +121,7 @@ class CryptStreamCreator(object):
 
         yield defer.DeferredList(self.finished_deferreds)
         self.blob_count += 1
-        iv = self.iv_generator.next()
+        iv = next(self.iv_generator)
         final_blob = self._get_blob_maker(iv, self.blob_manager.get_blob_creator())
         stream_terminator = yield final_blob.close()
         terminator_info = yield self._blob_finished(stream_terminator)
@@ -133,7 +132,7 @@ class CryptStreamCreator(object):
             if self.current_blob is None:
                 self.next_blob_creator = self.blob_manager.get_blob_creator()
                 self.blob_count += 1
-                iv = self.iv_generator.next()
+                iv = next(self.iv_generator)
                 self.current_blob = self._get_blob_maker(iv, self.next_blob_creator)
             done, num_bytes_written = self.current_blob.write(data)
             data = data[num_bytes_written:]

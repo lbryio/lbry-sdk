@@ -4,33 +4,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/) with
 regard to the json-rpc api.  As we're currently pre-1.0 release, we
-can and probably will change functionality and break backwards compatability
+can and probably will change functionality and break backwards compatibility
 at anytime.
 
 ## [Unreleased]
+Python 3 upgrade of the entire code base and switching to a brand new wallet
+implementation are the major changes in this release.
+
 ### Security
-  *
+  * upgraded `cryptography` package.
+
+### API
+  * unified all command line executables into a single `lbrynet` executable.
+  * deprecated `daemon_stop` command, use `stop` instead.
+  * deprecated `wallet_balance` command, use `account_balance` instead.
+  * deprecated `wallet_unlock` command, use `account_unlock` instead.
+  * deprecated `wallet_decrypt` command, use `account_decrypt` instead.
+  * deprecated `wallet_encrypt` command, use `account_encrypt` instead.
+  * deprecated `wallet_prefill_addresses` command, use `account_fund` instead.
+  * deprecated `wallet_list` command, use `address_list` instead.
+  * deprecated `wallet_is_address_mine` command, use `address_is_mine` instead.
+  * deprecated `wallet_public_key` command, use `address_public_key` instead.
+  * deprecated `wallet_new_address` command, use `address_generate` instead.
+  * deprecated `wallet_unused_address` command, use `address_unused` instead.
+  * added `account_list` command to list accounts including their balance.
+  * added `account_add` command to add a previously created account from seed or private key.
+  * added `account_create` command to generate a new account.
+  * added `account_remove` command to remove an account from wallet.
+  * added `account_set` command to change a setting on an account.
+  * added `account_balance` command to get just the account balance.
+  * added `account_unlock` command to unlock an account.
+  * added `account_encrypt` command to encrypt an account.
+  * added `account_decrypt` command to decrypt an account.
+  * added `account_fund` command to move funds between or within an account in various ways.
+  * added `account_max_address_gap` command to find large gaps of unused addresses.
+  * added `address_list` command to list addresses.
+  * added `address_is_mine` command to check if an address is one of your addresses.
+  * added `address_public_key` command to get public key of an address.
+  * added `address_generate` command to generate a new address.
+  * added `address_unused` command to get existing or generate a new unused address.
+  * removed `send_amount_to_address` command previously marked as deprecated
+  * removed `channel_list_mine` command previously marked as deprecated
+  * removed `get_availability` command previously marked as deprecated
+
+### Wallet
+  * changed to a new wallet implementation: [torba](https://github.com/lbryio/torba).
+  * changed wallet file format to support multiple accounts in one wallet.
+  * moved transaction data from wallet file into an sqlite database.
+  * changed channel certificates to be keyed by txid:nout instead of claim_id which
+    makes it possible to recover old certificates.
+
+### DHT
+  * Extensive internal changes as a result of porting to Python 3.
+
+### P2P & File Manager
+  * Extensive internal changes as a result of porting to Python 3.
+
+### Database
+  * 
+
+### Reflector
   *
 
+## [0.21.2] - 2018-08-23
 ### Fixed
-  * daemon cli spelling fixes
-  *
+ * issue in dht ping queue where enqueued pings that aren't yet due wouldn't be rescheduled
+ * blob mirror downloader not finishing streams that were partially uploaded at the time of the download attempt (https://github.com/lbryio/lbry/issues/1376)
 
-### Deprecated
-  *
-  *
 
-### Changed
-  *
-  *
+## [0.21.1] - 2018-08-13
+### Fixed
+ * `download_progress` field in `blockchain_headers` section of `status` not initializing correctly when resuming a download (https://github.com/lbryio/lbry/issues/1355)
+ * `wallet_send` not accepting decimal amounts (https://github.com/lbryio/lbry/issues/1356 commit https://github.com/lbryio/lbry/commit/1098ca0494ece420c70fc57f69d6d388715a99b8)
 
 ### Added
-  *
-  *
+ * `is_locked` to `wallet` in `status` response (https://github.com/lbryio/lbry/issues/1354, commit https://github.com/lbryio/lbry/commit/153022a1a7122ab6d31d3db433dccbe469bbcb3c)
+
+### Changed
+ * Bumped `lbryum` requirement to 3.2.4 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#324---2018-08-13)
+
+## [0.21.0] - 2018-08-09
+### Fixed
+ * check `claim_address` and `change_address` earlier on publishing, to avoid hard to understand errors later in the process (pr https://github.com/lbryio/lbry/pull/1347)
+ * loggly error reporting not following `share_usage_data` (pr https://github.com/lbryio/lbry/pull/1328)
+ * improper error handling when data is not valid JSON (pr https://github.com/lbryio/lbry/pull/1326)
+ * blob mirroring being set in unrelated tests, making them fail (pr https://github.com/lbryio/lbry/pull/1348)
+ * http blob mirroring edge cases (pr https://github.com/lbryio/lbry/pull/1315)
+ * external ports in log messages not showing the correct external port from the upnp redirects (https://github.com/lbryio/lbry/issues/1338) (pr https://github.com/lbryio/lbry/pull/1349)
+ * miniupnpc fallback issues in txupnp (https://github.com/lbryio/lbry/issues/1341) (pr https://github.com/lbryio/lbry/pull/1349)
+ * upnp error when disabled on router and a non-gateway is found, such as chromecast (https://github.com/lbryio/lbry/issues/1352) (https://github.com/lbryio/lbry/commit/dca4af942fbe95547794213775f0a62cd04a393f)
+
+### Deprecated
+ * automatic claim renew, this is no longer needed
+
+### Changed
+ * api server class to use components, and for all JSONRPC API commands to be callable so long as the required components are available. (pr https://github.com/lbryio/lbry/pull/1294)
+ * return error messages when required conditions on components are not met for API calls (pr https://github.com/lbryio/lbry/pull/1328)
+ * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht` field. (pr https://github.com/lbryio/lbry/pull/1328)
+ * `startup_status` field in the response to `status` to be a dict of component names to status booleans (pr https://github.com/lbryio/lbry/pull/1328)
+ * renamed the `blockchain_status` field in the response to `status` to `wallet` (pr https://github.com/lbryio/lbry/pull/1328)
+ * moved and renamed `wallet_is_encrypted` to `is_encrypted` in the `wallet` field in the response to `status` (pr https://github.com/lbryio/lbry/pull/1328)
+ * moved wallet, upnp and dht startup code from `Session` to `Components` (pr https://github.com/lbryio/lbry/pull/1328)
+ * attempt blob downloads from http mirror sources (by default) concurrently to p2p sources (pr https://github.com/lbryio/lbry/pull/1233)
+ * replace miniupnpc with [txupnp](https://github.com/lbryio/txupnp). Since txupnp is still under development, it will internally fall back to miniupnpc. (pr https://github.com/lbryio/lbry/pull/1328)
+ * simplified test_misc.py in the functional tests (pr https://github.com/lbryio/lbry/pull/1328)
+ * update `cryptography` requirement to 2.3 (pr https://github.com/lbryio/lbry/pull/1333)
+
+### Added
+ * `skipped_components` list to the response from `status` (pr https://github.com/lbryio/lbry/pull/1328)
+ * component statuses (`blockchain_headers`, `dht`, `wallet`, `blob_manager` `hash_announcer`, and `file_manager`) to the response to `status` (pr https://github.com/lbryio/lbry/pull/1328)
+ * `skipped_components` config setting, accepts a list of names of components to not run (pr https://github.com/lbryio/lbry/pull/1294)
+ * `ComponentManager` for managing the life-cycles of dependencies (pr https://github.com/lbryio/lbry/pull/1294)
+ * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously (pr https://github.com/lbryio/lbry/pull/1294)
+ * unit tests for `ComponentManager` (pr https://github.com/lbryio/lbry/pull/1294)
+ * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
+ * additional information to the balance error message when editing a claim (pr https://github.com/lbryio/lbry/pull/1309)
+ * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313) (pr https://github.com/lbryio/lbry/pull/1299)
+ * ability to download from HTTP mirrors by setting `download_mirrors` (prs https://github.com/lbryio/lbry/pull/1233 and https://github.com/lbryio/lbry/pull/1315)
+ * ability to filter peers from an iterative find value operation (finding peers for a blob). This is used to filter peers we've already found for a blob when accumulating the list of peers. (pr https://github.com/lbryio/lbry/pull/1287)
 
 ### Removed
-  *
-  *
+ * `session_status` argument and response field from `status` (pr https://github.com/lbryio/lbry/pull/1328)
+ * most of the internal attributes from `Daemon` (pr https://github.com/lbryio/lbry/pull/1294)
+
+
+## [0.20.4] - 2018-07-18
+### Fixed
+ * spelling errors in messages printed by `lbrynet-cli`
+ * high CPU usage when a stream is incomplete and the peers we're requesting from have no more blobs to send us (https://github.com/lbryio/lbry/pull/1301)
+
+### Changed
+ * keep track of failures for DHT peers for up to ten minutes instead of indefinitely (https://github.com/lbryio/lbry/pull/1300)
+ * skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too (https://github.com/lbryio/lbry/pull/1300)
+ * if a node becomes ignored during an iterative find cycle remove it from the shortlist so that we can't return it as a result nor try to probe it anyway (https://github.com/lbryio/lbry/pull/1303)
 
 
 ## [0.20.3] - 2018-07-03

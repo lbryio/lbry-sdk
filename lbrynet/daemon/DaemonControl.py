@@ -12,13 +12,11 @@ from lbrynet.core import log_support
 import argparse
 import logging.handlers
 
-from twisted.internet import defer, reactor
-from jsonrpc.proxy import JSONRPCProxy
+from twisted.internet import reactor
 
-from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils, system_info
-from lbrynet.daemon.DaemonServer import DaemonServer
+from lbrynet.daemon.Daemon import Daemon
 
 log = logging.getLogger(__name__)
 
@@ -27,20 +25,13 @@ def test_internet_connection():
     return utils.check_connection()
 
 
-def start():
-    """The primary entry point for launching the daemon."""
+def start(argv=None, conf_path=None):
+    if conf_path is not None:
+        conf.conf_file = conf_path
 
-    # postpone loading the config file to after the CLI arguments
-    # have been parsed, as they may contain an alternate config file location
-    conf.initialize_settings(load_conf_file=False)
+    conf.initialize_settings()
 
-    parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
-    parser.add_argument(
-        "--conf",
-        help="specify an alternative configuration file",
-        type=str,
-        default=None
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "--http-auth", dest="useauth", action="store_true", default=conf.settings['use_auth_http']
     )
@@ -58,67 +49,26 @@ def start():
         help='Show daemon version and quit'
     )
 
-    args = parser.parse_args()
-    update_settings_from_args(args)
-
-    conf.settings.load_conf_file_settings()
+    args = parser.parse_args(argv)
+    if args.useauth:
+        conf.settings.update({'use_auth_http': args.useauth}, data_types=(conf.TYPE_CLI,))
 
     if args.version:
         version = system_info.get_platform(get_ip=False)
         version['installation_id'] = conf.settings.installation_id
-        print utils.json_dumps_pretty(version)
+        print(utils.json_dumps_pretty(version))
         return
 
     lbrynet_log = conf.settings.get_log_filename()
     log_support.configure_logging(lbrynet_log, not args.quiet, args.verbose)
+    log_support.configure_loggly_handler()
     log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
-
-    try:
-        log.debug('Checking for an existing lbrynet daemon instance')
-        JSONRPCProxy.from_url(conf.settings.get_api_connection_string()).status()
-        log.info("lbrynet-daemon is already running")
-        return
-    except Exception:
-        log.debug('No lbrynet instance found, continuing to start')
 
     log.info("Starting lbrynet-daemon from command line")
 
     if test_internet_connection():
-        analytics_manager = analytics.Manager.new_instance()
-        start_server_and_listen(analytics_manager)
+        daemon = Daemon()
+        daemon.start_listening()
         reactor.run()
     else:
         log.info("Not connected to internet, unable to start")
-
-
-def update_settings_from_args(args):
-    if args.conf:
-        conf.conf_file = args.conf
-
-    if args.useauth:
-        conf.settings.update({
-            'use_auth_http': args.useauth,
-        }, data_types=(conf.TYPE_CLI,))
-
-
-
-@defer.inlineCallbacks
-def start_server_and_listen(analytics_manager):
-    """
-    Args:
-        use_auth: set to true to enable http authentication
-        analytics_manager: to send analytics
-    """
-    analytics_manager.send_server_startup()
-    daemon_server = DaemonServer(analytics_manager)
-    try:
-        yield daemon_server.start(conf.settings['use_auth_http'])
-        analytics_manager.send_server_startup_success()
-    except Exception as e:
-        log.exception('Failed to start lbrynet-daemon')
-        analytics_manager.send_server_startup_error(str(e))
-        daemon_server.stop()
-
-
-if __name__ == "__main__":
-    start()

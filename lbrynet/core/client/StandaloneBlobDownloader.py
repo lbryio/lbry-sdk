@@ -1,6 +1,4 @@
 import logging
-from zope.interface import implements
-from lbrynet import interfaces
 from lbrynet.core.BlobInfo import BlobInfo
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager
@@ -14,8 +12,8 @@ from twisted.internet.task import LoopingCall
 log = logging.getLogger(__name__)
 
 
-class SingleBlobMetadataHandler(object):
-    implements(interfaces.IMetadataHandler)
+class SingleBlobMetadataHandler:
+    #implements(interfaces.IMetadataHandler)
 
     def __init__(self, blob_hash, download_manager):
         self.blob_hash = blob_hash
@@ -31,7 +29,7 @@ class SingleBlobMetadataHandler(object):
         return 0
 
 
-class SingleProgressManager(object):
+class SingleProgressManager:
     def __init__(self, download_manager, finished_callback, timeout_callback, timeout):
         self.finished_callback = finished_callback
         self.timeout_callback = timeout_callback
@@ -71,10 +69,10 @@ class SingleProgressManager(object):
     def needed_blobs(self):
         blobs = self.download_manager.blobs
         assert len(blobs) == 1
-        return [b for b in blobs.itervalues() if not b.get_is_verified()]
+        return [b for b in blobs.values() if not b.get_is_verified()]
 
 
-class DummyBlobHandler(object):
+class DummyBlobHandler:
     def __init__(self):
         pass
 
@@ -82,7 +80,7 @@ class DummyBlobHandler(object):
         pass
 
 
-class StandaloneBlobDownloader(object):
+class StandaloneBlobDownloader:
     def __init__(self, blob_hash, blob_manager, peer_finder,
                  rate_limiter, payment_rate_manager, wallet,
                  timeout=None):

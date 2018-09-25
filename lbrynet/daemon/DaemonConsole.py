@@ -1,20 +1,17 @@
-# -*- coding: utf-8 -*-
-
 import sys
 import code
 import argparse
+import asyncio
 import logging.handlers
-from exceptions import SystemExit
 from twisted.internet import defer, reactor, threads
+from aiohttp import client_exceptions
+
 from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.core import log_support
-from lbrynet.daemon.DaemonServer import DaemonServer
 from lbrynet.daemon.auth.client import LBRYAPIClient
 from lbrynet.daemon.Daemon import Daemon
-
-get_client = LBRYAPIClient.get_client
 
 log = logging.getLogger(__name__)
 
@@ -118,12 +115,12 @@ def get_methods(daemon):
     locs = {}
 
     def wrapped(name, fn):
-        client = get_client()
+        client = LBRYAPIClient.get_client()
         _fn = getattr(client, name)
         _fn.__doc__ = fn.__doc__
         return {name: _fn}
 
-    for method_name, method in daemon.callable_methods.iteritems():
+    for method_name, method in daemon.callable_methods.items():
         locs.update(wrapped(method_name, method))
     return locs
 
@@ -134,14 +131,14 @@ def run_terminal(callable_methods, started_daemon, quiet=False):
 
     def help(method_name=None):
         if not method_name:
-            print "Available api functions: "
+            print("Available api functions: ")
             for name in callable_methods:
-                print "\t%s" % name
+                print("\t%s" % name)
             return
         if method_name not in callable_methods:
-            print "\"%s\" is not a recognized api function"
+            print("\"%s\" is not a recognized api function")
             return
-        print callable_methods[method_name].__doc__
+        print(callable_methods[method_name].__doc__)
         return
 
     locs.update({'help': help})
@@ -149,7 +146,7 @@ def run_terminal(callable_methods, started_daemon, quiet=False):
     if started_daemon:
         def exit(status=None):
             if not quiet:
-                print "Stopping lbrynet-daemon..."
+                print("Stopping lbrynet-daemon...")
             callable_methods['daemon_stop']()
             return sys.exit(status)
 
@@ -159,7 +156,7 @@ def run_terminal(callable_methods, started_daemon, quiet=False):
             try:
                 reactor.callLater(0, reactor.stop)
             except Exception as err:
-                print "error stopping reactor: ", err
+                print("error stopping reactor: {}".format(err))
             return sys.exit(status)
 
         locs.update({'exit': exit})
@@ -175,18 +172,7 @@ def start_server_and_listen(use_auth, analytics_manager, quiet):
     logging.getLogger("requests").setLevel(logging.CRITICAL)
 
     analytics_manager.send_server_startup()
-    daemon_server = DaemonServer(analytics_manager)
-    try:
-        yield daemon_server.start(use_auth)
-        analytics_manager.send_server_startup_success()
-        if not quiet:
-            print "Started lbrynet-daemon!"
-        defer.returnValue(True)
-    except Exception as e:
-        log.exception('Failed to start lbrynet-daemon')
-        analytics_manager.send_server_startup_error(str(e))
-        daemon_server.stop()
-        raise
+    yield Daemon().start_listening()
 
 
 def threaded_terminal(started_daemon, quiet):
@@ -196,21 +182,21 @@ def threaded_terminal(started_daemon, quiet):
     d.addErrback(log.exception)
 
 
-def start_lbrynet_console(quiet, use_existing_daemon, useauth):
+async def start_lbrynet_console(quiet, use_existing_daemon, useauth):
     if not utils.check_connection():
-        print "Not connected to internet, unable to start"
+        print("Not connected to internet, unable to start")
         raise Exception("Not connected to internet, unable to start")
     if not quiet:
-        print "Starting lbrynet-console..."
+        print("Starting lbrynet-console...")
     try:
-        get_client().status()
+        await LBRYAPIClient.get_client().status()
         d = defer.succeed(False)
         if not quiet:
-            print "lbrynet-daemon is already running, connecting to it..."
-    except:
+            print("lbrynet-daemon is already running, connecting to it...")
+    except client_exceptions.ClientConnectorError:
         if not use_existing_daemon:
             if not quiet:
-                print "Starting lbrynet-daemon..."
+                print("Starting lbrynet-daemon...")
             analytics_manager = analytics.Manager.new_instance()
             d = start_server_and_listen(useauth, analytics_manager, quiet)
         else:
@@ -237,7 +223,8 @@ def main():
         "--http-auth", dest="useauth", action="store_true", default=conf.settings['use_auth_http']
     )
     args = parser.parse_args()
-    start_lbrynet_console(args.quiet, args.use_existing_daemon, args.useauth)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(start_lbrynet_console(args.quiet, args.use_existing_daemon, args.useauth))
     reactor.run()
 
 

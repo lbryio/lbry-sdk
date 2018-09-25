@@ -1,16 +1,18 @@
 import ipaddress
+from binascii import hexlify
+from functools import reduce
 from lbrynet.dht import constants
 
 
 def is_valid_ipv4(address):
     try:
-        ip = ipaddress.ip_address(address.decode())  # this needs to be unicode, thus the decode()
+        ip = ipaddress.ip_address(address)
         return ip.version == 4
     except ipaddress.AddressValueError:
         return False
 
 
-class _Contact(object):
+class _Contact:
     """ Encapsulation for remote contact
 
     This class contains information on a single remote contact, and also
@@ -19,8 +21,8 @@ class _Contact(object):
 
     def __init__(self, contactManager, id, ipAddress, udpPort, networkProtocol, firstComm):
         if id is not None:
-            if not len(id) == constants.key_bits / 8:
-                raise ValueError("invalid node id: %s" % id.encode('hex'))
+            if not len(id) == constants.key_bits // 8:
+                raise ValueError("invalid node id: {}".format(hexlify(id).decode()))
         if not 0 <= udpPort <= 65536:
             raise ValueError("invalid port")
         if not is_valid_ipv4(ipAddress):
@@ -56,7 +58,7 @@ class _Contact(object):
     def log_id(self, short=True):
         if not self.id:
             return "not initialized"
-        id_hex = self.id.encode('hex')
+        id_hex = hexlify(self.id)
         return id_hex if not short else id_hex[:8]
 
     @property
@@ -95,25 +97,17 @@ class _Contact(object):
         return None
 
     def __eq__(self, other):
-        if isinstance(other, _Contact):
-            return self.id == other.id
-        elif isinstance(other, str):
-            return self.id == other
-        else:
-            return False
+        if not isinstance(other, _Contact):
+            raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
+        return (self.id, self.address, self.port) == (other.id, other.address, other.port)
 
-    def __ne__(self, other):
-        if isinstance(other, _Contact):
-            return self.id != other.id
-        elif isinstance(other, str):
-            return self.id != other
-        else:
-            return True
+    def __hash__(self):
+        return hash((self.id, self.address, self.port))
 
     def compact_ip(self):
         compact_ip = reduce(
             lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())
-        return str(compact_ip)
+        return compact_ip
 
     def set_id(self, id):
         if not self._id:
@@ -156,12 +150,12 @@ class _Contact(object):
             raise AttributeError("unknown command: %s" % name)
 
         def _sendRPC(*args, **kwargs):
-            return self._networkProtocol.sendRPC(self, name, args)
+            return self._networkProtocol.sendRPC(self, name.encode(), args)
 
         return _sendRPC
 
 
-class ContactManager(object):
+class ContactManager:
     def __init__(self, get_time=None):
         if not get_time:
             from twisted.internet import reactor
@@ -171,12 +165,11 @@ class ContactManager(object):
         self._rpc_failures = {}
 
     def get_contact(self, id, address, port):
-        for contact in self._contacts.itervalues():
+        for contact in self._contacts.values():
             if contact.id == id and contact.address == address and contact.port == port:
                 return contact
 
     def make_contact(self, id, ipAddress, udpPort, networkProtocol, firstComm=0):
-        ipAddress = str(ipAddress)
         contact = self.get_contact(id, ipAddress, udpPort)
         if contact:
             return contact
@@ -185,5 +178,12 @@ class ContactManager(object):
         return contact
 
     def is_ignored(self, origin_tuple):
-        failed_rpc_count = len(self._rpc_failures.get(origin_tuple, []))
+        failed_rpc_count = len(self._prune_failures(origin_tuple))
         return failed_rpc_count > constants.rpcAttempts
+
+    def _prune_failures(self, origin_tuple):
+        # Prunes recorded failures to the last time window of attempts
+        pruning_limit = self._get_time() - constants.rpcAttemptsPruningTimeWindow
+        pruned = list(filter(lambda t: t >= pruning_limit, self._rpc_failures.get(origin_tuple, [])))
+        self._rpc_failures[origin_tuple] = pruned
+        return pruned

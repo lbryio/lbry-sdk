@@ -1,16 +1,14 @@
 import binascii
 import logging
 
-from zope.interface import implements
 from twisted.internet import defer
-from lbrynet.interfaces import IPeerFinder
 from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
 
 
-class DummyPeerFinder(object):
+class DummyPeerFinder:
     """This class finds peers which have announced to the DHT that they have certain blobs"""
 
     def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=True):
@@ -19,7 +17,7 @@ class DummyPeerFinder(object):
 
 class DHTPeerFinder(DummyPeerFinder):
     """This class finds peers which have announced to the DHT that they have certain blobs"""
-    implements(IPeerFinder)
+    #implements(IPeerFinder)
 
     def __init__(self, dht_node, peer_manager):
         """
@@ -28,7 +26,7 @@ class DHTPeerFinder(DummyPeerFinder):
         """
         self.dht_node = dht_node
         self.peer_manager = peer_manager
-        self.peers = []
+        self.peers = {}
 
     @defer.inlineCallbacks
     def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=True):
@@ -42,16 +40,18 @@ class DHTPeerFinder(DummyPeerFinder):
         Returns:
         list of peers for the blob
         """
+        if blob_hash not in self.peers:
+            self.peers[blob_hash] = [(self.dht_node.externalIP, self.dht_node.peerPort)]
         bin_hash = binascii.unhexlify(blob_hash)
-        finished_deferred = self.dht_node.iterativeFindValue(bin_hash)
+        finished_deferred = self.dht_node.iterativeFindValue(bin_hash, exclude=self.peers[blob_hash])
         timeout = timeout or conf.settings['peer_search_timeout']
         if timeout:
             finished_deferred.addTimeout(timeout, self.dht_node.clock)
         try:
             peer_list = yield finished_deferred
         except defer.TimeoutError:
-            log.warning("DHT timed out while looking peers for blob"
-                        " %s after %s seconds.", blob_hash, timeout)
+            log.debug("DHT timed out while looking peers for blob %s after %s seconds",
+                      blob_hash, timeout)
             peer_list = []
 
         peers = set(peer_list)
@@ -60,4 +60,5 @@ class DHTPeerFinder(DummyPeerFinder):
             if filter_self and (host, port) == (self.dht_node.externalIP, self.dht_node.peerPort):
                 continue
             results.append(self.peer_manager.get_peer(host, port))
+            self.peers[blob_hash].append((host, port))
         defer.returnValue(results)

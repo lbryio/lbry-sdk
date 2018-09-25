@@ -8,23 +8,29 @@ from lbrynet import conf
 log = logging.getLogger(__name__)
 
 
-class DHTHashAnnouncer(object):
+class DHTHashAnnouncer:
     def __init__(self, dht_node, storage, concurrent_announcers=None):
         self.dht_node = dht_node
         self.storage = storage
         self.clock = dht_node.clock
         self.peer_port = dht_node.peerPort
         self.hash_queue = []
-        self.concurrent_announcers = concurrent_announcers or conf.settings['concurrent_announcers']
-        self._manage_lc = task.LoopingCall(self.manage)
-        self._manage_lc.clock = self.clock
-        self.sem = defer.DeferredSemaphore(self.concurrent_announcers)
+        if concurrent_announcers is None:
+            self.concurrent_announcers = conf.settings['concurrent_announcers']
+        else:
+            self.concurrent_announcers = concurrent_announcers
+        self._manage_lc = None
+        if self.concurrent_announcers:
+            self._manage_lc = task.LoopingCall(self.manage)
+            self._manage_lc.clock = self.clock
+        self.sem = defer.DeferredSemaphore(self.concurrent_announcers or conf.settings['concurrent_announcers'] or 1)
 
     def start(self):
-        self._manage_lc.start(30)
+        if self._manage_lc:
+            self._manage_lc.start(30)
 
     def stop(self):
-        if self._manage_lc.running:
+        if self._manage_lc and self._manage_lc.running:
             self._manage_lc.stop()
 
     @defer.inlineCallbacks
@@ -74,6 +80,9 @@ class DHTHashAnnouncer(object):
 
     @defer.inlineCallbacks
     def manage(self):
+        if not self.dht_node.contacts:
+            log.info("Not ready to start announcing hashes")
+            return
         need_reannouncement = yield self.storage.get_blobs_to_announce()
         if need_reannouncement:
             yield self.immediate_announce(need_reannouncement)

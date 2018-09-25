@@ -1,3 +1,7 @@
+class RPCError(Exception):
+    code = 0
+
+
 class PriceDisagreementError(Exception):
     pass
 
@@ -12,19 +16,19 @@ class DownloadCanceledError(Exception):
 
 class DownloadSDTimeout(Exception):
     def __init__(self, download):
-        Exception.__init__(self, 'Failed to download sd blob {} within timeout'.format(download))
+        super().__init__('Failed to download sd blob {} within timeout'.format(download))
         self.download = download
 
 
 class DownloadTimeoutError(Exception):
     def __init__(self, download):
-        Exception.__init__(self, 'Failed to download {} within timeout'.format(download))
+        super().__init__('Failed to download {} within timeout'.format(download))
         self.download = download
 
 
 class DownloadDataTimeout(Exception):
     def __init__(self, download):
-        Exception.__init__(self, 'Failed to download data blobs for sd hash '
+        super().__init__('Failed to download data blobs for sd hash '
                                  '{} within timeout'.format(download))
         self.download = download
 
@@ -41,7 +45,21 @@ class NullFundsError(Exception):
     pass
 
 
-class InsufficientFundsError(Exception):
+class InsufficientFundsError(RPCError):
+    code = -310
+
+
+class CurrencyConversionError(Exception):
+    pass
+
+
+class FileOpenError(ValueError):
+    # this extends ValueError because it is replacing a ValueError in EncryptedFileDownloader
+    # and I don't know where it might get caught upstream
+    pass
+
+
+class ResolveError(Exception):
     pass
 
 
@@ -55,39 +73,41 @@ class KeyFeeAboveMaxAllowed(Exception):
 
 class InvalidExchangeRateResponse(Exception):
     def __init__(self, source, reason):
-        Exception.__init__(self, 'Failed to get exchange rate from {}:{}'.format(source, reason))
+        super().__init__('Failed to get exchange rate from {}:{}'.format(source, reason))
         self.source = source
         self.reason = reason
 
 
 class UnknownNameError(Exception):
     def __init__(self, name):
-        Exception.__init__(self, 'Name {} is unknown'.format(name))
+        super().__init__('Name {} is unknown'.format(name))
         self.name = name
 
 
 class UnknownClaimID(Exception):
     def __init__(self, claim_id):
-        Exception.__init__(self, 'Claim {} is unknown'.format(claim_id))
+        super().__init__('Claim {} is unknown'.format(claim_id))
         self.claim_id = claim_id
 
 
 class UnknownURI(Exception):
     def __init__(self, uri):
-        Exception.__init__(self, 'URI {} cannot be resolved'.format(uri))
+        super().__init__('URI {} cannot be resolved'.format(uri))
         self.name = uri
+
 
 class UnknownOutpoint(Exception):
     def __init__(self, outpoint):
-        Exception.__init__(self, 'Outpoint {} cannot be resolved'.format(outpoint))
+        super().__init__('Outpoint {} cannot be resolved'.format(outpoint))
         self.outpoint = outpoint
+
 
 class InvalidName(Exception):
     def __init__(self, name, invalid_characters):
         self.name = name
         self.invalid_characters = invalid_characters
-        Exception.__init__(
-            self, 'URI contains invalid characters: {}'.format(','.join(invalid_characters)))
+        super().__init__(
+            'URI contains invalid characters: {}'.format(','.join(invalid_characters)))
 
 
 class UnknownStreamTypeError(Exception):
@@ -105,7 +125,7 @@ class InvalidStreamDescriptorError(Exception):
 class InvalidStreamInfoError(Exception):
     def __init__(self, name, stream_info):
         msg = '{} has claim with invalid stream info: {}'.format(name, stream_info)
-        Exception.__init__(self, msg)
+        super().__init__(msg)
         self.name = name
         self.stream_info = stream_info
 
@@ -155,13 +175,23 @@ class InvalidAuthenticationToken(Exception):
 class NegotiationError(Exception):
     pass
 
+
 class InvalidCurrencyError(Exception):
     def __init__(self, currency):
         self.currency = currency
-        Exception.__init__(
-            self, 'Invalid currency: {} is not a supported currency.'.format(currency))
+        super().__init__(
+            'Invalid currency: {} is not a supported currency.'.format(currency))
+
 
 class NoSuchDirectoryError(Exception):
     def __init__(self, directory):
         self.directory = directory
-        Exception.__init__(self, 'No such directory {}'.format(directory))
+        super().__init__('No such directory {}'.format(directory))
+
+
+class ComponentStartConditionNotMet(Exception):
+    pass
+
+
+class ComponentsNotStarted(Exception):
+    pass

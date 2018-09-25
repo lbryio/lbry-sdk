@@ -1,30 +1,33 @@
 import logging
-import urlparse
+from six.moves.urllib import parse as urlparse
 import json
 import inspect
+import signal
 
-from decimal import Decimal
-from zope.interface import implements
-from twisted.web import server, resource
+from functools import wraps
+from twisted.web import server
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
-from lbrynet import conf
+from lbrynet import conf, analytics
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
-from lbrynet.daemon.auth.util import APIKey, get_auth_message
-from lbrynet.daemon.auth.client import LBRY_SECRET
-from lbrynet.undecorated import undecorated
-
+from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
+from lbrynet.core.looping_call_manager import LoopingCallManager
+from lbrynet.daemon.ComponentManager import ComponentManager
+from .util import APIKey, get_auth_message, LBRY_SECRET
+from .undecorated import undecorated
+from .factory import AuthJSONRPCResource
+from lbrynet.daemon.json_response_encoder import JSONResponseEncoder
 log = logging.getLogger(__name__)
 
 EMPTY_PARAMS = [{}]
 
 
-class JSONRPCError(object):
+class JSONRPCError:
     # http://www.jsonrpc.org/specification#error_object
     CODE_PARSE_ERROR = -32700  # Invalid JSON. Error while parsing the JSON text.
     CODE_INVALID_REQUEST = -32600  # The JSON sent is not a valid Request object.
@@ -54,7 +57,7 @@ class JSONRPCError(object):
     }
 
     def __init__(self, message, code=CODE_APPLICATION_ERROR, traceback=None, data=None):
-        assert isinstance(code, (int, long)), "'code' must be an int"
+        assert isinstance(code, int), "'code' must be an int"
         assert (data is None or isinstance(data, dict)), "'data' must be None or a dict"
         self.code = code
         if message is None:
@@ -78,20 +81,11 @@ class JSONRPCError(object):
         }
 
     @classmethod
-    def create_from_exception(cls, exception, code=CODE_APPLICATION_ERROR, traceback=None):
-        return cls(exception.message, code=code, traceback=traceback)
-
-
-def default_decimal(obj):
-    if isinstance(obj, Decimal):
-        return float(obj)
+    def create_from_exception(cls, message, code=CODE_APPLICATION_ERROR, traceback=None):
+        return cls(message, code=code, traceback=traceback)
 
 
 class UnknownAPIMethodError(Exception):
-    pass
-
-
-class NotAllowedDuringStartupError(Exception):
     pass
 
 
@@ -110,8 +104,7 @@ def jsonrpc_dumps_pretty(obj, **kwargs):
     else:
         data = {"jsonrpc": "2.0", "result": obj, "id": id_}
 
-    return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2,
-                      separators=(',', ': '), **kwargs) + "\n"
+    return json.dumps(data, cls=JSONResponseEncoder, sort_keys=True, indent=2, **kwargs) + "\n"
 
 
 class JSONRPCServerType(type):
@@ -130,16 +123,38 @@ class JSONRPCServerType(type):
         return klass
 
 
-class AuthorizedBase(object):
-    __metaclass__ = JSONRPCServerType
+class AuthorizedBase(metaclass=JSONRPCServerType):
 
     @staticmethod
     def deprecated(new_command=None):
         def _deprecated_wrapper(f):
-            f._new_command = new_command
+            f.new_command = new_command
             f._deprecated = True
             return f
         return _deprecated_wrapper
+
+    @staticmethod
+    def requires(*components, **conditions):
+        if conditions and ["conditions"] != list(conditions.keys()):
+            raise SyntaxError("invalid conditions argument")
+        condition_names = conditions.get("conditions", [])
+
+        def _wrap(fn):
+            @defer.inlineCallbacks
+            @wraps(fn)
+            def _inner(*args, **kwargs):
+                component_manager = args[0].component_manager
+                for condition_name in condition_names:
+                    condition_result, err_msg = yield component_manager.evaluate_condition(condition_name)
+                    if not condition_result:
+                        raise ComponentStartConditionNotMet(err_msg)
+                if not component_manager.all_components_running(*components):
+                    raise ComponentsNotStarted("the following required components have not yet started: "
+                                               "%s" % json.dumps(components))
+                result = yield fn(*args, **kwargs)
+                defer.returnValue(result)
+            return _inner
+        return _wrap
 
 
 class AuthJSONRPCServer(AuthorizedBase):
@@ -149,7 +164,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     API methods are named with a leading "jsonrpc_"
 
     Attributes:
-        allowed_during_startup (list): list of api methods that are callable before the server has finished startup
         sessions (dict): (dict): {<session id>: <lbrynet.daemon.auth.util.APIKey>}
         callable_methods (dict): {<api method name>: <api method>}
 
@@ -166,18 +180,100 @@ class AuthJSONRPCServer(AuthorizedBase):
         the server will randomize the shared secret and return the new value under the LBRY_SECRET header, which the
         client uses to generate the token for their next request.
     """
-    implements(resource.IResource)
+    #implements(resource.IResource)
 
     isLeaf = True
     allowed_during_startup = []
+    component_attributes = {}
 
-    def __init__(self, use_authentication=None):
+    def __init__(self, analytics_manager=None, component_manager=None, use_authentication=None, to_skip=None,
+                 looping_calls=None, reactor=None):
+        if not reactor:
+            from twisted.internet import reactor
+        self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
+        self.component_manager = component_manager or ComponentManager(
+            analytics_manager=self.analytics_manager,
+            skip_components=to_skip or [],
+            reactor=reactor
+        )
+        self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).items()})
+        self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).items()}
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
+        self.listening_port = None
+        self._component_setup_deferred = None
         self.announced_startup = False
         self.sessions = {}
+        self.server = None
+
+    @defer.inlineCallbacks
+    def start_listening(self):
+        from twisted.internet import reactor, error as tx_error
+
+        try:
+            self.server = self.get_server_factory()
+            self.listening_port = reactor.listenTCP(
+                conf.settings['api_port'], self.server, interface=conf.settings['api_host']
+            )
+            log.info("lbrynet API listening on TCP %s:%i", conf.settings['api_host'], conf.settings['api_port'])
+            yield self.setup()
+            self.analytics_manager.send_server_startup_success()
+        except tx_error.CannotListenError:
+            log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
+                      'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
+            reactor.fireSystemEvent("shutdown")
+        except defer.CancelledError:
+            log.info("shutting down before finished starting")
+            reactor.fireSystemEvent("shutdown")
+        except Exception as err:
+            self.analytics_manager.send_server_startup_error(str(err))
+            log.exception('Failed to start lbrynet-daemon')
+            reactor.fireSystemEvent("shutdown")
 
     def setup(self):
-        return NotImplementedError()
+        from twisted.internet import reactor
+
+        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+        if not self.analytics_manager.is_started:
+            self.analytics_manager.start()
+        for lc_name, lc_time in self._looping_call_times.items():
+            self.looping_call_manager.start(lc_name, lc_time)
+
+        def update_attribute(setup_result, component):
+            setattr(self, self.component_attributes[component.component_name], component.component)
+
+        kwargs = {component: update_attribute for component in self.component_attributes.keys()}
+        self._component_setup_deferred = self.component_manager.setup(**kwargs)
+        return self._component_setup_deferred
+
+    @staticmethod
+    def _already_shutting_down(sig_num, frame):
+        log.info("Already shutting down")
+
+    def _shutdown(self):
+        # ignore INT/TERM signals once shutdown has started
+        signal.signal(signal.SIGINT, self._already_shutting_down)
+        signal.signal(signal.SIGTERM, self._already_shutting_down)
+        if self.listening_port:
+            self.listening_port.stopListening()
+        self.looping_call_manager.shutdown()
+        if self.server is not None:
+            for session in list(self.server.sessions.values()):
+                session.expire()
+        if self.analytics_manager:
+            self.analytics_manager.shutdown()
+        try:
+            self._component_setup_deferred.cancel()
+        except (AttributeError, defer.CancelledError):
+            pass
+        if self.component_manager is not None:
+            d = self.component_manager.stop()
+            d.addErrback(log.fail(), 'Failure while shutting down')
+        else:
+            d = defer.succeed(None)
+        return d
+
+    def get_server_factory(self):
+        return AuthJSONRPCResource(self).getServerFactory()
 
     def _set_headers(self, request, data, update_secret=False):
         if conf.settings['allowed_origin']:
@@ -190,8 +286,8 @@ class AuthJSONRPCServer(AuthorizedBase):
             request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
 
     @staticmethod
-    def _render_message(request, message):
-        request.write(message)
+    def _render_message(request, message: str):
+        request.write(message.encode())
         request.finish()
 
     def _render_error(self, failure, request, id_):
@@ -202,14 +298,23 @@ class AuthJSONRPCServer(AuthorizedBase):
             error = failure.check(JSONRPCError)
             if error is None:
                 # maybe its a twisted Failure with another type of error
-                error = JSONRPCError(failure.getErrorMessage() or failure.type.__name__,
-                                     traceback=failure.getTraceback())
+                if hasattr(failure.type, "code"):
+                    error_code = failure.type.code
+                else:
+                    error_code = JSONRPCError.CODE_APPLICATION_ERROR
+                error = JSONRPCError.create_from_exception(
+                    failure.getErrorMessage() or failure.type.__name__,
+                    code=error_code,
+                    traceback=failure.getTraceback()
+                )
+            if not failure.check(ComponentsNotStarted, ComponentStartConditionNotMet):
+                log.warning("error processing api request: %s\ntraceback: %s", error.message,
+                            "\n".join(error.traceback))
         else:
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
-        log.warning("error processing api request: %s\ntraceback: %s", error.message,
-                    "\n".join(error.traceback))
-        response_content = jsonrpc_dumps_pretty(error, id=id_)
+
+        response_content = jsonrpc_dumps_pretty(error, id=id_, ledger=self.ledger)
         self._set_headers(request, response_content)
         request.setResponseCode(200)
         self._render_message(request, response_content)
@@ -225,7 +330,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             return self._render(request)
         except BaseException as e:
             log.error(e)
-            error = JSONRPCError.create_from_exception(e, traceback=format_exc())
+            error = JSONRPCError.create_from_exception(str(e), traceback=format_exc())
             self._render_error(error, request, None)
             return server.NOT_DONE_YET
 
@@ -245,7 +350,6 @@ class AuthJSONRPCServer(AuthorizedBase):
                 def expire_session():
                     self._unregister_user_session(session_id)
 
-                session.startCheckingExpiration()
                 session.notifyOnExpire(expire_session)
                 message = "OK"
                 request.setResponseCode(200)
@@ -256,12 +360,12 @@ class AuthJSONRPCServer(AuthorizedBase):
                 session.touch()
 
         request.content.seek(0, 0)
-        content = request.content.read()
+        content = request.content.read().decode()
         try:
             parsed = jsonrpclib.loads(content)
-        except ValueError:
+        except json.JSONDecodeError:
             log.warning("Unable to decode request json")
-            self._render_error(JSONRPCError(None, JSONRPCError.CODE_PARSE_ERROR), request, None)
+            self._render_error(JSONRPCError(None, code=JSONRPCError.CODE_PARSE_ERROR), request, None)
             return server.NOT_DONE_YET
 
         request_id = None
@@ -285,7 +389,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                 log.warning("API validation failed")
                 self._render_error(
                     JSONRPCError.create_from_exception(
-                        err, code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
+                        str(err),
+                        code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
                         traceback=format_exc()
                     ),
                     request, request_id
@@ -300,20 +405,12 @@ class AuthJSONRPCServer(AuthorizedBase):
         except UnknownAPIMethodError as err:
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
-                JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request, request_id
-            )
-            return server.NOT_DONE_YET
-        except NotAllowedDuringStartupError:
-            log.warning('Function not allowed during startup: %s', function_name)
-            self._render_error(
-                JSONRPCError("This method is unavailable until the daemon is fully started",
-                             code=JSONRPCError.CODE_INVALID_REQUEST),
+                JSONRPCError(None, code=JSONRPCError.CODE_METHOD_NOT_FOUND),
                 request, request_id
             )
             return server.NOT_DONE_YET
 
-        if args == EMPTY_PARAMS or args == []:
+        if args in (EMPTY_PARAMS, []):
             _args, _kwargs = (), {}
         elif isinstance(args, dict):
             _args, _kwargs = (), args
@@ -416,13 +513,10 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
-        if not self.announced_startup:
-            if function_path not in self.allowed_during_startup:
-                raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
         if function_path in self.deprecated_methods:
-            new_command = self.deprecated_methods[function_path]._new_command
+            new_command = self.deprecated_methods[function_path].new_command
             log.warning('API function \"%s\" is deprecated, please update to use \"%s\"',
                         function_path, new_command)
             function_path = new_command
@@ -431,7 +525,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     @staticmethod
     def _check_params(function, args_tup, args_dict):
-        argspec = inspect.getargspec(undecorated(function))
+        argspec = inspect.getfullargspec(undecorated(function))
         num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
 
         duplicate_params = [
@@ -451,7 +545,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         if len(missing_required_params):
             return 'Missing required parameters', missing_required_params
 
-        extraneous_params = [] if argspec.keywords is not None else [
+        extraneous_params = [] if argspec.varkw is not None else [
             extra_param
             for extra_param in args_dict
             if extra_param not in argspec.args[1:]
@@ -480,10 +574,10 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _callback_render(self, result, request, id_, auth_required=False):
         try:
-            encoded_message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal)
+            message = jsonrpc_dumps_pretty(result, id=id_, ledger=self.ledger)
             request.setResponseCode(200)
-            self._set_headers(request, encoded_message, auth_required)
-            self._render_message(request, encoded_message)
+            self._set_headers(request, message, auth_required)
+            self._render_message(request, message)
         except Exception as err:
             log.exception("Failed to render API response: %s", result)
             self._render_error(err, request, id_)

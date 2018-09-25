@@ -18,13 +18,14 @@ HEARTBEAT = 'Heartbeat'
 CLAIM_ACTION = 'Claim Action'  # publish/create/update/abandon
 NEW_CHANNEL = 'New Channel'
 CREDITS_SENT = 'Credits Sent'
+NEW_DOWNLOAD_STAT = 'Download'
 
 BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 
 log = logging.getLogger(__name__)
 
 
-class Manager(object):
+class Manager:
     def __init__(self, analytics_api, context=None, installation_id=None, session_id=None):
         self.analytics_api = analytics_api
         self._tracked_data = collections.defaultdict(list)
@@ -41,6 +42,32 @@ class Manager(object):
         return cls(api)
 
     # Things We Track
+    def send_new_download_start(self, download_id, name, claim_dict):
+        self._send_new_download_stats("start", download_id, name, claim_dict)
+
+    def send_new_download_success(self, download_id, name, claim_dict):
+        self._send_new_download_stats("success", download_id, name, claim_dict)
+
+    def send_new_download_fail(self, download_id, name, claim_dict, e):
+        self._send_new_download_stats("failure", download_id, name, claim_dict, {
+            'name': type(e).__name__ if hasattr(type(e), "__name__") else str(type(e)),
+            'message': e.message,
+        })
+
+    def _send_new_download_stats(self, action, download_id, name, claim_dict, e=None):
+        self.analytics_api.track({
+            'userId': 'lbry',  # required, see https://segment.com/docs/sources/server/http/#track
+            'event': NEW_DOWNLOAD_STAT,
+            'properties': self._event_properties({
+                'download_id': download_id,
+                'name': name,
+                'sd_hash': None if not claim_dict else claim_dict.source_hash,
+                'action': action,
+                'error': e,
+            }),
+            'context': self.context,
+            'timestamp': utils.isonow(),
+        })
 
     def send_server_startup(self):
         self.analytics_api.track(self._event(SERVER_STARTUP))
@@ -158,7 +185,7 @@ class Manager(object):
 
     @staticmethod
     def _download_properties(id_, name, claim_dict=None, report=None):
-        sd_hash = None if not claim_dict else claim_dict.source_hash
+        sd_hash = None if not claim_dict else claim_dict.source_hash.decode()
         p = {
             'download_id': id_,
             'name': name,
@@ -177,33 +204,25 @@ class Manager(object):
         return {
             'download_id': id_,
             'name': name,
-            'stream_info': claim_dict.source_hash,
+            'stream_info': claim_dict.source_hash.decode(),
             'error': error_name(error),
-            'reason': error.message,
+            'reason': str(error),
             'report': report
         }
 
     @staticmethod
     def _make_context(platform, wallet):
+        # see https://segment.com/docs/spec/common/#context
+        # they say they'll ignore fields outside the spec, but evidently they don't
         context = {
             'app': {
-                'name': 'lbrynet',
                 'version': platform['lbrynet_version'],
-                'python_version': platform['python_version'],
                 'build': platform['build'],
-                'wallet': {
-                    'name': wallet,
-                    'version': platform['lbryum_version'] if wallet == conf.LBRYUM_WALLET else None
-                },
             },
             # TODO: expand os info to give linux/osx specific info
             'os': {
                 'name': platform['os_system'],
                 'version': platform['os_release']
-            },
-            'library': {
-                'name': 'lbrynet-analytics',
-                'version': '1.0.0'
             },
         }
         if 'desktop' in platform and 'distro' in platform:
@@ -219,7 +238,7 @@ class Manager(object):
             callback(maybe_deferred, *args, **kwargs)
 
 
-class Api(object):
+class Api:
     def __init__(self, cookies, url, write_key, enabled):
         self.cookies = cookies
         self.url = url

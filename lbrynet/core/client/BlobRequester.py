@@ -5,13 +5,11 @@ from decimal import Decimal
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionAborted
-from zope.interface import implements
 
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError
 from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoResponseError
 from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientBlobRequest
-from lbrynet.interfaces import IRequestCreator
 from lbrynet.core.Offer import Offer
 
 
@@ -39,8 +37,8 @@ def cache(fn):
     return helper
 
 
-class BlobRequester(object):
-    implements(IRequestCreator)
+class BlobRequester:
+    #implements(IRequestCreator)
 
     def __init__(self, blob_manager, peer_finder, payment_rate_manager, wallet, download_manager):
         self.blob_manager = blob_manager
@@ -163,7 +161,7 @@ class BlobRequester(object):
         return True
 
     def _get_bad_peers(self):
-        return [p for p in self._peers.iterkeys() if not self._should_send_request_to(p)]
+        return [p for p in self._peers.keys() if not self._should_send_request_to(p)]
 
     def _hash_available(self, blob_hash):
         for peer in self._available_blobs:
@@ -195,7 +193,7 @@ class BlobRequester(object):
         self._peers[peer] += amount
 
 
-class RequestHelper(object):
+class RequestHelper:
     def __init__(self, requestor, peer, protocol, payment_rate_manager):
         self.requestor = requestor
         self.peer = peer
@@ -354,6 +352,10 @@ class AvailabilityRequest(RequestHelper):
         log.debug("Received a response to the availability request")
         # save available blobs
         blob_hashes = response_dict['available_blobs']
+        if not blob_hashes:
+            # should not send any more requests as it doesnt have any blob we need
+            self.update_local_score(-10.0)
+            return True
         for blob_hash in blob_hashes:
             if blob_hash in request.request_dict['requested_blobs']:
                 self.process_available_blob_hash(blob_hash, request)
@@ -425,7 +427,7 @@ class PriceRequest(RequestHelper):
 class DownloadRequest(RequestHelper):
     """Choose a blob and download it from a peer and also pay the peer for the data."""
     def __init__(self, requester, peer, protocol, payment_rate_manager, wallet, head_blob_hash):
-        RequestHelper.__init__(self, requester, peer, protocol, payment_rate_manager)
+        super().__init__(requester, peer, protocol, payment_rate_manager)
         self.wallet = wallet
         self.head_blob_hash = head_blob_hash
 
@@ -574,7 +576,7 @@ class DownloadRequest(RequestHelper):
         return reason
 
 
-class BlobDownloadDetails(object):
+class BlobDownloadDetails:
     """Contains the information needed to make a ClientBlobRequest from an open blob"""
     def __init__(self, blob, deferred, write_func, cancel_func, peer):
         self.blob = blob

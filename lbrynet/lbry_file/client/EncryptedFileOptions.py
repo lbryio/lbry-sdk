@@ -8,7 +8,7 @@ def add_lbry_file_to_sd_identifier(sd_identifier):
                                   EncryptedFileOptions())
 
 
-class EncryptedFileOptions(object):
+class EncryptedFileOptions:
     def __init__(self):
         pass
 

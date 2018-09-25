@@ -1,69 +1,51 @@
-#!/usr/bin/env python
-
 import os
 from lbrynet import __version__
 from setuptools import setup, find_packages
 
-# TODO: find a way to keep this in sync with requirements.txt
-#
-# Note though that this list is intentionally less restrictive than
-# requirements.txt. This is only the libraries that are direct
-# dependencies of the lbrynet library.  requirements.txt includes
-# dependencies of dependencies and specific versions that we know
-# all work together.
-#
-# See https://packaging.python.org/requirements/  and
-# https://caremad.io/posts/2013/07/setup-vs-requirement/  for more details.
-requires = [
-    'Twisted',
-    'appdirs',
-    'distro',
-    'base58',
-    'envparse',
-    'jsonrpc',
-    'lbryschema==0.0.16',
-    'lbryum==3.2.3',
-    'miniupnpc',
-    'pyyaml',
-    'requests',
-    'txJSON-RPC',
-    'zope.interface',
-    'treq',
-    'docopt',
-    'six'
-]
-
-console_scripts = [
-    'lbrynet-daemon = lbrynet.daemon.DaemonControl:start',
-    'lbrynet-cli = lbrynet.daemon.DaemonCLI:main',
-    'lbrynet-console = lbrynet.daemon.DaemonConsole:main'
-]
-
-
-def package_files(directory):
-    for path, _, filenames in os.walk(directory):
-        for filename in filenames:
-            yield os.path.join('..', path, filename)
-
-
-package_name = "lbrynet"
-base_dir = os.path.abspath(os.path.dirname(__file__))
-# Get the long description from the README file
-with open(os.path.join(base_dir, 'README.md'), 'rb') as f:
-    long_description = f.read().decode('utf-8')
+BASE = os.path.dirname(__file__)
+README_PATH = os.path.join(BASE, 'README.md')
 
 setup(
-    name=package_name,
+    name="lbrynet",
     version=__version__,
     author="LBRY Inc.",
     author_email="hello@lbry.io",
     url="https://lbry.io",
     description="A decentralized media library and marketplace",
-    long_description=long_description,
+    long_description=open(README_PATH).read(),
     keywords="lbry protocol media",
     license='MIT',
-    packages=find_packages(base_dir),
-    install_requires=requires,
-    entry_points={'console_scripts': console_scripts},
+    python_requires='>=3.6',
+    packages=find_packages(exclude=('tests',)),
     zip_safe=False,
+    entry_points={
+        'console_scripts': 'lbrynet=lbrynet.cli:main'
+    },
+    install_requires=[
+        'aiohttp',
+        'twisted[tls]==18.7.0',
+        'appdirs',
+        'distro',
+        'base58==1.0.0',
+        'envparse',
+        'jsonrpc',
+        'cryptography',
+        'lbryschema',
+        'torba',
+        'txupnp',
+        'pyyaml',
+        'requests',
+        'txJSON-RPC',
+        'treq',
+        'docopt',
+        'colorama==0.3.7',
+        'six'
+    ],
+    extras_require={
+        'test': (
+            'mock>=2.0,<3.0',
+            'faker==0.8.17',
+            'orchstr8>=0.0.4'
+        )
+    }
 )

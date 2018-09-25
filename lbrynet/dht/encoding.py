@@ -1,134 +1,75 @@
-from error import DecodeError
+from .error import DecodeError
 
 
-class Encoding(object):
-    """ Interface for RPC message encoders/decoders
-
-    All encoding implementations used with this library should inherit and
-    implement this.
-    """
-
-    def encode(self, data):
-        """ Encode the specified data
-
-        @param data: The data to encode
-                     This method has to support encoding of the following
-                     types: C{str}, C{int} and C{long}
-                     Any additional data types may be supported as long as the
-                     implementing class's C{decode()} method can successfully
-                     decode them.
-
-        @return: The encoded data
-        @rtype: str
-        """
-
-    def decode(self, data):
-        """ Decode the specified data string
-
-        @param data: The data (byte string) to decode.
-        @type data: str
-
-        @return: The decoded data (in its correct type)
-        """
+def bencode(data):
+    """ Encoder implementation of the Bencode algorithm (Bittorrent). """
+    if isinstance(data, int):
+        return b'i%de' % data
+    elif isinstance(data, (bytes, bytearray)):
+        return b'%d:%s' % (len(data), data)
+    elif isinstance(data, str):
+        return b'%d:%s' % (len(data), data.encode())
+    elif isinstance(data, (list, tuple)):
+        encoded_list_items = b''
+        for item in data:
+            encoded_list_items += bencode(item)
+        return b'l%se' % encoded_list_items
+    elif isinstance(data, dict):
+        encoded_dict_items = b''
+        keys = data.keys()
+        for key in sorted(keys):
+            encoded_dict_items += bencode(key)
+            encoded_dict_items += bencode(data[key])
+        return b'd%se' % encoded_dict_items
+    else:
+        raise TypeError("Cannot bencode '%s' object" % type(data))
 
 
-class Bencode(Encoding):
-    """ Implementation of a Bencode-based algorithm (Bencode is the encoding
-    algorithm used by Bittorrent).
+def bdecode(data):
+    """ Decoder implementation of the Bencode algorithm. """
+    assert type(data) == bytes  # fixme: _maybe_ remove this after porting
+    if len(data) == 0:
+        raise DecodeError('Cannot decode empty string')
+    try:
+        return _decode_recursive(data)[0]
+    except ValueError as e:
+        raise DecodeError(str(e))
 
-    @note: This algorithm differs from the "official" Bencode algorithm in
-           that it can encode/decode floating point values in addition to
-           integers.
-    """
 
-    def encode(self, data):
-        """ Encoder implementation of the Bencode algorithm
-
-        @param data: The data to encode
-        @type data: int, long, tuple, list, dict or str
-
-        @return: The encoded data
-        @rtype: str
-        """
-        if isinstance(data, (int, long)):
-            return 'i%de' % data
-        elif isinstance(data, str):
-            return '%d:%s' % (len(data), data)
-        elif isinstance(data, (list, tuple)):
-            encodedListItems = ''
-            for item in data:
-                encodedListItems += self.encode(item)
-            return 'l%se' % encodedListItems
-        elif isinstance(data, dict):
-            encodedDictItems = ''
-            keys = data.keys()
-            keys.sort()
-            for key in keys:
-                encodedDictItems += self.encode(key)  # TODO: keys should always be bytestrings
-                encodedDictItems += self.encode(data[key])
-            return 'd%se' % encodedDictItems
-        else:
-            print data
-            raise TypeError("Cannot bencode '%s' object" % type(data))
-
-    def decode(self, data):
-        """ Decoder implementation of the Bencode algorithm
-
-        @param data: The encoded data
-        @type data: str
-
-        @note: This is a convenience wrapper for the recursive decoding
-               algorithm, C{_decodeRecursive}
-
-        @return: The decoded data, as a native Python type
-        @rtype:  int, list, dict or str
-        """
-        if len(data) == 0:
-            raise DecodeError('Cannot decode empty string')
+def _decode_recursive(data, start_index=0):
+    if data[start_index] == ord('i'):
+        end_pos = data[start_index:].find(b'e') + start_index
+        return int(data[start_index + 1:end_pos]), end_pos + 1
+    elif data[start_index] == ord('l'):
+        start_index += 1
+        decoded_list = []
+        while data[start_index] != ord('e'):
+            list_data, start_index = _decode_recursive(data, start_index)
+            decoded_list.append(list_data)
+        return decoded_list, start_index + 1
+    elif data[start_index] == ord('d'):
+        start_index += 1
+        decoded_dict = {}
+        while data[start_index] != ord('e'):
+            key, start_index = _decode_recursive(data, start_index)
+            value, start_index = _decode_recursive(data, start_index)
+            decoded_dict[key] = value
+        return decoded_dict, start_index
+    elif data[start_index] == ord('f'):
+        # This (float data type) is a non-standard extension to the original Bencode algorithm
+        end_pos = data[start_index:].find(b'e') + start_index
+        return float(data[start_index + 1:end_pos]), end_pos + 1
+    elif data[start_index] == ord('n'):
+        # This (None/NULL data type) is a non-standard extension
+        # to the original Bencode algorithm
+        return None, start_index + 1
+    else:
+        split_pos = data[start_index:].find(b':') + start_index
         try:
-            return self._decodeRecursive(data)[0]
-        except ValueError as e:
-            raise DecodeError(e.message)
-
-    @staticmethod
-    def _decodeRecursive(data, startIndex=0):
-        """ Actual implementation of the recursive Bencode algorithm
-
-        Do not call this; use C{decode()} instead
-        """
-        if data[startIndex] == 'i':
-            endPos = data[startIndex:].find('e') + startIndex
-            return int(data[startIndex + 1:endPos]), endPos + 1
-        elif data[startIndex] == 'l':
-            startIndex += 1
-            decodedList = []
-            while data[startIndex] != 'e':
-                listData, startIndex = Bencode._decodeRecursive(data, startIndex)
-                decodedList.append(listData)
-            return decodedList, startIndex + 1
-        elif data[startIndex] == 'd':
-            startIndex += 1
-            decodedDict = {}
-            while data[startIndex] != 'e':
-                key, startIndex = Bencode._decodeRecursive(data, startIndex)
-                value, startIndex = Bencode._decodeRecursive(data, startIndex)
-                decodedDict[key] = value
-            return decodedDict, startIndex
-        elif data[startIndex] == 'f':
-            # This (float data type) is a non-standard extension to the original Bencode algorithm
-            endPos = data[startIndex:].find('e') + startIndex
-            return float(data[startIndex + 1:endPos]), endPos + 1
-        elif data[startIndex] == 'n':
-            # This (None/NULL data type) is a non-standard extension
-            # to the original Bencode algorithm
-            return None, startIndex + 1
-        else:
-            splitPos = data[startIndex:].find(':') + startIndex
-            try:
-                length = int(data[startIndex:splitPos])
-            except ValueError, e:
-                raise DecodeError, e
-            startIndex = splitPos + 1
-            endPos = startIndex + length
-            bytes = data[startIndex:endPos]
-            return bytes, endPos
+            length = int(data[start_index:split_pos])
+        except ValueError:
+            raise DecodeError()
+        start_index = split_pos + 1
+        end_pos = start_index + length
+        b = data[start_index:end_pos]
+        return b, end_pos

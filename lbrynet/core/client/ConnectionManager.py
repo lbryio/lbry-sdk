@@ -1,8 +1,6 @@
 import random
 import logging
 from twisted.internet import defer, reactor
-from zope.interface import implements
-from lbrynet import interfaces
 from lbrynet import conf
 from lbrynet.core.client.ClientProtocol import ClientProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError
@@ -11,15 +9,15 @@ from lbrynet.core import utils
 log = logging.getLogger(__name__)
 
 
-class PeerConnectionHandler(object):
+class PeerConnectionHandler:
     def __init__(self, request_creators, factory):
         self.request_creators = request_creators
         self.factory = factory
         self.connection = None
 
 
-class ConnectionManager(object):
-    implements(interfaces.IConnectionManager)
+class ConnectionManager:
+    #implements(interfaces.IConnectionManager)
     MANAGE_CALL_INTERVAL_SEC = 5
     TCP_CONNECT_TIMEOUT = 15
 
@@ -98,7 +96,8 @@ class ConnectionManager(object):
             d.addBoth(lambda _: disconnect_peer(p))
             return d
 
-        closing_deferreds = [close_connection(peer) for peer in self._peer_connections.keys()]
+        # fixme: stop modifying dict during iteration
+        closing_deferreds = [close_connection(peer) for peer in list(self._peer_connections)]
         return defer.DeferredList(closing_deferreds)
 
     @defer.inlineCallbacks
@@ -226,5 +225,3 @@ class ConnectionManager(object):
             del self._connections_closing[peer]
             d.callback(True)
         return connection_was_made
-
-

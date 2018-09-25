@@ -1579,12 +1579,12 @@ Usage:
 
 
 Options:
-    --a_arg                :  a    arg
-    --b_arg                :  b    arg
-    --pos_arg=&lt;pos_arg&gt;    :  pos  arg
-    --pos_args=&lt;pos_args&gt;  :  pos  args
-    --pos_arg2=&lt;pos_arg2&gt;  :  pos  arg 2
-    --pos_arg3=&lt;pos_arg3&gt;  :  pos  arg 3
+    --a_arg                :  (bool)  a arg
+    --b_arg                :  (bool)  b arg
+    --pos_arg=&lt;pos_arg&gt;    :  (int)   pos arg
+    --pos_args=&lt;pos_args&gt;  :  (int)   pos args
+    --pos_arg2=&lt;pos_arg2&gt;  :  (int)   pos arg 2
+    --pos_arg3=&lt;pos_arg3&gt;  :  (int)   pos arg 3
 
 Returns:
     pos args
@@ -1828,14 +1828,16 @@ Returns:
 </code></pre>
 
 <h2 id="peer_ping">peer_ping</h2>
-<pre><code class="text">Find and ping a peer by node id
+<pre><code class="text">Send a kademlia ping to the specified peer. If address and port are provided the peer is directly pinged,
+if not provided the peer is located first.
 
 Usage:
-    peer_ping (&lt;node_id&gt; | --node_id=&lt;node_id&gt;)
+    peer_ping (&lt;node_id&gt; | --node_id=&lt;node_id&gt;) [&lt;address&gt; | --address=&lt;address&gt;] [&lt;port&gt; | --port=&lt;port&gt;]
 
 
 Options:
-          None
+    --address=&lt;address&gt;  :  (str)  ip address of the peer
+    --port=&lt;port&gt;        :  (int)  udp port of the peer
 
 Returns:
     (str) pong, or {'error': &lt;error message&gt;} if an error is encountered
@@ -2110,41 +2112,62 @@ Returns:
 <pre><code class="text">Get daemon status
 
 Usage:
-    status [--session_status]
+    status
 
 
 Options:
-    --session_status  :  (bool)  include session status in results
+          None
 
 Returns:
     (dict) lbrynet-daemon status
     {
-        'lbry_id': lbry peer id, base58,
-        'installation_id': installation id, base58,
-        'is_running': bool,
+        'installation_id': (str) installation id - base58,
+        'is_running': (bool),
         'is_first_run': bool,
-        'startup_status': {
-            'code': status code,
-            'message': status message
+        'skipped_components': (list) [names of skipped components (str)],
+        'startup_status': { Does not include components which have been skipped
+            'database': (bool),
+            'wallet': (bool),
+            'session': (bool),
+            'dht': (bool),
+            'hash_announcer': (bool),
+            'stream_identifier': (bool),
+            'file_manager': (bool),
+            'blob_manager': (bool),
+            'blockchain_headers': (bool),
+            'peer_protocol_server': (bool),
+            'reflector': (bool),
+            'upnp': (bool),
+            'exchange_rate_manager': (bool),
         },
         'connection_status': {
-            'code': connection status code,
-            'message': connection status message
+            'code': (str) connection status code,
+            'message': (str) connection status message
         },
-        'blockchain_status': {
-            'blocks': local blockchain height,
-            'blocks_behind': remote_height - local_height,
-            'best_blockhash': block hash of most recent block,
+        'blockchain_headers': {
+            'downloading_headers': (bool),
+            'download_progress': (float) 0-100.0
         },
-        'wallet_is_encrypted': bool,
-
-        If given the session status option:
-            'session_status': {
-                'managed_blobs': count of blobs in the blob manager,
-                'managed_streams': count of streams in the file manager
-                'announce_queue_size': number of blobs currently queued to be announced
-                'should_announce_blobs': number of blobs that should be announced
-            }
+        'wallet': {
+            'blocks': (int) local blockchain height,
+            'blocks_behind': (int) remote_height - local_height,
+            'best_blockhash': (str) block hash of most recent block,
+            'is_encrypted': (bool),
+            'is_locked': (bool),
+        },
+        'dht': {
+            'node_id': (str) lbry dht node id - hex encoded,
+            'peers_in_routing_table': (int) the number of peers in the routing table,
+        },
+        'blob_manager': {
+            'finished_blobs': (int) number of finished blobs in the blob manager,
+        },
+        'hash_announcer': {
+            'announce_queue_size': (int) number of blobs currently queued to be announced
+        },
+        'file_manager': {
+            'managed_files': (int) count of files in the file manager,
+        }
     }
 </code></pre>
 
@@ -2452,9 +2475,9 @@ Usage:
 
 
 Options:
-    --amount=&lt;amount&gt;      :  (float)  amount of credit to send
-    --address=&lt;address&gt;    :  (str)    address to send credits to
-    --claim_id=&lt;claim_id&gt;  :  (float)  claim_id of the claim to send to tip to
+    --amount=&lt;amount&gt;      :  (Decimal)  amount of credit to send
+    --address=&lt;address&gt;    :  (str)      address to send credits to
+    --claim_id=&lt;claim_id&gt;  :  (str)      claim_id of the claim to send to tip to
 
 Returns:
     If sending to an address:
