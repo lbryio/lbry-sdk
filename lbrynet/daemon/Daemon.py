@@ -1379,6 +1379,23 @@ class Daemon(AuthJSONRPCServer):
             password, self.get_account_or_default(account_id, lbc_only=False)
         )
 
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_account_lock(self, account_id=None):
+        """
+        Lock an unlocked account
+
+        Usage:
+            account_lock [<account_id> | --account_id=<account_id>]
+
+        Options:
+            --account_id=<account_id>        : (str) id for the account to lock
+
+        Returns:
+            (bool) true if account is locked, otherwise false
+        """
+
+        return self.wallet_manager.lock_account(self.get_account_or_default(account_id, lbc_only=False))
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_account_decrypt(self, account_id=None):
         """
