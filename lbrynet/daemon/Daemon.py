@@ -523,7 +523,8 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(result)
 
     def get_est_cost(self, uri, size=None):
-        """Get a cost estimate for a lbry stream, if size is not provided the
+        """
+		Get a cost estimate for a lbry stream, if size is not provided the
         sd blob will be downloaded to determine the stream size
 
         """
@@ -1720,7 +1721,11 @@ class Daemon(AuthJSONRPCServer):
                         'amount': (float) claim amount,
                         'effective_amount': (float) claim amount including supports,
                         'claim_id': (str) claim id,
-                        'claim_sequence': (int) claim sequence number,
+                        'claim_sequence': (int) 1-based claim sequence number defining the
+                                              order in which the claims were submitted.
+                                              The sequence may not be sequential (there may
+                                              be gaps, and it may not start with 1, but
+                                              will never be lower than 1).
                         'decoded_claim': (bool) whether or not the claim value was decoded,
                         'height': (int) claim height,
                         'depth': (int) claim depth,
@@ -1745,7 +1750,11 @@ class Daemon(AuthJSONRPCServer):
                         'amount': (float) claim amount,
                         'effective_amount': (float) claim amount including supports,
                         'claim_id': (str) claim id,
-                        'claim_sequence': (int) claim sequence number,
+                        'claim_sequence': (int) 1-based claim sequence number defining the
+                                              order in which the claims were submitted.
+                                              The sequence may not be sequential (there may
+                                              be gaps, and it may not start with 1, but
+                                              will never be lower than 1).
                         'decoded_claim': (bool) whether or not the claim value was decoded,
                         'height': (int) claim height,
                         'depth': (int) claim depth,
@@ -1931,7 +1940,7 @@ class Daemon(AuthJSONRPCServer):
                                                      allow the deletion of multiple files.
                                                      Otherwise do not delete anything.
             --sd_hash=<sd_hash>                    : (str) delete by file sd hash
-            --file_name=<file_name>                 : (str) delete by file name in downloads folder
+            --file_name=<file_name>                : (str) delete by file name in downloads folder
             --stream_hash=<stream_hash>            : (str) delete by file stream hash
             --rowid=<rowid>                        : (int) delete by file row id
             --claim_id=<claim_id>                  : (str) delete by file claim id
@@ -2519,16 +2528,21 @@ class Daemon(AuthJSONRPCServer):
                     'amount': (float) amount assigned to the claim
                     'blocks_to_expiration': (int) number of blocks until it expires
                     'category': (str) "claim", "update" , or "support"
+                    'channel_name': (str) name of the channel prefixed with '@'
                     'claim_id': (str) claim ID of the claim
                     'confirmations': (int) number of blocks of confirmations for the claim
+                    'decoded_claim': (bool) whether or not the claim value was decoded
                     'expiration_height': (int) the block height which the claim will expire
                     'expired': (bool) true if expired, false otherwise
+                    'has_signature': (bool) included if decoded_claim
                     'height': (int) height of the block containing the claim
+                    'is_pending': (bool) *** Don't know what this means.  I either get "false" or null for the value. ***,
                     'is_spent': (bool) true if claim is abandoned, false otherwise
                     'name': (str) name of the claim
-                    'permanent_url': (str) permanent url of the claim,
-                    'txid': (str) txid of the claim
                     'nout': (int) nout of the claim
+                    'permanent_url': (str) permanent url of the claim,
+                    'signature_is_valid': (bool) indicates that the signature is valid, but is only included if has_signature is true,
+                    'txid': (str) txid of the claim
                     'value': (str) value of the claim
                 },
            ]
@@ -2588,7 +2602,7 @@ class Daemon(AuthJSONRPCServer):
             --uris=<uris>            : (list) uris of the channel
             --page=<page>            : (int) which page of results to return where page 1 is the first
                                              page, defaults to no pages
-            --page_size=<page_size>  : (int) number of results in a page, default of 10
+            --page_size=<page_size>  : (int) number of results in a page, default of 10, maximum is 500
 
         Returns:
             {
@@ -2609,7 +2623,11 @@ class Daemon(AuthJSONRPCServer):
                             'amount': (float) claim amount,
                             'effective_amount': (float) claim amount including supports,
                             'claim_id': (str) claim id,
-                            'claim_sequence': (int) claim sequence number,
+                            'claim_sequence': (int) 1-based claim sequence number defining the
+                                              order in which the claims were submitted.
+                                              The sequence may not be sequential (there may
+                                              be gaps, and it may not start with 1, but
+                                              will never be lower than 1).
                             'decoded_claim': (bool) whether or not the claim value was decoded,
                             'height': (int) claim height,
                             'depth': (int) claim depth,
