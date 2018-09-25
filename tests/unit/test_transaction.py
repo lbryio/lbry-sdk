@@ -60,7 +60,7 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
         tx = get_transaction()
         with self.assertRaisesRegex(ValueError, "Cannot access net_account_balance"):
             _ = tx.net_account_balance
-        tx.inputs[0].is_my_account = True
+        tx.inputs[0].txo_ref.txo.is_my_account = True
         with self.assertRaisesRegex(ValueError, "Cannot access net_account_balance"):
             _ = tx.net_account_balance
         tx.outputs[0].is_my_account = True
@@ -72,7 +72,7 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
-        tx.inputs[0].is_my_account = True
+        tx.inputs[0].txo_ref.txo.is_my_account = True
         tx.outputs[0].is_my_account = False
         tx.outputs[1].is_my_account = True
         self.assertEqual(tx.net_account_balance, -200*CENT)
@@ -82,7 +82,7 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
-        tx.inputs[0].is_my_account = False
+        tx.inputs[0].txo_ref.txo.is_my_account = False
         tx.outputs[0].is_my_account = True
         tx.outputs[1].is_my_account = False
         self.assertEqual(tx.net_account_balance, 190*CENT)
@@ -92,7 +92,7 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
-        tx.inputs[0].is_my_account = True
+        tx.inputs[0].txo_ref.txo.is_my_account = True
         tx.outputs[0].is_my_account = True
         tx.outputs[1].is_my_account = True
         self.assertEqual(tx.net_account_balance, -10*CENT)  # lost to fee
