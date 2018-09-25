@@ -12,6 +12,7 @@ from .account import generate_certificate
 from .transaction import Transaction
 from .database import WalletDatabase
 
+
 log = logging.getLogger(__name__)
 
 
@@ -54,8 +55,7 @@ class LbryWalletManager(BaseWalletManager):
 
     @property
     def use_encryption(self):
-        # TODO: implement this
-        return False
+        return self.default_account.serialize_encrypted
 
     @property
     def is_first_run(self):
@@ -63,10 +63,35 @@ class LbryWalletManager(BaseWalletManager):
 
     @property
     def is_wallet_unlocked(self):
-        return True
+        return not self.default_account.encrypted
 
     def check_locked(self):
-        return defer.succeed(False)
+        return defer.succeed(self.default_account.encrypted)
+
+    def decrypt_account(self, account):
+        assert account.password is not None, "account is not unlocked"
+        assert not account.encrypted, "account is not unlocked"
+        account.serialize_encrypted = False
+        self.save()
+        return not account.encrypted and not account.serialize_encrypted
+
+    def encrypt_account(self, password, account):
+        assert not account.encrypted, "account is already encrypted"
+        account.encrypt(password)
+        account.serialize_encrypted = True
+        self.save()
+        return account.encrypted and account.serialize_encrypted
+
+    def unlock_account(self, password, account):
+        assert account.encrypted, "account is not locked"
+        account.decrypt(password)
+        return not account.encrypted
+
+    def lock_account(self, account):
+        assert account.password is not None, "account is already locked"
+        assert not account.encrypted and account.serialize_encrypted, "account is not encrypted"
+        account.encrypt(account.password)
+        return account.encrypted
 
     @staticmethod
     def migrate_lbryum_to_torba(path):

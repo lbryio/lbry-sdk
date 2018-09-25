@@ -175,7 +175,7 @@ class DHTHasContacts(RequiredCondition):
         return len(component.contacts) > 0
 
 
-class WalletIsLocked(RequiredCondition):
+class WalletIsUnlocked(RequiredCondition):
     name = WALLET_IS_UNLOCKED
     component = WALLET_COMPONENT
     message = "your wallet is locked"
@@ -1361,64 +1361,60 @@ class Daemon(AuthJSONRPCServer):
         return result
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_account_unlock(self, password):
+    def jsonrpc_account_unlock(self, password, account_id=None):
         """
         Unlock an encrypted account
 
         Usage:
-            account_unlock (<password> | --password=<password>)
+            account_unlock (<password> | --password=<password>) [<account_id> | --account_id=<account_id>]
 
         Options:
-            --password=<password> : (str) password for unlocking wallet
+            --account_id=<account_id>        : (str) id for the account to unlock
 
         Returns:
             (bool) true if account is unlocked, otherwise false
         """
 
-        # the check_locked() in the if statement is needed because that is what sets
-        # the wallet_unlocked_d deferred ¯\_(ツ)_/¯
-        if not self.wallet_manager.check_locked():
-            d = self.wallet_manager.wallet_unlocked_d
-            d.callback(password)
-            result = yield d
-        else:
-            result = True
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        return self.wallet_manager.unlock_account(
+            password, self.get_account_or_default(account_id, lbc_only=False)
+        )
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_account_decrypt(self):
+    def jsonrpc_account_decrypt(self, account_id=None):
         """
         Decrypt an encrypted account, this will remove the wallet password
 
         Usage:
-            account_decrypt
+            account_decrypt [<account_id> | --account_id=<account_id>]
 
         Options:
-            None
+            --account_id=<account_id>  : (str) id for the account to decrypt
 
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        return self.wallet_manager.decrypt_wallet()
+
+        return self.wallet_manager.decrypt_account(self.get_account_or_default(account_id, lbc_only=False))
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_account_encrypt(self, new_password):
+    def jsonrpc_account_encrypt(self, new_password, account_id=None):
         """
-        Encrypt a wallet with a password, if the wallet is already encrypted this will update
-        the password
+        Encrypt an unencrypted account with a password
 
         Usage:
-            wallet_encrypt (<new_password> | --new_password=<new_password>)
+            wallet_encrypt (<new_password> | --new_password=<new_password>) [<account_id> | --account_id=<account_id>]
 
         Options:
-            --new_password=<new_password> : (str) password string to be used for encrypting wallet
+            --account_id=<account_id>        : (str) id for the account to encrypt
 
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        return self.wallet_manager.encrypt_wallet(new_password)
+
+        return self.wallet_manager.encrypt_account(
+            new_password,
+            self.get_account_or_default(account_id, lbc_only=False)
+        )
 
     @requires("wallet")
     def jsonrpc_account_max_address_gap(self, account_id):

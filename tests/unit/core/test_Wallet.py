@@ -247,37 +247,3 @@ class WalletTest(unittest.TestCase):
         self.assertFailure(d, InsufficientFundsError)
         return d
 
-
-class WalletEncryptionTests(unittest.TestCase):
-    skip = "Needs to be ported to the new wallet."
-
-    def setUp(self):
-        user_dir = tempfile.mkdtemp()
-        self.wallet = MocLbryumWallet(user_dir)
-        return self.wallet.setup(password="password")
-
-    def tearDown(self):
-        return self.wallet.stop()
-
-    def test_unlock_wallet(self):
-        self.wallet._cmd_runner = Commands(
-            self.wallet.config, self.wallet.wallet, self.wallet.network, None, "password")
-        cmd_runner = self.wallet.get_cmd_runner()
-        cmd_runner.unlock_wallet("password")
-        self.assertIsNone(cmd_runner.new_password)
-        self.assertEqual(cmd_runner._password, "password")
-
-    def test_encrypt_decrypt_wallet(self):
-        self.wallet._cmd_runner = Commands(
-            self.wallet.config, self.wallet.wallet, self.wallet.network, None, "password")
-        self.wallet.encrypt_wallet("secret2", False)
-        self.wallet.decrypt_wallet()
-
-    def test_update_password_keyring_off(self):
-        self.wallet.config.use_keyring = False
-        self.wallet._cmd_runner = Commands(
-            self.wallet.config, self.wallet.wallet, self.wallet.network, None, "password")
-
-        # no keyring available, so ValueError is expected
-        with self.assertRaises(ValueError):
-            self.wallet.encrypt_wallet("secret2", True)
