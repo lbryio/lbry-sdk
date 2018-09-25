@@ -1676,7 +1676,9 @@ class Daemon(AuthJSONRPCServer):
                 'value': (str) value of claim
                 'height' : (int) height of claim takeover
                 'claim_id': (str) claim ID of claim
-                'supports': (list) list of supports associated with claim
+                'supports': (list) list of supports [{'txid': (str) txid,
+                                                      'nout': (int) nout,
+                                                      'amount': (float) amount}],
             }
 
             if claim cannot be resolved, dictionary as below will be returned
@@ -2567,16 +2569,30 @@ class Daemon(AuthJSONRPCServer):
                 'claims': (list) list of claims for the name
                 [
                     {
-                    'amount': (float) amount assigned to the claim
-                    'effective_amount': (float) total amount assigned to the claim,
-                                        including supports
-                    'claim_id': (str) claim ID of the claim
-                    'height': (int) height of block containing the claim
-                    'txid': (str) txid of the claim
-                    'nout': (int) nout of the claim
-                    'permanent_url': (str) permanent url of the claim,
-                    'supports': (list) a list of supports attached to the claim
-                    'value': (str) the value of the claim
+                        'address': (str) address that owns the claim
+                        'amount': (float) amount assigned to the claim
+                        'claim_id': (str) claim ID of the claim
+                        'claim_sequence': (int) 1-based claim sequence number defining the
+                                          order in which the claims were submitted.
+                                          The sequence may not be sequential (there may
+                                          be gaps, and it may not start with 1, but
+                                          will never be lower than 1).
+                        'decoded_claim': (bool) whether or not the claim value was decoded
+                        'depth': (int) claim depth,
+                        'effective_amount': (float) total amount assigned to the claim,
+                                            including supports
+                        'has_signature': (bool) included if decoded_claim
+                        'height': (int) height of block containing the claim
+                        'hex': (str) raw transaction,
+                        'name': (str) name of the claim
+                        'nout': (int) nout of the claim
+                        'permanent_url': (str) permanent url of the claim,
+                        'supports': (list) list of supports [{'txid': (str) txid,
+                                                              'nout': (int) nout,
+                                                              'amount': (float) amount}],
+                        'txid': (str) txid of the claim
+                        'valid_at_height': (int) the height at which this claim became valid
+                        'value': (dict) the value of the claim
                     },
                 ]
                 'supports_without_claims': (list) supports without any claims attached to them
@@ -2621,7 +2637,7 @@ class Daemon(AuthJSONRPCServer):
                                                          channel
                             'address': (str) claim address,
                             'amount': (float) claim amount,
-                            'effective_amount': (float) claim amount including supports,
+                            'channel_name': (str) name of the channel prefixed with '@'
                             'claim_id': (str) claim id,
                             'claim_sequence': (int) 1-based claim sequence number defining the
                                               order in which the claims were submitted.
@@ -2629,16 +2645,19 @@ class Daemon(AuthJSONRPCServer):
                                               be gaps, and it may not start with 1, but
                                               will never be lower than 1).
                             'decoded_claim': (bool) whether or not the claim value was decoded,
-                            'height': (int) claim height,
                             'depth': (int) claim depth,
+                            'effective_amount': (float) claim amount including supports,
                             'has_signature': (bool) included if decoded_claim
+                            'height': (int) claim height,
                             'name': (str) claim name,
-                            'supports: (list) list of supports [{'txid': (str) txid,
-                                                                 'nout': (int) nout,
-                                                                 'amount': (float) amount}],
-                            'txid': (str) claim txid,
                             'nout': (str) claim nout,
+                            'permanent_url': (str) permanent url of the claim,
                             'signature_is_valid': (bool), included if has_signature,
+                            'supports': (list) list of supports [{'txid': (str) txid,
+                                                                  'nout': (int) nout,
+                                                                  'amount': (float) amount}],
+                            'txid': (str) claim txid,
+                            'valid_at_height': (int) the height at which this claim became valid
                             'value': ClaimDict if decoded, otherwise hex string
                         }
                     ],
