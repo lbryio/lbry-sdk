@@ -36,14 +36,14 @@ class BasicAccountingTests(LedgerTestCase):
 
         tx = Transaction().add_outputs([Output.pay_pubkey_hash(100, hash160)])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, 1, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         balance = yield self.account.get_balance(0)
         self.assertEqual(balance, 100)
 
         tx = Transaction().add_outputs([Output.pay_claim_name_pubkey_hash(100, 'foo', b'', hash160)])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, 1, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         balance = yield self.account.get_balance(0)
         self.assertEqual(balance, 100)  # claim names don't count towards balance
@@ -57,7 +57,7 @@ class BasicAccountingTests(LedgerTestCase):
 
         tx = Transaction().add_outputs([Output.pay_pubkey_hash(100, hash160)])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, 1, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
 
         utxos = yield self.account.get_unspent_outputs()
@@ -65,7 +65,7 @@ class BasicAccountingTests(LedgerTestCase):
 
         tx = Transaction().add_inputs([Input.spend(utxos[0])])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, 1, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         balance = yield self.account.get_balance(0, include_claims=True)
         self.assertEqual(balance, 0)
