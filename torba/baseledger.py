@@ -134,7 +134,7 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     @defer.inlineCallbacks
     def get_transaction(self, txhash):
-        raw, _, _ = yield self.db.get_transaction(txhash)
+        raw, _, _, _ = yield self.db.get_transaction(txhash)
         if raw is not None:
             return self.transaction_class(raw)
 
