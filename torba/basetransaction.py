@@ -306,7 +306,7 @@ class BaseTransaction:
 
     @property
     def input_sum(self):
-        return sum(i.amount for i in self.inputs)
+        return sum(i.amount for i in self.inputs if i.txo_ref.txo is not None)
 
     @property
     def output_sum(self):
@@ -316,6 +316,8 @@ class BaseTransaction:
     def net_account_balance(self) -> int:
         balance = 0
         for txi in self.inputs:
+            if txi.txo_ref.txo is None:
+                continue
             if txi.is_my_account is None:
                 raise ValueError(
                     "Cannot access net_account_balance if inputs/outputs do not "

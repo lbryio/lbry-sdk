@@ -6,7 +6,7 @@ from twisted.internet import defer
 from twisted.enterprise import adbapi
 
 from torba.hash import TXRefImmutable
-from torba.basetransaction import TXORefResolvable
+from torba.basetransaction import BaseTransaction, TXORefResolvable
 
 log = logging.getLogger(__name__)
 
@@ -186,7 +186,7 @@ class BaseDatabase(SQLiteMixin):
             'script': sqlite3.Binary(txo.script.source)
         }
 
-    def save_transaction_io(self, save_tx, tx, is_verified, address, txhash, history):
+    def save_transaction_io(self, save_tx, tx: BaseTransaction, is_verified, address, txhash, history):
 
         def _steps(t):
             if save_tx == 'insert':
@@ -270,7 +270,7 @@ class BaseDatabase(SQLiteMixin):
             return None, None, None, False
 
     @defer.inlineCallbacks
-    def get_transactions(self, account, offset=0, limit=100):
+    def get_transactions(self, account, offset=0, limit=100) -> List[BaseTransaction]:
         account_id = account.public_key.address
         tx_rows = yield self.run_query(
             """
