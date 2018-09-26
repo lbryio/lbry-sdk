@@ -123,3 +123,34 @@ class Transaction(BaseTransaction):
     @classmethod
     def abandon(cls, claims: Iterable[Output], funding_accounts: Iterable[Account], change_account: Account):
         return cls.create([Input.spend(txo) for txo in claims], [], funding_accounts, change_account)
+
+    def _filter_my_outputs(self, f):
+        for txo in self.outputs:
+            if txo.is_my_account and f(txo.script):
+                yield txo
+
+    @property
+    def my_claim_outputs(self):
+        return self._filter_my_outputs(lambda s: s.is_claim_name)
+
+    @property
+    def my_update_outputs(self):
+        return self._filter_my_outputs(lambda s: s.is_update_claim)
+
+    @property
+    def my_support_outputs(self):
+        return self._filter_my_outputs(lambda s: s.is_support_claim)
+
+    @property
+    def my_abandon_outputs(self):
+        for txi in self.inputs:
+            abandon = txi.txo_ref.txo
+            if abandon is not None and abandon.is_my_account and abandon.script.is_claim_involved:
+                is_update = False
+                if abandon.script.is_claim_name or abandon.script.is_update_claim:
+                    for update in self.my_update_outputs:
+                        if abandon.claim_id == update.claim_id:
+                            is_update = True
+                            break
+                if not is_update:
+                    yield abandon

@@ -64,7 +64,7 @@ class WalletDatabase(BaseDatabase):
             SELECT tx.txid, txo.position, txo.claim_id
             FROM txo JOIN tx ON tx.txid=txo.txid
             WHERE {} AND (is_claim OR is_update)
-            GROUP BY txo.claim_id ORDER BY tx.height DESC;
+            GROUP BY txo.claim_id ORDER BY tx.height DESC, tx.position ASC;
             """.format(filter_sql), (filter_value,)
         )
 
@@ -89,23 +89,30 @@ class WalletDatabase(BaseDatabase):
             filter_sql = "claim_id=?"
             filter_value = (claim_id,)
         else:
-            filter_sql = "txo.txid=? AND position=?"
+            filter_sql = "txo.txid=? AND txo.position=?"
             filter_value = (txid, nout)
         utxos = yield self.db.runQuery(
             """
-            SELECT amount, script, txo.txid, position
-            FROM txo JOIN tx ON tx.txid=txo.txid
-            WHERE {} AND (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
-            ORDER BY tx.height DESC LIMIT 1;
+            SELECT amount, script, txo.txid, txo.position, account
+            FROM txo
+                JOIN tx ON tx.txid=txo.txid
+                JOIN pubkey_address ON pubkey_address.address=txo.address
+            WHERE {}
+              AND (is_claim OR is_update)
+              AND txoid NOT IN (SELECT txoid FROM txi)
+            ORDER BY tx.height DESC, tx.position ASC LIMIT 1;
             """.format(filter_sql), filter_value
         )
         output_class = account.ledger.transaction_class.output_class
+        account_id = account.public_key.address
         return [
             output_class(
                 values[0],
                 output_class.script_class(values[1]),
                 TXRefImmutable.from_id(values[2]),
-                position=values[3]
+                position=values[3],
+                is_change=False,
+                is_my_account=values[4] == account_id
             ) for values in utxos
         ]
 
@@ -113,11 +120,15 @@ class WalletDatabase(BaseDatabase):
     def get_claims(self, account):
         utxos = yield self.db.runQuery(
             """
-            SELECT amount, script, txo.txid, position
-            FROM txo JOIN tx ON tx.txid=txo.txid
-            WHERE (is_claim OR is_update) AND txoid NOT IN (SELECT txoid FROM txi)
-            ORDER BY tx.height DESC;
-            """
+            SELECT amount, script, txo.txid, txo.position
+            FROM txo
+                JOIN tx ON tx.txid=txo.txid
+                JOIN pubkey_address ON pubkey_address.address=txo.address
+            WHERE (is_claim OR is_update)
+              AND txoid NOT IN (SELECT txoid FROM txi)
+              AND account = :account
+            ORDER BY tx.height DESC, tx.position ASC;
+            """, {'account': account.public_key.address}
         )
         output_class = account.ledger.transaction_class.output_class
         return [
@@ -125,6 +136,8 @@ class WalletDatabase(BaseDatabase):
                 values[0],
                 output_class.script_class(values[1]),
                 TXRefImmutable.from_id(values[2]),
-                position=values[3]
+                position=values[3],
+                is_change=False,
+                is_my_account=True
             ) for values in utxos
         ]

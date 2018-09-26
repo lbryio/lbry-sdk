@@ -16,6 +16,7 @@ from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
 from torba.constants import COIN
+from torba.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
@@ -46,7 +47,7 @@ from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.wallet.account import Account as LBCAccount
-from torba.baseaccount import SingleKey, HierarchicalDeterministic
+from lbrynet.wallet.manager import LbryWalletManager
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
@@ -226,7 +227,7 @@ class Daemon(AuthJSONRPCServer):
         # TODO: delete these, get the components where needed
         self.storage = None
         self.dht_node = None
-        self.wallet_manager = None
+        self.wallet_manager: LbryWalletManager = None
         self.sd_identifier = None
         self.file_manager = None
         self.exchange_rate_manager = None
