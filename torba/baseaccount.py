@@ -359,7 +359,7 @@ class BaseAccount:
     def get_unspent_outputs(self, **constraints):
         return self.ledger.db.get_utxos_for_account(self, **constraints)
 
-    def get_transactions(self) -> 'List[basetransaction.BaseTransaction]':
+    def get_transactions(self) -> List['basetransaction.BaseTransaction']:
         return self.ledger.db.get_transactions(self)
 
     @defer.inlineCallbacks
