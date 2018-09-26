@@ -1009,7 +1009,7 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_wallet_is_address_mine(self, address):
         pass
 
-    @AuthJSONRPCServer.deprecated("address_public_key")
+    @AuthJSONRPCServer.deprecated()
     def jsonrpc_wallet_public_key(self, address):
         pass
 
@@ -1512,23 +1512,6 @@ class Daemon(AuthJSONRPCServer):
         return self.wallet_manager.address_is_mine(
             address, self.get_account_or_default(account_id)
         )
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_address_public_key(self, address):
-        """
-        Get public key from wallet address
-
-        Usage:
-            wallet_public_key (<address> | --address=<address>)
-
-        Options:
-            --address=<address>  : (str) address for which to get the public key
-
-        Returns:
-            (list) list of public keys associated with address.
-                Could contain more than one public key if multisig.
-        """
-        return self.wallet_manager.get_pub_keys(address)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_list(self, account_id=None):
@@ -2438,48 +2421,9 @@ class Daemon(AuthJSONRPCServer):
         self.analytics_manager.send_claim_action('new_support')
         return result
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
+    @AuthJSONRPCServer.deprecated()
     def jsonrpc_claim_renew(self, outpoint=None, height=None):
-        """
-        Renew claim(s) or support(s)
-
-        Usage:
-            claim_renew (<outpoint> | --outpoint=<outpoint>) | (<height> | --height=<height>)
-
-        Options:
-            --outpoint=<outpoint> : (str) outpoint of the claim to renew
-            --height=<height> : (str) update claims expiring before or at this block height
-
-        Returns:
-            (dict) Dictionary where key is the the original claim's outpoint and
-            value is the result of the renewal
-            {
-                outpoint:{
-
-                    'tx' : (str) hex encoded transaction
-                    'txid' : (str) txid of resulting claim
-                    'nout' : (int) nout of the resulting claim
-                    'fee' : (float) fee paid for the claim transaction
-                    'claim_id' : (str) claim ID of the resulting claim
-                },
-            }
-        """
-
-        if outpoint is None and height is None:
-            raise Exception("must provide an outpoint or a height")
-        elif outpoint is not None:
-            if len(outpoint.split(":")) == 2:
-                txid, nout = outpoint.split(":")
-                nout = int(nout)
-            else:
-                raise Exception("invalid outpoint")
-            result = yield self.wallet_manager.claim_renew(txid, nout)
-            result = {outpoint: result}
-        else:
-            height = int(height)
-            result = yield self.wallet_manager.claim_renew_all_before_expiration(height)
-        return result
+        pass
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
