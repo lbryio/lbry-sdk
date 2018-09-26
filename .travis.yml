@@ -67,7 +67,7 @@ jobs:
         artifacts:
           working_dir: dist
           paths:
-            - lbrynet-${TRAVIS_TAG}-${OS}.zip
+            - lbrynet-${TRAVIS_TAG:-${TRAVIS_COMMIT:0:7}}-${OS}.zip
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win/
 
@@ -89,7 +89,7 @@ jobs:
         artifacts:
           working_dir: dist
           paths:
-            - lbrynet-${TRAVIS_TAG}-${OS}.zip
+            - lbrynet-${TRAVIS_TAG:-${TRAVIS_COMMIT:0:7}}-${OS}.zip
           # artifact uploader thinks lbrynet is a directory, https://github.com/travis-ci/artifacts/issues/78
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/${OS}/lbrynet
