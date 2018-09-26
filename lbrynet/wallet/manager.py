@@ -7,6 +7,7 @@ from typing import List
 from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
+from torba.constants import COIN
 
 from lbryschema.claim import ClaimDict
 
@@ -244,30 +245,30 @@ class LbryWalletManager(BaseWalletManager):
             history.append({
                 'txid': tx.id,
                 'timestamp': ts,
-                'value': tx.net_account_balance,
-                'fee': tx.fee,
+                'value': tx.net_account_balance/COIN,
+                'fee': tx.fee/COIN,
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3],
                 'confirmations': headers.height - tx.height,
                 'claim_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount,
-                    'amount': txo.amount,
+                    'balance_delta': -txo.amount/COIN,
+                    'amount': txo.amount/COIN,
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_claim_outputs],
                 'update_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount,
-                    'amount': txo.amount,
+                    'balance_delta': -txo.amount/COIN,
+                    'amount': txo.amount/COIN,
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_update_outputs],
                 'support_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount,
-                    'amount': txo.amount,
+                    'balance_delta': -txo.amount/COIN,
+                    'amount': txo.amount/COIN,
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'is_tip': False,  # TODO: need to add lookup
@@ -275,8 +276,8 @@ class LbryWalletManager(BaseWalletManager):
                 } for txo in tx.my_support_outputs],
                 'abandon_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': txo.amount,
-                    'amount': txo.amount,
+                    'balance_delta': txo.amount/COIN,
+                    'amount': txo.amount/COIN,
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
