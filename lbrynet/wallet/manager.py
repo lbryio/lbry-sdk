@@ -1,6 +1,9 @@
 import os
 import json
 import logging
+from datetime import datetime
+from typing import List
+
 from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
@@ -8,7 +11,7 @@ from torba.basemanager import BaseWalletManager
 from lbryschema.claim import ClaimDict
 
 from .ledger import MainNetLedger
-from .account import generate_certificate
+from .account import BaseAccount, generate_certificate
 from .transaction import Transaction
 from .database import WalletDatabase
 
@@ -227,13 +230,62 @@ class LbryWalletManager(BaseWalletManager):
                 return True
         return False
 
-    def get_transaction(self, txid):
+    def get_transaction(self, txid: str):
         return self.default_account.ledger.get_transaction(txid)
 
-    def get_history(self, account):
-        return account.get_transactions()
+    @staticmethod
+    @defer.inlineCallbacks
+    def get_history(account: BaseAccount):
+        headers = account.ledger.headers
+        txs: List[Transaction] = (yield account.get_transactions())
+        history = []
+        for tx in txs:
+            ts = headers[tx.height]['timestamp']
+            history.append({
+                'txid': tx.id,
+                'timestamp': ts,
+                'value': tx.net_account_balance,
+                'fee': tx.fee,
+                'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3],
+                'confirmations': headers.height - tx.height,
+                'claim_info': [{
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': -txo.amount,
+                    'amount': txo.amount,
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                } for txo in tx.my_claim_outputs],
+                'update_info': [{
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': -txo.amount,
+                    'amount': txo.amount,
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                } for txo in tx.my_update_outputs],
+                'support_info': [{
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': -txo.amount,
+                    'amount': txo.amount,
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'is_tip': False,  # TODO: need to add lookup
+                    'nout': txo.position
+                } for txo in tx.my_support_outputs],
+                'abandon_info': [{
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': txo.amount,
+                    'amount': txo.amount,
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                } for txo in tx.my_abandon_outputs],
+            })
+        return history
 
-    def get_utxos(self, account):
+    @staticmethod
+    def get_utxos(account: BaseAccount):
         return account.get_unspent_outputs()
 
     @defer.inlineCallbacks
