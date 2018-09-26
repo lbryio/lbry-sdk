@@ -62,11 +62,12 @@ jobs:
         - docker pull cdrx/pyinstaller-windows:python3-32bit
       script:
         - docker run -v "$(pwd):/src/lbry" cdrx/pyinstaller-windows:python3-32bit lbry/scripts/wine_build.sh
+        - zip dist/lbrynet-${TRAVIS_TAG}-${OS}.zip dist/lbrynet.exe
       addons:
         artifacts:
           working_dir: dist
           paths:
-            - lbrynet.exe
+            - lbrynet-${TRAVIS_TAG}-${OS}.zip
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win/
 
@@ -80,13 +81,15 @@ jobs:
         - pip3 install -e .
       script:
         - pyinstaller -F -n lbrynet lbrynet/cli.py
+        - chmod +x dist/lbrynet
+        - zip dist/lbrynet-${TRAVIS_TAG}-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
       env: OS=linux
       addons:
         artifacts:
           working_dir: dist
           paths:
-            - lbrynet
+            - lbrynet-${TRAVIS_TAG}-${OS}.zip
           # artifact uploader thinks lbrynet is a directory, https://github.com/travis-ci/artifacts/issues/78
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/${OS}/lbrynet
