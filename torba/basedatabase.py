@@ -270,7 +270,7 @@ class BaseDatabase(SQLiteMixin):
             return None, None, None, False
 
     @defer.inlineCallbacks
-    def get_transactions(self, account, offset=0, limit=100) -> List[BaseTransaction]:
+    def get_transactions(self, account, offset=0, limit=100):
         account_id = account.public_key.address
         tx_rows = yield self.run_query(
             """

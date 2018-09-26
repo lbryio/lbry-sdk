@@ -1,5 +1,5 @@
 import typing
-from typing import Dict, Tuple, Type, Optional, Any
+from typing import List, Dict, Tuple, Type, Optional, Any
 from twisted.internet import defer
 
 from torba.mnemonic import Mnemonic
@@ -10,6 +10,7 @@ from torba.constants import COIN
 if typing.TYPE_CHECKING:
     from torba import baseledger
     from torba import wallet as basewallet
+    from torba import basetransaction
 
 
 class AddressManager:
@@ -358,7 +359,7 @@ class BaseAccount:
     def get_unspent_outputs(self, **constraints):
         return self.ledger.db.get_utxos_for_account(self, **constraints)
 
-    def get_transactions(self):
+    def get_transactions(self) -> 'List[basetransaction.BaseTransaction]':
         return self.ledger.db.get_transactions(self)
 
     @defer.inlineCallbacks
