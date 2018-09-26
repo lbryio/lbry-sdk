@@ -215,8 +215,8 @@ class Daemon(AuthJSONRPCServer):
                                              Checker.INTERNET_CONNECTION[1])
         }
         AuthJSONRPCServer.__init__(self, analytics_manager=analytics_manager, component_manager=component_manager,
-                                   use_authentication=conf.settings['use_auth_http'], to_skip=to_skip,
-                                   looping_calls=looping_calls)
+                                   use_authentication=conf.settings['use_auth_http'],
+                                   use_https=conf.settings['use_https'], to_skip=to_skip, looping_calls=looping_calls)
         self.is_first_run = is_first_run()
 
         # TODO: move this to a component

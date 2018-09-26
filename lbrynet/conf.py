@@ -278,6 +278,7 @@ ADJUSTABLE_SETTINGS = {
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
     'peer_search_timeout': (int, 60),
     'use_auth_http': (bool, False),
+    'use_https': (bool, False),
     'use_upnp': (bool, True),
     'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
@@ -573,11 +574,14 @@ class Config:
         """
         return os.path.join(self.ensure_data_dir(), self['LOG_FILE_NAME'])
 
-    def get_api_connection_string(self):
-        return 'http://%s:%i/%s' % (self['api_host'], self['api_port'], self['API_ADDRESS'])
-
-    def get_ui_address(self):
-        return 'http://%s:%i' % (self['api_host'], self['api_port'])
+    def get_api_connection_string(self, user: str = None, password: str = None) -> str:
+        return 'http%s://%s%s:%i/%s' % (
+            "" if not self['use_https'] else "s",
+            "" if not (user and password) else "%s:%s@" % (user, password),
+            self['api_host'],
+            self['api_port'],
+            self['API_ADDRESS']
+        )
 
     def get_db_revision_filename(self):
         return os.path.join(self.ensure_data_dir(), self['DB_REVISION_FILE_NAME'])
