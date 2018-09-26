@@ -24,9 +24,10 @@ implementation are the major changes in this release.
   * deprecated `wallet_prefill_addresses` command, use `account_fund` instead.
   * deprecated `wallet_list` command, use `address_list` instead.
   * deprecated `wallet_is_address_mine` command, use `address_is_mine` instead.
-  * deprecated `wallet_public_key` command, use `address_public_key` instead.
+  * deprecated `wallet_public_key` command.
   * deprecated `wallet_new_address` command, use `address_generate` instead.
   * deprecated `wallet_unused_address` command, use `address_unused` instead.
+  * deprecated `claim_renew` command.
   * added `account_list` command to list accounts including their balance.
   * added `account_add` command to add a previously created account from seed or private key.
   * added `account_create` command to generate a new account.
