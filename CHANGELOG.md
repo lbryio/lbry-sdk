@@ -16,6 +16,7 @@ implementation are the major changes in this release.
 
 ### API
   * unified all command line executables into a single `lbrynet` executable.
+  * added `use_https` configuration setting (off by default), if true the api server will generate a self signed ssl certificate when started and only handle api requests on the https address (default of `https://localhost:5279/lbryapi`)
   * deprecated `daemon_stop` command, use `stop` instead.
   * deprecated `wallet_balance` command, use `account_balance` instead.
   * deprecated `wallet_unlock` command, use `account_unlock` instead.
@@ -34,7 +35,8 @@ implementation are the major changes in this release.
   * added `account_remove` command to remove an account from wallet.
   * added `account_set` command to change a setting on an account.
   * added `account_balance` command to get just the account balance.
-  * added `account_unlock` command to unlock an account.
+  * added `account_unlock` command to unlock an encrypted account.
+  * added `account_lock` command to lock an encrypted account.
   * added `account_encrypt` command to encrypt an account.
   * added `account_decrypt` command to decrypt an account.
   * added `account_fund` command to move funds between or within an account in various ways.
