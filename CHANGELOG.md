@@ -11,6 +11,7 @@ at anytime.
 Python 3 upgrade of the entire code base and switching to a brand new wallet
 implementation are the major changes in this release.
 
+
 ### Security
   * upgraded `cryptography` package.
 
@@ -57,17 +58,21 @@ implementation are the major changes in this release.
   * changed channel certificates to be keyed by txid:nout instead of claim_id which
     makes it possible to recover old certificates.
 
+### File Manager
+  * Extensive internal changes as a result of porting to Python 3.
+
 ### DHT
   * Extensive internal changes as a result of porting to Python 3.
 
-### P2P & File Manager
+### P2P
   * Extensive internal changes as a result of porting to Python 3.
+
+### Reflector
+  *
 
 ### Database
   * 
 
-### Reflector
-  *
 
 ## [0.21.2] - 2018-08-23
 ### Fixed
