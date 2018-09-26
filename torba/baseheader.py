@@ -107,7 +107,7 @@ class BaseHeaders:
                     yield threads.deferToThread(self.validate_chunk, height, chunk)
                 except InvalidHeader as e:
                     bail = True
-                    chunk = chunk[:(height-e.height)*self.header_size]
+                    chunk = chunk[:(height-e.height+1)*self.header_size]
                 written = 0
                 if chunk:
                     self.io.seek(height * self.header_size, os.SEEK_SET)
