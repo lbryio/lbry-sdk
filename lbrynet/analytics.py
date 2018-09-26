@@ -51,7 +51,7 @@ class Manager:
     def send_new_download_fail(self, download_id, name, claim_dict, e):
         self._send_new_download_stats("failure", download_id, name, claim_dict, {
             'name': type(e).__name__ if hasattr(type(e), "__name__") else str(type(e)),
-            'message': e.message,
+            'message': str(e),
         })
 
     def _send_new_download_stats(self, action, download_id, name, claim_dict, e=None):
@@ -61,7 +61,7 @@ class Manager:
             'properties': self._event_properties({
                 'download_id': download_id,
                 'name': name,
-                'sd_hash': None if not claim_dict else claim_dict.source_hash,
+                'sd_hash': None if not claim_dict else claim_dict.source_hash.decode(),
                 'action': action,
                 'error': e,
             }),
