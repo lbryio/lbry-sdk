@@ -181,7 +181,7 @@ class LbryWalletManager(BaseWalletManager):
         return manager
 
     def get_best_blockhash(self):
-        return defer.succeed('')
+        return self.ledger.headers.hash(self.ledger.headers.height).decode()
 
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()
