@@ -89,3 +89,8 @@ class BasicTransactionTest(IntegrationTestCase):
 
         response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertNotIn('claim', response['lbry://@bar/foo'])
+
+        # checks for expected format in inexistent URIs
+        response = await d2f(self.ledger.resolve(0, 10, 'lbry://404', 'lbry://@404'))
+        self.assertEqual('URI lbry://404 cannot be resolved', response['lbry://404']['error'])
+        self.assertEqual('URI lbry://@404 cannot be resolved', response['lbry://@404']['error'])

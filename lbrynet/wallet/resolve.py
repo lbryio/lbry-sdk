@@ -36,7 +36,9 @@ class Resolver:
                         (yield self._handle_resolve_uri_response(uri, resolution, page, page_size))
                     )
                 except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
-                    results[uri] = {'error': err.message}
+                    results[uri] = {'error': str(err)}
+            else:
+                results[uri] = {'error': "URI lbry://{} cannot be resolved".format(uri.replace("lbry://", ""))}
         defer.returnValue(results)
 
     @defer.inlineCallbacks
