@@ -184,6 +184,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         def _update_contact(result):  # refresh the contact in the routing table
             contact.update_last_replied()
             if method == b'findValue':
+                if b'token' in result:
+                    contact.update_token(result[b'token'])
                 if b'protocolVersion' not in result:
                     contact.update_protocol_version(0)
                 else:

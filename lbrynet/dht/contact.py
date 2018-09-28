@@ -40,7 +40,7 @@ class _Contact:
         self._token = (None, 0)  # token, timestamp
 
     def update_token(self, token):
-        self._token = token, self.getTime()
+        self._token = token, self.getTime() if token else 0
 
     @property
     def token(self):

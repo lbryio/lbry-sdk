@@ -299,25 +299,24 @@ class Node(MockKademliaHelper):
     @defer.inlineCallbacks
     def storeToContact(self, blob_hash, contact):
         try:
-            token = contact.token
-            if not token:
-                find_value_response = yield contact.findValue(blob_hash)
-                token = find_value_response[b'token']
-                contact.update_token(token)
-            res = yield contact.store(blob_hash, token, self.peerPort, self.node_id, 0)
+            if not contact.token:
+                yield contact.findValue(blob_hash)
+            res = yield contact.store(blob_hash, contact.token, self.peerPort, self.node_id, 0)
             if res != b"OK":
                 raise ValueError(res)
-            defer.returnValue(True)
             log.debug("Stored %s to %s (%s)", binascii.hexlify(blob_hash), contact.log_id(), contact.address)
+            return True
         except protocol.TimeoutError:
             log.debug("Timeout while storing blob_hash %s at %s",
                       binascii.hexlify(blob_hash), contact.log_id())
         except ValueError as err:
             log.error("Unexpected response: %s" % err)
         except Exception as err:
+            if 'Invalid token' in str(err):
+                contact.update_token(None)
             log.error("Unexpected error while storing blob_hash %s at %s: %s",
                       binascii.hexlify(blob_hash), contact, err)
-        defer.returnValue(False)
+        return False
 
     @defer.inlineCallbacks
     def announceHaveBlob(self, blob_hash):
