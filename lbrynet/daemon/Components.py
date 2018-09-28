@@ -290,6 +290,7 @@ class HeadersComponent(Component):
 
     @defer.inlineCallbacks
     def start(self):
+        conf.settings.ensure_wallet_dir()
         if not os.path.exists(self.headers_dir):
             os.mkdir(self.headers_dir)
         if os.path.exists(self.old_file):
@@ -336,6 +337,7 @@ class WalletComponent(Component):
 
     @defer.inlineCallbacks
     def start(self):
+        conf.settings.ensure_wallet_dir()
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']

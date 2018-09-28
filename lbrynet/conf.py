@@ -567,6 +567,10 @@ class Config:
             os.makedirs(self['data_dir'])
         return self['data_dir']
 
+    def ensure_wallet_dir(self):
+        if not os.path.isdir(self['lbryum_wallet_dir']):
+            os.makedirs(self['lbryum_wallet_dir'])
+
     def get_log_filename(self):
         """
         Return the log file for this platform.
