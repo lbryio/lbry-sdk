@@ -14,6 +14,31 @@ class TestStoreExpiration(TestKademliaBase):
     network_size = 40
 
     @defer.inlineCallbacks
+    def test_nullify_token(self):
+        blob_hash = generate_id(1)
+        announcing_node = self.nodes[20]
+        # announce the blob
+        announce_d = announcing_node.announceHaveBlob(blob_hash)
+        self.pump_clock(5+1)
+        storing_node_ids = yield announce_d
+        self.assertEqual(len(storing_node_ids), 8)
+
+        for node in set(self.nodes).union(set(self._seeds)):
+            # now, everyone has the wrong token
+            node.change_token()
+            node.change_token()
+
+        announce_d = announcing_node.announceHaveBlob(blob_hash)
+        self.pump_clock(5+1)
+        storing_node_ids = yield announce_d
+        self.assertEqual(len(storing_node_ids), 0)  # cant store, wrong tokens, but they get nullified
+
+        announce_d = announcing_node.announceHaveBlob(blob_hash)
+        self.pump_clock(5+1)
+        storing_node_ids = yield announce_d
+        self.assertEqual(len(storing_node_ids), 8)  # next attempt succeeds as it refreshes tokens
+
+    @defer.inlineCallbacks
     def test_store_and_expire(self):
         blob_hash = generate_id(1)
         announcing_node = self.nodes[20]
