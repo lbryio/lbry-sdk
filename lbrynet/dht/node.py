@@ -220,7 +220,7 @@ class Node(MockKademliaHelper):
             if not bootstrap_contacts:
                 log.warning("no bootstrap contacts to ping")
             ping_result = yield _ping_contacts(bootstrap_contacts)
-            shortlist = ping_result.keys()
+            shortlist = list(ping_result.keys())
             if not shortlist:
                 log.warning("failed to ping %i bootstrap contacts", len(bootstrap_contacts))
                 defer.returnValue(None)
