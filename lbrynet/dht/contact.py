@@ -67,7 +67,7 @@ class _Contact:
 
     @property
     def lastFailed(self):
-        return self._contactManager._rpc_failures.get((self.address, self.port), [None])[-1]
+        return (self.failures or [None])[-1]
 
     @property
     def failures(self):

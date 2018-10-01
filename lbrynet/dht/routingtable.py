@@ -48,6 +48,7 @@ class TreeRoutingTable:
             from twisted.internet import reactor
             getTime = reactor.seconds
         self._getTime = getTime
+        self._ongoing_replacements = set()
 
     def get_contacts(self):
         contacts = []
@@ -134,8 +135,14 @@ class TreeRoutingTable:
                     to_replace = not_good_contacts[0]
                 else:
                     to_replace = self._buckets[bucketIndex]._contacts[0]
-                df = to_replace.ping()
-                df.addErrback(replaceContact, to_replace)
+                if to_replace not in self._ongoing_replacements:
+                    log.debug("pinging %s:%s", to_replace.address, to_replace.port)
+                    self._ongoing_replacements.add(to_replace)
+                    df = to_replace.ping()
+                    df.addErrback(replaceContact, to_replace)
+                    df.addBoth(lambda _: self._ongoing_replacements.remove(to_replace))
+                else:
+                    df = defer.succeed(None)
                 return df
         else:
             self.touchKBucketByIndex(bucketIndex)
