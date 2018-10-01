@@ -644,10 +644,10 @@ class Node(MockKademliaHelper):
         defer.returnValue(None)
 
     def _refreshContacts(self):
-        self._protocol._ping_queue.enqueue_maybe_ping(*self.contacts)
+        self._protocol._ping_queue.enqueue_maybe_ping(*self.contacts, delay=0)
 
     def _refreshStoringPeers(self):
-        self._protocol._ping_queue.enqueue_maybe_ping(*self._dataStore.getStoringContacts())
+        self._protocol._ping_queue.enqueue_maybe_ping(*self._dataStore.getStoringContacts(), delay=0)
 
     @defer.inlineCallbacks
     def _refreshRoutingTable(self):
