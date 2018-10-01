@@ -269,3 +269,17 @@ class KademliaProtocolTest(unittest.TestCase):
         self.assertTrue(self.node._dataStore.hasPeersForBlob(fake_blob))
         self.assertEqual(len(self.node._dataStore.getStoringContacts()), 1)
         self.assertIs(self.node._dataStore.getStoringContacts()[0], self.remote_contact)
+
+    @defer.inlineCallbacks
+    def test_find_node(self):
+        self.node.addContact(self.node.contact_manager.make_contact(
+            self.remote_contact.id, self.remote_contact.address, self.remote_contact.port, self.node._protocol)
+        )
+        result = self.node.findContact(b'0'*48)
+        for _ in range(6):
+            self._reactor.advance(1)
+        self.assertEqual((yield result), None)
+        result = self.node.findContact(self.remote_contact.id)
+        for _ in range(6):
+            self._reactor.advance(1)
+        self.assertEqual((yield result).id, self.remote_contact.id)

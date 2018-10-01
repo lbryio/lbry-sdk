@@ -451,20 +451,10 @@ class Node(MockKademliaHelper):
         @rtype: twisted.internet.defer.Deferred
         """
         try:
-            contact = self._routingTable.getContact(contactID)
-            df = defer.Deferred()
-            df.callback(contact)
+            df = defer.succeed(self._routingTable.getContact(contactID))
         except (ValueError, IndexError):
-            def parseResults(nodes):
-                node_ids = [c.id for c in nodes]
-                if contactID in nodes:
-                    contact = nodes[node_ids.index(contactID)]
-                    return contact
-                else:
-                    return None
-
             df = self.iterativeFindNode(contactID)
-            df.addCallback(parseResults)
+            df.addCallback(lambda nodes: ([node for node in nodes if node.id == contactID] or (None,))[0])
         return df
 
     @rpcmethod
