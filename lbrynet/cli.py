@@ -4,12 +4,13 @@ if 'twisted.internet.reactor' not in sys.modules:
     asyncioreactor.install()
 else:
     from twisted.internet import reactor
-    if not isinstance(reactor, asyncioreactor.AsyncioSelectorReactor):
+    if not isinstance(reactor, asyncioreactor.AsyncioSelectorReactor) and getattr(sys, 'frozen', False):
         # pyinstaller hooks install the default reactor before
         # any of our code runs, see kivy for similar problem:
         #    https://github.com/kivy/kivy/issues/4182
         del sys.modules['twisted.internet.reactor']
         asyncioreactor.install()
+        from twisted.internet import reactor
 
 import json
 import asyncio

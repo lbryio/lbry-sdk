@@ -2,9 +2,7 @@
 
 LBRY is an open-source protocol providing distribution, discovery, and purchase of digital content (data) via a decentralized network. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, and rights and access rules. LBRY also provides a data network that consists of peers uploading and downloading data from other peers, possibly in exchange for payments, and a distributed hash table, used by peers to discover other peers.
 
-This project aims to provide a daemon that can interact with the network via a json-rpc interface over HTTP.
-
-The project is written in Python 3.7+ and extensively uses Twisted framework.
+This project provides an SDK for building applications using the LBRY protocol. The SDK is written in Python 3.7+ using Twisted. For other languages or platforms, a JSONRPC API is provided.
 
 ## Installation
 
@@ -12,13 +10,13 @@ Our [releases page](https://github.com/lbryio/lbry/releases) contains pre-built 
 
 ## Usage
 
-Run `lbrynet start` to launch the daemon.
+Run `lbrynet start` to launch the API server.
 
 By default, `lbrynet` will provide a JSON-RPC server at `http://localhost:5279`. It is easy to interact with via cURL or sane programming languages.
 
 Our [quickstart guide](http://lbry.io/quickstart) provides a simple walkthrough and examples for learning.
 
-The full API is documented [here](https://lbryio.github.io/lbry/cli).
+The full API is documented [here](https://lbry.tech/api/sdk).
 
 ## Running from source
 
@@ -42,4 +40,4 @@ The primary contact for this project is [@jackrobison](mailto:jack@lbry.io)
 
 ## Additional information and links
 
-The documentation for the api can be found [here](https://lbry.io/api).
+The documentation for the api can be found [here](https://lbry.tech/api/sdk).

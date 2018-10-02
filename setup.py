@@ -22,6 +22,7 @@ setup(
         'console_scripts': 'lbrynet=lbrynet.cli:main'
     },
     install_requires=[
+        'asyncio',
         'aiohttp',
         'twisted[tls]==18.7.0',
         'appdirs',
