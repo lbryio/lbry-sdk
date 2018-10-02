@@ -20,9 +20,8 @@ Install [xcode command line tools](https://developer.xamarin.com/guides/testclou
 Remaining dependencies can then be installed by running:
 
 ```
-brew install mpfr libmpc protobuf
-sudo easy_install pip
-sudo pip install virtualenv
+brew install python3 protobuf
+python3 -m pip install virtualenv
 ```
 
 ### Linux Prerequisites
