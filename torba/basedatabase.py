@@ -11,12 +11,16 @@ from torba.basetransaction import BaseTransaction, TXORefResolvable
 log = logging.getLogger(__name__)
 
 
+def clean_arg_name(arg):
+    return arg.replace('.', '_')
+
+
 def constraints_to_sql(constraints, joiner=' AND ', prepend_sql=' AND ', prepend_key=''):
     if not constraints:
         return ''
     extras = []
     for key in list(constraints):
-        col, op = key, '='
+        col, op, constraint = key, '=', constraints.pop(key)
         if key.endswith('__not'):
             col, op = key[:-len('__not')], '!='
         elif key.endswith('__lt'):
@@ -32,24 +36,27 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_sql=' AND ', prepend
                 col, op = key[:-len('__in')], 'IN'
             else:
                 col, op = key[:-len('__not_in')], 'NOT IN'
-            items = constraints.pop(key)
-            if isinstance(items, list):
+            if isinstance(constraint, list):
                 placeholders = []
-                for item_no, item in enumerate(items, 1):
-                    constraints['{}_{}'.format(col, item_no)] = item
-                    placeholders.append(':{}_{}'.format(col, item_no))
+                for item_no, item in enumerate(constraint, 1):
+                    constraints['{}_{}'.format(clean_arg_name(col), item_no)] = item
+                    placeholders.append(':{}_{}'.format(clean_arg_name(col), item_no))
                 items = ', '.join(placeholders)
+            elif isinstance(constraint, str):
+                items = constraint
+            else:
+                raise ValueError("{} requires a list or string as constraint value.".format(key))
             extras.append('{} {} ({})'.format(col, op, items))
             continue
         elif key.endswith('__any'):
-            subconstraints = constraints.pop(key)
             extras.append('({})'.format(
-                constraints_to_sql(subconstraints, ' OR ', '', key+'_')
+                constraints_to_sql(constraint, ' OR ', '', key+'_')
             ))
-            for subkey, val in subconstraints.items():
-                constraints['{}_{}'.format(key, subkey)] = val
+            for subkey, val in constraint.items():
+                constraints['{}_{}'.format(clean_arg_name(key), clean_arg_name(subkey))] = val
             continue
-        extras.append('{} {} :{}'.format(col, op, prepend_key+key))
+        constraints[clean_arg_name(key)] = constraint
+        extras.append('{} {} :{}'.format(col, op, prepend_key+clean_arg_name(key)))
     return prepend_sql + joiner.join(extras) if extras else ''
 
 

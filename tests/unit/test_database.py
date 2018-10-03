@@ -11,52 +11,65 @@ from .test_transaction import get_output, NULL_HASH
 
 class TestConstraintBuilder(unittest.TestCase):
 
+    def test_dot(self):
+        constraints = {'txo.position': 18}
+        self.assertEqual(
+            constraints_to_sql(constraints, prepend_sql=''),
+            'txo.position = :txo_position'
+        )
+        self.assertEqual(constraints, {'txo_position': 18})
+
     def test_any(self):
         constraints = {
             'ages__any': {
-                'age__gt': 18,
-                'age__lt': 38
+                'txo.age__gt': 18,
+                'txo.age__lt': 38
             }
         }
         self.assertEqual(
             constraints_to_sql(constraints, prepend_sql=''),
-            '(age > :ages__any_age__gt OR age < :ages__any_age__lt)'
+            '(txo.age > :ages__any_txo_age__gt OR txo.age < :ages__any_txo_age__lt)'
         )
         self.assertEqual(
             constraints, {
-                'ages__any_age__gt': 18,
-                'ages__any_age__lt': 38
+                'ages__any_txo_age__gt': 18,
+                'ages__any_txo_age__lt': 38
             }
         )
 
     def test_in_list(self):
-        constraints = {'ages__in': [18, 38]}
+        constraints = {'txo.age__in': [18, 38]}
         self.assertEqual(
             constraints_to_sql(constraints, prepend_sql=''),
-            'ages IN (:ages_1, :ages_2)'
+            'txo.age IN (:txo_age_1, :txo_age_2)'
         )
         self.assertEqual(
             constraints, {
-                'ages_1': 18,
-                'ages_2': 38
+                'txo_age_1': 18,
+                'txo_age_2': 38
             }
         )
 
     def test_in_query(self):
-        constraints = {'ages__in': 'SELECT age from ages_table'}
+        constraints = {'txo.age__in': 'SELECT age from ages_table'}
         self.assertEqual(
             constraints_to_sql(constraints, prepend_sql=''),
-            'ages IN (SELECT age from ages_table)'
+            'txo.age IN (SELECT age from ages_table)'
         )
         self.assertEqual(constraints, {})
 
     def test_not_in_query(self):
-        constraints = {'ages__not_in': 'SELECT age from ages_table'}
+        constraints = {'txo.age__not_in': 'SELECT age from ages_table'}
         self.assertEqual(
             constraints_to_sql(constraints, prepend_sql=''),
-            'ages NOT IN (SELECT age from ages_table)'
+            'txo.age NOT IN (SELECT age from ages_table)'
         )
         self.assertEqual(constraints, {})
+
+    def test_in_invalid(self):
+        constraints = {'ages__in': 9}
+        with self.assertRaisesRegex(ValueError, 'list or string'):
+            constraints_to_sql(constraints, prepend_sql='')
 
 
 class TestQueries(unittest.TestCase):
