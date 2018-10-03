@@ -5,6 +5,7 @@ from lbryschema.claim import ClaimDict
 from torba.constants import COIN
 from lbrynet.wallet.transaction import Transaction
 from lbrynet.wallet.account import generate_certificate
+from lbrynet.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
 
 import lbryschema
 lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
@@ -54,13 +55,13 @@ class BasicTransactionTest(IntegrationTestCase):
             self.on_transaction_id(sendtxid2),
         ])
 
-        self.assertEqual(round(await d2f(self.account.get_balance(0))/COIN, 1), 10.0)
+        self.assertEqual(d2l(await d2f(self.account.get_balance(0))), '10.0')
 
         cert, key = generate_certificate()
-        cert_tx = await d2f(Transaction.claim('@bar', cert, 1*COIN, address1, [self.account], self.account))
+        cert_tx = await d2f(Transaction.claim('@bar', cert, l2d('1.0'), address1, [self.account], self.account))
         claim = ClaimDict.load_dict(example_claim_dict)
         claim = claim.sign(key, address1, cert_tx.outputs[0].claim_id)
-        claim_tx = await d2f(Transaction.claim('foo', claim, 1*COIN, address1, [self.account], self.account))
+        claim_tx = await d2f(Transaction.claim('foo', claim, l2d('1.0'), address1, [self.account], self.account))
 
         await self.broadcast(cert_tx)
         await self.broadcast(claim_tx)
@@ -74,8 +75,8 @@ class BasicTransactionTest(IntegrationTestCase):
             self.on_transaction_id(cert_tx.id),
         ])
 
-        self.assertEqual(round(await d2f(self.account.get_balance(0))/COIN, 1), 8.0)
-        self.assertEqual(round(await d2f(self.account.get_balance(0, True))/COIN, 1), 10.0)
+        self.assertEqual(d2l(await d2f(self.account.get_balance(0))), '7.985786')
+        self.assertEqual(d2l(await d2f(self.account.get_balance(0, include_claims=True))), '9.985786')
 
         response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertIn('lbry://@bar/foo', response)
