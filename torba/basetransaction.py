@@ -141,7 +141,7 @@ class BaseInput(InputOutput):
     def is_my_account(self) -> Optional[bool]:
         """ True if the output this input spends is yours. """
         if self.txo_ref.txo is None:
-            raise ValueError('Cannot resolve output to determine ownership.')
+            return False
         return self.txo_ref.txo.is_my_account
 
     @classmethod
@@ -237,7 +237,7 @@ class BaseTransaction:
     input_class = BaseInput
     output_class = BaseOutput
 
-    def __init__(self, raw=None, version: int = 1, locktime: int = 0,
+    def __init__(self, raw=None, version: int = 1, locktime: int = 0, is_verified: bool = False,
                  height: int = -1, position: int = -1) -> None:
         self._raw = raw
         self.ref = TXRefMutable(self)
@@ -245,6 +245,7 @@ class BaseTransaction:
         self.locktime = locktime
         self._inputs: List[BaseInput] = []
         self._outputs: List[BaseOutput] = []
+        self.is_verified = is_verified
         self.height = height
         self.position = position
         if raw is not None:

@@ -254,20 +254,20 @@ class TransactionIOBalancing(unittest.TestCase):
     def create_utxos(self, amounts):
         utxos = [self.txo(amount) for amount in amounts]
 
-        self.funding_tx = ledger_class.transaction_class() \
+        self.funding_tx = ledger_class.transaction_class(is_verified=True) \
             .add_inputs([self.txi(self.txo(sum(amounts)+0.1))]) \
             .add_outputs(utxos)
 
         save_tx = 'insert'
         for utxo in utxos:
             yield self.ledger.db.save_transaction_io(
-                save_tx, self.funding_tx, True,
+                save_tx, self.funding_tx,
                 self.ledger.hash160_to_address(utxo.script.values['pubkey_hash']),
                 utxo.script.values['pubkey_hash'], ''
             )
             save_tx = 'update'
 
-        defer.returnValue(utxos)
+        return utxos
 
     @staticmethod
     def inputs(tx):

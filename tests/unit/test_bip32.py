@@ -5,6 +5,7 @@ from .key_fixtures import expected_ids, expected_privkeys, expected_hardened_pri
 from torba.bip32 import PubKey, PrivateKey, from_extended_key_string
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 
+
 class BIP32Tests(unittest.TestCase):
 
     def test_pubkey_validation(self):
@@ -80,7 +81,6 @@ class BIP32Tests(unittest.TestCase):
             new_privkey = private_key.child(i)
             self.assertIsInstance(new_privkey, PrivateKey)
             self.assertEqual(hexlify(new_privkey.private_key_bytes), expected_hardened_privkeys[i - 1 - PrivateKey.HARDENED])
-
 
     def test_from_extended_keys(self):
         ledger = ledger_class({
