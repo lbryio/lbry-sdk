@@ -2426,7 +2426,6 @@ class Daemon(AuthJSONRPCServer):
         pass
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
         """
         Send a name claim to an address
@@ -2453,9 +2452,10 @@ class Daemon(AuthJSONRPCServer):
             }
 
         """
-        result = yield self.wallet_manager.send_claim_to_address(claim_id, address, amount)
-        response = yield self._render_response(result)
-        return response
+        decode_address(address)
+        return self.wallet_manager.send_claim_to_address(
+            claim_id, address, self.get_dewies_or_error("amount", amount) if amount else None
+        )
 
     # TODO: claim_list_mine should be merged into claim_list, but idk how to authenticate it -Grin
     @requires(WALLET_COMPONENT)
@@ -3252,16 +3252,18 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def get_channel_or_error(self, channel_id: str = None, name: str = None):
+    def get_channel_or_error(self, channel_id: str = None, channel_name: str = None):
         if channel_id is not None:
-            certificates = yield self.wallet_manager.get_certificates(claim_id=channel_id)
+            certificates = yield self.wallet_manager.get_certificates(
+                private_key_accounts=[self.default_account], claim_id=channel_id)
             if not certificates:
                 raise ValueError("Couldn't find channel with claim_id '{}'." .format(channel_id))
             return certificates[0]
-        if name is not None:
-            certificates = yield self.wallet_manager.get_certificates(name=name)
+        if channel_name is not None:
+            certificates = yield self.wallet_manager.get_certificates(
+                private_key_accounts=[self.default_account], claim_name=channel_name)
             if not certificates:
-                raise ValueError("Couldn't find channel with name '{}'.".format(name))
+                raise ValueError("Couldn't find channel with name '{}'.".format(channel_name))
             return certificates[0]
         raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
 

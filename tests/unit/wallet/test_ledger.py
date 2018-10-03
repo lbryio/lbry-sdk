@@ -34,16 +34,18 @@ class BasicAccountingTests(LedgerTestCase):
         address = yield self.account.receiving.get_or_create_usable_address()
         hash160 = self.ledger.address_to_hash160(address)
 
-        tx = Transaction().add_outputs([Output.pay_pubkey_hash(100, hash160)])
+        tx = Transaction(is_verified=True)\
+            .add_outputs([Output.pay_pubkey_hash(100, hash160)])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         balance = yield self.account.get_balance(0)
         self.assertEqual(balance, 100)
 
-        tx = Transaction().add_outputs([Output.pay_claim_name_pubkey_hash(100, 'foo', b'', hash160)])
+        tx = Transaction(is_verified=True)\
+            .add_outputs([Output.pay_claim_name_pubkey_hash(100, 'foo', b'', hash160)])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         balance = yield self.account.get_balance(0)
         self.assertEqual(balance, 100)  # claim names don't count towards balance
@@ -55,17 +57,19 @@ class BasicAccountingTests(LedgerTestCase):
         address = yield self.account.receiving.get_or_create_usable_address()
         hash160 = self.ledger.address_to_hash160(address)
 
-        tx = Transaction().add_outputs([Output.pay_pubkey_hash(100, hash160)])
+        tx = Transaction(is_verified=True)\
+            .add_outputs([Output.pay_pubkey_hash(100, hash160)])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
 
         utxos = yield self.account.get_unspent_outputs()
         self.assertEqual(len(utxos), 1)
 
-        tx = Transaction().add_inputs([Input.spend(utxos[0])])
+        tx = Transaction(is_verified=True)\
+            .add_inputs([Input.spend(utxos[0])])
         yield self.ledger.db.save_transaction_io(
-            'insert', tx, True, address, hash160, '{}:{}:'.format(tx.id, 1)
+            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         balance = yield self.account.get_balance(0, include_claims=True)
         self.assertEqual(balance, 0)
