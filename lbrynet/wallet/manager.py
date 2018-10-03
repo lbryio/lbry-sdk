@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from twisted.internet import defer
 
@@ -200,6 +200,20 @@ class LbryWalletManager(BaseWalletManager):
         yield account.ledger.broadcast(tx)
         return tx
 
+    @defer.inlineCallbacks
+    def send_claim_to_address(self, claim_id: str, destination_address: str, amount: Optional[int],
+                              account=None):
+        account = account or self.default_account
+        claims = account.ledger.db.get_utxos(claim_id=claim_id)
+        if not claims:
+            raise NameError("Claim not found: {}".format(claim_id))
+        tx = yield Transaction.update(
+            claims[0], ClaimDict.deserialize(claims[0].script.value['claim']), amount,
+            destination_address.encode(), [account], account
+        )
+        yield self.ledger.broadcast(tx)
+        return tx
+
     def send_points_to_address(self, reserved: ReservedPoints, amount: int, account=None):
         destination_address: bytes = reserved.identifier.encode('latin1')
         return self.send_amount_to_address(amount, destination_address, account)
@@ -297,7 +311,7 @@ class LbryWalletManager(BaseWalletManager):
             claim_address = yield account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
-                certificate.private_key, claim_address, certificate.claim_id
+                certificate.private_key, claim_address, certificate.channel.claim_id
             )
         existing_claims = yield account.get_unspent_outputs(include_claims=True, claim_name=name)
         if len(existing_claims) == 0:
@@ -315,7 +329,7 @@ class LbryWalletManager(BaseWalletManager):
             tx, tx.outputs[0], claim_address, claim_dict, name, amount
         )])
         # TODO: release reserved tx outputs in case anything fails by this point
-        defer.returnValue(tx)
+        return tx
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
         return {
@@ -371,8 +385,12 @@ class LbryWalletManager(BaseWalletManager):
     def channel_list(self):
         return self.default_account.get_channels()
 
-    def get_certificates(self, name=None, claim_id=None):
-        return self.db.get_certificates(name, claim_id, self.accounts, exclude_without_key=True)
+    def get_certificates(self, private_key_accounts, exclude_without_key=True, **constraints):
+        return self.db.get_certificates(
+            private_key_accounts=private_key_accounts,
+            exclude_without_key=exclude_without_key,
+            **constraints
+        )
 
     def update_peer_address(self, peer, address):
         pass  # TODO: Data payments is disabled

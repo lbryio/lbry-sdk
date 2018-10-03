@@ -1,5 +1,5 @@
 from collections import namedtuple
 
 
-class Certificate(namedtuple('Certificate', ('txid', 'nout', 'claim_id', 'name', 'private_key'))):
+class Certificate(namedtuple('Certificate', ('channel', 'private_key'))):
     pass

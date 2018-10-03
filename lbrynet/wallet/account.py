@@ -167,7 +167,10 @@ class Account(BaseAccount):
         return details
 
     def get_claim(self, claim_id=None, txid=None, nout=None):
-        return self.ledger.db.get_claim(self, claim_id, txid, nout)
+        if claim_id is not None:
+            return self.ledger.db.get_claims(account=self, claim_id=claim_id)
+        elif txid is not None and nout is not None:
+            return self.ledger.db.get_claims(**{'account': self, 'txo.txid': txid, 'txo.position': nout})
 
     def get_claims(self):
-        return self.ledger.db.get_claims(self)
+        return self.ledger.db.get_claims(account=self)
