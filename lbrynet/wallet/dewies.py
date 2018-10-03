@@ -10,7 +10,7 @@ def lbc_to_dewies(lbc):
             whole, fractional = result.groups()
             return int(whole+fractional.ljust(8, "0"))
     raise ValueError(textwrap.dedent(
-        r"""
+        """
         Decimal inputs require a value in the ones place and in the tenths place
         separated by a period. The value provided, '{}', is not of the correct
         format.
@@ -18,6 +18,7 @@ def lbc_to_dewies(lbc):
         The following are examples of valid decimal inputs:
 
         1.0
+        0.001
         2.34500
         4534.4
         2323434.0000
