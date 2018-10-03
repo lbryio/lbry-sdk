@@ -5,12 +5,10 @@ import requests
 import urllib
 import json
 import textwrap
-import re
 
 from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
-from decimal import Decimal
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
@@ -48,6 +46,7 @@ from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.wallet.account import Account as LBCAccount
 from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
@@ -1190,7 +1189,7 @@ class Daemon(AuthJSONRPCServer):
         dewies = yield account.get_balance(
             0 if include_unconfirmed else 6
         )
-        return Decimal(dewies) / COIN
+        return dewies_to_lbc(dewies)
 
     @requires("wallet")
     @defer.inlineCallbacks
@@ -1454,7 +1453,7 @@ class Daemon(AuthJSONRPCServer):
         return self.get_account_or_error(account_id).get_max_gap()
 
     @requires("wallet")
-    def jsonrpc_account_fund(self, to_account, from_account, amount=0,
+    def jsonrpc_account_fund(self, to_account, from_account, amount='0.0',
                              everything=False, outputs=1, broadcast=False):
         """
         Transfer some amount (or --everything) to an account from another
@@ -1973,7 +1972,6 @@ class Daemon(AuthJSONRPCServer):
     @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
     def jsonrpc_stream_cost_estimate(self, uri, size=None):
         """
         Get estimated cost for a lbry stream
@@ -1990,8 +1988,7 @@ class Daemon(AuthJSONRPCServer):
             (float) Estimated cost in lbry credits, returns None if uri is not
                 resolvable
         """
-        cost = yield self.get_est_cost(uri, size)
-        defer.returnValue(cost)
+        return self.get_est_cost(uri, size)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
@@ -2045,7 +2042,6 @@ class Daemon(AuthJSONRPCServer):
         })
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
     def jsonrpc_channel_list(self):
         """
         Get certificate claim infos for channels that can be published to
@@ -2060,10 +2056,7 @@ class Daemon(AuthJSONRPCServer):
             (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
             is in the wallet.
         """
-
-        result = yield self.wallet_manager.channel_list()
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        return self.wallet_manager.channel_list()
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -3285,13 +3278,11 @@ class Daemon(AuthJSONRPCServer):
         raise ValueError("Couldn't find account: {}.".format(account_id))
 
     @staticmethod
-    def get_dewies_or_error(argument: str, amount: str):
-        if isinstance(amount, str):
-            result = re.search(r'^(\d{1,10})\.(\d{1,8})$', amount)
-            if result is not None:
-                whole, fractional = result.groups()
-                return int(whole+fractional.ljust(8, "0"))
-        raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
+    def get_dewies_or_error(argument: str, lbc: str):
+        try:
+            return lbc_to_dewies(lbc)
+        except ValueError as e:
+            raise ValueError("Invalid value for '{}': {}".format(argument, e.args[0]))
 
 
 def loggly_time_string(dt):

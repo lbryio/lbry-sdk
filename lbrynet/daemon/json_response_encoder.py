@@ -3,6 +3,7 @@ from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
 from lbrynet.wallet.transaction import Transaction, Output
+from lbrynet.wallet.dewies import dewies_to_lbc
 
 
 class JSONResponseEncoder(JSONEncoder):
@@ -30,9 +31,9 @@ class JSONResponseEncoder(JSONEncoder):
             'height': tx.height,
             'inputs': [self.encode_input(txo) for txo in tx.inputs],
             'outputs': [self.encode_output(txo) for txo in tx.outputs],
-            'total_input': tx.input_sum,
-            'total_output': tx.input_sum - tx.fee,
-            'total_fee': tx.fee,
+            'total_input': dewies_to_lbc(tx.input_sum),
+            'total_output': dewies_to_lbc(tx.input_sum - tx.fee),
+            'total_fee': dewies_to_lbc(tx.fee),
             'hex': hexlify(tx.raw).decode(),
         }
 
@@ -40,7 +41,7 @@ class JSONResponseEncoder(JSONEncoder):
         output = {
             'txid': txo.tx_ref.id,
             'nout': txo.position,
-            'amount': txo.amount,
+            'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger),
             'is_claim': txo.script.is_claim_name,
             'is_support': txo.script.is_support_claim,

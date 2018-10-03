@@ -15,6 +15,7 @@ from .ledger import MainNetLedger
 from .account import BaseAccount, generate_certificate
 from .transaction import Transaction
 from .database import WalletDatabase
+from .dewies import dewies_to_lbc
 
 
 log = logging.getLogger(__name__)
@@ -259,30 +260,30 @@ class LbryWalletManager(BaseWalletManager):
             history.append({
                 'txid': tx.id,
                 'timestamp': ts,
-                'value': tx.net_account_balance/COIN,
-                'fee': tx.fee/COIN,
+                'value': dewies_to_lbc(tx.net_account_balance),
+                'fee': dewies_to_lbc(tx.fee),
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3],
                 'confirmations': headers.height - tx.height,
                 'claim_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_claim_outputs],
                 'update_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_update_outputs],
                 'support_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'is_tip': False,  # TODO: need to add lookup
@@ -290,8 +291,8 @@ class LbryWalletManager(BaseWalletManager):
                 } for txo in tx.my_support_outputs],
                 'abandon_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
