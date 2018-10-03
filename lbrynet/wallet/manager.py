@@ -7,7 +7,6 @@ from typing import List, Optional
 from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
-from torba.constants import COIN
 
 from lbryschema.claim import ClaimDict
 
