@@ -7,12 +7,20 @@ from twisted.enterprise import adbapi
 
 from torba.hash import TXRefImmutable
 from torba.basetransaction import BaseTransaction, TXORefResolvable
+from torba.baseaccount import BaseAccount
 
 log = logging.getLogger(__name__)
 
 
 def clean_arg_name(arg):
     return arg.replace('.', '_')
+
+
+def prepare_constraints(constraints):
+    if 'account' in constraints:
+        if isinstance(constraints['account'], BaseAccount):
+            constraints['account'] = constraints['account'].public_key.address
+    return constraints.pop('my_account', constraints.get('account'))
 
 
 def constraints_to_sql(constraints, joiner=' AND ', prepend_sql=' AND ', prepend_key=''):
@@ -36,7 +44,7 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_sql=' AND ', prepend
                 col, op = key[:-len('__in')], 'IN'
             else:
                 col, op = key[:-len('__not_in')], 'NOT IN'
-            if isinstance(constraint, list):
+            if isinstance(constraint, (list, set)):
                 placeholders = []
                 for item_no, item in enumerate(constraint, 1):
                     constraints['{}_{}'.format(clean_arg_name(col), item_no)] = item
@@ -288,38 +296,34 @@ class BaseDatabase(SQLiteMixin):
             return txs[0]
 
     @defer.inlineCallbacks
-    def get_transactions(self, account=None, txid=None, offset=0, limit=1000):
+    def get_transactions(self, offset=0, limit=1000000, **constraints):
+        my_account = prepare_constraints(constraints)
+        account = constraints.pop('account', None)
 
-        tx_where = ""
-        account_id = account.public_key.address if account is not None else None
+        if 'txid' not in constraints and account is not None:
+            constraints['txid__in'] = """
+                SELECT txo.txid FROM txo
+                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :account
+              UNION
+                SELECT txi.txid FROM txi
+                JOIN txo USING (txoid)
+                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :account
+            """
 
-        if txid is not None:
-            tx_where = """
-                WHERE txid = :txid
-            """
-        elif account is not None:
-            tx_where = """
-                WHERE txid IN (
-                    SELECT txo.txid FROM txo
-                    JOIN pubkey_address USING (address) WHERE pubkey_address.account = :account
-                  UNION
-                    SELECT txi.txid FROM txi
-                    JOIN txo USING (txoid)
-                    JOIN pubkey_address USING (address) WHERE pubkey_address.account = :account
-                )
-            """
+        where = constraints_to_sql(constraints, prepend_sql='WHERE ')
 
         tx_rows = yield self.run_query(
             """
             SELECT txid, raw, height, position, is_verified FROM tx {}
             ORDER BY height DESC, position DESC LIMIT :offset, :limit
-            """.format(tx_where), {
-                'account': account_id,
-                'txid': txid,
-                'offset': min(offset, 0),
-                'limit': max(limit, 100)
+            """.format(where), {
+                **constraints,
+                'account': account,
+                'offset': max(offset, 0),
+                'limit': max(limit, 1)
             }
         )
+
         txids, txs = [], []
         for row in tx_rows:
             txids.append(row[0])
@@ -327,49 +331,39 @@ class BaseDatabase(SQLiteMixin):
                 raw=row[1], height=row[2], position=row[3], is_verified=row[4]
             ))
 
-        txo_rows = yield self.run_query(
-            """
-            SELECT txoid, chain, account
-            FROM txo JOIN pubkey_address USING (address)
-            WHERE txid IN ({})
-            """.format(', '.join(['?']*len(txids))), txids
-        )
-        txos = {}
-        for row in txo_rows:
-            txos[row[0]] = {
-                'is_change': row[1] == 1,
-                'is_my_account': row[2] == account_id
-            }
+        annotated_txos = {
+            txo.id: txo for txo in
+            (yield self.get_txos(
+                my_account=my_account,
+                txid__in=txids
+            ))
+        }
 
-        referenced_txos = yield self.get_txos(
-            account=account,
-            txoid__in="SELECT txoid FROM txi WHERE txi.txid IN ({})".format(
-                ','.join("'{}'".format(txid) for txid in txids)
-            )
-        )
-        referenced_txos_map = {txo.id: txo for txo in referenced_txos}
+        referenced_txos = {
+            txo.id: txo for txo in
+            (yield self.get_txos(
+                my_account=my_account,
+                txoid__in="SELECT txoid FROM txi WHERE txi.txid IN ({})".format(
+                    ','.join("'{}'".format(txid) for txid in txids)
+                )
+            ))
+        }
 
         for tx in txs:
             for txi in tx.inputs:
-                if txi.txo_ref.id in referenced_txos_map:
-                    txi.txo_ref = TXORefResolvable(referenced_txos_map[txi.txo_ref.id])
+                txo = referenced_txos.get(txi.txo_ref.id)
+                if txo:
+                    txi.txo_ref = txo.ref
             for txo in tx.outputs:
-                txo_meta = txos.get(txo.id)
-                if txo_meta is not None:
-                    txo.is_change = txo_meta['is_change']
-                    txo.is_my_account = txo_meta['is_my_account']
-                else:
-                    txo.is_change = False
-                    txo.is_my_account = False
+                _txo = annotated_txos.get(txo.id)
+                if _txo:
+                    txo.update_annotations(_txo)
 
         return txs
 
     @defer.inlineCallbacks
-    def get_txos(self, account=None, **constraints):
-        account_id = None
-        if account is not None:
-            account_id = account.public_key.address
-            constraints['account'] = account_id
+    def get_txos(self, **constraints):
+        my_account = prepare_constraints(constraints)
         rows = yield self.run_query(
             """
             SELECT amount, script, txid, txo.position, chain, account
@@ -384,18 +378,18 @@ class BaseDatabase(SQLiteMixin):
                 tx_ref=TXRefImmutable.from_id(row[2]),
                 position=row[3],
                 is_change=row[4] == 1,
-                is_my_account=row[5] == account_id
+                is_my_account=row[5] == my_account
             ) for row in rows
         ]
 
     def get_utxos(self, **constraints):
         constraints['txoid__not_in'] = 'SELECT txoid FROM txi'
-        constraints['is_reserved'] = 0
+        constraints['is_reserved'] = False
         return self.get_txos(**constraints)
 
     def get_balance_for_account(self, account, include_reserved=False, **constraints):
         if not include_reserved:
-            constraints['is_reserved'] = 0
+            constraints['is_reserved'] = False
         values = {'account': account.public_key.address}
         values.update(constraints)
         return self.query_one_value(

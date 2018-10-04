@@ -200,6 +200,14 @@ class BaseOutput(InputOutput):
         self.is_change = is_change
         self.is_my_account = is_my_account
 
+    def update_annotations(self, annotated):
+        if annotated is None:
+            self.is_change = False
+            self.is_my_account = False
+        else:
+            self.is_change = annotated.is_change
+            self.is_my_account = annotated.is_my_account
+
     @property
     def ref(self):
         return TXORefResolvable(self)
