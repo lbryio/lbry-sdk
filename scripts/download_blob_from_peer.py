@@ -10,11 +10,12 @@ from pprint import pprint
 from twisted.internet import defer, reactor, threads
 
 from lbrynet import conf
-from lbrynet.core import log_support, Wallet, Peer
+from lbrynet.core import log_support, Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.database.storage import SQLiteStorage
+from lbrynet.wallet.manager import LbryWalletManager
 
 log = logging.getLogger()
 
@@ -51,8 +52,11 @@ def download_it(peer, timeout, blob_hash):
 
     config = {'auto_connect': True}
     if conf.settings['lbryum_wallet_dir']:
-        config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-    wallet = Wallet.LBRYumWallet(storage, config)
+        config['lbryum_wallet_dir'] = conf.settings['lbryum_wallet_dir']
+        config['use_keyring'] = False
+        config['blockchain_name'] = conf.settings['blockchain_name']
+        config['lbryum_servers'] = []
+    wallet = LbryWalletManager.from_lbrynet_config(config, storage)
 
     downloader = SinglePeerDownloader()
     downloader.setup(wallet)
