@@ -6,7 +6,7 @@ from twisted.internet import defer
 from twisted.enterprise import adbapi
 
 from torba.hash import TXRefImmutable
-from torba.basetransaction import BaseTransaction, TXORefResolvable
+from torba.basetransaction import BaseTransaction
 from torba.baseaccount import BaseAccount
 
 log = logging.getLogger(__name__)
