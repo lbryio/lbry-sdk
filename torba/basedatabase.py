@@ -358,6 +358,8 @@ class BaseDatabase(SQLiteMixin):
                 _txo = annotated_txos.get(txo.id)
                 if _txo:
                     txo.update_annotations(_txo)
+                else:
+                    txo.update_annotations(None)
 
         return txs
 

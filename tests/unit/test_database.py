@@ -139,14 +139,14 @@ class TestQueries(unittest.TestCase):
         self.assertEqual([tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
         self.assertEqual([3, 2, 1], [tx.height for tx in txs])
 
-        txs = yield self.ledger.db.get_transactions(account1)
+        txs = yield self.ledger.db.get_transactions(account=account1)
         self.assertEqual([tx2.id, tx1.id], [tx.id for tx in txs])
         self.assertEqual(txs[0].inputs[0].is_my_account, True)
         self.assertEqual(txs[0].outputs[0].is_my_account, False)
         self.assertEqual(txs[1].inputs[0].is_my_account, False)
         self.assertEqual(txs[1].outputs[0].is_my_account, True)
 
-        txs = yield self.ledger.db.get_transactions(account2)
+        txs = yield self.ledger.db.get_transactions(account=account2)
         self.assertEqual([tx3.id, tx2.id], [tx.id for tx in txs])
         self.assertEqual(txs[0].inputs[0].is_my_account, True)
         self.assertEqual(txs[0].outputs[0].is_my_account, False)
