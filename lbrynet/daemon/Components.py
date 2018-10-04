@@ -341,7 +341,7 @@ class WalletComponent(Component):
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet_manager = LbryWalletManager.from_lbrynet_config(conf.settings, storage)
+        self.wallet_manager = yield LbryWalletManager.from_lbrynet_config(conf.settings, storage)
         self.wallet_manager.old_db = storage
         yield self.wallet_manager.start()
 
