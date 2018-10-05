@@ -1,5 +1,5 @@
 from twisted.internet import defer
-from torba.basedatabase import BaseDatabase, constraints_to_sql
+from torba.basedatabase import BaseDatabase
 from .certificate import Certificate
 
 
