@@ -1,5 +1,6 @@
 import logging
 
+__name__ = "lbrynet"
 __version__ = "0.30.0rc5"
 version = tuple(__version__.split('.'))
 

@@ -13,7 +13,7 @@ import logging.handlers
 log = logging.getLogger(__name__)
 
 
-def get_lbrynet_version():
+def get_lbrynet_version() -> str:
     if build_type.BUILD == "dev":
         try:
             with open(os.devnull, 'w') as devnull:
@@ -27,7 +27,7 @@ def get_lbrynet_version():
     return lbrynet_version
 
 
-def get_platform(get_ip=True):
+def get_platform(get_ip: bool = True) -> dict:
     p = {
         "processor": platform.processor(),
         "python_version": platform.python_version(),
