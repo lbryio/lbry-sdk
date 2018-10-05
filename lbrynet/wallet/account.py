@@ -125,23 +125,11 @@ class Account(BaseAccount):
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
         return super().get_unspent_outputs(**constraints)
 
-    @defer.inlineCallbacks
     def get_channels(self):
-        utxos = yield super().get_unspent_outputs(
+        return super().get_unspent_outputs(
             claim_type__any={'is_claim': 1, 'is_update': 1},
             claim_name__like='@%'
         )
-        channels = []
-        for utxo in utxos:
-            d = ClaimDict.deserialize(utxo.script.values['claim'])
-            channels.append({
-                'name': utxo.claim_name,
-                'claim_id': utxo.claim_id,
-                'txid': utxo.tx_ref.id,
-                'nout': utxo.position,
-                'have_certificate': utxo.ref.id in self.certificates
-            })
-        return channels
 
     @classmethod
     def get_private_key_from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str):

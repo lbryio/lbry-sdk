@@ -43,12 +43,32 @@ class JSONResponseEncoder(JSONEncoder):
             'nout': txo.position,
             'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger),
-            'is_claim': txo.script.is_claim_name,
-            'is_support': txo.script.is_support_claim,
-            'is_update': txo.script.is_update_claim,
         }
         if txo.is_change is not None:
             output['is_change'] = txo.is_change
+        if txo.is_my_account is not None:
+            output['is_mine'] = txo.is_my_account
+        if txo.script.is_claim_involved:
+            output.update({
+                'name': txo.claim_name,
+                'claim_id': txo.claim_id,
+                'permanent_url': txo.permanent_url,
+                'is_claim': txo.script.is_claim_name,
+                'is_support': txo.script.is_support_claim,
+                'is_update': txo.script.is_update_claim
+            })
+            if txo.script.is_claim_name:
+                output.update({
+                    'category': 'claim',
+                    'value': txo.claim.claim_dict
+                })
+            elif txo.script.is_update_claim:
+                output.update({
+                    'category': 'update',
+                    'value': txo.claim.claim_dict
+                })
+            elif txo.script.is_support_claim:
+                output['category'] = 'support'
         return output
 
     def encode_input(self, txi):
