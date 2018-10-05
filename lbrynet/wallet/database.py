@@ -1,5 +1,5 @@
 from twisted.internet import defer
-from torba.basedatabase import BaseDatabase
+from torba.basedatabase import BaseDatabase, constraints_to_sql
 from .certificate import Certificate
 
 
@@ -45,6 +45,32 @@ class WalletDatabase(BaseDatabase):
             row['claim_id'] = txo.claim_id
             row['claim_name'] = txo.claim_name
         return row
+
+    @defer.inlineCallbacks
+    def get_txos(self, **constraints):
+        txos = yield super().get_txos(**constraints)
+        my_account = constraints.get('my_account', constraints.get('account'))
+
+        claim_ids = set()
+        for txo in txos:
+            if txo.script.is_claim_name or txo.script.is_update_claim:
+                if 'publisherSignature' in txo.claim_dict:
+                    claim_ids.add(txo.claim_dict['publisherSignature']['certificateId'])
+
+        if claim_ids:
+            channels = {
+                txo.claim_id: txo for txo in
+                (yield super().get_utxos(
+                    my_account=my_account,
+                    claim_id__in=claim_ids
+                ))
+            }
+            for txo in txos:
+                if txo.script.is_claim_name or txo.script.is_update_claim:
+                    if 'publisherSignature' in txo.claim_dict:
+                        txo.channel = channels.get(txo.claim_dict['publisherSignature']['certificateId'])
+
+        return txos
 
     def get_claims(self, **constraints):
         constraints['claim_type__any'] = {'is_claim': 1, 'is_update': 1}
