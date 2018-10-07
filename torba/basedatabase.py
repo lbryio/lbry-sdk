@@ -150,14 +150,6 @@ class SQLiteMixin:
         )
         return sql, values
 
-    @defer.inlineCallbacks
-    def query_one_value(self, query, params=None, default=None):
-        result = yield self.run_query(query, params)
-        if result:
-            return result[0][0] or default
-        else:
-            return default
-
     @staticmethod
     def execute(t, sql, values):
         log.debug(sql)
@@ -454,10 +446,10 @@ class BaseDatabase(SQLiteMixin):
 
     def add_keys(self, account, chain, keys):
         sql = (
-                  "insert into pubkey_address "
-                  "(address, account, chain, position, pubkey) "
-                  "values "
-              ) + ', '.join(['(?, ?, ?, ?, ?)'] * len(keys))
+            "insert into pubkey_address "
+            "(address, account, chain, position, pubkey) "
+            "values "
+        ) + ', '.join(['(?, ?, ?, ?, ?)'] * len(keys))
         values = []
         for position, pubkey in keys:
             values.append(pubkey.address)
