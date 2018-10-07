@@ -12,60 +12,97 @@ from torba.baseaccount import BaseAccount
 log = logging.getLogger(__name__)
 
 
-def clean_arg_name(arg):
-    return arg.replace('.', '_')
-
-
-def prepare_constraints(constraints):
-    if 'account' in constraints:
-        if isinstance(constraints['account'], BaseAccount):
-            constraints['account'] = constraints['account'].public_key.address
-    return constraints.pop('my_account', constraints.get('account'))
-
-
-def constraints_to_sql(constraints, joiner=' AND ', prepend_sql=' AND ', prepend_key=''):
-    if not constraints:
-        return ''
-    extras = []
-    for key in list(constraints):
-        col, op, constraint = key, '=', constraints.pop(key)
-        if key.endswith('__not'):
-            col, op = key[:-len('__not')], '!='
+def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
+    sql, values = [], {}
+    for key, constraint in constraints.items():
+        col, op, key = key, '=', key.replace('.', '_')
+        if key.startswith('$'):
+            values[key] = constraint
+            continue
+        elif key.endswith('__not'):
+            col, op = col[:-len('__not')], '!='
         elif key.endswith('__lt'):
-            col, op = key[:-len('__lt')], '<'
+            col, op = col[:-len('__lt')], '<'
         elif key.endswith('__lte'):
-            col, op = key[:-len('__lte')], '<='
+            col, op = col[:-len('__lte')], '<='
         elif key.endswith('__gt'):
-            col, op = key[:-len('__gt')], '>'
+            col, op = col[:-len('__gt')], '>'
         elif key.endswith('__like'):
-            col, op = key[:-len('__like')], 'LIKE'
+            col, op = col[:-len('__like')], 'LIKE'
         elif key.endswith('__in') or key.endswith('__not_in'):
             if key.endswith('__in'):
-                col, op = key[:-len('__in')], 'IN'
+                col, op = col[:-len('__in')], 'IN'
             else:
-                col, op = key[:-len('__not_in')], 'NOT IN'
+                col, op = col[:-len('__not_in')], 'NOT IN'
             if isinstance(constraint, (list, set)):
-                placeholders = []
-                for item_no, item in enumerate(constraint, 1):
-                    constraints['{}_{}'.format(clean_arg_name(col), item_no)] = item
-                    placeholders.append(':{}_{}'.format(clean_arg_name(col), item_no))
-                items = ', '.join(placeholders)
+                items = ', '.join(
+                    "'{}'".format(item) if isinstance(item, str) else str(item)
+                    for item in constraint
+                )
             elif isinstance(constraint, str):
                 items = constraint
             else:
-                raise ValueError("{} requires a list or string as constraint value.".format(key))
-            extras.append('{} {} ({})'.format(col, op, items))
+                raise ValueError("{} requires a list, set or string as constraint value.".format(col))
+            sql.append('{} {} ({})'.format(col, op, items))
             continue
         elif key.endswith('__any'):
-            extras.append('({})'.format(
-                constraints_to_sql(constraint, ' OR ', '', key+'_')
-            ))
-            for subkey, val in constraint.items():
-                constraints['{}_{}'.format(clean_arg_name(key), clean_arg_name(subkey))] = val
+            where, subvalues = constraints_to_sql(constraint, ' OR ', key+'_')
+            sql.append('({})'.format(where))
+            values.update(subvalues)
             continue
-        constraints[clean_arg_name(key)] = constraint
-        extras.append('{} {} :{}'.format(col, op, prepend_key+clean_arg_name(key)))
-    return prepend_sql + joiner.join(extras) if extras else ''
+        sql.append('{} {} :{}'.format(col, op, prepend_key+key))
+        values[prepend_key+key] = constraint
+    return joiner.join(sql) if sql else '', values
+
+
+def query(select, **constraints):
+    sql = [select]
+    limit = constraints.pop('limit', None)
+    offset = constraints.pop('offset', None)
+    order_by = constraints.pop('order_by', None)
+
+    constraints.pop('my_account', None)
+    account = constraints.pop('account', None)
+    if account is not None:
+        if not isinstance(account, list):
+            account = [account]
+        constraints['account__in'] = [
+            (a.public_key.address if isinstance(a, BaseAccount) else a) for a in account
+        ]
+
+    where, values = constraints_to_sql(constraints)
+    if where:
+        sql.append('WHERE')
+        sql.append(where)
+
+    if order_by is not None:
+        sql.append('ORDER BY')
+        if isinstance(order_by, str):
+            sql.append(order_by)
+        elif isinstance(order_by, list):
+            sql.append(', '.join(order_by))
+        else:
+            raise ValueError("order_by must be string or list")
+
+    if offset is not None:
+        sql.append('OFFSET {}'.format(offset))
+
+    if limit is not None:
+        sql.append('LIMIT {}'.format(limit))
+
+    return ' '.join(sql), values
+
+
+def rows_to_dict(rows, fields):
+    if rows:
+        return [dict(zip(fields, r)) for r in rows]
+    else:
+        return []
+
+
+def row_dict_or_default(rows, fields, default=None):
+    dicts = rows_to_dict(rows, fields)
+    return dicts[0] if dicts else default
 
 
 class SQLiteMixin:
@@ -118,22 +155,6 @@ class SQLiteMixin:
         result = yield self.run_query(query, params)
         if result:
             return result[0][0] or default
-        else:
-            return default
-
-    @defer.inlineCallbacks
-    def query_dict_value_list(self, query, fields, params=None):
-        result = yield self.run_query(query.format(', '.join(fields)), params)
-        if result:
-            return [dict(zip(fields, r)) for r in result]
-        else:
-            return []
-
-    @defer.inlineCallbacks
-    def query_dict_value(self, query, fields, params=None, default=None):
-        result = yield self.query_dict_value_list(query, fields, params)
-        if result:
-            return result[0]
         else:
             return default
 
@@ -232,9 +253,9 @@ class BaseDatabase(SQLiteMixin):
                     'height': tx.height, 'position': tx.position, 'is_verified': tx.is_verified
                 }, 'txid = ?', (tx.id,)))
 
-            existing_txos = [r[0] for r in self.execute(
-                t, "SELECT position FROM txo WHERE txid = ?", (tx.id,)
-            ).fetchall()]
+            existing_txos = [r[0] for r in self.execute(t, *query(
+                "SELECT position FROM txo", txid=tx.id
+            )).fetchall()]
 
             for txo in tx.outputs:
                 if txo.position in existing_txos:
@@ -246,16 +267,14 @@ class BaseDatabase(SQLiteMixin):
                     print('Database.save_transaction_io: pay script hash is not implemented!')
 
             # lookup the address associated with each TXI (via its TXO)
-            txoids = [txi.txo_ref.id for txi in tx.inputs]
-            txoid_place_holders = ','.join(['?']*len(txoids))
-            txoid_to_address = {r[0]: r[1] for r in self.execute(
-                t, "SELECT txoid, address FROM txo WHERE txoid in ({})".format(txoid_place_holders), txoids
-            ).fetchall()}
+            txoid_to_address = {r[0]: r[1] for r in self.execute(t, *query(
+                "SELECT txoid, address FROM txo", txoid__in=[txi.txo_ref.id for txi in tx.inputs]
+            )).fetchall()}
 
             # list of TXIs that have already been added
-            existing_txis = [r[0] for r in self.execute(
-                t, "SELECT txoid FROM txi WHERE txid = ?", (tx.id,)
-            ).fetchall()]
+            existing_txis = [r[0] for r in self.execute(t, *query(
+                "SELECT txoid FROM txi", txid=tx.id
+            )).fetchall()]
 
             for txi in tx.inputs:
                 txoid = txi.txo_ref.id
@@ -289,39 +308,27 @@ class BaseDatabase(SQLiteMixin):
         # 2. update address histories removing deleted TXs
         return defer.succeed(True)
 
-    @defer.inlineCallbacks
-    def get_transaction(self, txid, account=None):
-        txs = yield self.get_transactions(account=account, txid=txid)
-        if len(txs) == 1:
-            return txs[0]
-
-    @defer.inlineCallbacks
-    def get_transactions(self, offset=0, limit=1000000, **constraints):
-        my_account = prepare_constraints(constraints)
-        account = constraints.pop('account', None)
-
+    def select_transactions(self, cols, account=None, **constraints):
         if 'txid' not in constraints and account is not None:
+            constraints['$account'] = account.public_key.address
             constraints['txid__in'] = """
                 SELECT txo.txid FROM txo
-                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :account
+                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :$account
               UNION
                 SELECT txi.txid FROM txi
                 JOIN txo USING (txoid)
-                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :account
+                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :$account
             """
+        return self.run_query(*query("SELECT {} FROM tx".format(cols), **constraints))
 
-        where = constraints_to_sql(constraints, prepend_sql='WHERE ')
+    @defer.inlineCallbacks
+    def get_transactions(self, my_account=None, **constraints):
+        my_account = my_account or constraints.get('account', None)
 
-        tx_rows = yield self.run_query(
-            """
-            SELECT txid, raw, height, position, is_verified FROM tx {}
-            ORDER BY height DESC, position DESC LIMIT :offset, :limit
-            """.format(where), {
-                **constraints,
-                'account': account,
-                'offset': max(offset, 0),
-                'limit': max(limit, 1)
-            }
+        tx_rows = yield self.select_transactions(
+            'txid, raw, height, position, is_verified',
+            order_by=["height DESC", "position DESC"],
+            **constraints
         )
 
         txids, txs = [], []
@@ -343,9 +350,7 @@ class BaseDatabase(SQLiteMixin):
             txo.id: txo for txo in
             (yield self.get_txos(
                 my_account=my_account,
-                txoid__in="SELECT txoid FROM txi WHERE txi.txid IN ({})".format(
-                    ','.join("'{}'".format(txid) for txid in txids)
-                )
+                txoid__in=query("SELECT txoid FROM txi", **{'txid__in': txids})[0]
             ))
         }
 
@@ -364,13 +369,28 @@ class BaseDatabase(SQLiteMixin):
         return txs
 
     @defer.inlineCallbacks
-    def get_txos(self, **constraints):
-        my_account = prepare_constraints(constraints)
-        rows = yield self.run_query(
-            """
-            SELECT amount, script, txid, txo.position, chain, account
-            FROM txo JOIN pubkey_address USING (address)
-            """+constraints_to_sql(constraints, prepend_sql='WHERE '), constraints
+    def get_transaction_count(self, **constraints):
+        count = yield self.select_transactions('count(*)', **constraints)
+        return count[0][0]
+
+    @defer.inlineCallbacks
+    def get_transaction(self, **constraints):
+        txs = yield self.get_transactions(limit=1, **constraints)
+        if txs:
+            return txs[0]
+
+    def select_txos(self, cols, **constraints):
+        return self.run_query(*query(
+            "SELECT {} FROM txo JOIN pubkey_address USING (address)".format(cols), **constraints
+        ))
+
+    @defer.inlineCallbacks
+    def get_txos(self, my_account=None, **constraints):
+        my_account = my_account or constraints.get('account', None)
+        if isinstance(my_account, BaseAccount):
+            my_account = my_account.public_key.address
+        rows = yield self.select_txos(
+            "amount, script, txid, txo.position, chain, account", **constraints
         )
         output_class = self.ledger.transaction_class.output_class
         return [
@@ -384,34 +404,60 @@ class BaseDatabase(SQLiteMixin):
             ) for row in rows
         ]
 
-    def get_utxos(self, **constraints):
-        constraints['txoid__not_in'] = 'SELECT txoid FROM txi'
+    @defer.inlineCallbacks
+    def get_txo_count(self, **constraints):
+        count = yield self.select_txos('count(*)', **constraints)
+        return count[0][0]
+
+    @staticmethod
+    def constrain_utxo(constraints):
         constraints['is_reserved'] = False
+        constraints['txoid__not_in'] = "SELECT txoid FROM txi"
+
+    def get_utxos(self, **constraints):
+        self.constrain_utxo(constraints)
         return self.get_txos(**constraints)
 
-    def get_balance_for_account(self, account, include_reserved=False, **constraints):
-        if not include_reserved:
-            constraints['is_reserved'] = False
-        values = {'account': account.public_key.address}
-        values.update(constraints)
-        return self.query_one_value(
-            """
-            SELECT SUM(amount)
-            FROM txo
-                JOIN tx ON tx.txid=txo.txid
-                JOIN pubkey_address ON pubkey_address.address=txo.address
-            WHERE
-              pubkey_address.account=:account AND
-              txoid NOT IN (SELECT txoid FROM txi)
-            """+constraints_to_sql(constraints), values, 0
+    def get_utxos_count(self, **constraints):
+        self.constrain_utxo(constraints)
+        return self.get_txo_count(**constraints)
+
+    @defer.inlineCallbacks
+    def get_balance(self, **constraints):
+        self.constrain_utxo(constraints)
+        balance = yield self.select_txos('SUM(amount)', **constraints)
+        return balance[0][0] or 0
+
+    def select_addresses(self, cols, **constraints):
+        return self.run_query(*query(
+            "SELECT {} FROM pubkey_address".format(cols), **constraints
+        ))
+
+    @defer.inlineCallbacks
+    def get_addresses(self, cols=('address', 'account', 'chain', 'position', 'used_times'), **constraints):
+        addresses = yield self.select_addresses(', '.join(cols), **constraints)
+        return rows_to_dict(addresses, cols)
+
+    @defer.inlineCallbacks
+    def get_address_count(self, **constraints):
+        count = yield self.select_addresses('count(*)', **constraints)
+        return count[0][0]
+
+    @defer.inlineCallbacks
+    def get_address(self, address):
+        addresses = yield self.get_addresses(
+            cols=('address', 'account', 'chain', 'position', 'pubkey', 'history', 'used_times'),
+            address=address, limit=1
         )
+        if addresses:
+            return addresses[0]
 
     def add_keys(self, account, chain, keys):
         sql = (
-            "insert into pubkey_address "
-            "(address, account, chain, position, pubkey) "
-            "values "
-        ) + ', '.join(['(?, ?, ?, ?, ?)'] * len(keys))
+                  "insert into pubkey_address "
+                  "(address, account, chain, position, pubkey) "
+                  "values "
+              ) + ', '.join(['(?, ?, ?, ?, ?)'] * len(keys))
         values = []
         for position, pubkey in keys:
             values.append(pubkey.address)
@@ -430,40 +476,3 @@ class BaseDatabase(SQLiteMixin):
 
     def set_address_history(self, address, history):
         return self.db.runInteraction(lambda t: self._set_address_history(t, address, history))
-
-    def get_addresses(self, account, chain, limit=None, max_used_times=None, order_by=None):
-        columns = ['account', 'chain', 'position', 'address', 'used_times']
-        sql = ["SELECT {} FROM pubkey_address"]
-
-        where = []
-        params = {}
-        if account is not None:
-            params["account"] = account.public_key.address
-            where.append("account = :account")
-            columns.remove("account")
-        if chain is not None:
-            params["chain"] = chain
-            where.append("chain = :chain")
-            columns.remove("chain")
-        if max_used_times is not None:
-            params["used_times"] = max_used_times
-            where.append("used_times <= :used_times")
-
-        if where:
-            sql.append("WHERE")
-            sql.append(" AND ".join(where))
-
-        if order_by:
-            sql.append("ORDER BY {}".format(order_by))
-
-        if limit is not None:
-            sql.append("LIMIT {}".format(limit))
-
-        return self.query_dict_value_list(" ".join(sql), columns, params)
-
-    def get_address(self, address):
-        return self.query_dict_value(
-            "SELECT {} FROM pubkey_address WHERE address = :address",
-            ('address', 'account', 'chain', 'position', 'pubkey', 'history', 'used_times'),
-            {'address': address}
-        )

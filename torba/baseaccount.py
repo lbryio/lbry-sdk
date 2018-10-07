@@ -47,9 +47,11 @@ class AddressManager:
     def db(self):
         return self.account.ledger.db
 
-    def _query_addresses(self, limit: int = None, max_used_times: int = None, order_by=None):
+    def _query_addresses(self, **constraints):
         return self.db.get_addresses(
-            self.account, self.chain_number, limit, max_used_times, order_by
+            account=self.account,
+            chain=self.chain_number,
+            **constraints
         )
 
     def get_private_key(self, index: int) -> PrivateKey:
@@ -61,17 +63,17 @@ class AddressManager:
     def ensure_address_gap(self) -> defer.Deferred:
         raise NotImplementedError
 
-    def get_address_records(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
+    def get_address_records(self, only_usable: bool = False, **constraints) -> defer.Deferred:
         raise NotImplementedError
 
     @defer.inlineCallbacks
-    def get_addresses(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
-        records = yield self.get_address_records(limit=limit, only_usable=only_usable)
+    def get_addresses(self, only_usable: bool = False, **constraints) -> defer.Deferred:
+        records = yield self.get_address_records(only_usable=only_usable, **constraints)
         return [r['address'] for r in records]
 
     @defer.inlineCallbacks
     def get_or_create_usable_address(self) -> defer.Deferred:
-        addresses = yield self.get_addresses(limit=1, only_usable=True)
+        addresses = yield self.get_addresses(only_usable=True, limit=1)
         if addresses:
             return addresses[0]
         addresses = yield self.ensure_address_gap()
@@ -128,7 +130,7 @@ class HierarchicalDeterministic(AddressManager):
 
     @defer.inlineCallbacks
     def ensure_address_gap(self) -> defer.Deferred:
-        addresses = yield self._query_addresses(self.gap, None, "position DESC")
+        addresses = yield self._query_addresses(limit=self.gap, order_by="position DESC")
 
         existing_gap = 0
         for address in addresses:
@@ -145,11 +147,10 @@ class HierarchicalDeterministic(AddressManager):
         new_keys = yield self.generate_keys(start, end-1)
         return new_keys
 
-    def get_address_records(self, limit: int = None, only_usable: bool = False):
-        return self._query_addresses(
-            limit, self.maximum_uses_per_address if only_usable else None,
-            "used_times ASC, position ASC"
-        )
+    def get_address_records(self, only_usable: bool = False, **constraints):
+        if only_usable:
+            constraints['used_times__lte'] = self.maximum_uses_per_address
+        return self._query_addresses(order_by="used_times ASC, position ASC", **constraints)
 
 
 class SingleKey(AddressManager):
@@ -184,8 +185,8 @@ class SingleKey(AddressManager):
             return [self.public_key.address]
         return []
 
-    def get_address_records(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
-        return self._query_addresses()
+    def get_address_records(self, only_usable: bool = False, **constraints) -> defer.Deferred:
+        return self._query_addresses(**constraints)
 
 
 class BaseAccount:
@@ -329,23 +330,23 @@ class BaseAccount:
         return addresses
 
     @defer.inlineCallbacks
-    def get_addresses(self, limit: int = None, max_used_times: int = None) -> defer.Deferred:
-        records = yield self.get_address_records(limit, max_used_times)
-        return [r['address'] for r in records]
+    def get_addresses(self, **constraints) -> defer.Deferred:
+        rows = yield self.ledger.db.select_addresses('address', **constraints)
+        return [r[0] for r in rows]
 
-    def get_address_records(self, limit: int = None, max_used_times: int = None) -> defer.Deferred:
-        return self.ledger.db.get_addresses(self, None, limit, max_used_times)
+    def get_address_records(self, **constraints) -> defer.Deferred:
+        return self.ledger.db.get_addresses(account=self, **constraints)
 
     def get_private_key(self, chain: int, index: int) -> PrivateKey:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
         address_manager = {0: self.receiving, 1: self.change}[chain]
         return address_manager.get_private_key(index)
 
-    def get_balance(self, confirmations: int = 6, **constraints):
+    def get_balance(self, confirmations: int = 0, **constraints):
         if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})
-        return self.ledger.db.get_balance_for_account(self, **constraints)
+        return self.ledger.db.get_balance(account=self, **constraints)
 
     @defer.inlineCallbacks
     def get_max_gap(self):
@@ -356,11 +357,11 @@ class BaseAccount:
             'max_receiving_gap': receiving_gap,
         }
 
-    def get_unspent_outputs(self, **constraints):
+    def get_utxos(self, **constraints):
         return self.ledger.db.get_utxos(account=self, **constraints)
 
-    def get_transactions(self) -> List['basetransaction.BaseTransaction']:
-        return self.ledger.db.get_transactions(account=self)
+    def get_transactions(self, **constraints) -> List['basetransaction.BaseTransaction']:
+        return self.ledger.db.get_transactions(account=self, **constraints)
 
     @defer.inlineCallbacks
     def fund(self, to_account, amount=None, everything=False,
@@ -368,7 +369,7 @@ class BaseAccount:
         assert self.ledger == to_account.ledger, 'Can only transfer between accounts of the same ledger.'
         tx_class = self.ledger.transaction_class
         if everything:
-            utxos = yield self.get_unspent_outputs(**constraints)
+            utxos = yield self.get_utxos(**constraints)
             yield self.ledger.reserve_outputs(utxos)
             tx = yield tx_class.create(
                 inputs=[tx_class.input_class.spend(txo) for txo in utxos],

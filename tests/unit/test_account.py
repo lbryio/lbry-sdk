@@ -223,7 +223,10 @@ class TestSingleKeyAccount(unittest.TestCase):
         self.assertEqual(new_keys[0], account.public_key.address)
         records = yield account.receiving.get_address_records()
         self.assertEqual(records, [{
-            'position': 0, 'address': account.public_key.address, 'used_times': 0
+            'position': 0, 'chain': 0,
+            'account': account.public_key.address,
+            'address': account.public_key.address,
+            'used_times': 0
         }])
 
         # case #1: no new addresses needed

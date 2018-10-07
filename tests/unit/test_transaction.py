@@ -201,7 +201,7 @@ class TestTransactionSigning(unittest.TestCase):
         )
 
         yield account.ensure_address_gap()
-        address1, address2 = yield account.receiving.get_addresses(2)
+        address1, address2 = yield account.receiving.get_addresses(limit=2)
         pubkey_hash1 = self.ledger.address_to_hash160(address1)
         pubkey_hash2 = self.ledger.address_to_hash160(address2)
 

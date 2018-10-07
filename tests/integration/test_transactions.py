@@ -43,7 +43,7 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 3.5)
         self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 2.0)
 
-        utxos = await d2f(self.account.get_unspent_outputs())
+        utxos = await d2f(self.account.get_utxos())
         tx = await d2f(self.ledger.transaction_class.create(
             [self.ledger.transaction_class.input_class.spend(utxos[0])],
             [],

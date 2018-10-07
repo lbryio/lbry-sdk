@@ -4,72 +4,100 @@ from twisted.internet import defer
 from torba.wallet import Wallet
 from torba.constants import COIN
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
-from torba.basedatabase import constraints_to_sql
+from torba.basedatabase import query, constraints_to_sql
 
 from .test_transaction import get_output, NULL_HASH
 
 
-class TestConstraintBuilder(unittest.TestCase):
+class TestQueryBuilder(unittest.TestCase):
 
     def test_dot(self):
-        constraints = {'txo.position': 18}
         self.assertEqual(
-            constraints_to_sql(constraints, prepend_sql=''),
-            'txo.position = :txo_position'
+            constraints_to_sql({'txo.position': 18}),
+            ('txo.position = :txo_position', {'txo_position': 18})
         )
-        self.assertEqual(constraints, {'txo_position': 18})
 
     def test_any(self):
-        constraints = {
-            'ages__any': {
-                'txo.age__gt': 18,
-                'txo.age__lt': 38
-            }
-        }
         self.assertEqual(
-            constraints_to_sql(constraints, prepend_sql=''),
-            '(txo.age > :ages__any_txo_age__gt OR txo.age < :ages__any_txo_age__lt)'
-        )
-        self.assertEqual(
-            constraints, {
+            constraints_to_sql({
+                'ages__any': {
+                    'txo.age__gt': 18,
+                    'txo.age__lt': 38
+                }
+            }),
+            ('(txo.age > :ages__any_txo_age__gt OR txo.age < :ages__any_txo_age__lt)', {
                 'ages__any_txo_age__gt': 18,
                 'ages__any_txo_age__lt': 38
-            }
+            })
         )
 
     def test_in_list(self):
-        constraints = {'txo.age__in': [18, 38]}
         self.assertEqual(
-            constraints_to_sql(constraints, prepend_sql=''),
-            'txo.age IN (:txo_age_1, :txo_age_2)'
+            constraints_to_sql({'txo.age__in': [18, 38]}),
+            ('txo.age IN (18, 38)', {})
         )
         self.assertEqual(
-            constraints, {
-                'txo_age_1': 18,
-                'txo_age_2': 38
-            }
+            constraints_to_sql({'txo.age__in': ['abc123', 'def456']}),
+            ("txo.age IN ('abc123', 'def456')", {})
         )
 
     def test_in_query(self):
-        constraints = {'txo.age__in': 'SELECT age from ages_table'}
         self.assertEqual(
-            constraints_to_sql(constraints, prepend_sql=''),
-            'txo.age IN (SELECT age from ages_table)'
+            constraints_to_sql({'txo.age__in': 'SELECT age from ages_table'}),
+            ('txo.age IN (SELECT age from ages_table)', {})
         )
-        self.assertEqual(constraints, {})
 
     def test_not_in_query(self):
-        constraints = {'txo.age__not_in': 'SELECT age from ages_table'}
         self.assertEqual(
-            constraints_to_sql(constraints, prepend_sql=''),
-            'txo.age NOT IN (SELECT age from ages_table)'
+            constraints_to_sql({'txo.age__not_in': 'SELECT age from ages_table'}),
+            ('txo.age NOT IN (SELECT age from ages_table)', {})
         )
-        self.assertEqual(constraints, {})
 
     def test_in_invalid(self):
-        constraints = {'ages__in': 9}
-        with self.assertRaisesRegex(ValueError, 'list or string'):
-            constraints_to_sql(constraints, prepend_sql='')
+        with self.assertRaisesRegex(ValueError, 'list, set or string'):
+            constraints_to_sql({'ages__in': 9})
+
+    def test_query(self):
+        self.assertEqual(
+            query("select * from foo"),
+            ("select * from foo", {})
+        )
+        self.assertEqual(
+            query(
+                "select * from foo",
+                a='b', b__in='select * from blah where c=:$c',
+                d__any={'one': 1, 'two': 2}, limit=10, order_by='b', **{'$c': 3}),
+            (
+                "select * from foo WHERE a = :a AND "
+                "b IN (select * from blah where c=:$c) AND "
+                "(one = :d__any_one OR two = :d__any_two) ORDER BY b LIMIT 10",
+                {'a': 'b', 'd__any_one': 1, 'd__any_two': 2, '$c': 3}
+            )
+        )
+
+    def test_query_order_by(self):
+        self.assertEqual(
+            query("select * from foo", order_by='foo'),
+            ("select * from foo ORDER BY foo", {})
+        )
+        self.assertEqual(
+            query("select * from foo", order_by=['foo', 'bar']),
+            ("select * from foo ORDER BY foo, bar", {})
+        )
+
+    def test_query_limit_offset(self):
+        self.assertEqual(
+            query("select * from foo", limit=10),
+            ("select * from foo LIMIT 10", {})
+        )
+        self.assertEqual(
+            query("select * from foo", offset=10),
+            ("select * from foo OFFSET 10", {})
+        )
+        self.assertEqual(
+            query("select * from foo", limit=20, offset=10),
+            ("select * from foo OFFSET 10 LIMIT 20", {})
+        )
 
 
 class TestQueries(unittest.TestCase):
@@ -153,13 +181,13 @@ class TestQueries(unittest.TestCase):
         self.assertEqual(txs[1].inputs[0].is_my_account, False)
         self.assertEqual(txs[1].outputs[0].is_my_account, True)
 
-        tx = yield self.ledger.db.get_transaction(tx2.id)
+        tx = yield self.ledger.db.get_transaction(txid=tx2.id)
         self.assertEqual(tx.id, tx2.id)
         self.assertEqual(tx.inputs[0].is_my_account, False)
         self.assertEqual(tx.outputs[0].is_my_account, False)
-        tx = yield self.ledger.db.get_transaction(tx2.id, account1)
+        tx = yield self.ledger.db.get_transaction(txid=tx2.id, account=account1)
         self.assertEqual(tx.inputs[0].is_my_account, True)
         self.assertEqual(tx.outputs[0].is_my_account, False)
-        tx = yield self.ledger.db.get_transaction(tx2.id, account2)
+        tx = yield self.ledger.db.get_transaction(txid=tx2.id, account=account2)
         self.assertEqual(tx.inputs[0].is_my_account, False)
         self.assertEqual(tx.outputs[0].is_my_account, True)

@@ -148,7 +148,7 @@ class BaseLedger(metaclass=LedgerRegistry):
     def get_effective_amount_estimators(self, funding_accounts: Iterable[baseaccount.BaseAccount]):
         estimators = []
         for account in funding_accounts:
-            utxos = yield account.get_unspent_outputs()
+            utxos = yield account.get_utxos()
             for utxo in utxos:
                 estimators.append(utxo.get_estimator(self))
         return estimators
@@ -330,7 +330,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         # need to update anyways. Continue to get history and create more addresses until
         # all missing addresses are created and history for them is fully restored.
         yield account.ensure_address_gap()
-        addresses = yield account.get_addresses(max_used_times=0)
+        addresses = yield account.get_addresses(used_times=0)
         while addresses:
             yield defer.DeferredList([
                 self.update_history(a) for a in addresses
@@ -364,7 +364,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             try:
 
                 # see if we have a local copy of transaction, otherwise fetch it from server
-                tx = yield self.db.get_transaction(hex_id)
+                tx = yield self.db.get_transaction(txid=hex_id)
                 save_tx = None
                 if tx is None:
                     _raw = yield self.network.get_transaction(hex_id)
