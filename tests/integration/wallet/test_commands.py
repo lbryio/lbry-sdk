@@ -113,7 +113,7 @@ class CommandTestCase(IntegrationTestCase):
         lbry_conf.settings.node_id = None
 
         await d2f(self.account.ensure_address_gap())
-        address = (await d2f(self.account.receiving.get_addresses(1, only_usable=True)))[0]
+        address = (await d2f(self.account.receiving.get_addresses(limit=1, only_usable=True)))[0]
         sendtxid = await self.blockchain.send_to_address(address, 10)
         await self.confirm_tx(sendtxid)
         await self.generate(5)
@@ -197,7 +197,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         channels = yield self.out(self.daemon.jsonrpc_channel_list())
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@spam')
-        self.assertTrue(channels[0]['have_certificate'])
+        self.assertTrue(channels[0]['has_signature'])
 
         # As the new channel claim travels through the intertubes and makes its
         # way into the mempool and then a block and then into the claimtrie,
