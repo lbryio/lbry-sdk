@@ -60,7 +60,7 @@ class Account(BaseAccount):
                 claim = claims[maybe_claim_id]
                 tx = None
                 if claim:
-                    tx = yield self.ledger.get_transaction(claim['txid'])
+                    tx = yield self.ledger.db.get_transaction(txid=claim['txid'])
                 else:
                     log.warning(maybe_claim_id)
                 if tx is not None:
@@ -96,7 +96,7 @@ class Account(BaseAccount):
             else:
                 try:
                     txid, nout = maybe_claim_id.split(':')
-                    tx = yield self.ledger.get_transaction(txid)
+                    tx = yield self.ledger.db.get_transaction(txid=txid)
                     if tx.outputs[int(nout)].script.is_claim_involved:
                         results['previous-success'] += 1
                     else:
