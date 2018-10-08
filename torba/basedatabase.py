@@ -376,7 +376,9 @@ class BaseDatabase(SQLiteMixin):
 
     def select_txos(self, cols, **constraints):
         return self.run_query(*query(
-            "SELECT {} FROM txo JOIN pubkey_address USING (address)".format(cols), **constraints
+            "SELECT {} FROM txo"
+            " JOIN pubkey_address USING (address)"
+            " JOIN tx USING (txid)".format(cols), **constraints
         ))
 
     @defer.inlineCallbacks
