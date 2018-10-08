@@ -362,6 +362,9 @@ class BaseDatabase(SQLiteMixin):
 
     @defer.inlineCallbacks
     def get_transaction_count(self, **constraints):
+        constraints.pop('offset', None)
+        constraints.pop('limit', None)
+        constraints.pop('order_by', None)
         count = yield self.select_transactions('count(*)', **constraints)
         return count[0][0]
 
@@ -398,6 +401,9 @@ class BaseDatabase(SQLiteMixin):
 
     @defer.inlineCallbacks
     def get_txo_count(self, **constraints):
+        constraints.pop('offset', None)
+        constraints.pop('limit', None)
+        constraints.pop('order_by', None)
         count = yield self.select_txos('count(*)', **constraints)
         return count[0][0]
 
