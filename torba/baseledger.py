@@ -133,9 +133,6 @@ class BaseLedger(metaclass=LedgerRegistry):
     def add_account(self, account: baseaccount.BaseAccount):
         self.accounts.append(account)
 
-    def get_transaction(self, txhash):
-        return self.db.get_transaction(txhash)
-
     @defer.inlineCallbacks
     def get_private_key_for_address(self, address):
         match = yield self.db.get_address(address)
