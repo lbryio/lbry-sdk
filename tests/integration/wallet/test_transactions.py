@@ -54,7 +54,7 @@ class BasicTransactionTest(IntegrationTestCase):
             self.on_transaction_id(sendtxid2),
         ])
 
-        self.assertEqual(d2l(await d2f(self.account.get_balance(0))), '10.0')
+        self.assertEqual(d2l(await d2f(self.account.get_balance())), '10.0')
 
         cert, key = generate_certificate()
         cert_tx = await d2f(Transaction.claim('@bar', cert, l2d('1.0'), address1, [self.account], self.account))
@@ -74,8 +74,8 @@ class BasicTransactionTest(IntegrationTestCase):
             self.on_transaction_id(cert_tx.id),
         ])
 
-        self.assertEqual(d2l(await d2f(self.account.get_balance(0))), '7.985786')
-        self.assertEqual(d2l(await d2f(self.account.get_balance(0, include_claims=True))), '9.985786')
+        self.assertEqual(d2l(await d2f(self.account.get_balance())), '7.985786')
+        self.assertEqual(d2l(await d2f(self.account.get_balance(include_claims=True))), '9.985786')
 
         response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertIn('lbry://@bar/foo', response)
