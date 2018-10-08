@@ -2,7 +2,6 @@ import asyncio
 
 from orchstr8.testcase import IntegrationTestCase, d2f
 from lbryschema.claim import ClaimDict
-from torba.constants import COIN
 from lbrynet.wallet.transaction import Transaction
 from lbrynet.wallet.account import generate_certificate
 from lbrynet.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
