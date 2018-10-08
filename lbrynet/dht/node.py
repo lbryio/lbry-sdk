@@ -640,19 +640,14 @@ class Node(MockKademliaHelper):
         replication/republishing as necessary """
         yield self._refreshRoutingTable()
         self._dataStore.removeExpiredPeers()
-        yield self._refreshStoringPeers()
+        self._refreshStoringPeers()
         defer.returnValue(None)
 
     def _refreshContacts(self):
-        return defer.DeferredList(
-            [self._protocol._ping_queue.enqueue_maybe_ping(contact, delay=0) for contact in self.contacts]
-        )
+        self._protocol._ping_queue.enqueue_maybe_ping(*self.contacts, delay=0)
 
     def _refreshStoringPeers(self):
-        storing_contacts = self._dataStore.getStoringContacts()
-        return defer.DeferredList(
-            [self._protocol._ping_queue.enqueue_maybe_ping(contact, delay=0) for contact in storing_contacts]
-        )
+        self._protocol._ping_queue.enqueue_maybe_ping(*self._dataStore.getStoringContacts(), delay=0)
 
     @defer.inlineCallbacks
     def _refreshRoutingTable(self):

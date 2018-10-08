@@ -1,7 +1,6 @@
 import logging
 import errno
 from binascii import hexlify
-from collections import deque
 
 from twisted.internet import protocol, defer
 from .error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
@@ -22,72 +21,52 @@ class PingQueue:
 
     def __init__(self, node):
         self._node = node
-        self._get_time = self._node.clock.seconds
-        self._queue = deque()
         self._enqueued_contacts = {}
-        self._semaphore = defer.DeferredSemaphore(1)
-        self._ping_semaphore = defer.DeferredSemaphore(constants.alpha)
-        self._process_lc = node.get_looping_call(self._semaphore.run, self._process)
+        self._pending_contacts = {}
+        self._process_lc = node.get_looping_call(self._process)
 
-    def _add_contact(self, contact, delay=None):
-        if (contact.address, contact.port) in [(c.address, c.port) for c in self._enqueued_contacts]:
-            return defer.succeed(None)
-        delay = delay or constants.checkRefreshInterval
-        self._enqueued_contacts[contact] = self._get_time() + delay
-        self._queue.append(contact)
-        return defer.succeed(None)
+    def enqueue_maybe_ping(self, *contacts, **kwargs):
+        delay = kwargs.get('delay', constants.checkRefreshInterval)
+        no_op = (defer.succeed(None), lambda: None)
+        for contact in contacts:
+            if delay and contact not in self._enqueued_contacts:
+                self._pending_contacts.setdefault(contact, self._node.clock.seconds() + delay)
+            else:
+                self._enqueued_contacts.setdefault(contact, no_op)
 
     @defer.inlineCallbacks
-    def _process(self):
-        if not len(self._queue):
-            defer.returnValue(None)
-        contact = self._queue.popleft()
-        now = self._get_time()
-
-        # if the oldest contact in the queue isn't old enough to be pinged, add it back to the queue and return
-        if now < self._enqueued_contacts[contact]:
-            self._queue.appendleft(contact)
-            defer.returnValue(None)
-
-        pinged = []
-        checked = []
-        while now > self._enqueued_contacts[contact]:
-            checked.append(contact)
-            if not contact.contact_is_good:
-                pinged.append(contact)
-            if not len(self._queue):
-                break
-            contact = self._queue.popleft()
-            if not now > self._enqueued_contacts[contact]:
-                checked.append(contact)
-
-        @defer.inlineCallbacks
-        def _ping(contact):
-            try:
-                yield contact.ping()
-            except TimeoutError:
-                pass
-            except Exception as err:
-                log.warning("unexpected error: %s", err)
-
-        yield defer.DeferredList([_ping(contact) for contact in pinged])
-
-        for contact in checked:
-            if contact in self._enqueued_contacts and contact in pinged:
+    def _ping(self, contact):
+        if contact.contact_is_good:
+            return
+        try:
+            yield contact.ping()
+        except TimeoutError:
+            pass
+        except Exception as err:
+            log.warning("unexpected error: %s", err)
+        finally:
+            if contact in self._enqueued_contacts:
                 del self._enqueued_contacts[contact]
-            elif contact not in self._queue:
-                self._queue.appendleft(contact)
 
-        defer.returnValue(None)
+    def _process(self):
+        # move contacts that are scheduled to join the queue
+        if self._pending_contacts:
+            now = self._node.clock.seconds()
+            for contact in [contact for contact, schedule in self._pending_contacts.items() if schedule <= now]:
+                del self._pending_contacts[contact]
+                self._enqueued_contacts.setdefault(contact, (defer.succeed(None), lambda: None))
+        # spread pings across 60 seconds to avoid flood and/or false negatives
+        step = 60.0/float(len(self._enqueued_contacts)) if self._enqueued_contacts else 0
+        for index, (contact, (call, _)) in enumerate(self._enqueued_contacts.items()):
+            if call.called and not contact.contact_is_good:
+                self._enqueued_contacts[contact] = self._node.reactor_callLater(index*step, self._ping, contact)
 
     def start(self):
         return self._node.safe_start_looping_call(self._process_lc, 60)
 
     def stop(self):
+        map(None, (cancel() for _, (call, cancel) in self._enqueued_contacts.items() if not call.called))
         return self._node.safe_stop_looping_call(self._process_lc)
-
-    def enqueue_maybe_ping(self, contact, delay=None):
-        return self._semaphore.run(self._add_contact, contact, delay)
 
 
 class KademliaProtocol(protocol.DatagramProtocol):
