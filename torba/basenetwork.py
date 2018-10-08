@@ -167,6 +167,8 @@ class BaseNetwork:
                 log.exception("Connecting to %s raised an exception:", connection_string)
             finally:
                 self.client = None
+                if self.service is not None:
+                    self.service.stopService()
             if not self.running:
                 return
 

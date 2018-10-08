@@ -223,8 +223,13 @@ class BaseLedger(metaclass=LedgerRegistry):
             self.headers.open()
         ])
         first_connection = self.network.on_connected.first
+        self.network.on_connected.listen(self.join_network)
         self.network.start()
         yield first_connection
+
+    @defer.inlineCallbacks
+    def join_network(self, *args):
+        log.info("Subscribing and updating accounts.")
         yield self.update_headers()
         yield self.network.subscribe_headers()
         yield self.update_accounts()
