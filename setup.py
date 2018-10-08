@@ -5,6 +5,7 @@ from setuptools import setup, find_packages
 BASE = os.path.dirname(__file__)
 README_PATH = os.path.join(BASE, 'README.md')
 
+# list and dictionaries for setup
 setup(
     name="lbrynet",
     version=__version__,
@@ -21,6 +22,7 @@ setup(
     entry_points={
         'console_scripts': 'lbrynet=lbrynet.cli:main'
     },
+    # a list for the installment requirements
     install_requires=[
         'asyncio',
         'aiohttp',
@@ -42,6 +44,7 @@ setup(
         'colorama==0.3.7',
         'six'
     ],
+    # extra requirements
     extras_require={
         'test': (
             'mock>=2.0,<3.0',
