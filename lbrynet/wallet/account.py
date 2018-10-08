@@ -115,7 +115,7 @@ class Account(BaseAccount):
                 indent=2
             ))
 
-    def get_balance(self, confirmations=6, include_claims=False, **constraints):
+    def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
         return super().get_balance(confirmations, **constraints)
