@@ -410,7 +410,7 @@ class BaseDatabase(SQLiteMixin):
         self.constrain_utxo(constraints)
         return self.get_txos(**constraints)
 
-    def get_utxos_count(self, **constraints):
+    def get_utxo_count(self, **constraints):
         self.constrain_utxo(constraints)
         return self.get_txo_count(**constraints)
 
