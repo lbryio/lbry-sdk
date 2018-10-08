@@ -1166,7 +1166,7 @@ class Daemon(AuthJSONRPCServer):
 
     @requires("wallet")
     @defer.inlineCallbacks
-    def jsonrpc_account_balance(self, account_id=None, address=None, include_unconfirmed=False):
+    def jsonrpc_account_balance(self, account_id=None, confirmations=0):
         """
         Return the balance of an account
 
@@ -1174,21 +1174,16 @@ class Daemon(AuthJSONRPCServer):
             account_balance [<account_id>] [<address> | --address=<address>] [--include_unconfirmed]
 
         Options:
-            --account_id=<account_id> : (str) If provided only the balance for this
-                                        account will be given
-            --address=<address>       : (str) If provided only the balance for this
-                                        address will be given
-            --include_unconfirmed     : (bool) Include unconfirmed
+            --account_id=<account_id>       : (str) If provided only the balance for this
+                                              account will be given. Otherwise default account.
+            --confirmations=<confirmations> : (int) Only include transactions with this many
+                                              confirmed blocks.
 
         Returns:
             (decimal) amount of lbry credits in wallet
         """
-        if address is not None:
-            raise NotImplementedError("Limiting by address needs to be re-implemented in new wallet.")
         account = self.get_account_or_default(account_id)
-        dewies = yield account.get_balance(
-            0 if include_unconfirmed else 6
-        )
+        dewies = yield account.get_balance(confirmations=confirmations)
         return dewies_to_lbc(dewies)
 
     @requires("wallet")
@@ -1513,7 +1508,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_address_list(self, account_id=None):
+    def jsonrpc_address_list(self, account_id=None, offset=None, limit=None):
         """
         List account addresses
 
@@ -1522,11 +1517,26 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --account_id=<account_id>  : (str) id of the account to use
+            --offset=<offset>          : (int) slice address list starting at offset
+            --limit=<limit>            : (int) limit number of addresses returned
 
         Returns:
             List of wallet addresses
         """
-        return self.get_account_or_default(account_id).get_addresses()
+        account = self.get_account_or_default(account_id)
+        if None not in (offset, limit):
+            constraints = {
+                'account': account,
+                'offset': offset,
+                'limit': limit
+            }
+            return {
+                "list": self.ledger.db.get_addresses(**constraints),
+                "size": self.ledger.db.get_addresses_count(**constraints),
+                "offset": offset,
+                "limit": limit
+            }
+        return account.get_addresses()
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_unused(self, account_id=None):
@@ -2033,16 +2043,16 @@ class Daemon(AuthJSONRPCServer):
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
-        defer.returnValue({
+        return {
             "success": True,
             "tx": tx,
             "claim_id": txo.claim_id,
-            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+            "claim_address": txo.get_address(self.ledger),
             "output": txo
-        })
+        }
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_channel_list(self):
+    def jsonrpc_channel_list(self, account_id=None, offset=None, limit=None):
         """
         Get certificate claim infos for channels that can be published to
 
@@ -2050,13 +2060,28 @@ class Daemon(AuthJSONRPCServer):
             channel_list
 
         Options:
-            None
+            --account_id=<account_id>  : (str) id of the account to use
+            --offset=<offset>          : (int) slice channel list starting at offset
+            --limit=<limit>            : (int) limit number of channels returned
 
         Returns:
             (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
             is in the wallet.
         """
-        return self.wallet_manager.channel_list()
+        account = self.get_account_or_default(account_id)
+        if None not in (offset, limit):
+            constraints = {
+                'account': account,
+                'offset': offset,
+                'limit': limit
+            }
+            return {
+                "list": self.ledger.db.get_channels(**constraints),
+                "size": self.ledger.db.get_channels_count(**constraints),
+                "offset": offset,
+                "limit": limit
+            }
+        return account.get_channels()
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2450,9 +2475,8 @@ class Daemon(AuthJSONRPCServer):
             claim_id, address, self.get_dewies_or_error("amount", amount) if amount else None
         )
 
-    # TODO: claim_list_mine should be merged into claim_list, but idk how to authenticate it -Grin
     @requires(WALLET_COMPONENT)
-    def jsonrpc_claim_list_mine(self, account_id=None):
+    def jsonrpc_claim_list_mine(self, account_id=None, offset=None, limit=None):
         """
         List my name claims
 
@@ -2461,6 +2485,8 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
+            --offset=<offset>         : (int) slice claim list starting at offset
+            --limit=<limit>           : (int) limit number of claims returned
 
         Returns:
             (list) List of name claims owned by user
@@ -2484,7 +2510,20 @@ class Daemon(AuthJSONRPCServer):
                 },
            ]
         """
-        return self.get_account_or_default(account_id).get_claims()
+        account = self.get_account_or_default(account_id)
+        if None not in (offset, limit):
+            constraints = {
+                'account': account,
+                'offset': offset,
+                'limit': limit
+            }
+            return {
+                "list": self.ledger.db.get_claims(**constraints),
+                "size": self.ledger.db.get_claims_count(**constraints),
+                "offset": offset,
+                "limit": limit
+            }
+        return account.get_claims()
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2616,7 +2655,8 @@ class Daemon(AuthJSONRPCServer):
         return response
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_transaction_list(self, account_id=None):
+    @defer.inlineCallbacks
+    def jsonrpc_transaction_list(self, account_id=None, offset=None, limit=None):
         """
         List transactions belonging to wallet
 
@@ -2625,6 +2665,8 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
+            --offset=<offset>         : (int) slice transaction list starting at offset
+            --limit=<limit>           : (int) limit number of transactions returned
 
         Returns:
             (list) List of transactions
@@ -2672,7 +2714,21 @@ class Daemon(AuthJSONRPCServer):
             }
 
         """
-        return self.wallet_manager.get_history(self.get_account_or_default(account_id))
+        account = self.get_account_or_default(account_id)
+        if None not in (offset, limit):
+            constraints = {
+                'offset': offset,
+                'limit': limit
+            }
+            return {
+                "list": self.wallet_manager.get_history(
+                    account=account, **constraints),
+                "size": self.ledger.db.get_transactions_count(
+                    account=account, **constraints),
+                "offset": offset,
+                "limit": limit
+            }
+        return self.wallet_manager.get_history(account)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -2691,7 +2747,7 @@ class Daemon(AuthJSONRPCServer):
         return self.wallet_manager.get_transaction(txid)
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_utxo_list(self, account_id=None):
+    def jsonrpc_utxo_list(self, account_id=None, offset=None, limit=None):
         """
         List unspent transaction outputs
 
@@ -2700,6 +2756,8 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
+            --offset=<offset>         : (int) slice utxo list starting at offset
+            --limit=<limit>           : (int) limit number of utxo returned
 
         Returns:
             (list) List of unspent transaction outputs (UTXOs)
@@ -2718,7 +2776,20 @@ class Daemon(AuthJSONRPCServer):
                 ...
             ]
         """
-        return self.get_account_or_default(account_id).get_unspent_outputs()
+        account = self.get_account_or_default(account_id)
+        if None not in (offset, limit):
+            constraints = {
+                'account': account,
+                'offset': offset,
+                'limit': limit
+            }
+            return {
+                "list": self.ledger.db.get_utxos(**constraints),
+                "size": self.ledger.db.get_utxo_count(**constraints),
+                "offset": offset,
+                "limit": limit
+            }
+        return account.get_utxos()
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_block_show(self, blockhash=None, height=None):

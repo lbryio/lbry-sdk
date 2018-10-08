@@ -120,13 +120,13 @@ class Account(BaseAccount):
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
         return super().get_balance(confirmations, **constraints)
 
-    def get_unspent_outputs(self, include_claims=False, **constraints):
+    def get_utxos(self, include_claims=False, **constraints):
         if not include_claims:
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
-        return super().get_unspent_outputs(**constraints)
+        return super().get_utxos(**constraints)
 
     def get_channels(self):
-        return super().get_unspent_outputs(
+        return super().get_utxos(
             claim_type__any={'is_claim': 1, 'is_update': 1},
             claim_name__like='@%'
         )

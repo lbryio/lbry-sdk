@@ -63,7 +63,7 @@ class BasicAccountingTests(LedgerTestCase):
             'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
 
-        utxos = yield self.account.get_unspent_outputs()
+        utxos = yield self.account.get_utxos()
         self.assertEqual(len(utxos), 1)
 
         tx = Transaction(is_verified=True)\
@@ -74,6 +74,6 @@ class BasicAccountingTests(LedgerTestCase):
         balance = yield self.account.get_balance(0, include_claims=True)
         self.assertEqual(balance, 0)
 
-        utxos = yield self.account.get_unspent_outputs()
+        utxos = yield self.account.get_utxos()
         self.assertEqual(len(utxos), 0)
 

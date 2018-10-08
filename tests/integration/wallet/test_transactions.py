@@ -46,7 +46,7 @@ class BasicTransactionTest(IntegrationTestCase):
 
         await d2f(self.account.ensure_address_gap())
 
-        address1, address2 = await d2f(self.account.receiving.get_addresses(2, only_usable=True))
+        address1, address2 = await d2f(self.account.receiving.get_addresses(limit=2, only_usable=True))
         sendtxid1 = await self.blockchain.send_to_address(address1, 5)
         sendtxid2 = await self.blockchain.send_to_address(address2, 5)
         await self.blockchain.generate(1)

@@ -1,6 +1,5 @@
 from twisted.internet import defer
 from torba.basedatabase import BaseDatabase
-from .certificate import Certificate
 
 
 class WalletDatabase(BaseDatabase):
@@ -48,21 +47,24 @@ class WalletDatabase(BaseDatabase):
 
     @defer.inlineCallbacks
     def get_txos(self, **constraints):
-        txos = yield super().get_txos(**constraints)
-        my_account = constraints.get('my_account', constraints.get('account'))
+        my_account = constraints.get('my_account', constraints.get('account', None))
 
-        claim_ids = set()
+        txos = yield super().get_txos(**constraints)
+
+        channel_ids = set()
         for txo in txos:
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 if 'publisherSignature' in txo.claim_dict:
-                    claim_ids.add(txo.claim_dict['publisherSignature']['certificateId'])
+                    channel_ids.add(txo.claim_dict['publisherSignature']['certificateId'])
+                if txo.claim_name.startswith('@') and my_account is not None:
+                    txo.signature = my_account.get_certificate_private_key(txo.ref)
 
-        if claim_ids:
+        if channel_ids:
             channels = {
                 txo.claim_id: txo for txo in
                 (yield super().get_utxos(
                     my_account=my_account,
-                    claim_id__in=claim_ids
+                    claim_id__in=channel_ids
                 ))
             }
             for txo in txos:
@@ -72,14 +74,30 @@ class WalletDatabase(BaseDatabase):
 
         return txos
 
-    def get_claims(self, **constraints):
+    @staticmethod
+    def constrain_claims(constraints):
         constraints['claim_type__any'] = {'is_claim': 1, 'is_update': 1}
+
+    def get_claims(self, **constraints):
+        self.constrain_claims(constraints)
         return self.get_utxos(**constraints)
 
-    def get_channels(self, **constraints):
+    def get_claims_count(self, **constraints):
+        self.constrain_claims(constraints)
+        return self.get_utxo_count(**constraints)
+
+    @staticmethod
+    def constrain_channels(constraints):
         if 'claim_name' not in constraints or 'claim_id' not in constraints:
             constraints['claim_name__like'] = '@%'
+
+    def get_channels(self, **constraints):
+        self.constrain_channels(constraints)
         return self.get_claims(**constraints)
+
+    def get_channels_count(self, **constraints):
+        self.constrain_channels(constraints)
+        return self.get_claims_count(**constraints)
 
     @defer.inlineCallbacks
     def get_certificates(self, private_key_accounts, exclude_without_key=False, **constraints):
@@ -87,12 +105,14 @@ class WalletDatabase(BaseDatabase):
         certificates = []
         if private_key_accounts is not None:
             for channel in channels:
-                private_key = None
-                for account in private_key_accounts:
-                    private_key = account.get_certificate_private_key(channel.ref)
-                    if private_key is not None:
-                        break
-                if private_key is None and exclude_without_key:
-                    continue
-                certificates.append(Certificate(channel, private_key))
+                if not channel.has_signature:
+                    private_key = None
+                    for account in private_key_accounts:
+                        private_key = account.get_certificate_private_key(channel.ref)
+                        if private_key is not None:
+                            break
+                    if private_key is None and exclude_without_key:
+                        continue
+                    channel.signature = private_key
+                certificates.append(channel)
         return certificates

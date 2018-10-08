@@ -48,6 +48,7 @@ class JSONResponseEncoder(JSONEncoder):
             output['is_change'] = txo.is_change
         if txo.is_my_account is not None:
             output['is_mine'] = txo.is_my_account
+
         if txo.script.is_claim_involved:
             output.update({
                 'name': txo.claim_name,
@@ -57,18 +58,19 @@ class JSONResponseEncoder(JSONEncoder):
                 'is_support': txo.script.is_support_claim,
                 'is_update': txo.script.is_update_claim
             })
+
+            if txo.script.is_claim_name or txo.script.is_update_claim:
+                output['value'] = txo.claim.claim_dict
+                if txo.claim_name.startswith('@'):
+                    output['has_signature'] = txo.has_signature
+
             if txo.script.is_claim_name:
-                output.update({
-                    'category': 'claim',
-                    'value': txo.claim.claim_dict
-                })
+                output['category'] = 'claim'
             elif txo.script.is_update_claim:
-                output.update({
-                    'category': 'update',
-                    'value': txo.claim.claim_dict
-                })
+                output['category'] = 'update'
             elif txo.script.is_support_claim:
                 output['category'] = 'support'
+
         return output
 
     def encode_input(self, txi):

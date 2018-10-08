@@ -240,9 +240,9 @@ class LbryWalletManager(BaseWalletManager):
 
     @defer.inlineCallbacks
     def address_is_mine(self, unknown_address, account):
-        for my_address in (yield account.get_addresses()):
-            if unknown_address == my_address:
-                return True
+        match = yield self.ledger.db.get_address(address=unknown_address, account=account)
+        if match is not None:
+            return True
         return False
 
     def get_transaction(self, txid: str):
@@ -250,9 +250,9 @@ class LbryWalletManager(BaseWalletManager):
 
     @staticmethod
     @defer.inlineCallbacks
-    def get_history(account: BaseAccount):
+    def get_history(account: BaseAccount, **constraints):
         headers = account.ledger.headers
-        txs: List[Transaction] = (yield account.get_transactions())
+        txs = (yield account.get_transactions(account=account, **constraints))
         history = []
         for tx in txs:
             ts = headers[tx.height]['timestamp']
@@ -301,7 +301,7 @@ class LbryWalletManager(BaseWalletManager):
 
     @staticmethod
     def get_utxos(account: BaseAccount):
-        return account.get_unspent_outputs()
+        return account.get_utxos()
 
     @defer.inlineCallbacks
     def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
@@ -311,9 +311,9 @@ class LbryWalletManager(BaseWalletManager):
             claim_address = yield account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
-                certificate.private_key, claim_address, certificate.channel.claim_id
+                certificate.signature, claim_address, certificate.claim_id
             )
-        existing_claims = yield account.get_unspent_outputs(include_claims=True, claim_name=name)
+        existing_claims = yield account.get_utxos(include_claims=True, claim_name=name)
         if len(existing_claims) == 0:
             tx = yield Transaction.claim(
                 name, claim, amount, claim_address, [account], account
@@ -381,9 +381,6 @@ class LbryWalletManager(BaseWalletManager):
         account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
-
-    def channel_list(self):
-        return self.default_account.get_channels()
 
     def get_certificates(self, private_key_accounts, exclude_without_key=True, **constraints):
         return self.db.get_certificates(
