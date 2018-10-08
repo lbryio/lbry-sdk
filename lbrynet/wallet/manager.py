@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from twisted.internet import defer
 
