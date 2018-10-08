@@ -1134,7 +1134,6 @@ class Daemon(AuthJSONRPCServer):
             --account_id=<account_id>       : (str) If provided only the balance for this
                                                     account will be given
             --confirmations=<confirmations> : (int) required confirmations (default: 6)
-            --include_reserved              : (bool) include reserved UTXOs (default: false)
             --include_claims                : (bool) include claims, requires than a
                                                      LBC account is specified (default: false)
             --show_seed                     : (bool) show the seed for the account
@@ -1146,7 +1145,6 @@ class Daemon(AuthJSONRPCServer):
             account = self.get_account_or_error(account_id)
             args = {
                 'confirmations': confirmations,
-                'include_reserved': include_reserved,
                 'show_seed': show_seed
             }
             if include_claims:
