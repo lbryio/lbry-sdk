@@ -120,7 +120,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     @defer.inlineCallbacks
     def sendRPC(self, contact, method, args):
-        while True:
+        for _ in range(constants.rpcAttempts):
             try:
                 response = yield self._sendRPC(contact, method, args)
                 return response
