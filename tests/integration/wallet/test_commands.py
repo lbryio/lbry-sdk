@@ -2,7 +2,6 @@ import json
 import tempfile
 import logging
 import asyncio
-from decimal import Decimal
 from types import SimpleNamespace
 
 from twisted.internet import defer
@@ -204,40 +203,12 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Chris doesn't sit idly by: he checks his balance!
 
         result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, '0.0')
-
-        # "Oh! No! It's all gone? Did I make a mistake in entering the amount?"
-        # exclaims Chris, then he remembers there is a 6 block confirmation window
-        # to make sure the TX is really going to stay in the blockchain. And he only
-        # had one UTXO that morning.
-
-        # To get the unconfirmed balance he has to pass the '--include-unconfirmed'
-        # flag to lbrynet:
-        result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
         self.assertEqual(result, '8.989893')
-        # "Well, that's a relief." he thinks to himself as he exhales a sigh of relief.
 
-        # He waits for a block
-        yield self.d_generate(1)
-        # and checks the confirmed balance again.
-        result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, '0.0')
-        # Still zero.
-
-        # But it's only at 2 confirmations, so he waits another 3
-        yield self.d_generate(3)
-        # and checks again.
-        result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, '0.0')
-        # Still zero.
-
-        # Just one more confirmation
-        yield self.d_generate(1)
-        # and it should be 6 total, enough to get the correct balance!
-        result = yield self.daemon.jsonrpc_account_balance()
+        # He waits for 6 more blocks (confirmations) to make sure the balance has been settled.
+        yield self.d_generate(6)
+        result = yield self.daemon.jsonrpc_account_balance(confirmations=6)
         self.assertEqual(result, '8.989893')
-        # Like a Swiss watch (right niko?) the blockchain never disappoints! We're
-        # at 6 confirmations and the total is correct.
 
         # And is the channel resolvable and empty?
         response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam'))
@@ -265,7 +236,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # He quickly checks the unconfirmed balance to make sure everything looks
         # correct.
-        result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
+        result = yield self.daemon.jsonrpc_account_balance()
         self.assertEqual(result, '7.969786')
 
         # Also checks that his new story can be found on the blockchain before
