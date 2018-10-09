@@ -1,11 +1,11 @@
-import unittest
+from twisted.trial import unittest
 
 from torba.util import ArithUint256
 
 
 class TestArithUint256(unittest.TestCase):
 
-    def test(self):
+    def test_arithunit256(self):
         # https://github.com/bitcoin/bitcoin/blob/master/src/test/arith_uint256_tests.cpp
 
         from_compact = ArithUint256.from_compact
