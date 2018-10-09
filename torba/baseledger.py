@@ -135,7 +135,7 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     @defer.inlineCallbacks
     def get_private_key_for_address(self, address):
-        match = yield self.db.get_address(address)
+        match = yield self.db.get_address(address=address)
         if match:
             for account in self.accounts:
                 if match['account'] == account.public_key.address:
