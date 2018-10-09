@@ -1506,6 +1506,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
+    @defer.inlineCallbacks
     def jsonrpc_address_list(self, account_id=None, offset=None, limit=None):
         """
         List account addresses
@@ -1529,12 +1530,12 @@ class Daemon(AuthJSONRPCServer):
                 'limit': limit
             }
             return {
-                "list": self.ledger.db.get_addresses(**constraints),
-                "size": self.ledger.db.get_addresses_count(**constraints),
+                "list": (yield self.ledger.db.get_addresses(**constraints)),
+                "size": (yield self.ledger.db.get_addresses_count(**constraints)),
                 "offset": offset,
                 "limit": limit
             }
-        return account.get_addresses()
+        return (yield account.get_addresses())
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_unused(self, account_id=None):
@@ -2050,6 +2051,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
     @requires(WALLET_COMPONENT)
+    @defer.inlineCallbacks
     def jsonrpc_channel_list(self, account_id=None, offset=None, limit=None):
         """
         Get certificate claim infos for channels that can be published to
@@ -2074,12 +2076,12 @@ class Daemon(AuthJSONRPCServer):
                 'limit': limit
             }
             return {
-                "list": self.ledger.db.get_channels(**constraints),
-                "size": self.ledger.db.get_channels_count(**constraints),
+                "list": (yield self.ledger.db.get_channels(**constraints)),
+                "size": (yield self.ledger.db.get_channels_count(**constraints)),
                 "offset": offset,
                 "limit": limit
             }
-        return account.get_channels()
+        return (yield account.get_channels())
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2474,6 +2476,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
+    @defer.inlineCallbacks
     def jsonrpc_claim_list_mine(self, account_id=None, offset=None, limit=None):
         """
         List my name claims
@@ -2516,12 +2519,12 @@ class Daemon(AuthJSONRPCServer):
                 'limit': limit
             }
             return {
-                "list": self.ledger.db.get_claims(**constraints),
-                "size": self.ledger.db.get_claims_count(**constraints),
+                "list": (yield self.ledger.db.get_claims(**constraints)),
+                "size": (yield self.ledger.db.get_claims_count(**constraints)),
                 "offset": offset,
                 "limit": limit
             }
-        return account.get_claims()
+        return (yield account.get_claims())
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2719,14 +2722,14 @@ class Daemon(AuthJSONRPCServer):
                 'limit': limit
             }
             return {
-                "list": self.wallet_manager.get_history(
-                    account=account, **constraints),
-                "size": self.ledger.db.get_transactions_count(
-                    account=account, **constraints),
+                "list": (yield self.wallet_manager.get_history(
+                    account=account, **constraints)),
+                "size": (yield self.ledger.db.get_transactions_count(
+                    account=account, **constraints)),
                 "offset": offset,
                 "limit": limit
             }
-        return self.wallet_manager.get_history(account)
+        return (yield self.wallet_manager.get_history(account))
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -2782,12 +2785,12 @@ class Daemon(AuthJSONRPCServer):
                 'limit': limit
             }
             return {
-                "list": self.ledger.db.get_utxos(**constraints),
-                "size": self.ledger.db.get_utxo_count(**constraints),
+                "list": (yield self.ledger.db.get_utxos(**constraints)),
+                "size": (yield self.ledger.db.get_utxo_count(**constraints)),
                 "offset": offset,
                 "limit": limit
             }
-        return account.get_utxos()
+        return (yield account.get_utxos())
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_block_show(self, blockhash=None, height=None):

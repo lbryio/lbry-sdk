@@ -290,7 +290,7 @@ class LbryWalletManager(BaseWalletManager):
     @defer.inlineCallbacks
     def get_history(account: BaseAccount, **constraints):
         headers = account.ledger.headers
-        txs = (yield account.get_transactions(account=account, **constraints))
+        txs = (yield account.get_transactions(**constraints))
         history = []
         for tx in txs:
             ts = headers[tx.height]['timestamp']
