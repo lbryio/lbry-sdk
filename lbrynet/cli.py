@@ -134,7 +134,9 @@ def main(argv=None):
         return 0
 
     elif method in ['version', '--version', '-v']:
-        print(lbrynet_name + " " + get_platform(get_ip=False)["lbrynet_version"])
+        print("{lbrynet_name} {lbrynet_version}".format(
+            lbrynet_name=lbrynet_name, **get_platform(get_ip=False)
+        ))
         return 0
 
     elif method == 'start':
