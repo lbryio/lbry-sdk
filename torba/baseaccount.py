@@ -338,6 +338,9 @@ class BaseAccount:
     def get_address_records(self, **constraints) -> defer.Deferred:
         return self.ledger.db.get_addresses(account=self, **constraints)
 
+    def get_address_count(self, **constraints) -> defer.Deferred:
+        return self.ledger.db.get_address_count(account=self, **constraints)
+
     def get_private_key(self, chain: int, index: int) -> PrivateKey:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
         address_manager = {0: self.receiving, 1: self.change}[chain]
@@ -361,8 +364,14 @@ class BaseAccount:
     def get_utxos(self, **constraints):
         return self.ledger.db.get_utxos(account=self, **constraints)
 
+    def get_utxo_count(self, **constraints):
+        return self.ledger.db.get_utxo_count(account=self, **constraints)
+
     def get_transactions(self, **constraints) -> List['basetransaction.BaseTransaction']:
         return self.ledger.db.get_transactions(account=self, **constraints)
+
+    def get_transaction_count(self, **constraints):
+        return self.ledger.db.get_transaction_count(account=self, **constraints)
 
     @defer.inlineCallbacks
     def fund(self, to_account, amount=None, everything=False,
