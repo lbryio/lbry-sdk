@@ -51,20 +51,20 @@ class JSONResponseEncoder(JSONEncoder):
 
         if txo.script.is_claim_involved:
             output.update({
-                'name': txo.claim_name,
+                'name': txo.name,
                 'claim_id': txo.claim_id,
                 'permanent_url': txo.permanent_url,
-                'is_claim': txo.script.is_claim_name,
+                'is_claim': txo.script.is_name,
                 'is_support': txo.script.is_support_claim,
                 'is_update': txo.script.is_update_claim
             })
 
-            if txo.script.is_claim_name or txo.script.is_update_claim:
+            if txo.script.is_name or txo.script.is_update_claim:
                 output['value'] = txo.claim.claim_dict
-                if txo.claim_name.startswith('@'):
+                if txo.name.startswith('@'):
                     output['has_signature'] = txo.has_signature
 
-            if txo.script.is_claim_name:
+            if txo.script.is_name:
                 output['category'] = 'claim'
             elif txo.script.is_update_claim:
                 output['category'] = 'update'

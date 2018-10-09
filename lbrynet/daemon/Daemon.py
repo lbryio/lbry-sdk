@@ -111,7 +111,7 @@ class _FileID(IterableContainer):
     TXID = "txid"
     NOUT = "nout"
     CHANNEL_CLAIM_ID = "channel_claim_id"
-    CLAIM_NAME = "claim_name"
+    NAME = "name"
     CHANNEL_NAME = "channel_name"
 
 
@@ -575,7 +575,7 @@ class Daemon(AuthJSONRPCServer):
             'metadata': lbry_file.metadata,
             'channel_claim_id': lbry_file.channel_claim_id,
             'channel_name': lbry_file.channel_name,
-            'claim_name': lbry_file.claim_name
+            'name': lbry_file.name
         }
         defer.returnValue(result)
 
@@ -1563,7 +1563,7 @@ class Daemon(AuthJSONRPCServer):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--sort=<sort_method>...]
+                      [--name=<name>] [--sort=<sort_method>...]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1577,7 +1577,7 @@ class Daemon(AuthJSONRPCServer):
             --nout=<nout>                          : (int) get file with matching claim nout
             --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id
             --channel_name=<channel_name>  : (str) get file with matching channel name
-            --claim_name=<claim_name>              : (str) get file with matching claim name
+            --name=<name>              : (str) get file with matching claim name
             --sort=<sort_method>                   : (str) sort by any property, like 'file_name'
                                                      or 'metadata.author'; to specify direction
                                                      append ',asc' or ',desc'
@@ -1611,7 +1611,7 @@ class Daemon(AuthJSONRPCServer):
                     'metadata': (dict) None if claim is not found else the claim metadata,
                     'channel_claim_id': (str) None if claim is not found or not signed,
                     'channel_name': (str) None if claim is not found or not signed,
-                    'claim_name': (str) None if claim is not found else the claim name
+                    'name': (str) None if claim is not found else the claim name
                 },
             ]
         """
@@ -1833,7 +1833,7 @@ class Daemon(AuthJSONRPCServer):
                 'metadata': (dict) claim metadata,
                 'channel_claim_id': (str) None if claim is not signed
                 'channel_name': (str) None if claim is not signed
-                'claim_name': (str) claim name
+                'name': (str) claim name
             }
         """
 
@@ -1925,7 +1925,7 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             file_delete [--delete_from_download_dir] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                         [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
-                        [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
+                        [--nout=<nout>] [--name=<name>] [--channel_claim_id=<channel_claim_id>]
                         [--channel_name=<channel_name>]
 
         Options:
@@ -1941,7 +1941,7 @@ class Daemon(AuthJSONRPCServer):
             --claim_id=<claim_id>                  : (str) delete by file claim id
             --txid=<txid>                          : (str) delete by file claim txid
             --nout=<nout>                          : (int) delete by file claim nout
-            --claim_name=<claim_name>              : (str) delete by file claim name
+            --name=<name>              : (str) delete by file claim name
             --channel_claim_id=<channel_claim_id>  : (str) delete by file channel claim id
             --channel_name=<channel_name>                 : (str) delete by file channel claim name
 
@@ -2675,7 +2675,7 @@ class Daemon(AuthJSONRPCServer):
                                                         "balance_delta": (float) bid amount,
                                                         "amount": (float) claim amount,
                                                         "claim_id": (str) claim id,
-                                                        "claim_name": (str) claim name,
+                                                        "name": (str) claim name,
                                                         "nout": (int) nout
                                                         }],
                 "abandon_info": (list) abandon info if in txn [{
@@ -2683,7 +2683,7 @@ class Daemon(AuthJSONRPCServer):
                                                         "balance_delta": (float) returned amount,
                                                         "amount": (float) claim amount,
                                                         "claim_id": (str) claim id,
-                                                        "claim_name": (str) claim name,
+                                                        "name": (str) claim name,
                                                         "nout": (int) nout
                                                         }],
                 "confirmations": (int) number of confirmations for the txn,
@@ -2694,7 +2694,7 @@ class Daemon(AuthJSONRPCServer):
                                                         "balance_delta": (float) support amount,
                                                         "amount": (float) support amount,
                                                         "claim_id": (str) claim id,
-                                                        "claim_name": (str) claim name,
+                                                        "name": (str) claim name,
                                                         "is_tip": (bool),
                                                         "nout": (int) nout
                                                         }],
@@ -2705,7 +2705,7 @@ class Daemon(AuthJSONRPCServer):
                                                         "balance_delta": (float) credited/debited
                                                         "amount": (float) absolute amount,
                                                         "claim_id": (str) claim id,
-                                                        "claim_name": (str) claim name,
+                                                        "name": (str) claim name,
                                                         "nout": (int) nout
                                                         }],
                 "value": (float) value of txn
@@ -3323,7 +3323,7 @@ class Daemon(AuthJSONRPCServer):
             return certificates[0]
         if channel_name is not None:
             certificates = yield self.wallet_manager.get_certificates(
-                private_key_accounts=[self.default_account], claim_name=channel_name)
+                private_key_accounts=[self.default_account], name=channel_name)
             if not certificates:
                 raise ValueError("Couldn't find channel with name '{}'.".format(channel_name))
             return certificates[0]

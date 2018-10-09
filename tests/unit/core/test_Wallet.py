@@ -99,7 +99,7 @@ class WalletTest(unittest.TestCase):
             return claim_out
 
         self.wallet._send_name_claim = not_enough_funds_send_name_claim
-        d = self.wallet.claim_name('test', 1, test_claim_dict)
+        d = self.wallet.name('test', 1, test_claim_dict)
         self.assertFailure(d, Exception)
         return d
 
@@ -122,7 +122,7 @@ class WalletTest(unittest.TestCase):
             return defer.succeed(expected_claim_out)
 
         self.wallet._send_name_claim = success_send_name_claim
-        claim_out = yield self.wallet.claim_name('test', 1, test_claim_dict)
+        claim_out = yield self.wallet.name('test', 1, test_claim_dict)
         self.assertTrue('success' not in claim_out)
         self.assertEqual(expected_claim_out['claim_id'], claim_out['claim_id'])
         self.assertEqual(expected_claim_out['fee'], claim_out['fee'])
@@ -229,7 +229,7 @@ class WalletTest(unittest.TestCase):
         d = self.wallet.update_balance()
         d.addCallback(lambda _: self.assertEqual(5, self.wallet.get_balance()))
         d.addCallback(lambda _: self.wallet.reserve_points('testid', 2))
-        d.addCallback(lambda _: self.wallet.claim_name('test', 4, test_claim_dict))
+        d.addCallback(lambda _: self.wallet.name('test', 4, test_claim_dict))
         self.assertFailure(d, InsufficientFundsError)
         return d
 

@@ -6,25 +6,25 @@ from lbrynet.wallet.script import OutputScript
 
 class TestPayClaimNamePubkeyHash(unittest.TestCase):
 
-    def pay_claim_name_pubkey_hash(self, name, claim, pubkey_hash):
+    def pay_name_pubkey_hash(self, name, claim, pubkey_hash):
         # this checks that factory function correctly sets up the script
-        src1 = OutputScript.pay_claim_name_pubkey_hash(
+        src1 = OutputScript.pay_name_pubkey_hash(
             name, unhexlify(claim), unhexlify(pubkey_hash))
-        self.assertEqual(src1.template.name, 'claim_name+pay_pubkey_hash')
-        self.assertEqual(src1.values['claim_name'], name)
+        self.assertEqual(src1.template.name, 'name+pay_pubkey_hash')
+        self.assertEqual(src1.values['name'], name)
         self.assertEqual(hexlify(src1.values['claim']), claim)
         self.assertEqual(hexlify(src1.values['pubkey_hash']), pubkey_hash)
         # now we test that it will round trip
         src2 = OutputScript(src1.source)
-        self.assertEqual(src2.template.name, 'claim_name+pay_pubkey_hash')
-        self.assertEqual(src2.values['claim_name'], name)
+        self.assertEqual(src2.template.name, 'name+pay_pubkey_hash')
+        self.assertEqual(src2.values['name'], name)
         self.assertEqual(hexlify(src2.values['claim']), claim)
         self.assertEqual(hexlify(src2.values['pubkey_hash']), pubkey_hash)
         return hexlify(src1.source)
 
-    def test_pay_claim_name_pubkey_hash_1(self):
+    def test_pay_name_pubkey_hash_1(self):
         self.assertEqual(
-            self.pay_claim_name_pubkey_hash(
+            self.pay_name_pubkey_hash(
                 # name
                 b'cats',
                 # claim

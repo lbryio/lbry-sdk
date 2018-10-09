@@ -15,7 +15,7 @@ class WalletDatabase(BaseDatabase):
             is_reserved boolean not null default 0,
 
             claim_id text,
-            claim_name text,
+            name text,
             is_claim boolean not null default 0,
             is_update boolean not null default 0,
             is_support boolean not null default 0,
@@ -34,7 +34,7 @@ class WalletDatabase(BaseDatabase):
     def txo_to_row(self, tx, address, txo):
         row = super().txo_to_row(tx, address, txo)
         row.update({
-            'is_claim': txo.script.is_claim_name,
+            'is_claim': txo.script.is_name,
             'is_update': txo.script.is_update_claim,
             'is_support': txo.script.is_support_claim,
             'is_buy': txo.script.is_buy_claim,
@@ -42,7 +42,7 @@ class WalletDatabase(BaseDatabase):
         })
         if txo.script.is_claim_involved:
             row['claim_id'] = txo.claim_id
-            row['claim_name'] = txo.claim_name
+            row['name'] = txo.name
         return row
 
     @defer.inlineCallbacks
@@ -53,10 +53,10 @@ class WalletDatabase(BaseDatabase):
 
         channel_ids = set()
         for txo in txos:
-            if txo.script.is_claim_name or txo.script.is_update_claim:
+            if txo.script.is_name or txo.script.is_update_claim:
                 if 'publisherSignature' in txo.claim_dict:
                     channel_ids.add(txo.claim_dict['publisherSignature']['certificateId'])
-                if txo.claim_name.startswith('@') and my_account is not None:
+                if txo.name.startswith('@') and my_account is not None:
                     txo.signature = my_account.get_certificate_private_key(txo.ref)
 
         if channel_ids:
@@ -68,7 +68,7 @@ class WalletDatabase(BaseDatabase):
                 ))
             }
             for txo in txos:
-                if txo.script.is_claim_name or txo.script.is_update_claim:
+                if txo.script.is_name or txo.script.is_update_claim:
                     if 'publisherSignature' in txo.claim_dict:
                         txo.channel = channels.get(txo.claim_dict['publisherSignature']['certificateId'])
 
@@ -88,8 +88,8 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_channels(constraints):
-        if 'claim_name' not in constraints or 'claim_id' not in constraints:
-            constraints['claim_name__like'] = '@%'
+        if 'name' not in constraints or 'claim_id' not in constraints:
+            constraints['name__like'] = '@%'
 
     def get_channels(self, **constraints):
         self.constrain_channels(constraints)

@@ -29,9 +29,9 @@ def get_transaction(txo=None):
         .add_outputs([txo or Output.pay_pubkey_hash(CENT, NULL_HASH32)])
 
 
-def get_claim_transaction(claim_name, claim=b''):
+def get_claim_transaction(name, claim=b''):
     return get_transaction(
-        Output.pay_claim_name_pubkey_hash(CENT, claim_name, claim, NULL_HASH32)
+        Output.pay_name_pubkey_hash(CENT, name, claim, NULL_HASH32)
     )
 
 
@@ -53,17 +53,17 @@ class TestSizeAndFeeEstimation(unittest.TestCase):
         txo = get_output()
         self.assertEqual(txo.size, 46)
         self.assertEqual(txo.get_fee(self.ledger), 46 * FEE_PER_BYTE)
-        claim_name = 'verylongname'
-        tx = get_claim_transaction(claim_name, b'0'*4000)
+        name = 'verylongname'
+        tx = get_claim_transaction(name, b'0'*4000)
         base_size = tx.size - tx.inputs[0].size - tx.outputs[0].size
         txo = tx.outputs[0]
         self.assertEqual(tx.size, 4225)
         self.assertEqual(tx.base_size, base_size)
         self.assertEqual(txo.size, 4067)
-        self.assertEqual(txo.get_fee(self.ledger), len(claim_name) * FEE_PER_CHAR)
+        self.assertEqual(txo.get_fee(self.ledger), len(name) * FEE_PER_CHAR)
         # fee based on total bytes is the larger fee
-        claim_name = 'a'
-        tx = get_claim_transaction(claim_name, b'0'*4000)
+        name = 'a'
+        tx = get_claim_transaction(name, b'0'*4000)
         base_size = tx.size - tx.inputs[0].size - tx.outputs[0].size
         txo = tx.outputs[0]
         self.assertEqual(tx.size, 4214)
@@ -196,9 +196,9 @@ class TestTransactionSerialization(unittest.TestCase):
         self.assertEqual(out0.amount, 10000000)
         self.assertEqual(out0.position, 0)
         self.assertTrue(out0.script.is_pay_pubkey_hash)
-        self.assertTrue(out0.script.is_claim_name)
+        self.assertTrue(out0.script.is_name)
         self.assertTrue(out0.script.is_claim_involved)
-        self.assertEqual(out0.script.values['claim_name'], b'cats')
+        self.assertEqual(out0.script.values['name'], b'cats')
         self.assertEqual(
             hexlify(out0.script.values['pubkey_hash']),
             b'be16e4b0f9bd8f6d47d02b3a887049c36d3b84cb'

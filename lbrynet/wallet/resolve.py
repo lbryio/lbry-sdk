@@ -228,7 +228,7 @@ class Resolver:
         return queries, names, absolute_position_index
 
     @defer.inlineCallbacks
-    def iter_channel_claims_pages(self, queries, claim_positions, claim_names, certificate,
+    def iter_channel_claims_pages(self, queries, claim_positions, names, certificate,
                                   page_size=10):
         # lbryum server returns a dict of {claim_id: (name, claim_height)}
         # first, sort the claims by block height (and by claim id int value within a block).
@@ -250,7 +250,7 @@ class Resolver:
                 batch_result = yield self.network.get_claims_by_ids(*claim_ids)
                 for claim_id in claim_ids:
                     claim = batch_result[claim_id]
-                    if claim['name'] == claim_names[claim_id]:
+                    if claim['name'] == names[claim_id]:
                         formatted_claim = self.parse_and_validate_claim_result(claim, certificate)
                         formatted_claim['absolute_channel_position'] = claim_positions[
                             claim['claim_id']]
@@ -366,7 +366,7 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
                         claim_id = result['claim_id']
                         claim_sequence = result['claim_sequence']
                         claim_script = claim_output.script
-                        decoded_name = claim_script.values['claim_name'].decode()
+                        decoded_name = claim_script.values['name'].decode()
                         decoded_value = claim_script.values['claim']
                         if decoded_name == name:
                             return _build_response(name, decoded_value, claim_id,

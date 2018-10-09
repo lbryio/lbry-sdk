@@ -21,18 +21,18 @@ class OutputScript(BaseOutputScript):
     OP_BUY_CLAIM = 0xb9
 
     CLAIM_NAME_OPCODES = (
-        OP_CLAIM_NAME, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim'),
+        OP_CLAIM_NAME, PUSH_SINGLE('name'), PUSH_SINGLE('claim'),
         OP_2DROP, OP_DROP
     )
-    CLAIM_NAME_PUBKEY = Template('claim_name+pay_pubkey_hash', (
+    CLAIM_NAME_PUBKEY = Template('name+pay_pubkey_hash', (
         CLAIM_NAME_OPCODES + BaseOutputScript.PAY_PUBKEY_HASH.opcodes
     ))
-    CLAIM_NAME_SCRIPT = Template('claim_name+pay_script_hash', (
+    CLAIM_NAME_SCRIPT = Template('name+pay_script_hash', (
         CLAIM_NAME_OPCODES + BaseOutputScript.PAY_SCRIPT_HASH.opcodes
     ))
 
     SUPPORT_CLAIM_OPCODES = (
-        OP_SUPPORT_CLAIM, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim_id'),
+        OP_SUPPORT_CLAIM, PUSH_SINGLE('name'), PUSH_SINGLE('claim_id'),
         OP_2DROP, OP_DROP
     )
     SUPPORT_CLAIM_PUBKEY = Template('support_claim+pay_pubkey_hash', (
@@ -43,7 +43,7 @@ class OutputScript(BaseOutputScript):
     ))
 
     UPDATE_CLAIM_OPCODES = (
-        OP_UPDATE_CLAIM, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim_id'), PUSH_SINGLE('claim'),
+        OP_UPDATE_CLAIM, PUSH_SINGLE('name'), PUSH_SINGLE('claim_id'), PUSH_SINGLE('claim'),
         OP_2DROP, OP_2DROP
     )
     UPDATE_CLAIM_PUBKEY = Template('update_claim+pay_pubkey_hash', (
@@ -80,26 +80,26 @@ class OutputScript(BaseOutputScript):
     ]
 
     @classmethod
-    def pay_claim_name_pubkey_hash(cls, claim_name, claim, pubkey_hash):
+    def pay_name_pubkey_hash(cls, name, claim, pubkey_hash):
         return cls(template=cls.CLAIM_NAME_PUBKEY, values={
-            'claim_name': claim_name,
+            'name': name,
             'claim': claim,
             'pubkey_hash': pubkey_hash
         })
 
     @classmethod
-    def pay_update_claim_pubkey_hash(cls, claim_name, claim_id, claim, pubkey_hash):
+    def pay_update_claim_pubkey_hash(cls, name, claim_id, claim, pubkey_hash):
         return cls(template=cls.UPDATE_CLAIM_PUBKEY, values={
-            'claim_name': claim_name,
+            'name': name,
             'claim_id': claim_id,
             'claim': claim,
             'pubkey_hash': pubkey_hash
         })
 
     @classmethod
-    def pay_support_pubkey_hash(cls, claim_name: bytes, claim_id: bytes, pubkey_hash: bytes):
+    def pay_support_pubkey_hash(cls, name: bytes, claim_id: bytes, pubkey_hash: bytes):
         return cls(template=cls.SUPPORT_CLAIM_PUBKEY, values={
-            'claim_name': claim_name,
+            'name': name,
             'claim_id': claim_id,
             'pubkey_hash': pubkey_hash
         })
@@ -129,8 +129,8 @@ class OutputScript(BaseOutputScript):
         })
 
     @property
-    def is_claim_name(self):
-        return self.template.name.startswith('claim_name+')
+    def is_name(self):
+        return self.template.name.startswith('name+')
 
     @property
     def is_update_claim(self):
@@ -151,6 +151,6 @@ class OutputScript(BaseOutputScript):
     @property
     def is_claim_involved(self):
         return any((
-            self.is_claim_name, self.is_support_claim, self.is_update_claim,
+            self.is_name, self.is_support_claim, self.is_update_claim,
             self.is_sell_claim, self.is_buy_claim
         ))

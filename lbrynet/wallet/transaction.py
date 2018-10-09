@@ -35,13 +35,13 @@ class Output(BaseOutput):
 
     def get_fee(self, ledger):
         name_fee = 0
-        if self.script.is_claim_name:
-            name_fee = len(self.script.values['claim_name']) * ledger.fee_per_name_char
+        if self.script.is_name:
+            name_fee = len(self.script.values['name']) * ledger.fee_per_name_char
         return max(name_fee, super().get_fee(ledger))
 
     @property
     def claim_id(self) -> str:
-        if self.script.is_claim_name:
+        if self.script.is_name:
             claim_id = hash160(self.tx_ref.hash + struct.pack('>I', self.position))
         elif self.script.is_update_claim or self.script.is_support_claim:
             claim_id = self.script.values['claim_id']
@@ -50,14 +50,14 @@ class Output(BaseOutput):
         return hexlify(claim_id[::-1]).decode()
 
     @property
-    def claim_name(self) -> str:
+    def name(self) -> str:
         if self.script.is_claim_involved:
-            return self.script.values['claim_name'].decode()
-        raise ValueError('No claim_name associated.')
+            return self.script.values['name'].decode()
+        raise ValueError('No name associated.')
 
     @property
     def claim(self) -> ClaimDict:
-        if self.script.is_claim_name or self.script.is_update_claim:
+        if self.script.is_name or self.script.is_update_claim:
             return ClaimDict.deserialize(self.script.values['claim'])
         raise ValueError('Only claim name and claim update have the claim payload.')
 
@@ -72,11 +72,11 @@ class Output(BaseOutput):
         if self.script.is_claim_involved:
             if self.channel is not None:
                 return "{0}#{1}/{2}".format(
-                    self.channel.claim_name,
+                    self.channel.name,
                     self.channel.claim_id,
-                    self.claim_name
+                    self.name
                 )
-            return "{}#{}".format(self.claim_name, self.claim_id)
+            return "{}#{}".format(self.name, self.claim_id)
         raise ValueError('No claim associated.')
 
     @property
@@ -84,10 +84,10 @@ class Output(BaseOutput):
         return self.signature is not None
 
     @classmethod
-    def pay_claim_name_pubkey_hash(
-            cls, amount: int, claim_name: str, claim: bytes, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_claim_name_pubkey_hash(
-            claim_name.encode(), claim, pubkey_hash)
+    def pay_name_pubkey_hash(
+            cls, amount: int, name: str, claim: bytes, pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.pay_name_pubkey_hash(
+            name.encode(), claim, pubkey_hash)
         return cls(amount, script)
 
     @classmethod
@@ -97,14 +97,14 @@ class Output(BaseOutput):
 
     @classmethod
     def pay_update_claim_pubkey_hash(
-            cls, amount: int, claim_name: str, claim_id: str, claim: bytes, pubkey_hash: bytes) -> 'Output':
+            cls, amount: int, name: str, claim_id: str, claim: bytes, pubkey_hash: bytes) -> 'Output':
         script = cls.script_class.pay_update_claim_pubkey_hash(
-            claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
+            name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
         return cls(amount, script)
 
     @classmethod
-    def pay_support_pubkey_hash(cls, amount: int, claim_name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_support_pubkey_hash(claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash)
+    def pay_support_pubkey_hash(cls, amount: int, name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.pay_support_pubkey_hash(name.encode(), unhexlify(claim_id)[::-1], pubkey_hash)
         return cls(amount, script)
 
 
@@ -123,7 +123,7 @@ class Transaction(BaseTransaction):
     def claim(cls, name: str, meta: ClaimDict, amount: int, holding_address: bytes,
               funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
-        claim_output = Output.pay_claim_name_pubkey_hash(
+        claim_output = Output.pay_name_pubkey_hash(
             amount, name, meta.serialized, ledger.address_to_hash160(holding_address)
         )
         return cls.create([], [claim_output], funding_accounts, change_account)
@@ -142,17 +142,17 @@ class Transaction(BaseTransaction):
                funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
-            amount, previous_claim.claim_name, previous_claim.claim_id,
+            amount, previous_claim.name, previous_claim.claim_id,
             meta.serialized, ledger.address_to_hash160(holding_address)
         )
         return cls.create([Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account)
 
     @classmethod
-    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: bytes,
+    def support(cls, name: str, claim_id: str, amount: int, holding_address: bytes,
                 funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         output = Output.pay_support_pubkey_hash(
-            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
+            amount, name, claim_id, ledger.address_to_hash160(holding_address)
         )
         return cls.create([], [output], funding_accounts, change_account)
 
@@ -167,7 +167,7 @@ class Transaction(BaseTransaction):
 
     @property
     def my_claim_outputs(self):
-        return self._filter_my_outputs(lambda s: s.is_claim_name)
+        return self._filter_my_outputs(lambda s: s.is_name)
 
     @property
     def my_update_outputs(self):
@@ -183,7 +183,7 @@ class Transaction(BaseTransaction):
             abandon = txi.txo_ref.txo
             if abandon is not None and abandon.is_my_account and abandon.script.is_claim_involved:
                 is_update = False
-                if abandon.script.is_claim_name or abandon.script.is_update_claim:
+                if abandon.script.is_name or abandon.script.is_update_claim:
                     for update in self.my_update_outputs:
                         if abandon.claim_id == update.claim_id:
                             is_update = True
