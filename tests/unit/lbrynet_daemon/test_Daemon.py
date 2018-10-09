@@ -286,7 +286,7 @@ class TestFileListSorting(unittest.TestCase):
             'channel_claim_id': channel_claim_id,
             'channel_name': '@' + channel_name,
             'claim_id': self.faker.sha1(),
-            'claim_name': '-'.join(self.faker.words(4)),
+            'name': '-'.join(self.faker.words(4)),
             'completed': self.faker.boolean(),
             'download_directory': path.dirname(file_path),
             'download_path': file_path,

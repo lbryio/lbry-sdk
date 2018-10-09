@@ -76,7 +76,7 @@ class Account(BaseAccount):
                     del self.certificates[maybe_claim_id]
                     log.info(
                         "Migrated certificate with claim_id '%s' ('%s') to a new look up key %s.",
-                        maybe_claim_id, txo.script.values['claim_name'], tx_nout
+                        maybe_claim_id, txo.script.values['name'], tx_nout
                     )
                     results['migrate-success'] += 1
                 else:
@@ -128,7 +128,7 @@ class Account(BaseAccount):
     def get_channels(self):
         return super().get_utxos(
             claim_type__any={'is_claim': 1, 'is_update': 1},
-            claim_name__like='@%'
+            name__like='@%'
         )
 
     @classmethod

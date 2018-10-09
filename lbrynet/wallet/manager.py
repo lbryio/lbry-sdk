@@ -306,7 +306,7 @@ class LbryWalletManager(BaseWalletManager):
                     'balance_delta': dewies_to_lbc(-txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
+                    'name': txo.name,
                     'nout': txo.position
                 } for txo in tx.my_claim_outputs],
                 'update_info': [{
@@ -314,7 +314,7 @@ class LbryWalletManager(BaseWalletManager):
                     'balance_delta': dewies_to_lbc(-txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
+                    'name': txo.name,
                     'nout': txo.position
                 } for txo in tx.my_update_outputs],
                 'support_info': [{
@@ -322,7 +322,7 @@ class LbryWalletManager(BaseWalletManager):
                     'balance_delta': dewies_to_lbc(-txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
+                    'name': txo.name,
                     'is_tip': False,  # TODO: need to add lookup
                     'nout': txo.position
                 } for txo in tx.my_support_outputs],
@@ -331,7 +331,7 @@ class LbryWalletManager(BaseWalletManager):
                     'balance_delta': dewies_to_lbc(-txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
+                    'name': txo.name,
                     'nout': txo.position
                 } for txo in tx.my_abandon_outputs],
             })
@@ -342,7 +342,7 @@ class LbryWalletManager(BaseWalletManager):
         return account.get_utxos()
 
     @defer.inlineCallbacks
-    def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
+    def name(self, name, amount, claim_dict, certificate=None, claim_address=None):
         account = self.default_account
         claim = ClaimDict.load_dict(claim_dict)
         if not claim_address:
@@ -351,7 +351,7 @@ class LbryWalletManager(BaseWalletManager):
             claim = claim.sign(
                 certificate.signature, claim_address, certificate.claim_id
             )
-        existing_claims = yield account.get_utxos(include_claims=True, claim_name=name)
+        existing_claims = yield account.get_utxos(include_claims=True, name=name)
         if len(existing_claims) == 0:
             tx = yield Transaction.claim(
                 name, claim, amount, claim_address, [account], account
@@ -383,9 +383,9 @@ class LbryWalletManager(BaseWalletManager):
         }
 
     @defer.inlineCallbacks
-    def support_claim(self, claim_name, claim_id, amount, account):
+    def support_claim(self, name, claim_id, amount, account):
         holding_address = yield account.receiving.get_or_create_usable_address()
-        tx = yield Transaction.support(claim_name, claim_id, amount, holding_address, [account], account)
+        tx = yield Transaction.support(name, claim_id, amount, holding_address, [account], account)
         yield account.ledger.broadcast(tx)
         return tx
 

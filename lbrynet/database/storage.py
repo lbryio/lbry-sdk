@@ -131,7 +131,7 @@ class SQLiteStorage:
             create table if not exists claim (
                 claim_outpoint text not null primary key,
                 claim_id char(40) not null,
-                claim_name text not null,
+                name text not null,
                 amount integer not null,
                 height integer not null,
                 serialized_metadata blob not null,
@@ -729,7 +729,7 @@ class SQLiteStorage:
             claim_info = transaction.execute(
                 "select c.*, "
                 "case when c.channel_claim_id is not null then "
-                "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                "(select name from claim where claim_id==c.channel_claim_id) "
                 "else null end as channel_name from content_claim "
                 "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
                 "and content_claim.stream_hash=? order by c.rowid desc", (stream_hash,)
@@ -774,7 +774,7 @@ class SQLiteStorage:
                 results[stream_hash] = result
             bind = "({})".format(','.join('?' for _ in range(len(channel_id_infos))))
             for claim_id, channel_name in transaction.execute(
-                    "select claim_id, claim_name from claim where claim_id in {}".format(bind),
+                    "select claim_id, name from claim where claim_id in {}".format(bind),
                     tuple(channel_id_infos.keys())
             ).fetchall():
                 for stream_hash in channel_id_infos[claim_id]:
@@ -801,7 +801,7 @@ class SQLiteStorage:
         def _get_claim(transaction):
             claim_info = transaction.execute("select c.*, "
                                              "case when c.channel_claim_id is not null then "
-                                             "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                                             "(select name from claim where claim_id==c.channel_claim_id) "
                                              "else null end as channel_name from claim c where claim_outpoint = ?",
                                              (claim_outpoint,)).fetchone()
             channel_name = claim_info[-1]

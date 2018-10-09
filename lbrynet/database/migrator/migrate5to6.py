@@ -40,7 +40,7 @@ CREATE_TABLES_QUERY = """
             create table if not exists claim (
                 claim_outpoint text not null primary key,
                 claim_id char(40) not null,
-                claim_name text not null,
+                name text not null,
                 amount integer not null,
                 height integer not null,
                 serialized_metadata blob not null,

@@ -41,7 +41,7 @@ class Publisher:
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
-        tx = yield self.wallet.claim_name(
+        tx = yield self.wallet.name(
             name, bid, claim_dict, self.certificate, holding_address
         )
 
@@ -63,7 +63,7 @@ class Publisher:
     @defer.inlineCallbacks
     def publish_stream(self, name, bid, claim_dict, stream_hash, holding_address=None):
         """Make a claim without creating a lbry file"""
-        tx = yield self.wallet.claim_name(
+        tx = yield self.wallet.name(
             name, bid, claim_dict, self.certificate, holding_address
         )
         if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have

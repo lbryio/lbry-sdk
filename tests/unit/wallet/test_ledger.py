@@ -43,7 +43,7 @@ class BasicAccountingTests(LedgerTestCase):
         self.assertEqual(balance, 100)
 
         tx = Transaction(is_verified=True)\
-            .add_outputs([Output.pay_claim_name_pubkey_hash(100, 'foo', b'', hash160)])
+            .add_outputs([Output.pay_name_pubkey_hash(100, 'foo', b'', hash160)])
         yield self.ledger.db.save_transaction_io(
             'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
