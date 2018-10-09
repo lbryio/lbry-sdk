@@ -327,7 +327,7 @@ class BaseDatabase(SQLiteMixin):
         for row in tx_rows:
             txids.append(row[0])
             txs.append(self.ledger.transaction_class(
-                raw=row[1], height=row[2], position=row[3], is_verified=row[4]
+                raw=row[1], height=row[2], position=row[3], is_verified=bool(row[4])
             ))
 
         annotated_txos = {
@@ -444,10 +444,10 @@ class BaseDatabase(SQLiteMixin):
         return count[0][0]
 
     @defer.inlineCallbacks
-    def get_address(self, address):
+    def get_address(self, **constraints):
         addresses = yield self.get_addresses(
             cols=('address', 'account', 'chain', 'position', 'pubkey', 'history', 'used_times'),
-            address=address, limit=1
+            limit=1, **constraints
         )
         if addresses:
             return addresses[0]

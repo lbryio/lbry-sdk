@@ -177,14 +177,14 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     @defer.inlineCallbacks
     def get_local_status(self, address):
-        address_details = yield self.db.get_address(address)
+        address_details = yield self.db.get_address(address=address)
         history = address_details['history'] or ''
         h = sha256(history.encode())
         return hexlify(h)
 
     @defer.inlineCallbacks
     def get_local_history(self, address):
-        address_details = yield self.db.get_address(address)
+        address_details = yield self.db.get_address(address=address)
         history = address_details['history'] or ''
         parts = history.split(':')[:-1]
         return list(zip(parts[0::2], map(int, parts[1::2])))
