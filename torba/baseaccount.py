@@ -1,3 +1,4 @@
+import random
 import typing
 from typing import List, Dict, Tuple, Type, Optional, Any
 from twisted.internet import defer
@@ -73,9 +74,9 @@ class AddressManager:
 
     @defer.inlineCallbacks
     def get_or_create_usable_address(self) -> defer.Deferred:
-        addresses = yield self.get_addresses(only_usable=True, limit=1)
+        addresses = yield self.get_addresses(only_usable=True, limit=10)
         if addresses:
-            return addresses[0]
+            return random.choice(addresses)
         addresses = yield self.ensure_address_gap()
         return addresses[0]
 
