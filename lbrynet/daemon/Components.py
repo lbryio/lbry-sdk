@@ -261,7 +261,7 @@ class HeadersComponent(Component):
             defer.returnValue(False)
         local_height = self.local_header_file_height()
         remote_height = yield self.get_remote_height()
-        log.info("remote height: %i, local height: %s", remote_height, local_height)
+        log.info("remote height: %i, local height: %i", remote_height, local_height)
         if remote_height > (local_height + s3_headers_depth):
             defer.returnValue(True)
         defer.returnValue(False)
