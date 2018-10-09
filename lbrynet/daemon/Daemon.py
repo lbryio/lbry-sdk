@@ -1532,7 +1532,7 @@ class Daemon(AuthJSONRPCServer):
             }
             return {
                 "list": (yield self.ledger.db.get_addresses(**constraints)),
-                "size": (yield self.ledger.db.get_addresses_count(**constraints)),
+                "size": (yield self.ledger.db.get_address_count(**constraints)),
                 "offset": offset,
                 "limit": limit
             }
@@ -2079,7 +2079,7 @@ class Daemon(AuthJSONRPCServer):
             }
             return {
                 "list": (yield self.ledger.db.get_channels(**constraints)),
-                "size": (yield self.ledger.db.get_channels_count(**constraints)),
+                "size": (yield self.ledger.db.get_channel_count(**constraints)),
                 "offset": offset,
                 "limit": limit
             }
@@ -2523,7 +2523,7 @@ class Daemon(AuthJSONRPCServer):
             }
             return {
                 "list": (yield self.ledger.db.get_claims(**constraints)),
-                "size": (yield self.ledger.db.get_claims_count(**constraints)),
+                "size": (yield self.ledger.db.get_claim_count(**constraints)),
                 "offset": offset,
                 "limit": limit
             }
@@ -2728,7 +2728,7 @@ class Daemon(AuthJSONRPCServer):
             return {
                 "list": (yield self.wallet_manager.get_history(
                     account=account, **constraints)),
-                "size": (yield self.ledger.db.get_transactions_count(
+                "size": (yield self.ledger.db.get_transaction_count(
                     account=account, **constraints)),
                 "offset": offset,
                 "limit": limit

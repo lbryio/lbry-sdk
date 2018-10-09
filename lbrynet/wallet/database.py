@@ -82,7 +82,7 @@ class WalletDatabase(BaseDatabase):
         self.constrain_claims(constraints)
         return self.get_utxos(**constraints)
 
-    def get_claims_count(self, **constraints):
+    def get_claim_count(self, **constraints):
         self.constrain_claims(constraints)
         return self.get_utxo_count(**constraints)
 
@@ -95,9 +95,9 @@ class WalletDatabase(BaseDatabase):
         self.constrain_channels(constraints)
         return self.get_claims(**constraints)
 
-    def get_channels_count(self, **constraints):
+    def get_channel_count(self, **constraints):
         self.constrain_channels(constraints)
-        return self.get_claims_count(**constraints)
+        return self.get_claim_count(**constraints)
 
     @defer.inlineCallbacks
     def get_certificates(self, private_key_accounts, exclude_without_key=False, **constraints):

@@ -294,7 +294,7 @@ class LbryWalletManager(BaseWalletManager):
         history = []
         for tx in txs:
             ts = headers[tx.height]['timestamp']
-            history.append({
+            item = {
                 'txid': tx.id,
                 'timestamp': ts,
                 'value': dewies_to_lbc(tx.net_account_balance),
@@ -319,11 +319,11 @@ class LbryWalletManager(BaseWalletManager):
                 } for txo in tx.my_update_outputs],
                 'support_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'balance_delta': dewies_to_lbc(txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
-                    'is_tip': False,  # TODO: need to add lookup
+                    'is_tip': not txo.is_my_account,
                     'nout': txo.position
                 } for txo in tx.my_support_outputs],
                 'abandon_info': [{
@@ -334,7 +334,12 @@ class LbryWalletManager(BaseWalletManager):
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_abandon_outputs],
-            })
+            }
+            if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
+                item['fee'] = dewies_to_lbc(tx.fee)
+            else:
+                item['fee'] = '0'  # can't calculate fee without all input txos
+            history.append(item)
         return history
 
     @staticmethod
