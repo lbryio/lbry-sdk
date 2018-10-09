@@ -989,7 +989,7 @@ class Daemon(AuthJSONRPCServer):
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
     @AuthJSONRPCServer.deprecated("account_balance")
-    def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
+    def jsonrpc_wallet_balance(self, address=None):
         pass
 
     @AuthJSONRPCServer.deprecated("account_unlock")
@@ -1169,7 +1169,7 @@ class Daemon(AuthJSONRPCServer):
         Return the balance of an account
 
         Usage:
-            account_balance [<account_id>] [<address> | --address=<address>] [--include_unconfirmed]
+            account_balance [<account_id>] [<address> | --address=<address>]
 
         Options:
             --account_id=<account_id>       : (str) If provided only the balance for this
@@ -1513,6 +1513,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             address_list [<account_id> | --account_id=<account_id>]
+                         [--offset=<offset>] [--limit=<limit>]
 
         Options:
             --account_id=<account_id>  : (str) id of the account to use
@@ -2057,7 +2058,8 @@ class Daemon(AuthJSONRPCServer):
         Get certificate claim infos for channels that can be published to
 
         Usage:
-            channel_list
+            channel_list [<account_id> | --account_id=<account_id> ]
+                         [--offset=<offset>] [--limit=<limit>]
 
         Options:
             --account_id=<account_id>  : (str) id of the account to use
@@ -2483,6 +2485,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             claim_list_mine [<account_id> | --account_id=<account_id>]
+                            [--offset=<offset>] [--limit=<limit>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
@@ -2663,6 +2666,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             transaction_list [<account_id> | --account_id=<account_id>]
+                             [--offset=<offset>] [--limit=<limit>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
@@ -2753,7 +2757,8 @@ class Daemon(AuthJSONRPCServer):
         List unspent transaction outputs
 
         Usage:
-            utxo_list [<account_id>]
+            utxo_list [<account_id> | --account_id=<account_id>]
+                      [--offset=<offset>] [--limit=<limit>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
