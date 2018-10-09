@@ -73,7 +73,7 @@ class TestSynchronization(LedgerTestCase):
     def test_update_history(self):
         account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
         address = yield account.receiving.get_or_create_usable_address()
-        address_details = yield self.ledger.db.get_address(address)
+        address_details = yield self.ledger.db.get_address(address=address)
         self.assertEqual(address_details['history'], None)
 
         self.add_header(block_height=0, merkle_root=b'abcd04')
@@ -93,7 +93,7 @@ class TestSynchronization(LedgerTestCase):
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, ['abcd01', 'abcd02', 'abcd03'])
 
-        address_details = yield self.ledger.db.get_address(address)
+        address_details = yield self.ledger.db.get_address(address=address)
         self.assertEqual(address_details['history'], 'abcd01:0:abcd02:1:abcd03:2:')
 
         self.ledger.network.get_history_called = []
@@ -109,7 +109,7 @@ class TestSynchronization(LedgerTestCase):
         yield self.ledger.update_history(address)
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, ['abcd04'])
-        address_details = yield self.ledger.db.get_address(address)
+        address_details = yield self.ledger.db.get_address(address=address)
         self.assertEqual(address_details['history'], 'abcd01:0:abcd02:1:abcd03:2:abcd04:3:')
 
 
