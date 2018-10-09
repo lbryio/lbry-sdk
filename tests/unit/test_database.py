@@ -96,7 +96,7 @@ class TestQueryBuilder(unittest.TestCase):
         )
         self.assertEqual(
             query("select * from foo", limit=20, offset=10),
-            ("select * from foo OFFSET 10 LIMIT 20", {})
+            ("select * from foo LIMIT 20 OFFSET 10", {})
         )
 
 
