@@ -84,11 +84,11 @@ def query(select, **constraints):
         else:
             raise ValueError("order_by must be string or list")
 
-    if offset is not None:
-        sql.append('OFFSET {}'.format(offset))
-
     if limit is not None:
         sql.append('LIMIT {}'.format(limit))
+
+    if offset is not None:
+        sql.append('OFFSET {}'.format(offset))
 
     return ' '.join(sql), values
 
