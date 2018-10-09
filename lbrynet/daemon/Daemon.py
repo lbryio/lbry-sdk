@@ -2752,6 +2752,7 @@ class Daemon(AuthJSONRPCServer):
         return self.wallet_manager.get_transaction(txid)
 
     @requires(WALLET_COMPONENT)
+    @defer.inlineCallbacks
     def jsonrpc_utxo_list(self, account_id=None, offset=None, limit=None):
         """
         List unspent transaction outputs
