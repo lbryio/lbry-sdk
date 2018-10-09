@@ -220,9 +220,10 @@ class BaseLedger(metaclass=LedgerRegistry):
             self.headers.open()
         ])
         first_connection = self.network.on_connected.first
-        self.network.on_connected.listen(self.join_network)
         self.network.start()
         yield first_connection
+        yield self.join_network()
+        self.network.on_connected.listen(self.join_network)
 
     @defer.inlineCallbacks
     def join_network(self, *args):
