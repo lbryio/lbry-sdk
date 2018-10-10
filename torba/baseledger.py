@@ -203,11 +203,9 @@ class BaseLedger(metaclass=LedgerRegistry):
             working_branch = double_sha256(combined)
         return hexlify(working_branch[::-1])
 
-    @defer.inlineCallbacks
-    def validate_transaction_and_set_position(self, tx, height):
+    def validate_transaction_and_set_position(self, tx, height, merkle):
         if not height <= len(self.headers):
             return False
-        merkle = yield self.network.get_merkle(tx.id, height)
         merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
         header = self.headers[height]
         tx.position = merkle['pos']
@@ -353,6 +351,15 @@ class BaseLedger(metaclass=LedgerRegistry):
     def update_history(self, address):
         remote_history = yield self.network.get_history(address)
         local_history = yield self.get_local_history(address)
+        proofs = {
+            entry['tx_hash']: self.network.get_merkle(entry['tx_hash'], entry['height'])
+            for index, entry in enumerate(remote_history)
+            if index >= len(local_history) or (entry['tx_hash'], entry['height']) != local_history[index]
+        }
+        network_txs = {key: self.network.get_transaction(key) for key in proofs.keys()}
+        yield defer.DeferredList(list(proofs.values()) + list(network_txs.values()))
+        proofs = {key: value.result for key, value in proofs.items()}
+        network_txs = {key: value.result for key, value in network_txs.items()}
 
         synced_history = StringIO()
         for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
@@ -372,14 +379,14 @@ class BaseLedger(metaclass=LedgerRegistry):
                 tx = yield self.db.get_transaction(txid=hex_id)
                 save_tx = None
                 if tx is None:
-                    _raw = yield self.network.get_transaction(hex_id)
+                    _raw = network_txs[hex_id]
                     tx = self.transaction_class(unhexlify(_raw))
                     save_tx = 'insert'
 
                 tx.height = remote_height
 
                 if remote_height > 0 and (not tx.is_verified or tx.position == -1):
-                    yield self.validate_transaction_and_set_position(tx, remote_height)
+                    self.validate_transaction_and_set_position(tx, remote_height, proofs[hex_id])
                     if save_tx is None:
                         save_tx = 'update'
 

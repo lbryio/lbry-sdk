@@ -24,7 +24,7 @@ class MockNetwork:
         return defer.succeed(self.history)
 
     def get_merkle(self, txid, height):
-        return {'merkle': ['abcd01'], 'pos': 1}
+        return defer.succeed({'merkle': ['abcd01'], 'pos': 1})
 
     def get_transaction(self, tx_hash):
         self.get_transaction_called.append(tx_hash)
