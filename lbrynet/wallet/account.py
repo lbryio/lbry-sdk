@@ -115,6 +115,13 @@ class Account(BaseAccount):
                 indent=2
             ))
 
+    @defer.inlineCallbacks
+    def save_max_gap(self):
+        gap = yield self.get_max_gap()
+        self.receiving.gap = max(20, gap['max_receiving_gap'] + 1)
+        self.change.gap = max(6, gap['max_change_gap'] + 1)
+        self.wallet.save()
+
     def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
