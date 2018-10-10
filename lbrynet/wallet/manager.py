@@ -8,6 +8,7 @@ from typing import Optional
 
 from twisted.internet import defer
 
+from lbryschema.schema import SECP256k1
 from torba.basemanager import BaseWalletManager
 
 from lbryschema.claim import ClaimDict
@@ -354,7 +355,7 @@ class LbryWalletManager(BaseWalletManager):
             claim_address = yield account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
-                certificate.signature, claim_address, certificate.claim_id
+                certificate.signature, claim_address, certificate.claim_id, curve=SECP256k1
             )
         existing_claims = yield account.get_claims(claim_name=name)
         if len(existing_claims) == 0:
