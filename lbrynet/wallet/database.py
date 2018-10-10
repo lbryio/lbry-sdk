@@ -22,13 +22,17 @@ class WalletDatabase(BaseDatabase):
             is_buy boolean not null default 0,
             is_sell boolean not null default 0
         );
+        create index txo_claim_id_idx on txo (claim_id);
     """
 
     CREATE_TABLES_QUERY = (
             BaseDatabase.CREATE_TX_TABLE +
             BaseDatabase.CREATE_PUBKEY_ADDRESS_TABLE +
+            BaseDatabase.CREATE_PUBKEY_ADDRESS_INDEX +
             CREATE_TXO_TABLE +
-            BaseDatabase.CREATE_TXI_TABLE
+            BaseDatabase.CREATE_TXO_INDEX +
+            BaseDatabase.CREATE_TXI_TABLE +
+            BaseDatabase.CREATE_TXI_INDEX
     )
 
     def txo_to_row(self, tx, address, txo):

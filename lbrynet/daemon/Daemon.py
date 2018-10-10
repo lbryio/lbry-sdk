@@ -92,7 +92,7 @@ def maybe_paginate(get_records: Callable, get_record_count: Callable,
         })
         return {
             "items": (yield get_records(**constraints)),
-            "total_pages": ((yield get_record_count(**constraints)) + (page_size-1)) / page_size,
+            "total_pages": int(((yield get_record_count(**constraints)) + (page_size-1)) / page_size),
             "page": page, "page_size": page_size
         }
     return (yield get_records(**constraints))
