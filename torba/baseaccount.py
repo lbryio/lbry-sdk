@@ -108,13 +108,22 @@ class HierarchicalDeterministic(AddressManager):
 
     @defer.inlineCallbacks
     def generate_keys(self, start: int, end: int) -> defer.Deferred:
-        new_keys = []
+        keys_batch, final_keys = [], []
         for index in range(start, end+1):
-            new_keys.append((index, self.public_key.child(index)))
-        yield self.db.add_keys(
-            self.account, self.chain_number, new_keys
-        )
-        return [key[1].address for key in new_keys]
+            keys_batch.append((index, self.public_key.child(index)))
+            if len(keys_batch) % 2000 == 0:
+                yield self.db.add_keys(
+                    self.account, self.chain_number, keys_batch
+                )
+                final_keys.extend(keys_batch)
+                keys_batch.clear()
+        if keys_batch:
+            yield self.db.add_keys(
+                self.account, self.chain_number, keys_batch
+            )
+            final_keys.extend(keys_batch)
+            keys_batch.clear()
+        return [key[1].address for key in final_keys]
 
     @defer.inlineCallbacks
     def get_max_gap(self) -> defer.Deferred:
