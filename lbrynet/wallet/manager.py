@@ -356,7 +356,7 @@ class LbryWalletManager(BaseWalletManager):
             claim = claim.sign(
                 certificate.signature, claim_address, certificate.claim_id
             )
-        existing_claims = yield account.get_utxos(include_claims=True, claim_name=name)
+        existing_claims = yield account.get_claims(claim_name=name)
         if len(existing_claims) == 0:
             tx = yield Transaction.claim(
                 name, claim, amount, claim_address, [account], account
