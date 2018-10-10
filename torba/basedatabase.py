@@ -335,6 +335,9 @@ class BaseDatabase(SQLiteMixin):
             **constraints
         )
 
+        if not tx_rows:
+            return []
+
         txids, txs = [], []
         for row in tx_rows:
             txids.append(row[0])
