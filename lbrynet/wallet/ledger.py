@@ -83,6 +83,7 @@ class MainNetLedger(BaseLedger):
         yield defer.DeferredList([
             a.maybe_migrate_certificates() for a in self.accounts
         ])
+        yield defer.DeferredList([a.save_max_gap() for a in self.accounts])
 
 
 class TestNetLedger(MainNetLedger):
