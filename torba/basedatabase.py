@@ -480,11 +480,10 @@ class BaseDatabase(SQLiteMixin):
         ) + ', '.join(['(?, ?, ?, ?, ?)'] * len(keys))
         values = []
         for position, pubkey in keys:
-            values.append(pubkey.address)
-            values.append(account.public_key.address)
-            values.append(chain)
-            values.append(position)
-            values.append(sqlite3.Binary(pubkey.pubkey_bytes))
+            values.extend([
+                pubkey.address, account.public_key.address, chain, position,
+                sqlite3.Binary(pubkey.pubkey_bytes)
+            ])
         return self.run_operation(sql, values)
 
     @classmethod
