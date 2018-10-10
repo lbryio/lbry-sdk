@@ -332,7 +332,7 @@ class BaseAccount:
 
     @defer.inlineCallbacks
     def get_addresses(self, **constraints) -> defer.Deferred:
-        rows = yield self.ledger.db.select_addresses('address', **constraints)
+        rows = yield self.ledger.db.select_addresses('address', account=self, **constraints)
         return [r[0] for r in rows]
 
     def get_address_records(self, **constraints) -> defer.Deferred:
