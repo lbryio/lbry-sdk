@@ -1,6 +1,8 @@
 import os
 import logging
 from binascii import hexlify, unhexlify
+from io import StringIO
+
 from typing import Dict, Type, Iterable
 from operator import itemgetter
 from collections import namedtuple
@@ -352,10 +354,10 @@ class BaseLedger(metaclass=LedgerRegistry):
         remote_history = yield self.network.get_history(address)
         local_history = yield self.get_local_history(address)
 
-        synced_history = []
+        synced_history = StringIO()
         for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
 
-            synced_history.append((hex_id, remote_height))
+            synced_history.write('{}:{}:'.format(hex_id, remote_height))
 
             if i < len(local_history) and local_history[i] == (hex_id, remote_height):
                 continue
@@ -383,7 +385,7 @@ class BaseLedger(metaclass=LedgerRegistry):
 
                 yield self.db.save_transaction_io(
                     save_tx, tx, address, self.address_to_hash160(address),
-                    ''.join('{}:{}:'.format(tx_id, tx_height) for tx_id, tx_height in synced_history)
+                    synced_history.getvalue()
                 )
 
                 log.debug(
