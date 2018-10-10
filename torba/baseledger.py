@@ -348,18 +348,25 @@ class BaseLedger(metaclass=LedgerRegistry):
         )
 
     @defer.inlineCallbacks
-    def update_history(self, address):
-        remote_history = yield self.network.get_history(address)
-        local_history = yield self.get_local_history(address)
+    def _prefetch_history(self, remote_history, local_history):
         proofs = {
-            entry['tx_hash']: self.network.get_merkle(entry['tx_hash'], entry['height'])
+            entry['tx_hash']: (
+                self.network.get_merkle(entry['tx_hash'], entry['height']) if entry['height'] > 0 else None
+            )
             for index, entry in enumerate(remote_history)
             if index >= len(local_history) or (entry['tx_hash'], entry['height']) != local_history[index]
         }
         network_txs = {key: self.network.get_transaction(key) for key in proofs.keys()}
-        yield defer.DeferredList(list(proofs.values()) + list(network_txs.values()))
-        proofs = {key: value.result for key, value in proofs.items()}
+        yield defer.DeferredList(list(filter(None, proofs.values())) + list(network_txs.values()))
+        proofs = {key: value.result for key, value in proofs.items() if value}
         network_txs = {key: value.result for key, value in network_txs.items()}
+        return proofs, network_txs
+
+    @defer.inlineCallbacks
+    def update_history(self, address):
+        remote_history = yield self.network.get_history(address)
+        local_history = yield self.get_local_history(address)
+        proofs, network_txs = yield self._prefetch_history(remote_history, local_history)
 
         synced_history = StringIO()
         for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
