@@ -218,6 +218,7 @@ class BaseDatabase(SQLiteMixin):
     """
     CREATE_TXI_INDEX = """
         create index if not exists txi_address_idx on txi (address);
+        create index if not exists txi_txoid_idx on txi (txoid);
     """
 
     CREATE_TABLES_QUERY = (
