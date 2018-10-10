@@ -167,7 +167,7 @@ class SQLiteStorage:
                 timestamp integer,
                 primary key (sd_hash, reflector_address)
             );
-    """ + WalletDatabase.CREATE_TABLES_QUERY
+    """
 
     def __init__(self, db_dir, reactor=None):
         if not reactor:

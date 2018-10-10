@@ -22,7 +22,7 @@ class WalletDatabase(BaseDatabase):
             is_buy boolean not null default 0,
             is_sell boolean not null default 0
         );
-        create index txo_claim_id_idx on txo (claim_id);
+        create index if not exists txo_claim_id_idx on txo (claim_id);
     """
 
     CREATE_TABLES_QUERY = (
