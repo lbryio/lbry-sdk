@@ -43,6 +43,12 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
         self.assertEqual(len(addresses), 26)
 
     @defer.inlineCallbacks
+    def test_generate_keys_over_batch_threshold_saves_it_properly(self):
+        yield self.account.receiving.generate_keys(0, 200)
+        records = yield self.account.receiving.get_address_records()
+        self.assertEqual(201, len(records))
+
+    @defer.inlineCallbacks
     def test_ensure_address_gap(self):
         account = self.account
 
