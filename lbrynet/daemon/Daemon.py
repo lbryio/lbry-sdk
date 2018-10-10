@@ -6,6 +6,7 @@ import urllib
 import json
 import textwrap
 
+from typing import Callable, Optional
 from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
@@ -79,6 +80,22 @@ MAX_UPDATE_FEE_ESTIMATE = 0.3
 DIRECTION_ASCENDING = 'asc'
 DIRECTION_DESCENDING = 'desc'
 DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
+
+
+@defer.inlineCallbacks
+def maybe_paginate(get_records: Callable, get_record_count: Callable,
+                   page: Optional[int], page_size: Optional[int], **constraints):
+    if None not in (page, page_size):
+        constraints.update({
+            "offset": page_size * (page-1),
+            "limit": page_size
+        })
+        return {
+            "items": (yield get_records(**constraints)),
+            "total_pages": ((yield get_record_count(**constraints)) + (page_size-1)) / page_size,
+            "page": page, "page_size": page_size
+        }
+    return (yield get_records(**constraints))
 
 
 class IterableContainer:
@@ -1506,37 +1523,28 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_address_list(self, account_id=None, offset=None, limit=None):
+    def jsonrpc_address_list(self, account_id=None, page=None, page_size=None):
         """
         List account addresses
 
         Usage:
             address_list [<account_id> | --account_id=<account_id>]
-                         [--offset=<offset>] [--limit=<limit>]
+                         [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id>  : (str) id of the account to use
-            --offset=<offset>          : (int) slice address list starting at offset
-            --limit=<limit>            : (int) limit number of addresses returned
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             List of wallet addresses
         """
         account = self.get_account_or_default(account_id)
-        if None not in (offset, limit):
-            constraints = {
-                'account': account,
-                'offset': offset,
-                'limit': limit
-            }
-            return {
-                "list": (yield self.ledger.db.get_addresses(**constraints)),
-                "size": (yield self.ledger.db.get_address_count(**constraints)),
-                "offset": offset,
-                "limit": limit
-            }
-        return (yield account.get_addresses())
+        return maybe_paginate(
+            account.get_addresses,
+            account.get_address_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_unused(self, account_id=None):
@@ -2052,38 +2060,29 @@ class Daemon(AuthJSONRPCServer):
         }
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_channel_list(self, account_id=None, offset=None, limit=None):
+    def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
         """
         Get certificate claim infos for channels that can be published to
 
         Usage:
             channel_list [<account_id> | --account_id=<account_id> ]
-                         [--offset=<offset>] [--limit=<limit>]
+                         [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id>  : (str) id of the account to use
-            --offset=<offset>          : (int) slice channel list starting at offset
-            --limit=<limit>            : (int) limit number of channels returned
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
             is in the wallet.
         """
         account = self.get_account_or_default(account_id)
-        if None not in (offset, limit):
-            constraints = {
-                'account': account,
-                'offset': offset,
-                'limit': limit
-            }
-            return {
-                "list": (yield self.ledger.db.get_channels(**constraints)),
-                "size": (yield self.ledger.db.get_channel_count(**constraints)),
-                "offset": offset,
-                "limit": limit
-            }
-        return (yield account.get_channels())
+        return maybe_paginate(
+            account.get_channels,
+            account.get_channel_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2478,19 +2477,18 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_claim_list_mine(self, account_id=None, offset=None, limit=None):
+    def jsonrpc_claim_list_mine(self, account_id=None, page=None, page_size=None):
         """
         List my name claims
 
         Usage:
             claim_list_mine [<account_id> | --account_id=<account_id>]
-                            [--offset=<offset>] [--limit=<limit>]
+                            [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
-            --offset=<offset>         : (int) slice claim list starting at offset
-            --limit=<limit>           : (int) limit number of claims returned
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) List of name claims owned by user
@@ -2515,19 +2513,11 @@ class Daemon(AuthJSONRPCServer):
            ]
         """
         account = self.get_account_or_default(account_id)
-        if None not in (offset, limit):
-            constraints = {
-                'account': account,
-                'offset': offset,
-                'limit': limit
-            }
-            return {
-                "list": (yield self.ledger.db.get_claims(**constraints)),
-                "size": (yield self.ledger.db.get_claim_count(**constraints)),
-                "offset": offset,
-                "limit": limit
-            }
-        return (yield account.get_claims())
+        return maybe_paginate(
+            account.get_claims,
+            account.get_claim_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2659,19 +2649,18 @@ class Daemon(AuthJSONRPCServer):
         return response
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_transaction_list(self, account_id=None, offset=None, limit=None):
+    def jsonrpc_transaction_list(self, account_id=None, page=None, page_size=None):
         """
         List transactions belonging to wallet
 
         Usage:
             transaction_list [<account_id> | --account_id=<account_id>]
-                             [--offset=<offset>] [--limit=<limit>]
+                             [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
-            --offset=<offset>         : (int) slice transaction list starting at offset
-            --limit=<limit>           : (int) limit number of transactions returned
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) List of transactions
@@ -2720,20 +2709,11 @@ class Daemon(AuthJSONRPCServer):
 
         """
         account = self.get_account_or_default(account_id)
-        if None not in (offset, limit):
-            constraints = {
-                'offset': offset,
-                'limit': limit
-            }
-            return {
-                "list": (yield self.wallet_manager.get_history(
-                    account=account, **constraints)),
-                "size": (yield self.ledger.db.get_transaction_count(
-                    account=account, **constraints)),
-                "offset": offset,
-                "limit": limit
-            }
-        return (yield self.wallet_manager.get_history(account))
+        return maybe_paginate(
+            self.wallet_manager.get_history,
+            self.ledger.db.get_transaction_count,
+            page, page_size, account=account
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -2752,19 +2732,18 @@ class Daemon(AuthJSONRPCServer):
         return self.wallet_manager.get_transaction(txid)
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_utxo_list(self, account_id=None, offset=None, limit=None):
+    def jsonrpc_utxo_list(self, account_id=None, page=None, page_size=None):
         """
         List unspent transaction outputs
 
         Usage:
             utxo_list [<account_id> | --account_id=<account_id>]
-                      [--offset=<offset>] [--limit=<limit>]
+                      [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
-            --offset=<offset>         : (int) slice utxo list starting at offset
-            --limit=<limit>           : (int) limit number of utxo returned
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) List of unspent transaction outputs (UTXOs)
@@ -2784,19 +2763,11 @@ class Daemon(AuthJSONRPCServer):
             ]
         """
         account = self.get_account_or_default(account_id)
-        if None not in (offset, limit):
-            constraints = {
-                'account': account,
-                'offset': offset,
-                'limit': limit
-            }
-            return {
-                "list": (yield self.ledger.db.get_utxos(**constraints)),
-                "size": (yield self.ledger.db.get_utxo_count(**constraints)),
-                "offset": offset,
-                "limit": limit
-            }
-        return (yield account.get_utxos())
+        return maybe_paginate(
+            account.get_utxos,
+            account.get_utxo_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_block_show(self, blockhash=None, height=None):
