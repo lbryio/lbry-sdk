@@ -180,6 +180,9 @@ class BaseDatabase(SQLiteMixin):
             used_times integer not null default 0
         );
     """
+    CREATE_PUBKEY_ADDRESS_INDEX = """
+        create index if not exists pubkey_address_account_idx on pubkey_address (account);
+    """
 
     CREATE_TX_TABLE = """
         create table if not exists tx (
@@ -202,6 +205,9 @@ class BaseDatabase(SQLiteMixin):
             is_reserved boolean not null default 0
         );
     """
+    CREATE_TXO_INDEX = """
+        create index if not exists txo_address_idx on txo (address);
+    """
 
     CREATE_TXI_TABLE = """
         create table if not exists txi (
@@ -210,12 +216,18 @@ class BaseDatabase(SQLiteMixin):
             address text references pubkey_address
         );
     """
+    CREATE_TXI_INDEX = """
+        create index if not exists txi_address_idx on txi (address);
+    """
 
     CREATE_TABLES_QUERY = (
         CREATE_TX_TABLE +
         CREATE_PUBKEY_ADDRESS_TABLE +
+        CREATE_PUBKEY_ADDRESS_INDEX +
         CREATE_TXO_TABLE +
-        CREATE_TXI_TABLE
+        CREATE_TXO_INDEX +
+        CREATE_TXI_TABLE +
+        CREATE_TXI_INDEX
     )
 
     @staticmethod
@@ -308,7 +320,6 @@ class BaseDatabase(SQLiteMixin):
                 JOIN pubkey_address USING (address) WHERE pubkey_address.account = :$account
               UNION
                 SELECT txi.txid FROM txi
-                JOIN txo USING (txoid)
                 JOIN pubkey_address USING (address) WHERE pubkey_address.account = :$account
             """
         return self.run_query(*query("SELECT {} FROM tx".format(cols), **constraints))
