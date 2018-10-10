@@ -41,19 +41,19 @@ class DHTPeerFinder(DummyPeerFinder):
         list of peers for the blob
         """
         self.peers.setdefault(blob_hash, {(self.dht_node.externalIP, self.dht_node.peerPort,)})
-        if not blob_hash in self._ongoing_searchs:
+        if not blob_hash in self._ongoing_searchs or self._ongoing_searchs[blob_hash].called:
             self._ongoing_searchs[blob_hash] = self._execute_peer_search(blob_hash, timeout)
         peers = set(self._filter_self(blob_hash) if filter_self else self.peers[blob_hash])
         return defer.succeed([self.peer_manager.get_peer(*peer) for peer in peers])
 
     @defer.inlineCallbacks
     def _execute_peer_search(self, blob_hash, timeout):
+        bin_hash = binascii.unhexlify(blob_hash)
+        finished_deferred = self.dht_node.iterativeFindValue(bin_hash, exclude=self.peers[blob_hash])
+        timeout = timeout or conf.settings['peer_search_timeout']
+        if timeout:
+            finished_deferred.addTimeout(timeout, self.dht_node.clock)
         try:
-            bin_hash = binascii.unhexlify(blob_hash)
-            finished_deferred = self.dht_node.iterativeFindValue(bin_hash, exclude=self.peers[blob_hash])
-            timeout = timeout or conf.settings['peer_search_timeout']
-            if timeout:
-                finished_deferred.addTimeout(timeout, self.dht_node.clock)
             peer_list = yield finished_deferred
             self.peers[blob_hash].update(set((host, port) for _, host, port in peer_list))
         except defer.TimeoutError:
