@@ -221,7 +221,12 @@ class BaseDatabase(SQLiteMixin):
         create index if not exists txi_txoid_idx on txi (txoid);
     """
 
+    PRAGMAS = """
+        pragma journal_mode=WAL;
+    """
+
     CREATE_TABLES_QUERY = (
+        PRAGMAS +
         CREATE_TX_TABLE +
         CREATE_PUBKEY_ADDRESS_TABLE +
         CREATE_PUBKEY_ADDRESS_INDEX +
