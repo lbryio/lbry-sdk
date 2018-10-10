@@ -65,16 +65,16 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.broadcast(cert_tx)
         await self.broadcast(claim_tx)
         await asyncio.wait([  # mempool
-            self.on_transaction_id(claim_tx.id),
-            self.on_transaction_id(cert_tx.id),
+            self.on_transaction(claim_tx),
+            self.on_transaction(cert_tx),
         ])
         await self.blockchain.generate(1)
         await asyncio.wait([  # confirmed
-            self.on_transaction_id(claim_tx.id),
-            self.on_transaction_id(cert_tx.id),
+            self.on_transaction(claim_tx),
+            self.on_transaction(cert_tx),
         ])
 
-        self.assertEqual(d2l(await d2f(self.account.get_balance())), '7.985786')
+        self.assertEqual(d2l(await d2f(self.account.get_balance(confirmations=1))), '7.985786')
         self.assertEqual(d2l(await d2f(self.account.get_balance(include_claims=True))), '9.985786')
 
         response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
