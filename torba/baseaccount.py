@@ -111,7 +111,7 @@ class HierarchicalDeterministic(AddressManager):
         keys_batch, final_keys = [], []
         for index in range(start, end+1):
             keys_batch.append((index, self.public_key.child(index)))
-            if len(keys_batch) % 2000 == 0:
+            if len(keys_batch) % 180 == 0:
                 yield self.db.add_keys(
                     self.account, self.chain_number, keys_batch
                 )
