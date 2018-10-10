@@ -663,9 +663,9 @@ class Daemon(AuthJSONRPCServer):
         unreachable_peers = []
         try:
             peers = yield self.jsonrpc_peer_list(blob_hash, search_timeout)
-            peer_infos = [{"peer": Peer(x[0], x[1]),
+            peer_infos = [{"peer": Peer(x['host'], x['port']),
                            "blob_hash": blob_hash,
-                           "timeout": blob_timeout} for x in peers if x[2]]
+                           "timeout": blob_timeout} for x in peers]
             dl = []
             dl_peers = []
             dl_results = []
