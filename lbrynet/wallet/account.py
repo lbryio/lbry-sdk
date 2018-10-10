@@ -60,7 +60,7 @@ class Account(BaseAccount):
                 claim = claims[maybe_claim_id]
                 tx = None
                 if claim:
-                    tx = yield self.ledger.get_transaction(claim['txid'])
+                    tx = yield self.ledger.db.get_transaction(txid=claim['txid'])
                 else:
                     log.warning(maybe_claim_id)
                 if tx is not None:
@@ -96,7 +96,7 @@ class Account(BaseAccount):
             else:
                 try:
                     txid, nout = maybe_claim_id.split(':')
-                    tx = yield self.ledger.get_transaction(txid)
+                    tx = yield self.ledger.db.get_transaction(txid=txid)
                     if tx.outputs[int(nout)].script.is_claim_involved:
                         results['previous-success'] += 1
                     else:
@@ -115,33 +115,10 @@ class Account(BaseAccount):
                 indent=2
             ))
 
-    def get_balance(self, confirmations=6, include_claims=False, **constraints):
+    def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
         return super().get_balance(confirmations, **constraints)
-
-    def get_unspent_outputs(self, include_claims=False, **constraints):
-        if not include_claims:
-            constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
-        return super().get_unspent_outputs(**constraints)
-
-    @defer.inlineCallbacks
-    def get_channels(self):
-        utxos = yield super().get_unspent_outputs(
-            claim_type__any={'is_claim': 1, 'is_update': 1},
-            claim_name__like='@%'
-        )
-        channels = []
-        for utxo in utxos:
-            d = ClaimDict.deserialize(utxo.script.values['claim'])
-            channels.append({
-                'name': utxo.claim_name,
-                'claim_id': utxo.claim_id,
-                'txid': utxo.tx_ref.id,
-                'nout': utxo.position,
-                'have_certificate': utxo.ref.id in self.certificates
-            })
-        return channels
 
     @classmethod
     def get_private_key_from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str):
@@ -167,7 +144,31 @@ class Account(BaseAccount):
         return details
 
     def get_claim(self, claim_id=None, txid=None, nout=None):
-        return self.ledger.db.get_claim(self, claim_id, txid, nout)
+        if claim_id is not None:
+            return self.ledger.db.get_claims(account=self, claim_id=claim_id)
+        elif txid is not None and nout is not None:
+            return self.ledger.db.get_claims(**{'account': self, 'txo.txid': txid, 'txo.position': nout})
 
-    def get_claims(self):
-        return self.ledger.db.get_claims(self)
+    @staticmethod
+    def constraint_utxos_sans_claims(constraints):
+        constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
+
+    def get_utxos(self, **constraints):
+        self.constraint_utxos_sans_claims(constraints)
+        return super().get_utxos(**constraints)
+
+    def get_utxo_count(self, **constraints):
+        self.constraint_utxos_sans_claims(constraints)
+        return super().get_utxo_count(**constraints)
+
+    def get_claims(self, **constraints):
+        return self.ledger.db.get_claims(account=self, **constraints)
+
+    def get_claim_count(self, **constraints):
+        return self.ledger.db.get_claim_count(account=self, **constraints)
+
+    def get_channels(self, **constraints):
+        return self.ledger.db.get_channels(account=self, **constraints)
+
+    def get_channel_count(self, **constraints):
+        return self.ledger.db.get_channel_count(account=self, **constraints)

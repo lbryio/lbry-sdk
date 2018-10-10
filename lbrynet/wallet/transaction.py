@@ -1,12 +1,12 @@
 import struct
 from binascii import hexlify, unhexlify
-from typing import List, Iterable  # pylint: disable=unused-import
+from typing import List, Iterable, Optional
 
-from .account import Account  # pylint: disable=unused-import
+from .account import Account
 from torba.basetransaction import BaseTransaction, BaseInput, BaseOutput
 from torba.hash import hash160
 
-from lbryschema.claim import ClaimDict  # pylint: disable=unused-import
+from lbryschema.claim import ClaimDict
 from .script import InputScript, OutputScript
 
 
@@ -18,6 +18,20 @@ class Input(BaseInput):
 class Output(BaseOutput):
     script: OutputScript
     script_class = OutputScript
+
+    __slots__ = '_claim_dict', 'channel', 'signature'
+
+    def __init__(self, *args, channel: Optional['Output'] = None,
+                 signature: Optional[str] = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._claim_dict = None
+        self.channel = channel
+        self.signature = signature
+
+    def update_annotations(self, annotated):
+        super().update_annotations(annotated)
+        self.channel = annotated.channel if annotated else None
+        self.signature = annotated.signature if annotated else None
 
     def get_fee(self, ledger):
         name_fee = 0
@@ -42,10 +56,32 @@ class Output(BaseOutput):
         raise ValueError('No claim_name associated.')
 
     @property
-    def claim(self) -> bytes:
+    def claim(self) -> ClaimDict:
+        if self.script.is_claim_name or self.script.is_update_claim:
+            return ClaimDict.deserialize(self.script.values['claim'])
+        raise ValueError('Only claim name and claim update have the claim payload.')
+
+    @property
+    def claim_dict(self) -> dict:
+        if self._claim_dict is None:
+            self._claim_dict = self.claim.claim_dict
+        return self._claim_dict
+
+    @property
+    def permanent_url(self) -> str:
         if self.script.is_claim_involved:
-            return self.script.values['claim']
+            if self.channel is not None:
+                return "{0}#{1}/{2}".format(
+                    self.channel.claim_name,
+                    self.channel.claim_id,
+                    self.claim_name
+                )
+            return "{}#{}".format(self.claim_name, self.claim_id)
         raise ValueError('No claim associated.')
+
+    @property
+    def has_signature(self):
+        return self.signature is not None
 
     @classmethod
     def pay_claim_name_pubkey_hash(

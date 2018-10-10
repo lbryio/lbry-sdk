@@ -47,8 +47,8 @@ class TestKademliaBase(unittest.TestCase):
         :param step: reactor tick rate (in seconds)
         """
         advanced = 0.0
+        self.clock._sortCalls()
         while advanced < n:
-            self.clock._sortCalls()
             if step:
                 next_step = step
             elif self.clock.getDelayedCalls():
@@ -120,7 +120,7 @@ class TestKademliaBase(unittest.TestCase):
         seed_dl = []
         seeds = sorted(list(self.seed_dns.keys()))
         known_addresses = [(seed_name, 4444) for seed_name in seeds]
-        for seed_dns in seeds:
+        for _ in range(len(seeds)):
             self._add_next_node()
             seed = self.nodes.pop()
             self._seeds.append(seed)

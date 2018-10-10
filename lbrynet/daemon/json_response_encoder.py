@@ -3,6 +3,7 @@ from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
 from lbrynet.wallet.transaction import Transaction, Output
+from lbrynet.wallet.dewies import dewies_to_lbc
 
 
 class JSONResponseEncoder(JSONEncoder):
@@ -30,9 +31,9 @@ class JSONResponseEncoder(JSONEncoder):
             'height': tx.height,
             'inputs': [self.encode_input(txo) for txo in tx.inputs],
             'outputs': [self.encode_output(txo) for txo in tx.outputs],
-            'total_input': tx.input_sum,
-            'total_output': tx.input_sum - tx.fee,
-            'total_fee': tx.fee,
+            'total_input': dewies_to_lbc(tx.input_sum),
+            'total_output': dewies_to_lbc(tx.input_sum - tx.fee),
+            'total_fee': dewies_to_lbc(tx.fee),
             'hex': hexlify(tx.raw).decode(),
         }
 
@@ -40,14 +41,36 @@ class JSONResponseEncoder(JSONEncoder):
         output = {
             'txid': txo.tx_ref.id,
             'nout': txo.position,
-            'amount': txo.amount,
+            'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger),
-            'is_claim': txo.script.is_claim_name,
-            'is_support': txo.script.is_support_claim,
-            'is_update': txo.script.is_update_claim,
         }
         if txo.is_change is not None:
             output['is_change'] = txo.is_change
+        if txo.is_my_account is not None:
+            output['is_mine'] = txo.is_my_account
+
+        if txo.script.is_claim_involved:
+            output.update({
+                'name': txo.claim_name,
+                'claim_id': txo.claim_id,
+                'permanent_url': txo.permanent_url,
+                'is_claim': txo.script.is_claim_name,
+                'is_support': txo.script.is_support_claim,
+                'is_update': txo.script.is_update_claim
+            })
+
+            if txo.script.is_claim_name or txo.script.is_update_claim:
+                output['value'] = txo.claim.claim_dict
+                if txo.claim_name.startswith('@'):
+                    output['has_signature'] = txo.has_signature
+
+            if txo.script.is_claim_name:
+                output['category'] = 'claim'
+            elif txo.script.is_update_claim:
+                output['category'] = 'update'
+            elif txo.script.is_support_claim:
+                output['category'] = 'support'
+
         return output
 
     def encode_input(self, txi):

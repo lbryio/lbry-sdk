@@ -5,12 +5,11 @@ import requests
 import urllib
 import json
 import textwrap
-import re
 
+from typing import Callable, Optional
 from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
-from decimal import Decimal
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
@@ -48,6 +47,7 @@ from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.wallet.account import Account as LBCAccount
 from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
@@ -80,6 +80,22 @@ MAX_UPDATE_FEE_ESTIMATE = 0.3
 DIRECTION_ASCENDING = 'asc'
 DIRECTION_DESCENDING = 'desc'
 DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
+
+
+@defer.inlineCallbacks
+def maybe_paginate(get_records: Callable, get_record_count: Callable,
+                   page: Optional[int], page_size: Optional[int], **constraints):
+    if None not in (page, page_size):
+        constraints.update({
+            "offset": page_size * (page-1),
+            "limit": page_size
+        })
+        return {
+            "items": (yield get_records(**constraints)),
+            "total_pages": int(((yield get_record_count(**constraints)) + (page_size-1)) / page_size),
+            "page": page, "page_size": page_size
+        }
+    return (yield get_records(**constraints))
 
 
 class IterableContainer:
@@ -647,9 +663,9 @@ class Daemon(AuthJSONRPCServer):
         unreachable_peers = []
         try:
             peers = yield self.jsonrpc_peer_list(blob_hash, search_timeout)
-            peer_infos = [{"peer": Peer(x[0], x[1]),
+            peer_infos = [{"peer": Peer(x['host'], x['port']),
                            "blob_hash": blob_hash,
-                           "timeout": blob_timeout} for x in peers if x[2]]
+                           "timeout": blob_timeout} for x in peers]
             dl = []
             dl_peers = []
             dl_results = []
@@ -990,7 +1006,7 @@ class Daemon(AuthJSONRPCServer):
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
     @AuthJSONRPCServer.deprecated("account_balance")
-    def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
+    def jsonrpc_wallet_balance(self, address=None):
         pass
 
     @AuthJSONRPCServer.deprecated("account_unlock")
@@ -1135,7 +1151,6 @@ class Daemon(AuthJSONRPCServer):
             --account_id=<account_id>       : (str) If provided only the balance for this
                                                     account will be given
             --confirmations=<confirmations> : (int) required confirmations (default: 6)
-            --include_reserved              : (bool) include reserved UTXOs (default: false)
             --include_claims                : (bool) include claims, requires than a
                                                      LBC account is specified (default: false)
             --show_seed                     : (bool) show the seed for the account
@@ -1147,7 +1162,6 @@ class Daemon(AuthJSONRPCServer):
             account = self.get_account_or_error(account_id)
             args = {
                 'confirmations': confirmations,
-                'include_reserved': include_reserved,
                 'show_seed': show_seed
             }
             if include_claims:
@@ -1167,30 +1181,25 @@ class Daemon(AuthJSONRPCServer):
 
     @requires("wallet")
     @defer.inlineCallbacks
-    def jsonrpc_account_balance(self, account_id=None, address=None, include_unconfirmed=False):
+    def jsonrpc_account_balance(self, account_id=None, confirmations=0):
         """
         Return the balance of an account
 
         Usage:
-            account_balance [<account_id>] [<address> | --address=<address>] [--include_unconfirmed]
+            account_balance [<account_id>] [<address> | --address=<address>]
 
         Options:
-            --account_id=<account_id> : (str) If provided only the balance for this
-                                        account will be given
-            --address=<address>       : (str) If provided only the balance for this
-                                        address will be given
-            --include_unconfirmed     : (bool) Include unconfirmed
+            --account_id=<account_id>       : (str) If provided only the balance for this
+                                              account will be given. Otherwise default account.
+            --confirmations=<confirmations> : (int) Only include transactions with this many
+                                              confirmed blocks.
 
         Returns:
             (decimal) amount of lbry credits in wallet
         """
-        if address is not None:
-            raise NotImplementedError("Limiting by address needs to be re-implemented in new wallet.")
         account = self.get_account_or_default(account_id)
-        dewies = yield account.get_balance(
-            0 if include_unconfirmed else 6
-        )
-        return Decimal(dewies) / COIN
+        dewies = yield account.get_balance(confirmations=confirmations)
+        return dewies_to_lbc(dewies)
 
     @requires("wallet")
     @defer.inlineCallbacks
@@ -1454,7 +1463,7 @@ class Daemon(AuthJSONRPCServer):
         return self.get_account_or_error(account_id).get_max_gap()
 
     @requires("wallet")
-    def jsonrpc_account_fund(self, to_account, from_account, amount=0,
+    def jsonrpc_account_fund(self, to_account, from_account, amount='0.0',
                              everything=False, outputs=1, broadcast=False):
         """
         Transfer some amount (or --everything) to an account from another
@@ -1514,20 +1523,28 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_address_list(self, account_id=None):
+    def jsonrpc_address_list(self, account_id=None, page=None, page_size=None):
         """
         List account addresses
 
         Usage:
             address_list [<account_id> | --account_id=<account_id>]
+                         [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id>  : (str) id of the account to use
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             List of wallet addresses
         """
-        return self.get_account_or_default(account_id).get_addresses()
+        account = self.get_account_or_default(account_id)
+        return maybe_paginate(
+            account.get_addresses,
+            account.get_address_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_unused(self, account_id=None):
@@ -1973,7 +1990,6 @@ class Daemon(AuthJSONRPCServer):
     @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
     def jsonrpc_stream_cost_estimate(self, uri, size=None):
         """
         Get estimated cost for a lbry stream
@@ -1990,8 +2006,7 @@ class Daemon(AuthJSONRPCServer):
             (float) Estimated cost in lbry credits, returns None if uri is not
                 resolvable
         """
-        cost = yield self.get_est_cost(uri, size)
-        defer.returnValue(cost)
+        return self.get_est_cost(uri, size)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
@@ -2036,34 +2051,38 @@ class Daemon(AuthJSONRPCServer):
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
-        defer.returnValue({
+        return {
             "success": True,
             "tx": tx,
             "claim_id": txo.claim_id,
-            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+            "claim_address": txo.get_address(self.ledger),
             "output": txo
-        })
+        }
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_channel_list(self):
+    def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
         """
         Get certificate claim infos for channels that can be published to
 
         Usage:
-            channel_list
+            channel_list [<account_id> | --account_id=<account_id> ]
+                         [--page=<page>] [--page_size=<page_size>]
 
         Options:
-            None
+            --account_id=<account_id>  : (str) id of the account to use
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
             is in the wallet.
         """
-
-        result = yield self.wallet_manager.channel_list()
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        account = self.get_account_or_default(account_id)
+        return maybe_paginate(
+            account.get_channels,
+            account.get_channel_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2426,7 +2445,6 @@ class Daemon(AuthJSONRPCServer):
         pass
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
         """
         Send a name claim to an address
@@ -2453,21 +2471,24 @@ class Daemon(AuthJSONRPCServer):
             }
 
         """
-        result = yield self.wallet_manager.send_claim_to_address(claim_id, address, amount)
-        response = yield self._render_response(result)
-        return response
+        decode_address(address)
+        return self.wallet_manager.send_claim_to_address(
+            claim_id, address, self.get_dewies_or_error("amount", amount) if amount else None
+        )
 
-    # TODO: claim_list_mine should be merged into claim_list, but idk how to authenticate it -Grin
     @requires(WALLET_COMPONENT)
-    def jsonrpc_claim_list_mine(self, account_id=None):
+    def jsonrpc_claim_list_mine(self, account_id=None, page=None, page_size=None):
         """
         List my name claims
 
         Usage:
             claim_list_mine [<account_id> | --account_id=<account_id>]
+                            [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) List of name claims owned by user
@@ -2491,7 +2512,12 @@ class Daemon(AuthJSONRPCServer):
                 },
            ]
         """
-        return self.get_account_or_default(account_id).get_claims()
+        account = self.get_account_or_default(account_id)
+        return maybe_paginate(
+            account.get_claims,
+            account.get_claim_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2623,15 +2649,18 @@ class Daemon(AuthJSONRPCServer):
         return response
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_transaction_list(self, account_id=None):
+    def jsonrpc_transaction_list(self, account_id=None, page=None, page_size=None):
         """
         List transactions belonging to wallet
 
         Usage:
             transaction_list [<account_id> | --account_id=<account_id>]
+                             [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) List of transactions
@@ -2679,7 +2708,12 @@ class Daemon(AuthJSONRPCServer):
             }
 
         """
-        return self.wallet_manager.get_history(self.get_account_or_default(account_id))
+        account = self.get_account_or_default(account_id)
+        return maybe_paginate(
+            self.wallet_manager.get_history,
+            self.ledger.db.get_transaction_count,
+            page, page_size, account=account
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -2698,15 +2732,18 @@ class Daemon(AuthJSONRPCServer):
         return self.wallet_manager.get_transaction(txid)
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_utxo_list(self, account_id=None):
+    def jsonrpc_utxo_list(self, account_id=None, page=None, page_size=None):
         """
         List unspent transaction outputs
 
         Usage:
-            utxo_list [<account_id>]
+            utxo_list [<account_id> | --account_id=<account_id>]
+                      [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns:
             (list) List of unspent transaction outputs (UTXOs)
@@ -2725,7 +2762,12 @@ class Daemon(AuthJSONRPCServer):
                 ...
             ]
         """
-        return self.get_account_or_default(account_id).get_unspent_outputs()
+        account = self.get_account_or_default(account_id)
+        return maybe_paginate(
+            account.get_utxos,
+            account.get_utxo_count,
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_block_show(self, blockhash=None, height=None):
@@ -3252,16 +3294,18 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def get_channel_or_error(self, channel_id: str = None, name: str = None):
+    def get_channel_or_error(self, channel_id: str = None, channel_name: str = None):
         if channel_id is not None:
-            certificates = yield self.wallet_manager.get_certificates(claim_id=channel_id)
+            certificates = yield self.wallet_manager.get_certificates(
+                private_key_accounts=[self.default_account], claim_id=channel_id)
             if not certificates:
                 raise ValueError("Couldn't find channel with claim_id '{}'." .format(channel_id))
             return certificates[0]
-        if name is not None:
-            certificates = yield self.wallet_manager.get_certificates(name=name)
+        if channel_name is not None:
+            certificates = yield self.wallet_manager.get_certificates(
+                private_key_accounts=[self.default_account], claim_name=channel_name)
             if not certificates:
-                raise ValueError("Couldn't find channel with name '{}'.".format(name))
+                raise ValueError("Couldn't find channel with name '{}'.".format(channel_name))
             return certificates[0]
         raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
 
@@ -3283,13 +3327,11 @@ class Daemon(AuthJSONRPCServer):
         raise ValueError("Couldn't find account: {}.".format(account_id))
 
     @staticmethod
-    def get_dewies_or_error(argument: str, amount: str):
-        if isinstance(amount, str):
-            result = re.search(r'^(\d{1,10})\.(\d{1,8})$', amount)
-            if result is not None:
-                whole, fractional = result.groups()
-                return int(whole+fractional.ljust(8, "0"))
-        raise ValueError("Invalid value for '{}' argument: {}".format(argument, amount))
+    def get_dewies_or_error(argument: str, lbc: str):
+        try:
+            return lbc_to_dewies(lbc)
+        except ValueError as e:
+            raise ValueError("Invalid value for '{}': {}".format(argument, e.args[0]))
 
 
 def loggly_time_string(dt):

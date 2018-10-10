@@ -2,7 +2,6 @@ import json
 import tempfile
 import logging
 import asyncio
-from decimal import Decimal
 from types import SimpleNamespace
 
 from twisted.internet import defer
@@ -113,7 +112,7 @@ class CommandTestCase(IntegrationTestCase):
         lbry_conf.settings.node_id = None
 
         await d2f(self.account.ensure_address_gap())
-        address = (await d2f(self.account.receiving.get_addresses(1, only_usable=True)))[0]
+        address = (await d2f(self.account.receiving.get_addresses(limit=1, only_usable=True)))[0]
         sendtxid = await self.blockchain.send_to_address(address, 10)
         await self.confirm_tx(sendtxid)
         await self.generate(5)
@@ -181,7 +180,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # Chris45 starts everyday by checking his balance.
         result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, 10)
+        self.assertEqual(result, '10.0')
         # "10 LBC, yippy! I can do a lot with that.", he thinks to himself,
         # enthusiastically. But he is hungry so he goes into the kitchen
         # to make himself a spamdwich.
@@ -197,47 +196,19 @@ class EpicAdventuresOfChris45(CommandTestCase):
         channels = yield self.out(self.daemon.jsonrpc_channel_list())
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@spam')
-        self.assertTrue(channels[0]['have_certificate'])
+        self.assertTrue(channels[0]['has_signature'])
 
         # As the new channel claim travels through the intertubes and makes its
         # way into the mempool and then a block and then into the claimtrie,
         # Chris doesn't sit idly by: he checks his balance!
 
         result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, 0)
+        self.assertEqual(result, '8.989893')
 
-        # "Oh! No! It's all gone? Did I make a mistake in entering the amount?"
-        # exclaims Chris, then he remembers there is a 6 block confirmation window
-        # to make sure the TX is really going to stay in the blockchain. And he only
-        # had one UTXO that morning.
-
-        # To get the unconfirmed balance he has to pass the '--include-unconfirmed'
-        # flag to lbrynet:
-        result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
-        self.assertEqual(result, Decimal('8.989893'))
-        # "Well, that's a relief." he thinks to himself as he exhales a sigh of relief.
-
-        # He waits for a block
-        yield self.d_generate(1)
-        # and checks the confirmed balance again.
-        result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, 0)
-        # Still zero.
-
-        # But it's only at 2 confirmations, so he waits another 3
-        yield self.d_generate(3)
-        # and checks again.
-        result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, 0)
-        # Still zero.
-
-        # Just one more confirmation
-        yield self.d_generate(1)
-        # and it should be 6 total, enough to get the correct balance!
-        result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, Decimal('8.989893'))
-        # Like a Swiss watch (right niko?) the blockchain never disappoints! We're
-        # at 6 confirmations and the total is correct.
+        # He waits for 6 more blocks (confirmations) to make sure the balance has been settled.
+        yield self.d_generate(6)
+        result = yield self.daemon.jsonrpc_account_balance(confirmations=6)
+        self.assertEqual(result, '8.989893')
 
         # And is the channel resolvable and empty?
         response = yield self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam'))
@@ -265,8 +236,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # He quickly checks the unconfirmed balance to make sure everything looks
         # correct.
-        result = yield self.daemon.jsonrpc_account_balance(include_unconfirmed=True)
-        self.assertEqual(result, Decimal('7.969786'))
+        result = yield self.daemon.jsonrpc_account_balance()
+        self.assertEqual(result, '7.969786')
 
         # Also checks that his new story can be found on the blockchain before
         # giving the link to all his friends.
@@ -278,7 +249,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         yield self.d_generate(5)
         # When he comes back he verifies the confirmed balance.
         result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, Decimal('7.969786'))
+        self.assertEqual(result, '7.969786')
 
         # As people start reading his story they discover some typos and notify
         # Chris who explains in despair "Oh! Noooooos!" but then remembers
@@ -308,7 +279,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # After abandoning he just waits for his LBCs to be returned to his account
         yield self.d_generate(5)
         result = yield self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, Decimal('8.9693585'))
+        self.assertEqual(result, '8.9693585')
 
         # Amidst all this Chris receives a call from his friend Ramsey
         # who says that it is of utmost urgency that Chris transfer him
@@ -325,11 +296,11 @@ class EpicAdventuresOfChris45(CommandTestCase):
         yield self.d_generate(5)
         result = yield self.daemon.jsonrpc_account_balance()
         # Chris' balance was correct
-        self.assertEqual(result, Decimal('7.9692345'))
+        self.assertEqual(result, '7.9692345')
 
         # Ramsey too assured him that he had received the 1 LBC and thanks him
         result = yield self.daemon.jsonrpc_account_balance(ramsey_account_id)
-        self.assertEqual(result, Decimal('1.0'))
+        self.assertEqual(result, '1.0')
 
         # After Chris is done with all the "helping other people" stuff he decides that it's time to
         # write a new story and publish it to lbry. All he needed was a fresh start and he came up with:

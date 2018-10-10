@@ -1,13 +1,14 @@
 import os
 import json
 import logging
+from binascii import unhexlify
+
 from datetime import datetime
-from typing import List
+from typing import Optional
 
 from twisted.internet import defer
 
 from torba.basemanager import BaseWalletManager
-from torba.constants import COIN
 
 from lbryschema.claim import ClaimDict
 
@@ -15,6 +16,7 @@ from .ledger import MainNetLedger
 from .account import BaseAccount, generate_certificate
 from .transaction import Transaction
 from .database import WalletDatabase
+from .dewies import dewies_to_lbc
 
 
 log = logging.getLogger(__name__)
@@ -100,7 +102,7 @@ class LbryWalletManager(BaseWalletManager):
     @staticmethod
     def migrate_lbryum_to_torba(path):
         if not os.path.exists(path):
-            return
+            return None, None
         with open(path, 'r') as f:
             unmigrated_json = f.read()
             unmigrated = json.loads(unmigrated_json)
@@ -109,7 +111,15 @@ class LbryWalletManager(BaseWalletManager):
         #       have old structured wallets install one of the earlier releases that
         #       still has the below conversion code.
         if 'master_public_keys' not in unmigrated:
-            return
+            return None, None
+        total = unmigrated.get('addr_history')
+        receiving_addresses, change_addresses = set(), set()
+        for _, unmigrated_account in unmigrated.get('accounts', {}).items():
+            receiving_addresses.update(map(unhexlify, unmigrated_account.get('receiving', [])))
+            change_addresses.update(map(unhexlify, unmigrated_account.get('change', [])))
+        log.info("Wallet migrator found %s receiving addresses and %s change addresses. %s in total on history.",
+                 len(receiving_addresses), len(change_addresses), len(total))
+
         migrated_json = json.dumps({
             'version': 1,
             'name': 'My Wallet',
@@ -143,8 +153,10 @@ class LbryWalletManager(BaseWalletManager):
             os.fsync(f.fileno())
         os.rename(temp_path, path)
         os.chmod(path, mode)
+        return receiving_addresses, change_addresses
 
     @classmethod
+    @defer.inlineCallbacks
     def from_lbrynet_config(cls, settings, db):
 
         ledger_id = {
@@ -167,7 +179,7 @@ class LbryWalletManager(BaseWalletManager):
 
         wallet_file_path = os.path.join(wallets_directory, 'default_wallet')
 
-        cls.migrate_lbryum_to_torba(wallet_file_path)
+        receiving_addresses, change_addresses = cls.migrate_lbryum_to_torba(wallet_file_path)
 
         manager = cls.from_config({
             'ledgers': {ledger_id: ledger_config},
@@ -178,7 +190,33 @@ class LbryWalletManager(BaseWalletManager):
             log.info('Wallet at %s is empty, generating a default account.', wallet_file_path)
             manager.default_wallet.generate_account(ledger)
             manager.default_wallet.save()
-        return manager
+        if receiving_addresses or change_addresses:
+            ledger = manager.get_or_create_ledger(ledger_id)
+            if not os.path.exists(ledger.path):
+                os.mkdir(ledger.path)
+            yield ledger.db.open()
+            try:
+                yield manager._migrate_addresses(receiving_addresses, change_addresses)
+            finally:
+                yield ledger.db.close()
+        defer.returnValue(manager)
+
+    @defer.inlineCallbacks
+    def _migrate_addresses(self, receiving_addresses: set, change_addresses: set):
+        migrated_receiving = set((yield self.default_account.receiving.generate_keys(0, len(receiving_addresses))))
+        migrated_change = set((yield self.default_account.change.generate_keys(0, len(change_addresses))))
+        receiving_addresses = set(map(self.default_account.ledger.public_key_to_address, receiving_addresses))
+        change_addresses = set(map(self.default_account.ledger.public_key_to_address, change_addresses))
+        if not any(change_addresses.difference(migrated_change)):
+            log.info("Successfully migrated %s change addresses.", len(change_addresses))
+        else:
+            log.warning("Failed to migrate %s change addresses!",
+                        len(set(change_addresses).difference(set(migrated_change))))
+        if not any(receiving_addresses.difference(migrated_receiving)):
+            log.info("Successfully migrated %s receiving addresses.", len(receiving_addresses))
+        else:
+            log.warning("Failed to migrate %s receiving addresses!",
+                        len(set(receiving_addresses).difference(set(migrated_receiving))))
 
     def get_best_blockhash(self):
         return self.ledger.headers.hash(self.ledger.headers.height).decode()
@@ -198,6 +236,20 @@ class LbryWalletManager(BaseWalletManager):
         account = account or self.default_account
         tx = yield Transaction.pay(amount, destination_address, [account], account)
         yield account.ledger.broadcast(tx)
+        return tx
+
+    @defer.inlineCallbacks
+    def send_claim_to_address(self, claim_id: str, destination_address: str, amount: Optional[int],
+                              account=None):
+        account = account or self.default_account
+        claims = account.ledger.db.get_utxos(claim_id=claim_id)
+        if not claims:
+            raise NameError("Claim not found: {}".format(claim_id))
+        tx = yield Transaction.update(
+            claims[0], ClaimDict.deserialize(claims[0].script.value['claim']), amount,
+            destination_address.encode(), [account], account
+        )
+        yield self.ledger.broadcast(tx)
         return tx
 
     def send_points_to_address(self, reserved: ReservedPoints, amount: int, account=None):
@@ -226,9 +278,9 @@ class LbryWalletManager(BaseWalletManager):
 
     @defer.inlineCallbacks
     def address_is_mine(self, unknown_address, account):
-        for my_address in (yield account.get_addresses()):
-            if unknown_address == my_address:
-                return True
+        match = yield self.ledger.db.get_address(address=unknown_address, account=account)
+        if match is not None:
+            return True
         return False
 
     def get_transaction(self, txid: str):
@@ -236,58 +288,63 @@ class LbryWalletManager(BaseWalletManager):
 
     @staticmethod
     @defer.inlineCallbacks
-    def get_history(account: BaseAccount):
+    def get_history(account: BaseAccount, **constraints):
         headers = account.ledger.headers
-        txs: List[Transaction] = (yield account.get_transactions())
+        txs = (yield account.get_transactions(**constraints))
         history = []
         for tx in txs:
             ts = headers[tx.height]['timestamp']
-            history.append({
+            item = {
                 'txid': tx.id,
                 'timestamp': ts,
-                'value': tx.net_account_balance/COIN,
-                'fee': tx.fee/COIN,
+                'value': dewies_to_lbc(tx.net_account_balance),
+                'fee': dewies_to_lbc(tx.fee),
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3],
                 'confirmations': headers.height - tx.height,
                 'claim_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_claim_outputs],
                 'update_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_update_outputs],
                 'support_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': -txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
-                    'is_tip': False,  # TODO: need to add lookup
+                    'is_tip': not txo.is_my_account,
                     'nout': txo.position
                 } for txo in tx.my_support_outputs],
                 'abandon_info': [{
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': txo.amount/COIN,
-                    'amount': txo.amount/COIN,
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 } for txo in tx.my_abandon_outputs],
-            })
+            }
+            if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
+                item['fee'] = dewies_to_lbc(tx.fee)
+            else:
+                item['fee'] = '0'  # can't calculate fee without all input txos
+            history.append(item)
         return history
 
     @staticmethod
     def get_utxos(account: BaseAccount):
-        return account.get_unspent_outputs()
+        return account.get_utxos()
 
     @defer.inlineCallbacks
     def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
@@ -297,9 +354,9 @@ class LbryWalletManager(BaseWalletManager):
             claim_address = yield account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
-                certificate.private_key, claim_address, certificate.claim_id
+                certificate.signature, claim_address, certificate.claim_id
             )
-        existing_claims = yield account.get_unspent_outputs(include_claims=True, claim_name=name)
+        existing_claims = yield account.get_claims(claim_name=name)
         if len(existing_claims) == 0:
             tx = yield Transaction.claim(
                 name, claim, amount, claim_address, [account], account
@@ -315,7 +372,7 @@ class LbryWalletManager(BaseWalletManager):
             tx, tx.outputs[0], claim_address, claim_dict, name, amount
         )])
         # TODO: release reserved tx outputs in case anything fails by this point
-        defer.returnValue(tx)
+        return tx
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
         return {
@@ -368,11 +425,12 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
 
-    def channel_list(self):
-        return self.default_account.get_channels()
-
-    def get_certificates(self, name=None, claim_id=None):
-        return self.db.get_certificates(name, claim_id, self.accounts, exclude_without_key=True)
+    def get_certificates(self, private_key_accounts, exclude_without_key=True, **constraints):
+        return self.db.get_certificates(
+            private_key_accounts=private_key_accounts,
+            exclude_without_key=exclude_without_key,
+            **constraints
+        )
 
     def update_peer_address(self, peer, address):
         pass  # TODO: Data payments is disabled

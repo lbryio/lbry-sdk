@@ -19,6 +19,7 @@ from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
+from lbrynet import __name__ as lbrynet_name
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.daemon.DaemonControl import start as daemon_main
 from lbrynet.daemon.DaemonConsole import main as daemon_console
@@ -133,7 +134,9 @@ def main(argv=None):
         return 0
 
     elif method in ['version', '--version', '-v']:
-        print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=2, separators=(',', ': ')))
+        print("{lbrynet_name} {lbrynet_version}".format(
+            lbrynet_name=lbrynet_name, **get_platform(get_ip=False)
+        ))
         return 0
 
     elif method == 'start':

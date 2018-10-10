@@ -1,12 +1,12 @@
 import os
-from lbrynet import __version__
+from lbrynet import __name__, __version__
 from setuptools import setup, find_packages
 
 BASE = os.path.dirname(__file__)
 README_PATH = os.path.join(BASE, 'README.md')
 
 setup(
-    name="lbrynet",
+    name=__name__,
     version=__version__,
     author="LBRY Inc.",
     author_email="hello@lbry.io",
