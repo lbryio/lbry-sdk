@@ -107,3 +107,16 @@ class SettingsTest(unittest.TestCase):
             conf_decoded_new = decoder(conf_entry_new)
             self.assertEqual(conf_decoded, conf_decoded_new)
 
+    def test_load_file(self):
+        settings = self.get_mock_config_instance()
+
+        # nonexistent file
+        conf.conf_file = 'monkey.yml'
+        with self.assertRaises(FileNotFoundError):
+            settings.load_conf_file_settings()
+
+        # invalid extensions
+        for filename in ('monkey.yymmll', 'monkey'):
+            conf.conf_file = filename
+            with self.assertRaises(ValueError):
+                settings.load_conf_file_settings()
