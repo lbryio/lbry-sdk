@@ -6,9 +6,11 @@ from twisted.internet import defer, reactor, protocol
 from twisted.application.internet import ClientService, CancelledError
 from twisted.internet.endpoints import clientFromString
 from twisted.protocols.basic import LineOnlyReceiver
+from twisted.python import failure
 
 from torba import __version__
 from torba.stream import StreamController
+from torba.constants import TIMEOUT
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +71,11 @@ class StratumClientProtocol(LineOnlyReceiver):
             log.warning("Error setting up socket: %s", err)
 
     def connectionLost(self, reason=None):
+        self.connected = 0
         self.on_disconnected_controller.add(True)
+        for deferred in self.lookup_table.values():
+            if not deferred.called:
+                deferred.errback(TimeoutError("Connection dropped."))
 
     def lineReceived(self, line):
         log.debug('received: %s', line)
@@ -105,6 +111,10 @@ class StratumClientProtocol(LineOnlyReceiver):
         log.debug('sent: %s', message)
         self.sendLine(message.encode('latin-1'))
         d = self.lookup_table[message_id] = defer.Deferred()
+        d.addTimeout(
+            TIMEOUT, reactor, onTimeoutCancel=lambda *_: failure.Failure(TimeoutError(
+                "Timeout: Stratum request for '%s' took more than %s seconds" % (method, TIMEOUT)))
+        )
         return d
 
 
