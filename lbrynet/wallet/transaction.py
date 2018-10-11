@@ -2,6 +2,7 @@ import struct
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional
 
+from lbryschema.decode import smart_decode
 from .account import Account
 from torba.basetransaction import BaseTransaction, BaseInput, BaseOutput
 from torba.hash import hash160
@@ -58,7 +59,7 @@ class Output(BaseOutput):
     @property
     def claim(self) -> ClaimDict:
         if self.script.is_claim_name or self.script.is_update_claim:
-            return ClaimDict.deserialize(self.script.values['claim'])
+            return smart_decode(self.script.values['claim'])
         raise ValueError('Only claim name and claim update have the claim payload.')
 
     @property
