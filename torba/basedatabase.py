@@ -169,6 +169,10 @@ class SQLiteMixin:
 
 class BaseDatabase(SQLiteMixin):
 
+    PRAGMAS = """
+        pragma journal_mode=WAL;
+    """
+
     CREATE_PUBKEY_ADDRESS_TABLE = """
         create table if not exists pubkey_address (
             address text primary key,
@@ -219,10 +223,6 @@ class BaseDatabase(SQLiteMixin):
     CREATE_TXI_INDEX = """
         create index if not exists txi_address_idx on txi (address);
         create index if not exists txi_txoid_idx on txi (txoid);
-    """
-
-    PRAGMAS = """
-        pragma journal_mode=WAL;
     """
 
     CREATE_TABLES_QUERY = (
@@ -480,10 +480,10 @@ class BaseDatabase(SQLiteMixin):
         ) + ', '.join(['(?, ?, ?, ?, ?)'] * len(keys))
         values = []
         for position, pubkey in keys:
-            values.extend([
+            values.extend((
                 pubkey.address, account.public_key.address, chain, position,
                 sqlite3.Binary(pubkey.pubkey_bytes)
-            ])
+            ))
         return self.run_operation(sql, values)
 
     @classmethod

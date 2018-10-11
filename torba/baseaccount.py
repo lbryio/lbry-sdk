@@ -111,18 +111,12 @@ class HierarchicalDeterministic(AddressManager):
         keys_batch, final_keys = [], []
         for index in range(start, end+1):
             keys_batch.append((index, self.public_key.child(index)))
-            if len(keys_batch) % 180 == 0:
+            if index % 180 == 0 or index == end:
                 yield self.db.add_keys(
                     self.account, self.chain_number, keys_batch
                 )
                 final_keys.extend(keys_batch)
                 keys_batch.clear()
-        if keys_batch:
-            yield self.db.add_keys(
-                self.account, self.chain_number, keys_batch
-            )
-            final_keys.extend(keys_batch)
-            keys_batch.clear()
         return [key[1].address for key in final_keys]
 
     @defer.inlineCallbacks
