@@ -349,17 +349,20 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     @defer.inlineCallbacks
     def _prefetch_history(self, remote_history, local_history):
-        proofs = {
-            entry['tx_hash']: (
-                self.network.get_merkle(entry['tx_hash'], entry['height']) if entry['height'] > 0 else None
+        proofs, network_txs, deferreds = {}, {}, []
+        for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
+            if i < len(local_history) and local_history[i] == (hex_id, remote_height):
+                continue
+            if remote_height > 0:
+                deferreds.append(
+                    self.network.get_merkle(hex_id, remote_height).addBoth(
+                        lambda result, txid: proofs.__setitem__(txid, result), hex_id)
+                )
+            deferreds.append(
+                self.network.get_transaction(hex_id).addBoth(
+                    lambda result, txid: network_txs.__setitem__(txid, result), hex_id)
             )
-            for index, entry in enumerate(remote_history)
-            if index >= len(local_history) or (entry['tx_hash'], entry['height']) != local_history[index]
-        }
-        network_txs = {key: self.network.get_transaction(key) for key in proofs.keys()}
-        yield defer.DeferredList(list(filter(None, proofs.values())) + list(network_txs.values()))
-        proofs = {key: value.result for key, value in proofs.items() if value}
-        network_txs = {key: value.result for key, value in network_txs.items()}
+        yield defer.DeferredList(deferreds)
         return proofs, network_txs
 
     @defer.inlineCallbacks
