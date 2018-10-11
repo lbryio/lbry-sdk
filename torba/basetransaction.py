@@ -150,7 +150,7 @@ class BaseInput(InputOutput):
 
     @classmethod
     def deserialize_from(cls, stream):
-        tx_ref = TXRefImmutable.from_hash(stream.read(32))
+        tx_ref = TXRefImmutable.from_hash(stream.read(32), -1)
         position = stream.read_uint32()
         script = stream.read_string()
         sequence = stream.read_uint32()

@@ -49,7 +49,11 @@ class TXRef:
 
 class TXRefImmutable(TXRef):
 
-    __slots__ = '_height',
+    __slots__ = ('_height',)
+
+    def __init__(self):
+        super().__init__()
+        self._height = -1
 
     @classmethod
     def from_hash(cls, tx_hash: bytes, height: int) -> 'TXRefImmutable':
