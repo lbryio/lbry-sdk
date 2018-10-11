@@ -402,17 +402,17 @@ class BaseDatabase(SQLiteMixin):
         if isinstance(my_account, BaseAccount):
             my_account = my_account.public_key.address
         rows = yield self.select_txos(
-            "amount, script, txid, txo.position, chain, account", **constraints
+            "amount, script, txid, tx.height, txo.position, chain, account", **constraints
         )
         output_class = self.ledger.transaction_class.output_class
         return [
             output_class(
                 amount=row[0],
                 script=output_class.script_class(row[1]),
-                tx_ref=TXRefImmutable.from_id(row[2]),
-                position=row[3],
-                is_change=row[4] == 1,
-                is_my_account=row[5] == my_account
+                tx_ref=TXRefImmutable.from_id(row[2], row[3]),
+                position=row[4],
+                is_change=row[5] == 1,
+                is_my_account=row[6] == my_account
             ) for row in rows
         ]
 

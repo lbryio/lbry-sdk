@@ -39,6 +39,10 @@ class TXRefMutable(TXRef):
             self._hash = sha256(sha256(self.tx.raw))
         return self._hash
 
+    @property
+    def height(self):
+        return self.tx.height
+
     def reset(self):
         self._id = None
         self._hash = None
