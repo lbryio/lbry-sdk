@@ -186,13 +186,12 @@ class LbryWalletManager(BaseWalletManager):
             'ledgers': {ledger_id: ledger_config},
             'wallets': [wallet_file_path]
         })
+        ledger = manager.get_or_create_ledger(ledger_id)
         if manager.default_account is None:
-            ledger = manager.get_or_create_ledger('lbc_mainnet')
             log.info('Wallet at %s is empty, generating a default account.', wallet_file_path)
             manager.default_wallet.generate_account(ledger)
             manager.default_wallet.save()
         if receiving_addresses or change_addresses:
-            ledger = manager.get_or_create_ledger(ledger_id)
             if not os.path.exists(ledger.path):
                 os.mkdir(ledger.path)
             yield ledger.db.open()
