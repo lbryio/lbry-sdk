@@ -84,6 +84,19 @@ class MainNetLedger(BaseLedger):
             a.maybe_migrate_certificates() for a in self.accounts
         ])
         yield defer.DeferredList([a.save_max_gap() for a in self.accounts])
+        yield self._report_state()
+
+    @defer.inlineCallbacks
+    def _report_state(self):
+        for account in self.accounts:
+            total_receiving = len((yield account.receiving.get_addresses()))
+            total_change = len((yield account.change.get_addresses()))
+            channel_count = yield account.get_channel_count()
+            claim_count = yield account.get_claim_count()
+            log.info("Loaded account %s with %d receiving addresses (gap: %d), "
+                     "%d change addresses (gap: %d), %d channels, %d certificates and %d claims.",
+                     account.id, total_receiving, account.receiving.gap, total_change, account.change.gap,
+                     channel_count, len(account.certificates), claim_count)
 
 
 class TestNetLedger(MainNetLedger):
