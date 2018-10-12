@@ -80,6 +80,9 @@ class JSONResponseEncoder(JSONEncoder):
             else:
                 output['type'] = 'basic'
 
+            # deprecated, will be removed after 0.30 release
+            output['category'] = output['type']
+
         return output
 
     def encode_input(self, txi):
