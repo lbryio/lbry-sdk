@@ -4,11 +4,12 @@ from datetime import datetime
 from json import JSONEncoder
 from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.dewies import dewies_to_lbc
+from lbrynet.wallet.ledger import MainNetLedger
 
 
 class JSONResponseEncoder(JSONEncoder):
 
-    def __init__(self, *args, ledger, **kwargs):
+    def __init__(self, *args, ledger: MainNetLedger, **kwargs):
         super().__init__(*args, **kwargs)
         self.ledger = ledger
 
@@ -38,11 +39,15 @@ class JSONResponseEncoder(JSONEncoder):
         }
 
     def encode_output(self, txo):
+        tx_height = txo.tx_ref.height
+        best_height = self.ledger.headers.height
         output = {
             'txid': txo.tx_ref.id,
             'nout': txo.position,
             'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger),
+            'height': tx_height,
+            'confirmations': best_height - tx_height if tx_height > 0 else tx_height
         }
         if txo.is_change is not None:
             output['is_change'] = txo.is_change
@@ -54,22 +59,26 @@ class JSONResponseEncoder(JSONEncoder):
                 'name': txo.claim_name,
                 'claim_id': txo.claim_id,
                 'permanent_url': txo.permanent_url,
-                'is_claim': txo.script.is_claim_name,
-                'is_support': txo.script.is_support_claim,
-                'is_update': txo.script.is_update_claim
             })
 
             if txo.script.is_claim_name or txo.script.is_update_claim:
-                output['value'] = txo.claim.claim_dict
-                if txo.claim_name.startswith('@'):
-                    output['has_signature'] = txo.has_signature
+                claim = txo.claim
+                output['value'] = claim.claim_dict
+                if claim.has_signature:
+                    output['valid_signature'] = None
+                    if txo.channel is not None:
+                        output['valid_signature'] = claim.validate_signature(
+                            txo.get_address(self.ledger), txo.channel.claim
+                        )
 
             if txo.script.is_claim_name:
-                output['category'] = 'claim'
+                output['type'] = 'claim'
             elif txo.script.is_update_claim:
-                output['category'] = 'update'
+                output['type'] = 'update'
             elif txo.script.is_support_claim:
-                output['category'] = 'support'
+                output['type'] = 'support'
+            else:
+                output['type'] = 'basic'
 
         return output
 

@@ -355,7 +355,7 @@ class LbryWalletManager(BaseWalletManager):
             claim_address = yield account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
-                certificate.signature, claim_address, certificate.claim_id, curve=SECP256k1
+                certificate.private_key, claim_address, certificate.claim_id, curve=SECP256k1
             )
         existing_claims = yield account.get_claims(claim_name=name)
         if len(existing_claims) == 0:

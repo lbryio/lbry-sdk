@@ -196,7 +196,6 @@ class EpicAdventuresOfChris45(CommandTestCase):
         channels = yield self.out(self.daemon.jsonrpc_channel_list())
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@spam')
-        self.assertTrue(channels[0]['has_signature'])
 
         # As the new channel claim travels through the intertubes and makes its
         # way into the mempool and then a block and then into the claimtrie,

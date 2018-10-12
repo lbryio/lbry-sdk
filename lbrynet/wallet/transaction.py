@@ -20,19 +20,19 @@ class Output(BaseOutput):
     script: OutputScript
     script_class = OutputScript
 
-    __slots__ = '_claim_dict', 'channel', 'signature'
+    __slots__ = '_claim_dict', 'channel', 'private_key'
 
     def __init__(self, *args, channel: Optional['Output'] = None,
-                 signature: Optional[str] = None, **kwargs) -> None:
+                 private_key: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._claim_dict = None
         self.channel = channel
-        self.signature = signature
+        self.private_key = private_key
 
     def update_annotations(self, annotated):
         super().update_annotations(annotated)
         self.channel = annotated.channel if annotated else None
-        self.signature = annotated.signature if annotated else None
+        self.private_key = annotated.private_key if annotated else None
 
     def get_fee(self, ledger):
         name_fee = 0
@@ -81,8 +81,8 @@ class Output(BaseOutput):
         raise ValueError('No claim associated.')
 
     @property
-    def has_signature(self):
-        return self.signature is not None
+    def has_private_key(self):
+        return self.private_key is not None
 
     @classmethod
     def pay_claim_name_pubkey_hash(
