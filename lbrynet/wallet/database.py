@@ -61,7 +61,7 @@ class WalletDatabase(BaseDatabase):
                 if 'publisherSignature' in txo.claim_dict:
                     channel_ids.add(txo.claim_dict['publisherSignature']['certificateId'])
                 if txo.claim_name.startswith('@') and my_account is not None:
-                    txo.signature = my_account.get_certificate_private_key(txo.ref)
+                    txo.private_key = my_account.get_certificate_private_key(txo.ref)
 
         if channel_ids:
             channels = {
@@ -109,7 +109,7 @@ class WalletDatabase(BaseDatabase):
         certificates = []
         if private_key_accounts is not None:
             for channel in channels:
-                if not channel.has_signature:
+                if not channel.has_private_key:
                     private_key = None
                     for account in private_key_accounts:
                         private_key = account.get_certificate_private_key(channel.ref)
@@ -117,6 +117,6 @@ class WalletDatabase(BaseDatabase):
                             break
                     if private_key is None and exclude_without_key:
                         continue
-                    channel.signature = private_key
+                    channel.private_key = private_key
                 certificates.append(channel)
         return certificates

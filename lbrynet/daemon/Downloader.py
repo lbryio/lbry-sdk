@@ -12,6 +12,7 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet import conf
 from torba.constants import COIN
+from lbrynet.wallet.dewies import dewies_to_lbc
 
 INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
@@ -134,10 +135,12 @@ class GetStream:
         defer.returnValue(downloader)
 
     def _pay_key_fee(self, address, fee_lbc, name):
-        log.info("Pay key fee %f --> %s", fee_lbc, address)
+        log.info("Pay key fee %s --> %s", dewies_to_lbc(fee_lbc), address)
         reserved_points = self.wallet.reserve_points(address, fee_lbc)
         if reserved_points is None:
-            raise InsufficientFundsError('Unable to pay the key fee of %s for %s' % (fee_lbc, name))
+            raise InsufficientFundsError(
+                'Unable to pay the key fee of %s for %s' % (dewies_to_lbc(fee_lbc), name)
+            )
         return self.wallet.send_points_to_address(reserved_points, fee_lbc)
 
     @defer.inlineCallbacks
