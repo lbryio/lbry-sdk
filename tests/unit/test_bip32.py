@@ -1,12 +1,13 @@
-import unittest
 from binascii import unhexlify, hexlify
+
+from orchstr8.testcase import AsyncioTestCase
 
 from .key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
 from torba.bip32 import PubKey, PrivateKey, from_extended_key_string
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 
 
-class BIP32Tests(unittest.TestCase):
+class BIP32Tests(AsyncioTestCase):
 
     def test_pubkey_validation(self):
         with self.assertRaisesRegex(TypeError, 'chain code must be raw bytes'):
@@ -39,7 +40,7 @@ class BIP32Tests(unittest.TestCase):
             self.assertIsInstance(new_key, PubKey)
             self.assertEqual(hexlify(new_key.identifier()), expected_ids[i])
 
-    def test_private_key_validation(self):
+    async def test_private_key_validation(self):
         with self.assertRaisesRegex(TypeError, 'private key must be raw bytes'):
             PrivateKey(None, None, b'abcd'*8, 0, 255)
         with self.assertRaisesRegex(ValueError, 'private key must be 32 bytes'):
@@ -64,7 +65,7 @@ class BIP32Tests(unittest.TestCase):
             private_key.child(-1)
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)
 
-    def test_private_key_derivation(self):
+    async def test_private_key_derivation(self):
         private_key = PrivateKey(
             ledger_class({
                 'db': ledger_class.database_class(':memory:'),
@@ -82,7 +83,7 @@ class BIP32Tests(unittest.TestCase):
             self.assertIsInstance(new_privkey, PrivateKey)
             self.assertEqual(hexlify(new_privkey.private_key_bytes), expected_hardened_privkeys[i - 1 - PrivateKey.HARDENED])
 
-    def test_from_extended_keys(self):
+    async def test_from_extended_keys(self):
         ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),

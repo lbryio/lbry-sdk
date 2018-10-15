@@ -1,5 +1,6 @@
-import unittest
 from types import GeneratorType
+
+from orchstr8.testcase import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.coinselection import CoinSelector, MAXIMUM_TRIES
@@ -16,14 +17,17 @@ def search(*args, **kwargs):
     return [o.txo.amount for o in selection] if selection else selection
 
 
-class BaseSelectionTestCase(unittest.TestCase):
+class BaseSelectionTestCase(AsyncioTestCase):
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),
         })
-        return self.ledger.db.open()
+        await self.ledger.db.open()
+
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
 
     def estimates(self, *args):
         txos = args[0] if isinstance(args[0], (GeneratorType, list)) else args

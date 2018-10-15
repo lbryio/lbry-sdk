@@ -93,7 +93,7 @@ class TestScriptTemplates(unittest.TestCase):
         )
 
     def test_push_data_many_not_separated(self):
-        with self.assertRaisesRegexp(ParseError, 'consecutive PUSH_MANY'):
+        with self.assertRaisesRegex(ParseError, 'consecutive PUSH_MANY'):
             parse((PUSH_MANY('Chiefs'), PUSH_MANY('Devs')), (b'jeremy', b'grin', b'lex', b'jack'))
 
 

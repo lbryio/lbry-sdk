@@ -1,5 +1,6 @@
-import unittest
 import tempfile
+
+from orchstr8.testcase import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as BTCLedger
 from torba.coin.bitcoincash import MainNetLedger as BCHLedger
@@ -7,9 +8,9 @@ from torba.basemanager import BaseWalletManager
 from torba.wallet import Wallet, WalletStorage
 
 
-class TestWalletCreation(unittest.TestCase):
+class TestWalletCreation(AsyncioTestCase):
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.manager = BaseWalletManager()
         config = {'data_path': '/tmp/wallet'}
         self.btc_ledger = self.manager.get_or_create_ledger(BTCLedger.get_id(), config)

@@ -66,8 +66,9 @@ class BaseNetwork:
     async def stop(self):
         self.running = False
         if self.is_connected:
+            disconnected = self.client.on_disconnected.first
             await self.client.close()
-            await self.client.on_disconnected.first
+            await disconnected
 
     @property
     def is_connected(self):
