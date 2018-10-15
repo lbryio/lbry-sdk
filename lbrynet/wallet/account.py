@@ -1,8 +1,6 @@
 import json
 import logging
 
-from twisted.internet import defer
-
 from torba.baseaccount import BaseAccount
 from torba.basetransaction import TXORef
 
@@ -31,8 +29,7 @@ class Account(BaseAccount):
     def get_certificate_private_key(self, ref: TXORef):
         return self.certificates.get(ref.id)
 
-    @defer.inlineCallbacks
-    def maybe_migrate_certificates(self):
+    async def maybe_migrate_certificates(self):
         if not self.certificates:
             return
 
@@ -49,7 +46,7 @@ class Account(BaseAccount):
         for maybe_claim_id in list(self.certificates):
             results['total'] += 1
             if ':' not in maybe_claim_id:
-                claims = yield self.ledger.network.get_claims_by_ids(maybe_claim_id)
+                claims = await self.ledger.network.get_claims_by_ids(maybe_claim_id)
                 if maybe_claim_id not in claims:
                     log.warning(
                         "Failed to migrate claim '%s', server did not return any claim information.",
@@ -60,7 +57,7 @@ class Account(BaseAccount):
                 claim = claims[maybe_claim_id]
                 tx = None
                 if claim:
-                    tx = yield self.ledger.db.get_transaction(txid=claim['txid'])
+                    tx = await self.ledger.db.get_transaction(txid=claim['txid'])
                 else:
                     log.warning(maybe_claim_id)
                 if tx is not None:
@@ -96,7 +93,7 @@ class Account(BaseAccount):
             else:
                 try:
                     txid, nout = maybe_claim_id.split(':')
-                    tx = yield self.ledger.db.get_transaction(txid=txid)
+                    tx = await self.ledger.db.get_transaction(txid=txid)
                     if tx.outputs[int(nout)].script.is_claim_involved:
                         results['previous-success'] += 1
                     else:
@@ -115,9 +112,8 @@ class Account(BaseAccount):
                 indent=2
             ))
 
-    @defer.inlineCallbacks
-    def save_max_gap(self):
-        gap = yield self.get_max_gap()
+    async def save_max_gap(self):
+        gap = await self.get_max_gap()
         self.receiving.gap = max(20, gap['max_receiving_gap'] + 1)
         self.change.gap = max(6, gap['max_change_gap'] + 1)
         self.wallet.save()
@@ -144,9 +140,8 @@ class Account(BaseAccount):
         d['certificates'] = self.certificates
         return d
 
-    @defer.inlineCallbacks
-    def get_details(self, **kwargs):
-        details = yield super().get_details(**kwargs)
+    async def get_details(self, **kwargs):
+        details = await super().get_details(**kwargs)
         details['certificates'] = len(self.certificates)
         return details
 

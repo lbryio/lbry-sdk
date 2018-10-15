@@ -1,4 +1,3 @@
-from twisted.internet import defer
 from torba.basedatabase import BaseDatabase
 
 
@@ -49,11 +48,10 @@ class WalletDatabase(BaseDatabase):
             row['claim_name'] = txo.claim_name
         return row
 
-    @defer.inlineCallbacks
-    def get_txos(self, **constraints):
+    async def get_txos(self, **constraints):
         my_account = constraints.get('my_account', constraints.get('account', None))
 
-        txos = yield super().get_txos(**constraints)
+        txos = await super().get_txos(**constraints)
 
         channel_ids = set()
         for txo in txos:
@@ -66,7 +64,7 @@ class WalletDatabase(BaseDatabase):
         if channel_ids:
             channels = {
                 txo.claim_id: txo for txo in
-                (yield super().get_utxos(
+                (await super().get_utxos(
                     my_account=my_account,
                     claim_id__in=channel_ids
                 ))
@@ -103,9 +101,8 @@ class WalletDatabase(BaseDatabase):
         self.constrain_channels(constraints)
         return self.get_claim_count(**constraints)
 
-    @defer.inlineCallbacks
-    def get_certificates(self, private_key_accounts, exclude_without_key=False, **constraints):
-        channels = yield self.get_channels(**constraints)
+    async def get_certificates(self, private_key_accounts, exclude_without_key=False, **constraints):
+        channels = await self.get_channels(**constraints)
         certificates = []
         if private_key_accounts is not None:
             for channel in channels:

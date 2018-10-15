@@ -1,4 +1,5 @@
-from twisted.trial import unittest
+import unittest
+
 from lbrynet.wallet.dewies import lbc_to_dewies as l2d, dewies_to_lbc as d2l
 
 
