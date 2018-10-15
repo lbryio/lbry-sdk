@@ -1,5 +1,5 @@
+import unittest
 from binascii import hexlify, unhexlify
-from twisted.trial import unittest
 
 from lbrynet.wallet.script import OutputScript
 

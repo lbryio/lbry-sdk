@@ -3,8 +3,6 @@ import logging
 from ecdsa import BadSignatureError
 from binascii import unhexlify, hexlify
 
-from twisted.internet import defer
-
 from lbrynet.core.Error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
 from lbryschema.address import is_address
 from lbryschema.claim import ClaimDict
@@ -25,24 +23,22 @@ class Resolver:
         self.hash160_to_address = hash160_to_address
         self.network = network
 
-    @defer.inlineCallbacks
-    def _handle_resolutions(self, resolutions, requested_uris, page, page_size):
+    async def _handle_resolutions(self, resolutions, requested_uris, page, page_size):
         results = {}
         for uri in requested_uris:
             resolution = (resolutions or {}).get(uri, {})
             if resolution:
                 try:
                     results[uri] = _handle_claim_result(
-                        (yield self._handle_resolve_uri_response(uri, resolution, page, page_size))
+                        await self._handle_resolve_uri_response(uri, resolution, page, page_size)
                     )
                 except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
                     results[uri] = {'error': str(err)}
             else:
                 results[uri] = {'error': "URI lbry://{} cannot be resolved".format(uri.replace("lbry://", ""))}
-        defer.returnValue(results)
+        return results
 
-    @defer.inlineCallbacks
-    def _handle_resolve_uri_response(self, uri, resolution, page=0, page_size=10, raw=False):
+    async def _handle_resolve_uri_response(self, uri, resolution, page=0, page_size=10, raw=False):
         result = {}
         claim_trie_root = self.claim_trie_root
         parsed_uri = parse_lbry_uri(uri)
@@ -120,21 +116,21 @@ class Resolver:
         elif 'unverified_claims_for_name' in resolution and 'certificate' in result:
             unverified_claims_for_name = resolution['unverified_claims_for_name']
 
-            channel_info = yield self.get_channel_claims_page(unverified_claims_for_name,
+            channel_info = await self.get_channel_claims_page(unverified_claims_for_name,
                                                               result['certificate'], page=1)
             claims_in_channel, upper_bound = channel_info
 
-            if len(claims_in_channel) > 1:
-                log.error("Multiple signed claims for the same name")
-            elif not claims_in_channel:
+            if not claims_in_channel:
                 log.error("No valid claims for this name for this channel")
+            elif len(claims_in_channel) > 1:
+                log.error("Multiple signed claims for the same name")
             else:
                 result['claim'] = claims_in_channel[0]
 
         # parse and validate claims in a channel iteratively into pages of results
         elif 'unverified_claims_in_channel' in resolution and 'certificate' in result:
             ids_to_check = resolution['unverified_claims_in_channel']
-            channel_info = yield self.get_channel_claims_page(ids_to_check, result['certificate'],
+            channel_info = await self.get_channel_claims_page(ids_to_check, result['certificate'],
                                                               page=page, page_size=page_size)
             claims_in_channel, upper_bound = channel_info
 
@@ -145,16 +141,15 @@ class Resolver:
             result['success'] = False
             result['uri'] = str(parsed_uri)
 
-        defer.returnValue(result)
+        return result
 
-    @defer.inlineCallbacks
-    def get_certificate_and_validate_result(self, claim_result):
+    async def get_certificate_and_validate_result(self, claim_result):
         if not claim_result or 'value' not in claim_result:
             return claim_result
         certificate = None
         certificate_id = smart_decode(claim_result['value']).certificate_id
         if certificate_id:
-            certificate = yield self.network.get_claims_by_ids(certificate_id.decode())
+            certificate = await self.network.get_claims_by_ids(certificate_id.decode())
             certificate = certificate.pop(certificate_id.decode()) if certificate else None
         return self.parse_and_validate_claim_result(claim_result, certificate=certificate)
 
@@ -227,8 +222,7 @@ class Resolver:
                 abs_position += 1
         return queries, names, absolute_position_index
 
-    @defer.inlineCallbacks
-    def iter_channel_claims_pages(self, queries, claim_positions, claim_names, certificate,
+    async def iter_channel_claims_pages(self, queries, claim_positions, claim_names, certificate,
                                   page_size=10):
         # lbryum server returns a dict of {claim_id: (name, claim_height)}
         # first, sort the claims by block height (and by claim id int value within a block).
@@ -243,11 +237,10 @@ class Resolver:
         # processed them.
         # TODO: fix ^ in lbryschema
 
-        @defer.inlineCallbacks
-        def iter_validate_channel_claims():
+        async def iter_validate_channel_claims():
             formatted_claims = []
             for claim_ids in queries:
-                batch_result = yield self.network.get_claims_by_ids(*claim_ids)
+                batch_result = await self.network.get_claims_by_ids(*claim_ids)
                 for claim_id in claim_ids:
                     claim = batch_result[claim_id]
                     if claim['name'] == claim_names[claim_id]:
@@ -258,25 +251,20 @@ class Resolver:
                     else:
                         log.warning("ignoring claim with name mismatch %s %s", claim['name'],
                                     claim['claim_id'])
-                defer.returnValue(formatted_claims)
+                return formatted_claims
 
-        yielded_page = False
         results = []
 
-        for claim in (yield iter_validate_channel_claims()):
+        for claim in (await iter_validate_channel_claims()):
             results.append(claim)
 
             # if there is a full page of results, yield it
             if len(results) and len(results) % page_size == 0:
-                defer.returnValue(results[-page_size:])
-                yielded_page = True
+                return results[-page_size:]
 
-        # if we didn't get a full page of results, yield what results we did get
-        if not yielded_page:
-            defer.returnValue(results)
+        return results
 
-    @defer.inlineCallbacks
-    def get_channel_claims_page(self, channel_claim_infos, certificate, page, page_size=10):
+    async def get_channel_claims_page(self, channel_claim_infos, certificate, page, page_size=10):
         page = page or 0
         page_size = max(page_size, 1)
         if page_size > 500:
@@ -284,14 +272,14 @@ class Resolver:
         start_position = (page - 1) * page_size
         queries, names, claim_positions = self.prepare_claim_queries(start_position, page_size,
                                                                      channel_claim_infos)
-        page_generator = yield self.iter_channel_claims_pages(queries, claim_positions, names,
+        page_generator = await self.iter_channel_claims_pages(queries, claim_positions, names,
                                                               certificate, page_size=page_size)
         upper_bound = len(claim_positions)
         if not page:
-            defer.returnValue((None, upper_bound))
+            return None, upper_bound
         if start_position > upper_bound:
             raise IndexError("claim %i greater than max %i" % (start_position, upper_bound))
-        defer.returnValue((page_generator, upper_bound))
+        return page_generator, upper_bound
 
 
 # Format amount to be decimal encoded string

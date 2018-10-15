@@ -1,5 +1,5 @@
-from binascii import hexlify, unhexlify
 import unittest
+from binascii import hexlify, unhexlify
 
 from lbrynet.wallet.claim_proofs import get_hash_for_outpoint, verify_proof
 from lbryschema.hashing import double_sha256
