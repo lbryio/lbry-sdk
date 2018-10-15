@@ -99,11 +99,6 @@ def rows_to_dict(rows, fields):
         return []
 
 
-def row_dict_or_default(rows, fields, default=None):
-    dicts = rows_to_dict(rows, fields)
-    return dicts[0] if dicts else default
-
-
 class SQLiteMixin:
 
     CREATE_TABLES_QUERY: str
@@ -145,12 +140,6 @@ class SQLiteMixin:
             table, ', '.join(columns), where
         )
         return sql, values
-
-    @staticmethod
-    def execute(t, sql, values):
-        log.debug(sql)
-        log.debug(values)
-        return t.execute(sql, values)
 
 
 class BaseDatabase(SQLiteMixin):

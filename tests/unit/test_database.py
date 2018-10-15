@@ -32,7 +32,7 @@ class TestQueryBuilder(unittest.TestCase):
             })
         )
 
-    def test_in_list(self):
+    def test_in(self):
         self.assertEqual(
             constraints_to_sql({'txo.age__in': [18, 38]}),
             ('txo.age IN (18, 38)', {})
@@ -41,14 +41,16 @@ class TestQueryBuilder(unittest.TestCase):
             constraints_to_sql({'txo.age__in': ['abc123', 'def456']}),
             ("txo.age IN ('abc123', 'def456')", {})
         )
-
-    def test_in_query(self):
         self.assertEqual(
             constraints_to_sql({'txo.age__in': 'SELECT age from ages_table'}),
             ('txo.age IN (SELECT age from ages_table)', {})
         )
 
-    def test_not_in_query(self):
+    def test_not_in(self):
+        self.assertEqual(
+            constraints_to_sql({'txo.age__not_in': [18, 38]}),
+            ('txo.age NOT IN (18, 38)', {})
+        )
         self.assertEqual(
             constraints_to_sql({'txo.age__not_in': 'SELECT age from ages_table'}),
             ('txo.age NOT IN (SELECT age from ages_table)', {})
@@ -66,13 +68,13 @@ class TestQueryBuilder(unittest.TestCase):
         self.assertEqual(
             query(
                 "select * from foo",
-                a='b', b__in='select * from blah where c=:$c',
-                d__any={'one': 1, 'two': 2}, limit=10, order_by='b', **{'$c': 3}),
+                a__not='b', b__in='select * from blah where c=:$c',
+                d__any={'one__like': 'o', 'two': 2}, limit=10, order_by='b', **{'$c': 3}),
             (
-                "select * from foo WHERE a = :a AND "
+                "select * from foo WHERE a != :a__not AND "
                 "b IN (select * from blah where c=:$c) AND "
-                "(one = :d__any_one OR two = :d__any_two) ORDER BY b LIMIT 10",
-                {'a': 'b', 'd__any_one': 1, 'd__any_two': 2, '$c': 3}
+                "(one LIKE :d__any_one__like OR two = :d__any_two) ORDER BY b LIMIT 10",
+                {'a__not': 'b', 'd__any_one__like': 'o', 'd__any_two': 2, '$c': 3}
             )
         )
 
@@ -85,6 +87,8 @@ class TestQueryBuilder(unittest.TestCase):
             query("select * from foo", order_by=['foo', 'bar']),
             ("select * from foo ORDER BY foo, bar", {})
         )
+        with self.assertRaisesRegex(ValueError, 'order_by must be string or list'):
+            query("select * from foo", order_by={'foo': 'bar'})
 
     def test_query_limit_offset(self):
         self.assertEqual(
@@ -155,12 +159,52 @@ class TestQueries(AsyncioTestCase):
     def txi(self, txo):
         return ledger_class.transaction_class.input_class.spend(txo)
 
-    async def test_get_transactions(self):
+    async def test_queries(self):
+        self.assertEqual(0, await self.ledger.db.get_address_count())
         account1 = await self.create_account()
+        self.assertEqual(26, await self.ledger.db.get_address_count())
         account2 = await self.create_account()
+        self.assertEqual(52, await self.ledger.db.get_address_count())
+
+        self.assertEqual(0, await self.ledger.db.get_transaction_count())
+        self.assertEqual(0, await self.ledger.db.get_utxo_count())
+        self.assertEqual([], await self.ledger.db.get_utxos())
+        self.assertEqual(0, await self.ledger.db.get_txo_count())
+        self.assertEqual(0, await self.ledger.db.get_balance())
+        self.assertEqual(0, await self.ledger.db.get_balance(account=account1))
+        self.assertEqual(0, await self.ledger.db.get_balance(account=account2))
+
         tx1 = await self.create_tx_from_nothing(account1, 1)
+        self.assertEqual(1, await self.ledger.db.get_transaction_count(account=account1))
+        self.assertEqual(0, await self.ledger.db.get_transaction_count(account=account2))
+        self.assertEqual(1, await self.ledger.db.get_utxo_count(account=account1))
+        self.assertEqual(1, await self.ledger.db.get_txo_count(account=account1))
+        self.assertEqual(0, await self.ledger.db.get_txo_count(account=account2))
+        self.assertEqual(10**8, await self.ledger.db.get_balance())
+        self.assertEqual(10**8, await self.ledger.db.get_balance(account=account1))
+        self.assertEqual(0, await self.ledger.db.get_balance(account=account2))
+
         tx2 = await self.create_tx_from_txo(tx1.outputs[0], account2, 2)
+        self.assertEqual(2, await self.ledger.db.get_transaction_count(account=account1))
+        self.assertEqual(1, await self.ledger.db.get_transaction_count(account=account2))
+        self.assertEqual(0, await self.ledger.db.get_utxo_count(account=account1))
+        self.assertEqual(1, await self.ledger.db.get_txo_count(account=account1))
+        self.assertEqual(1, await self.ledger.db.get_utxo_count(account=account2))
+        self.assertEqual(1, await self.ledger.db.get_txo_count(account=account2))
+        self.assertEqual(10**8, await self.ledger.db.get_balance())
+        self.assertEqual(0, await self.ledger.db.get_balance(account=account1))
+        self.assertEqual(10**8, await self.ledger.db.get_balance(account=account2))
+
         tx3 = await self.create_tx_to_nowhere(tx2.outputs[0], 3)
+        self.assertEqual(2, await self.ledger.db.get_transaction_count(account=account1))
+        self.assertEqual(2, await self.ledger.db.get_transaction_count(account=account2))
+        self.assertEqual(0, await self.ledger.db.get_utxo_count(account=account1))
+        self.assertEqual(1, await self.ledger.db.get_txo_count(account=account1))
+        self.assertEqual(0, await self.ledger.db.get_utxo_count(account=account2))
+        self.assertEqual(1, await self.ledger.db.get_txo_count(account=account2))
+        self.assertEqual(0, await self.ledger.db.get_balance())
+        self.assertEqual(0, await self.ledger.db.get_balance(account=account1))
+        self.assertEqual(0, await self.ledger.db.get_balance(account=account2))
 
         txs = await self.ledger.db.get_transactions()
         self.assertEqual([tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
@@ -179,6 +223,7 @@ class TestQueries(AsyncioTestCase):
         self.assertEqual(txs[0].outputs[0].is_my_account, False)
         self.assertEqual(txs[1].inputs[0].is_my_account, False)
         self.assertEqual(txs[1].outputs[0].is_my_account, True)
+        self.assertEqual(2, await self.ledger.db.get_transaction_count(account=account2))
 
         tx = await self.ledger.db.get_transaction(txid=tx2.id)
         self.assertEqual(tx.id, tx2.id)
