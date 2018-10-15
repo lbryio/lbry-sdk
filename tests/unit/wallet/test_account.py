@@ -1,23 +1,24 @@
-from twisted.trial import unittest
-from twisted.internet import defer
+from orchstr8.testcase import AsyncioTestCase
+from torba.wallet import Wallet
 
 from lbrynet.wallet.ledger import MainNetLedger, WalletDatabase
 from lbrynet.wallet.header import Headers
 from lbrynet.wallet.account import Account
-from torba.wallet import Wallet
 
 
-class TestAccount(unittest.TestCase):
+class TestAccount(AsyncioTestCase):
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = MainNetLedger({
             'db': WalletDatabase(':memory:'),
             'headers': Headers(':memory:')
         })
-        return self.ledger.db.open()
+        await self.ledger.db.open()
 
-    @defer.inlineCallbacks
-    def test_generate_account(self):
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
+
+    async def test_generate_account(self):
         account = Account.generate(self.ledger, Wallet(), 'lbryum')
         self.assertEqual(account.ledger, self.ledger)
         self.assertIsNotNone(account.seed)
@@ -27,20 +28,19 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(account.public_key.ledger, self.ledger)
         self.assertEqual(account.private_key.public_key, account.public_key)
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 0)
-        addresses = yield account.change.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 0)
 
-        yield account.ensure_address_gap()
+        await account.ensure_address_gap()
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 20)
-        addresses = yield account.change.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 6)
 
-    @defer.inlineCallbacks
-    def test_generate_account_from_seed(self):
+    async def test_generate_account_from_seed(self):
         account = Account.from_dict(
             self.ledger, Wallet(), {
                 "seed":
@@ -58,16 +58,16 @@ class TestAccount(unittest.TestCase):
             'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMmDgp66FxH'
             'uDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9'
         )
-        address = yield account.receiving.ensure_address_gap()
+        address = await account.receiving.ensure_address_gap()
         self.assertEqual(address[0], 'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
 
-        private_key = yield self.ledger.get_private_key_for_address('bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
+        private_key = await self.ledger.get_private_key_for_address('bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
         self.assertEqual(
             private_key.extended_key_string(),
             'xprv9vwXVierUTT4hmoe3dtTeBfbNv1ph2mm8RWXARU6HsZjBaAoFaS2FRQu4fptR'
             'AyJWhJW42dmsEaC1nKnVKKTMhq3TVEHsNj1ca3ciZMKktT'
         )
-        private_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        private_key = await self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
         self.assertIsNone(private_key)
 
     def test_load_and_save_account(self):

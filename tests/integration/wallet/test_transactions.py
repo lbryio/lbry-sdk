@@ -1,6 +1,6 @@
 import asyncio
 
-from orchstr8.testcase import IntegrationTestCase, d2f
+from orchstr8.testcase import IntegrationTestCase
 from lbryschema.claim import ClaimDict
 from lbrynet.wallet.transaction import Transaction
 from lbrynet.wallet.account import generate_certificate
@@ -43,9 +43,9 @@ class BasicTransactionTest(IntegrationTestCase):
 
     async def test_creating_updating_and_abandoning_claim_with_channel(self):
 
-        await d2f(self.account.ensure_address_gap())
+        await self.account.ensure_address_gap()
 
-        address1, address2 = await d2f(self.account.receiving.get_addresses(limit=2, only_usable=True))
+        address1, address2 = await self.account.receiving.get_addresses(limit=2, only_usable=True)
         sendtxid1 = await self.blockchain.send_to_address(address1, 5)
         sendtxid2 = await self.blockchain.send_to_address(address2, 5)
         await self.blockchain.generate(1)
@@ -54,13 +54,13 @@ class BasicTransactionTest(IntegrationTestCase):
             self.on_transaction_id(sendtxid2),
         ])
 
-        self.assertEqual(d2l(await d2f(self.account.get_balance())), '10.0')
+        self.assertEqual(d2l(await self.account.get_balance()), '10.0')
 
         cert, key = generate_certificate()
-        cert_tx = await d2f(Transaction.claim('@bar', cert, l2d('1.0'), address1, [self.account], self.account))
+        cert_tx = await Transaction.claim('@bar', cert, l2d('1.0'), address1, [self.account], self.account)
         claim = ClaimDict.load_dict(example_claim_dict)
         claim = claim.sign(key, address1, cert_tx.outputs[0].claim_id)
-        claim_tx = await d2f(Transaction.claim('foo', claim, l2d('1.0'), address1, [self.account], self.account))
+        claim_tx = await Transaction.claim('foo', claim, l2d('1.0'), address1, [self.account], self.account)
 
         await self.broadcast(cert_tx)
         await self.broadcast(claim_tx)
@@ -74,23 +74,23 @@ class BasicTransactionTest(IntegrationTestCase):
             self.on_transaction(cert_tx),
         ])
 
-        self.assertEqual(d2l(await d2f(self.account.get_balance(confirmations=1))), '7.985786')
-        self.assertEqual(d2l(await d2f(self.account.get_balance(include_claims=True))), '9.985786')
+        self.assertEqual(d2l(await self.account.get_balance(confirmations=1)), '7.985786')
+        self.assertEqual(d2l(await self.account.get_balance(include_claims=True)), '9.985786')
 
-        response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
+        response = await self.ledger.resolve(0, 10, 'lbry://@bar/foo')
         self.assertIn('lbry://@bar/foo', response)
         self.assertIn('claim', response['lbry://@bar/foo'])
 
-        abandon_tx = await d2f(Transaction.abandon([claim_tx.outputs[0]], [self.account], self.account))
+        abandon_tx = await Transaction.abandon([claim_tx.outputs[0]], [self.account], self.account)
         await self.broadcast(abandon_tx)
         await self.on_transaction(abandon_tx)
         await self.blockchain.generate(1)
         await self.on_transaction(abandon_tx)
 
-        response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
+        response = await self.ledger.resolve(0, 10, 'lbry://@bar/foo')
         self.assertNotIn('claim', response['lbry://@bar/foo'])
 
         # checks for expected format in inexistent URIs
-        response = await d2f(self.ledger.resolve(0, 10, 'lbry://404', 'lbry://@404'))
+        response = await self.ledger.resolve(0, 10, 'lbry://404', 'lbry://@404')
         self.assertEqual('URI lbry://404 cannot be resolved', response['lbry://404']['error'])
         self.assertEqual('URI lbry://@404 cannot be resolved', response['lbry://@404']['error'])

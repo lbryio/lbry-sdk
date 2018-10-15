@@ -1,79 +1,68 @@
-from twisted.internet import defer
-from twisted.trial import unittest
+from orchstr8.testcase import AsyncioTestCase
+from torba.wallet import Wallet
+
 from lbrynet.wallet.account import Account
 from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.ledger import MainNetLedger
-from torba.wallet import Wallet
 
 
-class LedgerTestCase(unittest.TestCase):
+class LedgerTestCase(AsyncioTestCase):
 
-    def setUp(self):
-        super().setUp()
+    async def asyncSetUp(self):
         self.ledger = MainNetLedger({
             'db': MainNetLedger.database_class(':memory:'),
             'headers': MainNetLedger.headers_class(':memory:')
         })
         self.account = Account.generate(self.ledger, Wallet(), "lbryum")
-        return self.ledger.db.open()
+        await self.ledger.db.open()
 
-    def tearDown(self):
-        super().tearDown()
-        return self.ledger.db.close()
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
 
 
 class BasicAccountingTests(LedgerTestCase):
 
-    @defer.inlineCallbacks
-    def test_empty_state(self):
-        balance = yield self.account.get_balance()
-        self.assertEqual(balance, 0)
+    async def test_empty_state(self):
+        self.assertEqual(await self.account.get_balance(), 0)
 
-    @defer.inlineCallbacks
-    def test_balance(self):
-        address = yield self.account.receiving.get_or_create_usable_address()
+    async def test_balance(self):
+        address = await self.account.receiving.get_or_create_usable_address()
         hash160 = self.ledger.address_to_hash160(address)
 
         tx = Transaction(is_verified=True)\
             .add_outputs([Output.pay_pubkey_hash(100, hash160)])
-        yield self.ledger.db.save_transaction_io(
+        await self.ledger.db.save_transaction_io(
             'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
-        balance = yield self.account.get_balance(0)
-        self.assertEqual(balance, 100)
+        self.assertEqual(await self.account.get_balance(), 100)
 
         tx = Transaction(is_verified=True)\
             .add_outputs([Output.pay_claim_name_pubkey_hash(100, 'foo', b'', hash160)])
-        yield self.ledger.db.save_transaction_io(
+        await self.ledger.db.save_transaction_io(
             'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
-        balance = yield self.account.get_balance(0)
-        self.assertEqual(balance, 100)  # claim names don't count towards balance
-        balance = yield self.account.get_balance(0, include_claims=True)
-        self.assertEqual(balance, 200)
+        self.assertEqual(await self.account.get_balance(), 100)  # claim names don't count towards balance
+        self.assertEqual(await self.account.get_balance(include_claims=True), 200)
 
-    @defer.inlineCallbacks
-    def test_get_utxo(self):
+    async def test_get_utxo(self):
         address = yield self.account.receiving.get_or_create_usable_address()
         hash160 = self.ledger.address_to_hash160(address)
 
         tx = Transaction(is_verified=True)\
             .add_outputs([Output.pay_pubkey_hash(100, hash160)])
-        yield self.ledger.db.save_transaction_io(
+        await self.ledger.db.save_transaction_io(
             'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
 
-        utxos = yield self.account.get_utxos()
+        utxos = await self.account.get_utxos()
         self.assertEqual(len(utxos), 1)
 
         tx = Transaction(is_verified=True)\
             .add_inputs([Input.spend(utxos[0])])
-        yield self.ledger.db.save_transaction_io(
+        await self.ledger.db.save_transaction_io(
             'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
-        balance = yield self.account.get_balance(0, include_claims=True)
-        self.assertEqual(balance, 0)
+        self.assertEqual(await self.account.get_balance(include_claims=True), 0)
 
-        utxos = yield self.account.get_utxos()
+        utxos = await self.account.get_utxos()
         self.assertEqual(len(utxos), 0)
-

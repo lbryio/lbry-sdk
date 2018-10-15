@@ -1,7 +1,7 @@
+import unittest
 from binascii import hexlify, unhexlify
-from twisted.trial import unittest
-from twisted.internet import defer
 
+from orchstr8.testcase import AsyncioTestCase
 from torba.constants import CENT, COIN, NULL_HASH32
 from torba.wallet import Wallet
 
@@ -35,19 +35,17 @@ def get_claim_transaction(claim_name, claim=b''):
     )
 
 
-class TestSizeAndFeeEstimation(unittest.TestCase):
+class TestSizeAndFeeEstimation(AsyncioTestCase):
 
-    def setUp(self):
-        super().setUp()
+    async def asyncSetUp(self):
         self.ledger = MainNetLedger({
             'db': MainNetLedger.database_class(':memory:'),
             'headers': MainNetLedger.headers_class(':memory:')
         })
-        return self.ledger.db.open()
+        await self.ledger.db.open()
 
-    def tearDown(self):
-        super().tearDown()
-        return self.ledger.db.close()
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
 
     def test_output_size_and_fee(self):
         txo = get_output()
@@ -219,22 +217,19 @@ class TestTransactionSerialization(unittest.TestCase):
         self.assertEqual(tx.raw, raw)
 
 
-class TestTransactionSigning(unittest.TestCase):
+class TestTransactionSigning(AsyncioTestCase):
 
-    def setUp(self):
-        super().setUp()
+    async def asyncSetUp(self):
         self.ledger = MainNetLedger({
             'db': MainNetLedger.database_class(':memory:'),
             'headers': MainNetLedger.headers_class(':memory:')
         })
-        return self.ledger.db.open()
+        await self.ledger.db.open()
 
-    def tearDown(self):
-        super().tearDown()
-        return self.ledger.db.close()
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
 
-    @defer.inlineCallbacks
-    def test_sign(self):
+    async def test_sign(self):
         account = self.ledger.account_class.from_dict(
             self.ledger, Wallet(), {
                 "seed":
@@ -243,8 +238,8 @@ class TestTransactionSigning(unittest.TestCase):
             }
         )
 
-        yield account.ensure_address_gap()
-        address1, address2 = yield account.receiving.get_addresses(limit=2)
+        await account.ensure_address_gap()
+        address1, address2 = await account.receiving.get_addresses(limit=2)
         pubkey_hash1 = self.ledger.address_to_hash160(address1)
         pubkey_hash2 = self.ledger.address_to_hash160(address2)
 
@@ -252,7 +247,7 @@ class TestTransactionSigning(unittest.TestCase):
             .add_inputs([Input.spend(get_output(int(2*COIN), pubkey_hash1))]) \
             .add_outputs([Output.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)])
 
-        yield tx.sign([account])
+        await tx.sign([account])
 
         self.assertEqual(
             hexlify(tx.inputs[0].script.values['signature']),

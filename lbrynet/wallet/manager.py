@@ -6,8 +6,6 @@ from binascii import unhexlify
 from datetime import datetime
 from typing import Optional
 
-from twisted.internet import defer
-
 from lbryschema.schema import SECP256k1
 from torba.basemanager import BaseWalletManager
 
@@ -73,7 +71,7 @@ class LbryWalletManager(BaseWalletManager):
         return not self.default_account.encrypted
 
     def check_locked(self):
-        return defer.succeed(self.default_account.encrypted)
+        return self.default_account.encrypted
 
     def decrypt_account(self, account):
         assert account.password is not None, "account is not unlocked"
@@ -157,8 +155,7 @@ class LbryWalletManager(BaseWalletManager):
         return receiving_addresses, change_addresses
 
     @classmethod
-    @defer.inlineCallbacks
-    def from_lbrynet_config(cls, settings, db):
+    async def from_lbrynet_config(cls, settings, db):
 
         ledger_id = {
             'lbrycrd_main':    'lbc_mainnet',
@@ -194,17 +191,16 @@ class LbryWalletManager(BaseWalletManager):
         if receiving_addresses or change_addresses:
             if not os.path.exists(ledger.path):
                 os.mkdir(ledger.path)
-            yield ledger.db.open()
+            await ledger.db.open()
             try:
-                yield manager._migrate_addresses(receiving_addresses, change_addresses)
+                await manager._migrate_addresses(receiving_addresses, change_addresses)
             finally:
-                yield ledger.db.close()
-        defer.returnValue(manager)
+                await ledger.db.close()
+        return manager
 
-    @defer.inlineCallbacks
-    def _migrate_addresses(self, receiving_addresses: set, change_addresses: set):
-        migrated_receiving = set((yield self.default_account.receiving.generate_keys(0, len(receiving_addresses))))
-        migrated_change = set((yield self.default_account.change.generate_keys(0, len(change_addresses))))
+    async def _migrate_addresses(self, receiving_addresses: set, change_addresses: set):
+        migrated_receiving = set((await self.default_account.receiving.generate_keys(0, len(receiving_addresses))))
+        migrated_change = set((await self.default_account.change.generate_keys(0, len(change_addresses))))
         receiving_addresses = set(map(self.default_account.ledger.public_key_to_address, receiving_addresses))
         change_addresses = set(map(self.default_account.ledger.public_key_to_address, change_addresses))
         if not any(change_addresses.difference(migrated_change)):
@@ -231,25 +227,23 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: check if we have enough to cover amount
         return ReservedPoints(address, amount)
 
-    @defer.inlineCallbacks
-    def send_amount_to_address(self, amount: int, destination_address: bytes, account=None):
+    async def send_amount_to_address(self, amount: int, destination_address: bytes, account=None):
         account = account or self.default_account
-        tx = yield Transaction.pay(amount, destination_address, [account], account)
-        yield account.ledger.broadcast(tx)
+        tx = await Transaction.pay(amount, destination_address, [account], account)
+        await account.ledger.broadcast(tx)
         return tx
 
-    @defer.inlineCallbacks
-    def send_claim_to_address(self, claim_id: str, destination_address: str, amount: Optional[int],
+    async def send_claim_to_address(self, claim_id: str, destination_address: str, amount: Optional[int],
                               account=None):
         account = account or self.default_account
-        claims = account.ledger.db.get_utxos(claim_id=claim_id)
+        claims = await account.ledger.db.get_utxos(claim_id=claim_id)
         if not claims:
             raise NameError("Claim not found: {}".format(claim_id))
-        tx = yield Transaction.update(
+        tx = await Transaction.update(
             claims[0], ClaimDict.deserialize(claims[0].script.value['claim']), amount,
             destination_address.encode(), [account], account
         )
-        yield self.ledger.broadcast(tx)
+        await self.ledger.broadcast(tx)
         return tx
 
     def send_points_to_address(self, reserved: ReservedPoints, amount: int, account=None):
@@ -262,23 +256,21 @@ class LbryWalletManager(BaseWalletManager):
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
 
-    @defer.inlineCallbacks
-    def resolve(self, *uris, **kwargs):
+    async def resolve(self, *uris, **kwargs):
         page = kwargs.get('page', 0)
         page_size = kwargs.get('page_size', 10)
         check_cache = kwargs.get('check_cache', False)  # TODO: put caching back (was force_refresh parameter)
-        ledger = self.default_account.ledger  # type: MainNetLedger
-        results = yield ledger.resolve(page, page_size, *uris)
-        yield self.old_db.save_claims_for_resolve(
+        ledger: MainNetLedger = self.default_account.ledger
+        results = await ledger.resolve(page, page_size, *uris)
+        await self.old_db.save_claims_for_resolve(
             (value for value in results.values() if 'error' not in value))
-        defer.returnValue(results)
+        return results
 
     def get_claims_for_name(self, name: str):
         return self.ledger.network.get_claims_for_name(name)
 
-    @defer.inlineCallbacks
-    def address_is_mine(self, unknown_address, account):
-        match = yield self.ledger.db.get_address(address=unknown_address, account=account)
+    async def address_is_mine(self, unknown_address, account):
+        match = await self.ledger.db.get_address(address=unknown_address, account=account)
         if match is not None:
             return True
         return False
@@ -287,10 +279,9 @@ class LbryWalletManager(BaseWalletManager):
         return self.default_account.ledger.get_transaction(txid)
 
     @staticmethod
-    @defer.inlineCallbacks
-    def get_history(account: BaseAccount, **constraints):
+    async def get_history(account: BaseAccount, **constraints):
         headers = account.ledger.headers
-        txs = (yield account.get_transactions(**constraints))
+        txs = await account.get_transactions(**constraints)
         history = []
         for tx in txs:
             ts = headers[tx.height]['timestamp']
@@ -346,29 +337,28 @@ class LbryWalletManager(BaseWalletManager):
     def get_utxos(account: BaseAccount):
         return account.get_utxos()
 
-    @defer.inlineCallbacks
-    def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
+    async def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
         account = self.default_account
         claim = ClaimDict.load_dict(claim_dict)
         if not claim_address:
-            claim_address = yield account.receiving.get_or_create_usable_address()
+            claim_address = await account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
                 certificate.private_key, claim_address, certificate.claim_id, curve=SECP256k1
             )
-        existing_claims = yield account.get_claims(claim_name=name)
+        existing_claims = await account.get_claims(claim_name=name)
         if len(existing_claims) == 0:
-            tx = yield Transaction.claim(
+            tx = await Transaction.claim(
                 name, claim, amount, claim_address, [account], account
             )
         elif len(existing_claims) == 1:
-            tx = yield Transaction.update(
+            tx = await Transaction.update(
                 existing_claims[0], claim, amount, claim_address, [account], account
             )
         else:
             raise NameError("More than one other claim exists with the name '{}'.".format(name))
-        yield account.ledger.broadcast(tx)
-        yield self.old_db.save_claims([self._old_get_temp_claim_info(
+        await account.ledger.broadcast(tx)
+        await self.old_db.save_claims([self._old_get_temp_claim_info(
             tx, tx.outputs[0], claim_address, claim_dict, name, amount
         )])
         # TODO: release reserved tx outputs in case anything fails by this point
@@ -387,43 +377,39 @@ class LbryWalletManager(BaseWalletManager):
             "claim_sequence": -1,
         }
 
-    @defer.inlineCallbacks
-    def support_claim(self, claim_name, claim_id, amount, account):
-        holding_address = yield account.receiving.get_or_create_usable_address()
-        tx = yield Transaction.support(claim_name, claim_id, amount, holding_address, [account], account)
-        yield account.ledger.broadcast(tx)
+    async def support_claim(self, claim_name, claim_id, amount, account):
+        holding_address = await account.receiving.get_or_create_usable_address()
+        tx = await Transaction.support(claim_name, claim_id, amount, holding_address, [account], account)
+        await account.ledger.broadcast(tx)
         return tx
 
-    @defer.inlineCallbacks
-    def tip_claim(self, amount, claim_id, account):
-        claim_to_tip = yield self.get_claim_by_claim_id(claim_id)
-        tx = yield Transaction.support(
+    async def tip_claim(self, amount, claim_id, account):
+        claim_to_tip = await self.get_claim_by_claim_id(claim_id)
+        tx = await Transaction.support(
             claim_to_tip['name'], claim_id, amount, claim_to_tip['address'], [account], account
         )
-        yield account.ledger.broadcast(tx)
+        await account.ledger.broadcast(tx)
         return tx
 
-    @defer.inlineCallbacks
-    def abandon_claim(self, claim_id, txid, nout, account):
-        claim = yield account.get_claim(claim_id=claim_id, txid=txid, nout=nout)
+    async def abandon_claim(self, claim_id, txid, nout, account):
+        claim = await account.get_claim(claim_id=claim_id, txid=txid, nout=nout)
         if not claim:
             raise Exception('No claim found for the specified claim_id or txid:nout')
 
-        tx = yield Transaction.abandon(claim, [account], account)
-        yield account.ledger.broadcast(tx)
+        tx = await Transaction.abandon(claim, [account], account)
+        await account.ledger.broadcast(tx)
         # TODO: release reserved tx outputs in case anything fails by this point
-        defer.returnValue(tx)
+        return tx
 
-    @defer.inlineCallbacks
-    def claim_new_channel(self, channel_name, amount):
+    async def claim_new_channel(self, channel_name, amount):
         account = self.default_account
-        address = yield account.receiving.get_or_create_usable_address()
+        address = await account.receiving.get_or_create_usable_address()
         cert, key = generate_certificate()
-        tx = yield Transaction.claim(channel_name, cert, amount, address, [account], account)
-        yield account.ledger.broadcast(tx)
+        tx = await Transaction.claim(channel_name, cert, amount, address, [account], account)
+        await account.ledger.broadcast(tx)
         account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
-        defer.returnValue(tx)
+        return tx
 
     def get_certificates(self, private_key_accounts, exclude_without_key=True, **constraints):
         return self.db.get_certificates(
@@ -443,7 +429,7 @@ class LbryWalletManager(BaseWalletManager):
         pass  # TODO: Data payments is disabled
 
     def send_points(self, reserved_points, amount):
-        defer.succeed(True)  # TODO: Data payments is disabled
+        return True  # TODO: Data payments is disabled
 
     def cancel_point_reservation(self, reserved_points):
         pass # fixme: disabled for now.

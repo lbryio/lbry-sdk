@@ -1,15 +1,12 @@
+import asyncio
 import logging
-
-from six import int2byte
 from binascii import unhexlify
 
-from twisted.internet import defer
-
-from .resolve import Resolver
 from lbryschema.error import URIParseError
 from lbryschema.uri import parse_lbry_uri
 from torba.baseledger import BaseLedger
 
+from .resolve import Resolver
 from .account import Account
 from .network import Network
 from .database import WalletDatabase
@@ -25,15 +22,17 @@ class MainNetLedger(BaseLedger):
     symbol = 'LBC'
     network_name = 'mainnet'
 
+    headers: Headers
+
     account_class = Account
     database_class = WalletDatabase
     headers_class = Headers
     network_class = Network
     transaction_class = Transaction
 
-    secret_prefix = int2byte(0x1c)
-    pubkey_address_prefix = int2byte(0x55)
-    script_address_prefix = int2byte(0x7a)
+    secret_prefix = bytes((0x1c,))
+    pubkey_address_prefix = bytes((0x55,))
+    script_address_prefix = bytes((0x7a,))
     extended_public_key_prefix = unhexlify('0488b21e')
     extended_private_key_prefix = unhexlify('0488ade4')
 
@@ -54,42 +53,40 @@ class MainNetLedger(BaseLedger):
         return Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
                         hash160_to_address=self.hash160_to_address, network=self.network)
 
-    @defer.inlineCallbacks
-    def resolve(self, page, page_size, *uris):
+    async def resolve(self, page, page_size, *uris):
         for uri in uris:
             try:
                 parse_lbry_uri(uri)
             except URIParseError as err:
-                defer.returnValue({'error': err.message})
-        resolutions = yield self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
-        return (yield self.resolver._handle_resolutions(resolutions, uris, page, page_size))
+                return {'error': err.args[0]}
+        resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
+        return await self.resolver._handle_resolutions(resolutions, uris, page, page_size)
 
-    @defer.inlineCallbacks
-    def get_claim_by_claim_id(self, claim_id):
-        result = (yield self.network.get_claims_by_ids(claim_id)).pop(claim_id, {})
-        return (yield self.resolver.get_certificate_and_validate_result(result))
+    async def get_claim_by_claim_id(self, claim_id):
+        result = (await self.network.get_claims_by_ids(claim_id)).pop(claim_id, {})
+        return await self.resolver.get_certificate_and_validate_result(result)
 
-    @defer.inlineCallbacks
-    def get_claim_by_outpoint(self, txid, nout):
-        claims = (yield self.network.get_claims_in_tx(txid)) or []
+    async def get_claim_by_outpoint(self, txid, nout):
+        claims = (await self.network.get_claims_in_tx(txid)) or []
         for claim in claims:
             if claim['nout'] == nout:
-                return (yield self.resolver.get_certificate_and_validate_result(claim))
+                return await self.resolver.get_certificate_and_validate_result(claim)
         return 'claim not found'
 
-    @defer.inlineCallbacks
-    def start(self):
-        yield super().start()
-        yield defer.DeferredList([
+    async def start(self):
+        await super().start()
+        await asyncio.gather([
             a.maybe_migrate_certificates() for a in self.accounts
         ])
-        yield defer.DeferredList([a.save_max_gap() for a in self.accounts])
+        await asyncio.gather([
+            a.save_max_gap() for a in self.accounts
+        ])
 
 
 class TestNetLedger(MainNetLedger):
     network_name = 'testnet'
-    pubkey_address_prefix = int2byte(111)
-    script_address_prefix = int2byte(196)
+    pubkey_address_prefix = bytes((111,))
+    script_address_prefix = bytes((196,))
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
 
@@ -97,8 +94,8 @@ class TestNetLedger(MainNetLedger):
 class RegTestLedger(MainNetLedger):
     network_name = 'regtest'
     headers_class = UnvalidatedHeaders
-    pubkey_address_prefix = int2byte(111)
-    script_address_prefix = int2byte(196)
+    pubkey_address_prefix = bytes((111,))
+    script_address_prefix = bytes((196,))
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
 

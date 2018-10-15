@@ -1,15 +1,12 @@
-from io import BytesIO
 from binascii import unhexlify
 
-from twisted.trial import unittest
-from twisted.internet import defer
+from orchstr8.testcase import AsyncioTestCase
+from torba.util import ArithUint256
 
 from lbrynet.wallet.ledger import Headers
 
-from torba.util import ArithUint256
 
-
-class TestHeaders(unittest.TestCase):
+class TestHeaders(AsyncioTestCase):
 
     def test_deserialize(self):
         self.maxDiff = None
@@ -36,19 +33,17 @@ class TestHeaders(unittest.TestCase):
             'version': 536870912
         })
 
-    @defer.inlineCallbacks
-    def test_connect_from_genesis(self):
+    async def test_connect_from_genesis(self):
         headers = Headers(':memory:')
         self.assertEqual(headers.height, -1)
-        yield headers.connect(0, HEADERS)
+        await headers.connect(0, HEADERS)
         self.assertEqual(headers.height, 19)
 
-    @defer.inlineCallbacks
-    def test_connect_from_middle(self):
+    async def test_connect_from_middle(self):
         h = Headers(':memory:')
         h.io.write(HEADERS[:10*Headers.header_size])
         self.assertEqual(h.height, 9)
-        yield h.connect(len(h), HEADERS[10*Headers.header_size:20*Headers.header_size])
+        await h.connect(len(h), HEADERS[10*Headers.header_size:20*Headers.header_size])
         self.assertEqual(h.height, 19)
 
     def test_target_calculation(self):
