@@ -6,6 +6,8 @@ from binascii import unhexlify
 from datetime import datetime
 from typing import Optional
 
+from twisted.internet import defer
+
 from lbryschema.schema import SECP256k1
 from torba.basemanager import BaseWalletManager
 

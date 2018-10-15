@@ -75,12 +75,8 @@ class MainNetLedger(BaseLedger):
 
     async def start(self):
         await super().start()
-        await asyncio.gather([
-            a.maybe_migrate_certificates() for a in self.accounts
-        ])
-        await asyncio.gather([
-            a.save_max_gap() for a in self.accounts
-        ])
+        await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
+        await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
 
 
 class TestNetLedger(MainNetLedger):
