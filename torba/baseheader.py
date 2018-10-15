@@ -95,7 +95,9 @@ class BaseHeaders:
     async def connect(self, start: int, headers: bytes) -> int:
         added = 0
         bail = False
-        loop = asyncio.get_running_loop()
+        # TODO: switch to get_running_loop() after depricating python 3.6 support
+        #loop = asyncio.get_running_loop()
+        loop = asyncio.get_event_loop()
         async with self._header_connect_lock:
             for height, chunk in self._iterate_chunks(start, headers):
                 try:
