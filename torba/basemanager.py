@@ -1,6 +1,6 @@
+import asyncio
 import logging
 from typing import Type, MutableSequence, MutableMapping
-from twisted.internet import defer
 
 from torba.baseledger import BaseLedger, LedgerRegistry
 from torba.wallet import Wallet, WalletStorage
@@ -41,11 +41,10 @@ class BaseWalletManager:
         self.wallets.append(wallet)
         return wallet
 
-    @defer.inlineCallbacks
-    def get_detailed_accounts(self, confirmations=6, show_seed=False):
+    async def get_detailed_accounts(self, confirmations=6, show_seed=False):
         ledgers = {}
         for i, account in enumerate(self.accounts):
-            details = yield account.get_details(confirmations=confirmations, show_seed=True)
+            details = await account.get_details(confirmations=confirmations, show_seed=True)
             details['is_default_account'] = i == 0
             ledger_id = account.ledger.get_id()
             ledgers.setdefault(ledger_id, [])
@@ -68,16 +67,14 @@ class BaseWalletManager:
             for account in wallet.accounts:
                 yield account
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         self.running = True
-        yield defer.DeferredList([
+        await asyncio.gather(*(
             l.start() for l in self.ledgers.values()
-        ])
+        ))
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield defer.DeferredList([
+    async def stop(self):
+        await asyncio.gather(*(
             l.stop() for l in self.ledgers.values()
-        ])
+        ))
         self.running = False

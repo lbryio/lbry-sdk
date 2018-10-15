@@ -1,5 +1,5 @@
+import unittest
 from binascii import hexlify, unhexlify
-from twisted.trial import unittest
 
 from torba.bcd_data_stream import BCDataStream
 from torba.basescript import Template, ParseError, tokenize, push_data

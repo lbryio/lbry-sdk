@@ -1,8 +1,7 @@
 import os
 from urllib.request import Request, urlopen
 
-from twisted.trial import unittest
-from twisted.internet import defer
+from orchstr8.testcase import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainHeaders
 
@@ -11,7 +10,7 @@ def block_bytes(blocks):
     return blocks * MainHeaders.header_size
 
 
-class BitcoinHeadersTestCase(unittest.TestCase):
+class BitcoinHeadersTestCase(AsyncioTestCase):
 
     # Download headers instead of storing them in git.
     HEADER_URL = 'http://headers.electrum.org/blockchain_headers'
@@ -39,7 +38,7 @@ class BitcoinHeadersTestCase(unittest.TestCase):
             headers.seek(after, os.SEEK_SET)
             return headers.read(upto)
 
-    def get_headers(self, upto: int = -1):
+    async def get_headers(self, upto: int = -1):
         h = MainHeaders(':memory:')
         h.io.write(self.get_bytes(upto))
         return h
@@ -47,8 +46,8 @@ class BitcoinHeadersTestCase(unittest.TestCase):
 
 class BasicHeadersTests(BitcoinHeadersTestCase):
 
-    def test_serialization(self):
-        h = self.get_headers()
+    async def test_serialization(self):
+        h = await self.get_headers()
         self.assertEqual(h[0], {
             'bits': 486604799,
             'block_height': 0,
@@ -94,18 +93,16 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
             h.get_raw_header(self.RETARGET_BLOCK)
         )
 
-    @defer.inlineCallbacks
-    def test_connect_from_genesis_to_3000_past_first_chunk_at_2016(self):
+    async def test_connect_from_genesis_to_3000_past_first_chunk_at_2016(self):
         headers = MainHeaders(':memory:')
         self.assertEqual(headers.height, -1)
-        yield headers.connect(0, self.get_bytes(block_bytes(3001)))
+        await headers.connect(0, self.get_bytes(block_bytes(3001)))
         self.assertEqual(headers.height, 3000)
 
-    @defer.inlineCallbacks
-    def test_connect_9_blocks_passing_a_retarget_at_32256(self):
+    async def test_connect_9_blocks_passing_a_retarget_at_32256(self):
         retarget = block_bytes(self.RETARGET_BLOCK-5)
-        headers = self.get_headers(upto=retarget)
+        headers = await self.get_headers(upto=retarget)
         remainder = self.get_bytes(after=retarget)
         self.assertEqual(headers.height, 32250)
-        yield headers.connect(len(headers), remainder)
+        await headers.connect(len(headers), remainder)
         self.assertEqual(headers.height, 32259)

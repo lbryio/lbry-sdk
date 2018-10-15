@@ -1,4 +1,4 @@
-from twisted.trial import unittest
+import unittest
 from types import GeneratorType
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class

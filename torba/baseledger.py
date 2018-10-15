@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from binascii import hexlify, unhexlify
 from io import StringIO
@@ -6,8 +7,6 @@ from io import StringIO
 from typing import Dict, Type, Iterable
 from operator import itemgetter
 from collections import namedtuple
-
-from twisted.internet import defer
 
 from torba import baseaccount
 from torba import basenetwork
@@ -104,8 +103,8 @@ class BaseLedger(metaclass=LedgerRegistry):
         )
 
         self._transaction_processing_locks = {}
-        self._utxo_reservation_lock = defer.DeferredLock()
-        self._header_processing_lock = defer.DeferredLock()
+        self._utxo_reservation_lock = asyncio.Lock()
+        self._header_processing_lock = asyncio.Lock()
 
     @classmethod
     def get_id(cls):
@@ -135,41 +134,32 @@ class BaseLedger(metaclass=LedgerRegistry):
     def add_account(self, account: baseaccount.BaseAccount):
         self.accounts.append(account)
 
-    @defer.inlineCallbacks
-    def get_private_key_for_address(self, address):
-        match = yield self.db.get_address(address=address)
+    async def get_private_key_for_address(self, address):
+        match = await self.db.get_address(address=address)
         if match:
             for account in self.accounts:
                 if match['account'] == account.public_key.address:
                     return account.get_private_key(match['chain'], match['position'])
 
-    @defer.inlineCallbacks
-    def get_effective_amount_estimators(self, funding_accounts: Iterable[baseaccount.BaseAccount]):
+    async def get_effective_amount_estimators(self, funding_accounts: Iterable[baseaccount.BaseAccount]):
         estimators = []
         for account in funding_accounts:
-            utxos = yield account.get_utxos()
+            utxos = await account.get_utxos()
             for utxo in utxos:
                 estimators.append(utxo.get_estimator(self))
         return estimators
 
-    @defer.inlineCallbacks
-    def get_spendable_utxos(self, amount: int, funding_accounts):
-        yield self._utxo_reservation_lock.acquire()
-        try:
-            txos = yield self.get_effective_amount_estimators(funding_accounts)
+    async def get_spendable_utxos(self, amount: int, funding_accounts):
+        async with self._utxo_reservation_lock:
+            txos = await self.get_effective_amount_estimators(funding_accounts)
             selector = CoinSelector(
                 txos, amount,
                 self.transaction_class.output_class.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
             )
             spendables = selector.select()
             if spendables:
-                yield self.reserve_outputs(s.txo for s in spendables)
-        except Exception:
-            log.exception('Failed to get spendable utxos:')
-            raise
-        finally:
-            self._utxo_reservation_lock.release()
-        return spendables
+                await self.reserve_outputs(s.txo for s in spendables)
+            return spendables
 
     def reserve_outputs(self, txos):
         return self.db.reserve_outputs(txos)
@@ -177,16 +167,14 @@ class BaseLedger(metaclass=LedgerRegistry):
     def release_outputs(self, txos):
         return self.db.release_outputs(txos)
 
-    @defer.inlineCallbacks
-    def get_local_status(self, address):
-        address_details = yield self.db.get_address(address=address)
+    async def get_local_status(self, address):
+        address_details = await self.db.get_address(address=address)
         history = address_details['history'] or ''
         h = sha256(history.encode())
         return hexlify(h)
 
-    @defer.inlineCallbacks
-    def get_local_history(self, address):
-        address_details = yield self.db.get_address(address=address)
+    async def get_local_history(self, address):
+        address_details = await self.db.get_address(address=address)
         history = address_details['history'] or ''
         parts = history.split(':')[:-1]
         return list(zip(parts[0::2], map(int, parts[1::2])))
@@ -203,43 +191,40 @@ class BaseLedger(metaclass=LedgerRegistry):
             working_branch = double_sha256(combined)
         return hexlify(working_branch[::-1])
 
-    def validate_transaction_and_set_position(self, tx, height, merkle):
+    async def validate_transaction_and_set_position(self, tx, height):
         if not height <= len(self.headers):
             return False
+        merkle = await self.network.get_merkle(tx.id, height)
         merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
         header = self.headers[height]
         tx.position = merkle['pos']
         tx.is_verified = merkle_root == header['merkle_root']
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         if not os.path.exists(self.path):
             os.mkdir(self.path)
-        yield defer.gatherResults([
+        await asyncio.gather(
             self.db.open(),
             self.headers.open()
-        ])
+        )
         first_connection = self.network.on_connected.first
-        self.network.start()
-        yield first_connection
-        yield self.join_network()
+        asyncio.ensure_future(self.network.start())
+        await first_connection
+        await self.join_network()
         self.network.on_connected.listen(self.join_network)
 
-    @defer.inlineCallbacks
-    def join_network(self, *args):
+    async def join_network(self, *args):
         log.info("Subscribing and updating accounts.")
-        yield self.update_headers()
-        yield self.network.subscribe_headers()
-        yield self.update_accounts()
+        await self.update_headers()
+        await self.network.subscribe_headers()
+        await self.update_accounts()
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield self.network.stop()
-        yield self.db.close()
-        yield self.headers.close()
+    async def stop(self):
+        await self.network.stop()
+        await self.db.close()
+        await self.headers.close()
 
-    @defer.inlineCallbacks
-    def update_headers(self, height=None, headers=None, subscription_update=False):
+    async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
         while True:
 
@@ -251,14 +236,14 @@ class BaseLedger(metaclass=LedgerRegistry):
                 subscription_update = False
 
             if not headers:
-                header_response = yield self.network.get_headers(height, 2001)
+                header_response = await self.network.get_headers(height, 2001)
                 headers = header_response['hex']
 
             if not headers:
                 # Nothing to do, network thinks we're already at the latest height.
                 return
 
-            added = yield self.headers.connect(height, unhexlify(headers))
+            added = await self.headers.connect(height, unhexlify(headers))
             if added > 0:
                 height += added
                 self._on_header_controller.add(
@@ -268,7 +253,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                     # we started rewinding blocks and apparently found
                     # a new chain
                     rewound = 0
-                    yield self.db.rewind_blockchain(height)
+                    await self.db.rewind_blockchain(height)
 
                 if subscription_update:
                     # subscription updates are for latest header already
@@ -310,66 +295,37 @@ class BaseLedger(metaclass=LedgerRegistry):
             # robust sync, turn off subscription update shortcut
             subscription_update = False
 
-    @defer.inlineCallbacks
-    def receive_header(self, response):
-        yield self._header_processing_lock.acquire()
-        try:
+    async def receive_header(self, response):
+        async with self._header_processing_lock:
             header = response[0]
-            yield self.update_headers(
+            await self.update_headers(
                 height=header['height'], headers=header['hex'], subscription_update=True
             )
-        finally:
-            self._header_processing_lock.release()
 
-    def update_accounts(self):
-        return defer.DeferredList([
+    async def update_accounts(self):
+        return await asyncio.gather(*(
             self.update_account(a) for a in self.accounts
-        ])
+        ))
 
-    @defer.inlineCallbacks
-    def update_account(self, account):  # type: (baseaccount.BaseAccount) -> defer.Defferred
+    async def update_account(self, account: baseaccount.BaseAccount):
         # Before subscribing, download history for any addresses that don't have any,
         # this avoids situation where we're getting status updates to addresses we know
         # need to update anyways. Continue to get history and create more addresses until
         # all missing addresses are created and history for them is fully restored.
-        yield account.ensure_address_gap()
-        addresses = yield account.get_addresses(used_times=0)
+        await account.ensure_address_gap()
+        addresses = await account.get_addresses(used_times=0)
         while addresses:
-            yield defer.DeferredList([
-                self.update_history(a) for a in addresses
-            ])
-            addresses = yield account.ensure_address_gap()
+            await asyncio.gather(*(self.update_history(a) for a in addresses))
+            addresses = await account.ensure_address_gap()
 
         # By this point all of the addresses should be restored and we
         # can now subscribe all of them to receive updates.
-        all_addresses = yield account.get_addresses()
-        yield defer.DeferredList(
-            list(map(self.subscribe_history, all_addresses))
-        )
+        all_addresses = await account.get_addresses()
+        await asyncio.gather(*(self.subscribe_history(a) for a in all_addresses))
 
-    @defer.inlineCallbacks
-    def _prefetch_history(self, remote_history, local_history):
-        proofs, network_txs, deferreds = {}, {}, []
-        for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
-            if i < len(local_history) and local_history[i] == (hex_id, remote_height):
-                continue
-            if remote_height > 0:
-                deferreds.append(
-                    self.network.get_merkle(hex_id, remote_height).addBoth(
-                        lambda result, txid: proofs.__setitem__(txid, result), hex_id)
-                )
-            deferreds.append(
-                self.network.get_transaction(hex_id).addBoth(
-                    lambda result, txid: network_txs.__setitem__(txid, result), hex_id)
-            )
-        yield defer.DeferredList(deferreds)
-        return proofs, network_txs
-
-    @defer.inlineCallbacks
-    def update_history(self, address):
-        remote_history = yield self.network.get_history(address)
-        local_history = yield self.get_local_history(address)
-        proofs, network_txs = yield self._prefetch_history(remote_history, local_history)
+    async def update_history(self, address):
+        remote_history = await self.network.get_history(address)
+        local_history = await self.get_local_history(address)
 
         synced_history = StringIO()
         for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
@@ -379,30 +335,29 @@ class BaseLedger(metaclass=LedgerRegistry):
             if i < len(local_history) and local_history[i] == (hex_id, remote_height):
                 continue
 
-            lock = self._transaction_processing_locks.setdefault(hex_id, defer.DeferredLock())
+            lock = self._transaction_processing_locks.setdefault(hex_id, asyncio.Lock())
 
-            yield lock.acquire()
+            await lock.acquire()
 
             try:
 
                 # see if we have a local copy of transaction, otherwise fetch it from server
-                tx = yield self.db.get_transaction(txid=hex_id)
+                tx = await self.db.get_transaction(txid=hex_id)
                 save_tx = None
                 if tx is None:
-                    _raw = network_txs[hex_id]
+                    _raw = await self.network.get_transaction(hex_id)
                     tx = self.transaction_class(unhexlify(_raw))
                     save_tx = 'insert'
 
                 tx.height = remote_height
 
                 if remote_height > 0 and (not tx.is_verified or tx.position == -1):
-                    self.validate_transaction_and_set_position(tx, remote_height, proofs[hex_id])
+                    await self.validate_transaction_and_set_position(tx, remote_height)
                     if save_tx is None:
                         save_tx = 'update'
 
-                yield self.db.save_transaction_io(
-                    save_tx, tx, address, self.address_to_hash160(address),
-                    synced_history.getvalue()
+                await self.db.save_transaction_io(
+                    save_tx, tx, address, self.address_to_hash160(address), synced_history.getvalue()
                 )
 
                 log.debug(
@@ -412,28 +367,22 @@ class BaseLedger(metaclass=LedgerRegistry):
 
                 self._on_transaction_controller.add(TransactionEvent(address, tx))
 
-            except Exception:
-                log.exception('Failed to synchronize transaction:')
-                raise
-
             finally:
                 lock.release()
-                if not lock.locked and hex_id in self._transaction_processing_locks:
+                if not lock.locked() and hex_id in self._transaction_processing_locks:
                     del self._transaction_processing_locks[hex_id]
 
-    @defer.inlineCallbacks
-    def subscribe_history(self, address):
-        remote_status = yield self.network.subscribe_address(address)
-        local_status = yield self.get_local_status(address)
+    async def subscribe_history(self, address):
+        remote_status = await self.network.subscribe_address(address)
+        local_status = await self.get_local_status(address)
         if local_status != remote_status:
-            yield self.update_history(address)
+            await self.update_history(address)
 
-    @defer.inlineCallbacks
-    def receive_status(self, response):
+    async def receive_status(self, response):
         address, remote_status = response
-        local_status = yield self.get_local_status(address)
+        local_status = await self.get_local_status(address)
         if local_status != remote_status:
-            yield self.update_history(address)
+            await self.update_history(address)
 
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw).decode())

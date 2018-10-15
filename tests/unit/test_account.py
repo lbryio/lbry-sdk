@@ -1,25 +1,26 @@
 from binascii import hexlify
-from twisted.trial import unittest
-from twisted.internet import defer
+
+from orchstr8.testcase import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.baseaccount import HierarchicalDeterministic, SingleKey
 from torba.wallet import Wallet
 
 
-class TestHierarchicalDeterministicAccount(unittest.TestCase):
+class TestHierarchicalDeterministicAccount(AsyncioTestCase):
 
-    @defer.inlineCallbacks
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),
         })
-        yield self.ledger.db.open()
+        await self.ledger.db.open()
         self.account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
 
-    @defer.inlineCallbacks
-    def test_generate_account(self):
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
+
+    async def test_generate_account(self):
         account = self.account
 
         self.assertEqual(account.ledger, self.ledger)
@@ -27,81 +28,77 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
         self.assertEqual(account.public_key.ledger, self.ledger)
         self.assertEqual(account.private_key.public_key, account.public_key)
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 0)
-        addresses = yield account.change.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 0)
 
-        yield account.ensure_address_gap()
+        await account.ensure_address_gap()
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 20)
-        addresses = yield account.change.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 6)
 
-        addresses = yield account.get_addresses()
+        addresses = await account.get_addresses()
         self.assertEqual(len(addresses), 26)
 
-    @defer.inlineCallbacks
-    def test_generate_keys_over_batch_threshold_saves_it_properly(self):
-        yield self.account.receiving.generate_keys(0, 200)
-        records = yield self.account.receiving.get_address_records()
+    async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
+        await self.account.receiving.generate_keys(0, 200)
+        records = await self.account.receiving.get_address_records()
         self.assertEqual(201, len(records))
 
-    @defer.inlineCallbacks
-    def test_ensure_address_gap(self):
+    async def test_ensure_address_gap(self):
         account = self.account
 
         self.assertIsInstance(account.receiving, HierarchicalDeterministic)
 
-        yield account.receiving.generate_keys(4, 7)
-        yield account.receiving.generate_keys(0, 3)
-        yield account.receiving.generate_keys(8, 11)
-        records = yield account.receiving.get_address_records()
+        await account.receiving.generate_keys(4, 7)
+        await account.receiving.generate_keys(0, 3)
+        await account.receiving.generate_keys(8, 11)
+        records = await account.receiving.get_address_records()
         self.assertEqual(
             [r['position'] for r in records],
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         )
 
         # we have 12, but default gap is 20
-        new_keys = yield account.receiving.ensure_address_gap()
+        new_keys = await account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 8)
-        records = yield account.receiving.get_address_records()
+        records = await account.receiving.get_address_records()
         self.assertEqual(
             [r['position'] for r in records],
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
         )
 
         # case #1: no new addresses needed
-        empty = yield account.receiving.ensure_address_gap()
+        empty = await account.receiving.ensure_address_gap()
         self.assertEqual(len(empty), 0)
 
         # case #2: only one new addressed needed
-        records = yield account.receiving.get_address_records()
-        yield self.ledger.db.set_address_history(records[0]['address'], 'a:1:')
-        new_keys = yield account.receiving.ensure_address_gap()
+        records = await account.receiving.get_address_records()
+        await self.ledger.db.set_address_history(records[0]['address'], 'a:1:')
+        new_keys = await account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 1)
 
         # case #3: 20 addresses needed
-        yield self.ledger.db.set_address_history(new_keys[0], 'a:1:')
-        new_keys = yield account.receiving.ensure_address_gap()
+        await self.ledger.db.set_address_history(new_keys[0], 'a:1:')
+        new_keys = await account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 20)
 
-    @defer.inlineCallbacks
-    def test_get_or_create_usable_address(self):
+    async def test_get_or_create_usable_address(self):
         account = self.account
 
-        keys = yield account.receiving.get_addresses()
+        keys = await account.receiving.get_addresses()
         self.assertEqual(len(keys), 0)
 
-        address = yield account.receiving.get_or_create_usable_address()
+        address = await account.receiving.get_or_create_usable_address()
         self.assertIsNotNone(address)
 
-        keys = yield account.receiving.get_addresses()
+        keys = await account.receiving.get_addresses()
         self.assertEqual(len(keys), 20)
 
-    @defer.inlineCallbacks
-    def test_generate_account_from_seed(self):
+    async def test_generate_account_from_seed(self):
         account = self.ledger.account_class.from_dict(
             self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
@@ -123,17 +120,17 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
             'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7UbpV'
             'NzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g'
         )
-        address = yield account.receiving.ensure_address_gap()
+        address = await account.receiving.ensure_address_gap()
         self.assertEqual(address[0], '1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J')
 
-        private_key = yield self.ledger.get_private_key_for_address('1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J')
+        private_key = await self.ledger.get_private_key_for_address('1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J')
         self.assertEqual(
             private_key.extended_key_string(),
             'xprv9xV7rhbg6M4yWrdTeLorz3Q1GrQb4aQzzGWboP3du7W7UUztzNTUrEYTnDfz7o'
             'ptBygDxXYRppyiuenJpoBTgYP2C26E1Ah5FEALM24CsWi'
         )
 
-        invalid_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        invalid_key = await self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
         self.assertIsNone(invalid_key)
 
         self.assertEqual(
@@ -141,8 +138,7 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
             b'1c01ae1e4c7d89e39f6d3aa7792c097a30ca7d40be249b6de52c81ec8cf9aab48b01'
         )
 
-    @defer.inlineCallbacks
-    def test_load_and_save_account(self):
+    async def test_load_and_save_account(self):
         account_data = {
             'name': 'My Account',
             'seed':
@@ -164,11 +160,11 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
 
         account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
 
-        yield account.ensure_address_gap()
+        await account.ensure_address_gap()
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 5)
-        addresses = yield account.change.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 5)
 
         self.maxDiff = None
@@ -176,20 +172,21 @@ class TestHierarchicalDeterministicAccount(unittest.TestCase):
         self.assertDictEqual(account_data, account.to_dict())
 
 
-class TestSingleKeyAccount(unittest.TestCase):
+class TestSingleKeyAccount(AsyncioTestCase):
 
-    @defer.inlineCallbacks
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),
         })
-        yield self.ledger.db.open()
+        await self.ledger.db.open()
         self.account = self.ledger.account_class.generate(
             self.ledger, Wallet(), "torba", {'name': 'single-address'})
 
-    @defer.inlineCallbacks
-    def test_generate_account(self):
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
+
+    async def test_generate_account(self):
         account = self.account
 
         self.assertEqual(account.ledger, self.ledger)
@@ -197,37 +194,36 @@ class TestSingleKeyAccount(unittest.TestCase):
         self.assertEqual(account.public_key.ledger, self.ledger)
         self.assertEqual(account.private_key.public_key, account.public_key)
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 0)
-        addresses = yield account.change.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 0)
 
-        yield account.ensure_address_gap()
+        await account.ensure_address_gap()
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 1)
         self.assertEqual(addresses[0], account.public_key.address)
-        addresses = yield account.change.get_addresses()
-        self.assertEqual(len(addresses), 1)
-        self.assertEqual(addresses[0], account.public_key.address)
-
-        addresses = yield account.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 1)
         self.assertEqual(addresses[0], account.public_key.address)
 
-    @defer.inlineCallbacks
-    def test_ensure_address_gap(self):
+        addresses = await account.get_addresses()
+        self.assertEqual(len(addresses), 1)
+        self.assertEqual(addresses[0], account.public_key.address)
+
+    async def test_ensure_address_gap(self):
         account = self.account
 
         self.assertIsInstance(account.receiving, SingleKey)
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(addresses, [])
 
         # we have 12, but default gap is 20
-        new_keys = yield account.receiving.ensure_address_gap()
+        new_keys = await account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 1)
         self.assertEqual(new_keys[0], account.public_key.address)
-        records = yield account.receiving.get_address_records()
+        records = await account.receiving.get_address_records()
         self.assertEqual(records, [{
             'position': 0, 'chain': 0,
             'account': account.public_key.address,
@@ -236,37 +232,35 @@ class TestSingleKeyAccount(unittest.TestCase):
         }])
 
         # case #1: no new addresses needed
-        empty = yield account.receiving.ensure_address_gap()
+        empty = await account.receiving.ensure_address_gap()
         self.assertEqual(len(empty), 0)
 
         # case #2: after use, still no new address needed
-        records = yield account.receiving.get_address_records()
-        yield self.ledger.db.set_address_history(records[0]['address'], 'a:1:')
-        empty = yield account.receiving.ensure_address_gap()
+        records = await account.receiving.get_address_records()
+        await self.ledger.db.set_address_history(records[0]['address'], 'a:1:')
+        empty = await account.receiving.ensure_address_gap()
         self.assertEqual(len(empty), 0)
 
-    @defer.inlineCallbacks
-    def test_get_or_create_usable_address(self):
+    async def test_get_or_create_usable_address(self):
         account = self.account
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 0)
 
-        address1 = yield account.receiving.get_or_create_usable_address()
+        address1 = await account.receiving.get_or_create_usable_address()
         self.assertIsNotNone(address1)
 
-        yield self.ledger.db.set_address_history(address1, 'a:1:b:2:c:3:')
-        records = yield account.receiving.get_address_records()
+        await self.ledger.db.set_address_history(address1, 'a:1:b:2:c:3:')
+        records = await account.receiving.get_address_records()
         self.assertEqual(records[0]['used_times'], 3)
 
-        address2 = yield account.receiving.get_or_create_usable_address()
+        address2 = await account.receiving.get_or_create_usable_address()
         self.assertEqual(address1, address2)
 
-        keys = yield account.receiving.get_addresses()
+        keys = await account.receiving.get_addresses()
         self.assertEqual(len(keys), 1)
 
-    @defer.inlineCallbacks
-    def test_generate_account_from_seed(self):
+    async def test_generate_account_from_seed(self):
         account = self.ledger.account_class.from_dict(
             self.ledger, Wallet(), {
                 "seed":
@@ -285,17 +279,17 @@ class TestSingleKeyAccount(unittest.TestCase):
             'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
             'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
         )
-        address = yield account.receiving.ensure_address_gap()
+        address = await account.receiving.ensure_address_gap()
         self.assertEqual(address[0], account.public_key.address)
 
-        private_key = yield self.ledger.get_private_key_for_address(address[0])
+        private_key = await self.ledger.get_private_key_for_address(address[0])
         self.assertEqual(
             private_key.extended_key_string(),
             'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
             '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
         )
 
-        invalid_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        invalid_key = await self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
         self.assertIsNone(invalid_key)
 
         self.assertEqual(
@@ -303,8 +297,7 @@ class TestSingleKeyAccount(unittest.TestCase):
             b'1c92caa0ef99bfd5e2ceb73b66da8cd726a9370be8c368d448a322f3c5b23aaab901'
         )
 
-    @defer.inlineCallbacks
-    def test_load_and_save_account(self):
+    async def test_load_and_save_account(self):
         account_data = {
             'name': 'My Account',
             'seed':
@@ -322,11 +315,11 @@ class TestSingleKeyAccount(unittest.TestCase):
 
         account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
 
-        yield account.ensure_address_gap()
+        await account.ensure_address_gap()
 
-        addresses = yield account.receiving.get_addresses()
+        addresses = await account.receiving.get_addresses()
         self.assertEqual(len(addresses), 1)
-        addresses = yield account.change.get_addresses()
+        addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 1)
 
         self.maxDiff = None
@@ -334,7 +327,7 @@ class TestSingleKeyAccount(unittest.TestCase):
         self.assertDictEqual(account_data, account.to_dict())
 
 
-class AccountEncryptionTests(unittest.TestCase):
+class AccountEncryptionTests(AsyncioTestCase):
     password = "password"
     init_vector = b'0000000000000000'
     unencrypted_account = {
@@ -368,7 +361,7 @@ class AccountEncryptionTests(unittest.TestCase):
             'address_generator': {'name': 'single-address'}
     }
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),

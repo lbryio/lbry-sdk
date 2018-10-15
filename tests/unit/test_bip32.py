@@ -1,5 +1,5 @@
+import unittest
 from binascii import unhexlify, hexlify
-from twisted.trial import unittest
 
 from .key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
 from torba.bip32 import PubKey, PrivateKey, from_extended_key_string

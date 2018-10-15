@@ -1,4 +1,4 @@
-from twisted.trial import unittest
+import unittest
 
 from torba.util import ArithUint256
 

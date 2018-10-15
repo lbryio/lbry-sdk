@@ -1,145 +1,36 @@
-import json
-import socket
 import logging
 from itertools import cycle
-from twisted.internet import defer, reactor, protocol
-from twisted.application.internet import ClientService, CancelledError
-from twisted.internet.endpoints import clientFromString
-from twisted.protocols.basic import LineOnlyReceiver
-from twisted.python import failure
+
+from aiorpcx import ClientSession as BaseClientSession
 
 from torba import __version__
 from torba.stream import StreamController
-from torba.constants import TIMEOUT
 
 log = logging.getLogger(__name__)
 
 
-class StratumClientProtocol(LineOnlyReceiver):
-    delimiter = b'\n'
-    MAX_LENGTH = 2000000
+class ClientSession(BaseClientSession):
 
-    def __init__(self):
-        self.request_id = 0
-        self.lookup_table = {}
-        self.session = {}
-        self.network = None
-
-        self.on_disconnected_controller = StreamController()
-        self.on_disconnected = self.on_disconnected_controller.stream
-
-    def _get_id(self):
-        self.request_id += 1
-        return self.request_id
-
-    @property
-    def _ip(self):
-        return self.transport.getPeer().host
-
-    def get_session(self):
-        return self.session
-
-    def connectionMade(self):
-        try:
-            self.transport.setTcpNoDelay(True)
-            self.transport.setTcpKeepAlive(True)
-            if hasattr(socket, "TCP_KEEPIDLE"):
-                self.transport.socket.setsockopt(
-                    socket.SOL_TCP, socket.TCP_KEEPIDLE, 120
-                    # Seconds before sending keepalive probes
-                )
-            else:
-                log.debug("TCP_KEEPIDLE not available")
-            if hasattr(socket, "TCP_KEEPINTVL"):
-                self.transport.socket.setsockopt(
-                    socket.SOL_TCP, socket.TCP_KEEPINTVL, 1
-                    # Interval in seconds between keepalive probes
-                )
-            else:
-                log.debug("TCP_KEEPINTVL not available")
-            if hasattr(socket, "TCP_KEEPCNT"):
-                self.transport.socket.setsockopt(
-                    socket.SOL_TCP, socket.TCP_KEEPCNT, 5
-                    # Failed keepalive probles before declaring other end dead
-                )
-            else:
-                log.debug("TCP_KEEPCNT not available")
-
-        except Exception as err: # pylint: disable=broad-except
-            # Supported only by the socket transport,
-            # but there's really no better place in code to trigger this.
-            log.warning("Error setting up socket: %s", err)
-
-    def connectionLost(self, reason=None):
-        self.connected = 0
-        self.on_disconnected_controller.add(True)
-        for deferred in self.lookup_table.values():
-            if not deferred.called:
-                deferred.errback(TimeoutError("Connection dropped."))
-
-    def lineReceived(self, line):
-        log.debug('received: %s', line)
-
-        try:
-            message = json.loads(line)
-        except (ValueError, TypeError):
-            raise ValueError("Cannot decode message '{}'".format(line.strip()))
-
-        if message.get('id'):
-            try:
-                d = self.lookup_table.pop(message['id'])
-                if message.get('error'):
-                    d.errback(RuntimeError(message['error']))
-                else:
-                    d.callback(message.get('result'))
-            except KeyError:
-                raise LookupError(
-                    "Lookup for deferred object for message ID '{}' failed.".format(message['id']))
-        elif message.get('method') in self.network.subscription_controllers:
-            controller = self.network.subscription_controllers[message['method']]
-            controller.add(message.get('params'))
-        else:
-            log.warning("Cannot handle message '%s'", line)
-
-    def rpc(self, method, *args):
-        message_id = self._get_id()
-        message = json.dumps({
-            'id': message_id,
-            'method': method,
-            'params': args
-        })
-        log.debug('sent: %s', message)
-        self.sendLine(message.encode('latin-1'))
-        d = self.lookup_table[message_id] = defer.Deferred()
-        d.addTimeout(
-            TIMEOUT, reactor, onTimeoutCancel=lambda *_: failure.Failure(TimeoutError(
-                "Timeout: Stratum request for '%s' took more than %s seconds" % (method, TIMEOUT)))
-        )
-        return d
-
-
-class StratumClientFactory(protocol.ClientFactory):
-
-    protocol = StratumClientProtocol
-
-    def __init__(self, network):
+    def __init__(self, *args, network, **kwargs):
         self.network = network
-        self.client = None
+        super().__init__(*args, **kwargs)
+        self._on_disconnect_controller = StreamController()
+        self.on_disconnected = self._on_disconnect_controller.stream
 
-    def buildProtocol(self, addr):
-        client = self.protocol()
-        client.factory = self
-        client.network = self.network
-        self.client = client
-        return client
+    async def handle_request(self, request):
+        controller = self.network.subscription_controllers[request.method]
+        controller.add(request.args)
+
+    def connection_lost(self, exc):
+        super().connection_lost(exc)
+        self._on_disconnect_controller.add(True)
 
 
 class BaseNetwork:
 
     def __init__(self, ledger):
         self.config = ledger.config
-        self.client = None
-        self.service = None
+        self.client: ClientSession = None
         self.running = False
 
         self._on_connected_controller = StreamController()
@@ -156,48 +47,35 @@ class BaseNetwork:
             'blockchain.address.subscribe': self._on_status_controller,
         }
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         self.running = True
         for server in cycle(self.config['default_servers']):
             connection_string = 'tcp:{}:{}'.format(*server)
-            endpoint = clientFromString(reactor, connection_string)
-            log.debug("Attempting connection to SPV wallet server: %s", connection_string)
-            self.service = ClientService(endpoint, StratumClientFactory(self))
-            self.service.startService()
+            self.client = ClientSession(*server, network=self)
             try:
-                self.client = yield self.service.whenConnected(failAfterFailures=2)
-                yield self.ensure_server_version()
-                log.info("Successfully connected to SPV wallet server: %s", connection_string)
+                await self.client.create_connection()
+                await self.ensure_server_version()
+                log.info("Successfully connected to SPV wallet server: %s", )
                 self._on_connected_controller.add(True)
-                yield self.client.on_disconnected.first
-            except CancelledError:
-                return
+                await self.client.on_disconnected.first
             except Exception:  # pylint: disable=broad-except
                 log.exception("Connecting to %s raised an exception:", connection_string)
-            finally:
-                self.client = None
-                if self.service is not None:
-                    self.service.stopService()
             if not self.running:
                 return
 
-    def stop(self):
+    async def stop(self):
         self.running = False
-        if self.service is not None:
-            self.service.stopService()
         if self.is_connected:
-            return self.client.on_disconnected.first
-        else:
-            return defer.succeed(True)
+            await self.client.close()
+            await self.client.on_disconnected.first
 
     @property
     def is_connected(self):
-        return self.client is not None and self.client.connected
+        return self.client is not None and not self.client.is_closing()
 
     def rpc(self, list_or_method, *args):
         if self.is_connected:
-            return self.client.rpc(list_or_method, *args)
+            return self.client.send_request(list_or_method, args)
         else:
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
 

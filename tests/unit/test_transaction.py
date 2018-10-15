@@ -1,7 +1,8 @@
+import unittest
 from binascii import hexlify, unhexlify
 from itertools import cycle
-from twisted.trial import unittest
-from twisted.internet import defer
+
+from orchstr8.testcase import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.wallet import Wallet
@@ -29,9 +30,9 @@ def get_transaction(txo=None):
         .add_outputs([txo or ledger_class.transaction_class.output_class.pay_pubkey_hash(CENT, NULL_HASH)])
 
 
-class TestSizeAndFeeEstimation(unittest.TestCase):
+class TestSizeAndFeeEstimation(AsyncioTestCase):
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),
@@ -181,17 +182,19 @@ class TestTransactionSerialization(unittest.TestCase):
         self.assertEqual(tx.raw, raw)
 
 
-class TestTransactionSigning(unittest.TestCase):
+class TestTransactionSigning(AsyncioTestCase):
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),
         })
-        return self.ledger.db.open()
+        await self.ledger.db.open()
 
-    @defer.inlineCallbacks
-    def test_sign(self):
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
+
+    async def test_sign(self):
         account = self.ledger.account_class.from_dict(
             self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
@@ -200,8 +203,8 @@ class TestTransactionSigning(unittest.TestCase):
             }
         )
 
-        yield account.ensure_address_gap()
-        address1, address2 = yield account.receiving.get_addresses(limit=2)
+        await account.ensure_address_gap()
+        address1, address2 = await account.receiving.get_addresses(limit=2)
         pubkey_hash1 = self.ledger.address_to_hash160(address1)
         pubkey_hash2 = self.ledger.address_to_hash160(address2)
 
@@ -211,9 +214,8 @@ class TestTransactionSigning(unittest.TestCase):
             .add_inputs([tx_class.input_class.spend(get_output(2*COIN, pubkey_hash1))]) \
             .add_outputs([tx_class.output_class.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)]) \
 
-        yield tx.sign([account])
+        await tx.sign([account])
 
-        print(hexlify(tx.inputs[0].script.values['signature']))
         self.assertEqual(
             hexlify(tx.inputs[0].script.values['signature']),
             b'304402205a1df8cd5d2d2fa5934b756883d6c07e4f83e1350c740992d47a12422'
@@ -221,15 +223,14 @@ class TestTransactionSigning(unittest.TestCase):
         )
 
 
-class TransactionIOBalancing(unittest.TestCase):
+class TransactionIOBalancing(AsyncioTestCase):
 
-    @defer.inlineCallbacks
-    def setUp(self):
+    async def asyncSetUp(self):
         self.ledger = ledger_class({
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),
         })
-        yield self.ledger.db.open()
+        await self.ledger.db.open()
         self.account = self.ledger.account_class.from_dict(
             self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
@@ -237,9 +238,12 @@ class TransactionIOBalancing(unittest.TestCase):
             }
         )
 
-        addresses = yield self.account.ensure_address_gap()
+        addresses = await self.account.ensure_address_gap()
         self.pubkey_hash = [self.ledger.address_to_hash160(a) for a in addresses]
         self.hash_cycler = cycle(self.pubkey_hash)
+
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
 
     def txo(self, amount, address=None):
         return get_output(int(amount*COIN), address or next(self.hash_cycler))
@@ -250,8 +254,7 @@ class TransactionIOBalancing(unittest.TestCase):
     def tx(self, inputs, outputs):
         return ledger_class.transaction_class.create(inputs, outputs, [self.account], self.account)
 
-    @defer.inlineCallbacks
-    def create_utxos(self, amounts):
+    async def create_utxos(self, amounts):
         utxos = [self.txo(amount) for amount in amounts]
 
         self.funding_tx = ledger_class.transaction_class(is_verified=True) \
@@ -260,7 +263,7 @@ class TransactionIOBalancing(unittest.TestCase):
 
         save_tx = 'insert'
         for utxo in utxos:
-            yield self.ledger.db.save_transaction_io(
+            await self.ledger.db.save_transaction_io(
                 save_tx, self.funding_tx,
                 self.ledger.hash160_to_address(utxo.script.values['pubkey_hash']),
                 utxo.script.values['pubkey_hash'], ''
@@ -277,17 +280,16 @@ class TransactionIOBalancing(unittest.TestCase):
     def outputs(tx):
         return [round(o.amount/COIN, 2) for o in tx.outputs]
 
-    @defer.inlineCallbacks
-    def test_basic_use_cases(self):
+    async def test_basic_use_cases(self):
         self.ledger.fee_per_byte = int(.01*CENT)
 
         # available UTXOs for filling missing inputs
-        utxos = yield self.create_utxos([
+        utxos = await self.create_utxos([
             1, 1, 3, 5, 10
         ])
 
         # pay 3 coins (3.02 w/ fees)
-        tx = yield self.tx(
+        tx = await self.tx(
             [],            # inputs
             [self.txo(3)]  # outputs
         )
@@ -296,10 +298,10 @@ class TransactionIOBalancing(unittest.TestCase):
         # a change of 1.98 is added to reach balance
         self.assertEqual(self.outputs(tx), [3, 1.98])
 
-        yield self.ledger.release_outputs(utxos)
+        await self.ledger.release_outputs(utxos)
 
         # pay 2.98 coins (3.00 w/ fees)
-        tx = yield self.tx(
+        tx = await self.tx(
             [],               # inputs
             [self.txo(2.98)]  # outputs
         )
@@ -307,10 +309,10 @@ class TransactionIOBalancing(unittest.TestCase):
         self.assertEqual(self.inputs(tx), [3])
         self.assertEqual(self.outputs(tx), [2.98])
 
-        yield self.ledger.release_outputs(utxos)
+        await self.ledger.release_outputs(utxos)
 
         # supplied input and output, but input is not enough to cover output
-        tx = yield self.tx(
+        tx = await self.tx(
             [self.txi(self.txo(10))],  # inputs
             [self.txo(11)]             # outputs
         )
@@ -319,10 +321,10 @@ class TransactionIOBalancing(unittest.TestCase):
         # change is now needed to consume extra input
         self.assertEqual([11, 1.96], self.outputs(tx))
 
-        yield self.ledger.release_outputs(utxos)
+        await self.ledger.release_outputs(utxos)
 
         # liquidating a UTXO
-        tx = yield self.tx(
+        tx = await self.tx(
             [self.txi(self.txo(10))],  # inputs
             []                         # outputs
         )
@@ -330,10 +332,10 @@ class TransactionIOBalancing(unittest.TestCase):
         # missing change added to consume the amount
         self.assertEqual([9.98], self.outputs(tx))
 
-        yield self.ledger.release_outputs(utxos)
+        await self.ledger.release_outputs(utxos)
 
         # liquidating at a loss, requires adding extra inputs
-        tx = yield self.tx(
+        tx = await self.tx(
             [self.txi(self.txo(0.01))],  # inputs
             []                           # outputs
         )

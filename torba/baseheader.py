@@ -1,10 +1,9 @@
 import os
+import asyncio
 import logging
 from io import BytesIO
 from typing import Optional, Iterator, Tuple
 from binascii import hexlify
-
-from twisted.internet import threads, defer
 
 from torba.util import ArithUint256
 from torba.hash import double_sha256
@@ -36,16 +35,14 @@ class BaseHeaders:
             self.io = BytesIO()
         self.path = path
         self._size: Optional[int] = None
-        self._header_connect_lock = defer.DeferredLock()
+        self._header_connect_lock = asyncio.Lock()
 
-    def open(self):
+    async def open(self):
         if self.path != ':memory:':
             self.io = open(self.path, 'a+b')
-        return defer.succeed(True)
 
-    def close(self):
+    async def close(self):
         self.io.close()
-        return defer.succeed(True)
 
     @staticmethod
     def serialize(header: dict) -> bytes:
@@ -95,16 +92,15 @@ class BaseHeaders:
             return b'0' * 64
         return hexlify(double_sha256(header)[::-1])
 
-    @defer.inlineCallbacks
-    def connect(self, start: int, headers: bytes):
+    async def connect(self, start: int, headers: bytes) -> int:
         added = 0
         bail = False
-        yield self._header_connect_lock.acquire()
-        try:
+        loop = asyncio.get_running_loop()
+        async with self._header_connect_lock:
             for height, chunk in self._iterate_chunks(start, headers):
                 try:
                     # validate_chunk() is CPU bound and reads previous chunks from file system
-                    yield threads.deferToThread(self.validate_chunk, height, chunk)
+                    await loop.run_in_executor(None, self.validate_chunk, height, chunk)
                 except InvalidHeader as e:
                     bail = True
                     chunk = chunk[:(height-e.height+1)*self.header_size]
@@ -115,14 +111,12 @@ class BaseHeaders:
                     self.io.truncate()
                     # .seek()/.write()/.truncate() might also .flush() when needed
                     # the goal here is mainly to ensure we're definitely flush()'ing
-                    yield threads.deferToThread(self.io.flush)
+                    await loop.run_in_executor(None, self.io.flush)
                     self._size = None
                 added += written
                 if bail:
                     break
-        finally:
-            self._header_connect_lock.release()
-        defer.returnValue(added)
+        return added
 
     def validate_chunk(self, height, chunk):
         previous_hash, previous_header, previous_previous_header = None, None, None

@@ -1,6 +1,5 @@
 import os
 from binascii import hexlify
-from twisted.internet import defer
 
 from torba.coin.bitcoinsegwit import MainNetLedger
 from torba.wallet import Wallet
@@ -18,32 +17,30 @@ class MockNetwork:
         self.get_history_called = []
         self.get_transaction_called = []
 
-    def get_history(self, address):
+    async def get_history(self, address):
         self.get_history_called.append(address)
         self.address = address
-        return defer.succeed(self.history)
+        return self.history
 
-    def get_merkle(self, txid, height):
-        return defer.succeed({'merkle': ['abcd01'], 'pos': 1})
+    async def get_merkle(self, txid, height):
+        return {'merkle': ['abcd01'], 'pos': 1}
 
-    def get_transaction(self, tx_hash):
+    async def get_transaction(self, tx_hash):
         self.get_transaction_called.append(tx_hash)
-        return defer.succeed(self.transaction[tx_hash])
+        return self.transaction[tx_hash]
 
 
 class LedgerTestCase(BitcoinHeadersTestCase):
 
-    def setUp(self):
-        super().setUp()
+    async def asyncSetUp(self):
         self.ledger = MainNetLedger({
             'db': MainNetLedger.database_class(':memory:'),
             'headers': MainNetLedger.headers_class(':memory:')
         })
-        return self.ledger.db.open()
+        await self.ledger.db.open()
 
-    def tearDown(self):
-        super().tearDown()
-        return self.ledger.db.close()
+    async def asyncTearDown(self):
+        await self.ledger.db.close()
 
     def make_header(self, **kwargs):
         header = {
@@ -69,11 +66,10 @@ class LedgerTestCase(BitcoinHeadersTestCase):
 
 class TestSynchronization(LedgerTestCase):
 
-    @defer.inlineCallbacks
-    def test_update_history(self):
+    async def test_update_history(self):
         account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
-        address = yield account.receiving.get_or_create_usable_address()
-        address_details = yield self.ledger.db.get_address(address=address)
+        address = await account.receiving.get_or_create_usable_address()
+        address_details = await self.ledger.db.get_address(address=address)
         self.assertEqual(address_details['history'], None)
 
         self.add_header(block_height=0, merkle_root=b'abcd04')
@@ -89,16 +85,16 @@ class TestSynchronization(LedgerTestCase):
             'abcd02': hexlify(get_transaction(get_output(2)).raw),
             'abcd03': hexlify(get_transaction(get_output(3)).raw),
         })
-        yield self.ledger.update_history(address)
+        await self.ledger.update_history(address)
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, ['abcd01', 'abcd02', 'abcd03'])
 
-        address_details = yield self.ledger.db.get_address(address=address)
+        address_details = await self.ledger.db.get_address(address=address)
         self.assertEqual(address_details['history'], 'abcd01:0:abcd02:1:abcd03:2:')
 
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
-        yield self.ledger.update_history(address)
+        await self.ledger.update_history(address)
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, [])
 
@@ -106,10 +102,10 @@ class TestSynchronization(LedgerTestCase):
         self.ledger.network.transaction['abcd04'] = hexlify(get_transaction(get_output(4)).raw)
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
-        yield self.ledger.update_history(address)
+        await self.ledger.update_history(address)
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, ['abcd04'])
-        address_details = yield self.ledger.db.get_address(address=address)
+        address_details = await self.ledger.db.get_address(address=address)
         self.assertEqual(address_details['history'], 'abcd01:0:abcd02:1:abcd03:2:abcd04:3:')
 
 
@@ -117,14 +113,13 @@ class MocHeaderNetwork:
     def __init__(self, responses):
         self.responses = responses
 
-    def get_headers(self, height, blocks):
+    async def get_headers(self, height, blocks):
         return self.responses[height]
 
 
 class BlockchainReorganizationTests(LedgerTestCase):
 
-    @defer.inlineCallbacks
-    def test_1_block_reorganization(self):
+    async def test_1_block_reorganization(self):
         self.ledger.network = MocHeaderNetwork({
             20: {'height': 20, 'count': 5, 'hex': hexlify(
                 self.get_bytes(after=block_bytes(20), upto=block_bytes(5))
@@ -132,15 +127,14 @@ class BlockchainReorganizationTests(LedgerTestCase):
             25: {'height': 25, 'count': 0, 'hex': b''}
         })
         headers = self.ledger.headers
-        yield headers.connect(0, self.get_bytes(upto=block_bytes(20)))
+        await headers.connect(0, self.get_bytes(upto=block_bytes(20)))
         self.add_header(block_height=len(headers))
         self.assertEqual(headers.height, 20)
-        yield self.ledger.receive_header([{
+        await self.ledger.receive_header([{
             'height': 21, 'hex': hexlify(self.make_header(block_height=21))
         }])
 
-    @defer.inlineCallbacks
-    def test_3_block_reorganization(self):
+    async def test_3_block_reorganization(self):
         self.ledger.network = MocHeaderNetwork({
             20: {'height': 20, 'count': 5, 'hex': hexlify(
                 self.get_bytes(after=block_bytes(20), upto=block_bytes(5))
@@ -150,11 +144,11 @@ class BlockchainReorganizationTests(LedgerTestCase):
             25: {'height': 25, 'count': 0, 'hex': b''}
         })
         headers = self.ledger.headers
-        yield headers.connect(0, self.get_bytes(upto=block_bytes(20)))
+        await headers.connect(0, self.get_bytes(upto=block_bytes(20)))
         self.add_header(block_height=len(headers))
         self.add_header(block_height=len(headers))
         self.add_header(block_height=len(headers))
         self.assertEqual(headers.height, 22)
-        yield self.ledger.receive_header(({
+        await self.ledger.receive_header(({
             'height': 23, 'hex': hexlify(self.make_header(block_height=23))
         },))

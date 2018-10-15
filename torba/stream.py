@@ -1,6 +1,4 @@
 import asyncio
-from twisted.internet.defer import Deferred
-from twisted.python.failure import Failure
 
 
 class BroadcastSubscription:
@@ -31,11 +29,13 @@ class BroadcastSubscription:
 
     def _add(self, data):
         if self.can_fire and self._on_data is not None:
-            self._on_data(data)
+            maybe_coroutine = self._on_data(data)
+            if asyncio.iscoroutine(maybe_coroutine):
+                asyncio.ensure_future(maybe_coroutine)
 
-    def _add_error(self, error, traceback):
+    def _add_error(self, exception):
         if self.can_fire and self._on_error is not None:
-            self._on_error(error, traceback)
+            self._on_error(exception)
 
     def _close(self):
         if self.can_fire and self._on_done is not None:
@@ -66,9 +66,9 @@ class StreamController:
         for subscription in self._iterate_subscriptions:
             subscription._add(event)
 
-    def add_error(self, error, traceback):
+    def add_error(self, exception):
         for subscription in self._iterate_subscriptions:
-            subscription._add_error(error, traceback)
+            subscription._add_error(exception)
 
     def close(self):
         for subscription in self._iterate_subscriptions:
@@ -108,38 +108,35 @@ class Stream:
     def listen(self, on_data, on_error=None, on_done=None):
         return self._controller._listen(on_data, on_error, on_done)
 
-    def deferred_where(self, condition):
-        deferred = Deferred()
+    def where(self, condition) -> asyncio.Future:
+        future = asyncio.get_event_loop().create_future()
 
         def where_test(value):
             if condition(value):
-                self._cancel_and_callback(subscription, deferred, value)
+                self._cancel_and_callback(subscription, future, value)
 
         subscription = self.listen(
             where_test,
-            lambda error, traceback: self._cancel_and_error(subscription, deferred, error, traceback)
+            lambda exception: self._cancel_and_error(subscription, future, exception)
         )
 
-        return deferred
-
-    def where(self, condition):
-        return self.deferred_where(condition).asFuture(asyncio.get_event_loop())
+        return future
 
     @property
     def first(self):
-        deferred = Deferred()
+        future = asyncio.get_event_loop().create_future()
         subscription = self.listen(
-            lambda value: self._cancel_and_callback(subscription, deferred, value),
-            lambda error, traceback: self._cancel_and_error(subscription, deferred, error, traceback)
+            lambda value: self._cancel_and_callback(subscription, future, value),
+            lambda exception: self._cancel_and_error(subscription, future, exception)
         )
-        return deferred
+        return future
 
     @staticmethod
-    def _cancel_and_callback(subscription, deferred, value):
+    def _cancel_and_callback(subscription: BroadcastSubscription, future: asyncio.Future, value):
         subscription.cancel()
-        deferred.callback(value)
+        future.set_result(value)
 
     @staticmethod
-    def _cancel_and_error(subscription, deferred, error, traceback):
+    def _cancel_and_error(subscription: BroadcastSubscription, future: asyncio.Future, exception):
         subscription.cancel()
-        deferred.errback(Failure(error, exc_tb=traceback))
+        future.set_exception(exception)

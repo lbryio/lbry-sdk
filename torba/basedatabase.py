@@ -1,9 +1,8 @@
 import logging
-from typing import Tuple, List, Sequence
+from typing import Tuple, List
 
 import sqlite3
-from twisted.internet import defer
-from twisted.enterprise import adbapi
+import aiosqlite
 
 from torba.hash import TXRefImmutable
 from torba.basetransaction import BaseTransaction
@@ -107,25 +106,21 @@ def row_dict_or_default(rows, fields, default=None):
 
 class SQLiteMixin:
 
-    CREATE_TABLES_QUERY: Sequence[str] = ()
+    CREATE_TABLES_QUERY: str
 
     def __init__(self, path):
         self._db_path = path
-        self.db: adbapi.ConnectionPool = None
+        self.db: aiosqlite.Connection = None
         self.ledger = None
 
-    def open(self):
+    async def open(self):
         log.info("connecting to database: %s", self._db_path)
-        self.db = adbapi.ConnectionPool(
-            'sqlite3', self._db_path, cp_min=1, cp_max=1, check_same_thread=False
-        )
-        return self.db.runInteraction(
-            lambda t: t.executescript(self.CREATE_TABLES_QUERY)
-        )
+        self.db = aiosqlite.connect(self._db_path)
+        await self.db.__aenter__()
+        await self.db.executescript(self.CREATE_TABLES_QUERY)
 
-    def close(self):
-        self.db.close()
-        return defer.succeed(True)
+    async def close(self):
+        await self.db.close()
 
     @staticmethod
     def _insert_sql(table: str, data: dict) -> Tuple[str, List]:
@@ -247,78 +242,75 @@ class BaseDatabase(SQLiteMixin):
             'script': sqlite3.Binary(txo.script.source)
         }
 
-    def save_transaction_io(self, save_tx, tx: BaseTransaction, address, txhash, history):
+    async def save_transaction_io(self, save_tx, tx: BaseTransaction, address, txhash, history):
 
-        def _steps(t):
-            if save_tx == 'insert':
-                self.execute(t, *self._insert_sql('tx', {
+        if save_tx == 'insert':
+            await self.db.execute(*self._insert_sql('tx', {
+                'txid': tx.id,
+                'raw': sqlite3.Binary(tx.raw),
+                'height': tx.height,
+                'position': tx.position,
+                'is_verified': tx.is_verified
+            }))
+        elif save_tx == 'update':
+            await self.db.execute(*self._update_sql("tx", {
+                'height': tx.height, 'position': tx.position, 'is_verified': tx.is_verified
+            }, 'txid = ?', (tx.id,)))
+
+        existing_txos = [r[0] for r in await self.db.execute_fetchall(*query(
+            "SELECT position FROM txo", txid=tx.id
+        ))]
+
+        for txo in tx.outputs:
+            if txo.position in existing_txos:
+                continue
+            if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
+                await self.db.execute(*self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
+            elif txo.script.is_pay_script_hash:
+                # TODO: implement script hash payments
+                print('Database.save_transaction_io: pay script hash is not implemented!')
+
+        # lookup the address associated with each TXI (via its TXO)
+        txoid_to_address = {r[0]: r[1] for r in await self.db.execute_fetchall(*query(
+            "SELECT txoid, address FROM txo", txoid__in=[txi.txo_ref.id for txi in tx.inputs]
+        ))}
+
+        # list of TXIs that have already been added
+        existing_txis = [r[0] for r in await self.db.execute_fetchall(*query(
+            "SELECT txoid FROM txi", txid=tx.id
+        ))]
+
+        for txi in tx.inputs:
+            txoid = txi.txo_ref.id
+            new_txi = txoid not in existing_txis
+            address_matches = txoid_to_address.get(txoid) == address
+            if new_txi and address_matches:
+                await self.db.execute(*self._insert_sql("txi", {
                     'txid': tx.id,
-                    'raw': sqlite3.Binary(tx.raw),
-                    'height': tx.height,
-                    'position': tx.position,
-                    'is_verified': tx.is_verified
+                    'txoid': txoid,
+                    'address': address,
                 }))
-            elif save_tx == 'update':
-                self.execute(t, *self._update_sql("tx", {
-                    'height': tx.height, 'position': tx.position, 'is_verified': tx.is_verified
-                }, 'txid = ?', (tx.id,)))
 
-            existing_txos = [r[0] for r in self.execute(t, *query(
-                "SELECT position FROM txo", txid=tx.id
-            )).fetchall()]
+        await self._set_address_history(address, history)
 
-            for txo in tx.outputs:
-                if txo.position in existing_txos:
-                    continue
-                if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
-                    self.execute(t, *self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
-                elif txo.script.is_pay_script_hash:
-                    # TODO: implement script hash payments
-                    print('Database.save_transaction_io: pay script hash is not implemented!')
-
-            # lookup the address associated with each TXI (via its TXO)
-            txoid_to_address = {r[0]: r[1] for r in self.execute(t, *query(
-                "SELECT txoid, address FROM txo", txoid__in=[txi.txo_ref.id for txi in tx.inputs]
-            )).fetchall()}
-
-            # list of TXIs that have already been added
-            existing_txis = [r[0] for r in self.execute(t, *query(
-                "SELECT txoid FROM txi", txid=tx.id
-            )).fetchall()]
-
-            for txi in tx.inputs:
-                txoid = txi.txo_ref.id
-                new_txi = txoid not in existing_txis
-                address_matches = txoid_to_address.get(txoid) == address
-                if new_txi and address_matches:
-                    self.execute(t, *self._insert_sql("txi", {
-                        'txid': tx.id,
-                        'txoid': txoid,
-                        'address': address,
-                    }))
-
-            self._set_address_history(t, address, history)
-
-        return self.db.runInteraction(_steps)
-
-    def reserve_outputs(self, txos, is_reserved=True):
+    async def reserve_outputs(self, txos, is_reserved=True):
         txoids = [txo.id for txo in txos]
-        return self.run_operation(
+        await self.db.execute(
             "UPDATE txo SET is_reserved = ? WHERE txoid IN ({})".format(
                 ', '.join(['?']*len(txoids))
             ), [is_reserved]+txoids
         )
 
-    def release_outputs(self, txos):
-        return self.reserve_outputs(txos, is_reserved=False)
+    async def release_outputs(self, txos):
+        await self.reserve_outputs(txos, is_reserved=False)
 
-    def rewind_blockchain(self, above_height):  # pylint: disable=no-self-use
+    async def rewind_blockchain(self, above_height):  # pylint: disable=no-self-use
         # TODO:
         # 1. delete transactions above_height
         # 2. update address histories removing deleted TXs
-        return defer.succeed(True)
+        return True
 
-    def select_transactions(self, cols, account=None, **constraints):
+    async def select_transactions(self, cols, account=None, **constraints):
         if 'txid' not in constraints and account is not None:
             constraints['$account'] = account.public_key.address
             constraints['txid__in'] = """
@@ -328,13 +320,14 @@ class BaseDatabase(SQLiteMixin):
                 SELECT txi.txid FROM txi
                 JOIN pubkey_address USING (address) WHERE pubkey_address.account = :$account
             """
-        return self.run_query(*query("SELECT {} FROM tx".format(cols), **constraints))
+        return await self.db.execute_fetchall(
+            *query("SELECT {} FROM tx".format(cols), **constraints)
+        )
 
-    @defer.inlineCallbacks
-    def get_transactions(self, my_account=None, **constraints):
+    async def get_transactions(self, my_account=None, **constraints):
         my_account = my_account or constraints.get('account', None)
 
-        tx_rows = yield self.select_transactions(
+        tx_rows = await self.select_transactions(
             'txid, raw, height, position, is_verified',
             order_by=["height DESC", "position DESC"],
             **constraints
@@ -352,7 +345,7 @@ class BaseDatabase(SQLiteMixin):
 
         annotated_txos = {
             txo.id: txo for txo in
-            (yield self.get_txos(
+            (await self.get_txos(
                 my_account=my_account,
                 txid__in=txids
             ))
@@ -360,7 +353,7 @@ class BaseDatabase(SQLiteMixin):
 
         referenced_txos = {
             txo.id: txo for txo in
-            (yield self.get_txos(
+            (await self.get_txos(
                 my_account=my_account,
                 txoid__in=query("SELECT txoid FROM txi", **{'txid__in': txids})[0]
             ))
@@ -380,33 +373,30 @@ class BaseDatabase(SQLiteMixin):
 
         return txs
 
-    @defer.inlineCallbacks
-    def get_transaction_count(self, **constraints):
+    async def get_transaction_count(self, **constraints):
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
-        count = yield self.select_transactions('count(*)', **constraints)
+        count = await self.select_transactions('count(*)', **constraints)
         return count[0][0]
 
-    @defer.inlineCallbacks
-    def get_transaction(self, **constraints):
-        txs = yield self.get_transactions(limit=1, **constraints)
+    async def get_transaction(self, **constraints):
+        txs = await self.get_transactions(limit=1, **constraints)
         if txs:
             return txs[0]
 
-    def select_txos(self, cols, **constraints):
-        return self.run_query(*query(
+    async def select_txos(self, cols, **constraints):
+        return await self.db.execute_fetchall(*query(
             "SELECT {} FROM txo"
             " JOIN pubkey_address USING (address)"
             " JOIN tx USING (txid)".format(cols), **constraints
         ))
 
-    @defer.inlineCallbacks
-    def get_txos(self, my_account=None, **constraints):
+    async def get_txos(self, my_account=None, **constraints):
         my_account = my_account or constraints.get('account', None)
         if isinstance(my_account, BaseAccount):
             my_account = my_account.public_key.address
-        rows = yield self.select_txos(
+        rows = await self.select_txos(
             "amount, script, txid, tx.height, txo.position, chain, account", **constraints
         )
         output_class = self.ledger.transaction_class.output_class
@@ -421,12 +411,11 @@ class BaseDatabase(SQLiteMixin):
             ) for row in rows
         ]
 
-    @defer.inlineCallbacks
-    def get_txo_count(self, **constraints):
+    async def get_txo_count(self, **constraints):
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
-        count = yield self.select_txos('count(*)', **constraints)
+        count = await self.select_txos('count(*)', **constraints)
         return count[0][0]
 
     @staticmethod
@@ -442,37 +431,33 @@ class BaseDatabase(SQLiteMixin):
         self.constrain_utxo(constraints)
         return self.get_txo_count(**constraints)
 
-    @defer.inlineCallbacks
-    def get_balance(self, **constraints):
+    async def get_balance(self, **constraints):
         self.constrain_utxo(constraints)
-        balance = yield self.select_txos('SUM(amount)', **constraints)
+        balance = await self.select_txos('SUM(amount)', **constraints)
         return balance[0][0] or 0
 
-    def select_addresses(self, cols, **constraints):
-        return self.run_query(*query(
-            "SELECT {} FROM pubkey_address".format(cols), **constraints
-        ))
+    async def select_addresses(self, cols, **constraints):
+        return await self.db.execute_fetchall(*query(
+                "SELECT {} FROM pubkey_address".format(cols), **constraints
+            ))
 
-    @defer.inlineCallbacks
-    def get_addresses(self, cols=('address', 'account', 'chain', 'position', 'used_times'), **constraints):
-        addresses = yield self.select_addresses(', '.join(cols), **constraints)
+    async def get_addresses(self, cols=('address', 'account', 'chain', 'position', 'used_times'), **constraints):
+        addresses = await self.select_addresses(', '.join(cols), **constraints)
         return rows_to_dict(addresses, cols)
 
-    @defer.inlineCallbacks
-    def get_address_count(self, **constraints):
-        count = yield self.select_addresses('count(*)', **constraints)
+    async def get_address_count(self, **constraints):
+        count = await self.select_addresses('count(*)', **constraints)
         return count[0][0]
 
-    @defer.inlineCallbacks
-    def get_address(self, **constraints):
-        addresses = yield self.get_addresses(
+    async def get_address(self, **constraints):
+        addresses = await self.get_addresses(
             cols=('address', 'account', 'chain', 'position', 'pubkey', 'history', 'used_times'),
             limit=1, **constraints
         )
         if addresses:
             return addresses[0]
 
-    def add_keys(self, account, chain, keys):
+    async def add_keys(self, account, chain, keys):
         sql = (
             "insert into pubkey_address "
             "(address, account, chain, position, pubkey) "
@@ -484,14 +469,13 @@ class BaseDatabase(SQLiteMixin):
                 pubkey.address, account.public_key.address, chain, position,
                 sqlite3.Binary(pubkey.pubkey_bytes)
             ))
-        return self.run_operation(sql, values)
+        await self.db.execute(sql, values)
 
-    @classmethod
-    def _set_address_history(cls, t, address, history):
-        cls.execute(
-            t, "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
+    async def _set_address_history(self, address, history):
+        await self.db.execute(
+            "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
             (history, history.count(':')//2, address)
         )
 
-    def set_address_history(self, address, history):
-        return self.db.runInteraction(lambda t: self._set_address_history(t, address, history))
+    async def set_address_history(self, address, history):
+        await self._set_address_history(address, history)

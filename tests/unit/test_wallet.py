@@ -1,5 +1,5 @@
+import unittest
 import tempfile
-from twisted.trial import unittest
 
 from torba.coin.bitcoinsegwit import MainNetLedger as BTCLedger
 from torba.coin.bitcoincash import MainNetLedger as BCHLedger

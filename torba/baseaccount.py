@@ -1,7 +1,6 @@
 import random
 import typing
 from typing import List, Dict, Tuple, Type, Optional, Any
-from twisted.internet import defer
 
 from torba.mnemonic import Mnemonic
 from torba.bip32 import PrivateKey, PubKey, from_extended_key_string
@@ -44,12 +43,8 @@ class AddressManager:
     def to_dict_instance(self) -> Optional[dict]:
         raise NotImplementedError
 
-    @property
-    def db(self):
-        return self.account.ledger.db
-
     def _query_addresses(self, **constraints):
-        return self.db.get_addresses(
+        return self.account.ledger.db.get_addresses(
             account=self.account,
             chain=self.chain_number,
             **constraints
@@ -58,26 +53,24 @@ class AddressManager:
     def get_private_key(self, index: int) -> PrivateKey:
         raise NotImplementedError
 
-    def get_max_gap(self) -> defer.Deferred:
+    async def get_max_gap(self):
         raise NotImplementedError
 
-    def ensure_address_gap(self) -> defer.Deferred:
+    async def ensure_address_gap(self):
         raise NotImplementedError
 
-    def get_address_records(self, only_usable: bool = False, **constraints) -> defer.Deferred:
+    def get_address_records(self, only_usable: bool = False, **constraints):
         raise NotImplementedError
 
-    @defer.inlineCallbacks
-    def get_addresses(self, only_usable: bool = False, **constraints) -> defer.Deferred:
-        records = yield self.get_address_records(only_usable=only_usable, **constraints)
+    async def get_addresses(self, only_usable: bool = False, **constraints):
+        records = await self.get_address_records(only_usable=only_usable, **constraints)
         return [r['address'] for r in records]
 
-    @defer.inlineCallbacks
-    def get_or_create_usable_address(self) -> defer.Deferred:
-        addresses = yield self.get_addresses(only_usable=True, limit=10)
+    async def get_or_create_usable_address(self):
+        addresses = await self.get_addresses(only_usable=True, limit=10)
         if addresses:
             return random.choice(addresses)
-        addresses = yield self.ensure_address_gap()
+        addresses = await self.ensure_address_gap()
         return addresses[0]
 
 
@@ -106,22 +99,20 @@ class HierarchicalDeterministic(AddressManager):
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key.child(self.chain_number).child(index)
 
-    @defer.inlineCallbacks
-    def generate_keys(self, start: int, end: int) -> defer.Deferred:
+    async def generate_keys(self, start: int, end: int):
         keys_batch, final_keys = [], []
         for index in range(start, end+1):
             keys_batch.append((index, self.public_key.child(index)))
             if index % 180 == 0 or index == end:
-                yield self.db.add_keys(
+                await self.account.ledger.db.add_keys(
                     self.account, self.chain_number, keys_batch
                 )
                 final_keys.extend(keys_batch)
                 keys_batch.clear()
         return [key[1].address for key in final_keys]
 
-    @defer.inlineCallbacks
-    def get_max_gap(self) -> defer.Deferred:
-        addresses = yield self._query_addresses(order_by="position ASC")
+    async def get_max_gap(self):
+        addresses = await self._query_addresses(order_by="position ASC")
         max_gap = 0
         current_gap = 0
         for address in addresses:
@@ -132,9 +123,8 @@ class HierarchicalDeterministic(AddressManager):
                 current_gap = 0
         return max_gap
 
-    @defer.inlineCallbacks
-    def ensure_address_gap(self) -> defer.Deferred:
-        addresses = yield self._query_addresses(limit=self.gap, order_by="position DESC")
+    async def ensure_address_gap(self):
+        addresses = await self._query_addresses(limit=self.gap, order_by="position DESC")
 
         existing_gap = 0
         for address in addresses:
@@ -148,7 +138,7 @@ class HierarchicalDeterministic(AddressManager):
 
         start = addresses[0]['position']+1 if addresses else 0
         end = start + (self.gap - existing_gap)
-        new_keys = yield self.generate_keys(start, end-1)
+        new_keys = await self.generate_keys(start, end-1)
         return new_keys
 
     def get_address_records(self, only_usable: bool = False, **constraints):
@@ -176,20 +166,19 @@ class SingleKey(AddressManager):
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key
 
-    def get_max_gap(self) -> defer.Deferred:
-        return defer.succeed(0)
+    async def get_max_gap(self):
+        return 0
 
-    @defer.inlineCallbacks
-    def ensure_address_gap(self) -> defer.Deferred:
-        exists = yield self.get_address_records()
+    async def ensure_address_gap(self):
+        exists = await self.get_address_records()
         if not exists:
-            yield self.db.add_keys(
+            await self.account.ledger.db.add_keys(
                 self.account, self.chain_number, [(0, self.public_key)]
             )
             return [self.public_key.address]
         return []
 
-    def get_address_records(self, only_usable: bool = False, **constraints) -> defer.Deferred:
+    def get_address_records(self, only_usable: bool = False, **constraints):
         return self._query_addresses(**constraints)
 
 
@@ -289,9 +278,8 @@ class BaseAccount:
             'address_generator': self.address_generator.to_dict(self.receiving, self.change)
         }
 
-    @defer.inlineCallbacks
-    def get_details(self, show_seed=False, **kwargs):
-        satoshis = yield self.get_balance(**kwargs)
+    async def get_details(self, show_seed=False, **kwargs):
+        satoshis = await self.get_balance(**kwargs)
         details = {
             'id': self.id,
             'name': self.name,
@@ -325,23 +313,21 @@ class BaseAccount:
         self.password = None
         self.encrypted = True
 
-    @defer.inlineCallbacks
-    def ensure_address_gap(self):
+    async def ensure_address_gap(self):
         addresses = []
         for address_manager in self.address_managers:
-            new_addresses = yield address_manager.ensure_address_gap()
+            new_addresses = await address_manager.ensure_address_gap()
             addresses.extend(new_addresses)
         return addresses
 
-    @defer.inlineCallbacks
-    def get_addresses(self, **constraints) -> defer.Deferred:
-        rows = yield self.ledger.db.select_addresses('address', account=self, **constraints)
+    async def get_addresses(self, **constraints):
+        rows = await self.ledger.db.select_addresses('address', account=self, **constraints)
         return [r[0] for r in rows]
 
-    def get_address_records(self, **constraints) -> defer.Deferred:
+    def get_address_records(self, **constraints):
         return self.ledger.db.get_addresses(account=self, **constraints)
 
-    def get_address_count(self, **constraints) -> defer.Deferred:
+    def get_address_count(self, **constraints):
         return self.ledger.db.get_address_count(account=self, **constraints)
 
     def get_private_key(self, chain: int, index: int) -> PrivateKey:
@@ -355,10 +341,9 @@ class BaseAccount:
             constraints.update({'height__lte': height, 'height__gt': 0})
         return self.ledger.db.get_balance(account=self, **constraints)
 
-    @defer.inlineCallbacks
-    def get_max_gap(self):
-        change_gap = yield self.change.get_max_gap()
-        receiving_gap = yield self.receiving.get_max_gap()
+    async def get_max_gap(self):
+        change_gap = await self.change.get_max_gap()
+        receiving_gap = await self.receiving.get_max_gap()
         return {
             'max_change_gap': change_gap,
             'max_receiving_gap': receiving_gap,
@@ -376,24 +361,23 @@ class BaseAccount:
     def get_transaction_count(self, **constraints):
         return self.ledger.db.get_transaction_count(account=self, **constraints)
 
-    @defer.inlineCallbacks
-    def fund(self, to_account, amount=None, everything=False,
+    async def fund(self, to_account, amount=None, everything=False,
              outputs=1, broadcast=False, **constraints):
         assert self.ledger == to_account.ledger, 'Can only transfer between accounts of the same ledger.'
         tx_class = self.ledger.transaction_class
         if everything:
-            utxos = yield self.get_utxos(**constraints)
-            yield self.ledger.reserve_outputs(utxos)
-            tx = yield tx_class.create(
+            utxos = await self.get_utxos(**constraints)
+            await self.ledger.reserve_outputs(utxos)
+            tx = await tx_class.create(
                 inputs=[tx_class.input_class.spend(txo) for txo in utxos],
                 outputs=[],
                 funding_accounts=[self],
                 change_account=to_account
             )
         elif amount > 0:
-            to_address = yield to_account.change.get_or_create_usable_address()
+            to_address = await to_account.change.get_or_create_usable_address()
             to_hash160 = to_account.ledger.address_to_hash160(to_address)
-            tx = yield tx_class.create(
+            tx = await tx_class.create(
                 inputs=[],
                 outputs=[
                     tx_class.output_class.pay_pubkey_hash(amount//outputs, to_hash160)
@@ -406,9 +390,9 @@ class BaseAccount:
             raise ValueError('An amount is required.')
 
         if broadcast:
-            yield self.ledger.broadcast(tx)
+            await self.ledger.broadcast(tx)
         else:
-            yield self.ledger.release_outputs(
+            await self.ledger.release_outputs(
                 [txi.txo_ref.txo for txi in tx.inputs]
             )
 

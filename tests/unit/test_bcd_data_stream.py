@@ -1,4 +1,4 @@
-from twisted.trial import unittest
+import unittest
 
 from torba.bcd_data_stream import BCDataStream
 

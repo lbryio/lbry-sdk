@@ -3,8 +3,6 @@ import typing
 from typing import List, Iterable, Optional
 from binascii import hexlify
 
-from twisted.internet import defer
-
 from torba.basescript import BaseInputScript, BaseOutputScript
 from torba.baseaccount import BaseAccount
 from torba.constants import COIN, NULL_HASH32
@@ -426,8 +424,7 @@ class BaseTransaction:
         return ledger
 
     @classmethod
-    @defer.inlineCallbacks
-    def create(cls, inputs: Iterable[BaseInput], outputs: Iterable[BaseOutput],
+    async def create(cls, inputs: Iterable[BaseInput], outputs: Iterable[BaseOutput],
                funding_accounts: Iterable[BaseAccount], change_account: BaseAccount):
         """ Find optimal set of inputs when only outputs are provided; add change
             outputs if only inputs are provided or if inputs are greater than outputs. """
@@ -450,7 +447,7 @@ class BaseTransaction:
 
             if payment < cost:
                 deficit = cost - payment
-                spendables = yield ledger.get_spendable_utxos(deficit, funding_accounts)
+                spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
                 if not spendables:
                     raise ValueError('Not enough funds to cover this transaction.')
                 payment += sum(s.effective_amount for s in spendables)
@@ -463,28 +460,27 @@ class BaseTransaction:
                 )
                 change = payment - cost
                 if change > cost_of_change:
-                    change_address = yield change_account.change.get_or_create_usable_address()
+                    change_address = await change_account.change.get_or_create_usable_address()
                     change_hash160 = change_account.ledger.address_to_hash160(change_address)
                     change_amount = change - cost_of_change
                     change_output = cls.output_class.pay_pubkey_hash(change_amount, change_hash160)
                     change_output.is_change = True
                     tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
 
-            yield tx.sign(funding_accounts)
+            await tx.sign(funding_accounts)
 
         except Exception as e:
             log.exception('Failed to synchronize transaction:')
-            yield ledger.release_outputs(tx.outputs)
+            await ledger.release_outputs(tx.outputs)
             raise e
 
-        defer.returnValue(tx)
+        return tx
 
     @staticmethod
     def signature_hash_type(hash_type):
         return hash_type
 
-    @defer.inlineCallbacks
-    def sign(self, funding_accounts: Iterable[BaseAccount]) -> defer.Deferred:
+    async def sign(self, funding_accounts: Iterable[BaseAccount]):
         ledger = self.ensure_all_have_same_ledger(funding_accounts)
         for i, txi in enumerate(self._inputs):
             assert txi.script is not None
@@ -492,7 +488,7 @@ class BaseTransaction:
             txo_script = txi.txo_ref.txo.script
             if txo_script.is_pay_pubkey_hash:
                 address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
-                private_key = yield ledger.get_private_key_for_address(address)
+                private_key = await ledger.get_private_key_for_address(address)
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = \
                     private_key.sign(tx) + bytes((self.signature_hash_type(1),))
