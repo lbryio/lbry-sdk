@@ -14,7 +14,7 @@ jobs:
         - pip install -e .
       script:
         - pylint --rcfile=setup.cfg torba
-        - mypy torba
+        - mypy --ignore-missing-imports torba
       after_success: skip
 
     - &tests

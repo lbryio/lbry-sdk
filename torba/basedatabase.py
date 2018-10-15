@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import sqlite3
 import aiosqlite
@@ -134,7 +134,8 @@ class SQLiteMixin:
         return sql, values
 
     @staticmethod
-    def _update_sql(table: str, data: dict, where: str, constraints: list) -> Tuple[str, list]:
+    def _update_sql(table: str, data: dict, where: str,
+                    constraints: Union[list, tuple]) -> Tuple[str, list]:
         columns, values = [], []
         for column, value in data.items():
             columns.append("{} = ?".format(column))
@@ -150,16 +151,6 @@ class SQLiteMixin:
         log.debug(sql)
         log.debug(values)
         return t.execute(sql, values)
-
-    def run_operation(self, sql, values):
-        log.debug(sql)
-        log.debug(values)
-        return self.db.runOperation(sql, values)
-
-    def run_query(self, sql, values):
-        log.debug(sql)
-        log.debug(values)
-        return self.db.runQuery(sql, values)
 
 
 class BaseDatabase(SQLiteMixin):
@@ -438,10 +429,11 @@ class BaseDatabase(SQLiteMixin):
 
     async def select_addresses(self, cols, **constraints):
         return await self.db.execute_fetchall(*query(
-                "SELECT {} FROM pubkey_address".format(cols), **constraints
-            ))
+            "SELECT {} FROM pubkey_address".format(cols), **constraints
+        ))
 
-    async def get_addresses(self, cols=('address', 'account', 'chain', 'position', 'used_times'), **constraints):
+    async def get_addresses(self, cols=('address', 'account', 'chain', 'position', 'used_times'),
+                            **constraints):
         addresses = await self.select_addresses(', '.join(cols), **constraints)
         return rows_to_dict(addresses, cols)
 

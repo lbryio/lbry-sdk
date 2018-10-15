@@ -12,7 +12,7 @@ setup(
     description='Wallet library for bitcoin based currencies.',
     keywords='wallet,crypto,currency,money,bitcoin,lbry',
     classifiers=(
-        'Framework :: Twisted',
+        'Framework :: AsyncIO',
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
@@ -26,7 +26,8 @@ setup(
     packages=find_packages(exclude=('tests',)),
     python_requires='>=3.6',
     install_requires=(
-        'twisted',
+        'aiorpcx',
+        'aiosqlite',
         'coincurve',
         'pbkdf2',
         'cryptography'

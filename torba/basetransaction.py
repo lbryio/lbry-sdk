@@ -425,7 +425,7 @@ class BaseTransaction:
 
     @classmethod
     async def create(cls, inputs: Iterable[BaseInput], outputs: Iterable[BaseOutput],
-               funding_accounts: Iterable[BaseAccount], change_account: BaseAccount):
+                     funding_accounts: Iterable[BaseAccount], change_account: BaseAccount):
         """ Find optimal set of inputs when only outputs are provided; add change
             outputs if only inputs are provided or if inputs are greater than outputs. """
 

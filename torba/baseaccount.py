@@ -362,7 +362,7 @@ class BaseAccount:
         return self.ledger.db.get_transaction_count(account=self, **constraints)
 
     async def fund(self, to_account, amount=None, everything=False,
-             outputs=1, broadcast=False, **constraints):
+                   outputs=1, broadcast=False, **constraints):
         assert self.ledger == to_account.ledger, 'Can only transfer between accounts of the same ledger.'
         tx_class = self.ledger.transaction_class
         if everything:
