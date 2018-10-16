@@ -457,7 +457,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             else:
                 d = defer.succeed(result)
         except:
-            d = Failure(captureVars=Deferred.debug)
+            d = defer.fail(Failure(captureVars=Deferred.debug))
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is
