@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import treq
 import math
@@ -309,6 +310,14 @@ class HeadersComponent(Component):
         return defer.succeed(None)
 
 
+def d2f(deferred):
+    return deferred.asFuture(asyncio.get_event_loop())
+
+
+def f2d(future):
+    return defer.Deferred(future)
+
+
 class WalletComponent(Component):
     component_name = WALLET_COMPONENT
     depends_on = [DATABASE_COMPONENT, HEADERS_COMPONENT]
@@ -326,7 +335,7 @@ class WalletComponent(Component):
         if self.wallet_manager:
             local_height = self.wallet_manager.network.get_local_height()
             remote_height = self.wallet_manager.network.get_server_height()
-            best_hash = yield self.wallet_manager.get_best_blockhash()
+            best_hash = yield f2d(self.wallet_manager.get_best_blockhash())
             defer.returnValue({
                 'blocks': max(local_height, 0),
                 'blocks_behind': max(remote_height - local_height, 0),
@@ -341,13 +350,13 @@ class WalletComponent(Component):
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet_manager = yield LbryWalletManager.from_lbrynet_config(conf.settings, storage)
+        self.wallet_manager = yield f2d(LbryWalletManager.from_lbrynet_config(conf.settings, storage))
         self.wallet_manager.old_db = storage
-        yield self.wallet_manager.start()
+        yield f2d(self.wallet_manager.start())
 
     @defer.inlineCallbacks
     def stop(self):
-        yield self.wallet_manager.stop()
+        yield f2d(self.wallet_manager.stop())
         self.wallet_manager = None
 
 
