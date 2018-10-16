@@ -355,7 +355,7 @@ class BaseAccount:
     def get_utxo_count(self, **constraints):
         return self.ledger.db.get_utxo_count(account=self, **constraints)
 
-    def get_transactions(self, **constraints) -> List['basetransaction.BaseTransaction']:
+    def get_transactions(self, **constraints):
         return self.ledger.db.get_transactions(account=self, **constraints)
 
     def get_transaction_count(self, **constraints):

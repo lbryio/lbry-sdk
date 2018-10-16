@@ -50,12 +50,12 @@ class BaseNetwork:
     async def start(self):
         self.running = True
         for server in cycle(self.config['default_servers']):
-            connection_string = 'tcp:{}:{}'.format(*server)
+            connection_string = '{}:{}'.format(*server)
             self.client = ClientSession(*server, network=self)
             try:
                 await self.client.create_connection()
                 await self.ensure_server_version()
-                log.info("Successfully connected to SPV wallet server: %s", )
+                log.info("Successfully connected to SPV wallet server: %s", connection_string)
                 self._on_connected_controller.add(True)
                 await self.client.on_disconnected.first
             except Exception:  # pylint: disable=broad-except
