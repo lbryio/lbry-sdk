@@ -255,7 +255,7 @@ class Resolver:
 
         results = []
 
-        for claim in (await iter_validate_channel_claims()):
+        for claim in await iter_validate_channel_claims():
             results.append(claim)
 
             # if there is a full page of results, yield it
