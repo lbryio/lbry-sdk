@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import logging
 from binascii import unhexlify
 
@@ -265,7 +266,8 @@ class LbryWalletManager(BaseWalletManager):
         ledger: MainNetLedger = self.default_account.ledger
         results = await ledger.resolve(page, page_size, *uris)
         await self.old_db.save_claims_for_resolve(
-            (value for value in results.values() if 'error' not in value))
+            (value for value in results.values() if 'error' not in value)
+        ).asFuture(asyncio.get_event_loop())
         return results
 
     def get_claims_for_name(self, name: str):
@@ -362,7 +364,7 @@ class LbryWalletManager(BaseWalletManager):
         await account.ledger.broadcast(tx)
         await self.old_db.save_claims([self._old_get_temp_claim_info(
             tx, tx.outputs[0], claim_address, claim_dict, name, amount
-        )])
+        )]).asFuture(asyncio.get_event_loop())
         # TODO: release reserved tx outputs in case anything fails by this point
         return tx
 

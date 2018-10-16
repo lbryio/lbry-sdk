@@ -4,7 +4,11 @@ import tempfile
 import logging
 from types import SimpleNamespace
 
-from orchstr8.testcase import IntegrationTestCase
+from twisted.trial import unittest
+from twisted.internet import utils, defer
+from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
+
+from orchstr8.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
 import lbryschema
 lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
@@ -86,13 +90,34 @@ class FakeAnalytics:
         pass
 
 
+class IntegrationTestCase(unittest.TestCase, BaseIntegrationTestCase):
+
+    async def setUp(self):
+        await self.asyncSetUp()
+
+    async def tearDown(self):
+        await self.asyncTearDown()
+
+
+def run_with_async_support(suppress, f, *a, **kw):
+    if asyncio.iscoroutinefunction(f):
+        def test_method(*args, **kwargs):
+            return defer.Deferred.fromFuture(asyncio.ensure_future(f(*args, **kwargs)))
+    else:
+        test_method = f
+    return originalRunWith(suppress, test_method, *a, **kw)
+
+
+utils.runWithWarningsSuppressed = run_with_async_support
+
+
 class CommandTestCase(IntegrationTestCase):
 
     timeout = 180
     WALLET_MANAGER = LbryWalletManager
 
-    async def asyncSetUp(self):
-        await super().asyncSetUp()
+    async def setUp(self):
+        await super().setUp()
 
         if self.VERBOSE:
             log.setLevel(logging.DEBUG)
@@ -139,8 +164,8 @@ class CommandTestCase(IntegrationTestCase):
         self.daemon.wallet_manager = self.wallet_component.wallet_manager
         self.manager.old_db = self.daemon.storage
 
-    async def asyncTearDown(self):
-        await super().asyncTearDown()
+    async def tearDown(self):
+        await super().tearDown()
         self.wallet_component._running = False
         await d2f(self.daemon._shutdown())
 
@@ -300,7 +325,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'Totally un-cliched ending')
             file.write(b'**Audience Gasps**')
             file.flush()
-            claim3 = yield self.out(self.daemon.jsonrpc_publish(
+            claim3 = await self.out(self.daemon.jsonrpc_publish(
                 'fresh-start', '1.0', file_path=file.name, channel_name='@spam'
             ))
             self.assertTrue(claim3['success'])
@@ -360,7 +385,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
             file.write(b'I know right? Totally a hit song')
             file.write(b'That\'s what goes around for songs these days anyways')
             file.flush()
-            claim4 = yield self.out(self.daemon.jsonrpc_publish(
+            claim4 = await self.out(self.daemon.jsonrpc_publish(
                 'hit-song', '1.0', file_path=file.name, channel_id=channel['claim_id']
             ))
             self.assertTrue(claim4['success'])
@@ -384,7 +409,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
 class AccountManagement(CommandTestCase):
 
-    VERBOSE = True
+    VERBOSE = False
 
     async def test_performing_account_management_commands(self):
         # check initial account
@@ -393,7 +418,7 @@ class AccountManagement(CommandTestCase):
 
         # change account name and gap
         account_id = response['lbc_regtest'][0]['id']
-        await self.daemon.jsonrpc_account_set(
+        self.daemon.jsonrpc_account_set(
             account_id=account_id, new_name='test account',
             receiving_gap=95, receiving_max_uses=96,
             change_gap=97, change_max_uses=98
@@ -424,7 +449,7 @@ class AccountManagement(CommandTestCase):
         account_seed = response['lbc_regtest'][1]['seed']
 
         # remove account
-        await self.daemon.jsonrpc_account_remove(response['lbc_regtest'][1]['id'])
+        self.daemon.jsonrpc_account_remove(response['lbc_regtest'][1]['id'])
         response = await self.daemon.jsonrpc_account_list()
         self.assertEqual(len(response['lbc_regtest']), 1)
 
