@@ -7,6 +7,7 @@ apt-get -qq install -y git
 
 git clone https://github.com/lbryio/lbryschema.git --depth 1
 git clone https://github.com/lbryio/torba.git --depth 1
+git clone https://github.com/lbryio/torba.git && cd torba && git checkout 0ce4b9a7de9c7b20c364cbf19d9d29584fe268ea && cd ..
 git clone https://github.com/twisted/twisted.git --depth 1 --branch twisted-18.7.0
 sed -i -e '172,184{s/^/#/}' twisted/src/twisted/python/_setup.py
 
