@@ -6,6 +6,8 @@ from binascii import unhexlify
 from datetime import datetime
 from typing import Optional
 
+from twisted.internet import defer
+
 from lbryschema.schema import SECP256k1
 from torba.basemanager import BaseWalletManager
 
@@ -429,7 +431,7 @@ class LbryWalletManager(BaseWalletManager):
         pass  # TODO: Data payments is disabled
 
     def send_points(self, reserved_points, amount):
-        return True  # TODO: Data payments is disabled
+        defer.succeed(True)  # TODO: Data payments is disabled
 
     def cancel_point_reservation(self, reserved_points):
         pass # fixme: disabled for now.
