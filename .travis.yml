@@ -20,8 +20,11 @@ jobs:
       name: "Unit Tests w/ Python 3.7"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git
+        - pip install git+clone https://github.com/lbryio/electrumx.git#lbryumx
+        - pip install git+clone https://github.com/lbryio/orchstr8.git
         - pip install git+https://github.com/lbryio/lbryschema.git
+        - pip install git+https://github.com/lbryio/lbryumx.git
+        - pip install git+https://github.com/lbryio/torba.git
         - pip install -e .[test]
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -v tests.unit.wallet
