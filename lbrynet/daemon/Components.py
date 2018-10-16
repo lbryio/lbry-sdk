@@ -329,19 +329,18 @@ class WalletComponent(Component):
     def component(self):
         return self.wallet_manager
 
-    @defer.inlineCallbacks
     def get_status(self):
         if self.wallet_manager:
             local_height = self.wallet_manager.network.get_local_height()
             remote_height = self.wallet_manager.network.get_server_height()
-            best_hash = yield f2d(self.wallet_manager.get_best_blockhash())
-            defer.returnValue({
+            best_hash = self.wallet_manager.get_best_blockhash()
+            return {
                 'blocks': max(local_height, 0),
                 'blocks_behind': max(remote_height - local_height, 0),
                 'best_blockhash': best_hash,
                 'is_encrypted': self.wallet_manager.wallet.use_encryption,
                 'is_locked': not self.wallet_manager.is_wallet_unlocked,
-            })
+            }
 
     @defer.inlineCallbacks
     def start(self):
