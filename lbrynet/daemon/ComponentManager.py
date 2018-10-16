@@ -53,17 +53,16 @@ class ComponentManager:
         for component_class in self.component_classes.values():
             self.components.add(component_class(self))
 
-    @defer.inlineCallbacks
     def evaluate_condition(self, condition_name):
         if condition_name not in RegisteredConditions.conditions:
             raise NameError(condition_name)
         condition = RegisteredConditions.conditions[condition_name]
         try:
             component = self.get_component(condition.component)
-            result = yield defer.maybeDeferred(condition.evaluate, component)
+            result = condition.evaluate(component)
         except Exception as err:
             result = False
-        defer.returnValue((result, "" if result else condition.message))
+        return result, "" if result else condition.message
 
     def sort_components(self, reverse=False):
         """

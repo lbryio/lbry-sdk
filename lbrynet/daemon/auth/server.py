@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from six.moves.urllib import parse as urlparse
 import json
@@ -7,6 +8,7 @@ import signal
 from functools import wraps
 from twisted.web import server
 from twisted.internet import defer
+from twisted.internet.defer import Deferred
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
@@ -141,19 +143,17 @@ class AuthorizedBase(metaclass=JSONRPCServerType):
         condition_names = conditions.get("conditions", [])
 
         def _wrap(fn):
-            @defer.inlineCallbacks
             @wraps(fn)
             def _inner(*args, **kwargs):
                 component_manager = args[0].component_manager
                 for condition_name in condition_names:
-                    condition_result, err_msg = yield component_manager.evaluate_condition(condition_name)
+                    condition_result, err_msg = component_manager.evaluate_condition(condition_name)
                     if not condition_result:
                         raise ComponentStartConditionNotMet(err_msg)
                 if not component_manager.all_components_running(*components):
                     raise ComponentsNotStarted("the following required components have not yet started: "
                                                "%s" % json.dumps(components))
-                result = yield fn(*args, **kwargs)
-                defer.returnValue(result)
+                return fn(*args, **kwargs)
             return _inner
         return _wrap
 
@@ -446,7 +446,18 @@ class AuthJSONRPCServer(AuthorizedBase):
             )
             return server.NOT_DONE_YET
 
-        d = defer.maybeDeferred(fn, self, *_args, **_kwargs)
+        try:
+            result = fn(self, *_args, **_kwargs)
+            if isinstance(result, Deferred):
+                d = result
+            elif isinstance(result, Failure):
+                d = defer.fail(result)
+            elif asyncio.iscoroutine(result):
+                d = Deferred.fromFuture(asyncio.ensure_future(result))
+            else:
+                d = defer.succeed(result)
+        except:
+            d = Failure(captureVars=Deferred.debug)
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is

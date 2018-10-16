@@ -83,8 +83,7 @@ DIRECTION_DESCENDING = 'desc'
 DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
 
 
-@defer.inlineCallbacks
-def maybe_paginate(get_records: Callable, get_record_count: Callable,
+async def maybe_paginate(get_records: Callable, get_record_count: Callable,
                    page: Optional[int], page_size: Optional[int], **constraints):
     if None not in (page, page_size):
         constraints.update({
@@ -92,11 +91,11 @@ def maybe_paginate(get_records: Callable, get_record_count: Callable,
             "limit": page_size
         })
         return {
-            "items": (yield get_records(**constraints)),
-            "total_pages": int(((yield get_record_count(**constraints)) + (page_size-1)) / page_size),
+            "items": await get_records(**constraints),
+            "total_pages": int(((await get_record_count(**constraints)) + (page_size-1)) / page_size),
             "page": page, "page_size": page_size
         }
-    return (yield get_records(**constraints))
+    return await get_records(**constraints)
 
 
 class IterableContainer:
@@ -200,9 +199,7 @@ class WalletIsUnlocked(RequiredCondition):
 
     @staticmethod
     def evaluate(component):
-        d = component.check_locked()
-        d.addCallback(lambda r: not r)
-        return d
+        return not component.check_locked()
 
 
 class Daemon(AuthJSONRPCServer):
@@ -403,8 +400,7 @@ class Daemon(AuthJSONRPCServer):
                 del self.streams[sd_hash]
             defer.returnValue(result)
 
-    @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate=None,
+    async def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate=None,
                         claim_address=None, change_address=None):
         publisher = Publisher(
             self.blob_manager, self.payment_rate_manager, self.storage,
@@ -412,11 +408,11 @@ class Daemon(AuthJSONRPCServer):
         )
         parse_lbry_uri(name)
         if not file_path:
-            stream_hash = yield self.storage.get_stream_hash_for_sd_hash(
-                claim_dict['stream']['source']['source'])
-            tx = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
+            stream_hash = await d2f(self.storage.get_stream_hash_for_sd_hash(
+                claim_dict['stream']['source']['source']))
+            tx = await publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
         else:
-            tx = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
+            tx = await publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
@@ -425,13 +421,13 @@ class Daemon(AuthJSONRPCServer):
         nout = 0
         txo = tx.outputs[nout]
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-        defer.returnValue({
+        return {
             "success": True,
             "tx": tx,
             "claim_id": txo.claim_id,
             "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
             "output": tx.outputs[nout]
-        })
+        }
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
@@ -1043,8 +1039,7 @@ class Daemon(AuthJSONRPCServer):
         pass
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
+    async def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
         """
         Send credits. If given an address, send credits to it. If given a claim id, send a tip
         to the owner of a claim specified by uri. A tip is a claim support where the recipient
@@ -1102,11 +1097,11 @@ class Daemon(AuthJSONRPCServer):
             if reserved_points is None:
                 raise InsufficientFundsError()
             account = self.get_account_or_default(account_id)
-            result = yield self.wallet_manager.send_points_to_address(reserved_points, amount, account)
+            result = await self.wallet_manager.send_points_to_address(reserved_points, amount, account)
             self.analytics_manager.send_credits_sent()
         else:
             log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
-            result = yield self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
+            result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
         return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -1181,8 +1176,7 @@ class Daemon(AuthJSONRPCServer):
                 confirmations=confirmations, show_seed=show_seed)
 
     @requires("wallet")
-    @defer.inlineCallbacks
-    def jsonrpc_account_balance(self, account_id=None, confirmations=0):
+    async def jsonrpc_account_balance(self, account_id=None, confirmations=0):
         """
         Return the balance of an account
 
@@ -1199,12 +1193,11 @@ class Daemon(AuthJSONRPCServer):
             (decimal) amount of lbry credits in wallet
         """
         account = self.get_account_or_default(account_id)
-        dewies = yield account.get_balance(confirmations=confirmations)
+        dewies = await account.get_balance(confirmations=confirmations)
         return dewies_to_lbc(dewies)
 
     @requires("wallet")
-    @defer.inlineCallbacks
-    def jsonrpc_account_add(
+    async def jsonrpc_account_add(
             self, account_name, single_key=False, seed=None, private_key=None, public_key=None):
         """
         Add a previously created account from a seed, private key or public key (read-only).
@@ -1239,7 +1232,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
         if self.ledger.network.is_connected:
-            yield self.ledger.update_account(account)
+            await self.ledger.update_account(account)
 
         self.default_wallet.save()
 
@@ -1251,8 +1244,7 @@ class Daemon(AuthJSONRPCServer):
         return result
 
     @requires("wallet")
-    @defer.inlineCallbacks
-    def jsonrpc_account_create(self, account_name, single_key=False):
+    async def jsonrpc_account_create(self, account_name, single_key=False):
         """
         Create a new account. Specify --single_key if you want to use
         the same address for all transactions (not recommended).
@@ -1275,7 +1267,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
         if self.ledger.network.is_connected:
-            yield self.ledger.update_account(account)
+            await self.ledger.update_account(account)
 
         self.default_wallet.save()
 
@@ -1710,8 +1702,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_resolve(self, force=False, uri=None, uris=[]):
+    async def jsonrpc_resolve(self, force=False, uri=None, uris=None):
         """
         Resolve given LBRY URIs
 
@@ -1779,7 +1770,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        uris = tuple(uris)
+        uris = tuple(uris or [])
         if uri is not None:
             uris += (uri,)
 
@@ -1793,12 +1784,10 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[u] = {"error": "%s is not a valid uri" % u}
 
-        resolved = yield self.wallet_manager.resolve(*valid_uris, check_cache=not force)
-
+        resolved = await self.wallet_manager.resolve(*valid_uris, check_cache=not force)
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri]
-        response = yield self._render_response(results)
-        defer.returnValue(response)
+        return results
 
     @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
@@ -2010,8 +1999,7 @@ class Daemon(AuthJSONRPCServer):
         return self.get_est_cost(uri, size)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_channel_new(self, channel_name, amount):
+    async def jsonrpc_channel_new(self, channel_name, amount):
         """
         Generate a publisher key and create a new '@' prefixed certificate claim
 
@@ -2046,7 +2034,7 @@ class Daemon(AuthJSONRPCServer):
 
         if amount <= 0:
             raise Exception("Invalid amount")
-        tx = yield self.wallet_manager.claim_new_channel(channel_name, amount)
+        tx = await self.wallet_manager.claim_new_channel(channel_name, amount)
         self.default_wallet.save()
         self.analytics_manager.send_new_channel()
         nout = 0
@@ -2125,8 +2113,7 @@ class Daemon(AuthJSONRPCServer):
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
+    async def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
                         description=None, author=None, language=None, license=None,
                         license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
                         channel_name=None, channel_id=None,
@@ -2221,7 +2208,7 @@ class Daemon(AuthJSONRPCServer):
                 # raises an error if the address is invalid
                 decode_address(address)
 
-        available = yield self.default_account.get_balance()
+        available = await self.default_account.get_balance()
         if amount >= available:
             # TODO: add check for existing claim balance
             #balance = yield self.wallet.get_max_usable_balance_for_claim(name)
@@ -2273,7 +2260,7 @@ class Daemon(AuthJSONRPCServer):
                     log.warning("Stripping empty fee from published metadata")
                     del metadata['fee']
                 elif 'address' not in metadata['fee']:
-                    address = yield self.default_account.receiving.get_or_create_usable_address()
+                    address = await self.default_account.receiving.get_or_create_usable_address()
                     metadata['fee']['address'] = address
             if 'fee' in metadata and 'version' not in metadata['fee']:
                 metadata['fee']['version'] = '_0_0_1'
@@ -2316,7 +2303,7 @@ class Daemon(AuthJSONRPCServer):
 
         certificate = None
         if channel_id or channel_name:
-            certificate = yield self.get_channel_or_error(channel_id, channel_name)
+            certificate = await self.get_channel_or_error(channel_id, channel_name)
 
         log.info("Publish: %s", {
             'name': name,
@@ -2329,13 +2316,13 @@ class Daemon(AuthJSONRPCServer):
             'channel_name': channel_name
         })
 
-        result = yield self._publish_stream(name, amount, claim_dict, file_path, certificate,
-                                            claim_address, change_address)
-        return result
+        return await self._publish_stream(
+            name, amount, claim_dict, file_path, certificate,
+            claim_address, change_address
+        )
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None):
+    async def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None):
         """
         Abandon a name and reclaim credits from the claim
 
@@ -2366,16 +2353,12 @@ class Daemon(AuthJSONRPCServer):
         if nout is None and txid is not None:
             raise Exception('Must specify nout')
 
-        tx = yield self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
+        tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
         self.analytics_manager.send_claim_action('abandon')
-        defer.returnValue({
-            "success": True,
-            "tx": tx,
-        })
+        return {"success": True, "tx": tx}
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_claim_new_support(self, name, claim_id, amount, account_id=None):
+    async def jsonrpc_claim_new_support(self, name, claim_id, amount, account_id=None):
         """
         Support a name claim
 
@@ -2403,13 +2386,12 @@ class Daemon(AuthJSONRPCServer):
         """
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
-        result = yield self.wallet_manager.support_claim(name, claim_id, amount, account)
+        result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
         self.analytics_manager.send_claim_action('new_support')
         return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
+    async def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
         """
         Tip the owner of the claim
 
@@ -2437,7 +2419,7 @@ class Daemon(AuthJSONRPCServer):
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
         validate_claim_id(claim_id)
-        result = yield self.wallet_manager.tip_claim(amount, claim_id, account)
+        result = await self.wallet_manager.tip_claim(amount, claim_id, account)
         self.analytics_manager.send_claim_action('new_support')
         return result
 
@@ -3294,16 +3276,15 @@ class Daemon(AuthJSONRPCServer):
                                    response['head_blob_availability'].get('is_available')
         defer.returnValue(response)
 
-    @defer.inlineCallbacks
-    def get_channel_or_error(self, channel_id: str = None, channel_name: str = None):
+    async def get_channel_or_error(self, channel_id: str = None, channel_name: str = None):
         if channel_id is not None:
-            certificates = yield self.wallet_manager.get_certificates(
+            certificates = await self.wallet_manager.get_certificates(
                 private_key_accounts=[self.default_account], claim_id=channel_id)
             if not certificates:
                 raise ValueError("Couldn't find channel with claim_id '{}'." .format(channel_id))
             return certificates[0]
         if channel_name is not None:
-            certificates = yield self.wallet_manager.get_certificates(
+            certificates = await self.wallet_manager.get_certificates(
                 private_key_accounts=[self.default_account], claim_name=channel_name)
             if not certificates:
                 raise ValueError("Couldn't find channel with name '{}'.".format(channel_name))
