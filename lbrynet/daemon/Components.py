@@ -314,7 +314,7 @@ def d2f(deferred):
 
 
 def f2d(future):
-    return defer.Deferred(asyncio.ensure_future(future))
+    return defer.Deferred.fromFuture(asyncio.ensure_future(future))
 
 
 class WalletComponent(Component):
