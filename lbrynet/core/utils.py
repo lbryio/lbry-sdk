@@ -106,7 +106,8 @@ def check_connection(server="lbry.io", port=80, timeout=5):
     log.debug('Checking connection to %s:%s', server, port)
     try:
         server = socket.gethostbyname(server)
-        socket.create_connection((server, port), timeout)
+        conn = socket.create_connection((server, port), timeout)
+        conn.close()
         log.debug('Connection successful')
         return True
     except (socket.gaierror, socket.herror) as ex:
