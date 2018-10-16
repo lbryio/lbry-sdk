@@ -238,34 +238,33 @@ class HeadersComponent(Component):
             return os.stat(self.headers_file).st_size
         return 0
 
-    @defer.inlineCallbacks
-    def get_remote_height(self):
+    async def get_remote_height(self):
         ledger = SimpleNamespace()
         ledger.config = {
             'default_servers': conf.settings['lbryum_servers'],
             'data_path': conf.settings['lbryum_wallet_dir']
         }
         net = Network(ledger)
-        net.start()
-        yield net.on_connected.first
-        remote_height = yield net.get_server_height()
-        yield net.stop()
-        defer.returnValue(remote_height)
+        first_connection = net.on_connected.first
+        asyncio.ensure_future(net.start())
+        await first_connection
+        remote_height = await net.get_server_height()
+        await net.stop()
+        return remote_height
 
-    @defer.inlineCallbacks
-    def should_download_headers_from_s3(self):
+    async def should_download_headers_from_s3(self):
         if conf.settings['blockchain_name'] != "lbrycrd_main":
-            defer.returnValue(False)
+            return False
         self._check_header_file_integrity()
         s3_headers_depth = conf.settings['s3_headers_depth']
         if not s3_headers_depth:
-            defer.returnValue(False)
+            return False
         local_height = self.local_header_file_height()
-        remote_height = yield self.get_remote_height()
+        remote_height = await self.get_remote_height()
         log.info("remote height: %i, local height: %i", remote_height, local_height)
         if remote_height > (local_height + s3_headers_depth):
-            defer.returnValue(True)
-        defer.returnValue(False)
+            return True
+        return False
 
     def _check_header_file_integrity(self):
         # TODO: temporary workaround for usability. move to txlbryum and check headers instead of file integrity
@@ -297,7 +296,7 @@ class HeadersComponent(Component):
         if os.path.exists(self.old_file):
             log.warning("Moving old headers from %s to %s.", self.old_file, self.headers_file)
             os.rename(self.old_file, self.headers_file)
-        self._downloading_headers = yield self.should_download_headers_from_s3()
+        self._downloading_headers = yield f2d(self.should_download_headers_from_s3())
         if self._downloading_headers:
             try:
                 yield self.fetch_headers_from_s3()
@@ -315,7 +314,7 @@ def d2f(deferred):
 
 
 def f2d(future):
-    return defer.Deferred(future)
+    return defer.Deferred(asyncio.ensure_future(future))
 
 
 class WalletComponent(Component):

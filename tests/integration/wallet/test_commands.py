@@ -1,5 +1,3 @@
-from twisted.internet import asyncioreactor
-asyncioreactor.install()
 import json
 import asyncio
 import tempfile
