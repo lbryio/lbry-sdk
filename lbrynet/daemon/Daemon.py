@@ -1610,8 +1610,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_resolve_name(self, name, force=False):
+    async def jsonrpc_resolve_name(self, name, force=False):
         """
         Resolve stream info from a LBRY name
 
@@ -1629,14 +1628,12 @@ class Daemon(AuthJSONRPCServer):
 
         try:
             name = parse_lbry_uri(name).name
-            metadata = yield self.wallet_manager.resolve(name, check_cache=not force)
+            metadata = await self.wallet_manager.resolve(name, check_cache=not force)
             if name in metadata:
                 metadata = metadata[name]
+            return metadata
         except UnknownNameError:
             log.info('Name %s is not known', name)
-            defer.returnValue(None)
-        else:
-            defer.returnValue(metadata)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
