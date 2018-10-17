@@ -7,13 +7,16 @@ import time
 import shutil
 from pprint import pprint
 
-from twisted.internet import defer, reactor, threads
+from twisted.internet import asyncioreactor
+asyncioreactor.install()
+from twisted.internet import defer, threads, reactor
 
 from lbrynet import conf
 from lbrynet.core import log_support, Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.BlobManager import DiskBlobManager
+from lbrynet.daemon.Components import f2d
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.wallet.manager import LbryWalletManager
 
@@ -51,12 +54,11 @@ def download_it(peer, timeout, blob_hash):
     tmp_blob_manager = DiskBlobManager(tmp_dir, storage)
 
     config = {'auto_connect': True}
-    if conf.settings['lbryum_wallet_dir']:
-        config['lbryum_wallet_dir'] = conf.settings['lbryum_wallet_dir']
-        config['use_keyring'] = False
-        config['blockchain_name'] = conf.settings['blockchain_name']
-        config['lbryum_servers'] = []
-    wallet = LbryWalletManager.from_lbrynet_config(config, storage)
+    config['lbryum_wallet_dir'] = tempfile.mkdtemp()
+    config['use_keyring'] = False
+    config['blockchain_name'] = conf.settings['blockchain_name']
+    config['lbryum_servers'] = []
+    wallet = yield f2d(LbryWalletManager.from_lbrynet_config(config, storage))
 
     downloader = SinglePeerDownloader()
     downloader.setup(wallet)
