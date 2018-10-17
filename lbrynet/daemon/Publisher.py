@@ -13,7 +13,9 @@ def d2f(d):
 
 
 class Publisher:
-    def __init__(self, blob_manager, payment_rate_manager, storage, lbry_file_manager, wallet, certificate):
+    def __init__(self, account, blob_manager, payment_rate_manager, storage,
+                 lbry_file_manager, wallet, certificate):
+        self.account = account
         self.blob_manager = blob_manager
         self.payment_rate_manager = payment_rate_manager
         self.storage = storage
@@ -44,7 +46,7 @@ class Publisher:
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
         tx = await self.wallet.claim_name(
-            name, bid, claim_dict, self.certificate, holding_address
+            self.account, name, bid, claim_dict, self.certificate, holding_address
         )
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
@@ -65,7 +67,7 @@ class Publisher:
     async def publish_stream(self, name, bid, claim_dict, stream_hash, holding_address=None):
         """Make a claim without creating a lbry file"""
         tx = await self.wallet.claim_name(
-            name, bid, claim_dict, self.certificate, holding_address
+            self.account, name, bid, claim_dict, self.certificate, holding_address
         )
         if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
             await d2f(self.storage.save_content_claim(

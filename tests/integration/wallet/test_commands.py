@@ -462,3 +462,71 @@ class AccountManagement(CommandTestCase):
         # list specific account
         response = await self.daemon.jsonrpc_account_list(account_id, include_claims=True)
         self.assertEqual(response['name'], 'recreated account')
+
+
+class PublishCommand(CommandTestCase):
+
+    VERBOSE = False
+
+    async def test_publishing_checks_all_accounts_for_certificate(self):
+        account1_id, account1 = self.account.id, self.account
+        new_account = await self.daemon.jsonrpc_account_create('second account')
+        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+
+        spam_channel = await self.out(self.daemon.jsonrpc_channel_new('@spam', '1.0'))
+        self.assertTrue(spam_channel['success'])
+        await self.confirm_tx(spam_channel['tx']['txid'])
+
+        self.assertEqual('8.989893', await self.daemon.jsonrpc_account_balance())
+
+        result = await self.out(self.daemon.jsonrpc_wallet_send(
+            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+        ))
+        await self.confirm_tx(result['txid'])
+
+        self.assertEqual('3.989769', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
+
+        baz_channel = await self.out(self.daemon.jsonrpc_channel_new('@baz', '1.0', account2_id))
+        self.assertTrue(baz_channel['success'])
+        await self.confirm_tx(baz_channel['tx']['txid'])
+
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
+        self.assertEqual(len(channels), 1)
+        self.assertEqual(channels[0]['name'], '@spam')
+        self.assertEqual(channels, await self.out(self.daemon.jsonrpc_channel_list()))
+
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
+        self.assertEqual(len(channels), 1)
+        self.assertEqual(channels[0]['name'], '@baz')
+
+        # defaults to using all accounts to lookup channel
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            claim1 = await self.out(self.daemon.jsonrpc_publish(
+                'hovercraft', '1.0', file_path=file.name, channel_name='@baz'
+            ))
+            self.assertTrue(claim1['success'])
+            await self.confirm_tx(claim1['tx']['txid'])
+
+        # uses only the specific accounts which contains the channel
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            claim1 = await self.out(self.daemon.jsonrpc_publish(
+                'hovercraft', '1.0', file_path=file.name,
+                channel_name='@baz', channel_account_id=[account2_id]
+            ))
+            self.assertTrue(claim1['success'])
+            await self.confirm_tx(claim1['tx']['txid'])
+
+        # fails when specifying account which does not contain channel
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            with self.assertRaisesRegex(ValueError, "Couldn't find channel with name '@baz'."):
+                await self.out(self.daemon.jsonrpc_publish(
+                    'hovercraft', '1.0', file_path=file.name,
+                    channel_name='@baz', channel_account_id=[account1_id]
+                ))
