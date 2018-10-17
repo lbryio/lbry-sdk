@@ -1639,8 +1639,7 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(metadata)
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
+    async def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
         """
         Resolve claim info from txid/nout or with claim ID
 
@@ -1676,13 +1675,12 @@ class Daemon(AuthJSONRPCServer):
 
         """
         if claim_id is not None and txid is None and nout is None:
-            claim_results = yield self.wallet_manager.get_claim_by_claim_id(claim_id)
+            claim_results = await self.wallet_manager.get_claim_by_claim_id(claim_id)
         elif txid is not None and nout is not None and claim_id is None:
-            claim_results = yield self.wallet_manager.get_claim_by_outpoint(txid, int(nout))
+            claim_results = await self.wallet_manager.get_claim_by_outpoint(txid, int(nout))
         else:
             raise Exception("Must specify either txid/nout, or claim_id")
-        response = yield self._render_response(claim_results)
-        defer.returnValue(response)
+        return claim_results
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_resolve(self, force=False, uri=None, uris=None):
