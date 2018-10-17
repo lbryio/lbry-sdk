@@ -2297,7 +2297,7 @@ class Daemon(AuthJSONRPCServer):
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
-            'bid': amount,
+            'bid': dewies_to_lbc(amount),
             'claim_address': claim_address,
             'change_address': change_address,
             'claim_dict': claim_dict,
