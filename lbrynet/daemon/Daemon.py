@@ -1792,8 +1792,7 @@ class Daemon(AuthJSONRPCServer):
     @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    @defer.inlineCallbacks
-    def jsonrpc_get(self, uri, file_name=None, timeout=None):
+    async def jsonrpc_get(self, uri, file_name=None, timeout=None):
         """
         Download stream from a LBRY name.
 
@@ -1843,7 +1842,7 @@ class Daemon(AuthJSONRPCServer):
         if parsed_uri.is_channel and not parsed_uri.path:
             raise Exception("cannot download a channel claim, specify a /path")
 
-        resolved = (yield self.wallet_manager.resolve(uri)).get(uri, {})
+        resolved = (await self.wallet_manager.resolve(uri)).get(uri, {})
         resolved = resolved if 'value' in resolved else resolved.get('claim')
 
         if not resolved:
@@ -1857,23 +1856,22 @@ class Daemon(AuthJSONRPCServer):
 
         if sd_hash in self.streams:
             log.info("Already waiting on lbry://%s to start downloading", name)
-            yield self.streams[sd_hash].data_downloading_deferred
+            await d2f(self.streams[sd_hash].data_downloading_deferred)
 
-        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
+        lbry_file = await d2f(self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False))
 
         if lbry_file:
             if not os.path.isfile(os.path.join(lbry_file.download_directory, lbry_file.file_name)):
                 log.info("Already have lbry file but missing file in %s, rebuilding it",
                          lbry_file.download_directory)
-                yield lbry_file.start()
+                await d2f(lbry_file.start())
             else:
                 log.info('Already have a file for %s', name)
-            result = yield self._get_lbry_file_dict(lbry_file)
+            result = await d2f(self._get_lbry_file_dict(lbry_file))
         else:
-            result = yield self._download_name(name, claim_dict, sd_hash, txid, nout,
-                                               timeout=timeout, file_name=file_name)
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+            result = await d2f(self._download_name(name, claim_dict, sd_hash, txid, nout,
+                                                   timeout=timeout, file_name=file_name))
+        return result
 
     @requires(FILE_MANAGER_COMPONENT)
     @defer.inlineCallbacks
