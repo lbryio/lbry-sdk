@@ -89,7 +89,7 @@ def disable_third_party_loggers():
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
     logging.getLogger('lbryum').setLevel(logging.WARNING)
     logging.getLogger('twisted').setLevel(logging.CRITICAL)
-    logging.getLogger('txupnp').setLevel(logging.WARNING)
+    logging.getLogger('aioupnp').setLevel(logging.WARNING)
 
 
 @_log_decorator
