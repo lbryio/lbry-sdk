@@ -2,6 +2,7 @@ import logging
 from itertools import cycle
 
 from aiorpcx import ClientSession as BaseClientSession
+from asyncio import CancelledError
 
 from torba import __version__
 from torba.stream import StreamController
@@ -59,10 +60,13 @@ class BaseNetwork:
                 log.info("Successfully connected to SPV wallet server: %s", connection_string)
                 self._on_connected_controller.add(True)
                 await self.client.on_disconnected.first
-            except Exception:  # pylint: disable=broad-except
+            except (Exception, CancelledError):  # pylint: disable=broad-except
                 log.exception("Connecting to %s raised an exception:", connection_string)
             if not self.running:
                 return
+            elif self.client:
+                await self.client.close()
+                self.client.connection.cancel_pending_requests()
 
     async def stop(self):
         self.running = False
