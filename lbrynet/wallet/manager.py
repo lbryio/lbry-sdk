@@ -523,18 +523,15 @@ class LBRYcrdAddressQueryHandler:
         self.peer = peer
         request_handler.register_query_handler(self, self.query_identifiers)
 
+    @defer.inlineCallbacks
     def handle_queries(self, queries):
-
-        def create_response(address):
+        if self.query_identifiers[0] in queries:
+            future = self.wallet.get_unused_address_for_peer(self.peer)
+            address = yield defer.Deferred.fromFuture(asyncio.ensure_future(future))
             self.address = address
             fields = {'lbrycrd_address': address}
             return fields
-
-        if self.query_identifiers[0] in queries:
-            d = self.wallet.get_unused_address_for_peer(self.peer)
-            d.addCallback(create_response)
-            return d
         if self.address is None:
             raise Exception("Expected a request for an address, but did not receive one")
         else:
-            return defer.succeed({})
+            return {}
