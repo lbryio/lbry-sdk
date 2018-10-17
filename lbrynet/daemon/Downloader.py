@@ -3,6 +3,7 @@ import os
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
+from lbrynet.daemon.Components import f2d
 from lbryschema.fee import Fee
 
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
@@ -103,7 +104,7 @@ class GetStream:
         max_key_fee_amount = self.convert_max_fee()
         converted_fee_amount = self.exchange_rate_manager.convert_currency(fee.currency, "LBC",
                                                                            fee.amount)
-        if converted_fee_amount > (yield self.wallet.default_account.get_balance()):
+        if converted_fee_amount > (yield f2d(self.wallet.default_account.get_balance())):
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
         if converted_fee_amount > max_key_fee_amount and not self.disable_max_key_fee:
             raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee_amount,
@@ -141,7 +142,7 @@ class GetStream:
             raise InsufficientFundsError(
                 'Unable to pay the key fee of %s for %s' % (dewies_to_lbc(fee_lbc), name)
             )
-        return self.wallet.send_points_to_address(reserved_points, fee_lbc)
+        return f2d(self.wallet.send_points_to_address(reserved_points, fee_lbc))
 
     @defer.inlineCallbacks
     def pay_key_fee(self, fee, name):
