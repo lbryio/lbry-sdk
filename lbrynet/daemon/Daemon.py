@@ -6,7 +6,7 @@ import urllib
 import json
 import textwrap
 
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
@@ -400,10 +400,10 @@ class Daemon(AuthJSONRPCServer):
                 del self.streams[sd_hash]
             defer.returnValue(result)
 
-    async def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate=None,
+    async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
                         claim_address=None, change_address=None):
         publisher = Publisher(
-            self.blob_manager, self.payment_rate_manager, self.storage,
+            account, self.blob_manager, self.payment_rate_manager, self.storage,
             self.file_manager, self.wallet_manager, certificate
         )
         parse_lbry_uri(name)
@@ -1975,17 +1975,19 @@ class Daemon(AuthJSONRPCServer):
         return self.get_est_cost(uri, size)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_channel_new(self, channel_name, amount):
+    async def jsonrpc_channel_new(self, channel_name, amount, account_id=None):
         """
         Generate a publisher key and create a new '@' prefixed certificate claim
 
         Usage:
             channel_new (<channel_name> | --channel_name=<channel_name>)
                         (<amount> | --amount=<amount>)
+                        [--account_id=<account_id>]
 
         Options:
             --channel_name=<channel_name>    : (str) name of the channel prefixed with '@'
             --amount=<amount>                : (decimal) bid amount on the channel
+            --account_id=<account_id>        : (str) id of the account to store channel
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -2007,10 +2009,12 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid channel name")
 
         amount = self.get_dewies_or_error("amount", amount)
-
         if amount <= 0:
             raise Exception("Invalid amount")
-        tx = await self.wallet_manager.claim_new_channel(channel_name, amount)
+
+        tx = await self.wallet_manager.claim_new_channel(
+            channel_name, amount, self.get_account_or_default(account_id)
+        )
         self.default_wallet.save()
         self.analytics_manager.send_new_channel()
         nout = 0
@@ -2030,7 +2034,7 @@ class Daemon(AuthJSONRPCServer):
         Get certificate claim infos for channels that can be published to
 
         Usage:
-            channel_list [<account_id> | --account_id=<account_id> ]
+            channel_list [<account_id> | --account_id=<account_id>]
                          [--page=<page>] [--page_size=<page_size>]
 
         Options:
@@ -2089,11 +2093,12 @@ class Daemon(AuthJSONRPCServer):
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
-                        description=None, author=None, language=None, license=None,
-                        license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
-                        channel_name=None, channel_id=None,
-                        claim_address=None, change_address=None):
+    async def jsonrpc_publish(
+            self, name, bid, metadata=None, file_path=None, fee=None, title=None,
+            description=None, author=None, language=None, license=None,
+            license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
+            channel_name=None, channel_id=None, channel_account_id=None, account_id=None,
+            claim_address=None, change_address=None):
         """
         Make a new name claim and publish associated data to lbrynet,
         update over existing claim if user already has a claim for name.
@@ -2117,6 +2122,7 @@ class Daemon(AuthJSONRPCServer):
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail=<thumbnail>]
                     [--preview=<preview>] [--nsfw=<nsfw>] [--sources=<sources>]
                     [--channel_name=<channel_name>] [--channel_id=<channel_id>]
+                    [--channel_account_id=<channel_account_id>...] [--account_id=<account_id>]
                     [--claim_address=<claim_address>] [--change_address=<change_address>]
 
         Options:
@@ -2156,8 +2162,11 @@ class Daemon(AuthJSONRPCServer):
                                              for channel claim being in the wallet. This allows
                                              publishing to a channel where only the certificate
                                              private key is in the wallet.
+          --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
+                                             for channel certificates, defaults to all accounts.
+                 --account_id=<account_id> : (str) account to use for funding the transaction
            --claim_address=<claim_address> : (str) address where the claim is sent to, if not specified
-                                             new address wil automatically be created
+                                             new address will automatically be created
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -2184,7 +2193,9 @@ class Daemon(AuthJSONRPCServer):
                 # raises an error if the address is invalid
                 decode_address(address)
 
-        available = await self.default_account.get_balance()
+        account = self.get_account_or_default(account_id)
+
+        available = await account.get_balance()
         if amount >= available:
             # TODO: add check for existing claim balance
             #balance = yield self.wallet.get_max_usable_balance_for_claim(name)
@@ -2236,7 +2247,7 @@ class Daemon(AuthJSONRPCServer):
                     log.warning("Stripping empty fee from published metadata")
                     del metadata['fee']
                 elif 'address' not in metadata['fee']:
-                    address = await self.default_account.receiving.get_or_create_usable_address()
+                    address = await account.receiving.get_or_create_usable_address()
                     metadata['fee']['address'] = address
             if 'fee' in metadata and 'version' not in metadata['fee']:
                 metadata['fee']['version'] = '_0_0_1'
@@ -2279,7 +2290,9 @@ class Daemon(AuthJSONRPCServer):
 
         certificate = None
         if channel_id or channel_name:
-            certificate = await self.get_channel_or_error(channel_id, channel_name)
+            certificate = await self.get_channel_or_error(
+                self.get_accounts_or_all(channel_account_id), channel_id, channel_name
+            )
 
         log.info("Publish: %s", {
             'name': name,
@@ -2293,8 +2306,8 @@ class Daemon(AuthJSONRPCServer):
         })
 
         return await self._publish_stream(
-            name, amount, claim_dict, file_path, certificate,
-            claim_address, change_address
+            account, name, amount, claim_dict, file_path,
+            certificate, claim_address, change_address
         )
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -3248,16 +3261,17 @@ class Daemon(AuthJSONRPCServer):
                                    response['head_blob_availability'].get('is_available')
         defer.returnValue(response)
 
-    async def get_channel_or_error(self, channel_id: str = None, channel_name: str = None):
+    async def get_channel_or_error(
+            self, accounts: List[LBCAccount], channel_id: str = None, channel_name: str = None):
         if channel_id is not None:
             certificates = await self.wallet_manager.get_certificates(
-                private_key_accounts=[self.default_account], claim_id=channel_id)
+                private_key_accounts=accounts, claim_id=channel_id)
             if not certificates:
                 raise ValueError("Couldn't find channel with claim_id '{}'." .format(channel_id))
             return certificates[0]
         if channel_name is not None:
             certificates = await self.wallet_manager.get_certificates(
-                private_key_accounts=[self.default_account], claim_name=channel_name)
+                private_key_accounts=accounts, claim_name=channel_name)
             if not certificates:
                 raise ValueError("Couldn't find channel with name '{}'.".format(channel_name))
             return certificates[0]
@@ -3267,6 +3281,12 @@ class Daemon(AuthJSONRPCServer):
         if account_id is None:
             return self.default_account
         return self.get_account_or_error(account_id, argument_name, lbc_only)
+
+    def get_accounts_or_all(self, account_ids: List[str]):
+        return [
+            self.get_account_or_error(account_id)
+            for account_id in account_ids
+        ] if account_ids else self.default_wallet.accounts
 
     def get_account_or_error(self, account_id: str, argument_name: str = "account", lbc_only=True):
         for account in self.default_wallet.accounts:

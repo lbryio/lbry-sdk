@@ -341,8 +341,7 @@ class LbryWalletManager(BaseWalletManager):
     def get_utxos(account: BaseAccount):
         return account.get_utxos()
 
-    async def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
-        account = self.default_account
+    async def claim_name(self, account, name, amount, claim_dict, certificate=None, claim_address=None):
         claim = ClaimDict.load_dict(claim_dict)
         if not claim_address:
             claim_address = await account.receiving.get_or_create_usable_address()
@@ -405,8 +404,7 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: release reserved tx outputs in case anything fails by this point
         return tx
 
-    async def claim_new_channel(self, channel_name, amount):
-        account = self.default_account
+    async def claim_new_channel(self, channel_name, amount, account):
         address = await account.receiving.get_or_create_usable_address()
         cert, key = generate_certificate()
         tx = await Transaction.claim(channel_name, cert, amount, address, [account], account)
