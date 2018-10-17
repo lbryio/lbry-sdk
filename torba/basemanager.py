@@ -41,10 +41,10 @@ class BaseWalletManager:
         self.wallets.append(wallet)
         return wallet
 
-    async def get_detailed_accounts(self, confirmations=6, show_seed=False):
+    async def get_detailed_accounts(self, **kwargs):
         ledgers = {}
         for i, account in enumerate(self.accounts):
-            details = await account.get_details(confirmations=confirmations, show_seed=True)
+            details = await account.get_details(**kwargs)
             details['is_default_account'] = i == 0
             ledger_id = account.ledger.get_id()
             ledgers.setdefault(ledger_id, [])
