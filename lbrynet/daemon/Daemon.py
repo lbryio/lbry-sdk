@@ -2526,8 +2526,7 @@ class Daemon(AuthJSONRPCServer):
         return claims
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
+    async def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
         """
         Get paginated claims in a channel specified by a channel uri
 
@@ -2601,7 +2600,7 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
 
-        resolved = yield self.wallet_manager.resolve(*valid_uris, page=page, page_size=page_size)
+        resolved = await self.wallet_manager.resolve(*valid_uris, page=page, page_size=page_size)
         for u in resolved:
             if 'error' in resolved[u]:
                 results[u] = resolved[u]
@@ -2612,9 +2611,7 @@ class Daemon(AuthJSONRPCServer):
                 if page:
                     results[u]['returned_page'] = page
                     results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
-
-        response = yield self._render_response(results)
-        return response
+        return results
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_list(self, account_id=None, page=None, page_size=None):
