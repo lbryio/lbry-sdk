@@ -273,6 +273,7 @@ class BaseDatabase(SQLiteMixin):
                 }))
 
         await self._set_address_history(address, history)
+        await self.db.commit()
 
     async def reserve_outputs(self, txos, is_reserved=True):
         txoids = [txo.id for txo in txos]
@@ -460,7 +461,7 @@ class BaseDatabase(SQLiteMixin):
             "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
             (history, history.count(':')//2, address)
         )
-        await self.db.commit()
 
     async def set_address_history(self, address, history):
         await self._set_address_history(address, history)
+        await self.db.commit()
