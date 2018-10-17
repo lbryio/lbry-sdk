@@ -7,17 +7,24 @@ regard to the json-rpc api.  As we're currently pre-1.0 release, we
 can and probably will change functionality and break backwards compatibility
 at anytime.
 
-## [Unreleased]
-Python 3 upgrade of the entire code base and switching to a brand new wallet
-implementation are the major changes in this release.
+## [0.30.0] - 2018-10-17
+This release is the most ambitious upgrade to lbrynet yet; including a brand
+new wallet implementation, switch to Python 3 of the entire code base and
+many changes to the API such as pagination and a more consistent output from
+most commands.
 
 
 ### Security
   * upgraded `cryptography` package.
+  * switch to `coincurve` for private / public key generation (addresses)
+  * support for connecting to daemon via SSL
+  * improved workflow for encrypt/decrypt of wallet
 
 ### API
   * unified all command line executables into a single `lbrynet` executable.
-  * added `use_https` configuration setting (off by default), if true the api server will generate a self signed ssl certificate when started and only handle api requests on the https address (default of `https://localhost:5279/lbryapi`)
+  * added `use_https` configuration setting (off by default), if true the api
+    server will generate a self signed ssl certificate when started and only
+    handle api requests on the https address (default of `https://localhost:5279/lbryapi`)
   * deprecated `daemon_stop` command, use `stop` instead.
   * deprecated `wallet_balance` command, use `account_balance` instead.
   * deprecated `wallet_unlock` command, use `account_unlock` instead.
@@ -27,7 +34,7 @@ implementation are the major changes in this release.
   * deprecated `wallet_list` command, use `address_list` instead.
   * deprecated `wallet_is_address_mine` command, use `address_is_mine` instead.
   * deprecated `wallet_public_key` command.
-  * deprecated `wallet_new_address` command, use `address_generate` instead.
+  * deprecated `wallet_new_address` command.
   * deprecated `wallet_unused_address` command, use `address_unused` instead.
   * deprecated `claim_renew` command.
   * added `account_list` command to list accounts including their balance.
@@ -44,9 +51,9 @@ implementation are the major changes in this release.
   * added `account_max_address_gap` command to find large gaps of unused addresses.
   * added `address_list` command to list addresses.
   * added `address_is_mine` command to check if an address is one of your addresses.
-  * added `address_public_key` command to get public key of an address.
-  * added `address_generate` command to generate a new address.
   * added `address_unused` command to get existing or generate a new unused address.
+  * added pagination support for `address_list`, `channel_list`, `claim_list_mine`,
+    `transaction_list` and `utxo_list`.
   * removed `send_amount_to_address` command previously marked as deprecated
   * removed `channel_list_mine` command previously marked as deprecated
   * removed `get_availability` command previously marked as deprecated
@@ -68,10 +75,10 @@ implementation are the major changes in this release.
   * Extensive internal changes as a result of porting to Python 3.
 
 ### Reflector
-  *
+  * No major changes to reflector.
 
 ### Database
-  * 
+  * No changes to existing storage module.
 
 
 ## [0.21.2] - 2018-08-23
