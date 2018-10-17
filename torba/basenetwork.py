@@ -16,6 +16,7 @@ class ClientSession(BaseClientSession):
         super().__init__(*args, **kwargs)
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
+        self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
 
     async def handle_request(self, request):
         controller = self.network.subscription_controllers[request.method]
