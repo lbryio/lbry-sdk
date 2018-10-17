@@ -28,7 +28,7 @@ from lbryschema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf
 from lbrynet.reflector import reupload
-from lbrynet.daemon.Components import d2f
+from lbrynet.daemon.Components import d2f, f2d
 from lbrynet.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
 from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
 from lbrynet.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
@@ -2958,7 +2958,7 @@ class Daemon(AuthJSONRPCServer):
         """
         if uri or stream_hash or sd_hash:
             if uri:
-                metadata = (yield self.wallet_manager.resolve(uri))[uri]
+                metadata = (yield f2d(self.wallet_manager.resolve(uri)))[uri]
                 sd_hash = utils.get_sd_hash(metadata)
                 stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
             elif stream_hash:
