@@ -40,8 +40,9 @@ class CLIIntegrationTest(unittest.TestCase):
             RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT
         ]
         conf.initialize_settings(load_conf_file=False)
+        conf.settings['api_port'] = 5299
         conf.settings['use_auth_http'] = self.USE_AUTH
-        conf.settings["components_to_skip"] = skip
+        conf.settings['components_to_skip'] = skip
         conf.settings.initialize_post_conf_load()
         Daemon.component_attributes = {}
         self.daemon = Daemon(analytics_manager=FakeAnalytics())
