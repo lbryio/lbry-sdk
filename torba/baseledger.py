@@ -190,10 +190,9 @@ class BaseLedger(metaclass=LedgerRegistry):
             working_branch = double_sha256(combined)
         return hexlify(working_branch[::-1])
 
-    async def validate_transaction_and_set_position(self, tx, height):
+    async def validate_transaction_and_set_position(self, tx, height, merkle):
         if not height <= len(self.headers):
             return False
-        merkle = await self.network.get_merkle(tx.id, height)
         merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
         header = self.headers[height]
         tx.position = merkle['pos']
@@ -314,17 +313,23 @@ class BaseLedger(metaclass=LedgerRegistry):
         await account.ensure_address_gap()
         addresses = await account.get_addresses(used_times=0)
         while addresses:
-            await asyncio.gather(*(self.update_history(a) for a in addresses))
+            await asyncio.gather(*(self.subscribe_history(a) for a in addresses))
             addresses = await account.ensure_address_gap()
 
-        # By this point all of the addresses should be restored and we
-        # can now subscribe all of them to receive updates.
-        all_addresses = await account.get_addresses()
-        await asyncio.gather(*(self.subscribe_history(a) for a in all_addresses))
+    async def _prefetch_history(self, remote_history, local_history):
+        proofs, network_txs = {}, {}
+        for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
+            if i < len(local_history) and local_history[i] == (hex_id, remote_height):
+                continue
+            if remote_height > 0:
+                proofs[hex_id] = asyncio.ensure_future(self.network.get_merkle(hex_id, remote_height))
+            network_txs[hex_id] = asyncio.ensure_future(self.network.get_transaction(hex_id))
+        return proofs, network_txs
 
     async def update_history(self, address):
         remote_history = await self.network.get_history(address)
         local_history = await self.get_local_history(address)
+        proofs, network_txs = await self._prefetch_history(remote_history, local_history)
 
         synced_history = StringIO()
         for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
@@ -344,14 +349,14 @@ class BaseLedger(metaclass=LedgerRegistry):
                 tx = await self.db.get_transaction(txid=hex_id)
                 save_tx = None
                 if tx is None:
-                    _raw = await self.network.get_transaction(hex_id)
+                    _raw = await network_txs[hex_id]
                     tx = self.transaction_class(unhexlify(_raw))
                     save_tx = 'insert'
 
                 tx.height = remote_height
 
                 if remote_height > 0 and (not tx.is_verified or tx.position == -1):
-                    await self.validate_transaction_and_set_position(tx, remote_height)
+                    await self.validate_transaction_and_set_position(tx, remote_height, await proofs[hex_id])
                     if save_tx is None:
                         save_tx = 'update'
 
