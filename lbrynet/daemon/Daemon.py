@@ -433,8 +433,8 @@ class Daemon(AuthJSONRPCServer):
         if blob:
             return self.blob_manager.get_blob(blob[0])
         return download_sd_blob(
-            sd_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
-            self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['search_timeout'],
+            sd_hash.decode(), self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
+            self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
             download_mirrors=conf.settings['download_mirrors']
         )
 
@@ -442,7 +442,7 @@ class Daemon(AuthJSONRPCServer):
         """Return previously downloaded sd blob if already in the blob
         manager, otherwise download and return it
         """
-        d = self.blob_manager.completed_blobs([sd_hash])
+        d = self.blob_manager.completed_blobs([sd_hash.decode()])
         d.addCallback(self._get_or_download_sd_blob, sd_hash)
         return d
 
@@ -465,23 +465,19 @@ class Daemon(AuthJSONRPCServer):
             return 0.0
         return size / (10 ** 6) * conf.settings['data_rate']
 
-    @defer.inlineCallbacks
-    def get_est_cost_using_known_size(self, uri, size):
+    async def get_est_cost_using_known_size(self, uri, size):
         """
         Calculate estimated LBC cost for a stream given its size in bytes
         """
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        resolved = yield self.wallet_manager.resolve(uri)
+        resolved = await self.wallet_manager.resolve(uri)
 
         if uri in resolved and 'claim' in resolved[uri]:
             claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
             final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
-            result = yield self._render_response(final_fee)
-            defer.returnValue(result)
-        else:
-            defer.returnValue(None)
+            return final_fee
 
     def get_est_cost_from_sd_hash(self, sd_hash):
         """
@@ -514,13 +510,12 @@ class Daemon(AuthJSONRPCServer):
                                                                                      fee.amount)
         return data_cost + fee_amount
 
-    @defer.inlineCallbacks
-    def get_est_cost_from_uri(self, uri):
+    async def get_est_cost_from_uri(self, uri):
         """
         Resolve a name and return the estimated stream cost
         """
 
-        resolved = yield self.wallet_manager.resolve(uri)
+        resolved = await self.wallet_manager.resolve(uri)
         if resolved:
             claim_response = resolved[uri]
         else:
@@ -530,11 +525,11 @@ class Daemon(AuthJSONRPCServer):
         if claim_response and 'claim' in claim_response:
             if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
                 claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
-                cost = yield self._get_est_cost_from_metadata(claim_value, uri)
+                cost = await d2f(self._get_est_cost_from_metadata(claim_value, uri))
                 result = round(cost, 5)
             else:
                 log.warning("Failed to estimate cost for %s", uri)
-        defer.returnValue(result)
+        return result
 
     def get_est_cost(self, uri, size=None):
         """Get a cost estimate for a lbry stream, if size is not provided the
