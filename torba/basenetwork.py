@@ -1,8 +1,8 @@
 import logging
 from itertools import cycle
+from asyncio import CancelledError
 
 from aiorpcx import ClientSession as BaseClientSession
-from asyncio import CancelledError
 
 from torba import __version__
 from torba.stream import StreamController
