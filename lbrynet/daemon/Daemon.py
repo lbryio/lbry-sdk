@@ -2489,8 +2489,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_claim_list(self, name):
+    async def jsonrpc_claim_list(self, name):
         """
         List current claims and information about them for a given name
 
@@ -2522,7 +2521,7 @@ class Daemon(AuthJSONRPCServer):
                 'last_takeover_height': (int) the height of last takeover for the name
             }
         """
-        claims = yield self.wallet_manager.get_claims_for_name(name)  # type: dict
+        claims = await self.wallet_manager.get_claims_for_name(name)  # type: dict
         sort_claim_results(claims['claims'])
         return claims
 
