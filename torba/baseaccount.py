@@ -1,6 +1,6 @@
 import random
 import typing
-from typing import List, Dict, Tuple, Type, Optional, Any
+from typing import Dict, Tuple, Type, Optional, Any
 
 from torba.mnemonic import Mnemonic
 from torba.bip32 import PrivateKey, PubKey, from_extended_key_string
@@ -10,7 +10,6 @@ from torba.constants import COIN
 if typing.TYPE_CHECKING:
     from torba import baseledger
     from torba import wallet as basewallet
-    from torba import basetransaction
 
 
 class AddressManager:
