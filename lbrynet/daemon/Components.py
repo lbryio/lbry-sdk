@@ -3,7 +3,6 @@ import asyncio
 import logging
 import treq
 import math
-import asyncio
 import binascii
 from hashlib import sha256
 from types import SimpleNamespace
