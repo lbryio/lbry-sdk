@@ -80,6 +80,10 @@ most commands.
 ### Database
   * No changes to existing storage module.
 
+### Known Issues
+  * Channel certificate import/export is currently not working.
+  * `claim_list_by_channel`, `resolve` and some other commands which
+    return very large results (over 1MB) from lbryumx may fail.
 
 ## [0.21.2] - 2018-08-23
 ### Fixed
