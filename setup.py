@@ -24,6 +24,7 @@ setup(
     install_requires=[
         'asyncio',
         'aiohttp',
+        'aioupnp',
         'twisted[tls]==18.7.0',
         'appdirs',
         'distro',
@@ -33,7 +34,6 @@ setup(
         'cryptography',
         'lbryschema',
         'torba',
-        'txupnp',
         'pyyaml',
         'requests',
         'txJSON-RPC',

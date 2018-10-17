@@ -3,12 +3,13 @@ import asyncio
 import logging
 import treq
 import math
+import asyncio
 import binascii
 from hashlib import sha256
 from types import SimpleNamespace
 from twisted.internet import defer, threads, reactor, error
 import lbryschema
-from txupnp.upnp import UPnP
+from aioupnp.upnp import UPnP
 from lbrynet import conf
 from lbrynet.core.utils import DeferredDict
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
@@ -48,6 +49,10 @@ UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
 RATE_LIMITER_COMPONENT = "rate_limiter"
 PAYMENT_RATE_COMPONENT = "payment_rate_manager"
+
+
+def from_future(coroutine: asyncio.coroutine) -> defer.Deferred:
+    return defer.Deferred.fromFuture(asyncio.ensure_future(coroutine))
 
 
 def get_wallet_config():
@@ -688,8 +693,8 @@ class UPnPComponent(Component):
     @defer.inlineCallbacks
     def _setup_redirects(self):
         upnp_redirects = yield DeferredDict({
-            "UDP": self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"),
-            "TCP": self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
+            "UDP": from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")),
+            "TCP": from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
         })
         self.upnp_redirects.update(upnp_redirects)
 
@@ -698,20 +703,23 @@ class UPnPComponent(Component):
         if not self.use_upnp:
             self.external_ip = CS.get_external_ip()
             return
-        self.upnp = UPnP(self.component_manager.reactor, try_miniupnpc_fallback=True)
         try:
-            found = yield self.upnp.discover()
+            self.upnp = yield from_future(UPnP.discover())
+            log.info("found upnp gateway")
+            found = True
         except Exception as err:
             log.warning("upnp discovery failed: %s", err)
             found = False
-        if found and not self.upnp.miniupnpc_runner:
-            log.info("set up redirects using txupnp")
-        elif found and self.upnp.miniupnpc_runner:
-            log.warning("failed to set up redirect with txupnp, miniupnpc fallback was successful")
         if found:
             try:
-                self.external_ip = yield self.upnp.get_external_ip()
+                self.external_ip = yield from_future(self.upnp.get_external_ip())
+                if self.external_ip == "0.0.0.0":
+                    log.warning("upnp doesn't know the external ip address (returned 0.0.0.0), using fallback")
+                    self.external_ip = CS.get_external_ip()
+                else:
+                    log.info("got external ip from upnp: %s", self.external_ip)
                 yield self._setup_redirects()
+                log.info("set up upnp port redirects")
             except Exception as err:
                 log.warning("error trying to set up upnp: %s", err)
                 self.external_ip = CS.get_external_ip()
@@ -720,7 +728,8 @@ class UPnPComponent(Component):
 
     def stop(self):
         return defer.DeferredList(
-            [self.upnp.delete_port_mapping(port, protocol) for protocol, port in self.upnp_redirects.items()]
+            [from_future(self.upnp.delete_port_mapping(port, protocol))
+             for protocol, port in self.upnp_redirects.items()]
         )
 
 
