@@ -13,6 +13,7 @@ from lbrynet import conf
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
+from lbrynet.daemon.Components import f2d
 from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, BLOB_COMPONENT
 from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
@@ -95,7 +96,7 @@ class TestCostEst(unittest.TestCase):
         size = 10000000
         correct_result = 4.5
         daemon = get_test_daemon(generous=True, with_fee=True)
-        result = yield daemon.get_est_cost("test", size)
+        result = yield f2d(daemon.get_est_cost("test", size))
         self.assertEqual(result, correct_result)
 
     @defer.inlineCallbacks
@@ -105,7 +106,7 @@ class TestCostEst(unittest.TestCase):
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
         correct_result = size / 10 ** 6 * data_rate + fake_fee_amount
         daemon = get_test_daemon(generous=False, with_fee=True)
-        result = yield daemon.get_est_cost("test", size)
+        result = yield f2d(daemon.get_est_cost("test", size))
         self.assertEqual(result, round(correct_result, 1))
 
     @defer.inlineCallbacks
@@ -113,7 +114,7 @@ class TestCostEst(unittest.TestCase):
         size = 10000000
         correct_result = 0.0
         daemon = get_test_daemon(generous=True)
-        result = yield daemon.get_est_cost("test", size)
+        result = yield f2d(daemon.get_est_cost("test", size))
         self.assertEqual(result, correct_result)
 
     @defer.inlineCallbacks
@@ -122,7 +123,7 @@ class TestCostEst(unittest.TestCase):
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
         correct_result = size / 10 ** 6 * data_rate
         daemon = get_test_daemon(generous=False)
-        result = yield daemon.get_est_cost("test", size)
+        result = yield f2d(daemon.get_est_cost("test", size))
         self.assertEqual(result, round(correct_result, 1))
 
 
