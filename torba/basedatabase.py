@@ -113,6 +113,7 @@ class SQLiteMixin:
         self.db = aiosqlite.connect(self._db_path)
         await self.db.__aenter__()
         await self.db.executescript(self.CREATE_TABLES_QUERY)
+        await self.db.commit()
 
     async def close(self):
         await self.db.close()
@@ -248,7 +249,7 @@ class BaseDatabase(SQLiteMixin):
                 await self.db.execute(*self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
             elif txo.script.is_pay_script_hash:
                 # TODO: implement script hash payments
-                print('Database.save_transaction_io: pay script hash is not implemented!')
+                log.warning('Database.save_transaction_io: pay script hash is not implemented!')
 
         # lookup the address associated with each TXI (via its TXO)
         txoid_to_address = {r[0]: r[1] for r in await self.db.execute_fetchall(*query(
@@ -280,9 +281,11 @@ class BaseDatabase(SQLiteMixin):
                 ', '.join(['?']*len(txoids))
             ), [is_reserved]+txoids
         )
+        await self.db.commit()
 
     async def release_outputs(self, txos):
         await self.reserve_outputs(txos, is_reserved=False)
+        await self.db.commit()
 
     async def rewind_blockchain(self, above_height):  # pylint: disable=no-self-use
         # TODO:
@@ -451,12 +454,14 @@ class BaseDatabase(SQLiteMixin):
                 sqlite3.Binary(pubkey.pubkey_bytes)
             ))
         await self.db.execute(sql, values)
+        await self.db.commit()
 
     async def _set_address_history(self, address, history):
         await self.db.execute(
             "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
             (history, history.count(':')//2, address)
         )
+        await self.db.commit()
 
     async def set_address_history(self, address, history):
         await self._set_address_history(address, history)
