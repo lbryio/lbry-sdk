@@ -285,7 +285,6 @@ class BaseDatabase(SQLiteMixin):
 
     async def release_outputs(self, txos):
         await self.reserve_outputs(txos, is_reserved=False)
-        await self.db.commit()
 
     async def rewind_blockchain(self, above_height):  # pylint: disable=no-self-use
         # TODO:
