@@ -306,17 +306,13 @@ class BaseLedger(metaclass=LedgerRegistry):
         ))
 
     async def update_account(self, account: baseaccount.BaseAccount):
-        # Before subscribing, download history for any addresses that don't have any,
-        # this avoids situation where we're getting status updates to addresses we know
-        # need to update anyways. Continue to get history and create more addresses until
-        # all missing addresses are created and history for them is fully restored.
         await account.ensure_address_gap()
         addresses = await account.get_addresses(used_times=0)
         while addresses:
             await asyncio.gather(*(self.subscribe_history(a) for a in addresses))
             addresses = await account.ensure_address_gap()
 
-    async def _prefetch_history(self, remote_history, local_history):
+    def _prefetch_history(self, remote_history, local_history):
         proofs, network_txs = {}, {}
         for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
             if i < len(local_history) and local_history[i] == (hex_id, remote_height):
@@ -329,7 +325,7 @@ class BaseLedger(metaclass=LedgerRegistry):
     async def update_history(self, address):
         remote_history = await self.network.get_history(address)
         local_history = await self.get_local_history(address)
-        proofs, network_txs = await self._prefetch_history(remote_history, local_history)
+        proofs, network_txs = self._prefetch_history(remote_history, local_history)
 
         synced_history = StringIO()
         for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):

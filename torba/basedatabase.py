@@ -110,10 +110,9 @@ class SQLiteMixin:
 
     async def open(self):
         log.info("connecting to database: %s", self._db_path)
-        self.db = aiosqlite.connect(self._db_path)
+        self.db = aiosqlite.connect(self._db_path, isolation_level=None)
         await self.db.__aenter__()
         await self.db.executescript(self.CREATE_TABLES_QUERY)
-        await self.db.commit()
 
     async def close(self):
         await self.db.close()
@@ -273,7 +272,6 @@ class BaseDatabase(SQLiteMixin):
                 }))
 
         await self._set_address_history(address, history)
-        await self.db.commit()
 
     async def reserve_outputs(self, txos, is_reserved=True):
         txoids = [txo.id for txo in txos]
@@ -282,7 +280,6 @@ class BaseDatabase(SQLiteMixin):
                 ', '.join(['?']*len(txoids))
             ), [is_reserved]+txoids
         )
-        await self.db.commit()
 
     async def release_outputs(self, txos):
         await self.reserve_outputs(txos, is_reserved=False)
@@ -454,7 +451,6 @@ class BaseDatabase(SQLiteMixin):
                 sqlite3.Binary(pubkey.pubkey_bytes)
             ))
         await self.db.execute(sql, values)
-        await self.db.commit()
 
     async def _set_address_history(self, address, history):
         await self.db.execute(
@@ -464,4 +460,3 @@ class BaseDatabase(SQLiteMixin):
 
     async def set_address_history(self, address, history):
         await self._set_address_history(address, history)
-        await self.db.commit()
