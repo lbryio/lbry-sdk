@@ -1134,19 +1134,19 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires("wallet")
-    def jsonrpc_account_list(self, account_id=None, confirmations=6, include_reserved=False,
+    def jsonrpc_account_list(self, account_id=None, confirmations=6,
                              include_claims=False, show_seed=False):
         """
         List details of all of the accounts or a specific account.
 
         Usage:
             account_list [<account_id>] [--confirmations=<confirmations>]
-                [--include_reserved] [--include_claims] [--show_seed]
+                         [--include_claims] [--show_seed]
 
         Options:
             --account_id=<account_id>       : (str) If provided only the balance for this
                                                     account will be given
-            --confirmations=<confirmations> : (int) required confirmations (default: 6)
+            --confirmations=<confirmations> : (int) required confirmations (default: 0)
             --include_claims                : (bool) include claims, requires than a
                                                      LBC account is specified (default: false)
             --show_seed                     : (bool) show the seed for the account
@@ -1154,26 +1154,14 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (map) balance of account(s)
         """
+        kwargs = {
+            'confirmations': confirmations,
+            'show_seed': show_seed
+        }
         if account_id:
-            account = self.get_account_or_error(account_id)
-            args = {
-                'confirmations': confirmations,
-                'show_seed': show_seed
-            }
-            if include_claims:
-                args['include_claims'] = True
-                if not isinstance(account, LBCAccount):
-                    raise Exception(
-                        "'--include-claims' requires specifying an LBC ledger account. "
-                        "Found '{}', but it's an {} ledger account."
-                        .format(account_id, account.ledger.symbol)
-                    )
-            return account.get_details(**args)
+            return self.get_account_or_error(account_id).get_details(**kwargs)
         else:
-            if include_claims:
-                raise Exception("'--include-claims' requires specifying an LBC account by id.")
-            return self.wallet_manager.get_detailed_accounts(
-                confirmations=confirmations, show_seed=show_seed)
+            return self.wallet_manager.get_detailed_accounts(**kwargs)
 
     @requires("wallet")
     async def jsonrpc_account_balance(self, account_id=None, confirmations=0):
