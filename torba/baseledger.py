@@ -169,9 +169,8 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     async def get_local_status(self, address):
         address_details = await self.db.get_address(address=address)
-        history = address_details['history'] or ''
-        h = sha256(history.encode())
-        return hexlify(h)
+        history = address_details['history']
+        return hexlify(sha256(history.encode())).decode() if history else None
 
     async def get_local_history(self, address):
         address_details = await self.db.get_address(address=address)
