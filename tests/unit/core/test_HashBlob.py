@@ -27,7 +27,7 @@ class BlobFileTest(unittest.TestCase):
         writer.write(self.fake_content)
         writer.close()
         out = yield finished_d
-        self.assertTrue(isinstance(out, BlobFile))
+        self.assertIsInstance(out, BlobFile)
         self.assertTrue(out.verified)
         self.assertEqual(self.fake_content_len, out.get_length())
 
@@ -119,7 +119,7 @@ class BlobFileTest(unittest.TestCase):
         # file should not exist, since we did not finish write
         blob_file_2 = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
         out = blob_file_2.open_for_reading()
-        self.assertEqual(None, out)
+        self.assertIsNone(out)
 
     @defer.inlineCallbacks
     def test_multiple_writers(self):
@@ -134,7 +134,7 @@ class BlobFileTest(unittest.TestCase):
         out_2 = yield finished_d_2
         out_1 = yield self.assertFailure(finished_d_1, DownloadCanceledError)
 
-        self.assertTrue(isinstance(out_2, BlobFile))
+        self.assertIsInstance(out_2, BlobFile)
         self.assertTrue(out_2.verified)
         self.assertEqual(self.fake_content_len, out_2.get_length())
 

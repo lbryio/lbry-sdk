@@ -101,12 +101,12 @@ class AvailabilityWeightedStrategyTests(unittest.TestCase):
         response2 = host_strategy.respond_to_offer(offer, client, blobs)
         client_strategy.update_accepted_offers(host, response2)
 
-        self.assertEqual(response1.is_too_low, False)
-        self.assertEqual(response1.is_accepted, True)
+        self.assertFalse(response1.is_too_low)
+        self.assertTrue(response1.is_accepted)
         self.assertEqual(response1.rate, 0.0)
 
-        self.assertEqual(response2.is_too_low, False)
-        self.assertEqual(response2.is_accepted, True)
+        self.assertFalse(response2.is_too_low)
+        self.assertTrue(response2.is_accepted)
         self.assertEqual(response2.rate, 0.0)
 
     def test_how_many_turns_before_accept_with_similar_rate_settings(self):

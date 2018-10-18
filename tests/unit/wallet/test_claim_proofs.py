@@ -40,4 +40,4 @@ class ClaimProofsTestCase(unittest.TestCase):
             ]
         }
         out = verify_proof(proof, hexlify(root_hash[::-1]), 'a')
-        self.assertEqual(out, True)
+        self.assertTrue(out)

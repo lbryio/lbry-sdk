@@ -178,21 +178,21 @@ class KademliaProtocolTest(unittest.TestCase):
         self._reactor.advance(3)
         find_value_response = yield d
         self.assertEqual(self.remote_contact.protocolVersion, 0)
-        self.assertTrue('protocolVersion' not in find_value_response)
+        self.assertNotIn('protocolVersion', find_value_response)
 
         self.remote_node.findValue = original_findvalue
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
         self.assertEqual(self.remote_contact.protocolVersion, 1)
-        self.assertTrue('protocolVersion' not in find_value_response)
+        self.assertNotIn('protocolVersion', find_value_response)
 
         self.remote_node.findValue = findValue
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
         self.assertEqual(self.remote_contact.protocolVersion, 0)
-        self.assertTrue('protocolVersion' not in find_value_response)
+        self.assertNotIn('protocolVersion', find_value_response)
 
     @defer.inlineCallbacks
     def testStoreToPre_0_20_0_Node(self):
@@ -213,7 +213,7 @@ class KademliaProtocolTest(unittest.TestCase):
 
         @rpcmethod
         def store(contact, key, value, originalPublisherID=None, self_store=False, **kwargs):
-            self.assertTrue(len(key) == 48)
+            self.assertEqual(len(key), 48)
             self.assertSetEqual(set(value.keys()), {b'token', b'lbryid', b'port'})
             self.assertFalse(self_store)
             self.assertDictEqual(kwargs, {})
@@ -230,7 +230,7 @@ class KademliaProtocolTest(unittest.TestCase):
         self._reactor.advance(3)
         find_value_response = yield d
         self.assertEqual(self.remote_contact.protocolVersion, 0)
-        self.assertTrue(b'protocolVersion' not in find_value_response)
+        self.assertNotIn(b'protocolVersion', find_value_response)
         token = find_value_response[b'token']
         d = self.remote_contact.store(fake_blob, token, 3333, self.node.node_id, 0)
         self._reactor.advance(3)
@@ -256,7 +256,7 @@ class KademliaProtocolTest(unittest.TestCase):
         self._reactor.advance(3)
         find_value_response = yield d
         self.assertEqual(self.remote_contact.protocolVersion, 0)
-        self.assertTrue(b'protocolVersion' not in find_value_response)
+        self.assertNotIn(b'protocolVersion', find_value_response)
         token = find_value_response[b'token']
         us_from_them.update_protocol_version(0)
         d = self.remote_node._protocol.sendRPC(
@@ -278,7 +278,7 @@ class KademliaProtocolTest(unittest.TestCase):
         result = self.node.findContact(b'0'*48)
         for _ in range(6):
             self._reactor.advance(1)
-        self.assertEqual((yield result), None)
+        self.assertIsNone((yield result))
         result = self.node.findContact(self.remote_contact.id)
         for _ in range(6):
             self._reactor.advance(1)

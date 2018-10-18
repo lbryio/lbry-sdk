@@ -28,8 +28,8 @@ class ContactTest(unittest.TestCase):
             ValueError, self.contact_manager.make_contact, b'not valid node id', '192.168.1.20.1', 1000, None)
 
     def test_no_duplicate_contact_objects(self):
-        self.assertTrue(self.second_contact is self.second_contact_second_reference)
-        self.assertTrue(self.first_contact is not self.first_contact_different_values)
+        self.assertIs(self.second_contact, self.second_contact_second_reference)
+        self.assertIsNot(self.first_contact, self.first_contact_different_values)
 
     def test_boolean(self):
         """ Test "equals" and "not equals" comparisons """
@@ -65,68 +65,68 @@ class TestContactLastReplied(unittest.TestCase):
         self.contact_manager = ContactManager(self.clock.seconds)
         self.contact = self.contact_manager.make_contact(generate_id(), "127.0.0.1", 4444, None)
         self.clock.advance(3600)
-        self.assertTrue(self.contact.contact_is_good is None)
+        self.assertIsNone(self.contact.contact_is_good)
 
     def test_stale_replied_to_us(self):
         self.contact.update_last_replied()
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
 
     def test_stale_requested_from_us(self):
         self.contact.update_last_requested()
-        self.assertTrue(self.contact.contact_is_good is None)
+        self.assertIsNone(self.contact.contact_is_good)
 
     def test_stale_then_fail(self):
         self.contact.update_last_failed()
-        self.assertTrue(self.contact.contact_is_good is None)
+        self.assertIsNone(self.contact.contact_is_good)
         self.clock.advance(1)
         self.contact.update_last_failed()
-        self.assertTrue(self.contact.contact_is_good is False)
+        self.assertIs(self.contact.contact_is_good, False)
 
     def test_good_turned_stale(self):
         self.contact.update_last_replied()
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(constants.checkRefreshInterval - 1)
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(1)
-        self.assertTrue(self.contact.contact_is_good is None)
+        self.assertIsNone(self.contact.contact_is_good)
 
     def test_good_then_fail(self):
         self.contact.update_last_replied()
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(1)
         self.contact.update_last_failed()
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(59)
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.contact.update_last_failed()
-        self.assertTrue(self.contact.contact_is_good is False)
+        self.assertIs(self.contact.contact_is_good, False)
         for _ in range(7200):
             self.clock.advance(60)
-            self.assertTrue(self.contact.contact_is_good is False)
+            self.assertIs(self.contact.contact_is_good, False)
 
     def test_good_then_fail_then_good(self):
         # it replies
         self.contact.update_last_replied()
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(1)
 
         # it fails twice in a row
         self.contact.update_last_failed()
         self.clock.advance(1)
         self.contact.update_last_failed()
-        self.assertTrue(self.contact.contact_is_good is False)
+        self.assertIs(self.contact.contact_is_good, False)
         self.clock.advance(1)
 
         # it replies
         self.contact.update_last_replied()
         self.clock.advance(1)
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
 
         # it goes stale
         self.clock.advance(constants.checkRefreshInterval - 2)
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(1)
-        self.assertTrue(self.contact.contact_is_good is None)
+        self.assertIsNone(self.contact.contact_is_good)
 
 
 class TestContactLastRequested(unittest.TestCase):
@@ -137,39 +137,39 @@ class TestContactLastRequested(unittest.TestCase):
         self.clock.advance(1)
         self.contact.update_last_replied()
         self.clock.advance(3600)
-        self.assertTrue(self.contact.contact_is_good is None)
+        self.assertIsNone(self.contact.contact_is_good)
 
     def test_previous_replied_then_requested(self):
         # it requests
         self.contact.update_last_requested()
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
 
         # it goes stale
         self.clock.advance(constants.checkRefreshInterval - 1)
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(1)
-        self.assertTrue(self.contact.contact_is_good is None)
+        self.assertIsNone(self.contact.contact_is_good)
 
     def test_previous_replied_then_requested_then_failed(self):
         # it requests
         self.contact.update_last_requested()
-        self.assertTrue(self.contact.contact_is_good is True)
+        self.assertIs(self.contact.contact_is_good, True)
         self.clock.advance(1)
 
         # it fails twice in a row
         self.contact.update_last_failed()
         self.clock.advance(1)
         self.contact.update_last_failed()
-        self.assertTrue(self.contact.contact_is_good is False)
+        self.assertIs(self.contact.contact_is_good, False)
         self.clock.advance(1)
 
         # it requests
         self.contact.update_last_requested()
         self.clock.advance(1)
-        self.assertTrue(self.contact.contact_is_good is False)
+        self.assertIs(self.contact.contact_is_good, False)
 
         # it goes stale
         self.clock.advance((constants.refreshTimeout / 4) - 2)
-        self.assertTrue(self.contact.contact_is_good is False)
+        self.assertIs(self.contact.contact_is_good, False)
         self.clock.advance(1)
-        self.assertTrue(self.contact.contact_is_good is False)
+        self.assertIs(self.contact.contact_is_good, False)

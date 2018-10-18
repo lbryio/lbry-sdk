@@ -53,7 +53,7 @@ class NodeDataTest(unittest.TestCase):
             expected_result = self.contact.compact_ip() + struct.pack('>H', value) + self.contact.id
             self.assertTrue(self.node._dataStore.hasPeersForBlob(key),
                             "Stored key not found in node's DataStore: '%s'" % key)
-            self.assertTrue(expected_result in self.node._dataStore.getPeersForBlob(key),
+            self.assertIn(expected_result, self.node._dataStore.getPeersForBlob(key),
                             "Stored val not found in node's DataStore: key:'%s' port:'%s' %s"
                             % (key, value, self.node._dataStore.getPeersForBlob(key)))
 

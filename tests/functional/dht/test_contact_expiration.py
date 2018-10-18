@@ -30,7 +30,7 @@ class TestPeerExpiration(TestKademliaBase):
                                                             self.nodes + self._seeds))
 
         self.assertRaises(AssertionError, self.verify_all_nodes_are_routable)
-        self.assertTrue(len(get_nodes_with_stale_contacts()) > 1)
+        self.assertGreater(len(get_nodes_with_stale_contacts()), 1)
 
         # run the network long enough for two failures to happen
         self.pump_clock(constants.checkRefreshInterval * 3)
