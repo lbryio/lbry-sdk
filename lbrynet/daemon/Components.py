@@ -6,9 +6,10 @@ import math
 import binascii
 from hashlib import sha256
 from types import SimpleNamespace
-from twisted.internet import defer, threads, reactor, error
+from twisted.internet import defer, threads, reactor, error, task
 import lbryschema
 from aioupnp.upnp import UPnP
+from aioupnp.fault import UPnPError
 from lbrynet import conf
 from lbrynet.core.utils import DeferredDict
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
@@ -684,6 +685,8 @@ class UPnPComponent(Component):
         self.upnp = None
         self.upnp_redirects = {}
         self.external_ip = None
+        self._maintain_redirects_lc = task.LoopingCall(self._maintain_redirects)
+        self._maintain_redirects_lc.clock = self.component_manager.reactor
 
     @property
     def component(self):
@@ -698,40 +701,90 @@ class UPnPComponent(Component):
         self.upnp_redirects.update(upnp_redirects)
 
     @defer.inlineCallbacks
+    def _maintain_redirects(self):
+        # setup the gateway if necessary
+        if not self.upnp:
+            try:
+                self.upnp = yield from_future(UPnP.discover())
+                log.info("found upnp gateway: %s", self.upnp.gateway.manufacturer_string)
+            except Exception as err:
+                log.warning("upnp discovery failed: %s", err)
+                return
+
+        # update the external ip
+        try:
+            external_ip = yield from_future(self.upnp.get_external_ip())
+            if external_ip == "0.0.0.0":
+                log.warning("upnp doesn't know the external ip address (returned 0.0.0.0), using fallback")
+                external_ip = CS.get_external_ip()
+            if self.external_ip and self.external_ip != external_ip:
+                log.info("external ip changed from %s to %s", self.external_ip, external_ip)
+            elif not self.external_ip:
+                log.info("got external ip: %s", external_ip)
+            self.external_ip = external_ip
+        except (asyncio.TimeoutError, UPnPError):
+            pass
+
+        if not self.upnp_redirects:  # setup missing redirects
+            try:
+                upnp_redirects = yield DeferredDict({
+                    "UDP": from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")),
+                    "TCP": from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
+                })
+                self.upnp_redirects.update(upnp_redirects)
+            except (asyncio.TimeoutError, UPnPError):
+                self.upnp = None
+                return self._maintain_redirects()
+        else:  # check existing redirects are still active
+            found = set()
+            mappings = yield from_future(self.upnp.get_redirects())
+            for mapping in mappings:
+                proto = mapping['NewProtocol']
+                if proto in self.upnp_redirects and mapping['NewExternalPort'] == self.upnp_redirects[proto]:
+                    if mapping['NewInternalClient'] == self.upnp.lan_address:
+                        found.add(proto)
+            if 'UDP' not in found:
+                try:
+                    udp_port = yield from_future(
+                        self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
+                    )
+                    self.upnp_redirects['UDP'] = udp_port
+                    log.info("refreshed upnp redirect for dht port: %i", udp_port)
+                except (asyncio.TimeoutError, UPnPError):
+                    del self.upnp_redirects['UDP']
+            if 'TCP' not in found:
+                try:
+                    tcp_port = yield from_future(
+                        self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
+                    )
+                    self.upnp_redirects['TCP'] = tcp_port
+                    log.info("refreshed upnp redirect for peer port: %i", tcp_port)
+                except (asyncio.TimeoutError, UPnPError):
+                    del self.upnp_redirects['TCP']
+            if 'TCP' in self.upnp_redirects and 'UDP' in self.upnp_redirects:
+                log.debug("upnp redirects are still active")
+
+    @defer.inlineCallbacks
     def start(self):
         if not self.use_upnp:
             self.external_ip = CS.get_external_ip()
             return
-        try:
-            self.upnp = yield from_future(UPnP.discover())
-            log.info("found upnp gateway")
-            found = True
-        except Exception as err:
-            log.warning("upnp discovery failed: %s", err)
-            found = False
-        if found:
-            try:
-                self.external_ip = yield from_future(self.upnp.get_external_ip())
-                if self.external_ip == "0.0.0.0":
-                    log.warning("upnp doesn't know the external ip address (returned 0.0.0.0), using fallback")
-                    self.external_ip = CS.get_external_ip()
-                else:
-                    log.info("got external ip from upnp: %s", self.external_ip)
-                yield self._setup_redirects()
-            except Exception as err:
-                log.warning("error trying to set up upnp: %s", err)
-                self.external_ip = CS.get_external_ip()
-        else:
-            self.external_ip = CS.get_external_ip()
+        success = False
+        yield self._maintain_redirects()
         if self.upnp:
             if not self.upnp_redirects:
                 log.error("failed to setup upnp, debugging infomation: %s", self.upnp.zipped_debugging_info)
             else:
-                log.info("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
+                success = True
+                log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
+        self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())
+        self._maintain_redirects_lc.start(360, now=False)
 
     def stop(self):
+        if self._maintain_redirects_lc.running:
+            self._maintain_redirects_lc.stop()
         return defer.DeferredList(
             [from_future(self.upnp.delete_port_mapping(port, protocol))
              for protocol, port in self.upnp_redirects.items()]
@@ -741,6 +794,9 @@ class UPnPComponent(Component):
         return {
             'redirects': self.upnp_redirects,
             'gateway': '' if not self.upnp else self.upnp.gateway.manufacturer_string,
+            'dht_redirect_set': 'UDP' in self.upnp_redirects,
+            'peer_redirect_set': 'TCP' in self.upnp_redirects,
+            'external_ip': self.external_ip
         }
 
 

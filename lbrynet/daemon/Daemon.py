@@ -777,6 +777,9 @@ class Daemon(AuthJSONRPCServer):
                         <TCP | UDP>: (int) external_port,
                     },
                     'gateway': (str) manufacturer and model,
+                    'dht_redirect_set': (bool),
+                    'peer_redirect_set': (bool),
+                    'external_ip': (str) external ip address,
                 }
             }
         """
