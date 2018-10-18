@@ -288,14 +288,14 @@ class LbryWalletManager(BaseWalletManager):
         txs = await account.get_transactions(**constraints)
         history = []
         for tx in txs:
-            ts = headers[tx.height]['timestamp']
+            ts = headers[tx.height]['timestamp'] if tx.height > 0 else None
             item = {
                 'txid': tx.id,
                 'timestamp': ts,
                 'value': dewies_to_lbc(tx.net_account_balance),
                 'fee': dewies_to_lbc(tx.fee),
-                'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3],
-                'confirmations': headers.height - tx.height,
+                'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
+                'confirmations': headers.height - tx.height if tx.height > 0 else 0,
                 'claim_info': [{
                     'address': txo.get_address(account.ledger),
                     'balance_delta': dewies_to_lbc(-txo.amount),

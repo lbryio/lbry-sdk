@@ -67,6 +67,7 @@ class JSONResponseEncoder(JSONEncoder):
                 if claim.has_signature:
                     output['valid_signature'] = None
                     if txo.channel is not None:
+                        output['channel_name'] = txo.channel.claim_name
                         output['valid_signature'] = claim.validate_signature(
                             txo.get_address(self.ledger), txo.channel.claim
                         )
@@ -79,9 +80,6 @@ class JSONResponseEncoder(JSONEncoder):
                 output['type'] = 'support'
             else:
                 output['type'] = 'basic'
-
-            # deprecated, will be removed after 0.30 release
-            output['category'] = output['type']
 
         return output
 
