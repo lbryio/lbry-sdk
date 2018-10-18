@@ -54,6 +54,7 @@ most commands.
   * added `address_unused` command to get existing or generate a new unused address.
   * added pagination support for `address_list`, `channel_list`, `claim_list_mine`,
     `transaction_list` and `utxo_list`.
+  * added `upnp` field to `status` response
   * removed `send_amount_to_address` command previously marked as deprecated
   * removed `channel_list_mine` command previously marked as deprecated
   * removed `get_availability` command previously marked as deprecated

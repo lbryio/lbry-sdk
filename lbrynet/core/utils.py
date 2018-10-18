@@ -94,7 +94,7 @@ def rot13(some_str):
 
 
 def deobfuscate(obfustacated):
-    return base64.b64decode(rot13(obfustacated))
+    return base64.b64decode(rot13(obfustacated)).decode()
 
 
 def obfuscate(plain):
