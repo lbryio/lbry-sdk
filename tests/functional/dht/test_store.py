@@ -77,7 +77,7 @@ class TestStoreExpiration(TestKademliaBase):
             self.assertFalse(node._dataStore.hasPeersForBlob(blob_hash))
             datastore_result = node._dataStore.getPeersForBlob(blob_hash)
             self.assertEqual(len(datastore_result), 0)
-            self.assertTrue(blob_hash in node._dataStore)  # the looping call shouldn't have removed it yet
+            self.assertIn(blob_hash, node._dataStore)  # the looping call shouldn't have removed it yet
             self.assertEqual(len(node._dataStore.getStoringContacts()), 1)
 
         self.pump_clock(constants.checkRefreshInterval + 1)  # tick the clock forward (so the nodes refresh)
@@ -86,7 +86,7 @@ class TestStoreExpiration(TestKademliaBase):
             datastore_result = node._dataStore.getPeersForBlob(blob_hash)
             self.assertEqual(len(datastore_result), 0)
             self.assertEqual(len(node._dataStore.getStoringContacts()), 0)
-            self.assertTrue(blob_hash not in node._dataStore.keys())  # the looping call should have fired
+            self.assertNotIn(blob_hash, node._dataStore.keys())  # the looping call should have fired
 
     @defer.inlineCallbacks
     def test_storing_node_went_stale_then_came_back(self):
@@ -136,7 +136,7 @@ class TestStoreExpiration(TestKademliaBase):
             datastore_result = node._dataStore.getPeersForBlob(blob_hash)
             self.assertEqual(len(datastore_result), 0)
             self.assertEqual(len(node._dataStore.getStoringContacts()), 1)
-            self.assertTrue(blob_hash in node._dataStore)
+            self.assertIn(blob_hash, node._dataStore)
 
         # # bring the announcing node back online
         self.nodes.append(announcing_node)
@@ -152,7 +152,7 @@ class TestStoreExpiration(TestKademliaBase):
             datastore_result = node._dataStore.getPeersForBlob(blob_hash)
             self.assertEqual(len(datastore_result), 1)
             self.assertEqual(len(node._dataStore.getStoringContacts()), 1)
-            self.assertTrue(blob_hash in node._dataStore)
+            self.assertIn(blob_hash, node._dataStore)
 
         # verify the announced blob expires in the storing nodes datastores
         self.clock.advance(constants.dataExpireTimeout)  # skip the clock directly ahead
@@ -160,7 +160,7 @@ class TestStoreExpiration(TestKademliaBase):
             self.assertFalse(node._dataStore.hasPeersForBlob(blob_hash))
             datastore_result = node._dataStore.getPeersForBlob(blob_hash)
             self.assertEqual(len(datastore_result), 0)
-            self.assertTrue(blob_hash in node._dataStore)  # the looping call shouldn't have removed it yet
+            self.assertIn(blob_hash, node._dataStore)  # the looping call shouldn't have removed it yet
             self.assertEqual(len(node._dataStore.getStoringContacts()), 1)
 
         self.pump_clock(constants.checkRefreshInterval + 1)  # tick the clock forward (so the nodes refresh)
@@ -169,4 +169,4 @@ class TestStoreExpiration(TestKademliaBase):
             datastore_result = node._dataStore.getPeersForBlob(blob_hash)
             self.assertEqual(len(datastore_result), 0)
             self.assertEqual(len(node._dataStore.getStoringContacts()), 0)
-            self.assertTrue(blob_hash not in node._dataStore)  # the looping call should have fired
+            self.assertNotIn(blob_hash, node._dataStore)  # the looping call should have fired

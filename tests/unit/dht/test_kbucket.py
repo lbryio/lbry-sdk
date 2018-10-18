@@ -122,4 +122,4 @@ class KBucketTest(unittest.TestCase):
         # try remove contact from empty list
         self.kbucket.addContact(rmContact)
         result = self.kbucket.removeContact(rmContact)
-        self.assertFalse(rmContact in self.kbucket._contacts, "Could not remove contact from bucket")
+        self.assertNotIn(rmContact, self.kbucket._contacts, "Could not remove contact from bucket")

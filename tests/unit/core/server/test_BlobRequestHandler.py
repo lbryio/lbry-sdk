@@ -113,7 +113,7 @@ class TestBlobRequestHandlerSender(unittest.TestCase):
         handler = BlobRequestHandler.BlobRequestHandler(None, None, None, None)
         handler.currently_uploading = None
         deferred = handler.send_blob_if_requested(None)
-        self.assertEqual(True, self.successResultOf(deferred))
+        self.assertTrue(self.successResultOf(deferred))
 
     def test_file_is_sent_to_consumer(self):
         # TODO: also check that the expected payment values are set

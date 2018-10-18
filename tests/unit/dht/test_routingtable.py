@@ -151,8 +151,8 @@ class TreeRoutingTableTest(unittest.TestCase):
         self.assertEqual(len(self.routingTable._buckets), 2)
         self.assertEqual(len(self.routingTable._buckets[0]._contacts), 8)
         self.assertEqual(len(self.routingTable._buckets[1]._contacts), 2)
-        self.assertFalse(contact in self.routingTable._buckets[0]._contacts)
-        self.assertFalse(contact in self.routingTable._buckets[1]._contacts)
+        self.assertNotIn(contact, self.routingTable._buckets[0]._contacts)
+        self.assertNotIn(contact, self.routingTable._buckets[1]._contacts)
 
 
 # class KeyErrorFixedTest(unittest.TestCase):

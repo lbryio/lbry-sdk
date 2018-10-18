@@ -123,7 +123,7 @@ class WalletTest(unittest.TestCase):
 
         self.wallet._send_name_claim = success_send_name_claim
         claim_out = yield self.wallet.claim_name('test', 1, test_claim_dict)
-        self.assertTrue('success' not in claim_out)
+        self.assertNotIn('success', claim_out)
         self.assertEqual(expected_claim_out['claim_id'], claim_out['claim_id'])
         self.assertEqual(expected_claim_out['fee'], claim_out['fee'])
         self.assertEqual(expected_claim_out['nout'], claim_out['nout'])
@@ -218,7 +218,7 @@ class WalletTest(unittest.TestCase):
         self.assertEqual(3, self.wallet.get_balance())
         # test failed point reservation
         out = yield self.wallet.reserve_points('testid', 4)
-        self.assertEqual(None, out)
+        self.assertIsNone(out)
 
     def test_point_reservation_and_claim(self):
         # check that claims take into consideration point reservations

@@ -241,7 +241,7 @@ class FileStorageTests(StorageTest):
         file_name = 'encrypted_file_saver_test.tmp'
         self.assertFalse(os.path.isfile(file_name))
         written_to = yield open_file_for_writing(self.db_dir, file_name)
-        self.assertTrue(written_to == file_name)
+        self.assertEqual(written_to, file_name)
         self.assertTrue(os.path.isfile(os.path.join(self.db_dir, file_name)))
 
     @defer.inlineCallbacks

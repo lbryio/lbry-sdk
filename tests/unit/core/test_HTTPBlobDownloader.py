@@ -42,7 +42,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.client.collect.side_effect = bad_collect
         yield self.downloader.start()
         self.assertEqual(self.blob.get_length(), self.response.length)
-        self.assertEqual(self.blob.get_is_verified(), False)
+        self.assertFalse(self.blob.get_is_verified())
         self.assertEqual(self.blob.writers, {})
 
     @defer.inlineCallbacks
@@ -62,7 +62,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.assertEqual(len(self.client.collect.mock_calls), self.downloader.max_failures)
         self.blob_manager.get_blob.assert_called_with(self.blob_hash)
         self.assertEqual(self.blob.get_length(), self.response.length)
-        self.assertEqual(self.blob.get_is_verified(), False)
+        self.assertFalse(self.blob.get_is_verified())
         self.assertEqual(self.blob.writers, {})
 
     @defer.inlineCallbacks
@@ -72,7 +72,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.blob_manager.get_blob.assert_called_with(self.blob_hash)
         self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
         self.client.collect.assert_not_called()
-        self.assertEqual(self.blob.get_is_verified(), False)
+        self.assertFalse(self.blob.get_is_verified())
         self.assertEqual(self.blob.writers, {})
 
     def test_stop(self):
@@ -83,7 +83,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
         self.client.collect.assert_called()
         self.assertEqual(self.blob.get_length(), self.response.length)
-        self.assertEqual(self.blob.get_is_verified(), False)
+        self.assertFalse(self.blob.get_is_verified())
         self.assertEqual(self.blob.writers, {})
 
 

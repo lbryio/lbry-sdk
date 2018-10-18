@@ -228,7 +228,7 @@ class TestIntegrationConnectionManager(TestCase):
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
         self.assertEqual(0, self.connection_manager.num_peer_connections())
-        self.assertEqual(None, self.connection_manager._next_manage_call)
+        self.assertIsNone(self.connection_manager._next_manage_call)
 
     @defer.inlineCallbacks
     def test_closed_connection_when_server_is_slow(self):
@@ -242,7 +242,7 @@ class TestIntegrationConnectionManager(TestCase):
         connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
             factory.connection_was_made_deferred
         self.assertEqual(0, self.connection_manager.num_peer_connections())
-        self.assertEqual(True, connection_made)
+        self.assertTrue(connection_made)
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
 

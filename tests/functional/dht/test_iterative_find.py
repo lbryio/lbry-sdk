@@ -19,10 +19,10 @@ class TestFindNode(TestKademliaBase):
         to_last_node = Distance(last_node_id)
         for n in self.nodes:
             find_close_nodes_result = n._routingTable.findCloseNodes(last_node_id, constants.k)
-            self.assertTrue(len(find_close_nodes_result) == constants.k)
+            self.assertEqual(len(find_close_nodes_result), constants.k)
             found_ids = [c.id for c in find_close_nodes_result]
             self.assertListEqual(found_ids, sorted(found_ids, key=lambda x: to_last_node(x)))
             if last_node_id in [c.id for c in n.contacts]:
-                self.assertTrue(found_ids[0] == last_node_id)
+                self.assertEqual(found_ids[0], last_node_id)
             else:
-                self.assertTrue(last_node_id not in found_ids)
+                self.assertNotIn(last_node_id, found_ids)

@@ -54,7 +54,7 @@ class BlobManagerTest(unittest.TestCase):
         # check to see if blob is there
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir, blob_hash)))
         blobs = yield self.bm.get_all_verified_blobs()
-        self.assertTrue(blob_hash in blobs)
+        self.assertIn(blob_hash, blobs)
         defer.returnValue(blob_hash)
 
     @defer.inlineCallbacks
@@ -82,7 +82,7 @@ class BlobManagerTest(unittest.TestCase):
         self.assertEqual(len(blobs), 0)
         blobs = yield self.bm.storage.get_all_blob_hashes()
         self.assertEqual(len(blobs), 0)
-        self.assertFalse(blob_hash in self.bm.blobs)
+        self.assertNotIn(blob_hash, self.bm.blobs)
 
         # delete blob that was already deleted once
         yield self.bm.delete_blobs([blob_hash])
@@ -116,7 +116,7 @@ class BlobManagerTest(unittest.TestCase):
         yield self.bm.delete_blobs([blob_hash])
         blobs = yield self.bm.get_all_verified_blobs()
         self.assertEqual(len(blobs), 10)
-        self.assertTrue(blob_hashes[-1] in blobs)
+        self.assertIn(blob_hashes[-1], blobs)
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir, blob_hashes[-1])))
 
     @defer.inlineCallbacks
