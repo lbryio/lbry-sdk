@@ -16,13 +16,13 @@ class DownloadCanceledError(Exception):
 
 class DownloadSDTimeout(Exception):
     def __init__(self, download):
-        super().__init__('Failed to download sd blob {} within timeout'.format(download))
+        super().__init__(f'Failed to download sd blob {download} within timeout')
         self.download = download
 
 
 class DownloadTimeoutError(Exception):
     def __init__(self, download):
-        super().__init__('Failed to download {} within timeout'.format(download))
+        super().__init__(f'Failed to download {download} within timeout')
         self.download = download
 
 
@@ -73,32 +73,32 @@ class KeyFeeAboveMaxAllowed(Exception):
 
 class InvalidExchangeRateResponse(Exception):
     def __init__(self, source, reason):
-        super().__init__('Failed to get exchange rate from {}:{}'.format(source, reason))
+        super().__init__(f'Failed to get exchange rate from {source}:{reason}')
         self.source = source
         self.reason = reason
 
 
 class UnknownNameError(Exception):
     def __init__(self, name):
-        super().__init__('Name {} is unknown'.format(name))
+        super().__init__(f'Name {name} is unknown')
         self.name = name
 
 
 class UnknownClaimID(Exception):
     def __init__(self, claim_id):
-        super().__init__('Claim {} is unknown'.format(claim_id))
+        super().__init__(f'Claim {claim_id} is unknown')
         self.claim_id = claim_id
 
 
 class UnknownURI(Exception):
     def __init__(self, uri):
-        super().__init__('URI {} cannot be resolved'.format(uri))
+        super().__init__(f'URI {uri} cannot be resolved')
         self.name = uri
 
 
 class UnknownOutpoint(Exception):
     def __init__(self, outpoint):
-        super().__init__('Outpoint {} cannot be resolved'.format(outpoint))
+        super().__init__(f'Outpoint {outpoint} cannot be resolved')
         self.outpoint = outpoint
 
 
@@ -124,7 +124,7 @@ class InvalidStreamDescriptorError(Exception):
 
 class InvalidStreamInfoError(Exception):
     def __init__(self, name, stream_info):
-        msg = '{} has claim with invalid stream info: {}'.format(name, stream_info)
+        msg = f'{name} has claim with invalid stream info: {stream_info}'
         super().__init__(msg)
         self.name = name
         self.stream_info = stream_info
@@ -180,13 +180,13 @@ class InvalidCurrencyError(Exception):
     def __init__(self, currency):
         self.currency = currency
         super().__init__(
-            'Invalid currency: {} is not a supported currency.'.format(currency))
+            f'Invalid currency: {currency} is not a supported currency.')
 
 
 class NoSuchDirectoryError(Exception):
     def __init__(self, directory):
         self.directory = directory
-        super().__init__('No such directory {}'.format(directory))
+        super().__init__(f'No such directory {directory}')
 
 
 class ComponentStartConditionNotMet(Exception):

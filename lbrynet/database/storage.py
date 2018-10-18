@@ -580,7 +580,7 @@ class SQLiteStorage:
             return [
                 _format_support(*support_info)
                 for support_info in transaction.execute(
-                    "select * from support where claim_id {}".format(bind),
+                    f"select * from support where claim_id {bind}",
                     tuple(claim_ids)
                 ).fetchall()
             ]
@@ -773,7 +773,7 @@ class SQLiteStorage:
                 results[stream_hash] = result
             bind = "({})".format(','.join('?' for _ in range(len(channel_id_infos))))
             for claim_id, channel_name in transaction.execute(
-                    "select claim_id, claim_name from claim where claim_id in {}".format(bind),
+                    f"select claim_id, claim_name from claim where claim_id in {bind}",
                     tuple(channel_id_infos.keys())
             ).fetchall():
                 for stream_hash in channel_id_infos[claim_id]:

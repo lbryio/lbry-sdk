@@ -182,7 +182,7 @@ class BlobFile:
                 if writer.len_so_far != self.length:
                     err_string = "blob length is %i vs expected %i" % (writer.len_so_far, self.length)
                 else:
-                    err_string = "blob hash is %s vs expected %s" % (writer.blob_hash, self.blob_hash)
+                    err_string = f"blob hash is {writer.blob_hash} vs expected {self.blob_hash}"
                 errback_finished_deferred(Failure(InvalidDataError(err_string)))
                 d = defer.succeed(None)
         else:

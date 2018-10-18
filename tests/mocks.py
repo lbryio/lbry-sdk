@@ -25,7 +25,7 @@ def decode_rsa_key(pem_key):
     return serialization.load_der_public_key(decoded, default_backend())
 
 
-class FakeLBRYFile(object):
+class FakeLBRYFile:
     def __init__(self, blob_manager, stream_info_manager, stream_hash, uri="fake_uri"):
         self.blob_manager = blob_manager
         self.stream_info_manager = stream_info_manager
@@ -44,7 +44,7 @@ class Node(RealNode):
         return self.joinNetwork(known_node_addresses)
 
 
-class FakeNetwork(object):
+class FakeNetwork:
     @staticmethod
     def get_local_height():
         return 1
@@ -86,7 +86,7 @@ class ExchangeRateManager(ERM.ExchangeRateManager):
                 feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
 
-class PointTraderKeyExchanger(object):
+class PointTraderKeyExchanger:
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -117,7 +117,7 @@ class PointTraderKeyExchanger(object):
             return err
 
 
-class PointTraderKeyQueryHandlerFactory(object):
+class PointTraderKeyQueryHandlerFactory:
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -134,7 +134,7 @@ class PointTraderKeyQueryHandlerFactory(object):
                 "point trader testing network")
 
 
-class PointTraderKeyQueryHandler(object):
+class PointTraderKeyQueryHandler:
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -152,7 +152,7 @@ class PointTraderKeyQueryHandler(object):
             try:
                 decode_rsa_key(new_encoded_pub_key)
             except (ValueError, TypeError, IndexError):
-                value_error = ValueError("Client sent an invalid public key: {}".format(new_encoded_pub_key))
+                value_error = ValueError(f"Client sent an invalid public key: {new_encoded_pub_key}")
                 return defer.fail(Failure(value_error))
             self.public_key = new_encoded_pub_key
             self.wallet.set_public_key_for_peer(self.peer, self.public_key)
@@ -164,7 +164,7 @@ class PointTraderKeyQueryHandler(object):
             return defer.succeed({})
 
 
-class Wallet(object):
+class Wallet:
     def __init__(self):
         self.private_key = rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT,
                                                     key_size=1024, backend=default_backend())
@@ -226,7 +226,7 @@ class Wallet(object):
         return "aa04a949348f9f094d503e5816f0cfb57ee68a22f6d08d149217d071243e0378"
 
 
-class PeerFinder(object):
+class PeerFinder:
     def __init__(self, start_port, peer_manager, num_peers):
         self.start_port = start_port
         self.peer_manager = peer_manager
@@ -247,7 +247,7 @@ class PeerFinder(object):
         pass
 
 
-class Announcer(object):
+class Announcer:
     def __init__(self, *args):
         pass
 
@@ -366,7 +366,7 @@ class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
 
 # The components below viz. FakeWallet, FakeSession, FakeFileManager are just for testing Component Manager's
 # startup and stop
-class FakeComponent(object):
+class FakeComponent:
     depends_on = []
     component_name = None
 

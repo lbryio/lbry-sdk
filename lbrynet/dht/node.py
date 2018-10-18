@@ -499,7 +499,7 @@ class Node(MockKademliaHelper):
         if 0 <= port <= 65536:
             compact_port = port.to_bytes(2, 'big')
         else:
-            raise TypeError('Invalid port: {}'.format(port))
+            raise TypeError(f'Invalid port: {port}')
         compact_address = compact_ip + compact_port + rpc_contact.id
         now = int(self.clock.seconds())
         originallyPublished = now - age

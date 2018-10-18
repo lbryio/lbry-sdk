@@ -304,13 +304,13 @@ def format_amount_value(obj):
 
 def _get_permanent_url(claim_result):
     if claim_result.get('has_signature') and claim_result.get('channel_name'):
-        return "{0}#{1}/{2}".format(
+        return "{}#{}/{}".format(
             claim_result['channel_name'],
             claim_result['value']['publisherSignature']['certificateId'],
             claim_result['name']
         )
     else:
-        return "{0}#{1}".format(
+        return "{}#{}".format(
             claim_result['name'],
             claim_result['claim_id']
         )
@@ -461,7 +461,7 @@ def _handle_claim_result(results):
 
     # case where there is no 'certificate', 'value', or 'claim' key
     elif 'certificate' not in results:
-        msg = 'result in unexpected format:{}'.format(results)
+        msg = f'result in unexpected format:{results}'
         assert False, msg
 
     return results

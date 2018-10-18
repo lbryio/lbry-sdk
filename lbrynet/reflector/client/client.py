@@ -195,7 +195,7 @@ class EncryptedFileReflectorClient(Protocol):
             raise ValueError("Need protocol version number!")
         self.server_version = int(response_dict['version'])
         if self.server_version not in [REFLECTOR_V1, REFLECTOR_V2]:
-            raise ValueError("I can't handle protocol version {}!".format(self.server_version))
+            raise ValueError(f"I can't handle protocol version {self.server_version}!")
         self.received_server_version = True
         return defer.succeed(True)
 
@@ -258,7 +258,7 @@ class EncryptedFileReflectorClient(Protocol):
                 self.read_handle = read_handle
                 return defer.succeed(None)
         return defer.fail(ValueError(
-            "Couldn't open that blob for some reason. blob_hash: {}".format(blob.blob_hash)))
+            f"Couldn't open that blob for some reason. blob_hash: {blob.blob_hash}"))
 
     def send_blob_info(self):
         assert self.next_blob_to_send is not None, "need to have a next blob to send at this point"

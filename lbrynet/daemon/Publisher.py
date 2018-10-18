@@ -28,9 +28,9 @@ class Publisher:
         """Create lbry file and make claim"""
         log.info('Starting publish for %s', name)
         if not os.path.isfile(file_path):
-            raise Exception("File {} not found".format(file_path))
+            raise Exception(f"File {file_path} not found")
         if os.path.getsize(file_path) == 0:
-            raise Exception("Cannot publish empty file {}".format(file_path))
+            raise Exception(f"Cannot publish empty file {file_path}")
 
         file_name = os.path.basename(file_path)
         with open(file_path, 'rb') as read_handle:

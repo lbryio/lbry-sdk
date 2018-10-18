@@ -111,7 +111,7 @@ class BlobReflectorClient(Protocol):
             raise ValueError("Need protocol version number!")
         server_version = int(response_dict['version'])
         if self.protocol_version != server_version:
-            raise ValueError("I can't handle protocol version {}!".format(self.protocol_version))
+            raise ValueError(f"I can't handle protocol version {self.protocol_version}!")
         self.received_handshake_response = True
         return defer.succeed(True)
 
@@ -141,7 +141,7 @@ class BlobReflectorClient(Protocol):
                 self.read_handle = read_handle
                 return None
         raise ValueError(
-            "Couldn't open that blob for some reason. blob_hash: {}".format(blob.blob_hash))
+            f"Couldn't open that blob for some reason. blob_hash: {blob.blob_hash}")
 
     def send_blob_info(self):
         log.debug("Send blob info for %s", self.next_blob_to_send.blob_hash)

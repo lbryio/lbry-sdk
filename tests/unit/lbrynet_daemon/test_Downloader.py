@@ -20,7 +20,7 @@ from lbrynet.wallet.manager import LbryWalletManager
 from tests.mocks import mock_conf_settings
 
 
-class MocDownloader(object):
+class MocDownloader:
     def __init__(self):
         self.finish_deferred = defer.Deferred(None)
         self.stop_called = False

@@ -70,7 +70,7 @@ class TestComponentManagerOverrides(unittest.TestCase):
         mocks.mock_conf_settings(self)
 
     def test_init_with_overrides(self):
-        class FakeWallet(object):
+        class FakeWallet:
             component_name = "wallet"
             depends_on = []
 
@@ -88,7 +88,7 @@ class TestComponentManagerOverrides(unittest.TestCase):
         self.assertNotIsInstance(fake_wallet, Components.WalletComponent)
 
     def test_init_with_wrong_overrides(self):
-        class FakeRandomComponent(object):
+        class FakeRandomComponent:
             component_name = "someComponent"
             depends_on = []
 

@@ -72,12 +72,12 @@ class Output(BaseOutput):
     def permanent_url(self) -> str:
         if self.script.is_claim_involved:
             if self.channel is not None:
-                return "{0}#{1}/{2}".format(
+                return "{}#{}/{}".format(
                     self.channel.claim_name,
                     self.channel.claim_id,
                     self.claim_name
                 )
-            return "{}#{}".format(self.claim_name, self.claim_id)
+            return f"{self.claim_name}#{self.claim_id}"
         raise ValueError('No claim associated.')
 
     @property

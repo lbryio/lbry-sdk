@@ -42,7 +42,7 @@ def init_conf_windows(settings={}):
         conf.settings.update(settings)
 
 
-class LbryUploader(object):
+class LbryUploader:
     def __init__(self, file_size, ul_rate_limit=None):
         self.file_size = file_size
         self.ul_rate_limit = ul_rate_limit

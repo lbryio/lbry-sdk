@@ -338,7 +338,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             while seqNumber < totalPackets:
                 packetData = data[startPos:startPos + self.msgSizeLimit]
                 encSeqNumber = chr(seqNumber >> 8) + chr(seqNumber & 0xff)
-                txData = '\x00%s%s%s\x00%s' % (encTotalPackets, encSeqNumber, rpcID, packetData)
+                txData = f'\x00{encTotalPackets}{encSeqNumber}{rpcID}\x00{packetData}'
                 self._scheduleSendNext(txData, address)
 
                 startPos += self.msgSizeLimit

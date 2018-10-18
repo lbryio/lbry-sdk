@@ -40,7 +40,7 @@ class Peer:
         self.stats[stat_type] += count
 
     def __str__(self):
-        return '{}:{}'.format(self.host, self.port)
+        return f'{self.host}:{self.port}'
 
     def __repr__(self):
-        return 'Peer({!r}, {!r})'.format(self.host, self.port)
+        return f'Peer({self.host!r}, {self.port!r})'

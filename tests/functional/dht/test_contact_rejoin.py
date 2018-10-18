@@ -11,7 +11,7 @@ class TestReJoin(TestKademliaBase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        yield super(TestReJoin, self).setUp()
+        yield super().setUp()
         self.removed_node = self.nodes[20]
         self.nodes.remove(self.removed_node)
         yield self.run_reactor(1, [self.removed_node.stop()])

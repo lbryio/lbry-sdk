@@ -48,5 +48,5 @@ class ErrorMessage(ResponseMessage):
     def __init__(self, rpcID, nodeID, exceptionType, errorMessage):
         super().__init__(rpcID, nodeID, errorMessage)
         if isinstance(exceptionType, type):
-            exceptionType = ('%s.%s' % (exceptionType.__module__, exceptionType.__name__)).encode()
+            exceptionType = (f'{exceptionType.__module__}.{exceptionType.__name__}').encode()
         self.exceptionType = exceptionType

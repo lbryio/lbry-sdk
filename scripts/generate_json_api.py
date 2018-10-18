@@ -18,7 +18,7 @@ def get_api(obj):
     try:
         description, usage, options, returns = SECTIONS.search(docstr).groups()
     except:
-        raise ValueError("Doc string format error for {}.".format(obj.__name__))
+        raise ValueError(f"Doc string format error for {obj.__name__}.")
 
     required = re.findall(REQUIRED_OPTIONS, usage)
 

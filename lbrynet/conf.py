@@ -154,7 +154,7 @@ def server_list(servers):
 
 
 def server_list_reverse(servers):
-    return ["%s:%s" % (server, port) for server, port in servers]
+    return [f"{server}:{port}" for server, port in servers]
 
 
 class Env(envparse.Env):
@@ -367,7 +367,7 @@ class Config:
 
     def _assert_valid_data_type(self, data_type):
         if data_type not in self._data:
-            raise KeyError('{} in is not a valid data type'.format(data_type))
+            raise KeyError(f'{data_type} in is not a valid data type')
 
     def get_valid_setting_names(self):
         return self._data[TYPE_DEFAULT].keys()
@@ -377,7 +377,7 @@ class Config:
 
     def _assert_valid_setting(self, name):
         if not self._is_valid_setting(name):
-            raise KeyError('{} is not a valid setting'.format(name))
+            raise KeyError(f'{name} is not a valid setting')
 
     def _validate_settings(self, data):
         invalid_settings = set(data.keys()) - set(self.get_valid_setting_names())
@@ -387,7 +387,7 @@ class Config:
     def _assert_editable_setting(self, name):
         self._assert_valid_setting(name)
         if name in self._fixed_defaults:
-            raise ValueError('{} is not an editable setting'.format(name))
+            raise ValueError(f'{name} is not an editable setting')
 
     def _assert_valid_setting_value(self, name, value):
         if name == "max_key_fee":
@@ -442,7 +442,7 @@ class Config:
         for possible_data_type in self._search_order:
             if name in self._data[possible_data_type]:
                 return self._data[possible_data_type][name]
-        raise KeyError('{} is not a valid setting'.format(name))
+        raise KeyError(f'{name} is not a valid setting')
 
     def set(self, name, value, data_types=(TYPE_RUNTIME,)):
         """Set a config value
@@ -582,7 +582,7 @@ class Config:
     def get_api_connection_string(self, user: str = None, password: str = None) -> str:
         return 'http%s://%s%s:%i/%s' % (
             "" if not self['use_https'] else "s",
-            "" if not (user and password) else "%s:%s@" % (user, password),
+            "" if not (user and password) else f"{user}:{password}@",
             self['api_host'],
             self['api_port'],
             self['API_ADDRESS']

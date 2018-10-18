@@ -9,7 +9,7 @@ from lbrynet.dht.distance import Distance
 from lbrynet.core.utils import generate_id
 
 
-class FakeRPCProtocol(object):
+class FakeRPCProtocol:
     """ Fake RPC protocol; allows lbrynet.dht.contact.Contact objects to "send" RPCs """
     def sendRPC(self, *args, **kwargs):
         return defer.succeed(None)
