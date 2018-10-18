@@ -2,6 +2,7 @@ from random import choice
 import logging
 from twisted.internet import defer, task
 from twisted.internet.error import ConnectingCancelledError
+from twisted.web._newclient import ResponseNeverReceived
 import treq
 from lbrynet.core.utils import DeferredDict
 from lbrynet.core.Error import DownloadCanceledError
@@ -132,9 +133,10 @@ class HTTPBlobDownloader:
                         yield self.blob_manager.blob_completed(blob, should_announce=should_announce)
                         self.downloaded_blob_hashes.append(blob.blob_hash)
                 break
-            except (IOError, Exception, defer.CancelledError, ConnectingCancelledError) as e:
+            except (IOError, Exception, defer.CancelledError, ConnectingCancelledError, ResponseNeverReceived) as e:
                 if isinstance(
-                        e, (DownloadCanceledError, defer.CancelledError, ConnectingCancelledError)
+                        e, (DownloadCanceledError, defer.CancelledError, ConnectingCancelledError,
+                            ResponseNeverReceived)
                 ) or 'closed file' in str(e):
                     # some other downloader finished first or it was simply cancelled
                     log.info("Mirror download cancelled: %s", blob.blob_hash)
