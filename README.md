@@ -32,12 +32,12 @@ This project is MIT licensed. For the full license, see [LICENSE](LICENSE).
 
 ## Security
 
-We take security seriously. Please contact security@lbry.io regarding any security issues. Our PGP key is here if you need it.
+We take security seriously. Please contact security@lbry.io regarding any security issues. [Our GPG key is here](https://lbry.io/faq/gpg-key) if you need it.
 
 ## Contact
 
-The primary contact for this project is [@jackrobison](mailto:jack@lbry.io)
+The primary contact for this project is [@jackrobison](mailto:jack@lbry.io).
 
 ## Additional information and links
 
-The documentation for the api can be found [here](https://lbry.tech/api/sdk).
+The documentation for the API can be found [here](https://lbry.tech/api/sdk).
