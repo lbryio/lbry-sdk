@@ -621,7 +621,7 @@ class Node(MockKademliaHelper):
             #     # Update the "last accessed" timestamp for the appropriate k-bucket
             #     self._routingTable.touchKBucket(key)
             if len(shortlist) == 0:
-                log.warning("This node doesnt know any other nodes")
+                log.warning("This node doesn't know any other nodes")
                 # This node doesn't know of any other nodes
                 fakeDf = defer.Deferred()
                 fakeDf.callback([])

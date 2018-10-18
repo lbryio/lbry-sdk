@@ -157,7 +157,7 @@ class TreeRoutingTable:
         @param count: the amount of contacts to return, default of k (8)
         @type count: int
         @param sender_node_id: Used during RPC, this is be the sender's Node ID
-                               Whatever ID is passed in the paramater will get
+                               Whatever ID is passed in the parameter will get
                                excluded from the list of returned contacts.
         @type sender_node_id: str
 

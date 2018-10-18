@@ -92,7 +92,7 @@ class GetStreamTests(unittest.TestCase):
     @defer.inlineCallbacks
     def test_init_exception(self):
         """
-        test that if initialization would fail, by giving it invaild
+        test that if initialization would fail, by giving it invalid
         stream_info, that an exception is thrown
         """
 

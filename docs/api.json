@@ -1193,7 +1193,7 @@
             {
                 "name": "claim_address",
                 "type": "str",
-                "description": "address where the claim is sent to, if not specified new address wil automatically be created",
+                "description": "address where the claim is sent to, if not specified new address will automatically be created",
                 "is_required": false
             }
         ],

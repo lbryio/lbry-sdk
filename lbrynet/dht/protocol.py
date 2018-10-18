@@ -311,7 +311,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         If the data is spread over multiple UDP datagrams, the packets have the
         following structure::
             |           |     |      |      |        ||||||||||||   0x00   |
-            |Transmision|Total number|Sequence number| RPC ID   |Header end|
+            |Transmission|Total number|Sequence number| RPC ID   |Header end|
             | type ID   | of packets |of this packet |          | indicator|
             | (1 byte)  | (2 bytes)  |  (2 bytes)    |(20 bytes)| (1 byte) |
             |           |     |      |      |        ||||||||||||          |
@@ -357,7 +357,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             except OSError as err:
                 if err.errno == errno.EWOULDBLOCK:
                     # i'm scared this may swallow important errors, but i get a million of these
-                    # on Linux and it doesnt seem to affect anything  -grin
+                    # on Linux and it doesn't seem to affect anything  -grin
                     log.warning("Can't send data to dht: EWOULDBLOCK")
                 elif err.errno == errno.ENETUNREACH:
                     # this should probably try to retransmit when the network connection is back

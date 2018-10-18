@@ -53,10 +53,10 @@ class StreamBlobDecryptor:
 
     def decrypt(self, write_func):
         """
-        Decrypt blob and write its content useing write_func
+        Decrypt blob and write its content using write_func
 
         write_func - function that takes decrypted string as
-            arugment and writes it somewhere
+            argument and writes it somewhere
 
         Returns:
 
