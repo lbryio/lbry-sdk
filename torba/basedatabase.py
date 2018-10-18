@@ -33,7 +33,7 @@ class AIOSQLite:
             self.executor.shutdown(wait=True)
         conn = self.connection
         self.connection = None
-        return asyncio._get_running_loop().call_later(0.01, __close, conn)
+        return asyncio.get_event_loop_policy().get_event_loop().call_later(0.01, __close, conn)
 
     def executescript(self, script: str) -> Awaitable:
         return wrap_future(self.executor.submit(self.connection.executescript, script))
@@ -48,13 +48,13 @@ class AIOSQLite:
         parameters = parameters if parameters is not None else []
         return self.run(lambda conn, sql, parameters: conn.execute(sql, parameters), sql, parameters)
 
-    def run(self, fn: Callable[[sqlite3.Connection, Any], Any], *args, **kwargs) -> Awaitable:
-        return wrap_future(self.executor.submit(self.__run_transaction, fn, *args, **kwargs))
+    def run(self, fun: Callable[[sqlite3.Connection, Any, Any], Any], *args, **kwargs) -> Awaitable:
+        return wrap_future(self.executor.submit(self.__run_transaction, fun, *args, **kwargs))
 
-    def __run_transaction(self, fn: Callable[[sqlite3.Connection, Any], Any], *args, **kwargs):
+    def __run_transaction(self, fun: Callable[[sqlite3.Connection, Any, Any], Any], *args, **kwargs):
         self.connection.execute('begin')
         try:
-            fn(self.connection, *args, **kwargs)
+            fun(self.connection, *args, **kwargs)  # type: ignore
         except (Exception, OSError):
             self.connection.rollback()
             raise
