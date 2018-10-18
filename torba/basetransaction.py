@@ -470,7 +470,7 @@ class BaseTransaction:
             await tx.sign(funding_accounts)
 
         except Exception as e:
-            log.exception('Failed to synchronize transaction:')
+            log.exception('Failed to create transaction:')
             await ledger.release_outputs(tx.outputs)
             raise e
 
