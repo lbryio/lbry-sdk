@@ -161,7 +161,7 @@ class DeferredLockContextManager:
         self._lock = lock
 
     def __enter__(self):
-        yield self._lock.aquire()
+        yield self._lock.acquire()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         yield self._lock.release()

@@ -31,7 +31,7 @@ class TestStoreExpiration(TestKademliaBase):
         announce_d = announcing_node.announceHaveBlob(blob_hash)
         self.pump_clock(5+1)
         storing_node_ids = yield announce_d
-        self.assertEqual(len(storing_node_ids), 0)  # cant store, wrong tokens, but they get nullified
+        self.assertEqual(len(storing_node_ids), 0)  # can't store, wrong tokens, but they get nullified
 
         announce_d = announcing_node.announceHaveBlob(blob_hash)
         self.pump_clock(5+1)

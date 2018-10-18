@@ -33,7 +33,7 @@ def init_conf_windows(settings={}):
     """
     There is no fork on windows, so imports
     are freshly initialized in new processes.
-    So conf needs to be intialized for new processes
+    So conf needs to be initialized for new processes
     """
     if os.name == 'nt':
         original_settings = conf.settings
