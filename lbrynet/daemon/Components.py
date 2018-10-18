@@ -718,18 +718,30 @@ class UPnPComponent(Component):
                 else:
                     log.info("got external ip from upnp: %s", self.external_ip)
                 yield self._setup_redirects()
-                log.info("set up upnp port redirects")
             except Exception as err:
                 log.warning("error trying to set up upnp: %s", err)
                 self.external_ip = CS.get_external_ip()
         else:
             self.external_ip = CS.get_external_ip()
+        if self.upnp:
+            if not self.upnp_redirects:
+                log.error("failed to setup upnp, debugging infomation: %s", self.upnp.zipped_debugging_info)
+            else:
+                log.info("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
+        else:
+            log.error("failed to setup upnp")
 
     def stop(self):
         return defer.DeferredList(
             [from_future(self.upnp.delete_port_mapping(port, protocol))
              for protocol, port in self.upnp_redirects.items()]
         )
+
+    def get_status(self):
+        return {
+            'redirects': self.upnp_redirects,
+            'gateway': '' if not self.upnp else self.upnp.gateway.manufacturer_string,
+        }
 
 
 class ExchangeRateManagerComponent(Component):

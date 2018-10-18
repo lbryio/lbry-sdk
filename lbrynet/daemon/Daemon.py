@@ -771,6 +771,12 @@ class Daemon(AuthJSONRPCServer):
                 },
                 'file_manager': {
                     'managed_files': (int) count of files in the file manager,
+                },
+                'upnp': {
+                    'redirects': {
+                        <TCP | UDP>: (int) external_port,
+                    },
+                    'gateway': (str) manufacturer and model,
                 }
             }
         """
