@@ -3,7 +3,7 @@ class LoopingCallManager:
         self.calls = calls or {}
 
     def register_looping_call(self, name, call):
-        assert name not in self.calls, '{} is already registered'.format(name)
+        assert name not in self.calls, f'{name} is already registered'
         self.calls[name] = call
 
     def start(self, name, *args):

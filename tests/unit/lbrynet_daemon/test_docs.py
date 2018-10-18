@@ -10,7 +10,7 @@ class DaemonDocsTests(unittest.TestCase):
             try:
                 docopt.docopt(fn.__doc__, ())
             except docopt.DocoptLanguageError as err:
-                failures.append("invalid docstring for %s, %s" % (name, err.message))
+                failures.append(f"invalid docstring for {name}, {err.message}")
             except docopt.DocoptExit:
                 pass
         if failures:

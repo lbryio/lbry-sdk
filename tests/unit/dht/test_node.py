@@ -21,7 +21,7 @@ class NodeIDTest(unittest.TestCase):
         previous_ids = []
         for i in range(100):
             new_id = self.node._generateID()
-            self.assertNotIn(new_id, previous_ids, 'id at index {} not unique'.format(i))
+            self.assertNotIn(new_id, previous_ids, f'id at index {i} not unique')
             self.assertEqual(len(new_id), 48, 'id at index {} wrong length: {}'.format(i, len(new_id)))
             previous_ids.append(new_id)
 

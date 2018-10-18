@@ -13,7 +13,7 @@ import os
 
 AES_BLOCK_SIZE_BYTES = int(AES.block_size / 8)
 
-class MocBlob(object):
+class MocBlob:
     def __init__(self):
         self.data = b''
 

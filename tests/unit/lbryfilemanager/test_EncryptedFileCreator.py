@@ -108,6 +108,6 @@ class CreateEncryptedFileTest(unittest.TestCase):
     def test_can_create_file_with_unicode_filename(self):
         expected_stream_hash = ('d1da4258f3ce12edb91d7e8e160d091d3ab1432c2e55a6352dce0'
                                 '2fd5adb86fe144e93e110075b5865fff8617776c6c0')
-        filename = u'☃.file'
+        filename = '☃.file'
         lbry_file = yield self.create_file(filename)
         self.assertEqual(expected_stream_hash, lbry_file.stream_hash)

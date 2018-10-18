@@ -147,15 +147,15 @@ def main(argv=None):
 
     elif method not in Daemon.callable_methods:
         if method not in Daemon.deprecated_methods:
-            print('{} is not a valid command.'.format(method))
+            print(f'{method} is not a valid command.')
             return 1
 
         new_method = Daemon.deprecated_methods[method].new_command
         if new_method is None:
-            print("{} is permanently deprecated and does not have a replacement command.".format(method))
+            print(f"{method} is permanently deprecated and does not have a replacement command.")
             return 0
 
-        print("{} is deprecated, using {}.".format(method, new_method))
+        print(f"{method} is deprecated, using {new_method}.")
         method = new_method
 
     fn = Daemon.callable_methods[method]

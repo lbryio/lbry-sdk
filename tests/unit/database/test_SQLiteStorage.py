@@ -65,7 +65,7 @@ fake_claim_info = {
 }
 
 
-class FakeAnnouncer(object):
+class FakeAnnouncer:
     def __init__(self):
         self._queue_size = 0
 
@@ -73,7 +73,7 @@ class FakeAnnouncer(object):
         return self._queue_size
 
 
-class MocSession(object):
+class MocSession:
     def __init__(self, storage):
         self.storage = storage
 
@@ -167,7 +167,7 @@ class SupportsStorageTests(StorageTest):
         random_supports = [{
             "txid": random_lbry_hash(),
             "nout": i,
-            "address": "addr{}".format(i),
+            "address": f"addr{i}",
             "amount": i
         } for i in range(20)]
         expected_supports = {}

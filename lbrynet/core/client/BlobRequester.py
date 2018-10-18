@@ -27,7 +27,7 @@ def get_points(num_bytes, rate):
 
 def cache(fn):
     """Caches the function call for each instance"""
-    attr = '__{}_value'.format(fn.__name__)
+    attr = f'__{fn.__name__}_value'
 
     def helper(self):
         if not hasattr(self, attr):

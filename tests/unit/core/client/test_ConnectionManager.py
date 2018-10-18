@@ -17,12 +17,12 @@ PEER_PORT = 5551
 LOCAL_HOST = '127.0.0.1'
 
 
-class MocDownloader(object):
+class MocDownloader:
     def insufficient_funds(self):
         pass
 
 
-class MocRequestCreator(object):
+class MocRequestCreator:
 
     def __init__(self, peers_to_return, peers_to_return_head_blob=None):
         self.peers_to_return = peers_to_return
@@ -55,7 +55,7 @@ class MocRequestCreator(object):
         return self.peers_to_return_head_blob
 
 
-class MocFunctionalQueryHandler(object):
+class MocFunctionalQueryHandler:
 
     def __init__(self, clock, is_good=True, is_delayed=False):
         self.query_identifiers = ['moc_request']
@@ -81,7 +81,7 @@ class MocFunctionalQueryHandler(object):
             return defer.succeed({})
 
 
-class MocQueryHandlerFactory(object):
+class MocQueryHandlerFactory:
     # is is_good, the query handler works as expectd,
     # is is_delayed, the query handler will delay its resposne
     def __init__(self, clock, is_good=True, is_delayed=False):

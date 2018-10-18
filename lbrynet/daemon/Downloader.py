@@ -107,8 +107,8 @@ class GetStream:
         if converted_fee_amount > (yield f2d(self.wallet.default_account.get_balance())):
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
         if converted_fee_amount > max_key_fee_amount and not self.disable_max_key_fee:
-            raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee_amount,
-                                                                             max_key_fee_amount))
+            raise KeyFeeAboveMaxAllowed('Key fee {} above max allowed {}'.format(converted_fee_amount,
+                                                                                 max_key_fee_amount))
         converted_fee = {
             'currency': 'LBC',
             'amount': converted_fee_amount,
@@ -120,7 +120,7 @@ class GetStream:
         for factory in factories:
             if isinstance(factory, ManagedEncryptedFileDownloaderFactory):
                 return factory
-        raise Exception('No suitable factory was found in {}'.format(factories))
+        raise Exception(f'No suitable factory was found in {factories}')
 
     @defer.inlineCallbacks
     def get_downloader(self, factory, stream_metadata, file_name=None):
@@ -140,7 +140,7 @@ class GetStream:
         reserved_points = self.wallet.reserve_points(address, fee_lbc)
         if reserved_points is None:
             raise InsufficientFundsError(
-                'Unable to pay the key fee of %s for %s' % (dewies_to_lbc(fee_lbc), name)
+                'Unable to pay the key fee of {} for {}'.format(dewies_to_lbc(fee_lbc), name)
             )
         return f2d(self.wallet.send_points_to_address(reserved_points, fee_lbc))
 

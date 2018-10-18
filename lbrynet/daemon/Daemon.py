@@ -278,7 +278,7 @@ class Daemon(AuthJSONRPCServer):
     def setup(self):
         log.info("Starting lbrynet-daemon")
         log.info("Platform: %s", json.dumps(system_info.get_platform()))
-        yield super(Daemon, self).setup()
+        yield super().setup()
         log.info("Started lbrynet-daemon")
 
     def _stop_streams(self):
@@ -288,7 +288,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _shutdown(self):
         self._stop_streams()
-        return super(Daemon, self)._shutdown()
+        return super()._shutdown()
 
     def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
         """
@@ -597,7 +597,7 @@ class Daemon(AuthJSONRPCServer):
                     lbry_file = l_f
                     break
         else:
-            raise NoValidSearch('{} is not a valid search operation'.format(search_by))
+            raise NoValidSearch(f'{search_by} is not a valid search operation')
         if return_json and lbry_file:
             lbry_file = yield self._get_lbry_file_dict(lbry_file)
         defer.returnValue(lbry_file)
@@ -975,7 +975,7 @@ class Daemon(AuthJSONRPCServer):
         fn = self.callable_methods.get(command)
         if fn is None:
             raise Exception(
-                "No help available for '{}'. It is not a valid command.".format(command)
+                f"No help available for '{command}'. It is not a valid command."
             )
 
         return self._render_response({
@@ -1879,7 +1879,7 @@ class Daemon(AuthJSONRPCServer):
         search_type, value = get_lbry_file_search_value(kwargs)
         lbry_file = yield self._get_lbry_file(search_type, value, return_json=False)
         if not lbry_file:
-            raise Exception('Unable to find a file for {}:{}'.format(search_type, value))
+            raise Exception(f'Unable to find a file for {search_type}:{value}')
 
         if status == 'start' and lbry_file.stopped or status == 'stop' and not lbry_file.stopped:
             yield self.file_manager.toggle_lbry_file_running(lbry_file)
@@ -3273,7 +3273,7 @@ class Daemon(AuthJSONRPCServer):
             certificates = await self.wallet_manager.get_certificates(
                 private_key_accounts=accounts, claim_name=channel_name)
             if not certificates:
-                raise ValueError("Couldn't find channel with name '{}'.".format(channel_name))
+                raise ValueError(f"Couldn't find channel with name '{channel_name}'.")
             return certificates[0]
         raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
 
@@ -3298,7 +3298,7 @@ class Daemon(AuthJSONRPCServer):
                         .format(account_id, account.ledger.symbol, argument_name)
                     )
                 return account
-        raise ValueError("Couldn't find account: {}.".format(account_id))
+        raise ValueError(f"Couldn't find account: {account_id}.")
 
     @staticmethod
     def get_dewies_or_error(argument: str, lbc: str):
@@ -3347,7 +3347,7 @@ def get_lbry_file_search_value(search_fields):
         value = search_fields.get(searchtype, None)
         if value is not None:
             return searchtype, value
-    raise NoValidSearch('{} is missing a valid search type'.format(search_fields))
+    raise NoValidSearch(f'{search_fields} is missing a valid search type')
 
 
 def iter_lbry_file_search_values(search_fields):

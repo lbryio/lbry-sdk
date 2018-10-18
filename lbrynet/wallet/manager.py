@@ -148,7 +148,7 @@ class LbryWalletManager(BaseWalletManager):
         while os.path.isfile(backup_path_template % i):
             i += 1
         os.rename(path, backup_path_template % i)
-        temp_path = "%s.tmp.%s" % (path, os.getpid())
+        temp_path = "{}.tmp.{}".format(path, os.getpid())
         with open(temp_path, "w") as f:
             f.write(migrated_json)
             f.flush()
@@ -241,7 +241,7 @@ class LbryWalletManager(BaseWalletManager):
         account = account or self.default_account
         claims = await account.ledger.db.get_utxos(claim_id=claim_id)
         if not claims:
-            raise NameError("Claim not found: {}".format(claim_id))
+            raise NameError(f"Claim not found: {claim_id}")
         tx = await Transaction.update(
             claims[0], ClaimDict.deserialize(claims[0].script.value['claim']), amount,
             destination_address.encode(), [account], account
@@ -359,7 +359,7 @@ class LbryWalletManager(BaseWalletManager):
                 existing_claims[0], claim, amount, claim_address, [account], account
             )
         else:
-            raise NameError("More than one other claim exists with the name '{}'.".format(name))
+            raise NameError(f"More than one other claim exists with the name '{name}'.")
         await account.ledger.broadcast(tx)
         await self.old_db.save_claims([self._old_get_temp_claim_info(
             tx, tx.outputs[0], claim_address, claim_dict, name, amount
@@ -480,7 +480,7 @@ class LBRYcrdAddressRequester:
     def _handle_address_response(self, response_dict, peer, request, protocol):
         if request.response_identifier not in response_dict:
             raise ValueError(
-                "Expected {} in response but did not get it".format(request.response_identifier))
+                f"Expected {request.response_identifier} in response but did not get it")
         assert protocol in self._protocols, "Responding protocol is not in our list of protocols"
         address = response_dict[request.response_identifier]
         self.wallet.update_peer_address(peer, address)

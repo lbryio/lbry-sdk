@@ -98,7 +98,7 @@ class ThePublisherOfThings:
 
         for block in range(self.blocks):
             for txn in range(self.txns_per_block):
-                name = 'block{}txn{}'.format(block, txn)
+                name = f'block{block}txn{txn}'
                 self.profiler.start('total')
                 yield self.service.lbry.daemon.jsonrpc_publish(
                     name=name, bid=self.random.randrange(1, 5)/1000.0,
@@ -124,9 +124,9 @@ def generate_publishes(_):
     yield pub.start()
     yield pub.generate_publishes()
     yield pub.stop()
-    print('lbrycrd: {}'.format(pub.service.lbrycrd.data_path))
-    print('lbrynet: {}'.format(pub.service.lbry.data_path))
-    print('lbryumserver: {}'.format(pub.service.lbryumserver.data_path))
+    print(f'lbrycrd: {pub.service.lbrycrd.data_path}')
+    print(f'lbrynet: {pub.service.lbry.data_path}')
+    print(f'lbryumserver: {pub.service.lbryumserver.data_path}')
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from tests.util import random_lbry_hash
 from tests.mocks import mock_conf_settings
 
 
-class MocDHTNode(object):
+class MocDHTNode:
     def __init__(self):
         self.blobs_announced = 0
         self.clock = task.Clock()
@@ -20,7 +20,7 @@ class MocDHTNode(object):
         return d
 
 
-class MocStorage(object):
+class MocStorage:
     def __init__(self, blobs_to_announce):
         self.blobs_to_announce = blobs_to_announce
         self.announced = False

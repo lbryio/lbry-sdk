@@ -105,7 +105,7 @@ To exit:
 """
 
 welcome = "{:*^60}\n".format(" Welcome to the lbrynet interactive console! ")
-welcome += "\n".join(["{:<60}".format(w) for w in welcometext.splitlines()])
+welcome += "\n".join([f"{w:<60}" for w in welcometext.splitlines()])
 welcome += "\n%s" % ("*" * 60)
 welcome = color(welcome, "grey")
 banner = color(logo, "green") + color(welcome, "grey")
@@ -156,7 +156,7 @@ def run_terminal(callable_methods, started_daemon, quiet=False):
             try:
                 reactor.callLater(0, reactor.stop)
             except Exception as err:
-                print("error stopping reactor: {}".format(err))
+                print(f"error stopping reactor: {err}")
             return sys.exit(status)
 
         locs.update({'exit': exit})

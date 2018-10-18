@@ -41,7 +41,7 @@ class DiskBlobManager:
         blob that is already on the hard disk
         """
         if length is not None and not isinstance(length, int):
-            raise Exception("invalid length type: %s (%s)" % (length, str(type(length))))
+            raise Exception("invalid length type: {} ({})".format(length, str(type(length))))
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
         return self._make_new_blob(blob_hash, length)

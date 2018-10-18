@@ -186,4 +186,4 @@ class HTTPBlobDownloader:
 
 
 def url_for(server, blob_hash=''):
-    return 'http://{}/{}'.format(server, blob_hash)
+    return f'http://{server}/{blob_hash}'

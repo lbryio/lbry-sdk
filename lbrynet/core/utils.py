@@ -195,7 +195,7 @@ class DeferredProfiler:
             caller: [(start, finished, finished - start, success)
                      for (start, finished, _caller, success) in profile_results
                      if _caller == caller]
-            for caller in set(result[2] for result in profile_results)
+            for caller in {result[2] for result in profile_results}
         }
 
         log.info("called %s %i times from %i sources\n", fn.__name__, len(profile_results), len(call_counts))

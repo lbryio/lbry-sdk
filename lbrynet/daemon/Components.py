@@ -59,7 +59,7 @@ def get_wallet_config():
     if wallet_type == conf.LBRYCRD_WALLET:
         raise ValueError('LBRYcrd Wallet is no longer supported')
     elif wallet_type != conf.LBRYUM_WALLET:
-        raise ValueError('Wallet Type {} is not valid'.format(wallet_type))
+        raise ValueError(f'Wallet Type {wallet_type} is not valid')
     lbryum_servers = {address: {'t': str(port)}
                           for address, port in GCS('lbryum_servers')}
     config = {
@@ -209,7 +209,7 @@ class HeadersComponent(Component):
             self._headers_progress_percent = math.ceil(local_size / final_size * 100)
 
         local_header_size = self.local_header_file_size()
-        resume_header = {"Range": "bytes={}-".format(local_header_size)}
+        resume_header = {"Range": f"bytes={local_header_size}-"}
         response = yield treq.get(HEADERS_URL, headers=resume_header)
         got_406 = response.code == 406  # our file is bigger
         final_size_after_download = response.length + local_header_size
@@ -283,7 +283,7 @@ class HeadersComponent(Component):
             hashsum.update(headers_file.read(checksum_length_in_bytes))
         current_checksum = hashsum.hexdigest()
         if current_checksum != checksum:
-            msg = "Expected checksum {}, got {}".format(checksum, current_checksum)
+            msg = f"Expected checksum {checksum}, got {current_checksum}"
             log.warning("Wallet file corrupted, checksum mismatch. " + msg)
             log.warning("Deleting header file so it can be downloaded again.")
             os.unlink(self.headers_file)
@@ -663,7 +663,7 @@ class ReflectorComponent(Component):
             log.info('Started reflector on port %s', self.reflector_server_port)
         except error.CannotListenError as e:
             log.exception("Couldn't bind reflector to port %d", self.reflector_server_port)
-            raise ValueError("{} lbrynet may already be running on your computer.".format(e))
+            raise ValueError(f"{e} lbrynet may already be running on your computer.")
 
     @defer.inlineCallbacks
     def stop(self):

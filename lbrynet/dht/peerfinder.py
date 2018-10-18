@@ -55,7 +55,7 @@ class DHTPeerFinder(DummyPeerFinder):
             finished_deferred.addTimeout(timeout, self.dht_node.clock)
         try:
             peer_list = yield finished_deferred
-            self.peers[blob_hash].update(set((host, port) for _, host, port in peer_list))
+            self.peers[blob_hash].update({(host, port) for _, host, port in peer_list})
         except defer.TimeoutError:
             log.debug("DHT timed out while looking peers for blob %s after %s seconds", blob_hash, timeout)
         finally:
@@ -63,4 +63,4 @@ class DHTPeerFinder(DummyPeerFinder):
 
     def _filter_self(self, blob_hash):
         my_host, my_port = self.dht_node.externalIP, self.dht_node.peerPort
-        return set((host, port) for host, port in self.peers[blob_hash] if (host, port) != (my_host, my_port))
+        return {(host, port) for host, port in self.peers[blob_hash] if (host, port) != (my_host, my_port)}

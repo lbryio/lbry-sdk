@@ -45,7 +45,7 @@ def resolve(name, timeout=(1, 3, 11, 45)):
     return defer.succeed(MOCK_DHT_SEED_DNS[name])
 
 
-class MockUDPTransport(object):
+class MockUDPTransport:
     def __init__(self, address, port, max_packet_size, protocol):
         self.address = address
         self.port = port
@@ -61,7 +61,7 @@ class MockUDPTransport(object):
             pass
 
 
-class MockUDPPort(object):
+class MockUDPPort:
     def __init__(self, protocol, remover):
         self.protocol = protocol
         self._remover = remover
@@ -75,7 +75,7 @@ class MockUDPPort(object):
         return result
 
 
-class MockNetwork(object):
+class MockNetwork:
     peers = {}  # (interface, port): (protocol, max_packet_size)
 
     @classmethod
