@@ -27,7 +27,6 @@ setup(
     python_requires='>=3.6',
     install_requires=(
         'aiorpcx',
-        'aiosqlite',
         'coincurve',
         'pbkdf2',
         'cryptography'
