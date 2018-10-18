@@ -118,7 +118,7 @@ class ReflectorServer(Protocol):
         if self.receiving_blob:
             self.blob_writer.write(data)
         else:
-            log.debug('Not yet recieving blob, data needs further processing')
+            log.debug('Not yet receiving blob, data needs further processing')
             self.request_buff += data
             msg, extra_data = self._get_valid_response(self.request_buff)
             if msg is not None:

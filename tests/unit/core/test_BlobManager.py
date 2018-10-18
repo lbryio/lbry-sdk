@@ -128,7 +128,7 @@ class BlobManagerTest(unittest.TestCase):
         count = yield self.bm.count_should_announce_blobs()
         self.assertEqual(1, count)
 
-        # set should annouce to False
+        # set should announce to False
         yield self.bm.set_should_announce(blob_hash, should_announce=False)
         out = yield self.bm.get_should_announce(blob_hash)
         self.assertFalse(out)

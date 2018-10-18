@@ -83,7 +83,7 @@ def download_it(peer, timeout, blob_hash):
                     if info:
                         break
 
-                    # there's some kind of race condition where it sometimes doesnt write the blob to disk in time
+                    # there's some kind of race condition where it sometimes doesn't write the blob to disk in time
                     time.sleep(0.1)
 
                 if info is not None:
