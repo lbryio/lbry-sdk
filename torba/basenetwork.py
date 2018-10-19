@@ -1,6 +1,7 @@
 import logging
-from itertools import cycle
+import asyncio
 from asyncio import CancelledError
+from itertools import cycle
 
 from aiorpcx import ClientSession as BaseClientSession
 
@@ -51,6 +52,7 @@ class BaseNetwork:
 
     async def start(self):
         self.running = True
+        delay = 0.0
         for server in cycle(self.config['default_servers']):
             connection_string = '{}:{}'.format(*server)
             self.client = ClientSession(*server, network=self)
@@ -59,6 +61,7 @@ class BaseNetwork:
                 await self.ensure_server_version()
                 log.info("Successfully connected to SPV wallet server: %s", connection_string)
                 self._on_connected_controller.add(True)
+                delay = 0.0
                 await self.client.on_disconnected.first
             except (Exception, CancelledError):  # pylint: disable=broad-except
                 log.exception("Connecting to %s raised an exception:", connection_string)
@@ -67,6 +70,8 @@ class BaseNetwork:
             elif self.client:
                 await self.client.close()
                 self.client.connection.cancel_pending_requests()
+                await asyncio.sleep(delay)
+                delay = min(delay + 1.0, 10.0)
 
     async def stop(self):
         self.running = False
