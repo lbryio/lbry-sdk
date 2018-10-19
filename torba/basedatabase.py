@@ -293,21 +293,14 @@ class BaseDatabase(SQLiteMixin):
                 "SELECT position FROM txo", txid=tx.id
             ))))
 
-            txos_insert = []
             for txo in tx.outputs:
                 if txo.position in existing_txos:
                     continue
                 if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
-                    txos_insert.append(
-                        (tx.id, txo.id, address, txo.position, txo.amount, sqlite3.Binary(txo.script.source))
-                    )
+                    conn.execute(*self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
                 elif txo.script.is_pay_script_hash:
                     # TODO: implement script hash payments
                     log.warning('Database.save_transaction_io: pay script hash is not implemented!')
-            conn.executemany(
-                'INSERT INTO txo (txid, txoid, address, position, amount, script) values (?, ?, ?, ?, ?, ?)',
-                txos_insert
-            )
 
             # lookup the address associated with each TXI (via its TXO)
             txoid_to_address = {r[0]: r[1] for r in conn.execute(*query(
@@ -319,14 +312,16 @@ class BaseDatabase(SQLiteMixin):
                 "SELECT txoid FROM txi", txid=tx.id
             ))}
 
-            txis_insert = []
             for txi in tx.inputs:
                 txoid = txi.txo_ref.id
                 new_txi = txoid not in existing_txis
                 address_matches = txoid_to_address.get(txoid) == address
                 if new_txi and address_matches:
-                    txis_insert.append((tx.id, txoid, address))
-            conn.executemany('INSERT INTO txi (txid, txoid, address) VALUES (?, ?, ?)', txis_insert)
+                    conn.execute(*self._insert_sql("txi", {
+                        'txid': tx.id,
+                        'txoid': txoid,
+                        'address': address,
+                    }))
             conn.execute(
                 "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
                 (history, history.count(':')//2, address)
