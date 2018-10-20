@@ -1,3 +1,4 @@
+import os
 from setuptools import setup, find_packages
 
 import torba
@@ -10,6 +11,9 @@ setup(
     author='LBRY Inc.',
     author_email='hello@lbry.io',
     description='Wallet library for bitcoin based currencies.',
+    long_description=open(os.path.join(os.path.dirname(__file__), 'README.md'),
+                          encoding='utf-8').read(),
+    long_description_content_type="text/markdown",
     keywords='wallet,crypto,currency,money,bitcoin,lbry',
     classifiers=(
         'Framework :: AsyncIO',
