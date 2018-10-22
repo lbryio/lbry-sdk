@@ -84,6 +84,7 @@ jobs:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
         - pip3 install git+https://github.com/lbryio/lbryschema.git
+        - python scripts/set_build.py
         - pip3 install -e .
       script:
         - pyinstaller -F -n lbrynet lbrynet/cli.py
