@@ -7,7 +7,47 @@ regard to the json-rpc api.  As we're currently pre-1.0 release, we
 can and probably will change functionality and break backwards compatibility
 at anytime.
 
-## [0.30.0] - 2018-10-17
+
+## Unreleased
+
+### Security
+  *
+  *
+
+### API
+  *
+  *
+
+### Wallet
+  *
+  *
+
+### File Manager
+  *
+  *
+
+### DHT
+  *
+  *
+
+### P2P
+  *
+  *
+
+### Reflector
+  *
+  *
+
+### Database
+  *
+  *
+
+### Known Issues
+  *
+  *
+
+
+## [0.30.0] - 2018-10-22
 This release is the most ambitious upgrade to lbrynet yet; including a brand
 new wallet implementation, switch to Python 3 of the entire code base and
 many changes to the API such as pagination and a more consistent output from
@@ -58,6 +98,7 @@ most commands.
   * removed `send_amount_to_address` command previously marked as deprecated
   * removed `channel_list_mine` command previously marked as deprecated
   * removed `get_availability` command previously marked as deprecated
+  * updated `txupnp` dependency to `aioupnp` (UPnP for asyncio)
 
 ### Wallet
   * changed to a new wallet implementation: [torba](https://github.com/lbryio/torba).
