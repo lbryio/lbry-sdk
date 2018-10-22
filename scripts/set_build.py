@@ -17,7 +17,7 @@ def main():
 def get_build():
     try:
         tag = subprocess.check_output(['git', 'describe', '--exact-match', '--all']).strip()
-        if re.match('v\d+\.\d+\.\d+rc\d+', tag):
+        if re.match('v\d+\.\d+\.\d+rc\d+', tag.decode()):
             return 'rc'
         else:
             return 'release'
