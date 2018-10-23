@@ -353,7 +353,7 @@ class AvailabilityRequest(RequestHelper):
         # save available blobs
         blob_hashes = response_dict['available_blobs']
         if not blob_hashes:
-            # should not send any more requests as it doesnt have any blob we need
+            # should not send any more requests as it doesn't have any blob we need
             self.update_local_score(-10.0)
             return True
         for blob_hash in blob_hashes:

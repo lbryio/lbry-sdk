@@ -22,9 +22,9 @@ Once python 3 is installed run `python3 -m pip install virtualenv` to install vi
 Windows users will need to install `Visual C++ Build Tools`, which can be installed by [Microsoft Build Tools](Microsoft Build Tools 2015)
 
 
-### OS X
+### macOS
 
-OS X users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
+macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
 
 Remaining dependencies can then be installed by running:
 

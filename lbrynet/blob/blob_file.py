@@ -52,7 +52,7 @@ class BlobFile:
     def open_for_writing(self, peer):
         """
         open a blob file to be written by peer, supports concurrent
-        writers, as long as they are from differnt peers.
+        writers, as long as they are from different peers.
 
         returns tuple of (writer, finished_deferred)
 
@@ -115,7 +115,7 @@ class BlobFile:
     def verified(self):
         """
         Protect verified from being modified by other classes.
-        verified is True if a write to a blob has completed succesfully,
+        verified is True if a write to a blob has completed successfully,
         or a blob has been read to have the same length as specified
         in init
         """

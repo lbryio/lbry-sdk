@@ -11,7 +11,7 @@ class Peer:
         self.attempt_connection_at = None
         # Number of times this Peer has been reported to be down, resets to 0 when it is up
         self.down_count = 0
-        # Number of succesful connections (with full protocol completion) to this peer
+        # Number of successful connections (with full protocol completion) to this peer
         self.success_count = 0
         self.score = 0
         self.stats = defaultdict(float)  # {string stat_type, float count}

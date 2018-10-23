@@ -11,6 +11,7 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.client.ConnectionManager import ConnectionManager
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet.dht.peerfinder import DummyPeerFinder
 
 
@@ -96,10 +97,13 @@ class SinglePeerDownloader:
     @defer.inlineCallbacks
     def download_temp_blob_from_peer(self, peer, timeout, blob_hash):
         tmp_dir = yield threads.deferToThread(tempfile.mkdtemp)
-        tmp_blob_manager = DiskBlobManager(tmp_dir, tmp_dir)
+        tmp_storage = SQLiteStorage(tmp_dir)
+        yield tmp_storage.setup()
+        tmp_blob_manager = DiskBlobManager(tmp_dir, tmp_storage)
         try:
             result = yield self.download_blob_from_peer(peer, timeout, blob_hash, tmp_blob_manager)
         finally:
             yield tmp_blob_manager.stop()
+            yield tmp_storage.stop()
             yield threads.deferToThread(shutil.rmtree, tmp_dir)
         defer.returnValue(result)

@@ -246,7 +246,7 @@ def configure_twisted():
 class LoggerNameFilter:
     """Filter a log record based on its name.
 
-    Allows all info level and higher records to pass thru.
+    Allows all info level and higher records to pass through.
     Debug records pass if the log record name (or a parent) match
     the input list of logger names.
     """

@@ -130,7 +130,7 @@ class TestIntegrationConnectionManager(TestCase):
         self.server_port = None
 
     def _init_connection_manager(self, seek_head_blob_first=False):
-        # this import is requierd here so utils.call_later is replaced by self.clock.callLater
+        # this import is required here so utils.call_later is replaced by self.clock.callLater
         from lbrynet.core.client.ConnectionManager import ConnectionManager
         self.connection_manager = ConnectionManager(self.downloader, self.rate_limiter,
                                                     [self.primary_request_creator], [])

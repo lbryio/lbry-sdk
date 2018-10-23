@@ -94,6 +94,10 @@ class Account(BaseAccount):
                 try:
                     txid, nout = maybe_claim_id.split(':')
                     tx = await self.ledger.db.get_transaction(txid=txid)
+                    if not tx:
+                        log.warning("Claim migration failed to find a transaction for outpoint %s:%i")
+                        results['previous-corrupted'] += 1
+                        continue
                     if tx.outputs[int(nout)].script.is_claim_involved:
                         results['previous-success'] += 1
                     else:

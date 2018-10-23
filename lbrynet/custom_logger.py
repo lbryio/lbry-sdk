@@ -69,7 +69,7 @@ class Logger(logging.Logger):
         Returns: a function that takes the following arguments:
             err: twisted.python.failure.Failure
             msg: the message to log, using normal logging string iterpolation.
-            msg_args: the values to subtitute into `msg`
+            msg_args: the values to substitute into `msg`
             msg_kwargs: set `level` to change from the default ERROR severity. Other
                 keywoards are treated as normal log kwargs.
         """

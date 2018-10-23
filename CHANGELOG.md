@@ -7,7 +7,47 @@ regard to the json-rpc api.  As we're currently pre-1.0 release, we
 can and probably will change functionality and break backwards compatibility
 at anytime.
 
-## [0.30.0] - 2018-10-17
+
+## Unreleased
+
+### Security
+  *
+  *
+
+### API
+  *
+  *
+
+### Wallet
+  *
+  *
+
+### File Manager
+  *
+  *
+
+### DHT
+  *
+  *
+
+### P2P
+  *
+  *
+
+### Reflector
+  *
+  *
+
+### Database
+  *
+  *
+
+### Known Issues
+  *
+  *
+
+
+## [0.30.0] - 2018-10-22
 This release is the most ambitious upgrade to lbrynet yet; including a brand
 new wallet implementation, switch to Python 3 of the entire code base and
 many changes to the API such as pagination and a more consistent output from
@@ -54,9 +94,11 @@ most commands.
   * added `address_unused` command to get existing or generate a new unused address.
   * added pagination support for `address_list`, `channel_list`, `claim_list_mine`,
     `transaction_list` and `utxo_list`.
+  * added `upnp` field to `status` response
   * removed `send_amount_to_address` command previously marked as deprecated
   * removed `channel_list_mine` command previously marked as deprecated
   * removed `get_availability` command previously marked as deprecated
+  * updated `txupnp` dependency to `aioupnp` (UPnP for asyncio)
 
 ### Wallet
   * changed to a new wallet implementation: [torba](https://github.com/lbryio/torba).
@@ -444,7 +486,7 @@ most commands.
  * Fixed https://github.com/lbryio/lbry/issues/923
  * Fixed concurrent reflects opening too many files
  * Fixed cases when reflecting would fail on error conditions
- * Fixed deadlocks from occuring during blob writes
+ * Fixed deadlocks from occurring during blob writes
  * Fixed and updated`lbrynet.tests.dht`
  * Fixed redundant dht id
  * Fixed dht `ping` method
@@ -831,7 +873,7 @@ most commands.
  * Removed check_pending logic from Daemon
  * Switched to txrequests so requests can use twisted event loop
  * Renamed API command file_seed to file_set_status
- * Dont add expected payment to wallet when payment rate is 0
+ * Don't add expected payment to wallet when payment rate is 0
 ### Fixed
  * Fix restart procedure in DaemonControl
  * Create download directory if it doesn't exist
@@ -862,7 +904,7 @@ most commands.
  * Added string comparison to ClaimOutpoint (needed to look things up by outpoint)
  * Remove unused API commands from daemon
  * Fix file filter `outpoint`
- * Made dictionary key names in API commmand outputs to be more consistent
+ * Made dictionary key names in API command outputs to be more consistent
 ### Added
  * Add file filters: `claim_id`, `outpoint`, and `rowid`
  * Make loggly logs less verbose
@@ -914,7 +956,7 @@ most commands.
  * Include download url in version check
 
 ### Fixed
- * add misssing traceback to logging
+ * add missing traceback to logging
 
 ## [0.8.3] - 2017-02-15
 ### Fixed

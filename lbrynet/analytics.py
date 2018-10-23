@@ -19,6 +19,7 @@ CLAIM_ACTION = 'Claim Action'  # publish/create/update/abandon
 NEW_CHANNEL = 'New Channel'
 CREDITS_SENT = 'Credits Sent'
 NEW_DOWNLOAD_STAT = 'Download'
+UPNP_SETUP = "UPnP Setup"
 
 BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 
@@ -68,6 +69,14 @@ class Manager:
             'context': self.context,
             'timestamp': utils.isonow(),
         })
+
+    def send_upnp_setup_success_fail(self, success, status):
+        self.analytics_api.track(
+            self._event(UPNP_SETUP, {
+                'success': success,
+                'status': status,
+            })
+        )
 
     def send_server_startup(self):
         self.analytics_api.track(self._event(SERVER_STARTUP))

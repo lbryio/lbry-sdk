@@ -57,7 +57,7 @@ class MockUDPTransport:
             dest = MockNetwork.peers[address][0]
             debug_kademlia_packet(data, (self.address, self.port), address, self._node)
             dest.datagramReceived(data, (self.address, self.port))
-        else:  # the node is sending to an address that doesnt currently exist, act like it never arrived
+        else:  # the node is sending to an address that doesn't currently exist, act like it never arrived
             pass
 
 

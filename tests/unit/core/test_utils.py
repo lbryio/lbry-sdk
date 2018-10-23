@@ -23,13 +23,13 @@ class CompareVersionTest(unittest.TestCase):
 
 class ObfuscationTest(unittest.TestCase):
     def test_deobfuscation_reverses_obfuscation(self):
-        plain = "my_test_string".encode()
-        obf = utils.obfuscate(plain)
+        plain = "my_test_string"
+        obf = utils.obfuscate(plain.encode())
         self.assertEqual(plain, utils.deobfuscate(obf))
 
     def test_can_use_unicode(self):
-        plain = '☃'.encode()
-        obf = utils.obfuscate(plain)
+        plain = '☃'
+        obf = utils.obfuscate(plain.encode())
         self.assertEqual(plain, utils.deobfuscate(obf))
 
 
