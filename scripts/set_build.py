@@ -17,9 +17,9 @@ def main():
 def get_build():
     try:
         tag = subprocess.check_output(['git', 'describe', '--exact-match', '--all']).strip()
-        if re.match('v\d+\.\d+\.\d+rc\d+', tag.decode()):
+        if re.match('tags\/v\d+\.\d+\.\d+rc\d+$', tag.decode()):
             return 'rc'
-        elif re.match('v\d+\.\d+\.\d+$', tag.decode()):
+        elif re.match('tags\/v\d+\.\d+\.\d+$', tag.decode()):
             return 'release'
         return 'qa'
     except subprocess.CalledProcessError:
