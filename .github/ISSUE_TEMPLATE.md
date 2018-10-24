@@ -51,3 +51,24 @@ Tell us what happens instead
 
 ## Screenshots
 <!-- If a screenshot would help explain the bug, please include one or two here -->
+
+
+
+## Internal Use
+
+### Acceptance Criteria
+1.
+2.
+3.
+
+### Definition of Done
+- [ ]  Tested against acceptance criteria
+- [ ] Tested against the assumptions of user story
+- [ ] The project builds without errors
+- [ ] Unit tests are written and passing
+- [ ] Tests on devices/browsers listed in the issue have passed
+- [ ] QA performed & issues resolved
+- [ ] Refactoring completed
+- [ ] Any configuration or build changes documented
+- [ ] Documentation updated
+- [ ] Peer Code Review performed
