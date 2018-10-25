@@ -307,7 +307,7 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     async def update_account(self, account: baseaccount.BaseAccount):
         await account.ensure_address_gap()
-        addresses = await account.get_addresses(used_times=0)
+        addresses = await account.get_addresses()
         while addresses:
             await asyncio.gather(*(self.subscribe_history(a) for a in addresses))
             addresses = await account.ensure_address_gap()
