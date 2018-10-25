@@ -2295,7 +2295,7 @@ class Daemon(AuthJSONRPCServer):
         except DecodeError as err:
             # there was a problem with a metadata field, raise an error here rather than
             # waiting to find out when we go to publish the claim (after having made the stream)
-            raise Exception("invalid publish metadata: %s" % err.message)
+            raise Exception(f"invalid publish metadata: {err}")
 
         certificate = None
         if channel_id or channel_name:

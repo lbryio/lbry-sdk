@@ -334,7 +334,9 @@ class ContentClaimStorageTests(StorageTest):
         invalid_update_info['nout'] = 0
         invalid_update_info['claim_id'] = "beef0002" * 5
         invalid_update_outpoint = "%s:%i" % (invalid_update_info['txid'], invalid_update_info['nout'])
-        with self.assertRaisesRegex(Exception, "invalid stream update"):
+        with self.assertRaisesRegex(Exception, "mismatching claim ids when updating stream "
+                                               "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef "
+                                               "vs beef0002beef0002beef0002beef0002beef0002"):
             yield self.storage.save_claims([invalid_update_info])
             yield self.storage.save_content_claim(stream_hash, invalid_update_outpoint)
         current_claim_info = yield self.storage.get_content_claim(stream_hash)
