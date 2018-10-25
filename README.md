@@ -26,6 +26,10 @@ Installing from source is also relatively painless, full instructions are in [IN
 
 Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.io/faq/contributing) link.
 
+## How to use wallet
+
+
+
 ## License
 
 This project is MIT licensed. For the full license, see [LICENSE](LICENSE).
