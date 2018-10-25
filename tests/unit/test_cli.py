@@ -1,5 +1,4 @@
 import contextlib
-import json
 from io import StringIO
 from twisted.trial import unittest
 
