@@ -15,8 +15,8 @@ at anytime.
   *
 
 ### API
-  *
-  *
+  * add `aioupnp_version` to `upnp` field in the response to `status`
+  * fix uncaught claim signature errors
 
 ### Wallet
   *
