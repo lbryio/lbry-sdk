@@ -30,7 +30,7 @@ class HTTPSHandler(logging.Handler):
     @defer.inlineCallbacks
     def _emit(self, record):
         payload = self.format(record)
-        response = yield treq.post(self.url, data=payload, cookies=self.cookies)
+        response = yield treq.post(self.url, data=payload.encode(), cookies=self.cookies)
         self.cookies.update(response.cookies())
 
     def emit(self, record):

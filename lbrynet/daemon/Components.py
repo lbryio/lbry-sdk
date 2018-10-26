@@ -8,6 +8,7 @@ from hashlib import sha256
 from types import SimpleNamespace
 from twisted.internet import defer, threads, reactor, error, task
 import lbryschema
+from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
 from lbrynet import conf
@@ -792,8 +793,9 @@ class UPnPComponent(Component):
 
     def get_status(self):
         return {
+            'aioupnp_version': aioupnp_version,
             'redirects': self.upnp_redirects,
-            'gateway': '' if not self.upnp else self.upnp.gateway.manufacturer_string,
+            'gateway': 'No gateway found' if not self.upnp else self.upnp.gateway.manufacturer_string,
             'dht_redirect_set': 'UDP' in self.upnp_redirects,
             'peer_redirect_set': 'TCP' in self.upnp_redirects,
             'external_ip': self.external_ip

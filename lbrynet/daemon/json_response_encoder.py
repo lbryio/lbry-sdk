@@ -2,6 +2,7 @@ from decimal import Decimal
 from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
+from ecdsa import BadSignatureError
 from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.wallet.ledger import MainNetLedger
@@ -68,9 +69,12 @@ class JSONResponseEncoder(JSONEncoder):
                     output['valid_signature'] = None
                     if txo.channel is not None:
                         output['channel_name'] = txo.channel.claim_name
-                        output['valid_signature'] = claim.validate_signature(
-                            txo.get_address(self.ledger), txo.channel.claim
-                        )
+                        try:
+                            output['valid_signature'] = claim.validate_signature(
+                                txo.get_address(self.ledger), txo.channel.claim
+                            )
+                        except BadSignatureError:
+                            output['valid_signature'] = False
 
             if txo.script.is_claim_name:
                 output['type'] = 'claim'

@@ -709,7 +709,9 @@ class SQLiteStorage:
                 "select claim_id from claim where claim_outpoint=?", current_associated_content
             ).fetchone()[0]
             if current_associated_claim_id != new_claim_id:
-                raise Exception("invalid stream update")
+                raise Exception(
+                    f"mismatching claim ids when updating stream {current_associated_claim_id} vs {new_claim_id}"
+                )
 
         # update the claim associated to the file
         transaction.execute("insert or replace into content_claim values (?, ?)", (stream_hash, claim_outpoint))
