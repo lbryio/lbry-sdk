@@ -30,7 +30,7 @@ setup(
     packages=find_packages(exclude=('tests',)),
     python_requires='>=3.6',
     install_requires=(
-        'aiorpcx',
+        'aiorpcx==0.8.2',
         'coincurve',
         'pbkdf2',
         'cryptography'
