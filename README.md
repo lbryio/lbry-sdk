@@ -1,4 +1,5 @@
 # <img src="https://raw.githubusercontent.com/lbryio/lbry/master/lbry.png" alt="LBRY" width="48" height="36" /> LBRY [![Build Status](https://travis-ci.org/lbryio/lbry.svg?branch=master)](https://travis-ci.org/lbryio/lbry) [![Test Coverage](https://codecov.io/gh/lbryio/lbry/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry)
+[![MIT licensed](https://img.shields.io/dub/l/vibe-d.svg?style=flat)(https://github.com/lbryio/lbry/blob/master/LICENSE)
 
 LBRY is an open-source protocol providing distribution, discovery, and purchase of digital content (data) via a decentralized network. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, and rights and access rules. LBRY also provides a data network that consists of peers uploading and downloading data from other peers, possibly in exchange for payments, and a distributed hash table, used by peers to discover other peers.
 
