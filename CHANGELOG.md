@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/) with
-regard to the json-rpc api.  As we're currently pre-1.0 release, we
+regard to the JSON-RPC API. As we're currently on the pre-1.0 release, we
 can and probably will change functionality and break backwards compatibility
 at anytime.
 
@@ -55,56 +55,56 @@ most commands.
 
 
 ### Security
-  * upgraded `cryptography` package.
-  * switch to `coincurve` for private / public key generation (addresses)
-  * support for connecting to daemon via SSL
-  * improved workflow for encrypt/decrypt of wallet
+  * Upgraded `cryptography` package.
+  * Switch to `coincurve` for private / public key generation (addresses)
+  * Support for connecting to daemon via SSL
+  * Improved workflow for encrypt/decrypt of wallet
 
 ### API
-  * unified all command line executables into a single `lbrynet` executable.
-  * added `use_https` configuration setting (off by default), if true the api
-    server will generate a self signed ssl certificate when started and only
-    handle api requests on the https address (default of `https://localhost:5279/lbryapi`)
-  * deprecated `daemon_stop` command, use `stop` instead.
-  * deprecated `wallet_balance` command, use `account_balance` instead.
-  * deprecated `wallet_unlock` command, use `account_unlock` instead.
-  * deprecated `wallet_decrypt` command, use `account_decrypt` instead.
-  * deprecated `wallet_encrypt` command, use `account_encrypt` instead.
-  * deprecated `wallet_prefill_addresses` command, use `account_fund` instead.
-  * deprecated `wallet_list` command, use `address_list` instead.
-  * deprecated `wallet_is_address_mine` command, use `address_is_mine` instead.
-  * deprecated `wallet_public_key` command.
-  * deprecated `wallet_new_address` command.
-  * deprecated `wallet_unused_address` command, use `address_unused` instead.
-  * deprecated `claim_renew` command.
-  * added `account_list` command to list accounts including their balance.
-  * added `account_add` command to add a previously created account from seed or private key.
-  * added `account_create` command to generate a new account.
-  * added `account_remove` command to remove an account from wallet.
-  * added `account_set` command to change a setting on an account.
-  * added `account_balance` command to get just the account balance.
-  * added `account_unlock` command to unlock an encrypted account.
-  * added `account_lock` command to lock an encrypted account.
-  * added `account_encrypt` command to encrypt an account.
-  * added `account_decrypt` command to decrypt an account.
-  * added `account_fund` command to move funds between or within an account in various ways.
-  * added `account_max_address_gap` command to find large gaps of unused addresses.
-  * added `address_list` command to list addresses.
-  * added `address_is_mine` command to check if an address is one of your addresses.
-  * added `address_unused` command to get existing or generate a new unused address.
-  * added pagination support for `address_list`, `channel_list`, `claim_list_mine`,
+  * Unified all command line executables into a single `lbrynet` executable.
+  * Added `use_https` configuration setting (off by default). If true, the API
+    server will generate a self-signed SSL certificate when started and only
+    handle API requests on the HTTPS address (default of `https://localhost:5279/lbryapi`)
+  * Deprecated `daemon_stop` command, use `stop` instead.
+  * Deprecated `wallet_balance` command, use `account_balance` instead.
+  * Deprecated `wallet_unlock` command, use `account_unlock` instead.
+  * Deprecated `wallet_decrypt` command, use `account_decrypt` instead.
+  * Deprecated `wallet_encrypt` command, use `account_encrypt` instead.
+  * Deprecated `wallet_prefill_addresses` command, use `account_fund` instead.
+  * Deprecated `wallet_list` command, use `address_list` instead.
+  * Deprecated `wallet_is_address_mine` command, use `address_is_mine` instead.
+  * Deprecated `wallet_public_key` command.
+  * Deprecated `wallet_new_address` command.
+  * Deprecated `wallet_unused_address` command, use `address_unused` instead.
+  * Deprecated `claim_renew` command.
+  * Added `account_list` command to list accounts including their balance.
+  * Added `account_add` command to add a previously created account from seed or private key.
+  * Added `account_create` command to generate a new account.
+  * Added `account_remove` command to remove an account from wallet.
+  * Added `account_set` command to change a setting on an account.
+  * Added `account_balance` command to get just the account balance.
+  * Added `account_unlock` command to unlock an encrypted account.
+  * Added `account_lock` command to lock an encrypted account.
+  * Added `account_encrypt` command to encrypt an account.
+  * Added `account_decrypt` command to decrypt an account.
+  * Added `account_fund` command to move funds between or within an account in various ways.
+  * Added `account_max_address_gap` command to find large gaps of unused addresses.
+  * Added `address_list` command to list addresses.
+  * Added `address_is_mine` command to check if an address is one of your addresses.
+  * Added `address_unused` command to get existing or generate a new unused address.
+  * Added pagination support for `address_list`, `channel_list`, `claim_list_mine`,
     `transaction_list` and `utxo_list`.
-  * added `upnp` field to `status` response
-  * removed `send_amount_to_address` command previously marked as deprecated
-  * removed `channel_list_mine` command previously marked as deprecated
-  * removed `get_availability` command previously marked as deprecated
-  * updated `txupnp` dependency to `aioupnp` (UPnP for asyncio)
+  * Added `upnp` field to `status` response
+  * Removed `send_amount_to_address` command previously marked as deprecated
+  * Removed `channel_list_mine` command previously marked as deprecated
+  * Removed `get_availability` command previously marked as deprecated
+  * Updated `txupnp` dependency to `aioupnp` (UPnP for asyncio)
 
 ### Wallet
-  * changed to a new wallet implementation: [torba](https://github.com/lbryio/torba).
-  * changed wallet file format to support multiple accounts in one wallet.
-  * moved transaction data from wallet file into an sqlite database.
-  * changed channel certificates to be keyed by txid:nout instead of claim_id which
+  * Changed to a new wallet implementation: [torba](https://github.com/lbryio/torba).
+  * Changed wallet file format to support multiple accounts in one wallet.
+  * Moved transaction data from wallet file into an sqlite database.
+  * Changed channel certificates to be keyed by txid:nout instead of claim_id which
     makes it possible to recover old certificates.
 
 ### File Manager
@@ -127,8 +127,8 @@ most commands.
 
 ## [0.21.2] - 2018-08-23
 ### Fixed
- * issue in dht ping queue where enqueued pings that aren't yet due wouldn't be rescheduled
- * blob mirror downloader not finishing streams that were partially uploaded at the time of the download attempt (https://github.com/lbryio/lbry/issues/1376)
+ * Issue in DHT ping queue where enqueued pings that aren't yet due wouldn't be rescheduled
+ * Blob mirror downloader not finishing streams that were partially uploaded at the time of the download attempt (https://github.com/lbryio/lbry/issues/1376)
 
 
 ## [0.21.1] - 2018-08-13
@@ -144,93 +144,93 @@ most commands.
 
 ## [0.21.0] - 2018-08-09
 ### Fixed
- * check `claim_address` and `change_address` earlier on publishing, to avoid hard to understand errors later in the process (pr https://github.com/lbryio/lbry/pull/1347)
- * loggly error reporting not following `share_usage_data` (pr https://github.com/lbryio/lbry/pull/1328)
- * improper error handling when data is not valid JSON (pr https://github.com/lbryio/lbry/pull/1326)
- * blob mirroring being set in unrelated tests, making them fail (pr https://github.com/lbryio/lbry/pull/1348)
- * http blob mirroring edge cases (pr https://github.com/lbryio/lbry/pull/1315)
- * external ports in log messages not showing the correct external port from the upnp redirects (https://github.com/lbryio/lbry/issues/1338) (pr https://github.com/lbryio/lbry/pull/1349)
- * miniupnpc fallback issues in txupnp (https://github.com/lbryio/lbry/issues/1341) (pr https://github.com/lbryio/lbry/pull/1349)
- * upnp error when disabled on router and a non-gateway is found, such as chromecast (https://github.com/lbryio/lbry/issues/1352) (https://github.com/lbryio/lbry/commit/dca4af942fbe95547794213775f0a62cd04a393f)
+ * Check `claim_address` and `change_address` earlier on publishing, to avoid hard to understand errors later in the process (PR: https://github.com/lbryio/lbry/pull/1347)
+ * Loggly error reporting not following `share_usage_data` (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Improper error handling when data is not valid JSON (PR: https://github.com/lbryio/lbry/pull/1326)
+ * Blob mirroring being set in unrelated tests, making them fail (PR: https://github.com/lbryio/lbry/pull/1348)
+ * HTTP blob mirroring edge cases (PR: https://github.com/lbryio/lbry/pull/1315)
+ * External ports in log messages not showing the correct external port from the UPnP redirects (https://github.com/lbryio/lbry/issues/1338) (PR: https://github.com/lbryio/lbry/pull/1349)
+ * miniupnpc fallback issues in txupnp (https://github.com/lbryio/lbry/issues/1341) (PR: https://github.com/lbryio/lbry/pull/1349)
+ * UPnP error when disabled on router and a non-gateway is found, such as Chromecast (https://github.com/lbryio/lbry/issues/1352) (https://github.com/lbryio/lbry/commit/dca4af942fbe95547794213775f0a62cd04a393f)
 
 ### Deprecated
- * automatic claim renew, this is no longer needed
+ * Automatic claim renew, this is no longer needed
 
 ### Changed
- * api server class to use components, and for all JSONRPC API commands to be callable so long as the required components are available. (pr https://github.com/lbryio/lbry/pull/1294)
- * return error messages when required conditions on components are not met for API calls (pr https://github.com/lbryio/lbry/pull/1328)
- * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht` field. (pr https://github.com/lbryio/lbry/pull/1328)
- * `startup_status` field in the response to `status` to be a dict of component names to status booleans (pr https://github.com/lbryio/lbry/pull/1328)
- * renamed the `blockchain_status` field in the response to `status` to `wallet` (pr https://github.com/lbryio/lbry/pull/1328)
- * moved and renamed `wallet_is_encrypted` to `is_encrypted` in the `wallet` field in the response to `status` (pr https://github.com/lbryio/lbry/pull/1328)
- * moved wallet, upnp and dht startup code from `Session` to `Components` (pr https://github.com/lbryio/lbry/pull/1328)
- * attempt blob downloads from http mirror sources (by default) concurrently to p2p sources (pr https://github.com/lbryio/lbry/pull/1233)
- * replace miniupnpc with [txupnp](https://github.com/lbryio/txupnp). Since txupnp is still under development, it will internally fall back to miniupnpc. (pr https://github.com/lbryio/lbry/pull/1328)
- * simplified test_misc.py in the functional tests (pr https://github.com/lbryio/lbry/pull/1328)
- * update `cryptography` requirement to 2.3 (pr https://github.com/lbryio/lbry/pull/1333)
+ * API server class to use components, and for all JSONRPC API commands to be callable so long as the required components are available. (PR: https://github.com/lbryio/lbry/pull/1294)
+ * Return error messages when required conditions on components are not met for API calls (PR: https://github.com/lbryio/lbry/pull/1328)
+ * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht` field. (PR: https://github.com/lbryio/lbry/pull/1328)
+ * `startup_status` field in the response to `status` to be a dict of component names to status booleans (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Renamed the `blockchain_status` field in the response to `status` to `wallet` (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Moved and renamed `wallet_is_encrypted` to `is_encrypted` in the `wallet` field in the response to `status` (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Moved wallet, UPnP and DHT startup code from `Session` to `Components` (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Attempt blob downloads from HTTP mirror sources (by default) concurrently to p2p sources (PR: https://github.com/lbryio/lbry/pull/1233)
+ * Replace miniupnpc with [txupnp](https://github.com/lbryio/txupnp). Since txupnp is still under development, it will internally fall back to miniupnpc. (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Simplified test_misc.py in the functional tests (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Update `cryptography` requirement to 2.3 (PR: https://github.com/lbryio/lbry/pull/1333)
 
 ### Added
- * `skipped_components` list to the response from `status` (pr https://github.com/lbryio/lbry/pull/1328)
- * component statuses (`blockchain_headers`, `dht`, `wallet`, `blob_manager` `hash_announcer`, and `file_manager`) to the response to `status` (pr https://github.com/lbryio/lbry/pull/1328)
- * `skipped_components` config setting, accepts a list of names of components to not run (pr https://github.com/lbryio/lbry/pull/1294)
- * `ComponentManager` for managing the life-cycles of dependencies (pr https://github.com/lbryio/lbry/pull/1294)
- * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously (pr https://github.com/lbryio/lbry/pull/1294)
- * unit tests for `ComponentManager` (pr https://github.com/lbryio/lbry/pull/1294)
- * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
- * additional information to the balance error message when editing a claim (pr https://github.com/lbryio/lbry/pull/1309)
- * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313) (pr https://github.com/lbryio/lbry/pull/1299)
- * ability to download from HTTP mirrors by setting `download_mirrors` (prs https://github.com/lbryio/lbry/pull/1233 and https://github.com/lbryio/lbry/pull/1315)
- * ability to filter peers from an iterative find value operation (finding peers for a blob). This is used to filter peers we've already found for a blob when accumulating the list of peers. (pr https://github.com/lbryio/lbry/pull/1287)
+ * `skipped_components` list to the response from `status` (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Component statuses (`blockchain_headers`, `dht`, `wallet`, `blob_manager` `hash_announcer`, and `file_manager`) to the response to `status` (PR: https://github.com/lbryio/lbry/pull/1328)
+ * `skipped_components` config setting, accepts a list of names of components to not run (PR: https://github.com/lbryio/lbry/pull/1294)
+ * `ComponentManager` for managing the life-cycles of dependencies (PR: https://github.com/lbryio/lbry/pull/1294)
+ * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously (PR: https://github.com/lbryio/lbry/pull/1294)
+ * Unit tests for `ComponentManager` (PR: https://github.com/lbryio/lbry/pull/1294)
+ * Script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
+ * Additional information to the balance error message when editing a claim (PR: https://github.com/lbryio/lbry/pull/1309)
+ * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313) (PR: https://github.com/lbryio/lbry/pull/1299)
+ * Ability to download from HTTP mirrors by setting `download_mirrors` (PRs: https://github.com/lbryio/lbry/pull/1233 and https://github.com/lbryio/lbry/pull/1315)
+ * Ability to filter peers from an iterative find value operation (finding peers for a blob). This is used to filter peers we've already found for a blob when accumulating the list of peers. (PR: https://github.com/lbryio/lbry/pull/1287)
 
 ### Removed
- * `session_status` argument and response field from `status` (pr https://github.com/lbryio/lbry/pull/1328)
- * most of the internal attributes from `Daemon` (pr https://github.com/lbryio/lbry/pull/1294)
+ * `session_status` argument and response field from `status` (PR: https://github.com/lbryio/lbry/pull/1328)
+ * Most of the internal attributes from `Daemon` (PR: https://github.com/lbryio/lbry/pull/1294)
 
 
 ## [0.20.4] - 2018-07-18
 ### Fixed
- * spelling errors in messages printed by `lbrynet-cli`
- * high CPU usage when a stream is incomplete and the peers we're requesting from have no more blobs to send us (https://github.com/lbryio/lbry/pull/1301)
+ * Spelling errors in messages printed by `lbrynet-cli`
+ * High CPU usage when a stream is incomplete and the peers we're requesting from have no more blobs to send us (PR: https://github.com/lbryio/lbry/pull/1301)
 
 ### Changed
- * keep track of failures for DHT peers for up to ten minutes instead of indefinitely (https://github.com/lbryio/lbry/pull/1300)
- * skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too (https://github.com/lbryio/lbry/pull/1300)
- * if a node becomes ignored during an iterative find cycle remove it from the shortlist so that we can't return it as a result nor try to probe it anyway (https://github.com/lbryio/lbry/pull/1303)
+ * Keep track of failures for DHT peers for up to ten minutes instead of indefinitely (PR: https://github.com/lbryio/lbry/pull/1300)
+ * Skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too (PR: https://github.com/lbryio/lbry/pull/1300)
+ * If a node becomes ignored during an iterative find cycle, remove it from the shortlist so that we can't return it as a result nor try to probe it anyway (PR: https://github.com/lbryio/lbry/pull/1303)
 
 
 ## [0.20.3] - 2018-07-03
 ### Fixed
  * `blob_list` raising an error when blobs in a stream haven't yet been created (8a0d0b44ddf9cbeb2a9074eed39d6064ce21df64)
- * stopping a download potentially raising an attribute error (https://github.com/lbryio/lbry/pull/1269)
- * file manager startup locking up when there are many files for some channels (https://github.com/lbryio/lbry/pull/1281)
- * improper sorting when getting the closest peers to a hash (https://github.com/lbryio/lbry/pull/1282)
+ * Stopping a download potentially raising an attribute error (PR: https://github.com/lbryio/lbry/pull/1269)
+ * File manager startup locking up when there are many files for some channels (PR: https://github.com/lbryio/lbry/pull/1281)
+ * Improper sorting when getting the closest peers to a hash (PR: https://github.com/lbryio/lbry/pull/1282)
 
 ### Changed
- * raised the default `peer_search_timeout` setting from 3 to 30 and added logging for when it happens (https://github.com/lbryio/lbry/pull/1283)
- * change iterative find stop condition on find value to allow it to continue until a value is found or it times out (https://github.com/lbryio/lbry/pull/1283)
- * include all of our own blobs in the local dht datastore (as if we had announced them to ourselves) (https://github.com/lbryio/lbry/pull/1280)
- * ignore dht `store` token validation errors for the first expiration-time after startup (fixes failed `store` requests after a restart) (https://github.com/lbryio/lbry/pull/1280)
+ * Raised the default `peer_search_timeout` setting from 3 to 30 and added logging for when it happens (PR: https://github.com/lbryio/lbry/pull/1283)
+ * Change iterative find stop condition on find value to allow it to continue until a value is found or it times out (PR: https://github.com/lbryio/lbry/pull/1283)
+ * Include all of our own blobs in the local DHT datastore (as if we had announced them to ourselves) (PR: https://github.com/lbryio/lbry/pull/1280)
+ * Ignore dht `store` token validation errors for the first expiration-time after startup (fixes failed `store` requests after a restart) (PR: https://github.com/lbryio/lbry/pull/1280)
 
 ### Removed
- * `jsonrpclib` as a requirement for the project (https://github.com/lbryio/lbry/pull/1274)
+ * `jsonrpclib` as a requirement for the project (PR: https://github.com/lbryio/lbry/pull/1274)
 
 
 ## [0.20.2] - 2018-06-23
 ### Changed
  * Bumped `lbryschema` requirement to 0.0.16 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0016---2018-06-23)
  * Bumped `lbryum` requirement to 3.2.3 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#323---2018-06-23)
- * save claims to sqlite in batches to speed up `resolve` queries for many uris
+ * Save claims to sqlite in batches to speed up `resolve` queries for many URIs
 
 
 ## [0.20.1] - 2018-06-19
 ### Fixed
- * fixed token validation error when the dht node has just been started (https://github.com/lbryio/lbry/issues/1248)
- * fixed a race condition when inserting a blob into the database (https://github.com/lbryio/lbry/issues/1129)
- * reflector server incorrectly responding as if it has all the blobs for a stream that was only partially uploaded to it
+ * Fixed token validation error when the DHT node has just been started (https://github.com/lbryio/lbry/issues/1248)
+ * Fixed a race condition when inserting a blob into the database (https://github.com/lbryio/lbry/issues/1129)
+ * Reflector server incorrectly responding as if it has all the blobs for a stream that was only partially uploaded to it
  * `publish` raising a database error when updating a claim that we don't have a file for (https://github.com/lbryio/lbry/issues/1165)
- * blob client protocol not tearing itself down properly after a failure (https://github.com/lbryio/lbry/issues/950)
- * lockup in wallet startup when one or more lbryumx servers are unavailable (https://github.com/lbryio/lbry/issues/1245)
- * download being stopped if the sd blob downloaded and data did not start within the timeout (https://github.com/lbryio/lbry/issues/1172)
+ * Blob client protocol not tearing itself down properly after a failure (https://github.com/lbryio/lbry/issues/950)
+ * Lockup in wallet startup when one or more lbryumx servers are unavailable (https://github.com/lbryio/lbry/issues/1245)
+ * Download being stopped if the sd blob downloaded and data did not start within the timeout (https://github.com/lbryio/lbry/issues/1172)
 
 ### Changed
  * Bumped `lbryum` requirement to 3.2.2 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#322---2018-06-19)
@@ -249,88 +249,88 @@ most commands.
   * Please review the full change log for more details on specific fixes, changes and additions.
 
 ### Fixed
- * fix payment rate manager typo ([1236](https://github.com/lbryio/lbry/pull/1236))
- * handling error from dht clients with old `ping` method
- * blobs not being re-announced if no peers successfully stored, now failed announcements are re-queued
- * issue where an `AuthAPIClient` (used by `lbrynet-cli`) would fail to update its session secret and keep making new auth sessions, with every other request failing
+ * Fix payment rate manager typo ([1236](https://github.com/lbryio/lbry/pull/1236))
+ * Handling error from DHT clients with old `ping` method
+ * Blobs not being re-announced if no peers successfully stored, now failed announcements are re-queued
+ * Issue where an `AuthAPIClient` (used by `lbrynet-cli`) would fail to update its session secret and keep making new auth sessions, with every other request failing
  * `use_auth_http` in a config file being overridden by the default command line argument to `lbrynet-daemon`, now the command line value will only override the config file value if it is provided
  * `lbrynet-cli` not automatically switching to the authenticated client if the server is detected to be using authentication. This resulted in `lbrynet-cli` failing to run when `lbrynet-daemon` was run with the `--http-auth` flag
- * fixed error when using `claim_show` with `txid` and `nout` arguments
- * fixed error when saving server list to conf file ([1209](https://github.com/lbryio/lbry/pull/1209))
+ * Fixed error when using `claim_show` with `txid` and `nout` arguments
+ * Fixed error when saving server list to conf file ([1209](https://github.com/lbryio/lbry/pull/1209))
 
 ### Changed
- * if the `use_authentication` setting is configured, use authentication for all api methods instead of only those with the `auth_required` decorator
- * regenerate api keys on startup if the using authentication
- * support both positional and keyword args for api calls
+ * If the `use_authentication` setting is configured, use authentication for all API methods instead of only those with the `auth_required` decorator
+ * Regenerate API keys on startup if the using authentication
+ * Support both positional and keyword args for API calls
  * `blob_announce` to queue the blob announcement but not block on it
  * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
- * predictable result sorting for `claim_list` and `claim_list_mine` ([1216](https://github.com/lbryio/lbry/pull/1216) and [1208](https://github.com/lbryio/lbry/pull/1208))
- * increase the default `auto_re_reflect_interval` setting to a day and the default `concurrent_announcers` setting to 10
- * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind ([1177](https://github.com/lbryio/lbry/pull/1177))
- * check headers file integrity on startup, removing/truncating the file to force re-download when necessary
- * support partial headers file download from S3 ([1189](https://github.com/lbryio/lbry/pull/1189))
- * refactor `add_completed_blobs` on storage.py, simplifying into less queries ([1226](https://github.com/lbryio/lbry/pull/1226))
- * full verification of streams only during database migration instead of every startup ([1195](https://github.com/lbryio/lbry/pull/1195))
- * database batching functions for starting up the file manager
- * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
- * track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect ([1194](https://github.com/lbryio/lbry/pull/1194))
- * pass the sd hash to reflector ClientFactory instead of looking it up from the database
- * dht logging to be more verbose with errors and warnings
- * `store` kademlia rpc method to block on the call finishing and to return storing peer information
- * kademlia protocol to minimally delay writes to the UDP socket
- * several internal dht functions to use inlineCallbacks
+ * Predictable result sorting for `claim_list` and `claim_list_mine` ([1216](https://github.com/lbryio/lbry/pull/1216) and [1208](https://github.com/lbryio/lbry/pull/1208))
+ * Increase the default `auto_re_reflect_interval` setting to a day and the default `concurrent_announcers` setting to 10
+ * Download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind ([1177](https://github.com/lbryio/lbry/pull/1177))
+ * Check headers file integrity on startup, removing/truncating the file to force re-download when necessary
+ * Support partial headers file download from S3 ([1189](https://github.com/lbryio/lbry/pull/1189))
+ * Refactor `add_completed_blobs` on storage.py, simplifying into less queries ([1226](https://github.com/lbryio/lbry/pull/1226))
+ * Full verification of streams only during database migration instead of every startup ([1195](https://github.com/lbryio/lbry/pull/1195))
+ * Database batching functions for starting up the file manager
+ * Added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
+ * Track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect ([1194](https://github.com/lbryio/lbry/pull/1194))
+ * Pass the sd hash to reflector ClientFactory instead of looking it up from the database
+ * DHT logging to be more verbose with errors and warnings
+ * `store` kademlia RPC method to block on the call finishing and to return storing peer information
+ * Kademlia protocol to minimally delay writes to the UDP socket
+ * Several internal DHT functions to use inlineCallbacks
  * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
- * refactored `DHTHashAnnouncer` to no longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
- * decoupled `DiskBlobManager` from `DHTHashAnnouncer`, get blob hashes to announce from `SQLiteStorage`. The blob manager no longer announces blobs after they are completed, the hash announcer takes care of this now.
- * changed the bucket splitting condition in the dht routing table to be more aggressive
- * ping dht nodes who have stored to us periodically to determine whether we should include them as an active peer for the hash when we are queried. Nodes that are known to be not reachable by the node storing the record are no longer returned as peers by the storing node.
- * changed dht bootstrap join process to better populate the routing table initially
- * cache dht node tokens used during announcement to minimize the number of requests that are needed
- * implement BEP0005 dht rules to classify nodes as good, bad, or unknown and for when to add them to the routing table (http://www.bittorrent.org/beps/bep_0005.html)
- * refactored internal dht contact class to track failure counts/times, the time the contact last replied to us, and the time the node last requested something fom us ([1211](https://github.com/lbryio/lbry/pull/1211))
- * refactored dht iterativeFind
- * sort dht contacts returned by `findCloseNodes` in the routing table
+ * Refactored `DHTHashAnnouncer` to no longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
+ * Decoupled `DiskBlobManager` from `DHTHashAnnouncer`, get blob hashes to announce from `SQLiteStorage`. The blob manager no longer announces blobs after they are completed, the hash announcer takes care of this now.
+ * Changed the bucket splitting condition in the DHT routing table to be more aggressive
+ * Ping DHT nodes who have stored to us periodically to determine whether we should include them as an active peer for the hash when we are queried. Nodes that are known to be not reachable by the node storing the record are no longer returned as peers by the storing node.
+ * Changed DHT bootstrap join process to better populate the routing table initially
+ * Cache DHT node tokens used during announcement to minimize the number of requests that are needed
+ * Implement BEP0005 DHT rules to classify nodes as good, bad, or unknown and for when to add them to the routing table (http://www.bittorrent.org/beps/bep_0005.html)
+ * Refactored internal DHT contact class to track failure counts/times, the time the contact last replied to us, and the time the node last requested something from us ([1211](https://github.com/lbryio/lbry/pull/1211))
+ * Refactored DHT iterativeFind
+ * Sort DHT contacts returned by `findCloseNodes` in the routing table
  * `reactor` and `callLater`, `listenUDP`, and `resolve` functions to be configurable (to allow easier testing)
- * calls to get the current time to use `reactor.seconds` (to control callLater and LoopingCall timing in tests)
- * temporarily disabled data price negotiation, treat all data as free
- * disabled Cryptonator price feed
- * use `treq` instead of `txrequests` ([1191](https://github.com/lbryio/lbry/pull/1191))
- * updated `cryptography` version to 2.2.2
- * removed `pycrypto` dependency, replacing all calls to `cryptography`
+ * Calls to get the current time to use `reactor.seconds` (to control callLater and LoopingCall timing in tests)
+ * Temporarily disabled data price negotiation, treat all data as free
+ * Disabled Cryptonator price feed
+ * Use `treq` instead of `txrequests` ([1191](https://github.com/lbryio/lbry/pull/1191))
+ * Updated `cryptography` version to 2.2.2
+ * Removed `pycrypto` dependency, replacing all calls to `cryptography`
 
 ### Added
  * `peer_ping` command
  * `--sort` option in `file_list` ([1174](https://github.com/lbryio/lbry/pull/1174))
  * `port` field to contacts returned by `routing_table_get`
- * configurable `concurrent_announcers` and `s3_headers_depth` settings
- * virtual kademlia network and mock udp transport for dht integration tests
- * functional tests for bootstrapping the dht, announcing and expiring hashes, finding and pinging nodes, protocol version 0/1 backwards/forwards compatibility, and rejoining the network
- * linux distro and desktop name added to analytics ([1218](https://github.com/lbryio/lbry/pull/1218))
- * certifi module for Twisted SSL verification on Windows ([1213](https://github.com/lbryio/lbry/pull/1213))
- * protocol version to dht requests and to the response from `findValue`
+ * Configurable `concurrent_announcers` and `s3_headers_depth` settings
+ * Virtual Kademlia network and mock UDP transport for DHT integration tests
+ * Functional tests for bootstrapping the DHT, announcing and expiring hashes, finding and pinging nodes, protocol version 0/1 backwards/forwards compatibility, and rejoining the network
+ * Linux distro and desktop name added to analytics ([1218](https://github.com/lbryio/lbry/pull/1218))
+ * Certified module for Twisted SSL verification on Windows ([1213](https://github.com/lbryio/lbry/pull/1213))
+ * Protocol version to DHT requests and to the response from `findValue`
 
 ### Removed
  * `announce_all` argument from `blob_announce`
- * old `blob_announce_all` command
- * unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
+ * Old `blob_announce_all` command
+ * Unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
  * `AuthJSONRPCServer.auth_required` decorator ([1161](https://github.com/lbryio/lbry/pull/1161))
- * `OptimizedTreeRoutingTable` class used by the dht node for the time being
+ * `OptimizedTreeRoutingTable` class used by the DHT node for the time being
 
 
 ## [0.19.3] - 2018-05-04
 ### Changed
- * download blockchain headers from s3 before starting the wallet when the local height is more than s3_headers_depth (a config setting) blocks behind (https://github.com/lbryio/lbry/pull/1177)
- * un-deprecated report_bug command (https://github.com/lbryio/lbry/commit/f8e418fb4448a3ed1531657f8b3c608fb568af85)
+ * Download blockchain headers from s3 before starting the wallet when the local height is more than s3_headers_depth (a config setting) blocks behind (https://github.com/lbryio/lbry/pull/1177)
+ * Un-deprecated report_bug command (https://github.com/lbryio/lbry/commit/f8e418fb4448a3ed1531657f8b3c608fb568af85)
 
 ## [0.19.2] - 2018-03-28
 ### Fixed
- * incorrectly raised download cancelled error for already verified blob files
- * infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
- * docstring bugs for `stream_availability`, `channel_import`, and `blob_announce`
+ * Incorrectly raised download cancelled error for already verified blob files
+ * Infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
+ * Docstring bugs for `stream_availability`, `channel_import`, and `blob_announce`
 
 ### Added
  * `blob_reflect` command to send specific blobs to a reflector server
- * unit test for docopt
+ * Unit test for docopt
 
 ### Removed
  * `flags` decorator from server.py as short flags are no longer used when using api/cli methods
@@ -347,7 +347,7 @@ most commands.
  * Channel creation to use same bid logic as for claims ([1148](https://github.com/lbryio/lbry/pull/1148))
 
 ### Deprecated
- * `report_bug` jsonrpc command
+ * `report_bug` JSON-RPC command
 
 ### Changed
  * Bumped `lbryschema` requirement to 0.0.15 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0015---2018-03-20)
@@ -358,7 +358,7 @@ most commands.
 ### Added
  * Scripts to auto-generate documentation ([1128](https://github.com/lbryio/lbry/pull/1128))
  * Now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount ([1137](https://github.com/lbryio/lbry/pull/1137))
- * Forward-compatibility for upcoming DHT bencoding changes
+ * Forward-compatibility for upcoming DHT encoding changes
 
 ### Removed
  * Short(single dashed) arguments for `lbrynet-cli`
@@ -366,46 +366,46 @@ most commands.
 
 ## [0.19.0] - 2018-03-02
 ### Fixed
- * improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
- * unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
- * value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
- * being unable to re-download updated content (https://github.com/lbryio/lbry/issues/951)
- * sending error messages for failed api requests
- * file manager startup being slow when handling thousands of files
- * handling decryption error for blobs encrypted with an invalid key
- * handling stream with no data blob (https://github.com/lbryio/lbry/issues/905)
- * fetching the external ip
- * `blob_list` returning an error with --uri parameter and incorrectly returning `[]` for streams where blobs are known (https://github.com/lbryio/lbry/issues/895)
- * `get` failing with a non-useful error message when given a uri for a channel claim
- * exception checking in several wallet unit tests
- * daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
+ * Improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
+ * Unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
+ * Value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
+ * Being unable to re-download updated content (https://github.com/lbryio/lbry/issues/951)
+ * Sending error messages for failed API requests
+ * File manager startup being slow when handling thousands of files
+ * Handling decryption error for blobs encrypted with an invalid key
+ * Handling stream with no data blob (https://github.com/lbryio/lbry/issues/905)
+ * Fetching the external IP
+ * `blob_list` returning an error with --URI parameter and incorrectly returning `[]` for streams where blobs are known (https://github.com/lbryio/lbry/issues/895)
+ * `get` failing with a non-useful error message when given a URI for a channel claim
+ * Exception checking in several wallet unit tests
+ * Daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
  * `publish` command to allow updating claims with a `bid` amount higher than the wallet balance, so long as the amount is less than the wallet balance plus the bid amount of the claim being updated (https://github.com/lbryio/lbry/issues/748)
- * incorrect `blob_num` for the stream terminator blob, which would result in creating invalid streams. Such invalid streams are detected on startup and are automatically removed (https://github.com/lbryio/lbry/issues/1124)
+ * Incorrect `blob_num` for the stream terminator blob, which would result in creating invalid streams. Such invalid streams are detected on startup and are automatically removed (https://github.com/lbryio/lbry/issues/1124)
 
 ### Deprecated
  * `channel_list_mine`, replaced with `channel_list`
  * `get_availability`, replaced with `stream_availability`
 
 ### Changed
- * dht tests to only be in one folder
- * config file format of `known_dht_nodes`, `lbryum_servers`, and `reflector_servers` to lists of `hostname:port` strings
- * startup of `lbrynet-daemon` to block on the wallet being unlocked if it is encrypted
+ * DHT tests to only be in one folder
+ * Config file format of `known_dht_nodes`, `lbryum_servers`, and `reflector_servers` to lists of `hostname:port` strings
+ * Startup of `lbrynet-daemon` to block on the wallet being unlocked if it is encrypted
  * `publish` to verify the claim schema before trying to make the claim and to return better error messages
  * `channel_list_mine` to be instead named `channel_list`
  * `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
- * file objects returned by `file_list` and `get` to contain `claim_name` field instead of `name`
+ * File objects returned by `file_list` and `get` to contain `claim_name` field instead of `name`
  * `name` filter parameter for `file_list`, `file_set_status`, `file_reflect`,  and `file_delete` to be named `claim_name`
  * `metadata` field in file objects returned by `file_list` and `get` to be a [Metadata object](https://github.com/lbryio/lbryschema/blob/master/lbryschema/proto/metadata.proto#L5)
- * assumption for time it takes to announce single hash from 1 second to 5 seconds
- * HTTP error codes for failed api requests, conform to http://www.jsonrpc.org/specification#error_object (previously http errors were set for jsonrpc errors)
- * api requests resulting in errors to return less verbose tracebacks
+ * Assumption for time it takes to announce single hash from 1 second to 5 seconds
+ * HTTP error codes for failed API requests, conform to http://www.jsonrpc.org/specification#error_object (previously http errors were set for JSON-RPC errors)
+ * API requests resulting in errors to return less verbose tracebacks
  * logging about streams to not include file names (only include sd hashes)
  * wallet info exchange to re-use addresses, this was a significant source of address bloat in the wallet
  * lbrynet to not manually save the wallet file and to let lbryum handle it
- * internals to use reworked lbryum `payto` command
- * dht `Node` class to re-attempt joining the network every 60 secs if no peers are known
+ * Internals to use reworked lbryum `payto` command
+ * DHT `Node` class to re-attempt joining the network every 60 seconds if no peers are known
  * lbrynet database and file manager to separate the creation of lbry files (from downloading or publishing) from the handling of a stream. All files have a stream, but not all streams may have a file. (https://github.com/lbryio/lbry/issues/1020)
- * manager classes to use new `SQLiteStorage` for database interaction. This class uses a single `lbrynet.sqlite` database file.
+ * Manager classes to use new `SQLiteStorage` for database interaction. This class uses a single `lbrynet.sqlite` database file.
 
 ### Added
  * `lbrynet-console`, a tool to run or connect to lbrynet-daemon and launch an interactive python console with the api functions built in.
@@ -421,7 +421,7 @@ most commands.
  * `is_mine` boolean to `channel_list` results
  * `txid`, `nout`, `channel_claim_id`, `channel_claim_name`, `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
  * `txid`, `nout`, `channel_claim_id`, and `channel_claim_name` filters for `file` commands (`file_list`, `file_set_status`, `file_reflect`,  and `file_delete`)
- * unit tests for `SQLiteStorage` and updated old tests for relevant changes (https://github.com/lbryio/lbry/issues/1088)
+ * Unit tests for `SQLiteStorage` and updated old tests for relevant changes (https://github.com/lbryio/lbry/issues/1088)
 
 ### Removed
  * `seccure` and `gmpy` dependencies
@@ -430,14 +430,14 @@ most commands.
  * `name` argument for `claim_show` command
  * `message` response field in file objects returned by `file_list` and `get`
  * `include_tip_info` argument from `transaction_list`, which will now always include tip information.
- * old and unused UI related code
- * unnecessary `TempBlobManager` class
- * old storage classes used by the file manager, wallet, and blob manager
- * old `.db` database files from the data directory
+ * Old and unused UI related code
+ * Unnecessary `TempBlobManager` class
+ * Old storage classes used by the file manager, wallet, and blob manager
+ * Old `.db` database files from the data directory
 
 ## [0.18.0] - 2017-11-08
 ### Fixed
- * Fixed amount of close nodes to add to list in case of extension to neighbouring k-buckets
+ * Fixed amount of close nodes to add to list in case of extension to neighboring k-buckets
  * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
  * Fixed failing ConnectionManager unit test for parallel connections
  * Fixed race condition between `publish` and `channel_new`
@@ -460,19 +460,19 @@ most commands.
 ## [0.17.1] - 2017-10-25
 ### Fixed
  * Fixed slow startup for nodes with many lbry files
- * Fixed setting the external ip on startup
- * Fixed session startup not blocking on joining the dht
- * Fixed several parsing bugs that prevented replacing dead dht contacts
+ * Fixed setting the external IP on startup
+ * Fixed session startup not blocking on joining the DHT
+ * Fixed several parsing bugs that prevented replacing dead DHT contacts
  * Fixed lbryid length validation
  * Fixed an old print statement that polluted logs
- * Fixed rpc id length for dht requests
+ * Fixed RPC id length for DHT requests
 
 ### Changed
  * Bumped `lbryschema` requirement to 0.0.13 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0013---2017-10-25)
  * Bumped `lbryum` requirement to 3.1.10 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#3110---2017-10-25)
- * Use the first port available for the peer and dht ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
+ * Use the first port available for the peer and DHT ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
  * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
- * Bumped jsonschema requirement to 2.6.0
+ * Bumped JSON-schema requirement to 2.6.0
  * Refactor some assert statements to accommodate the PYTHONOPTIMIZE flag set for Android.
 
 ### Added
@@ -488,11 +488,11 @@ most commands.
  * Fixed cases when reflecting would fail on error conditions
  * Fixed deadlocks from occurring during blob writes
  * Fixed and updated`lbrynet.tests.dht`
- * Fixed redundant dht id
- * Fixed dht `ping` method
- * Fixed raising remote exceptions in dht
- * Fixed hanging delayedCall in dht node class
- * Fixed logging error in dht when calling or receiving methods with no arguments
+ * Fixed redundant DHT id
+ * Fixed DHT `ping` method
+ * Fixed raising remote exceptions in DHT
+ * Fixed hanging delayedCall in DHT node class
+ * Fixed logging error in DHT when calling or receiving methods with no arguments
  * Fixed IndexError in routingTable.findCloseNodes which would cause an empty list to be returned
  * Fixed bug where last blob in a stream was not saved to blob manager
 
@@ -503,7 +503,7 @@ most commands.
  * Bumped `lbryschema` requirement to 0.0.12 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0012---2017-10-12)
  * Bumped `lbryum` requirement to 3.1.9 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#319---2017-10-12)
  * Announcing by head blob is turned on by default
- * Updated reflector server dns
+ * Updated reflector server DNS
  * Moved tests into the lbrynet package.
 
 ### Added
@@ -529,7 +529,7 @@ most commands.
 
 ### Changed
  * Improved download analytics
- * Improved download errors by distinguishing a data timeout from a sd timeout
+ * Improved download errors by distinguishing a data timeout from an sd timeout
 
 
 ## [0.16.2] - 2017-09-26
@@ -555,7 +555,7 @@ most commands.
 ### Changed
  * Bumped `lbryschema` requirement to 0.0.11 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0011---2017-09-18)
  * Bumped `lbryum` requirement to 3.1.7 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#317---2017-09-18)
- * Updated exchange rate tests for the lbry.io api
+ * Updated exchange rate tests for the lbry.io API
 
 ### Added
  * Added option to announce head blob only if seeding
@@ -566,7 +566,7 @@ most commands.
 
 ## [0.15.2] - 2017-09-07
 ### Changed
- * Use lbry.io exchange rate API instead of google finance
+ * Use lbry.io exchange rate API instead of Google Finance
 
 
 ## [0.15.1] - 2017-08-22
@@ -662,7 +662,7 @@ most commands.
  * Renamed `lbrynet.lbryfile` to `lbrynet.lbry_file`
  * Renamed `lbrynet.lbryfilemanager` to `lbrynet.file_manager`
  * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
- * Initialize lbrynet settings when configuring an api client if they are not set yet
+ * Initialize lbrynet settings when configuring an API client if they are not set yet
  * Updated lbryum imports
  * Improve error message when resolving a claim fails using the "get" command
 
@@ -692,7 +692,7 @@ most commands.
 
 
 ### Changed
- * Support resolution of multiple uris with `resolve`, all results are keyed by uri
+ * Support resolution of multiple URIs with `resolve`, all results are keyed by URI
  * Add `error` responses for failed resolves
  * Add `claim_list_by_channel`, supports multiple channel resolution
  * Rename delete_target_file argument of delete API command to delete_from_download_dir
@@ -721,7 +721,7 @@ most commands.
 ### Changed
  * Do not catch base exception in API command resolve
  * Remove deprecated `lbrynet.metadata` and update what used it to instead use `lbryschema`
- * Get version information locally instead of via api for cli
+ * Get version information locally instead of via API for cli
 
 
 ### Deprecated
@@ -768,7 +768,7 @@ most commands.
 ## [0.10.3] - 2017-05-23
 
 ### Added
- * Add decorator to support queueing api calls
+ * Add decorator to support queuing API calls
  * Added force option to API command resolve
 
 
@@ -823,11 +823,11 @@ most commands.
 ### Added
  * Add `claim_id` parameter to `claim_show`
  * Add `hex` field to claim responses for the raw claim value
- * Add an `error` field to to file responses if an error occurs
+ * Add an `error` field to file responses if an error occurs
 ### Changed
  * Use `uri` instead of `name` in `get_availability`
  * Add `channel_name` to claim and file responses where applicable
- * Return None (instead of errors) if a uri cannot be resolved
+ * Return None (instead of errors) if a URI cannot be resolved
  * Use `uri` instead of `name` for `stream_cost_estimate`, update cost estimate for lbryschema
 ### Fixed
  * `file_list` for files with bad signatures
@@ -842,11 +842,11 @@ most commands.
  * Add `delete_all` parameter to `file_delete` to allow deleting multiple files
  * Add `channel_list_mine`
  * Add `channel_new`
- * Add `resolve` to resolve lbry uris
+ * Add `resolve` to resolve lbry URIs
 ### Changed
  * Use `uri` instead of `name` for `get`, remove explicit `claim_id` parameter
  * Increase default download timeout
- * Use lbry.io api for exchange rate data
+ * Use lbry.io API for exchange rate data
 
 ## [0.9.2rc4] - 2017-04-06
 ### Changed
@@ -867,7 +867,7 @@ most commands.
 ## [0.9.2rc2] - 2017-03-25
 ### Added
  * Add `wallet_list` command
- * Add checks for missing/extraneous params when calling jsonrpc commands
+ * Add checks for missing/extraneous params when calling JSON-RPC commands
  * Added colors to cli error messages
 ### Changed
  * Removed check_pending logic from Daemon
@@ -880,22 +880,22 @@ most commands.
  * Fixed descriptor_get
  * Fixed API command descriptor_get
  * Fixed API command transaction_show
- * Fixed error handling for jsonrpc commands
+ * Fixed error handling for JSON-RPC commands
  * Handle failure to decode claim cache file
 
 
 
 ## [0.9.1] - 2017-03-17
 ### Added
- * publish API command can take metadata fields as arguments
+ * Publish API command can take metadata fields as arguments
  * Added `reflect_uploads` config to disable reflecting on upload
  * Added `--version` flag
 ### Fixed
  * Fix wallet_public_key API command
  * Fixed jsonrpc_reflect()
- * Fixed api help return
+ * Fixed API help return
 ### Changed
- * Removed `simplejson` dependency in favor of bulitin `json`
+ * Removed `simplejson` dependency in favor of bulit-in `json`
 
 
 
@@ -913,7 +913,7 @@ most commands.
  * Refactor file_list, add `full_status` argument to populate resource intensive fields
  * Remove deprecated file commands: `get_lbry_files`, `get_lbry_file`, and `file_get`
  * Remove deprecated `delete_lbry_file` command
- * Return standard file json from `get`
+ * Return standard file JSON from `get`
 
 
 ## [0.9.0rc12] - 2017-03-06
@@ -946,14 +946,14 @@ most commands.
 
 ## [0.8.5] - 2017-02-18
 ### Fixed
- * Fix result expected by ui from file_get for missing files
+ * Fix result expected by UI from file_get for missing files
 
 ## [0.8.4] - 2017-02-17
 ### Changed
  * Remove unused upload_allowed option
  * Remove code related to packaging as that step is now done in the electron client
  * Remove lbryum version check; use lbry-electron as version source
- * Include download url in version check
+ * Include download URL in version check
 
 ### Fixed
  * add missing traceback to logging
@@ -965,7 +965,7 @@ most commands.
  * Catch UnknownNameErrors when resolving a name. [#479](https://github.com/lbryio/lbry/issues/479)
  * Change EWOULDBLOCK error in DHT to warning. #481
  * mark peers as down if it fails download protocol
- * Made hash reannounce time to be adjustable to fix [#432](https://github.com/lbryio/lbry/issues/432)
+ * Made hash re-announce time to be adjustable to fix [#432](https://github.com/lbryio/lbry/issues/432)
  * Fix recursion depth error upon failed blob
  * Call stopProducing in reflector client file_sender when uploading is done
  * Ensure streams in stream_info_manager are saved in lbry_file_manager
@@ -985,7 +985,7 @@ most commands.
  * Convert EncryptedFileDownloader to inlineCallbacks
  * Convert EncryptedFileManager to use inlineCallbacks
  * Convert Daemon._delete_lbry_file to inlineCallbacks
- * Add uri to stream reflector to de-obfuscate reflector logs
+ * Add URI to stream reflector to de-obfuscate reflector logs
  * Simplify lbrynet.lbrynet_daemon.Publisher
  * Reflect streams in file manager looping call rather than in each file
  * Convert GetStream to inclineCallbacks
@@ -1007,7 +1007,7 @@ most commands.
 
 ## [0.8.0] - 2017-01-24
 ### Changed
- * renamed api endpoints
+ * renamed API endpoints
  * improved command line user experience
  * integrate twisted logging with python logging
  * Updated READMEs
@@ -1015,6 +1015,6 @@ most commands.
 ### Fixed
  * Fixed bug where ConnectionManager wasn't being stopped
  * Fixed: #343
- * Stop hanging if github is down
- * paths for debian package have been updated to be correct
+ * Stop hanging if Github is down
+ * paths for Debian package have been updated to be correct
  * improved output of the publish command

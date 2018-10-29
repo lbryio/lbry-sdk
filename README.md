@@ -1,12 +1,12 @@
 # <img src="https://raw.githubusercontent.com/lbryio/lbry/master/lbry.png" alt="LBRY" width="48" height="36" /> LBRY [![Build Status](https://travis-ci.org/lbryio/lbry.svg?branch=master)](https://travis-ci.org/lbryio/lbry) [![Test Coverage](https://codecov.io/gh/lbryio/lbry/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry)
 
-LBRY is an open-source protocol providing distribution, discovery, and purchase of digital content (data) via a decentralized network. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, and rights and access rules. LBRY also provides a data network that consists of peers uploading and downloading data from other peers, possibly in exchange for payments, and a distributed hash table, used by peers to discover other peers.
+LBRY is an open-source protocol providing distribution, discovery, and purchase of digital content (data) via a decentralized peer-to-peer network. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, rights and access rules. LBRY also provides a data network that consists of peers (seeders) uploading and downloading data from other peers, possibly in exchange for payments, as well as a distributed hash table used by peers to discover other peers.
 
-This project provides an SDK for building applications using the LBRY protocol. The SDK is written in Python 3.7+ using Twisted. For other languages or platforms, a JSONRPC API is provided.
+This project provides an SDK for building applications using the LBRY protocol. The SDK is written in Python 3.7+ using Twisted. For other languages or platforms, a JSON-RPC API is provided.
 
 ## Installation
 
-Our [releases page](https://github.com/lbryio/lbry/releases) contains pre-built binaries of the latest release, pre-releases, and past releases, for macOS, Debian-based Linux, and Windows. [Automated travis builds](http://build.lbry.io/daemon/) are also available for testing.
+Our [releases page](https://github.com/lbryio/lbry/releases) contains pre-built binaries of the latest release, pre-releases, and past releases for macOS, Debian-based Linux, and Windows. [Automated travis builds](http://build.lbry.io/daemon/) are also available for testing.
 
 ## Usage
 
@@ -20,7 +20,7 @@ The full API is documented [here](https://lbry.tech/api/sdk).
 
 ## Running from source
 
-Installing from source is also relatively painless, full instructions are in [INSTALL.md](INSTALL.md)
+Installing from source is also relatively painless. Full instructions are in [INSTALL.md](INSTALL.md)
 
 ## Contributing
 

@@ -6,11 +6,11 @@ from zope.interface import Interface
 
 class IPeerFinder(Interface):
     """
-    Used to find peers by sha384 hashes which they claim to be associated with.
+    Used to find peers by SHA-384 hashes which they claim to be associated with.
     """
     def find_peers_for_blob(self, blob_hash):
         """
-        Look for peers claiming to be associated with a sha384 hashsum.
+        Look for peers claiming to be associated with a SHA-384 hashsum.
 
         @param blob_hash: The sha384 hashsum to use to look up peers.
         @type blob_hash: string, hex encoded
