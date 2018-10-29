@@ -1,29 +1,17 @@
 import platform
 import json
-import subprocess
 import os
 
 from six.moves.urllib import request
 from six.moves.urllib.error import URLError
 from lbrynet.schema import __version__ as schema_version
 from lbrynet import build_type, __version__ as lbrynet_version
-from lbrynet.extras.daemon.conf import ROOT_DIR
 import logging.handlers
 
 log = logging.getLogger(__name__)
 
 
 def get_lbrynet_version() -> str:
-    if build_type.BUILD == "dev":
-        try:
-            with open(os.devnull, 'w') as devnull:
-                git_dir = ROOT_DIR + '/.git'
-                return subprocess.check_output(
-                    ['git', '--git-dir='+git_dir, 'describe', '--dirty', '--always'],
-                    stderr=devnull
-                ).decode().strip().lstrip('v')
-        except (subprocess.CalledProcessError, OSError):
-            log.debug("failed to get version from git")
     return lbrynet_version
 
 
