@@ -64,7 +64,7 @@ class WalletDatabase(BaseDatabase):
         if channel_ids:
             channels = {
                 txo.claim_id: txo for txo in
-                (await super().get_utxos(
+                (await self.get_claims(
                     my_account=my_account,
                     claim_id__in=channel_ids
                 ))
