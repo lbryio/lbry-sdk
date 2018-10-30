@@ -3,7 +3,7 @@ from lbrynet import __name__, __version__
 from setuptools import setup, find_packages
 
 BASE = os.path.dirname(__file__)
-README_PATH = os.path.join(BASE, 'README.md')
+README_PATH = os.path.join(BASE, 'README.md')//hello
 
 setup(
     name=__name__,
