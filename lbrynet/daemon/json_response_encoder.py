@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 from binascii import hexlify
 from datetime import datetime
@@ -6,6 +7,9 @@ from ecdsa import BadSignatureError
 from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.wallet.ledger import MainNetLedger
+
+
+log = logging.getLogger(__name__)
 
 
 class JSONResponseEncoder(JSONEncoder):
@@ -74,6 +78,9 @@ class JSONResponseEncoder(JSONEncoder):
                                 txo.get_address(self.ledger), txo.channel.claim
                             )
                         except BadSignatureError:
+                            output['valid_signature'] = False
+                        except ValueError:
+                            log.exception(f'txo.id: {txo.id}, txo.channel.id:{txo.channel.id}, output: {output}')
                             output['valid_signature'] = False
 
             if txo.script.is_claim_name:
