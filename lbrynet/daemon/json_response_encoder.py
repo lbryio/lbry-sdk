@@ -80,7 +80,10 @@ class JSONResponseEncoder(JSONEncoder):
                         except BadSignatureError:
                             output['valid_signature'] = False
                         except ValueError:
-                            log.exception(f'txo.id: {txo.id}, txo.channel.id:{txo.channel.id}, output: {output}')
+                            log.exception(
+                                'txo.id: %s, txo.channel.id:%s, output: %s',
+                                txo.id, txo.channel.id, output
+                            )
                             output['valid_signature'] = False
 
             if txo.script.is_claim_name:
