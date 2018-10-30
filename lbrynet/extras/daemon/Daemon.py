@@ -220,7 +220,7 @@ class Daemon(AuthJSONRPCServer):
     }
 
     def __init__(self, analytics_manager=None, component_manager=None):
-        to_skip = list(conf.settings['components_to_skip'])
+        to_skip = conf.settings['components_to_skip']
         if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
             to_skip.append('reflector')
         looping_calls = {
