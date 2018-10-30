@@ -3,7 +3,7 @@ import asyncio
 from asyncio import CancelledError
 from itertools import cycle
 
-from aiorpcx import ClientSession as BaseClientSession
+from aiorpcx import RPCSession as BaseClientSession, Connector
 
 from torba import __version__
 from torba.stream import StreamController
@@ -13,12 +13,17 @@ log = logging.getLogger(__name__)
 
 class ClientSession(BaseClientSession):
 
-    def __init__(self, *args, network, **kwargs):
+    def __init__(self, *args, network, server, **kwargs):
         self.network = network
+        self.server = server
         super().__init__(*args, **kwargs)
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
         self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
+
+    async def create_connection(self):
+        connector = Connector(lambda: self, *self.server)
+        await connector.create_connection()
 
     async def handle_request(self, request):
         controller = self.network.subscription_controllers[request.method]
@@ -54,8 +59,8 @@ class BaseNetwork:
         self.running = True
         delay = 0.0
         for server in cycle(self.config['default_servers']):
+            self.client = ClientSession(network=self, server=server)
             connection_string = '{}:{}'.format(*server)
-            self.client = ClientSession(*server, network=self)
             try:
                 await self.client.create_connection()
                 await self.ensure_server_version()
