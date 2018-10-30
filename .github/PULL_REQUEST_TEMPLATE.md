@@ -1,15 +1,36 @@
-<!-- 
-Thank your for making LBRY better!
+## PR Checklist
+Please check all that apply to this PR using "x":
 
-note: Check existing issues and pull-requests before submitting new ones, as a courtesy to the maintainers and making sure work isn't duplicated.
--->
-### Description
+- [ ] I have checked that this PR is not a duplicate of an existing PR (open, closed or merged)
+- [ ] I have checked that this PR does not introduce a breaking change
+- [ ] This PR introduces breaking changes and I have provided a detailed explanation below
 
-<!-- Please describe what the changes are made in this pull request and why the change was necessary. -->
 
-<!--
-If this pull request applies to an issue, add in the issue number here
-e.g.
-Fixes #1
--->
-### Fixes #
+## PR Type
+What kind of change does this PR introduce?
+
+<!-- Please check all that apply to this PR using "x". -->
+
+- [ ] Bugfix
+- [ ] Feature
+- [ ] Breaking changes (bugfix or feature that introduces breaking changes)
+- [ ] Code style update (formatting)
+- [ ] Refactoring (no functional changes)
+- [ ] Documentation changes
+- [ ] Other - Please describe:
+
+## Fixes
+
+Issue Number: N/A
+
+
+## What is the current behavior?
+
+
+## What is the new behavior?
+
+
+## Other information
+
+
+<!-- If this PR contains a breaking change, please describe the impact and solution strategy for existing applications below. -->
