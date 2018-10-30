@@ -42,7 +42,6 @@ HEADERS_COMPONENT = "blockchain_headers"
 WALLET_COMPONENT = "wallet"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
-STREAM_IDENTIFIER_COMPONENT = "stream_identifier"
 FILE_MANAGER_COMPONENT = "file_manager"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 REFLECTOR_COMPONENT = "reflector"
@@ -366,7 +365,7 @@ class WalletComponent(Component):
 
 class BlobComponent(Component):
     component_name = BLOB_COMPONENT
-    depends_on = [DATABASE_COMPONENT, DHT_COMPONENT]
+    depends_on = [DATABASE_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -378,8 +377,12 @@ class BlobComponent(Component):
 
     def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        dht_node = self.component_manager.get_component(DHT_COMPONENT)
-        self.blob_manager = DiskBlobManager(CS.get_blobfiles_dir(), storage, dht_node._dataStore)
+        datastore = None
+        if DHT_COMPONENT not in self.component_manager.skip_components:
+            dht_node = self.component_manager.get_component(DHT_COMPONENT)
+            if dht_node:
+                datastore = dht_node._dataStore
+        self.blob_manager = DiskBlobManager(CS.get_blobfiles_dir(), storage, datastore)
         return self.blob_manager.setup()
 
     def stop(self):
@@ -439,11 +442,7 @@ class DHTComponent(Component):
             peerPort=self.external_peer_port
         )
 
-        self.dht_node.start_listening()
-        yield self.dht_node._protocol._listening
-        d = self.dht_node.joinNetwork(GCS('known_dht_nodes'))
-        d.addCallback(lambda _: self.dht_node.start_looping_calls())
-        d.addCallback(lambda _: log.info("Joined the dht"))
+        yield self.dht_node.start(GCS('known_dht_nodes'))
         log.info("Started the dht")
 
     @defer.inlineCallbacks
@@ -500,41 +499,6 @@ class RateLimiterComponent(Component):
         return defer.succeed(None)
 
 
-class StreamIdentifierComponent(Component):
-    component_name = STREAM_IDENTIFIER_COMPONENT
-    depends_on = [DHT_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
-
-    def __init__(self, component_manager):
-        super().__init__(component_manager)
-        self.sd_identifier = StreamDescriptorIdentifier()
-
-    @property
-    def component(self):
-        return self.sd_identifier
-
-    @defer.inlineCallbacks
-    def start(self):
-        dht_node = self.component_manager.get_component(DHT_COMPONENT)
-        rate_limiter = self.component_manager.get_component(RATE_LIMITER_COMPONENT)
-        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
-        storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        wallet = self.component_manager.get_component(WALLET_COMPONENT)
-
-        add_lbry_file_to_sd_identifier(self.sd_identifier)
-        file_saver_factory = EncryptedFileSaverFactory(
-            dht_node.peer_finder,
-            rate_limiter,
-            blob_manager,
-            storage,
-            wallet,
-            GCS('download_directory')
-        )
-        yield self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
-
-    def stop(self):
-        pass
-
-
 class PaymentRateComponent(Component):
     component_name = PAYMENT_RATE_COMPONENT
 
@@ -555,8 +519,8 @@ class PaymentRateComponent(Component):
 
 class FileManagerComponent(Component):
     component_name = FILE_MANAGER_COMPONENT
-    depends_on = [DHT_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT,
-                  STREAM_IDENTIFIER_COMPONENT, PAYMENT_RATE_COMPONENT]
+    depends_on = [RATE_LIMITER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT,
+                  PAYMENT_RATE_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -575,15 +539,26 @@ class FileManagerComponent(Component):
 
     @defer.inlineCallbacks
     def start(self):
-        dht_node = self.component_manager.get_component(DHT_COMPONENT)
         rate_limiter = self.component_manager.get_component(RATE_LIMITER_COMPONENT)
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT)
+
+        sd_identifier = StreamDescriptorIdentifier()
+        add_lbry_file_to_sd_identifier(sd_identifier)
+        file_saver_factory = EncryptedFileSaverFactory(
+            self.component_manager.peer_finder,
+            rate_limiter,
+            blob_manager,
+            storage,
+            wallet,
+            GCS('download_directory')
+        )
+        yield sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
+
         payment_rate_manager = self.component_manager.get_component(PAYMENT_RATE_COMPONENT)
         log.info('Starting the file manager')
-        self.file_manager = EncryptedFileManager(dht_node.peer_finder, rate_limiter, blob_manager, wallet,
+        self.file_manager = EncryptedFileManager(self.component_manager.peer_finder, rate_limiter, blob_manager, wallet,
                                                  payment_rate_manager, storage, sd_identifier)
         yield self.file_manager.setup()
         log.info('Done setting up file manager')
@@ -595,7 +570,7 @@ class FileManagerComponent(Component):
 
 class PeerProtocolServerComponent(Component):
     component_name = PEER_PROTOCOL_SERVER_COMPONENT
-    depends_on = [UPNP_COMPONENT, DHT_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, WALLET_COMPONENT,
+    depends_on = [UPNP_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, WALLET_COMPONENT,
                   PAYMENT_RATE_COMPONENT]
 
     def __init__(self, component_manager):
@@ -624,7 +599,7 @@ class PeerProtocolServerComponent(Component):
         }
         server_factory = ServerProtocolFactory(
             self.component_manager.get_component(RATE_LIMITER_COMPONENT), query_handlers,
-            self.component_manager.get_component(DHT_COMPONENT).peer_manager
+            self.component_manager.peer_manager
         )
 
         try:
@@ -648,7 +623,7 @@ class PeerProtocolServerComponent(Component):
 
 class ReflectorComponent(Component):
     component_name = REFLECTOR_COMPONENT
-    depends_on = [DHT_COMPONENT, BLOB_COMPONENT, FILE_MANAGER_COMPONENT]
+    depends_on = [BLOB_COMPONENT, FILE_MANAGER_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -662,10 +637,9 @@ class ReflectorComponent(Component):
     @defer.inlineCallbacks
     def start(self):
         log.info("Starting reflector server")
-        dht_node = self.component_manager.get_component(DHT_COMPONENT)
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
-        reflector_factory = reflector_server_factory(dht_node.peer_manager, blob_manager, file_manager)
+        reflector_factory = reflector_server_factory(self.component_manager.peer_manager, blob_manager, file_manager)
         try:
             self.reflector_server = yield reactor.listenTCP(self.reflector_server_port, reflector_factory)
             log.info('Started reflector on port %s', self.reflector_server_port)
@@ -701,10 +675,12 @@ class UPnPComponent(Component):
 
     @defer.inlineCallbacks
     def _setup_redirects(self):
-        upnp_redirects = yield DeferredDict({
-            "UDP": from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")),
-            "TCP": from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
-        })
+        d = {}
+        if PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
+            d["TCP"] = from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
+        if DHT_COMPONENT not in self.component_manager.skip_components:
+            d["UDP"] = from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"))
+        upnp_redirects = yield DeferredDict(d)
         self.upnp_redirects.update(upnp_redirects)
 
     @defer.inlineCallbacks
@@ -739,10 +715,12 @@ class UPnPComponent(Component):
         if not self.upnp_redirects and self.upnp:  # setup missing redirects
             try:
                 log.info("add UPnP port mappings")
-                upnp_redirects = yield DeferredDict({
-                    "UDP": from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")),
-                    "TCP": from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
-                })
+                d = {}
+                if PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
+                    d["TCP"] = from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
+                if DHT_COMPONENT not in self.component_manager.skip_components:
+                    d["UDP"] = from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"))
+                upnp_redirects = yield DeferredDict(d)
                 log.info("set up redirects: %s", upnp_redirects)
                 self.upnp_redirects.update(upnp_redirects)
             except (asyncio.TimeoutError, UPnPError):
@@ -756,7 +734,7 @@ class UPnPComponent(Component):
                 if proto in self.upnp_redirects and mapping['NewExternalPort'] == self.upnp_redirects[proto]:
                     if mapping['NewInternalClient'] == self.upnp.lan_address:
                         found.add(proto)
-            if 'UDP' not in found:
+            if 'UDP' not in found and DHT_COMPONENT not in self.component_manager.skip_components:
                 try:
                     udp_port = yield from_future(
                         self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
@@ -765,7 +743,7 @@ class UPnPComponent(Component):
                     log.info("refreshed upnp redirect for dht port: %i", udp_port)
                 except (asyncio.TimeoutError, UPnPError):
                     del self.upnp_redirects['UDP']
-            if 'TCP' not in found:
+            if 'TCP' not in found and PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
                 try:
                     tcp_port = yield from_future(
                         self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
@@ -774,8 +752,11 @@ class UPnPComponent(Component):
                     log.info("refreshed upnp redirect for peer port: %i", tcp_port)
                 except (asyncio.TimeoutError, UPnPError):
                     del self.upnp_redirects['TCP']
-            if 'TCP' in self.upnp_redirects and 'UDP' in self.upnp_redirects:
-                log.debug("upnp redirects are still active")
+            if ('TCP' in self.upnp_redirects
+                and PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components) and (
+                    'UDP' in self.upnp_redirects and DHT_COMPONENT not in self.component_manager.skip_components):
+                if self.upnp_redirects:
+                    log.debug("upnp redirects are still active")
 
     @defer.inlineCallbacks
     def start(self):
@@ -786,11 +767,13 @@ class UPnPComponent(Component):
         success = False
         yield self._maintain_redirects()
         if self.upnp:
-            if not self.upnp_redirects:
+            if not self.upnp_redirects and not all([x in self.component_manager.skip_components for x in
+                                                    (DHT_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT)]):
                 log.error("failed to setup upnp, debugging infomation: %s", self.upnp.zipped_debugging_info)
             else:
                 success = True
-                log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
+                if self.upnp_redirects:
+                    log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
         self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())

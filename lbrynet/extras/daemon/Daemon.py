@@ -210,7 +210,6 @@ class Daemon(AuthJSONRPCServer):
         DATABASE_COMPONENT: "storage",
         DHT_COMPONENT: "dht_node",
         WALLET_COMPONENT: "wallet_manager",
-        STREAM_IDENTIFIER_COMPONENT: "sd_identifier",
         FILE_MANAGER_COMPONENT: "file_manager",
         EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
         PAYMENT_RATE_COMPONENT: "payment_rate_manager",
@@ -241,7 +240,6 @@ class Daemon(AuthJSONRPCServer):
         self.storage = None
         self.dht_node = None
         self.wallet_manager: LbryWalletManager = None
-        self.sd_identifier = None
         self.file_manager = None
         self.exchange_rate_manager = None
         self.payment_rate_manager = None
@@ -305,7 +303,7 @@ class Daemon(AuthJSONRPCServer):
         rate_manager = rate_manager or self.payment_rate_manager
         timeout = timeout or 30
         downloader = StandaloneBlobDownloader(
-            blob_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
+            blob_hash, self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
             rate_manager, self.wallet_manager, timeout
         )
         return downloader.download()
@@ -372,8 +370,8 @@ class Daemon(AuthJSONRPCServer):
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
             self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
             self.streams[sd_hash] = GetStream(
-                self.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
-                self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
+                self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
+                self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
                 conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
                 timeout
             )
@@ -432,7 +430,7 @@ class Daemon(AuthJSONRPCServer):
         if blob:
             return self.blob_manager.get_blob(blob[0])
         return download_sd_blob(
-            sd_hash.decode(), self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
+            sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
             self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
             download_mirrors=conf.settings['download_mirrors']
         )
@@ -819,7 +817,7 @@ class Daemon(AuthJSONRPCServer):
                 'ip': (str) remote ip, if available,
                 'lbrynet_version': (str) lbrynet_version,
                 'lbryum_version': (str) lbryum_version,
-                'lbrynet.schema_version': (str) lbrynet.schema_version,
+                'lbryschema_version': (str) lbryschema_version,
                 'os_release': (str) os release string
                 'os_system': (str) os name
                 'platform': (str) platform string
@@ -1776,8 +1774,8 @@ class Daemon(AuthJSONRPCServer):
             results[resolved_uri] = resolved[resolved_uri]
         return results
 
-    @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
-              DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+              RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_get(self, uri, file_name=None, timeout=None):
         """
@@ -1962,7 +1960,7 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(result)
         defer.returnValue(response)
 
-    @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_stream_cost_estimate(self, uri, size=None):
