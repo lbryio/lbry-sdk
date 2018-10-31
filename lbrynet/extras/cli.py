@@ -58,11 +58,13 @@ def print_help():
        lbrynet [--conf <config file>] <command> [<args>]
     
     EXAMPLES
-       lbrynet commands                 # list available commands
-       lbrynet status                   # get daemon status
-       lbrynet --conf ~/l1.conf status  # like above but using ~/l1.conf as config file
-       lbrynet resolve_name what        # resolve a name
-       lbrynet help resolve_name        # get help for a command
+        lbrynet start                  # starts the daemon. The daemon needs to be running for commands to work
+        lbrynet help                   # display this message
+        lbrynet help <command_name>    # get help for a command(doesn't need the daemon to be running)
+        lbrynet commands               # list available commands
+        lbrynet status                 # get the running status of the daemon
+        lbrynet --conf ~/l1.conf       # use ~/l1.conf as config file
+        lbrynet resolve what           # resolve a name
     """))
 
 
