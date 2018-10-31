@@ -1,6 +1,6 @@
 # Installing LBRY
 
-If only the json-rpc API server is needed the recommended way to install LBRY is to use a pre-built binary. We provide binaries for all major operating systems. See the [README](README.md).
+If only the json-rpc API server is needed, the recommended way to install LBRY is to use a pre-built binary. We provide binaries for all major operating systems. See the [README](README.md).
 
 These instructions are for installing LBRY from source, which is recommended if you are interested in doing development work or LBRY is not available on your operating system (godspeed, TempleOS users).
 
@@ -60,7 +60,7 @@ To install:
  pip install --editable .[test]  # [test] installs extras needed for running the tests
  ```
 
-To verify your install, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `virtualenv` command.
+To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `virtualenv` command.
 
 ## Run the tests
 To run the unit tests from the repo directory:
