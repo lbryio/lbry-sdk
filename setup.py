@@ -3,6 +3,10 @@ from setuptools import setup, find_packages
 
 import torba
 
+BASE = os.path.dirname(__file__)
+with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
+    long_description = fh.read()
+
 setup(
     name='torba',
     version=torba.__version__,
@@ -10,11 +14,10 @@ setup(
     license='MIT',
     author='LBRY Inc.',
     author_email='hello@lbry.io',
-    description='Wallet library for bitcoin based currencies.',
-    long_description=open(os.path.join(os.path.dirname(__file__), 'README.md'),
-                          encoding='utf-8').read(),
+    description='Wallet client/server framework for bitcoin based currencies.',
+    long_description=long_description,
     long_description_content_type="text/markdown",
-    keywords='wallet,crypto,currency,money,bitcoin,lbry',
+    keywords='wallet,crypto,currency,money,bitcoin,electrum,electrumx',
     classifiers=(
         'Framework :: AsyncIO',
         'Intended Audience :: Developers',
@@ -23,13 +26,16 @@ setup(
         'Programming Language :: Python :: 3',
         'Operating System :: OS Independent',
         'Topic :: Internet',
+        'Topic :: Software Development :: Testing',
         'Topic :: Software Development :: Libraries :: Python Modules',
+        'Topic :: System :: Benchmark',
         'Topic :: System :: Distributed Computing',
         'Topic :: Utilities',
     ),
     packages=find_packages(exclude=('tests',)),
     python_requires='>=3.6',
     install_requires=(
+        'aiohttp',
         'aiorpcx==0.9.0',
         'coincurve',
         'pbkdf2',
@@ -38,6 +44,13 @@ setup(
     extras_require={
         'test': (
             'mock',
-        )
-    }
+            'requests',
+        ),
+        'server': (
+            'attrs',
+            'plyvel',
+            'pylru'
+        ),
+    },
+    entry_points={'console_scripts': ['torba=torba.cli:main']}
 )

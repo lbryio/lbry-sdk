@@ -1,3 +1,4 @@
+import logging
 from asyncio import CancelledError
 
 from orchstr8.testcase import IntegrationTestCase
@@ -6,7 +7,7 @@ from torba.constants import COIN
 
 class ReconnectTests(IntegrationTestCase):
 
-    VERBOSE = False
+    VERBOSITY = logging.DEBUG
 
     async def test_connection_drop_still_receives_events_after_reconnected(self):
         address1 = await self.account.receiving.get_or_create_usable_address()
@@ -31,4 +32,3 @@ class ReconnectTests(IntegrationTestCase):
         await self.blockchain.generate(1)
         # omg, the burned cable still works! torba is fire proof!
         await self.ledger.network.get_transaction(sendtxid)
-

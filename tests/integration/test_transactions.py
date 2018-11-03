@@ -1,11 +1,12 @@
+import logging
 import asyncio
-from orchstr8.testcase import IntegrationTestCase
+from torba.testing import IntegrationTestCase
 from torba.constants import COIN
 
 
 class BasicTransactionTests(IntegrationTestCase):
 
-    VERBOSE = False
+    VERBOSITY = logging.WARNING
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)

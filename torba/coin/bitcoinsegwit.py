@@ -4,7 +4,7 @@ __node_bin__ = 'bitcoin-0.16.3/bin'
 __node_url__ = (
     'https://bitcoin.org/bin/bitcoin-core-0.16.3/bitcoin-0.16.3-x86_64-linux-gnu.tar.gz'
 )
-__electrumx__ = 'electrumx.lib.coins.BitcoinSegwitRegtest'
+__spvserver__ = 'torba.server.coins.BitcoinSegwitRegtest'
 
 import struct
 from typing import Optional

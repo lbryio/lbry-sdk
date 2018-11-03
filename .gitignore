@@ -8,6 +8,7 @@ dist/
 # testing
 .tox/
 tests/unit/bitcoin_headers
+torba/bin
 
 # cache and logs
 __pycache__/

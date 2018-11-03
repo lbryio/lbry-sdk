@@ -4,7 +4,7 @@ __node_bin__ = 'bitcoin-abc-0.17.2/bin'
 __node_url__ = (
     'https://download.bitcoinabc.org/0.17.2/linux/bitcoin-abc-0.17.2-x86_64-linux-gnu.tar.gz'
 )
-__electrumx__ = 'electrumx.lib.coins.BitcoinCashRegtest'
+__spvserver__ = 'torba.server.coins.BitcoinCashRegtest'
 
 from binascii import unhexlify
 from torba.baseledger import BaseLedger
