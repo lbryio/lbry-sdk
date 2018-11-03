@@ -42,7 +42,7 @@ def main():
     command = getattr(args, 'command', 'help')
 
     if command == 'gui':
-        from torba.workbench import main as start_app
+        from torba.workbench import main as start_app  # pylint: disable=E0611,E0401
         return start_app()
 
     loop = asyncio.get_event_loop()
