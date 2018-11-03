@@ -27,7 +27,7 @@ class WebSocketLogHandler(logging.Handler):
 
 class TestingServiceAPI:
 
-    def __init__(self, stack: Conductor, loop: asyncio.AbstractEventLoop):
+    def __init__(self, stack: Conductor, loop: asyncio.AbstractEventLoop) -> None:
         self.stack = stack
         self.loop = loop
         self.app = Application()
@@ -112,25 +112,25 @@ class TestingServiceAPI:
         })
 
     async def log(self, request):
-        ws = WebSocketResponse()
-        await ws.prepare(request)
-        self.app['websockets'].add(ws)
+        web_socket = WebSocketResponse()
+        await web_socket.prepare(request)
+        self.app['websockets'].add(web_socket)
         try:
-            async for msg in ws:
+            async for msg in web_socket:
                 if msg.type == WSMsgType.TEXT:
                     if msg.data == 'close':
-                        await ws.close()
+                        await web_socket.close()
                 elif msg.type == WSMsgType.ERROR:
-                    print('ws connection closed with exception %s' %
-                          ws.exception())
+                    print('web socket connection closed with exception %s' %
+                          web_socket.exception())
         finally:
-            self.app['websockets'].remove(ws)
-        return ws
+            self.app['websockets'].remove(web_socket)
+        return web_socket
 
     @staticmethod
     async def on_shutdown(app):
-        for ws in app['websockets']:
-            await ws.close(code=WSCloseCode.GOING_AWAY, message='Server shutdown')
+        for web_socket in app['websockets']:
+            await web_socket.close(code=WSCloseCode.GOING_AWAY, message='Server shutdown')
 
     async def on_status(self, _):
         if not self.app['websockets']:
@@ -143,5 +143,5 @@ class TestingServiceAPI:
         })
 
     def send_message(self, msg):
-        for ws in self.app['websockets']:
-            asyncio.ensure_future(ws.send_json(msg))
+        for web_socket in self.app['websockets']:
+            asyncio.ensure_future(web_socket.send_json(msg))

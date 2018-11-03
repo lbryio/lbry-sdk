@@ -13,9 +13,9 @@ def get_argument_parser():
     )
     subparsers = parser.add_subparsers(dest='command', help='sub-command help')
 
-    gui = subparsers.add_parser("gui", help="Start Qt GUI.")
+    subparsers.add_parser("gui", help="Start Qt GUI.")
 
-    download = subparsers.add_parser("download", help="Download blockchain node binary.")
+    subparsers.add_parser("download", help="Download blockchain node binary.")
 
     start = subparsers.add_parser("start", help="Start orchstr8 service.")
     start.add_argument("--blockchain", help="Start blockchain node.", action="store_true")
@@ -25,7 +25,7 @@ def get_argument_parser():
     generate = subparsers.add_parser("generate", help="Call generate method on running orchstr8 instance.")
     generate.add_argument("blocks", type=int, help="Number of blocks to generate")
 
-    transfer = subparsers.add_parser("transfer", help="Call transfer method on running orchstr8 instance.")
+    subparsers.add_parser("transfer", help="Call transfer method on running orchstr8 instance.")
     return parser
 
 

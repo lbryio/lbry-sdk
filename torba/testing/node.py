@@ -1,5 +1,4 @@
 import os
-import sys
 import shutil
 import asyncio
 import zipfile
@@ -8,9 +7,10 @@ import logging
 import tempfile
 import subprocess
 import importlib
-import requests
 from binascii import hexlify
-from typing import Type
+from typing import Type, Optional
+
+import requests
 
 from torba.server.server import Server
 from torba.server.env import Env
@@ -18,12 +18,6 @@ from torba.wallet import Wallet
 from torba.baseledger import BaseLedger, BlockHeightEvent
 from torba.basemanager import BaseWalletManager
 from torba.baseaccount import BaseAccount
-
-root = logging.getLogger()
-ch = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-root.addHandler(ch)
 
 
 def get_manager_from_environment(default_manager=BaseWalletManager):
@@ -122,17 +116,17 @@ class WalletNode:
         self.manager_class = manager_class
         self.ledger_class = ledger_class
         self.verbose = verbose
-        self.manager: BaseWalletManager = None
-        self.ledger: BaseLedger = None
-        self.wallet: Wallet = None
-        self.account: BaseAccount = None
-        self.data_path: str = None
+        self.manager: Optional[BaseWalletManager] = None
+        self.ledger: Optional[BaseLedger] = None
+        self.wallet: Optional[Wallet] = None
+        self.account: Optional[BaseAccount] = None
+        self.data_path: Optional[str] = None
 
     async def start(self):
         self.data_path = tempfile.mkdtemp()
         wallet_file_name = os.path.join(self.data_path, 'my_wallet.json')
-        with open(wallet_file_name, 'w') as wf:
-            wf.write('{"version": 1, "accounts": []}\n')
+        with open(wallet_file_name, 'w') as wallet_file:
+            wallet_file.write('{"version": 1, "accounts": []}\n')
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
@@ -164,6 +158,7 @@ class SPVNode:
         self.coin_class = coin_class
         self.controller = None
         self.data_path = None
+        self.server = None
 
     async def start(self):
         self.data_path = tempfile.mkdtemp()
@@ -253,15 +248,15 @@ class BlockchainNode:
 
         if not os.path.exists(downloaded_file):
             self.log.info('Downloading: %s', self.latest_release_url)
-            r = requests.get(self.latest_release_url, stream=True)
+            response = requests.get(self.latest_release_url, stream=True)
             with open(downloaded_file, 'wb') as f:
-                shutil.copyfileobj(r.raw, f)
+                shutil.copyfileobj(response.raw, f)
 
         self.log.info('Extracting: %s', downloaded_file)
 
         if downloaded_file.endswith('.zip'):
-            with zipfile.ZipFile(downloaded_file) as zf:
-                zf.extractall(self.bin_dir)
+            with zipfile.ZipFile(downloaded_file) as dotzip:
+                dotzip.extractall(self.bin_dir)
                 # zipfile bug https://bugs.python.org/issue15795
                 os.chmod(self.cli_bin, 0o755)
                 os.chmod(self.daemon_bin, 0o755)
@@ -314,7 +309,7 @@ class BlockchainNode:
         process = await asyncio.create_subprocess_exec(
             *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
         )
-        out, err = await process.communicate()
+        out, _ = await process.communicate()
         self.log.info(out.decode().strip())
         return out.decode().strip()
 
@@ -322,8 +317,8 @@ class BlockchainNode:
         self._block_expected += blocks
         return self._cli_cmnd('generate', str(blocks))
 
-    def invalidateblock(self, hash):
-        return self._cli_cmnd('invalidateblock', hash)
+    def invalidateblock(self, blockhash):
+        return self._cli_cmnd('invalidateblock', blockhash)
 
     def get_raw_change_address(self):
         return self._cli_cmnd('getrawchangeaddress')
@@ -331,8 +326,8 @@ class BlockchainNode:
     async def get_balance(self):
         return float(await self._cli_cmnd('getbalance'))
 
-    def send_to_address(self, address, credits):
-        return self._cli_cmnd('sendtoaddress', address, str(credits))
+    def send_to_address(self, address, amount):
+        return self._cli_cmnd('sendtoaddress', address, str(amount))
 
     def send_raw_transaction(self, tx):
         return self._cli_cmnd('sendrawtransaction', tx.decode())

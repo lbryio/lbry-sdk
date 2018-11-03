@@ -1,12 +1,12 @@
 import asyncio
-import unittest
 import logging
+import unittest
 from unittest.case import _Outcome
 from .node import Conductor
 
 
 try:
-    from asyncio.runners import _cancel_all_tasks
+    from asyncio.runners import _cancel_all_tasks  # pylint: disable=C0412
 except ImportError:
     # this is only available in py3.7
     def _cancel_all_tasks(loop):
@@ -17,26 +17,26 @@ class AsyncioTestCase(unittest.TestCase):
     # Implementation inspired by discussion:
     #  https://bugs.python.org/issue32972
 
-    async def asyncSetUp(self):
+    async def asyncSetUp(self):  # pylint: disable=C0103
         pass
 
-    async def asyncTearDown(self):
+    async def asyncTearDown(self):  # pylint: disable=C0103
         pass
 
-    async def doAsyncCleanups(self):
+    async def doAsyncCleanups(self):  # pylint: disable=C0103
         pass
 
-    def run(self, result=None):
+    def run(self, result=None):  # pylint: disable=R0915
         orig_result = result
         if result is None:
             result = self.defaultTestResult()
-            startTestRun = getattr(result, 'startTestRun', None)
+            startTestRun = getattr(result, 'startTestRun', None)  # pylint: disable=C0103
             if startTestRun is not None:
                 startTestRun()
 
         result.startTest(self)
 
-        testMethod = getattr(self, self._testMethodName)
+        testMethod = getattr(self, self._testMethodName)  # pylint: disable=C0103
         if (getattr(self.__class__, "__unittest_skip__", False) or
                 getattr(testMethod, "__unittest_skip__", False)):
             # If the class or method was skipped.
@@ -99,9 +99,9 @@ class AsyncioTestCase(unittest.TestCase):
         finally:
             result.stopTest(self)
             if orig_result is None:
-                stopTestRun = getattr(result, 'stopTestRun', None)
+                stopTestRun = getattr(result, 'stopTestRun', None)  # pylint: disable=C0103
                 if stopTestRun is not None:
-                    stopTestRun()
+                    stopTestRun()  # pylint: disable=E1102
 
             # explicitly break reference cycles:
             # outcome.errors -> frame -> outcome -> outcome.errors
@@ -118,6 +118,15 @@ class IntegrationTestCase(AsyncioTestCase):
     LEDGER = None
     MANAGER = None
     VERBOSITY = logging.WARNING
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.conductor = None
+        self.blockchain = None
+        self.manager = None
+        self.ledger = None
+        self.wallet = None
+        self.account = None
 
     async def asyncSetUp(self):
         self.conductor = Conductor(
@@ -162,7 +171,7 @@ class IntegrationTestCase(AsyncioTestCase):
     async def on_transaction(self, tx):
         addresses = await self.get_tx_addresses(tx, self.ledger)
         await asyncio.wait([
-            self.ledger.on_transaction.where(lambda e: e.address == address)
+            self.ledger.on_transaction.where(lambda e: e.address == address)  # pylint: disable=W0640
             for address in addresses
         ])
 
