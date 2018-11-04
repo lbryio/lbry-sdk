@@ -6,8 +6,8 @@ from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
 
-from lbrynet.reflector.common import IncompleteResponse, ReflectorRequestError
-from lbrynet.reflector.common import REFLECTOR_V1, REFLECTOR_V2
+from lbrynet.extras.reflector.common import IncompleteResponse, ReflectorRequestError
+from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 
 log = logging.getLogger(__name__)
 

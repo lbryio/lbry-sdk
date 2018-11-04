@@ -4,7 +4,7 @@ from binascii import hexlify
 from twisted.internet import defer, error
 from twisted.trial import unittest
 from lbrynet.core.StreamDescriptor import get_sd_info
-from lbrynet import reflector
+from lbrynet.extras import reflector
 from lbrynet.core import BlobManager, PeerManager
 from lbrynet.core import StreamDescriptor
 from lbrynet.file_manager import EncryptedFileCreator
