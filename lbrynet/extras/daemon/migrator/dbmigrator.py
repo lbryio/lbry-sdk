@@ -7,21 +7,21 @@ def migrate_db(db_dir, start, end):
     current = start
     while current < end:
         if current == 1:
-            from lbrynet.database.migrator.migrate1to2 import do_migration
+            from lbrynet.extras.daemon.migrator.migrate1to2 import do_migration
         elif current == 2:
-            from lbrynet.database.migrator.migrate2to3 import do_migration
+            from lbrynet.extras.daemon.migrator.migrate2to3 import do_migration
         elif current == 3:
-            from lbrynet.database.migrator.migrate3to4 import do_migration
+            from lbrynet.extras.daemon.migrator.migrate3to4 import do_migration
         elif current == 4:
-            from lbrynet.database.migrator.migrate4to5 import do_migration
+            from lbrynet.extras.daemon.migrator.migrate4to5 import do_migration
         elif current == 5:
-            from lbrynet.database.migrator.migrate5to6 import do_migration
+            from lbrynet.extras.daemon.migrator.migrate5to6 import do_migration
         elif current == 6:
-            from lbrynet.database.migrator.migrate6to7 import do_migration
+            from lbrynet.extras.daemon.migrator.migrate6to7 import do_migration
         elif current == 7:
-            from lbrynet.database.migrator.migrate7to8 import do_migration
+            from lbrynet.extras.daemon.migrator.migrate7to8 import do_migration
         elif current == 8:
-            from lbrynet.database.migrator.migrate8to9 import do_migration
+            from lbrynet.extras.daemon.migrator import do_migration
         else:
             raise Exception("DB migration of version {} to {} is not available".format(current,
                                                                                        current+1))

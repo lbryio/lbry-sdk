@@ -23,7 +23,7 @@ from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from .Component import Component
 from .ExchangeRateManager import ExchangeRateManager
-from lbrynet.database.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.dht import node, hashannouncer
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
@@ -159,7 +159,7 @@ class DatabaseComponent(Component):
                             'Your database is revision %i, expected %i' %
                             (old_revision, self.get_current_db_revision()))
         if old_revision < self.get_current_db_revision():
-            from lbrynet.database.migrator import dbmigrator
+            from lbrynet.extras.daemon.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
             yield threads.deferToThread(
                 dbmigrator.migrate_db, GCS('data_dir'), old_revision, self.get_current_db_revision()

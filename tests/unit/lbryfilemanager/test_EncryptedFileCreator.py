@@ -1,17 +1,15 @@
 import json
-import mock
 from twisted.trial import unittest
 from twisted.internet import defer
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.database.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.StreamDescriptor import JSONBytesEncoder

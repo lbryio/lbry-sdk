@@ -10,7 +10,7 @@ from lbrynet.core import StreamDescriptor
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
-from lbrynet.database.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from tests import mocks
 from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
