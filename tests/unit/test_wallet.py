@@ -1,6 +1,6 @@
 import tempfile
 
-from orchstr8.testcase import AsyncioTestCase
+from torba.testing import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as BTCLedger
 from torba.coin.bitcoincash import MainNetLedger as BCHLedger

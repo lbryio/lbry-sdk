@@ -5,7 +5,7 @@ from torba.constants import COIN
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.basedatabase import query, constraints_to_sql
 
-from orchstr8.testcase import AsyncioTestCase
+from torba.testing import AsyncioTestCase
 
 from .test_transaction import get_output, NULL_HASH
 

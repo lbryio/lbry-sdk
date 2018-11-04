@@ -1,6 +1,6 @@
 from types import GeneratorType
 
-from orchstr8.testcase import AsyncioTestCase
+from torba.testing import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.coinselection import CoinSelector, MAXIMUM_TRIES

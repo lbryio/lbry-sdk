@@ -1,6 +1,6 @@
 from binascii import hexlify
 
-from orchstr8.testcase import AsyncioTestCase
+from torba.testing import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.baseaccount import HierarchicalDeterministic, SingleKey

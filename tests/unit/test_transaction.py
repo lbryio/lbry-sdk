@@ -2,7 +2,7 @@ import unittest
 from binascii import hexlify, unhexlify
 from itertools import cycle
 
-from orchstr8.testcase import AsyncioTestCase
+from torba.testing import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.wallet import Wallet

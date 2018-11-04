@@ -1,7 +1,7 @@
 import os
 from urllib.request import Request, urlopen
 
-from orchstr8.testcase import AsyncioTestCase
+from torba.testing import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainHeaders
 

@@ -1,1 +1,1 @@
-from .testcase import IntegrationTestCase
+from .testcase import IntegrationTestCase, AsyncioTestCase
