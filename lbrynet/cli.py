@@ -20,10 +20,10 @@ from docopt import docopt
 from textwrap import dedent
 
 from lbrynet import __name__ as lbrynet_name
-from lbrynet.daemon.Daemon import Daemon
-from lbrynet.daemon.DaemonControl import start as daemon_main
-from lbrynet.daemon.DaemonConsole import main as daemon_console
-from lbrynet.daemon.auth.client import LBRYAPIClient
+from lbrynet.extras.daemon.Daemon import Daemon
+from lbrynet.extras.daemon.DaemonControl import start as daemon_main
+from lbrynet.extras.daemon.DaemonConsole import main as daemon_console
+from lbrynet.extras.daemon.auth.client import LBRYAPIClient
 from lbrynet.core.system_info import get_platform
 
 

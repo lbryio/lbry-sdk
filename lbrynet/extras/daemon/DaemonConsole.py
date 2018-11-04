@@ -10,8 +10,8 @@ from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.core import log_support
-from lbrynet.daemon.auth.client import LBRYAPIClient
-from lbrynet.daemon.Daemon import Daemon
+from .auth.client import LBRYAPIClient
+from .Daemon import Daemon
 
 log = logging.getLogger(__name__)
 

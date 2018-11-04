@@ -19,11 +19,11 @@ from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.core.looping_call_manager import LoopingCallManager
-from lbrynet.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from .keyring import APIKey, Keyring
 from .undecorated import undecorated
 from .factory import AuthJSONRPCResource
-from lbrynet.daemon.json_response_encoder import JSONResponseEncoder
+from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
 log = logging.getLogger(__name__)
 
 EMPTY_PARAMS = [{}]

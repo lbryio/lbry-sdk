@@ -11,13 +11,13 @@ from faker import Faker
 from lbrynet.schema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.database.storage import SQLiteStorage
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
-from lbrynet.daemon.Components import f2d
-from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, BLOB_COMPONENT
-from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
-from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
+from lbrynet.extras.daemon.Components import f2d
+from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, BLOB_COMPONENT
+from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
