@@ -2,9 +2,9 @@ import struct
 from typing import Optional
 from binascii import hexlify, unhexlify
 
-from torba.baseheader import BaseHeaders
-from torba.util import ArithUint256
-from torba.hash import sha512, double_sha256, ripemd160
+from torba.client.baseheader import BaseHeaders
+from torba.client.util import ArithUint256
+from torba.client.hash import sha512, double_sha256, ripemd160
 
 
 class Headers(BaseHeaders):

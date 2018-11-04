@@ -60,7 +60,8 @@ class ComponentManager:
         try:
             component = self.get_component(condition.component)
             result = condition.evaluate(component)
-        except Exception as err:
+        except Exception:
+            log.exception('failed to evaluate condition:')
             result = False
         return result, "" if result else condition.message
 

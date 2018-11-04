@@ -1,6 +1,6 @@
 import re
 import textwrap
-from torba.constants import COIN
+from torba.client.constants import COIN
 
 
 def lbc_to_dewies(lbc):

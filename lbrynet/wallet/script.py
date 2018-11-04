@@ -1,5 +1,5 @@
-from torba.basescript import BaseInputScript, BaseOutputScript, Template
-from torba.basescript import PUSH_SINGLE, PUSH_INTEGER, OP_DROP, OP_2DROP, PUSH_SUBSCRIPT, OP_VERIFY
+from torba.client.basescript import BaseInputScript, BaseOutputScript, Template
+from torba.client.basescript import PUSH_SINGLE, PUSH_INTEGER, OP_DROP, OP_2DROP, PUSH_SUBSCRIPT, OP_VERIFY
 
 
 class InputScript(BaseInputScript):

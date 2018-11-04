@@ -1,4 +1,4 @@
-from torba.basenetwork import BaseNetwork
+from torba.client.basenetwork import BaseNetwork
 
 
 class Network(BaseNetwork):

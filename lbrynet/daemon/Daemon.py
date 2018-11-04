@@ -14,8 +14,8 @@ from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
-from torba.constants import COIN
-from torba.baseaccount import SingleKey, HierarchicalDeterministic
+from torba.client.constants import COIN
+from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri

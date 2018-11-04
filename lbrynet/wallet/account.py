@@ -1,8 +1,8 @@
 import json
 import logging
 
-from torba.baseaccount import BaseAccount
-from torba.basetransaction import TXORef
+from torba.client.baseaccount import BaseAccount
+from torba.client.basetransaction import TXORef
 
 from lbryschema.claim import ClaimDict
 from lbryschema.signer import SECP256k1, get_signer
