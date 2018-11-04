@@ -24,6 +24,8 @@ jobs:
         - pip install tox-travis
       script: tox
     - <<: *tests
+      python: "3.6"
+    - <<: *tests
       env: TESTTYPE=integration
 
 after_success:

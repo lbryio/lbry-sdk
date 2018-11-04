@@ -26,11 +26,10 @@ from aiorpcx import (
 )
 
 import torba
-import torba.server.text as text
-import torba.server.util as util
+from torba.server import text
+from torba.server import util
 from torba.server.hash import (sha256, hash_to_hex_str, hex_str_to_hash,
                                 HASHX_LEN, Base58Error)
-from torba.server.peer import Peer
 from torba.server.daemon import DaemonError
 from torba.server.peers import PeerManager
 

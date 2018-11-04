@@ -27,8 +27,8 @@
 
 from ipaddress import ip_address
 
+from torba.server import util
 from torba.server.util import cachedproperty
-import torba.server.util as util
 
 from typing import Dict
 

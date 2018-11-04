@@ -21,7 +21,7 @@ from struct import pack, unpack
 import attr
 from aiorpcx import run_in_thread, sleep
 
-import torba.server.util as util
+from torba.server import util
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
 from torba.server.merkle import Merkle, MerkleCache
 from torba.server.util import formatted_time

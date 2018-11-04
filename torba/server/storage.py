@@ -10,7 +10,7 @@
 import os
 from functools import partial
 
-import torba.server.util as util
+from torba.server import util
 
 
 def db_class(name):

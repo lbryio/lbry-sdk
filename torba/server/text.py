@@ -1,6 +1,6 @@
 import time
 
-import torba.server.util as util
+from torba.server import util
 
 
 def sessions_lines(data):

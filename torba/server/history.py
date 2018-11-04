@@ -15,7 +15,7 @@ import time
 from collections import defaultdict
 from functools import partial
 
-import torba.server.util as util
+from torba.server import util
 from torba.server.util import pack_be_uint16, unpack_be_uint16_from
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
 
