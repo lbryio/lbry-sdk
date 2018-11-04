@@ -1,4 +1,5 @@
-from __future__ import print_function
+# Copyright (c) 2014 Michael Kropat
+
 import sys
 import ctypes
 from ctypes import windll, wintypes
