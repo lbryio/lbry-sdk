@@ -9,7 +9,7 @@ from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
-from lbrynet.database.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager

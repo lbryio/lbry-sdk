@@ -1,14 +1,9 @@
 # pylint: skip-file
-import os
-import shutil
 import tempfile
 
 from decimal import Decimal
-from collections import defaultdict
 from twisted.trial import unittest
-from twisted.internet import threads, defer
-from lbrynet.database.storage import SQLiteStorage
-from tests.mocks import FakeNetwork
+from twisted.internet import defer
 from lbrynet.core.Error import InsufficientFundsError
 #from lbrynet.core.Wallet import LBRYumWallet, ReservedPoints
 #from lbryum.commands import Commands

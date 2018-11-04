@@ -11,7 +11,7 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.client.ConnectionManager import ConnectionManager
-from lbrynet.database.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.dht.peerfinder import DummyPeerFinder
 
 
