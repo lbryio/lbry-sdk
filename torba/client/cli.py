@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 
 from torba.orchstr8.node import Conductor, get_ledger_from_environment, get_blockchain_node_from_ledger
-from torba.orchstr8.service import TestingServiceAPI
+from torba.orchstr8.service import ConductorService
 
 
 def get_argument_parser():
@@ -67,7 +67,7 @@ def main():
         if getattr(args, 'wallet', False):
             loop.run_until_complete(conductor.start_wallet())
 
-        service = TestingServiceAPI(conductor, loop)
+        service = ConductorService(conductor, loop)
         loop.run_until_complete(service.start())
 
         try:
