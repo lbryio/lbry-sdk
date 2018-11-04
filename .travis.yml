@@ -10,7 +10,7 @@ jobs:
       name: "pylint lbrynet"
       install:
         - pip install pylint
-        - pip install git+https://github.com/lbryio/torba.git[server]
+        - pip install git+https://github.com/lbryio/torba.git
         - pip install -e .[wallet-server]
       script: pylint lbrynet
 
@@ -19,7 +19,7 @@ jobs:
       name: "Unit Tests w/ Python 3.7"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git[server]
+        - pip install git+https://github.com/lbryio/torba.git
         - pip install -e .[test]
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -v tests.unit.wallet
