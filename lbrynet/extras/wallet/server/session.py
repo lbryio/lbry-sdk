@@ -4,10 +4,10 @@ from binascii import unhexlify, hexlify
 from aiorpcx import RPCError
 from torba.server.hash import hash_to_hex_str
 from torba.server.session import ElectrumX
-import torba.server.util as util
+from torba.server import util
 
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.schema.error import URIParseError, DecodeError
+from lbrynet.schema.error import URIParseError
 from .block_processor import LBRYBlockProcessor
 from .db import LBRYDB
 
@@ -64,7 +64,7 @@ class LBRYElectrumX(ElectrumX):
             if index < 0:
                 raise ValueError
         except ValueError:
-            raise RPCError("index has to be >= 0 and integer")
+            raise RPCError(1, "index has to be >= 0 and integer")
         raw_tx = await self.daemon_request('getrawtransaction', tx_hash)
         if not raw_tx:
             return None
@@ -175,7 +175,7 @@ class LBRYElectrumX(ElectrumX):
                 supports = self.format_supports_from_daemon(claim_info.get('supports', []))  # fixme: lbrycrd#124
                 result['supports'] = supports
             else:
-                self.logger.warning('tx has no claims in db: {} {}'.format(tx_hash, nout))
+                self.logger.warning('tx has no claims in db: %s %s', tx_hash, nout)
         return result
 
     async def claimtrie_getnthclaimforname(self, name, n):
@@ -209,7 +209,8 @@ class LBRYElectrumX(ElectrumX):
 
     def format_claim_from_daemon(self, claim, name=None):
         '''Changes the returned claim data to the format expected by lbrynet and adds missing fields.'''
-        if not claim: return {}
+        if not claim:
+            return {}
         name = name or claim['name']
         claim_id = claim['claimId']
         raw_claim_id = unhexlify(claim_id)[::-1]
@@ -266,7 +267,7 @@ class LBRYElectrumX(ElectrumX):
                 return
         except Exception:
             pass
-        raise RPCError('{} should be a transaction hash'.format(value))
+        raise RPCError(1, f'{value} should be a transaction hash')
 
     def assert_claim_id(self, value):
         '''Raise an RPCError if the value is not a valid claim id
@@ -276,7 +277,7 @@ class LBRYElectrumX(ElectrumX):
                 return
         except Exception:
             pass
-        raise RPCError('{} should be a claim id hash'.format(value))
+        raise RPCError(1, f'{value} should be a claim id hash')
 
     async def slow_get_claim_by_id_using_name(self, claim_id):
         # TODO: temporary workaround for a lbrycrd bug on indexing. Should be removed when it gets stable
@@ -288,7 +289,9 @@ class LBRYElectrumX(ElectrumX):
             for claim in claims['claims']:
                 if claim['claimId'] == claim_id:
                     claim['name'] = name
-                    self.logger.warning('Recovered a claim missing from lbrycrd index: {} {}'.format(name, claim_id))
+                    self.logger.warning(
+                        'Recovered a claim missing from lbrycrd index: %s %s', name, claim_id
+                    )
                     return claim
 
     async def claimtrie_getvalueforuri(self, block_hash, uri, known_certificates=None):

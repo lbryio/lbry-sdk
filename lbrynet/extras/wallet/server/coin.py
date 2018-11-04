@@ -70,13 +70,13 @@ class LBC(Coin):
             }
 
     @cachedproperty
-    def address_handlers(cls):
+    def address_handlers(self):
         return ScriptPubKey.PayToHandlers(
-            address=cls.P2PKH_address_from_hash160,
-            script_hash=cls.P2SH_address_from_hash160,
-            pubkey=cls.P2PKH_address_from_pubkey,
+            address=self.P2PKH_address_from_hash160,
+            script_hash=self.P2SH_address_from_hash160,
+            pubkey=self.P2PKH_address_from_pubkey,
             unspendable=lambda: None,
-            strange=cls.claim_address_handler,
+            strange=self.claim_address_handler,
         )
 
     @classmethod
