@@ -9,8 +9,8 @@ __spvserver__ = 'torba.server.coins.BitcoinSegwitRegtest'
 import struct
 from typing import Optional
 from binascii import hexlify, unhexlify
-from torba.baseledger import BaseLedger
-from torba.baseheader import BaseHeaders, ArithUint256
+from torba.client.baseledger import BaseLedger
+from torba.client.baseheader import BaseHeaders, ArithUint256
 
 
 class MainHeaders(BaseHeaders):

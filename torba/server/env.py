@@ -5,33 +5,35 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-'''Class for handling environment configuration and defaults.'''
-
 
 import re
 import resource
+from os import environ
 from collections import namedtuple
 from ipaddress import ip_address
 
+from torba.server.util import class_logger
 from torba.server.coins import Coin
-from torba.server.env_base import EnvBase
 import torba.server.util as lib_util
 
 
 NetIdentity = namedtuple('NetIdentity', 'host tcp_port ssl_port nick_suffix')
 
 
-class Env(EnvBase):
-    '''Wraps environment configuration. Optionally, accepts a Coin class
-       as first argument to have ElectrumX serve custom coins not part of
-       the standard distribution.
-    '''
+class Env:
 
     # Peer discovery
     PD_OFF, PD_SELF, PD_ON = range(3)
 
+    class Error(Exception):
+        pass
+
     def __init__(self, coin=None):
-        super().__init__()
+        self.logger = class_logger(__name__, self.__class__.__name__)
+        self.allow_root = self.boolean('ALLOW_ROOT', False)
+        self.host = self.default('HOST', 'localhost')
+        self.rpc_host = self.default('RPC_HOST', 'localhost')
+        self.loop_policy = self.event_loop_policy()
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
@@ -55,8 +57,7 @@ class Env(EnvBase):
         self.rpc_port = self.integer('RPC_PORT', 8000)
         self.max_subscriptions = self.integer('MAX_SUBSCRIPTIONS', 10000)
         self.banner_file = self.default('BANNER_FILE', None)
-        self.tor_banner_file = self.default('TOR_BANNER_FILE',
-                                            self.banner_file)
+        self.tor_banner_file = self.default('TOR_BANNER_FILE', self.banner_file)
         self.anon_logs = self.boolean('ANON_LOGS', False)
         self.log_sessions = self.integer('LOG_SESSIONS', 3600)
         # Peer discovery
@@ -82,6 +83,78 @@ class Env(EnvBase):
         self.identities = [identity
                            for identity in (clearnet_identity, tor_identity)
                            if identity is not None]
+
+    @classmethod
+    def default(cls, envvar, default):
+        return environ.get(envvar, default)
+
+    @classmethod
+    def boolean(cls, envvar, default):
+        default = 'Yes' if default else ''
+        return bool(cls.default(envvar, default).strip())
+
+    @classmethod
+    def required(cls, envvar):
+        value = environ.get(envvar)
+        if value is None:
+            raise cls.Error('required envvar {} not set'.format(envvar))
+        return value
+
+    @classmethod
+    def integer(cls, envvar, default):
+        value = environ.get(envvar)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except Exception:
+            raise cls.Error('cannot convert envvar {} value {} to an integer'
+                            .format(envvar, value))
+
+    @classmethod
+    def custom(cls, envvar, default, parse):
+        value = environ.get(envvar)
+        if value is None:
+            return default
+        try:
+            return parse(value)
+        except Exception as e:
+            raise cls.Error('cannot parse envvar {} value {}'
+                            .format(envvar, value)) from e
+
+    @classmethod
+    def obsolete(cls, envvars):
+        bad = [envvar for envvar in envvars if environ.get(envvar)]
+        if bad:
+            raise cls.Error('remove obsolete environment variables {}'
+                            .format(bad))
+
+    def event_loop_policy(self):
+        policy = self.default('EVENT_LOOP_POLICY', None)
+        if policy is None:
+            return None
+        if policy == 'uvloop':
+            import uvloop
+            return uvloop.EventLoopPolicy()
+        raise self.Error('unknown event loop policy "{}"'.format(policy))
+
+    def cs_host(self, *, for_rpc):
+        '''Returns the 'host' argument to pass to asyncio's create_server
+        call.  The result can be a single host name string, a list of
+        host name strings, or an empty string to bind to all interfaces.
+
+        If rpc is True the host to use for the RPC server is returned.
+        Otherwise the host to use for SSL/TCP servers is returned.
+        '''
+        host = self.rpc_host if for_rpc else self.host
+        result = [part.strip() for part in host.split(',')]
+        if len(result) == 1:
+            result = result[0]
+        # An empty result indicates all interfaces, which we do not
+        # permitted for an RPC server.
+        if for_rpc and not result:
+            result = 'localhost'
+        return result
 
     def sane_max_sessions(self):
         '''Return the maximum number of sessions to permit.  Normally this

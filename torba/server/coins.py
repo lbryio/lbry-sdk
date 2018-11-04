@@ -45,6 +45,7 @@ from torba.server.hash import HASHX_LEN, hex_str_to_hash
 from torba.server.script import ScriptPubKey, OpCodes
 import torba.server.tx as lib_tx
 import torba.server.block_processor as block_proc
+from torba.server.db import DB
 import torba.server.daemon as daemon
 from torba.server.session import ElectrumX, DashElectrumX
 
@@ -71,6 +72,7 @@ class Coin(object):
     DESERIALIZER = lib_tx.Deserializer
     DAEMON = daemon.Daemon
     BLOCK_PROCESSOR = block_proc.BlockProcessor
+    DB = DB
     HEADER_VALUES = [
         'version', 'prev_block_hash', 'merkle_root', 'timestamp', 'bits', 'nonce'
     ]

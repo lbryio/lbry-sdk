@@ -51,6 +51,19 @@ setup(
             'plyvel',
             'pylru'
         ),
+        'ui': (
+            'pyside2',
+        )
     },
-    entry_points={'console_scripts': ['torba=torba.cli:main']}
+    entry_points={
+        'console_scripts': [
+            'torba-client=torba.client.cli:main',
+            'torba-server=torba.server.cli:main [server]',
+            'orchstr8=torba.orchstr8.cli:main [server]',
+        ],
+        'gui_scripts': [
+            'torba=torba.ui:main [ui]'
+            'torba-workbench=torba.workbench:main [ui]'
+        ]
+    }
 )

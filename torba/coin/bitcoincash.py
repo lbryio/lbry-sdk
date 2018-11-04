@@ -7,8 +7,8 @@ __node_url__ = (
 __spvserver__ = 'torba.server.coins.BitcoinCashRegtest'
 
 from binascii import unhexlify
-from torba.baseledger import BaseLedger
-from torba.basetransaction import BaseTransaction
+from torba.client.baseledger import BaseLedger
+from torba.client.basetransaction import BaseTransaction
 from .bitcoinsegwit import MainHeaders, UnverifiedHeaders
 
 
