@@ -1,7 +1,7 @@
 import logging
 from asyncio import CancelledError
 
-from orchstr8.testcase import IntegrationTestCase
+from torba.testing import IntegrationTestCase
 from torba.constants import COIN
 
 
