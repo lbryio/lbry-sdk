@@ -1,6 +1,6 @@
 import binascii
 from twisted.internet import defer
-from lbrynet.cryptstream.CryptBlob import StreamBlobDecryptor
+from lbrynet.blob.CryptBlob import StreamBlobDecryptor
 
 
 class CryptBlobHandler:

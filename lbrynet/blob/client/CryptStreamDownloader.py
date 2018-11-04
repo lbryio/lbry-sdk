@@ -4,7 +4,7 @@ from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.p2p.client.DownloadManager import DownloadManager
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
-from lbrynet.cryptstream.client.CryptBlobHandler import CryptBlobHandler
+from lbrynet.blob.client.CryptBlobHandler import CryptBlobHandler
 from twisted.internet import defer
 from twisted.python.failure import Failure
 
