@@ -77,7 +77,7 @@ jobs:
         - python scripts/set_build.py
         - pip3 install -e .
       script:
-        - pyinstaller -F -n lbrynet lbrynet/cli.py
+        - pyinstaller -F -n lbrynet lbrynet/extras/cli.py
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
