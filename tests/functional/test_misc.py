@@ -13,9 +13,9 @@ from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
-from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.file_manager.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.blob.EncryptedFileCreator import create_lbry_file
+from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
+from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 
 from tests import mocks
 from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir

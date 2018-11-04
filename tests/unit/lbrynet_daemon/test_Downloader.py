@@ -13,8 +13,8 @@ from lbrynet.extras.daemon import Downloader
 from lbrynet.extras.daemon import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.dht.peerfinder import DummyPeerFinder
-from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
+from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 
 from tests.mocks import mock_conf_settings

@@ -10,7 +10,7 @@ from lbrynet.p2p.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, Inv
 from lbrynet.p2p.Error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
 from lbrynet.p2p.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.p2p.StreamDescriptor import download_sd_blob
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
+from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet import conf
 from torba.client.constants import COIN
 from lbrynet.extras.wallet.dewies import dewies_to_lbc

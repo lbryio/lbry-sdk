@@ -25,9 +25,9 @@ from .Component import Component
 from .ExchangeRateManager import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.dht import node, hashannouncer
-from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.file_manager.client.EncryptedFileDownloader import EncryptedFileSaverFactory
-from lbrynet.file_manager.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
+from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactory
+from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.extras.reflector import ServerFactory as reflector_server_factory
 
 from lbrynet.p2p.utils import generate_id

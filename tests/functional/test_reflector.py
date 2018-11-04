@@ -7,8 +7,8 @@ from lbrynet.p2p.StreamDescriptor import get_sd_info
 from lbrynet.extras import reflector
 from lbrynet.p2p import BlobManager, PeerManager
 from lbrynet.p2p import StreamDescriptor
-from lbrynet.file_manager import EncryptedFileCreator
-from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.blob import EncryptedFileCreator
+from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
