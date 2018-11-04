@@ -6,13 +6,13 @@ from binascii import hexlify, unhexlify
 
 from twisted.internet import defer
 from lbrynet import conf
-from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
-from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
-from lbrynet.core.utils import short_hash
+from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
+from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
+from lbrynet.p2p.utils import short_hash
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.core.StreamDescriptor import save_sd_info
+from lbrynet.p2p.StreamDescriptor import save_sd_info
 
 log = logging.getLogger(__name__)
 

@@ -6,11 +6,11 @@ from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionAborted
 
-from lbrynet.core.Error import ConnectionClosedBeforeResponseError
-from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoResponseError
-from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
-from lbrynet.core.client.ClientRequest import ClientRequest, ClientBlobRequest
-from lbrynet.core.Offer import Offer
+from lbrynet.p2p.Error import ConnectionClosedBeforeResponseError
+from lbrynet.p2p.Error import InvalidResponseError, RequestCanceledError, NoResponseError
+from lbrynet.p2p.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
+from lbrynet.p2p.client.ClientRequest import ClientRequest, ClientBlobRequest
+from lbrynet.p2p.Offer import Offer
 
 
 log = logging.getLogger(__name__)

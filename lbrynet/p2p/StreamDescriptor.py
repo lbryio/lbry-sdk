@@ -5,10 +5,10 @@ import json
 import logging
 
 from twisted.internet import threads, defer
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
-from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
-from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
+from lbrynet.p2p.cryptoutils import get_lbry_hash_obj
+from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.p2p.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
+from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
 
 log = logging.getLogger(__name__)
 

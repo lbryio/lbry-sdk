@@ -8,9 +8,9 @@ from cryptography.hazmat.primitives import serialization
 from twisted.internet import defer
 from twisted.python.failure import Failure
 
-from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import RequestCanceledError
-from lbrynet.core import BlobAvailability
+from lbrynet.p2p.client.ClientRequest import ClientRequest
+from lbrynet.p2p.Error import RequestCanceledError
+from lbrynet.p2p import BlobAvailability
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.dht.node import Node as RealNode
 from lbrynet.extras.daemon import ExchangeRateManager as ERM

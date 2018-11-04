@@ -24,7 +24,7 @@ from lbrynet.extras.daemon.Daemon import Daemon
 from lbrynet.extras.daemon.DaemonControl import start as daemon_main
 from lbrynet.extras.daemon.DaemonConsole import main as daemon_console
 from lbrynet.extras.daemon.auth.client import LBRYAPIClient
-from lbrynet.core.system_info import get_platform
+from lbrynet.p2p.system_info import get_platform
 
 
 async def execute_command(method, params, conf_path=None):

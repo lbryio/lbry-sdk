@@ -2,8 +2,8 @@ import sqlite3
 import logging
 import os
 
-from lbrynet.core.Error import InvalidStreamDescriptorError
-from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, format_sd_info, format_blobs, validate_descriptor
+from lbrynet.p2p.Error import InvalidStreamDescriptorError
+from lbrynet.p2p.StreamDescriptor import EncryptedFileStreamType, format_sd_info, format_blobs, validate_descriptor
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 
 log = logging.getLogger(__name__)

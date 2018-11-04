@@ -25,7 +25,7 @@ from lbrynet.schema.address import decode_address
 from lbrynet.schema.decode import smart_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
-from lbrynet.core.system_info import get_lbrynet_version
+from lbrynet.p2p.system_info import get_lbrynet_version
 from lbrynet import conf
 from lbrynet.extras.reflector import reupload
 from .Components import d2f, f2d
@@ -36,16 +36,16 @@ from .ComponentManager import RequiredCondition
 from .Downloader import GetStream
 from .Publisher import Publisher
 from .auth.server import AuthJSONRPCServer
-from lbrynet.core import utils, system_info
-from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
-from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.core.Error import NullFundsError, NegativeFundsError
-from lbrynet.core.Error import ResolveError
+from lbrynet.p2p import utils, system_info
+from lbrynet.p2p.StreamDescriptor import download_sd_blob
+from lbrynet.p2p.Error import InsufficientFundsError, UnknownNameError
+from lbrynet.p2p.Error import DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.p2p.Error import NullFundsError, NegativeFundsError
+from lbrynet.p2p.Error import ResolveError
 from lbrynet.dht.error import TimeoutError
-from lbrynet.core.Peer import Peer
-from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
-from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.p2p.Peer import Peer
+from lbrynet.p2p.SinglePeerDownloader import SinglePeerDownloader
+from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies

@@ -12,15 +12,15 @@ from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
 from lbrynet import conf
-from lbrynet.core.utils import DeferredDict
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core.RateLimiter import RateLimiter
-from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
+from lbrynet.p2p.utils import DeferredDict
+from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.RateLimiter import RateLimiter
+from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
-from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
-from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
+from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
 from .Component import Component
 from .ExchangeRateManager import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -30,7 +30,7 @@ from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverF
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.extras.reflector import ServerFactory as reflector_server_factory
 
-from lbrynet.core.utils import generate_id
+from lbrynet.p2p.utils import generate_id
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ class ConfigSettings:
 
     @staticmethod
     def get_external_ip():
-        from lbrynet.core.system_info import get_platform
+        from lbrynet.p2p.system_info import get_platform
         platform = get_platform(get_ip=True)
         return platform['ip']
 

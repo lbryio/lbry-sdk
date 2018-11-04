@@ -9,7 +9,7 @@ from twisted.internet import defer
 import twisted.python.log
 
 from lbrynet import __version__ as lbrynet_version, build_type, conf
-from lbrynet.core import utils
+from lbrynet.p2p import utils
 
 
 class HTTPSHandler(logging.Handler):

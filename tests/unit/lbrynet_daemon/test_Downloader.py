@@ -4,11 +4,11 @@ from twisted.trial import unittest
 from twisted.internet import defer, task
 
 
-from lbrynet.core import PaymentRateManager
-from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.RateLimiter import DummyRateLimiter
+from lbrynet.p2p import PaymentRateManager
+from lbrynet.p2p.Error import DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon import Downloader
 from lbrynet.extras.daemon import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage

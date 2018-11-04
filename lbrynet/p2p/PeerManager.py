@@ -1,4 +1,4 @@
-from lbrynet.core.Peer import Peer
+from lbrynet.p2p.Peer import Peer
 
 
 class PeerManager:

@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography.hazmat.backends import default_backend
-from lbrynet.core.BlobInfo import BlobInfo
+from lbrynet.p2p.BlobInfo import BlobInfo
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 log = logging.getLogger(__name__)

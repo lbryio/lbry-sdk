@@ -3,15 +3,15 @@ from binascii import hexlify
 
 from twisted.internet import defer, error
 from twisted.trial import unittest
-from lbrynet.core.StreamDescriptor import get_sd_info
+from lbrynet.p2p.StreamDescriptor import get_sd_info
 from lbrynet.extras import reflector
-from lbrynet.core import BlobManager, PeerManager
-from lbrynet.core import StreamDescriptor
+from lbrynet.p2p import BlobManager, PeerManager
+from lbrynet.p2p import StreamDescriptor
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.core.RateLimiter import DummyRateLimiter
+from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from tests import mocks
 from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
