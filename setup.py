@@ -48,7 +48,14 @@ setup(
         'test': (
             'mock>=2.0,<3.0',
             'faker==0.8.17',
-            'torba[server]'
-        )
+            'pytest',
+            'pytest-asyncio',
+            'pytest-xprocess',
+            'torba[server]',
+        ),
+        'wallet-server': (
+            'msgpack',
+            'torba[server]',
+        ),
     }
 )

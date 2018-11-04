@@ -13,7 +13,7 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet import conf
 from torba.client.constants import COIN
-from lbrynet.wallet.dewies import dewies_to_lbc
+from lbrynet.extras.wallet.dewies import dewies_to_lbc
 
 INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'

@@ -15,7 +15,7 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.dht.peerfinder import DummyPeerFinder
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.extras.wallet import LbryWalletManager
 
 from tests.mocks import mock_conf_settings
 

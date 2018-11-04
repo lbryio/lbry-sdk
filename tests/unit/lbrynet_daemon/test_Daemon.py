@@ -19,7 +19,7 @@ from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_R
 from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager

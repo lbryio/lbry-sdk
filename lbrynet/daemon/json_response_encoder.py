@@ -4,9 +4,9 @@ from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
 from ecdsa import BadSignatureError
-from lbrynet.wallet.transaction import Transaction, Output
-from lbrynet.wallet.dewies import dewies_to_lbc
-from lbrynet.wallet.ledger import MainNetLedger
+from lbrynet.extras.wallet import MainNetLedger
+from lbrynet.extras.wallet.transaction import Transaction, Output
+from lbrynet.extras.wallet.dewies import dewies_to_lbc
 
 
 log = logging.getLogger(__name__)

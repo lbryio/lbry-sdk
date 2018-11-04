@@ -46,9 +46,9 @@ from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.wallet.account import Account as LBCAccount
-from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
+from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.extras.wallet.account import Account as LBCAccount
+from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
