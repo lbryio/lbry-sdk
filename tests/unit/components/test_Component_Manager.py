@@ -1,12 +1,12 @@
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, STREAM_IDENTIFIER_COMPONENT
-from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
-from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
-from lbrynet.daemon import Components
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, STREAM_IDENTIFIER_COMPONENT
+from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
+from lbrynet.extras.daemon import Components
 from tests import mocks
 
 

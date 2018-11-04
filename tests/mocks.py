@@ -13,7 +13,7 @@ from lbrynet.core.Error import RequestCanceledError
 from lbrynet.core import BlobAvailability
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.dht.node import Node as RealNode
-from lbrynet.daemon import ExchangeRateManager as ERM
+from lbrynet.extras.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
 
 KB = 2**10

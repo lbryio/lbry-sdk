@@ -28,14 +28,14 @@ from lbrynet.schema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf
 from lbrynet.extras.reflector import reupload
-from lbrynet.daemon.Components import d2f, f2d
-from lbrynet.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
-from lbrynet.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
-from lbrynet.daemon.ComponentManager import RequiredCondition
-from lbrynet.daemon.Downloader import GetStream
-from lbrynet.daemon.Publisher import Publisher
-from lbrynet.daemon.auth.server import AuthJSONRPCServer
+from .Components import d2f, f2d
+from .Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
+from .Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
+from .Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
+from .ComponentManager import RequiredCondition
+from .Downloader import GetStream
+from .Publisher import Publisher
+from .auth.server import AuthJSONRPCServer
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError

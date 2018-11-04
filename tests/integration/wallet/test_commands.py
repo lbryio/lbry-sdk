@@ -15,15 +15,15 @@ lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
-from lbrynet.daemon.Daemon import Daemon
+from lbrynet.extras.daemon.Daemon import Daemon
 from lbrynet.extras.wallet import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
+from lbrynet.extras.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
     ExchangeRateManagerComponent
-from lbrynet.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT
-from lbrynet.daemon.Components import UPnPComponent
-from lbrynet.daemon.Components import d2f
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.auth.server import jsonrpc_dumps_pretty
+from lbrynet.extras.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT
+from lbrynet.extras.daemon.Components import UPnPComponent
+from lbrynet.extras.daemon.Components import d2f
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.auth.server import jsonrpc_dumps_pretty
 
 
 class FakeUPnP(UPnPComponent):

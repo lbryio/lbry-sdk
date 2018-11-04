@@ -3,7 +3,7 @@ import os
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
-from lbrynet.daemon.Components import f2d
+from .Components import f2d
 from lbrynet.schema.fee import Fee
 
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError

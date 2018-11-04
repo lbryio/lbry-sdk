@@ -1,8 +1,8 @@
 import mock
-from twisted.internet import defer, reactor
+from twisted.internet import reactor
 from twisted.trial import unittest
 from lbrynet import conf
-from lbrynet.daemon.auth import server
+from lbrynet.extras.daemon.auth import server
 
 from tests.mocks import mock_conf_settings
 

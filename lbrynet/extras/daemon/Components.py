@@ -21,8 +21,8 @@ from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.daemon.Component import Component
-from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
+from .Component import Component
+from .ExchangeRateManager import ExchangeRateManager
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.dht import node, hashannouncer
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
