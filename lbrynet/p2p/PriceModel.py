@@ -1,7 +1,5 @@
-from zope.interface import implementer
 from decimal import Decimal
 
-from lbrynet.interfaces import IBlobPriceModel
 from lbrynet.extras.daemon import conf
 
 
@@ -28,7 +26,6 @@ class MeanAvailabilityWeightedPrice:
         blob_tracker (BlobAvailabilityTracker): blob availability tracker
 
     """
-    implementer(IBlobPriceModel)
 
     def __init__(self, tracker, base_price=None, alpha=1.0):
         self.blob_tracker = tracker
