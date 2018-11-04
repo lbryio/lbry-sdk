@@ -18,7 +18,7 @@ from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 

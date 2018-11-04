@@ -3,7 +3,7 @@ import logging
 import mimetypes
 import os
 
-from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
+from lbrynet.blob.EncryptedFileCreator import create_lbry_file
 
 log = logging.getLogger(__name__)
 

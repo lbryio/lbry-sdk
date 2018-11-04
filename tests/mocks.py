@@ -11,7 +11,7 @@ from twisted.python.failure import Failure
 from lbrynet.p2p.client.ClientRequest import ClientRequest
 from lbrynet.p2p.Error import RequestCanceledError
 from lbrynet.p2p import BlobAvailability
-from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.dht.node import Node as RealNode
 from lbrynet.extras.daemon import ExchangeRateManager as ERM
 from lbrynet import conf

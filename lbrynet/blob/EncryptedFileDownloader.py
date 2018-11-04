@@ -9,9 +9,9 @@ from lbrynet import conf
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
 from lbrynet.p2p.utils import short_hash
-from lbrynet.file_manager.client.EncryptedFileDownloader import EncryptedFileSaver
-from lbrynet.file_manager.client.EncryptedFileDownloader import EncryptedFileDownloader
-from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
+from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaver
+from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileDownloader
+from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.p2p.StreamDescriptor import save_sd_info
 
 log = logging.getLogger(__name__)
