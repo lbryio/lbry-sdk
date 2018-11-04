@@ -1,7 +1,7 @@
 syntax = "proto2";
 
-import "lbrynet.schema/proto/metadata.proto";
-import "lbrynet.schema/proto/source.proto";
+import "lbrynet/schema/proto/metadata.proto";
+import "lbrynet/schema/proto/source.proto";
 
 
 message Stream {
