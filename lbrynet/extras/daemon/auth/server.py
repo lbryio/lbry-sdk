@@ -14,7 +14,8 @@ from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
-from lbrynet import conf, analytics
+from lbrynet import conf
+from lbrynet.extras.daemon import analytics
 from lbrynet.p2p.Error import InvalidAuthenticationToken
 from lbrynet.p2p import utils
 from lbrynet.p2p.Error import ComponentsNotStarted, ComponentStartConditionNotMet

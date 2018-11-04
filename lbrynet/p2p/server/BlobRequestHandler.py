@@ -4,7 +4,7 @@ from twisted.internet import defer
 from twisted.protocols.basic import FileSender
 from twisted.python.failure import Failure
 
-from lbrynet import analytics
+from lbrynet.extras.daemon import analytics
 from lbrynet.p2p.Offer import Offer
 
 log = logging.getLogger(__name__)
