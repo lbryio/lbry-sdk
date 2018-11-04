@@ -16,7 +16,7 @@ lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
 from lbrynet.daemon.Daemon import Daemon
-from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
     ExchangeRateManagerComponent
 from lbrynet.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT

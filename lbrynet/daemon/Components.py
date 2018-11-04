@@ -17,8 +17,8 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
-from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.wallet.network import Network
+from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.extras.wallet import Network
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.daemon.Component import Component
