@@ -1,7 +1,7 @@
 import six
 import struct
 import binascii
-from torba.hash import double_sha256
+from torba.client.hash import double_sha256
 
 
 class InvalidProofError(Exception):

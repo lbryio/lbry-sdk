@@ -1,5 +1,5 @@
-from orchstr8.testcase import AsyncioTestCase
-from torba.wallet import Wallet
+from torba.testcase import AsyncioTestCase
+from torba.client.wallet import Wallet
 
 from lbrynet.wallet.ledger import MainNetLedger, WalletDatabase
 from lbrynet.wallet.header import Headers

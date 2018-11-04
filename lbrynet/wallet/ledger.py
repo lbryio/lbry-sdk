@@ -4,7 +4,7 @@ from binascii import unhexlify
 
 from lbryschema.error import URIParseError
 from lbryschema.uri import parse_lbry_uri
-from torba.baseledger import BaseLedger
+from torba.client.baseledger import BaseLedger
 
 from .resolve import Resolver
 from .account import Account

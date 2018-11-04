@@ -1,4 +1,4 @@
-from torba.basedatabase import BaseDatabase
+from torba.client.basedatabase import BaseDatabase
 
 
 class WalletDatabase(BaseDatabase):

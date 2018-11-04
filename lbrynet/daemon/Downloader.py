@@ -12,7 +12,7 @@ from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet import conf
-from torba.constants import COIN
+from torba.client.constants import COIN
 from lbrynet.wallet.dewies import dewies_to_lbc
 
 INITIALIZING_CODE = 'initializing'

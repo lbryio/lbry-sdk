@@ -1,6 +1,7 @@
+import logging
 import asyncio
 
-from orchstr8.testcase import IntegrationTestCase
+from torba.testcase import IntegrationTestCase
 from lbryschema.claim import ClaimDict
 from lbrynet.wallet.transaction import Transaction
 from lbrynet.wallet.account import generate_certificate
@@ -39,7 +40,7 @@ example_claim_dict = {
 
 class BasicTransactionTest(IntegrationTestCase):
 
-    VERBOSE = False
+    VERBOSITY = logging.WARN
 
     async def test_creating_updating_and_abandoning_claim_with_channel(self):
 
