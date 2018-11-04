@@ -9,7 +9,7 @@ from typing import Optional
 
 from twisted.internet import defer
 
-from lbryschema.schema import SECP256k1
+from lbrynet.schema import SECP256k1
 from torba.client.basemanager import BaseWalletManager
 
 from lbrynet.schema.claim import ClaimDict
