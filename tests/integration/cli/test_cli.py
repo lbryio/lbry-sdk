@@ -3,8 +3,8 @@ from twisted.trial import unittest
 from io import StringIO
 from twisted.internet import defer
 
-from lbrynet import conf
-from lbrynet import cli
+from lbrynet.extras.daemon import conf
+from lbrynet.extras import cli
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT, \
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT, \
     PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, \

@@ -10,7 +10,7 @@ from twisted.trial.unittest import TestCase
 from twisted.internet import defer, reactor, task
 from twisted.internet.task import deferLater
 from twisted.internet.protocol import ServerFactory
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.p2p import utils
 
 PEER_PORT = 5551

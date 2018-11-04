@@ -2,7 +2,7 @@ import contextlib
 from io import StringIO
 from twisted.trial import unittest
 
-from lbrynet.cli import normalize_value, main
+from lbrynet.extras.cli import normalize_value, main
 from lbrynet.p2p.system_info import get_platform
 
 

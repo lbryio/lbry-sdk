@@ -3,7 +3,7 @@ import os
 import json
 import logging
 from lbrynet.schema.decode import smart_decode
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 
 log = logging.getLogger(__name__)
 

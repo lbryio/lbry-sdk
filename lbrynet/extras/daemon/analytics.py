@@ -4,7 +4,7 @@ import logging
 import treq
 from twisted.internet import defer, task
 
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.p2p import looping_call_manager, utils, system_info
 
 # Things We Track

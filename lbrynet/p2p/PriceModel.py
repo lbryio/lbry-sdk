@@ -2,7 +2,7 @@ from zope.interface import implementer
 from decimal import Decimal
 
 from lbrynet.interfaces import IBlobPriceModel
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 
 
 def get_default_price_model(blob_tracker, base_price, **kwargs):

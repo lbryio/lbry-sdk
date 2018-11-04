@@ -13,7 +13,7 @@ from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 import lbrynet.schema
 lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
-from lbrynet import conf as lbry_conf
+from lbrynet.extras.daemon import conf as lbry_conf
 from lbrynet.dht.node import Node
 from lbrynet.extras.daemon.Daemon import Daemon
 from lbrynet.extras.wallet import LbryWalletManager

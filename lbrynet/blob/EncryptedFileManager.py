@@ -14,8 +14,7 @@ from lbrynet.p2p.StreamDescriptor import EncryptedFileStreamType, get_sd_info
 from lbrynet.blob.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.blob.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.p2p.utils import safe_start_looping_call, safe_stop_looping_call
-from lbrynet import conf
-
+from lbrynet.extras.daemon import conf
 
 log = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from twisted.trial import unittest
 from faker import Faker
 
 from lbrynet.schema.decode import smart_decode
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
