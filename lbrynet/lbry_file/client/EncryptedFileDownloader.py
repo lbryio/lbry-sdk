@@ -4,7 +4,7 @@ import traceback
 from binascii import hexlify, unhexlify
 
 from lbrynet.p2p.StreamDescriptor import save_sd_info
-from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
+from lbrynet.blob.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.p2p.Error import FileOpenError
 from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler

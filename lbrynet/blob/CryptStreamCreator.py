@@ -6,7 +6,7 @@ import logging
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from twisted.internet import defer
-from lbrynet.cryptstream.CryptBlob import CryptStreamBlobMaker
+from lbrynet.blob.CryptBlob import CryptStreamBlobMaker
 
 
 log = logging.getLogger(__name__)
