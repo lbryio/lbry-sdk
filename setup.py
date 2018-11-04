@@ -18,7 +18,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     keywords='wallet,crypto,currency,money,bitcoin,electrum,electrumx',
-    classifiers=(
+    classifiers=[
         'Framework :: AsyncIO',
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
@@ -31,7 +31,7 @@ setup(
         'Topic :: System :: Benchmark',
         'Topic :: System :: Distributed Computing',
         'Topic :: Utilities',
-    ),
+    ],
     packages=find_packages(exclude=('tests',)),
     python_requires='>=3.6',
     install_requires=(
@@ -62,8 +62,8 @@ setup(
             'orchstr8=torba.orchstr8.cli:main [server]',
         ],
         'gui_scripts': [
-            'torba=torba.ui:main [ui]'
-            'torba-workbench=torba.workbench:main [ui]'
+            'torba=torba.ui:main [ui]',
+            'torba-workbench=torba.workbench:main [ui]',
         ]
     }
 )
