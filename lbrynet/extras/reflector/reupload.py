@@ -1,7 +1,7 @@
 import random
 
 from twisted.internet import reactor, defer
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from . import ClientFactory, BlobClientFactory
 
 

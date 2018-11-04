@@ -5,7 +5,7 @@ from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import failure
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.p2p import utils
 from lbrynet.p2p.Error import ConnectionClosedBeforeResponseError, NoResponseError
 from lbrynet.p2p.Error import DownloadCanceledError, MisbehavingPeerError

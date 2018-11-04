@@ -7,7 +7,7 @@ from six.moves.urllib import request
 from six.moves.urllib.error import URLError
 from lbrynet.schema import __version__ as schema_version
 from lbrynet import build_type, __version__ as lbrynet_version
-from lbrynet.conf import ROOT_DIR
+from lbrynet.extras.daemon.conf import ROOT_DIR
 import logging.handlers
 
 log = logging.getLogger(__name__)

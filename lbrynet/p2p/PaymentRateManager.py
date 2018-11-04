@@ -1,5 +1,5 @@
 from lbrynet.p2p.Strategy import get_default_strategy, OnlyFreeStrategy
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from decimal import Decimal
 
 

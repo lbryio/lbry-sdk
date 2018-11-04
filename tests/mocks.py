@@ -13,8 +13,7 @@ from lbrynet.p2p.Error import RequestCanceledError
 from lbrynet.p2p import BlobAvailability
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.dht.node import Node as RealNode
-from lbrynet.extras.daemon import ExchangeRateManager as ERM
-from lbrynet import conf
+from lbrynet.extras.daemon import ExchangeRateManager as ERM, conf
 
 KB = 2**10
 PUBLIC_EXPONENT = 65537  # http://www.daemonology.net/blog/2009-06-11-cryptographic-right-answers.html

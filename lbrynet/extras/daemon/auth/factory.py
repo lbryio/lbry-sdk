@@ -3,7 +3,7 @@ import logging
 from twisted.web import server, guard, resource
 from twisted.cred import portal
 
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from .auth import PasswordChecker, HttpPasswordRealm
 from ..auth.keyring import Keyring
 

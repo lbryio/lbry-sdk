@@ -2,7 +2,7 @@ import os
 from hashlib import md5
 from twisted.internet import defer, reactor
 from twisted.trial import unittest
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.p2p.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.p2p.StreamDescriptor import download_sd_blob

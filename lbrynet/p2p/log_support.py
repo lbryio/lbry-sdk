@@ -8,7 +8,8 @@ import treq
 from twisted.internet import defer
 import twisted.python.log
 
-from lbrynet import __version__ as lbrynet_version, build_type, conf
+from lbrynet import __version__ as lbrynet_version, build_type
+from lbrynet.extras.daemon import conf
 from lbrynet.p2p import utils
 
 

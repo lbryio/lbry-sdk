@@ -1,6 +1,6 @@
 from zope.interface import implementer
 from decimal import Decimal
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.interfaces import INegotiationStrategy
 from lbrynet.p2p.Offer import Offer
 from lbrynet.p2p.PriceModel import MeanAvailabilityWeightedPrice, ZeroPrice

@@ -11,7 +11,7 @@ import lbrynet.schema
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.p2p.utils import DeferredDict
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.p2p.RateLimiter import RateLimiter

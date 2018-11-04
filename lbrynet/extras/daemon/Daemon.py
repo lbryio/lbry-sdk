@@ -26,7 +26,7 @@ from lbrynet.schema.decode import smart_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.p2p.system_info import get_lbrynet_version
-from lbrynet import conf
+from lbrynet.extras.daemon import conf
 from lbrynet.extras.reflector import reupload
 from .Components import d2f, f2d
 from .Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
