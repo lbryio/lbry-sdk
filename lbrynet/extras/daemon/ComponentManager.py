@@ -1,7 +1,7 @@
 import logging
 from twisted.internet import defer
 
-from lbrynet.core.Error import ComponentStartConditionNotMet
+from lbrynet.p2p.Error import ComponentStartConditionNotMet
 
 log = logging.getLogger(__name__)
 

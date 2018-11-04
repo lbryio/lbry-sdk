@@ -2,8 +2,8 @@ from zope.interface import implementer
 from decimal import Decimal
 from lbrynet import conf
 from lbrynet.interfaces import INegotiationStrategy
-from lbrynet.core.Offer import Offer
-from lbrynet.core.PriceModel import MeanAvailabilityWeightedPrice, ZeroPrice
+from lbrynet.p2p.Offer import Offer
+from lbrynet.p2p.PriceModel import MeanAvailabilityWeightedPrice, ZeroPrice
 
 
 def get_default_strategy(blob_tracker, **kwargs):

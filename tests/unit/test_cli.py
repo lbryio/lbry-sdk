@@ -3,7 +3,7 @@ from io import StringIO
 from twisted.trial import unittest
 
 from lbrynet.cli import normalize_value, main
-from lbrynet.core.system_info import get_platform
+from lbrynet.p2p.system_info import get_platform
 
 
 class CLITest(unittest.TestCase):

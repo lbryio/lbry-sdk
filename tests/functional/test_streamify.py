@@ -4,13 +4,13 @@ import tempfile
 from hashlib import md5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.StreamDescriptor import get_sd_info
-from lbrynet.core.PeerManager import PeerManager
-from lbrynet.core.RateLimiter import DummyRateLimiter
+from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.p2p.StreamDescriptor import get_sd_info
+from lbrynet.p2p.PeerManager import PeerManager
+from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from tests import mocks

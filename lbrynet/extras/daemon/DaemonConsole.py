@@ -8,8 +8,8 @@ from aiohttp import client_exceptions
 
 from lbrynet import analytics
 from lbrynet import conf
-from lbrynet.core import utils
-from lbrynet.core import log_support
+from lbrynet.p2p import utils
+from lbrynet.p2p import log_support
 from .auth.client import LBRYAPIClient
 from .Daemon import Daemon
 

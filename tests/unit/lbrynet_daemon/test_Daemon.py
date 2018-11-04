@@ -22,7 +22,7 @@ from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDow
 from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from tests import util
 from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager

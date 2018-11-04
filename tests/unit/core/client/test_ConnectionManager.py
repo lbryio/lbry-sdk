@@ -1,17 +1,17 @@
-from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.server.ServerProtocol import ServerProtocol
-from lbrynet.core.client.ClientProtocol import ClientProtocol
-from lbrynet.core.RateLimiter import RateLimiter
-from lbrynet.core.Peer import Peer
-from lbrynet.core.PeerManager import PeerManager
-from lbrynet.core.Error import NoResponseError
+from lbrynet.p2p.client.ClientRequest import ClientRequest
+from lbrynet.p2p.server.ServerProtocol import ServerProtocol
+from lbrynet.p2p.client.ClientProtocol import ClientProtocol
+from lbrynet.p2p.RateLimiter import RateLimiter
+from lbrynet.p2p.Peer import Peer
+from lbrynet.p2p.PeerManager import PeerManager
+from lbrynet.p2p.Error import NoResponseError
 
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, reactor, task
 from twisted.internet.task import deferLater
 from twisted.internet.protocol import ServerFactory
 from lbrynet import conf
-from lbrynet.core import utils
+from lbrynet.p2p import utils
 
 PEER_PORT = 5551
 LOCAL_HOST = '127.0.0.1'
@@ -131,7 +131,7 @@ class TestIntegrationConnectionManager(TestCase):
 
     def _init_connection_manager(self, seek_head_blob_first=False):
         # this import is required here so utils.call_later is replaced by self.clock.callLater
-        from lbrynet.core.client.ConnectionManager import ConnectionManager
+        from lbrynet.p2p.client.ConnectionManager import ConnectionManager
         self.connection_manager = ConnectionManager(self.downloader, self.rate_limiter,
                                                     [self.primary_request_creator], [])
         self.connection_manager.seek_head_blob_first = seek_head_blob_first

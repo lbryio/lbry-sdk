@@ -1,10 +1,10 @@
 import logging
-from lbrynet.core.BlobInfo import BlobInfo
-from lbrynet.core.client.BlobRequester import BlobRequester
-from lbrynet.core.client.ConnectionManager import ConnectionManager
-from lbrynet.core.client.DownloadManager import DownloadManager
-from lbrynet.core.Error import InvalidBlobHashError, DownloadSDTimeout
-from lbrynet.core.utils import is_valid_blobhash, safe_start_looping_call, safe_stop_looping_call
+from lbrynet.p2p.BlobInfo import BlobInfo
+from lbrynet.p2p.client.BlobRequester import BlobRequester
+from lbrynet.p2p.client.ConnectionManager import ConnectionManager
+from lbrynet.p2p.client.DownloadManager import DownloadManager
+from lbrynet.p2p.Error import InvalidBlobHashError, DownloadSDTimeout
+from lbrynet.p2p.utils import is_valid_blobhash, safe_start_looping_call, safe_stop_looping_call
 from twisted.python.failure import Failure
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall

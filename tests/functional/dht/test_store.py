@@ -3,7 +3,7 @@ from binascii import hexlify
 
 from twisted.internet import defer
 from lbrynet.dht import constants
-from lbrynet.core.utils import generate_id
+from lbrynet.p2p.utils import generate_id
 from .dht_test_environment import TestKademliaBase
 import logging
 

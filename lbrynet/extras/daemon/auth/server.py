@@ -15,10 +15,10 @@ from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
 from lbrynet import conf, analytics
-from lbrynet.core.Error import InvalidAuthenticationToken
-from lbrynet.core import utils
-from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
-from lbrynet.core.looping_call_manager import LoopingCallManager
+from lbrynet.p2p.Error import InvalidAuthenticationToken
+from lbrynet.p2p import utils
+from lbrynet.p2p.Error import ComponentsNotStarted, ComponentStartConditionNotMet
+from lbrynet.p2p.looping_call_manager import LoopingCallManager
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from .keyring import APIKey, Keyring
 from .undecorated import undecorated

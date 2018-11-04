@@ -116,7 +116,7 @@ class CommandTestCase(IntegrationTestCase):
     async def setUp(self):
         await super().setUp()
 
-        logging.getLogger('lbrynet.core').setLevel(self.VERBOSITY)
+        logging.getLogger('lbrynet.p2p').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
         lbry_conf.settings = None

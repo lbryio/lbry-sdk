@@ -5,9 +5,9 @@ from functools import reduce
 
 from twisted.internet import defer, error, task
 
-from lbrynet.core.utils import generate_id, DeferredDict
-from lbrynet.core.call_later_manager import CallLaterManager
-from lbrynet.core.PeerManager import PeerManager
+from lbrynet.p2p.utils import generate_id, DeferredDict
+from lbrynet.p2p.call_later_manager import CallLaterManager
+from lbrynet.p2p.PeerManager import PeerManager
 from .error import TimeoutError
 from . import constants
 from . import routingtable
@@ -580,7 +580,7 @@ class Node(MockKademliaHelper):
         """
         return generate_id()
 
-    # from lbrynet.core.utils import profile_deferred
+    # from lbrynet.p2p.utils import profile_deferred
     # @profile_deferred()
     @defer.inlineCallbacks
     def _iterativeFind(self, key, startupShortlist=None, rpc='findNode', exclude=None):

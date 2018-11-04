@@ -12,7 +12,7 @@ import pkg_resources
 from twisted.python.failure import Failure
 from twisted.internet import defer
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
+from lbrynet.p2p.cryptoutils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
 

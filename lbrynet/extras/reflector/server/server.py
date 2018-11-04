@@ -3,10 +3,10 @@ import json
 from twisted.python import failure
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
-from lbrynet.core.utils import is_valid_blobhash
-from lbrynet.core.Error import DownloadCanceledError, InvalidBlobHashError
-from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
-from lbrynet.core.StreamDescriptor import save_sd_info
+from lbrynet.p2p.utils import is_valid_blobhash
+from lbrynet.p2p.Error import DownloadCanceledError, InvalidBlobHashError
+from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorReader
+from lbrynet.p2p.StreamDescriptor import save_sd_info
 from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 from lbrynet.extras.reflector.common import ReflectorRequestError, ReflectorClientVersionError
 

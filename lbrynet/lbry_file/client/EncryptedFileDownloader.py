@@ -3,10 +3,10 @@ import logging
 import traceback
 from binascii import hexlify, unhexlify
 
-from lbrynet.core.StreamDescriptor import save_sd_info
+from lbrynet.p2p.StreamDescriptor import save_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
-from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
-from lbrynet.core.Error import FileOpenError
+from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
+from lbrynet.p2p.Error import FileOpenError
 from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
 from twisted.internet import defer, threads
 

@@ -32,11 +32,11 @@ def resetTime(test_case, timestamp=DEFAULT_TIMESTAMP):
     patcher.start().return_value = iso_time
     test_case.addCleanup(patcher.stop)
 
-    patcher = mock.patch('lbrynet.core.utils.now')
+    patcher = mock.patch('lbrynet.p2p.utils.now')
     patcher.start().return_value = timestamp
     test_case.addCleanup(patcher.stop)
 
-    patcher = mock.patch('lbrynet.core.utils.utcnow')
+    patcher = mock.patch('lbrynet.p2p.utils.utcnow')
     patcher.start().return_value = timestamp
     test_case.addCleanup(patcher.stop)
 

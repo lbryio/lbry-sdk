@@ -5,12 +5,12 @@ import tempfile
 from twisted.internet import defer, threads, reactor
 
 from lbrynet.blob import BlobFile
-from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.RateLimiter import DummyRateLimiter
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core.client.BlobRequester import BlobRequester
-from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.core.client.ConnectionManager import ConnectionManager
+from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.p2p.RateLimiter import DummyRateLimiter
+from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.client.BlobRequester import BlobRequester
+from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.dht.peerfinder import DummyPeerFinder
 

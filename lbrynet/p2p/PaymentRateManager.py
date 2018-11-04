@@ -1,4 +1,4 @@
-from lbrynet.core.Strategy import get_default_strategy, OnlyFreeStrategy
+from lbrynet.p2p.Strategy import get_default_strategy, OnlyFreeStrategy
 from lbrynet import conf
 from decimal import Decimal
 

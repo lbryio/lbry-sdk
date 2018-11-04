@@ -1,6 +1,6 @@
-from lbrynet.core.StreamDescriptor import EncryptedFileStreamType
-from lbrynet.core.StreamDescriptor import EncryptedFileStreamDescriptorValidator
-from lbrynet.core.DownloadOption import DownloadOption, DownloadOptionChoice
+from lbrynet.p2p.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.p2p.StreamDescriptor import EncryptedFileStreamDescriptorValidator
+from lbrynet.p2p.DownloadOption import DownloadOption, DownloadOptionChoice
 
 
 def add_lbry_file_to_sd_identifier(sd_identifier):

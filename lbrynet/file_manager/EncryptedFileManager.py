@@ -10,10 +10,10 @@ from twisted.python.failure import Failure
 from lbrynet.extras.reflector.reupload import reflect_file
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info
+from lbrynet.p2p.StreamDescriptor import EncryptedFileStreamType, get_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
-from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
+from lbrynet.p2p.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet import conf
 
 
