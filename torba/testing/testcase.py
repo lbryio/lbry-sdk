@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import unittest
 from unittest.case import _Outcome
@@ -6,8 +5,11 @@ from .node import Conductor
 
 
 try:
-    from asyncio.runners import _cancel_all_tasks  # pylint: disable=C0412
+    import asyncio
+    from asyncio.runners import _cancel_all_tasks  # type: ignore
 except ImportError:
+    import asyncio
+
     # this is only available in py3.7
     def _cancel_all_tasks(loop):
         pass
