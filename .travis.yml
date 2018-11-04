@@ -11,7 +11,7 @@ jobs:
       install:
         - pip install pylint
         - pip install git+https://github.com/lbryio/torba.git
-        - pip install -e .
+        - pip install -e .[wallet-server]
       script: pylint lbrynet
 
     - &tests
