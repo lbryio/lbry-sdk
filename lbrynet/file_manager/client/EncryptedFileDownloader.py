@@ -7,7 +7,7 @@ from lbrynet.p2p.StreamDescriptor import save_sd_info
 from lbrynet.blob.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.p2p.Error import FileOpenError
-from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
+from lbrynet.file_manager.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
 from twisted.internet import defer, threads
 
 
