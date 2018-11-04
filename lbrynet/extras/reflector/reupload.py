@@ -2,7 +2,7 @@ import random
 
 from twisted.internet import reactor, defer
 from lbrynet import conf
-from lbrynet.reflector import ClientFactory, BlobClientFactory
+from . import ClientFactory, BlobClientFactory
 
 
 def _is_ip(host):
