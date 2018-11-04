@@ -145,7 +145,8 @@ class LBRYDB(DB):
         return self.outpoint_to_claim_id_cache.get(key) or self.outpoint_to_claim_id_db.get(key)
 
     def get_claims_for_name(self, name):
-        if name in self.claims_for_name_cache: return self.claims_for_name_cache[name]
+        if name in self.claims_for_name_cache:
+            return self.claims_for_name_cache[name]
         db_claims = self.names_db.get(name)
         return msgpack.loads(db_claims) if db_claims else {}
 
@@ -159,13 +160,14 @@ class LBRYDB(DB):
         self.logger.info("[-] Removing claim from name: {} - {}".format(hash_to_hex_str(claim_id), name))
         claims = self.get_claims_for_name(name)
         claim_n = claims.pop(claim_id)
-        for claim_id, number in claims.items():
+        for _claim_id, number in claims.items():
             if number > claim_n:
-                claims[claim_id] = number - 1
+                claims[_claim_id] = number - 1
         self.claims_for_name_cache[name] = claims
 
     def get_signed_claim_ids_by_cert_id(self, cert_id):
-        if cert_id in self.claims_signed_by_cert_cache: return self.claims_signed_by_cert_cache[cert_id]
+        if cert_id in self.claims_signed_by_cert_cache:
+            return self.claims_signed_by_cert_cache[cert_id]
         db_claims = self.signatures_db.get(cert_id)
         return msgpack.loads(db_claims, use_list=True) if db_claims else []
 

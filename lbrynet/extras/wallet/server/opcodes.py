@@ -84,11 +84,11 @@ def decode_claim_script(bytes_script):
     value = None
     claim_id = None
     claim = None
-    if not (0 <= decoded_script[op][0] <= opcodes.OP_PUSHDATA4):
+    if not 0 <= decoded_script[op][0] <= opcodes.OP_PUSHDATA4:
         return False
     name = decoded_script[op][1]
     op += 1
-    if not (0 <= decoded_script[op][0] <= opcodes.OP_PUSHDATA4):
+    if not 0 <= decoded_script[op][0] <= opcodes.OP_PUSHDATA4:
         return False
     if decoded_script[0][0] in [
         opcodes.OP_SUPPORT_CLAIM,

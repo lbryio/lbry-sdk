@@ -10,9 +10,7 @@ def handles_errors(decorated_function):
         try:
             return await decorated_function(*args, **kwargs)
         except DaemonError as daemon_error:
-            error_dict = daemon_error.args[0]
-            message, code = error_dict['message'], error_dict['code']
-            raise RPCError(code=code, message=message)
+            raise RPCError(1, daemon_error.args[0])
     return wrapper
 
 
