@@ -15,7 +15,7 @@ from lbrynet.androidhelpers.paths import (
 )
 
 try:
-    from lbrynet.winhelpers.winpaths import get_path, FOLDERID, UserHandle
+    from extras.winpaths import get_path, FOLDERID, UserHandle
 except (ImportError, ValueError, NameError):
     # Android platform: NameError: name 'c_wchar' is not defined
     pass
