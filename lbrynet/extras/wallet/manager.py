@@ -296,40 +296,60 @@ class LbryWalletManager(BaseWalletManager):
                 'fee': dewies_to_lbc(tx.fee),
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
                 'confirmations': headers.height - tx.height if tx.height > 0 else 0,
-                'claim_info': [{
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
-                } for txo in tx.my_claim_outputs],
-                'update_info': [{
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
-                } for txo in tx.my_update_outputs],
-                'support_info': [{
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'is_tip': not txo.is_my_account,
-                    'nout': txo.position
-                } for txo in tx.my_support_outputs],
-                'abandon_info': [{
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
-                } for txo in tx.my_abandon_outputs],
+                'claim_info': [],
+                'update_info': [],
+                'support_info': [],
+                'abandon_info': []
             }
+            for txo in tx.my_claim_outputs:
+                item['claim_info'].append({
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                })
+            for txo in tx.my_update_outputs:
+                item['update_info'].append({
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                })
+            for txo in tx.my_support_outputs:
+                is_tip = next(tx.my_inputs, None) is None
+                item['support_info'].append({
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': dewies_to_lbc(txo.amount if is_tip else -txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'is_tip': is_tip,
+                    'nout': txo.position
+                })
+            for txo in tx.other_support_outputs:
+                is_tip = next(tx.my_inputs, None) is not None
+                item['support_info'].append({
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'is_tip': is_tip,
+                    'nout': txo.position
+                })
+            for txo in tx.my_abandon_outputs:
+                item['abandon_info'].append({
+                    'address': txo.get_address(account.ledger),
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                })
             if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
                 item['fee'] = dewies_to_lbc(tx.fee)
             else:
