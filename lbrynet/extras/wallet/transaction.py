@@ -161,9 +161,20 @@ class Transaction(BaseTransaction):
     def abandon(cls, claims: Iterable[Output], funding_accounts: Iterable[Account], change_account: Account):
         return cls.create([Input.spend(txo) for txo in claims], [], funding_accounts, change_account)
 
+    @property
+    def my_inputs(self):
+        for txi in self.inputs:
+            if txi.txo_ref.txo is not None and txi.txo_ref.txo.is_my_account:
+                yield txi
+
     def _filter_my_outputs(self, f):
         for txo in self.outputs:
             if txo.is_my_account and f(txo.script):
+                yield txo
+
+    def _filter_other_outputs(self, f):
+        for txo in self.outputs:
+            if not txo.is_my_account and f(txo.script):
                 yield txo
 
     @property
@@ -177,6 +188,10 @@ class Transaction(BaseTransaction):
     @property
     def my_support_outputs(self):
         return self._filter_my_outputs(lambda s: s.is_support_claim)
+
+    @property
+    def other_support_outputs(self):
+        return self._filter_other_outputs(lambda s: s.is_support_claim)
 
     @property
     def my_abandon_outputs(self):
