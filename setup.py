@@ -37,7 +37,7 @@ setup(
         'envparse',
         'jsonrpc',
         'cryptography',
-        'protobuf',
+        'protobuf==3.6.1',
         'jsonschema',
         'ecdsa',
         'torba',
