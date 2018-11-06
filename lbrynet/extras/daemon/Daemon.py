@@ -2207,19 +2207,14 @@ class Daemon(AuthJSONRPCServer):
 
         available = await account.get_balance()
         if amount >= available:
-            # TODO: add check for existing claim balance
-            #balance = yield self.wallet.get_max_usable_balance_for_claim(name)
-            #max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
-            #if balance <= MAX_UPDATE_FEE_ESTIMATE:
-            raise InsufficientFundsError(
-                "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
-                .format(round((amount - available) / COIN + 0.01, 2))
-            )
-            #       .format(MAX_UPDATE_FEE_ESTIMATE - balance))
-            #elif bid > max_bid_amount:
-            #    raise InsufficientFundsError(
-            #        "Please lower the bid value, the maximum amount you can specify for this claim is {}."
-            #            .format(max_bid_amount))
+            existing_claims = await account.get_claims(claim_name=name)
+            if len(existing_claims) == 1:
+                available += existing_claims[0].get_estimator(self.ledger).effective_amount
+            if amount >= available:
+                raise InsufficientFundsError(
+                    f"Please lower the bid value, the maximum amount "
+                    f"you can specify for this claim is {dewies_to_lbc(available)}."
+                )
 
         metadata = metadata or {}
         if fee is not None:
