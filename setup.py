@@ -25,7 +25,7 @@ setup(
     packages=find_packages(exclude=('tests',)),
     zip_safe=False,
     entry_points={
-        'console_scripts': 'lbrynet=lbrynet.cli:main'
+        'console_scripts': 'lbrynet=lbrynet.extras.cli:main'
     },
     install_requires=[
         'aiohttp',
