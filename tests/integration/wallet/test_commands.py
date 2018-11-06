@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from twisted.trial import unittest
 from twisted.internet import utils, defer
 from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
+from lbrynet.p2p.Error import InsufficientFundsError
 
 from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
@@ -590,6 +591,19 @@ class PublishCommand(CommandTestCase):
         await self.generate(1)
 
         self.assertEqual('0.009348', await self.daemon.jsonrpc_account_balance())
+
+        # fails when specifying more than available
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            with self.assertRaisesRegex(
+                InsufficientFundsError,
+                "Please lower the bid value, the maximum amount"
+                " you can specify for this claim is 9.979274."
+            ):
+                await self.out(self.daemon.jsonrpc_publish(
+                    'hovercraft', '9.98', file_path=file.name
+                ))
 
 
 class SupportingSupports(CommandTestCase):
