@@ -172,6 +172,22 @@ class CommandTestCase(IntegrationTestCase):
         await self.generate(1)
         await self.on_transaction_id(txid)
 
+    async def on_transaction_dict(self, tx):
+        await asyncio.wait([
+            self.ledger.on_transaction.where(
+                partial(lambda address, event: address == event.address, address)
+            ) for address in self.get_all_addresses(tx)
+        ])
+
+    @staticmethod
+    def get_all_addresses(tx):
+        addresses = set()
+        for txi in tx['inputs']:
+            addresses.add(txi['address'])
+        for txo in tx['outputs']:
+            addresses.add(txo['address'])
+        return list(addresses)
+
     async def generate(self, blocks):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
         await self.blockchain.generate(blocks)
@@ -529,36 +545,70 @@ class PublishCommand(CommandTestCase):
                     channel_name='@baz', channel_account_id=[account1_id]
                 ))
 
+    async def test_updating_claim_includes_claim_value_in_balance_check(self):
+
+        self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
+
+        # create the initial name claim
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            claim = await self.out(self.daemon.jsonrpc_publish(
+                'hovercraft', '9.0', file_path=file.name
+            ))
+            self.assertTrue(claim['success'])
+
+        await self.on_transaction_dict(claim['tx'])
+        await self.generate(1)
+
+        self.assertEqual('0.979893', await self.daemon.jsonrpc_account_balance())
+
+        # update the claim first time
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            claim = await self.out(self.daemon.jsonrpc_publish(
+                'hovercraft', '9.0', file_path=file.name
+            ))
+            self.assertTrue(claim['success'])
+
+        await self.on_transaction_dict(claim['tx'])
+        await self.generate(1)
+
+        self.assertEqual('0.9796205', await self.daemon.jsonrpc_account_balance())
+
+        # update the claim a second time but use even more funds
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            claim = await self.out(self.daemon.jsonrpc_publish(
+                'hovercraft', '9.97', file_path=file.name
+            ))
+            self.assertTrue(claim['success'])
+
+        await self.on_transaction_dict(claim['tx'])
+        await self.generate(1)
+
+        self.assertEqual('0.009348', await self.daemon.jsonrpc_account_balance())
+
 
 class SupportingSupports(CommandTestCase):
 
     VERBOSITY = logging.INFO
 
-    async def on_transaction_dict(self, tx):
-        await asyncio.wait([
-            self.ledger.on_transaction.where(
-                partial(lambda address, event: address == event.address, address)
-            ) for address in self.get_all_addresses(tx)
-        ])
-
-    @staticmethod
-    def get_all_addresses(tx):
-        addresses = set()
-        for txi in tx['inputs']:
-            addresses.add(txi['address'])
-        for txo in tx['outputs']:
-            addresses.add(txo['address'])
-        return list(addresses)
-
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
         account2_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
 
-        # give account2 some spending LBC
+        # send account2 5 LBC out of the 10 LBC in account1
         result = await self.out(self.daemon.jsonrpc_wallet_send(
             '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
         ))
         await self.confirm_tx(result['txid'])
+
+        # account1 and account2 balances:
+        self.assertEqual('4.999876', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
 
         # create the claim we'll be tipping and supporting
         with tempfile.NamedTemporaryFile() as file:
@@ -617,9 +667,7 @@ class SupportingSupports(CommandTestCase):
         self.assertEqual('1.999717', await self.daemon.jsonrpc_account_balance(account2_id))
 
         # verify that the outgoing support is marked correctly as is_tip=False in account2
-        txs2 = await self.out(
-            self.daemon.jsonrpc_transaction_list(account2_id)
-        )
+        txs2 = await self.out(self.daemon.jsonrpc_transaction_list(account2_id))
         self.assertEqual(len(txs2[0]['support_info']), 1)
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
