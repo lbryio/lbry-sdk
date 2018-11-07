@@ -2315,7 +2315,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None):
+    async def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None, blocking=True):
         """
         Abandon a name and reclaim credits from the claim
 
@@ -2323,12 +2323,14 @@ class Daemon(AuthJSONRPCServer):
             claim_abandon [<claim_id> | --claim_id=<claim_id>]
                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
                           [--account_id=<account_id>]
+                          [--blocking]
 
         Options:
             --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
             --txid=<txid>             : (str) txid of the claim to abandon
             --nout=<nout>             : (int) nout of the claim to abandon
             --account_id=<account_id> : (str) id of the account to use
+            --blocking                : (bool) wait until abandon is in mempool
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -2348,6 +2350,8 @@ class Daemon(AuthJSONRPCServer):
 
         tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
         self.analytics_manager.send_claim_action('abandon')
+        if blocking:
+            await self.ledger.wait(tx)
         return {"success": True, "tx": tx}
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])

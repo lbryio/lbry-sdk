@@ -163,9 +163,9 @@ class CommandTestCase(IntegrationTestCase):
         self.manager.old_db = self.daemon.storage
 
     async def tearDown(self):
-        await super().tearDown()
         self.wallet_component._running = False
         await d2f(self.daemon._shutdown())
+        await super().tearDown()
 
     async def confirm_tx(self, txid):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
@@ -622,17 +622,11 @@ class AbandonCommand(CommandTestCase):
                 'hovercraft', '0.0001', file_path=file.name
             ))
             self.assertTrue(claim['success'])
-
-        await self.on_transaction_dict(claim['tx'])
-        await self.generate(1)
+            await self.on_transaction_dict(claim['tx'])
+            await self.generate(1)
 
         self.assertEqual('9.979793', await self.daemon.jsonrpc_account_balance())
-
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
-
-        await self.on_transaction_dict(abandon['tx'])
-        await self.generate(1)
-
+        await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
         self.assertEqual('9.97968399', await self.daemon.jsonrpc_account_balance())
 
 
