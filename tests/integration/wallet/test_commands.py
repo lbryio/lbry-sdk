@@ -163,9 +163,9 @@ class CommandTestCase(IntegrationTestCase):
         self.manager.old_db = self.daemon.storage
 
     async def tearDown(self):
+        await super().tearDown()
         self.wallet_component._running = False
         await d2f(self.daemon._shutdown())
-        await super().tearDown()
 
     async def confirm_tx(self, txid):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
