@@ -1,6 +1,7 @@
 import sys
 import logging
 import unittest
+from typing import Optional
 from unittest.case import _Outcome
 from torba.orchstr8 import Conductor
 from torba.orchstr8.node import BlockchainNode, WalletNode
@@ -8,7 +9,6 @@ from torba.client.baseledger import BaseLedger
 from torba.client.baseaccount import BaseAccount
 from torba.client.basemanager import BaseWalletManager
 from torba.client.wallet import Wallet
-from typing import Optional
 
 
 try:
