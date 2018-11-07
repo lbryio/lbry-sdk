@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+from functools import partial
 from binascii import hexlify, unhexlify
 from io import StringIO
 
@@ -384,3 +385,21 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw).decode())
+
+    async def wait(self, tx: basetransaction.BaseTransaction, height=0):
+        addresses = set()
+        for txi in tx.inputs:
+            if txi.txo_ref.txo is not None:
+                addresses.add(
+                    self.hash160_to_address(txi.txo_ref.txo.script.values['pubkey_hash'])
+                )
+        for txo in tx.outputs:
+            addresses.add(
+                self.hash160_to_address(txo.script.values['pubkey_hash'])
+            )
+        records = await self.db.get_addresses(cols=('address',), address__in=addresses)
+        await asyncio.wait([
+            self.on_transaction.where(partial(
+                lambda a, e: a == e.address and e.tx.height >= height, address_record['address']
+            )) for address_record in records
+        ])

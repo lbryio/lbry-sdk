@@ -3,6 +3,12 @@ import logging
 import unittest
 from unittest.case import _Outcome
 from torba.orchstr8 import Conductor
+from torba.orchstr8.node import BlockchainNode, WalletNode
+from torba.client.baseledger import BaseLedger
+from torba.client.baseaccount import BaseAccount
+from torba.client.basemanager import BaseWalletManager
+from torba.client.wallet import Wallet
+from typing import Optional
 
 
 try:
@@ -130,13 +136,13 @@ class IntegrationTestCase(AsyncioTestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.conductor = None
-        self.blockchain = None
-        self.wallet_node = None
-        self.manager = None
-        self.ledger = None
-        self.wallet = None
-        self.account = None
+        self.conductor: Optional[Conductor] = None
+        self.blockchain: Optional[BlockchainNode] = None
+        self.wallet_node: Optional[WalletNode] = None
+        self.manager: Optional[BaseWalletManager] = None
+        self.ledger: Optional[BaseLedger] = None
+        self.wallet: Optional[Wallet] = None
+        self.account: Optional[BaseAccount] = None
 
     async def asyncSetUp(self):
         self.conductor = Conductor(
@@ -178,19 +184,3 @@ class IntegrationTestCase(AsyncioTestCase):
         return self.ledger.on_transaction.where(
             lambda e: e.tx.id == tx.id and e.address == address
         )
-
-    async def on_transaction(self, tx):
-        addresses = await self.get_tx_addresses(tx, self.ledger)
-        await asyncio.wait([
-            self.ledger.on_transaction.where(lambda e: e.address == address)  # pylint: disable=W0640
-            for address in addresses
-        ])
-
-    async def get_tx_addresses(self, tx, ledger):
-        addresses = set()
-        for txo in tx.outputs:
-            address = ledger.hash160_to_address(txo.script.values['pubkey_hash'])
-            record = await ledger.db.get_address(address=address)
-            if record is not None:
-                addresses.add(address)
-        return list(addresses)

@@ -37,9 +37,9 @@ class BasicTransactionTests(IntegrationTestCase):
             [account1], account1
         )
         await self.broadcast(tx)
-        await self.on_transaction(tx)  # mempool
+        await self.ledger.wait(tx)  # mempool
         await self.blockchain.generate(1)
-        await self.on_transaction(tx)  # confirmed
+        await self.ledger.wait(tx)  # confirmed
 
         self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 3.5)
         self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 2.0)
@@ -51,9 +51,9 @@ class BasicTransactionTests(IntegrationTestCase):
             [account1], account1
         )
         await self.broadcast(tx)
-        await self.on_transaction(tx)  # mempool
+        await self.ledger.wait(tx)  # mempool
         await self.blockchain.generate(1)
-        await self.on_transaction(tx)  # confirmed
+        await self.ledger.wait(tx)  # confirmed
 
         txs = await account1.get_transactions()
         tx = txs[1]
