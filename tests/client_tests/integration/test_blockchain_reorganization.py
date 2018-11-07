@@ -1,4 +1,5 @@
 import logging
+from unittest import skip
 from torba.testcase import IntegrationTestCase
 
 
@@ -6,6 +7,7 @@ class BlockchainReorganizationTests(IntegrationTestCase):
 
     VERBOSITY = logging.WARN
 
+    @skip("too slow on Travis CI")
     async def test_reorg(self):
         self.assertEqual(self.ledger.headers.height, 200)
 
