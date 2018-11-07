@@ -246,7 +246,7 @@ class Node(MockKademliaHelper):
         yield _iterative_join()
 
     @defer.inlineCallbacks
-    def start(self, known_node_addresses=None):
+    def start(self, known_node_addresses=None, block_on_join=False):
         """ Causes the Node to attempt to join the DHT network by contacting the
         known DHT nodes. This can be called multiple times if the previous attempt
         has failed or if the Node has lost all the contacts.
@@ -261,8 +261,11 @@ class Node(MockKademliaHelper):
         self.start_listening()
         yield self._protocol._listening
         # TODO: Refresh all k-buckets further away than this node's closest neighbour
-        yield self.joinNetwork(known_node_addresses or [])
-        self.start_looping_calls()
+        d = self.joinNetwork(known_node_addresses or [])
+        d.addCallback(lambda _: self.start_looping_calls())
+        d.addCallback(lambda _: log.info("Joined the dht"))
+        if block_on_join:
+            yield d
 
     def start_looping_calls(self):
         self.safe_start_looping_call(self._change_token_lc, constants.tokenSecretChangeInterval)

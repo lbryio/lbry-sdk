@@ -441,7 +441,7 @@ class DHTComponent(Component):
             peerPort=self.external_peer_port
         )
 
-        yield self.dht_node.start(GCS('known_dht_nodes'))
+        yield self.dht_node.start(GCS('known_dht_nodes'), block_on_join=False)
         log.info("Started the dht")
 
     @defer.inlineCallbacks
