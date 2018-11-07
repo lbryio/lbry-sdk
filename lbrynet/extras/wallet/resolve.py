@@ -57,14 +57,14 @@ class Resolver:
                                                        height, depth,
                                                        transaction_class=self.transaction_class,
                                                        hash160_to_address=self.hash160_to_address)
-                    result['certificate'] = self.parse_and_validate_claim_result(certificate_result,
-                                                                                 raw=raw)
+                    result['certificate'] = await self.parse_and_validate_claim_result(certificate_result,
+                                                                                       raw=raw)
             elif certificate_resolution_type == "claim_id":
-                result['certificate'] = self.parse_and_validate_claim_result(certificate_response,
-                                                                             raw=raw)
+                result['certificate'] = await self.parse_and_validate_claim_result(certificate_response,
+                                                                                   raw=raw)
             elif certificate_resolution_type == "sequence":
-                result['certificate'] = self.parse_and_validate_claim_result(certificate_response,
-                                                                             raw=raw)
+                result['certificate'] = await self.parse_and_validate_claim_result(certificate_response,
+                                                                                   raw=raw)
             else:
                 log.error("unknown response type: %s", certificate_resolution_type)
 
@@ -97,17 +97,17 @@ class Resolver:
                                                  height, depth,
                                                  transaction_class=self.transaction_class,
                                                  hash160_to_address=self.hash160_to_address)
-                    result['claim'] = self.parse_and_validate_claim_result(claim_result,
-                                                                           certificate,
-                                                                           raw)
+                    result['claim'] = await self.parse_and_validate_claim_result(claim_result,
+                                                                                 certificate,
+                                                                                 raw)
             elif claim_resolution_type == "claim_id":
-                result['claim'] = self.parse_and_validate_claim_result(claim_response,
-                                                                       certificate,
-                                                                       raw)
+                result['claim'] = await self.parse_and_validate_claim_result(claim_response,
+                                                                             certificate,
+                                                                             raw)
             elif claim_resolution_type == "sequence":
-                result['claim'] = self.parse_and_validate_claim_result(claim_response,
-                                                                       certificate,
-                                                                       raw)
+                result['claim'] = await self.parse_and_validate_claim_result(claim_response,
+                                                                             certificate,
+                                                                             raw)
             else:
                 log.error("unknown response type: %s", claim_resolution_type)
 
@@ -151,9 +151,9 @@ class Resolver:
         if certificate_id:
             certificate = await self.network.get_claims_by_ids(certificate_id.decode())
             certificate = certificate.pop(certificate_id.decode()) if certificate else None
-        return self.parse_and_validate_claim_result(claim_result, certificate=certificate)
+        return await self.parse_and_validate_claim_result(claim_result, certificate=certificate)
 
-    def parse_and_validate_claim_result(self, claim_result, certificate=None, raw=False):
+    async def parse_and_validate_claim_result(self, claim_result, certificate=None, raw=False):
         if not claim_result or 'value' not in claim_result:
             return claim_result
 
@@ -174,7 +174,7 @@ class Resolver:
             if decoded.has_signature:
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
-                    certificate = self.network.get_claims_by_ids(decoded.certificate_id)
+                    certificate = await self.network.get_claims_by_ids(decoded.certificate_id.decode())
                     if not certificate:
                         log.warning('Certificate %s not found', decoded.certificate_id)
                 claim_result['has_signature'] = True
@@ -244,7 +244,7 @@ class Resolver:
                 for claim_id in claim_ids:
                     claim = batch_result[claim_id]
                     if claim['name'] == claim_names[claim_id]:
-                        formatted_claim = self.parse_and_validate_claim_result(claim, certificate)
+                        formatted_claim = await self.parse_and_validate_claim_result(claim, certificate)
                         formatted_claim['absolute_channel_position'] = claim_positions[
                             claim['claim_id']]
                         formatted_claims.append(formatted_claim)
