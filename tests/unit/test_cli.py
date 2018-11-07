@@ -67,7 +67,7 @@ class CLITest(unittest.TestCase):
             main(['version'])
         self.assertEqual(
             actual_output.getvalue().strip(),
-            "lbrynet {lbrynet_version}".format(**get_platform(get_ip=False))
+            "lbrynet {lbrynet_version}".format(**get_platform())
         )
 
     def test_invalid_command(self):

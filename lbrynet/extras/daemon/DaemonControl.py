@@ -53,7 +53,7 @@ def start(argv=None, conf_path=None):
         conf.settings.update({'use_auth_http': args.useauth}, data_types=(conf.TYPE_CLI,))
 
     if args.version:
-        version = system_info.get_platform(get_ip=False)
+        version = system_info.get_platform()
         version['installation_id'] = conf.settings.installation_id
         print(utils.json_dumps_pretty(version))
         return

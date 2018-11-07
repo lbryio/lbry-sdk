@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import treq
+import json
 import math
 import binascii
 from hashlib import sha256
@@ -11,7 +12,7 @@ import lbrynet.schema
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
-from lbrynet import conf, system_info
+from lbrynet import conf
 from lbrynet.utils import DeferredDict, generate_id
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.p2p.RateLimiter import RateLimiter
@@ -93,9 +94,19 @@ class ConfigSettings:
         return conf.settings.node_id
 
     @staticmethod
-    def get_external_ip():
-        platform = system_info.get_platform(get_ip=True)
-        return platform['ip']
+    @defer.inlineCallbacks
+    def get_external_ip():  # used if upnp is disabled or non-functioning
+        try:
+            buf = []
+            response = yield treq.get("https://api.lbry.io/ip")
+            yield treq.collect(response, buf.append)
+            parsed = json.loads(b"".join(buf).decode())
+            if parsed['success']:
+                return parsed['data']['ip']
+            return
+        except Exception as err:
+            return
+
 
 
 # Shorthand for common ConfigSettings methods
@@ -429,7 +440,7 @@ class DHTComponent(Component):
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
-            external_ip = CS.get_external_ip()
+            external_ip = yield CS.get_external_ip()
             if not external_ip:
                 log.warning("failed to get external ip")
 
@@ -705,7 +716,7 @@ class UPnPComponent(Component):
 
         if external_ip == "0.0.0.0" or not external_ip:
             log.warning("unable to get external ip from UPnP, checking lbry.io fallback")
-            external_ip = CS.get_external_ip()
+            external_ip = yield CS.get_external_ip()
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         self.external_ip = external_ip
@@ -761,7 +772,7 @@ class UPnPComponent(Component):
     def start(self):
         log.info("detecting external ip")
         if not self.use_upnp:
-            self.external_ip = CS.get_external_ip()
+            self.external_ip = yield CS.get_external_ip()
             return
         success = False
         yield self._maintain_redirects()

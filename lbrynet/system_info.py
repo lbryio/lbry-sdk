@@ -1,9 +1,6 @@
 import platform
-import json
 import os
 
-from six.moves.urllib import request
-from six.moves.urllib.error import URLError
 from lbrynet.schema import __version__ as schema_version
 from lbrynet import build_type, __version__ as lbrynet_version
 import logging.handlers
@@ -15,7 +12,7 @@ def get_lbrynet_version() -> str:
     return lbrynet_version
 
 
-def get_platform(get_ip: bool = True) -> dict:
+def get_platform() -> dict:
     p = {
         "processor": platform.processor(),
         "python_version": platform.python_version(),
@@ -33,15 +30,5 @@ def get_platform(get_ip: bool = True) -> dict:
             p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
         except ModuleNotFoundError:
             pass
-
-    # TODO: remove this from get_platform and add a get_external_ip function using treq
-    if get_ip:
-        try:
-            response = json.loads(request.urlopen("https://api.lbry.io/ip").read())
-            if not response['success']:
-                raise URLError("failed to get external ip")
-            p['ip'] = response['data']['ip']
-        except (URLError, AssertionError):
-            p['ip'] = "Could not determine IP"
 
     return p

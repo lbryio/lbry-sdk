@@ -140,7 +140,7 @@ def main(argv=None):
 
     elif method in ['version', '--version', '-v']:
         print("{lbrynet_name} {lbrynet_version}".format(
-            lbrynet_name=lbrynet_name, **get_platform(get_ip=False)
+            lbrynet_name=lbrynet_name, **get_platform()
         ))
         return 0
 
