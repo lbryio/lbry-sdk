@@ -765,7 +765,6 @@ class SQLiteStorage:
                     streams = channel_id_infos.get(claim_info[7], [])
                     streams.append(claim_info[0])
                     channel_id_infos[claim_info[7]] = streams
-            for claim_info in claim_infos:
                 stream_hash = claim_info[0]
                 result = _format_claim_response(*claim_info[1:])
                 results[stream_hash] = result
