@@ -133,6 +133,10 @@ class DB(object):
         # Read TX counts (requires meta directory)
         await self._read_tx_counts()
 
+    def shutdown(self):
+        self.utxo_db.close()
+        self.history.close_db()
+
     async def open_for_compacting(self):
         await self._open_dbs(True, True)
 

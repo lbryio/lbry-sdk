@@ -175,7 +175,7 @@ class SPVNode:
 
     async def stop(self, cleanup=True):
         try:
-            await self.controller.shutdown()
+            self.server.db.shutdown()
         finally:
             cleanup and self.cleanup()
 
