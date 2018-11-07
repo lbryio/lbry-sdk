@@ -608,7 +608,7 @@ class PublishCommand(CommandTestCase):
 
 class AbandonCommand(CommandTestCase):
 
-    VERBOSITY = logging.INFO
+    VERBOSITY = logging.WARN
 
     async def test_abandoning_claim_at_loss(self):
 
