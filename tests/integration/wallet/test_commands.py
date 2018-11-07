@@ -606,9 +606,39 @@ class PublishCommand(CommandTestCase):
                 ))
 
 
-class SupportingSupports(CommandTestCase):
+class AbandonCommand(CommandTestCase):
 
     VERBOSITY = logging.INFO
+
+    async def test_abandoning_claim_at_loss(self):
+
+        self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
+
+        # create the initial name claim
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            claim = await self.out(self.daemon.jsonrpc_publish(
+                'hovercraft', '0.0001', file_path=file.name
+            ))
+            self.assertTrue(claim['success'])
+
+        await self.on_transaction_dict(claim['tx'])
+        await self.generate(1)
+
+        self.assertEqual('9.979793', await self.daemon.jsonrpc_account_balance())
+
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
+
+        await self.on_transaction_dict(abandon['tx'])
+        await self.generate(1)
+
+        self.assertEqual('9.97968399', await self.daemon.jsonrpc_account_balance())
+
+
+class SupportingSupports(CommandTestCase):
+
+    VERBOSITY = logging.WARN
 
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
