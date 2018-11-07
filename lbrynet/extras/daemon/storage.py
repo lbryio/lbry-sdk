@@ -573,16 +573,13 @@ class SQLiteStorage:
             }
 
         def _get_supports(transaction):
-            if len(claim_ids) == 1:
-                bind = "=?"
-            else:
-                bind = "in ({})".format(','.join('?' for _ in range(len(claim_ids))))
             return [
                 _format_support(*support_info)
-                for support_info in transaction.execute(
-                    f"select * from support where claim_id {bind}",
+                for support_info in _batched_select(
+                    transaction,
+                    "select * from support where claim_id in {}",
                     tuple(claim_ids)
-                ).fetchall()
+                )
             ]
 
         return self.db.runInteraction(_get_supports)
@@ -756,13 +753,12 @@ class SQLiteStorage:
     def get_claims_from_stream_hashes(self, stream_hashes, include_supports=True):
         def _batch_get_claim(transaction):
             results = {}
-            bind = "({})".format(','.join('?' for _ in range(len(stream_hashes))))
-            claim_infos = transaction.execute(
+            claim_infos = _batched_select(
+                transaction,
                 "select content_claim.stream_hash, c.* from content_claim "
                 "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
-                "and content_claim.stream_hash in {} order by c.rowid desc".format(bind),
-                tuple(stream_hashes)
-            ).fetchall()
+                "and content_claim.stream_hash in {} order by c.rowid desc",
+                stream_hashes)
             channel_id_infos = {}
             for claim_info in claim_infos:
                 if claim_info[7]:
@@ -773,11 +769,12 @@ class SQLiteStorage:
                 stream_hash = claim_info[0]
                 result = _format_claim_response(*claim_info[1:])
                 results[stream_hash] = result
-            bind = "({})".format(','.join('?' for _ in range(len(channel_id_infos))))
-            for claim_id, channel_name in transaction.execute(
-                    f"select claim_id, claim_name from claim where claim_id in {bind}",
-                    tuple(channel_id_infos.keys())
-            ).fetchall():
+            channel_names = _batched_select(
+                transaction,
+                "select claim_id, claim_name from claim where claim_id in {}",
+                tuple(channel_id_infos.keys())
+            )
+            for claim_id, channel_name in channel_names:
                 for stream_hash in channel_id_infos[claim_id]:
                     results[stream_hash]['channel_name'] = channel_name
             return results
@@ -892,3 +889,11 @@ def _format_claim_response(outpoint, claim_id, name, amount, height, serialized,
         "channel_name": None
     }
     return r
+
+
+def _batched_select(transaction, query, parameters):
+    for start_index in range(0, len(parameters), 900):
+        current_batch = parameters[start_index:start_index+900]
+        bind = "({})".format(','.join('?' for _ in range(len(current_batch))))
+        for result in transaction.execute(query.format(bind), current_batch):
+            yield result
