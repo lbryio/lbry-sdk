@@ -8,6 +8,7 @@ import twisted.python.log
 from twisted.internet import defer
 from lbrynet import __version__ as lbrynet_version, build_type
 from lbrynet import utils, conf
+from lbrynet.custom_logger import install_logger
 
 
 class HTTPSHandler(logging.Handler):
@@ -212,6 +213,8 @@ def configure_logging(file_name, console, verbose=None):
             See `convert_verbose` for more details.
     """
     logger = logging.getLoggerClass()
+    if not hasattr(logger, "fail"):
+        install_logger()
     verbose = convert_verbose(verbose)
     configure_twisted()
     configure_file_handler(file_name)
