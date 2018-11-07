@@ -2,6 +2,7 @@ import asyncio
 import logging
 from binascii import unhexlify
 
+from lbrynet.extras.wallet.dewies import dewies_to_lbc
 from lbrynet.schema.error import URIParseError
 from lbrynet.schema.uri import parse_lbry_uri
 from torba.client.baseledger import BaseLedger
@@ -85,9 +86,10 @@ class MainNetLedger(BaseLedger):
             total_change = len((await account.change.get_addresses()))
             channel_count = await account.get_channel_count()
             claim_count = await account.get_claim_count()
-            log.info("Loaded account %s with %d receiving addresses (gap: %d), "
-                     "%d change addresses (gap: %d), %d channels, %d certificates and %d claims.",
-                     account.id, total_receiving, account.receiving.gap, total_change, account.change.gap,
+            balance = dewies_to_lbc(await account.get_balance())
+            log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
+                     "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
+                     account.id, balance, total_receiving, account.receiving.gap, total_change, account.change.gap,
                      channel_count, len(account.certificates), claim_count)
 
 
