@@ -6,10 +6,9 @@ from binascii import hexlify, unhexlify
 from decimal import Decimal
 from twisted.internet import defer, task, threads
 from twisted.enterprise import adbapi
-
+from lbrynet import conf
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
-from lbrynet.extras.daemon import conf
 from lbrynet.blob.CryptBlob import CryptBlobInfo
 from lbrynet.dht.constants import dataExpireTimeout
 from torba.client.constants import COIN

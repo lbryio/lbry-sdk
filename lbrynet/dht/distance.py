@@ -1,4 +1,4 @@
-from lbrynet.dht import constants
+from . import constants
 
 
 class Distance:

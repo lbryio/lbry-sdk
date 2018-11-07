@@ -7,9 +7,8 @@ from twisted.internet import defer
 from twisted.trial import unittest
 
 from faker import Faker
-
+from lbrynet import conf
 from lbrynet.schema.decode import smart_decode
-from lbrynet.extras.daemon import conf
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
@@ -23,24 +22,19 @@ from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
-from tests import util
+from tests import test_utils
 from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from tests.mocks import BTCLBCFeed, USDBTCFeed
-from tests.util import is_android
-
-
-import logging
-logging.getLogger("lbryum").setLevel(logging.WARNING)
+from tests.test_utils import is_android
 
 
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
-
     rates = {
-        'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
-        'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
+        'BTCLBC': {'spot': 3.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
+        'USDBTC': {'spot': 2.0, 'ts': test_utils.DEFAULT_ISO_TIME + 2}
     }
     component_manager = ComponentManager(
         skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, UPNP_COMPONENT,
@@ -89,7 +83,7 @@ class TestCostEst(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        util.resetTime(self)
+        test_utils.resetTime(self)
 
     @defer.inlineCallbacks
     def test_fee_and_generous_data(self):
@@ -134,7 +128,7 @@ class TestJsonRpc(unittest.TestCase):
             return None
 
         mock_conf_settings(self)
-        util.resetTime(self)
+        test_utils.resetTime(self)
         self.test_daemon = get_test_daemon()
         self.test_daemon.wallet_manager.is_first_run = False
         self.test_daemon.wallet_manager.get_best_blockhash = noop
@@ -156,7 +150,7 @@ class TestFileListSorting(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        util.resetTime(self)
+        test_utils.resetTime(self)
         self.faker = Faker('en_US')
         self.faker.seed(129)  # contains 3 same points paid (5.9)
         self.test_daemon = get_test_daemon()

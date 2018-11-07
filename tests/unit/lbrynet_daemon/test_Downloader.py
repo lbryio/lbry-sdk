@@ -12,7 +12,7 @@ from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon import Downloader
 from lbrynet.extras.daemon import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.dht.peerfinder import DummyPeerFinder
+from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
 from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager

@@ -5,10 +5,10 @@ import logging
 from binascii import hexlify, unhexlify
 
 from twisted.internet import defer
-from lbrynet.extras.daemon import conf
+from lbrynet import conf
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
-from lbrynet.p2p.utils import short_hash
+from lbrynet.utils import short_hash
 from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileDownloader
 from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport

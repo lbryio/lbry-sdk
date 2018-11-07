@@ -7,7 +7,7 @@ import sys
 import yaml
 import envparse
 from appdirs import user_data_dir, user_config_dir
-from lbrynet.p2p import utils
+from lbrynet import utils
 from lbrynet.p2p.Error import InvalidCurrencyError, NoSuchDirectoryError
 from lbrynet.androidhelpers.paths import (
     android_internal_storage_dir,

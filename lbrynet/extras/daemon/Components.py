@@ -11,8 +11,8 @@ import lbrynet.schema
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
-from lbrynet.extras.daemon import conf
-from lbrynet.p2p.utils import DeferredDict
+from lbrynet import conf, system_info
+from lbrynet.utils import DeferredDict, generate_id
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.BlobManager import DiskBlobManager
@@ -23,15 +23,14 @@ from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
 from .Component import Component
 from .ExchangeRateManager import ExchangeRateManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.dht import node
-from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
+from .storage import SQLiteStorage
+from .HashAnnouncer import DHTHashAnnouncer
+
+from lbrynet.dht.node import Node
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.extras.reflector import ServerFactory as reflector_server_factory
-
-from lbrynet.p2p.utils import generate_id
 
 log = logging.getLogger(__name__)
 
@@ -95,8 +94,7 @@ class ConfigSettings:
 
     @staticmethod
     def get_external_ip():
-        from lbrynet.p2p.system_info import get_platform
-        platform = get_platform(get_ip=True)
+        platform = system_info.get_platform(get_ip=True)
         return platform['ip']
 
 
@@ -435,7 +433,7 @@ class DHTComponent(Component):
             if not external_ip:
                 log.warning("failed to get external ip")
 
-        self.dht_node = node.Node(
+        self.dht_node = Node(
             node_id=node_id,
             udpPort=GCS('dht_node_port'),
             externalUDPPort=self.external_udp_port,

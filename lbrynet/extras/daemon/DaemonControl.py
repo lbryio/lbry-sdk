@@ -7,15 +7,14 @@ if 'win' in sys.platform:
     import certifi
     os.environ['SSL_CERT_FILE'] = certifi.where()
 
-from lbrynet.p2p import log_support
+from lbrynet import log_support
 
 import argparse
 import logging.handlers
 
 from twisted.internet import reactor
 
-from lbrynet.extras.daemon import conf
-from lbrynet.p2p import utils, system_info
+from lbrynet import utils, system_info, conf
 from .Daemon import Daemon
 
 log = logging.getLogger(__name__)

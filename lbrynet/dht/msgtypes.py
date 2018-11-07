@@ -7,7 +7,7 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
-from lbrynet.p2p.utils import generate_id
+from lbrynet.utils import generate_id
 from . import constants
 
 

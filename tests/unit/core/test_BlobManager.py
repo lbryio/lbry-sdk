@@ -6,12 +6,12 @@ import string
 from twisted.trial import unittest
 from twisted.internet import defer
 
-from tests.util import random_lbry_hash
+from tests.test_utils import random_lbry_hash
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.p2p.Peer import Peer
-from lbrynet.extras.daemon import conf
-from lbrynet.p2p.cryptoutils import get_lbry_hash_obj
+from lbrynet import conf
+from lbrynet.cryptoutils import get_lbry_hash_obj
 
 
 class BlobManagerTest(unittest.TestCase):

@@ -4,7 +4,7 @@ from twisted.internet import defer, task
 from twisted.internet.error import ConnectingCancelledError
 from twisted.web._newclient import ResponseNeverReceived
 import treq
-from lbrynet.p2p.utils import DeferredDict
+from lbrynet.utils import DeferredDict
 from lbrynet.p2p.Error import DownloadCanceledError
 
 log = logging.getLogger(__name__)

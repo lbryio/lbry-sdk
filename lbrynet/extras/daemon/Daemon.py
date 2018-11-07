@@ -16,6 +16,8 @@ from twisted.python.failure import Failure
 
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
+from lbrynet import conf, utils, system_info
+from lbrynet.system_info import get_lbrynet_version
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError
@@ -23,19 +25,15 @@ from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.address import decode_address
 from lbrynet.schema.decode import smart_decode
 
-# TODO: importing this when internet is disabled raises a socket.gaierror
-from lbrynet.p2p.system_info import get_lbrynet_version
-from lbrynet.extras.daemon import conf
 from lbrynet.extras.reflector import reupload
 from .Components import d2f, f2d
 from .Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from .Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
+from .Components import FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
 from .Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
 from .ComponentManager import RequiredCondition
 from .Downloader import GetStream
 from .Publisher import Publisher
 from .auth.server import AuthJSONRPCServer
-from lbrynet.p2p import utils, system_info
 from lbrynet.p2p.StreamDescriptor import download_sd_blob
 from lbrynet.p2p.Error import InsufficientFundsError, UnknownNameError
 from lbrynet.p2p.Error import DownloadDataTimeout, DownloadSDTimeout
@@ -448,7 +446,7 @@ class Daemon(AuthJSONRPCServer):
         Get total stream size in bytes from a sd blob
         """
 
-        d = self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
+        d = self.file_manager.sd_identifier.get_metadata_for_sd_blob(sd_blob)
         d.addCallback(lambda metadata: metadata.validator.info_to_show())
         d.addCallback(lambda info: int(dict(info)['stream_size']))
         return d
@@ -466,9 +464,7 @@ class Daemon(AuthJSONRPCServer):
         """
         Calculate estimated LBC cost for a stream given its size in bytes
         """
-
         cost = self._get_est_cost_from_stream_size(size)
-
         resolved = await self.wallet_manager.resolve(uri)
 
         if uri in resolved and 'claim' in resolved[uri]:
@@ -533,7 +529,6 @@ class Daemon(AuthJSONRPCServer):
         sd blob will be downloaded to determine the stream size
 
         """
-
         if size is not None:
             return self.get_est_cost_using_known_size(uri, size)
         return self.get_est_cost_from_uri(uri)

@@ -2,13 +2,13 @@ import os
 import logging
 import traceback
 from binascii import hexlify, unhexlify
+from twisted.internet import defer, threads
 
 from lbrynet.p2p.StreamDescriptor import save_sd_info
 from lbrynet.blob.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.p2p.Error import FileOpenError
 from lbrynet.blob.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
-from twisted.internet import defer, threads
 
 
 log = logging.getLogger(__name__)

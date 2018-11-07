@@ -12,7 +12,7 @@ from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.dht.peerfinder import DummyPeerFinder
+from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
 
 
 log = logging.getLogger(__name__)

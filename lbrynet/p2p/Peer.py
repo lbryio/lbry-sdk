@@ -1,6 +1,6 @@
 import datetime
 from collections import defaultdict
-from lbrynet.p2p import utils
+from lbrynet import utils
 
 # Do not create this object except through PeerManager
 class Peer:

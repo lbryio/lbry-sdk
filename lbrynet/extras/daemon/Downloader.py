@@ -4,14 +4,14 @@ from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
 from .Components import f2d
+from lbrynet import conf
 from lbrynet.schema.fee import Fee
 
 from lbrynet.p2p.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
 from lbrynet.p2p.Error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
-from lbrynet.p2p.utils import safe_start_looping_call, safe_stop_looping_call
+from lbrynet.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.p2p.StreamDescriptor import download_sd_blob
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.extras.daemon import conf
 from torba.client.constants import COIN
 from lbrynet.extras.wallet.dewies import dewies_to_lbc
 

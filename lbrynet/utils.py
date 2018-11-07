@@ -12,7 +12,7 @@ import pkg_resources
 from twisted.python.failure import Failure
 from twisted.internet import defer
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.p2p.cryptoutils import get_lbry_hash_obj
+from lbrynet.cryptoutils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ def call_later(delay, func, *args, **kwargs):
     # see: http://twistedmatrix.com/documents/current/core/howto/choosing-reactor.html
     from twisted.internet import reactor
     return reactor.callLater(delay, func, *args, **kwargs)
+
 
 def safe_start_looping_call(looping_call, interval_sec):
     if not looping_call.running:

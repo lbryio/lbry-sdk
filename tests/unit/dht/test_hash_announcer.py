@@ -1,8 +1,8 @@
 from twisted.trial import unittest
 from twisted.internet import defer, task
-from lbrynet.p2p import utils
+from lbrynet import utils
 from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
-from tests.util import random_lbry_hash
+from tests.test_utils import random_lbry_hash
 from tests.mocks import mock_conf_settings
 
 

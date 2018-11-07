@@ -6,9 +6,9 @@ import logging.handlers
 from twisted.internet import defer, reactor, threads
 from aiohttp import client_exceptions
 
-from lbrynet.extras.daemon import analytics, conf
-from lbrynet.p2p import utils
-from lbrynet.p2p import log_support
+from lbrynet.extras.daemon import analytics
+from lbrynet import utils, conf
+from lbrynet import log_support
 from .auth.client import LBRYAPIClient
 from .Daemon import Daemon
 

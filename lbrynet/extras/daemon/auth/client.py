@@ -3,7 +3,7 @@ import aiohttp
 import logging
 from urllib.parse import urlparse
 
-from lbrynet.extras.daemon import conf
+from lbrynet import conf
 from .keyring import Keyring, APIKey
 
 log = logging.getLogger(__name__)

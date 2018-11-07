@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from twisted.internet import ssl
 import logging
-from lbrynet.extras.daemon import conf
+from lbrynet import conf
 
 log = logging.getLogger(__name__)
 

@@ -1,12 +1,14 @@
-from binascii import unhexlify
 import logging
+from binascii import unhexlify
+from twisted.internet import defer
+from twisted.python.failure import Failure
+
 from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.p2p.client.DownloadManager import DownloadManager
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.blob.client.CryptBlobHandler import CryptBlobHandler
-from twisted.internet import defer
-from twisted.python.failure import Failure
+
 
 
 log = logging.getLogger(__name__)

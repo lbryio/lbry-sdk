@@ -1,5 +1,5 @@
 from decimal import Decimal
-from lbrynet.extras.daemon import conf
+from lbrynet import conf
 from lbrynet.p2p.Offer import Offer
 from lbrynet.p2p.PriceModel import MeanAvailabilityWeightedPrice, ZeroPrice
 
@@ -133,7 +133,6 @@ class BasicAvailabilityWeightedStrategy(Strategy):
 
 
 class OnlyFreeStrategy(Strategy):
-
     def __init__(self, *args, **kwargs):
         price_model = ZeroPrice()
         super().__init__(price_model, 0.0, 0.0, True)

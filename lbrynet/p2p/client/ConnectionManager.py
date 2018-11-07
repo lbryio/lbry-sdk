@@ -1,10 +1,9 @@
 import random
 import logging
 from twisted.internet import defer, reactor
-from lbrynet.extras.daemon import conf
+from lbrynet import utils, conf
 from lbrynet.p2p.client.ClientProtocol import ClientProtocolFactory
 from lbrynet.p2p.Error import InsufficientFundsError
-from lbrynet.p2p import utils
 
 log = logging.getLogger(__name__)
 

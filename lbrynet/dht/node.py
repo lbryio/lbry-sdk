@@ -5,9 +5,8 @@ from functools import reduce
 
 from twisted.internet import defer, error, task
 
-from lbrynet.p2p.utils import generate_id, DeferredDict
-from lbrynet.p2p.call_later_manager import CallLaterManager
-from lbrynet.p2p.PeerManager import PeerManager
+from lbrynet.utils import generate_id, DeferredDict
+from .call_later_manager import CallLaterManager
 from .error import TimeoutError
 from . import constants
 from . import routingtable

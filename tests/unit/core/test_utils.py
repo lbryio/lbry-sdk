@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lbrynet.p2p import utils
+from lbrynet import utils
 
 from twisted.trial import unittest
 

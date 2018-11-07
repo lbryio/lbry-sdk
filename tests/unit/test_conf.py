@@ -4,7 +4,7 @@ import sys
 import tempfile
 from unittest import skipIf
 from twisted.trial import unittest
-from lbrynet.extras.daemon import conf
+from lbrynet import conf
 from lbrynet.p2p.Error import InvalidCurrencyError
 
 
