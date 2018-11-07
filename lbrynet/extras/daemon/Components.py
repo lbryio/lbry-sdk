@@ -24,7 +24,8 @@ from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
 from .Component import Component
 from .ExchangeRateManager import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.dht import node, hashannouncer
+from lbrynet.dht import node
+from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -466,7 +467,7 @@ class HashAnnouncerComponent(Component):
     def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
-        self.hash_announcer = hashannouncer.DHTHashAnnouncer(dht_node, storage)
+        self.hash_announcer = DHTHashAnnouncer(dht_node, storage)
         yield self.hash_announcer.start()
 
     @defer.inlineCallbacks
