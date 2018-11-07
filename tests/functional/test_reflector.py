@@ -26,7 +26,7 @@ class TestReflector(unittest.TestCase):
         self.client_db_dir, self.client_blob_dir = mk_db_and_blob_dir()
         prm = OnlyFreePaymentsManager()
         wallet = mocks.Wallet()
-        peer_manager = PeerManager.PeerManager()
+        peer_manager = PeerManager()
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
         self.server_storage = SQLiteStorage(self.server_db_dir)
         self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir, self.server_storage)
