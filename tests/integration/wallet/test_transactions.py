@@ -66,13 +66,13 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.broadcast(cert_tx)
         await self.broadcast(claim_tx)
         await asyncio.wait([  # mempool
-            self.on_transaction(claim_tx),
-            self.on_transaction(cert_tx)
+            self.ledger.wait(claim_tx),
+            self.ledger.wait(cert_tx)
         ])
         await self.blockchain.generate(1)
         await asyncio.wait([  # confirmed
-            self.on_transaction(claim_tx),
-            self.on_transaction(cert_tx)
+            self.ledger.wait(claim_tx),
+            self.ledger.wait(cert_tx)
         ])
 
         self.assertEqual(d2l(await self.account.get_balance()), '7.985786')
@@ -84,9 +84,9 @@ class BasicTransactionTest(IntegrationTestCase):
 
         abandon_tx = await Transaction.abandon([claim_tx.outputs[0]], [self.account], self.account)
         await self.broadcast(abandon_tx)
-        await self.on_transaction(abandon_tx)
+        await self.ledger.wait(abandon_tx)
         await self.blockchain.generate(1)
-        await self.on_transaction(abandon_tx)
+        await self.ledger.wait(abandon_tx)
 
         response = await self.ledger.resolve(0, 10, 'lbry://@bar/foo')
         self.assertNotIn('claim', response['lbry://@bar/foo'])
