@@ -78,7 +78,7 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_claims(constraints):
-        constraints['claim_type__any'] = {'is_claim': 1, 'is_update': 1}
+        constraints['claim_type__any'] = {'is_claim': 1, 'is_update': 1, 'is_support': 1}
 
     def get_claims(self, **constraints):
         self.constrain_claims(constraints)
