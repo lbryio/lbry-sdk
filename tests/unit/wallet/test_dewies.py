@@ -1,6 +1,6 @@
 import unittest
 
-from lbrynet.wallet.dewies import lbc_to_dewies as l2d, dewies_to_lbc as d2l
+from lbrynet.extras.wallet.dewies import lbc_to_dewies as l2d, dewies_to_lbc as d2l
 
 
 class TestDeweyConversion(unittest.TestCase):

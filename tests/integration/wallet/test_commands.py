@@ -8,25 +8,22 @@ from twisted.trial import unittest
 from twisted.internet import utils, defer
 from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
 
-from orchstr8.testcase import IntegrationTestCase as BaseIntegrationTestCase
+from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
-import lbryschema
-lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
+import lbrynet.schema
+lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
-from lbrynet import conf as lbry_conf
+from lbrynet.extras.daemon import conf as lbry_conf
 from lbrynet.dht.node import Node
-from lbrynet.daemon.Daemon import Daemon
-from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
+from lbrynet.extras.daemon.Daemon import Daemon
+from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.extras.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
     ExchangeRateManagerComponent
-from lbrynet.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT
-from lbrynet.daemon.Components import UPnPComponent
-from lbrynet.daemon.Components import d2f
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.auth.server import jsonrpc_dumps_pretty
-
-
-log = logging.getLogger(__name__)
+from lbrynet.extras.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT
+from lbrynet.extras.daemon.Components import UPnPComponent
+from lbrynet.extras.daemon.Components import d2f
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.auth.server import jsonrpc_dumps_pretty
 
 
 class FakeUPnP(UPnPComponent):
@@ -114,20 +111,19 @@ utils.runWithWarningsSuppressed = run_with_async_support
 class CommandTestCase(IntegrationTestCase):
 
     timeout = 180
-    WALLET_MANAGER = LbryWalletManager
+    MANAGER = LbryWalletManager
 
     async def setUp(self):
         await super().setUp()
 
-        if self.VERBOSE:
-            log.setLevel(logging.DEBUG)
-            logging.getLogger('lbrynet.core').setLevel(logging.DEBUG)
+        logging.getLogger('lbrynet.p2p').setLevel(self.VERBOSITY)
+        logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
         lbry_conf.settings = None
         lbry_conf.initialize_settings(load_conf_file=False)
-        lbry_conf.settings['data_dir'] = self.stack.wallet.data_path
-        lbry_conf.settings['lbryum_wallet_dir'] = self.stack.wallet.data_path
-        lbry_conf.settings['download_directory'] = self.stack.wallet.data_path
+        lbry_conf.settings['data_dir'] = self.wallet_node.data_path
+        lbry_conf.settings['lbryum_wallet_dir'] = self.wallet_node.data_path
+        lbry_conf.settings['download_directory'] = self.wallet_node.data_path
         lbry_conf.settings['use_upnp'] = False
         lbry_conf.settings['reflect_uploads'] = False
         lbry_conf.settings['blockchain_name'] = 'lbrycrd_regtest'
@@ -187,7 +183,8 @@ class CommandTestCase(IntegrationTestCase):
 
 
 class EpicAdventuresOfChris45(CommandTestCase):
-    VERBOSE = False
+
+    VERBOSITY = logging.WARN
 
     async def test_no_this_is_not_a_test_its_an_adventure(self):
         # Chris45 is an avid user of LBRY and this is his story. It's fact and fiction
@@ -466,7 +463,7 @@ class AccountManagement(CommandTestCase):
 
 class PublishCommand(CommandTestCase):
 
-    VERBOSE = False
+    VERBOSITY = logging.WARN
 
     async def test_publishing_checks_all_accounts_for_certificate(self):
         account1_id, account1 = self.account.id, self.account

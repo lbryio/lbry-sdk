@@ -1,9 +1,9 @@
 from binascii import unhexlify
 
-from orchstr8.testcase import AsyncioTestCase
-from torba.util import ArithUint256
+from torba.testcase import AsyncioTestCase
+from torba.client.util import ArithUint256
 
-from lbrynet.wallet.ledger import Headers
+from lbrynet.extras.wallet.ledger import Headers
 
 
 class TestHeaders(AsyncioTestCase):

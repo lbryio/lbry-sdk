@@ -4,18 +4,18 @@ from twisted.trial import unittest
 from twisted.internet import defer, task
 
 
-from lbrynet.core import PaymentRateManager
-from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.RateLimiter import DummyRateLimiter
-from lbrynet.daemon import Downloader
-from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
-from lbrynet.database.storage import SQLiteStorage
+from lbrynet.p2p import PaymentRateManager
+from lbrynet.p2p.Error import DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.p2p.RateLimiter import DummyRateLimiter
+from lbrynet.extras.daemon import Downloader
+from lbrynet.extras.daemon import ExchangeRateManager
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.dht.peerfinder import DummyPeerFinder
-from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
+from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.extras.wallet import LbryWalletManager
 
 from tests.mocks import mock_conf_settings
 

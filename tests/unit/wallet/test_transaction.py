@@ -1,12 +1,12 @@
 import unittest
 from binascii import hexlify, unhexlify
 
-from orchstr8.testcase import AsyncioTestCase
-from torba.constants import CENT, COIN, NULL_HASH32
-from torba.wallet import Wallet
+from torba.testcase import AsyncioTestCase
+from torba.client.constants import CENT, COIN, NULL_HASH32
+from torba.client.wallet import Wallet
 
-from lbrynet.wallet.ledger import MainNetLedger
-from lbrynet.wallet.transaction import Transaction, Output, Input
+from lbrynet.extras.wallet import MainNetLedger
+from lbrynet.extras.wallet.transaction import Transaction, Output, Input
 
 
 FEE_PER_BYTE = 50

@@ -118,7 +118,20 @@ class KademliaProtocol(protocol.DatagramProtocol):
             return args
         return args + ({b'protocolVersion': self._protocolVersion},)
 
+    @defer.inlineCallbacks
     def sendRPC(self, contact, method, args):
+        for _ in range(constants.rpcAttempts):
+            try:
+                response = yield self._sendRPC(contact, method, args)
+                return response
+            except TimeoutError:
+                if contact.contact_is_good:
+                    log.debug("RETRY %s ON %s", method, contact)
+                    continue
+                else:
+                    raise
+
+    def _sendRPC(self, contact, method, args):
         """
         Sends an RPC to the specified contact
 
@@ -153,11 +166,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
         df = defer.Deferred()
 
         def _remove_contact(failure):  # remove the contact from the routing table and track the failure
+            contact.update_last_failed()
             try:
-                self._node.removeContact(contact)
+                if not contact.contact_is_good:
+                    self._node.removeContact(contact)
             except (ValueError, IndexError):
                 pass
-            contact.update_last_failed()
             return failure
 
         def _update_contact(result):  # refresh the contact in the routing table
