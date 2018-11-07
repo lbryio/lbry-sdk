@@ -136,8 +136,8 @@ class Manager:
 
     def _get_looping_calls(self):
         return [
-            ('send_heartbeat', self._send_heartbeat, 60),
-            ('update_tracked_metrics', self._update_tracked_metrics, 300),
+            ('send_heartbeat', self._send_heartbeat, 300),
+            ('update_tracked_metrics', self._update_tracked_metrics, 600),
         ]
 
     def _setup_looping_calls(self):
