@@ -444,27 +444,42 @@ class BaseTransaction:
 
         try:
 
-            if payment < cost:
-                deficit = cost - payment
-                spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
-                if not spendables:
-                    raise ValueError('Not enough funds to cover this transaction.')
-                payment += sum(s.effective_amount for s in spendables)
-                tx.add_inputs(s.txi for s in spendables)
+            for _ in range(2):
 
-            if payment > cost:
+                if payment < cost:
+                    deficit = cost - payment
+                    spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
+                    if not spendables:
+                        raise ValueError('Not enough funds to cover this transaction.')
+                    payment += sum(s.effective_amount for s in spendables)
+                    tx.add_inputs(s.txi for s in spendables)
+
                 cost_of_change = (
                     tx.get_base_fee(ledger) +
                     cls.output_class.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
                 )
-                change = payment - cost
-                if change > cost_of_change:
-                    change_address = await change_account.change.get_or_create_usable_address()
-                    change_hash160 = change_account.ledger.address_to_hash160(change_address)
-                    change_amount = change - cost_of_change
-                    change_output = cls.output_class.pay_pubkey_hash(change_amount, change_hash160)
-                    change_output.is_change = True
-                    tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
+                if payment > cost:
+                    change = payment - cost
+                    if change > cost_of_change:
+                        change_address = await change_account.change.get_or_create_usable_address()
+                        change_hash160 = change_account.ledger.address_to_hash160(change_address)
+                        change_amount = change - cost_of_change
+                        change_output = cls.output_class.pay_pubkey_hash(change_amount, change_hash160)
+                        change_output.is_change = True
+                        tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
+
+                if tx._outputs:
+                    break
+                else:
+                    # this condition and the outer range(2) loop cover an edge case
+                    # whereby a single input is just enough to cover the fee and
+                    # has some change left over, but the change left over is less
+                    # than the cost_of_change: thus the input is completely
+                    # consumed and no output is added, which is an invalid tx.
+                    # to be able to spend this input we must increase the cost
+                    # of the TX and run through the balance algorithm a second time
+                    # adding an extra input and change output, making tx valid.
+                    cost = cost + cost_of_change + 1
 
             await tx.sign(funding_accounts)
 
