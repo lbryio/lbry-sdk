@@ -1,13 +1,12 @@
 import json
 import binascii
-
+from google.protobuf import json_format  # pylint: disable=no-name-in-module
 import six
 
 from lbrynet.schema.error import DecodeError, InvalidAddress
 from lbrynet.schema.legacy.migrate import migrate as schema_migrator
 from lbrynet.schema.claim import ClaimDict
 
-from google.protobuf import json_format  # pylint: disable=no-name-in-module
 
 
 def migrate_json_claim_value(decoded_json):

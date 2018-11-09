@@ -4,7 +4,7 @@ import logging
 from urllib.parse import urlparse
 
 from lbrynet import conf
-from .keyring import Keyring, APIKey
+from lbrynet.extras.daemon.auth.keyring import Keyring, APIKey
 
 log = logging.getLogger(__name__)
 USER_AGENT = "AuthServiceProxy/0.1"

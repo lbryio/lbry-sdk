@@ -1,5 +1,5 @@
 from collections import UserDict
-from . import constants
+from lbrynet.dht import constants
 
 
 class DictDataStore(UserDict):

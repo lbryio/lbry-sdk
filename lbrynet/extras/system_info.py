@@ -1,9 +1,9 @@
 import platform
 import os
+import logging.handlers
 
 from lbrynet.schema import __version__ as schema_version
 from lbrynet import build_type, __version__ as lbrynet_version
-import logging.handlers
 
 log = logging.getLogger(__name__)
 

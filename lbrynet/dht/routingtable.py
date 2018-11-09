@@ -6,14 +6,13 @@
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
 import random
-from binascii import unhexlify
-
-from twisted.internet import defer
-from . import constants
-from . import kbucket
-from .error import TimeoutError
-from .distance import Distance
 import logging
+from binascii import unhexlify
+from twisted.internet import defer
+
+from lbrynet.dht import constants, kbucket
+from lbrynet.dht.error import TimeoutError
+from lbrynet.dht.distance import Distance
 
 log = logging.getLogger(__name__)
 

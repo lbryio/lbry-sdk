@@ -3,7 +3,6 @@ import os
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
-from .Components import f2d
 from lbrynet import conf
 from lbrynet.schema.fee import Fee
 
@@ -14,6 +13,7 @@ from lbrynet.p2p.StreamDescriptor import download_sd_blob
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from torba.client.constants import COIN
 from lbrynet.extras.wallet.dewies import dewies_to_lbc
+from lbrynet.extras.daemon.Components import f2d
 
 INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'

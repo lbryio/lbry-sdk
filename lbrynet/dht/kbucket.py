@@ -1,8 +1,8 @@
 import logging
 
-from . import constants
-from .distance import Distance
-from .error import BucketFull
+from lbrynet.dht import constants
+from lbrynet.dht.distance import Distance
+from lbrynet.dht.error import BucketFull
 
 log = logging.getLogger(__name__)
 

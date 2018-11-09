@@ -14,7 +14,7 @@ import logging.handlers
 from twisted.internet import reactor
 from lbrynet import utils, conf, log_support
 from lbrynet.extras import system_info
-from .Daemon import Daemon
+from lbrynet.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger(__name__)
 

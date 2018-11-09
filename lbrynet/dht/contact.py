@@ -1,7 +1,7 @@
 import ipaddress
 from binascii import hexlify
 from functools import reduce
-from . import constants
+from lbrynet.dht import constants
 
 
 def is_valid_ipv4(address):

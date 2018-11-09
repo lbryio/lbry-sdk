@@ -8,7 +8,7 @@
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
 from lbrynet.utils import generate_id
-from . import constants
+from lbrynet.dht import constants
 
 
 class Message:

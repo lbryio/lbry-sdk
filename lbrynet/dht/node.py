@@ -6,14 +6,11 @@ from functools import reduce
 from twisted.internet import defer, error, task
 
 from lbrynet.utils import generate_id, DeferredDict
-from .call_later_manager import CallLaterManager
-from .error import TimeoutError
-from . import constants
-from . import routingtable
-from . import datastore
-from . import protocol
-from .contact import ContactManager
-from .iterativefind import iterativeFind
+from lbrynet.dht.call_later_manager import CallLaterManager
+from lbrynet.dht.error import TimeoutError
+from lbrynet.dht import constants, routingtable, datastore, protocol
+from lbrynet.dht.contact import ContactManager
+from lbrynet.dht.iterativefind import iterativeFind
 
 log = logging.getLogger(__name__)
 

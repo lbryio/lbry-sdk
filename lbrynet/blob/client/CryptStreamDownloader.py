@@ -10,7 +10,6 @@ from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.blob.client.CryptBlobHandler import CryptBlobHandler
 
 
-
 log = logging.getLogger(__name__)
 
 

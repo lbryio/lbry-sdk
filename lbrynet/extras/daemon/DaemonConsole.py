@@ -6,11 +6,10 @@ import logging.handlers
 from twisted.internet import defer, reactor, threads
 from aiohttp import client_exceptions
 
+from lbrynet import utils, conf, log_support
 from lbrynet.extras.daemon import analytics
-from lbrynet import utils, conf
-from lbrynet import log_support
-from .auth.client import LBRYAPIClient
-from .Daemon import Daemon
+from lbrynet.extras.daemon.auth.client import LBRYAPIClient
+from lbrynet.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger(__name__)
 

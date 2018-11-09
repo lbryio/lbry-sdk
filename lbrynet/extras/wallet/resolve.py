@@ -9,8 +9,7 @@ from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
 from lbrynet.schema.error import DecodeError
 from lbrynet.schema.uri import parse_lbry_uri
-
-from .claim_proofs import verify_proof, InvalidProofError
+from lbrynet.extras.wallet.claim_proofs import verify_proof, InvalidProofError
 log = logging.getLogger(__name__)
 
 

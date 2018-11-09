@@ -8,30 +8,33 @@ import binascii
 from hashlib import sha256
 from types import SimpleNamespace
 from twisted.internet import defer, threads, reactor, error, task
-import lbrynet.schema
+
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
+
+import lbrynet.schema
 from lbrynet import conf
+
+from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
+from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactory
+from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.dht.node import Node
+from lbrynet.extras.daemon.Component import Component
+from lbrynet.extras.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
+from lbrynet.extras.reflector.server.server import ReflectorServerFactory
+from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.extras.wallet import Network
 from lbrynet.utils import DeferredDict, generate_id
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
-from lbrynet.extras.wallet import LbryWalletManager
-from lbrynet.extras.wallet import Network
 from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
-from .Component import Component
-from .ExchangeRateManager import ExchangeRateManager
-from .storage import SQLiteStorage
-from .HashAnnouncer import DHTHashAnnouncer
 
-from lbrynet.dht.node import Node
-from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactory
-from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.extras.reflector import ServerFactory as reflector_server_factory
 
 log = logging.getLogger(__name__)
 
@@ -649,7 +652,7 @@ class ReflectorComponent(Component):
         log.info("Starting reflector server")
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
-        reflector_factory = reflector_server_factory(self.component_manager.peer_manager, blob_manager, file_manager)
+        reflector_factory = ReflectorServerFactory(self.component_manager.peer_manager, blob_manager, file_manager)
         try:
             self.reflector_server = yield reactor.listenTCP(self.reflector_server_port, reflector_factory)
             log.info('Started reflector on port %s', self.reflector_server_port)

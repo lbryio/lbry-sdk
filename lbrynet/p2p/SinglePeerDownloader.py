@@ -4,7 +4,7 @@ import tempfile
 
 from twisted.internet import defer, threads, reactor
 
-from lbrynet.blob import BlobFile
+from lbrynet.blob.blob_file import BlobFile
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager

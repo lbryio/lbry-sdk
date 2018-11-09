@@ -1,10 +1,10 @@
-from binascii import unhexlify
 import string
-from collections import defaultdict
 import json
 import logging
-
+from collections import defaultdict
+from binascii import unhexlify
 from twisted.internet import threads, defer
+
 from lbrynet.cryptoutils import get_lbry_hash_obj
 from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.p2p.Error import UnknownStreamTypeError, InvalidStreamDescriptorError

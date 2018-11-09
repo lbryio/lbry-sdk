@@ -1,4 +1,4 @@
-from lbrynet.blob import BlobFile
+from lbrynet.blob.blob_file import BlobFile
 from lbrynet.p2p.Error import DownloadCanceledError, InvalidDataError
 
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir, random_lbry_hash

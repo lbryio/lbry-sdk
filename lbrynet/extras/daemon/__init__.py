@@ -1,1 +1,1 @@
-from . import Components  # register Component classes
+from lbrynet.extras.daemon import Components  # register Component classes

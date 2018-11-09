@@ -1,6 +1,6 @@
 import struct
 from torba.server.enum import Enumeration
-from .model import NameClaim, ClaimSupport, ClaimUpdate
+from lbrynet.extras.wallet.server.model import NameClaim, ClaimSupport, ClaimUpdate
 # TODO: Take this to lbryschema (it's also on lbryum and lbryum-server)
 
 
