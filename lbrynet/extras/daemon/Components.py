@@ -336,7 +336,7 @@ class WalletComponent(Component):
         return self.wallet_manager
 
     def get_status(self):
-        if self.wallet_manager:
+        if self.wallet_manager and self.running:
             local_height = self.wallet_manager.network.get_local_height()
             remote_height = self.wallet_manager.network.get_server_height()
             best_hash = self.wallet_manager.get_best_blockhash()
