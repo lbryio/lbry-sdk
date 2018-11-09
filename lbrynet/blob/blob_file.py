@@ -3,14 +3,32 @@ import logging
 from twisted.internet import defer, threads
 from twisted.web.client import FileBodyProducer
 from twisted.python.failure import Failure
+from lbrynet.cryptoutils import get_lbry_hash_obj
 from lbrynet.p2p.Error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
-from lbrynet.utils import is_valid_blobhash
 from lbrynet.blob.writer import HashBlobWriter
 from lbrynet.blob.reader import HashBlobReader
 
 log = logging.getLogger(__name__)
 
 MAX_BLOB_SIZE = 2 * 2 ** 20
+
+# digest_size is in bytes, and blob hashes are hex encoded
+blobhash_length = get_lbry_hash_obj().digest_size * 2
+
+
+def is_valid_hashcharacter(char):
+    return char in "0123456789abcdef"
+
+
+def is_valid_blobhash(blobhash):
+    """Checks whether the blobhash is the correct length and contains only
+    valid characters (0-9, a-f)
+
+    @param blobhash: string, the blobhash to check
+
+    @return: True/False
+    """
+    return len(blobhash) == blobhash_length and all(is_valid_hashcharacter(l) for l in blobhash)
 
 
 class BlobFile:

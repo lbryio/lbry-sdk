@@ -16,9 +16,6 @@ from lbrynet.cryptoutils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
 
-# digest_size is in bytes, and blob hashes are hex encoded
-blobhash_length = get_lbry_hash_obj().digest_size * 2
-
 
 # defining these time functions here allows for easier overriding in testing
 def now():
@@ -68,21 +65,6 @@ def generate_id(num=None):
     else:
         h.update(str(random.getrandbits(512)).encode())
     return h.digest()
-
-
-def is_valid_hashcharacter(char):
-    return char in "0123456789abcdef"
-
-
-def is_valid_blobhash(blobhash):
-    """Checks whether the blobhash is the correct length and contains only
-    valid characters (0-9, a-f)
-
-    @param blobhash: string, the blobhash to check
-
-    @return: True/False
-    """
-    return len(blobhash) == blobhash_length and all(is_valid_hashcharacter(l) for l in blobhash)
 
 
 def version_is_greater_than(a, b):
