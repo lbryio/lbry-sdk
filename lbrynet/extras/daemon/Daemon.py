@@ -16,8 +16,8 @@ from twisted.python.failure import Failure
 
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
-from lbrynet import conf, utils, system_info
-from lbrynet.system_info import get_lbrynet_version
+from lbrynet import conf, utils, __version__
+from lbrynet.extras import system_info
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError
@@ -844,7 +844,7 @@ class Daemon(AuthJSONRPCServer):
             message,
             conf.settings.installation_id,
             platform_name,
-            get_lbrynet_version()
+            __version__
         )
         return self._render_response(True)
 

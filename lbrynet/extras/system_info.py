@@ -8,10 +8,6 @@ import logging.handlers
 log = logging.getLogger(__name__)
 
 
-def get_lbrynet_version() -> str:
-    return lbrynet_version
-
-
 def get_platform() -> dict:
     p = {
         "processor": platform.processor(),
@@ -19,7 +15,7 @@ def get_platform() -> dict:
         "platform": platform.platform(),
         "os_release": platform.release(),
         "os_system": platform.system(),
-        "lbrynet_version": get_lbrynet_version(),
+        "lbrynet_version": lbrynet_version,
         "lbryschema_version": schema_version,
         "build": build_type.BUILD,  # CI server sets this during build step
     }

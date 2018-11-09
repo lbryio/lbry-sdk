@@ -4,8 +4,8 @@ import logging
 import treq
 from twisted.internet import defer, task
 
-from lbrynet import conf, utils, system_info
-from lbrynet.extras import looping_call_manager
+from lbrynet import conf, utils
+from lbrynet.extras import looping_call_manager, system_info
 
 # Things We Track
 SERVER_STARTUP = 'Server Startup'
