@@ -383,6 +383,9 @@ def validate_claim_signature_and_get_channel_name(claim, certificate_claim,
                                                   claim_address, decoded_certificate=None):
     if not certificate_claim:
         return False, None
+    if 'value' not in certificate_claim:
+        log.warning('Got an invalid claim while parsing certificates, please report: %s', certificate_claim)
+        return False, None
     certificate = decoded_certificate or smart_decode(certificate_claim['value'])
     if not isinstance(certificate, ClaimDict):
         raise TypeError("Certificate is not a ClaimDict: %s" % str(type(certificate)))
