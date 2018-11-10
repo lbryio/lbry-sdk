@@ -416,6 +416,12 @@ def _decode_claim_result(claim):
         if not claim['signature_is_valid']:
             log.warning("lbry://%s#%s has an invalid signature",
                         claim['name'], claim['claim_id'])
+    if 'value' not in claim:
+        log.warning('Got an invalid claim while parsing, please report: %s', claim)
+        claim['hex'] = None
+        claim['value'] = None
+        claim['error'] = "Failed to parse: missing value"
+        return claim
     try:
         decoded = smart_decode(claim['value'])
         claim_dict = decoded.claim_dict
