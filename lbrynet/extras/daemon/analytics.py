@@ -4,8 +4,8 @@ import logging
 import treq
 from twisted.internet import defer, task
 
-from lbrynet.extras.daemon import conf
-from lbrynet.p2p import looping_call_manager, utils, system_info
+from lbrynet import conf, utils
+from lbrynet.extras import looping_call_manager, system_info
 
 # Things We Track
 SERVER_STARTUP = 'Server Startup'
@@ -136,8 +136,8 @@ class Manager:
 
     def _get_looping_calls(self):
         return [
-            ('send_heartbeat', self._send_heartbeat, 60),
-            ('update_tracked_metrics', self._update_tracked_metrics, 300),
+            ('send_heartbeat', self._send_heartbeat, 300),
+            ('update_tracked_metrics', self._update_tracked_metrics, 600),
         ]
 
     def _setup_looping_calls(self):

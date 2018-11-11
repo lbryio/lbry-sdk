@@ -6,7 +6,7 @@ from torba.server.hash import hash_to_hex_str, HASHX_LEN
 from hashlib import sha256
 from torba.server.coins import Coin, CoinError
 
-from .opcodes import decode_claim_script, opcodes as lbry_opcodes
+from lbrynet.extras.wallet.server.opcodes import decode_claim_script, opcodes as lbry_opcodes
 
 
 class LBC(Coin):

@@ -3,6 +3,7 @@ import datetime
 import hmac
 import hashlib
 import base58
+import logging
 from OpenSSL.crypto import FILETYPE_PEM
 from ssl import create_default_context, SSLContext
 from cryptography.hazmat.backends import default_backend
@@ -12,8 +13,8 @@ from cryptography.x509.name import NameOID, NameAttribute
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from twisted.internet import ssl
-import logging
-from lbrynet.extras.daemon import conf
+
+from lbrynet import conf
 
 log = logging.getLogger(__name__)
 

@@ -5,9 +5,6 @@ from decimal import Decimal
 from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet.p2p.Error import InsufficientFundsError
-#from lbrynet.p2p.Wallet import LBRYumWallet, ReservedPoints
-#from lbryum.commands import Commands
-#from lbryum.simple_config import SimpleConfig
 from lbrynet.schema.claim import ClaimDict
 
 test_metadata = {

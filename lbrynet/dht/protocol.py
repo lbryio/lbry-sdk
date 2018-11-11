@@ -3,12 +3,8 @@ import errno
 from binascii import hexlify
 
 from twisted.internet import protocol, defer
-from .error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
-
-from . import constants
-from . import encoding
-from . import msgtypes
-from . import msgformat
+from lbrynet.dht import constants, encoding, msgformat, msgtypes
+from lbrynet.dht.error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
 
 log = logging.getLogger(__name__)
 

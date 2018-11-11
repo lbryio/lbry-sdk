@@ -1,6 +1,5 @@
 from decimal import Decimal
-
-from lbrynet.extras.daemon import conf
+from lbrynet import conf
 
 
 def get_default_price_model(blob_tracker, base_price, **kwargs):

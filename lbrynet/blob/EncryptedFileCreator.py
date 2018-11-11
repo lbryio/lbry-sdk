@@ -2,8 +2,8 @@
 Utilities for turning plain files into LBRY Files.
 """
 
-import logging
 import os
+import logging
 from binascii import hexlify
 
 from twisted.internet import defer

@@ -1,17 +1,16 @@
+from twisted.trial.unittest import TestCase
+from twisted.internet import defer, reactor, task
+from twisted.internet.task import deferLater
+from twisted.internet.protocol import ServerFactory
+
+from lbrynet import conf, utils
 from lbrynet.p2p.client.ClientRequest import ClientRequest
 from lbrynet.p2p.server.ServerProtocol import ServerProtocol
 from lbrynet.p2p.client.ClientProtocol import ClientProtocol
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.Peer import Peer
-from lbrynet.p2p.PeerManager import PeerManager
 from lbrynet.p2p.Error import NoResponseError
-
-from twisted.trial.unittest import TestCase
-from twisted.internet import defer, reactor, task
-from twisted.internet.task import deferLater
-from twisted.internet.protocol import ServerFactory
-from lbrynet.extras.daemon import conf
-from lbrynet.p2p import utils
+from lbrynet.extras.daemon.PeerManager import PeerManager
 
 PEER_PORT = 5551
 LOCAL_HOST = '127.0.0.1'

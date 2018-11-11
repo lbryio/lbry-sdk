@@ -24,22 +24,25 @@ from lbrynet.extras.daemon.Daemon import Daemon
 from lbrynet.extras.daemon.DaemonControl import start as daemon_main
 from lbrynet.extras.daemon.DaemonConsole import main as daemon_console
 from lbrynet.extras.daemon.auth.client import LBRYAPIClient
-from lbrynet.p2p.system_info import get_platform
+from lbrynet.extras.system_info import get_platform
 
 
 async def execute_command(method, params, conf_path=None):
     # this check if the daemon is running or not
+    api = None
     try:
         api = await LBRYAPIClient.get_client(conf_path)
         await api.status()
     except (ClientConnectorError, ConnectionError):
-        await api.session.close()
+        if api:
+            await api.session.close()
         print("Could not connect to daemon. Are you sure it's running?")
         return 1
 
     # this actually executes the method
+    resp = await api.call(method, params)
+
     try:
-        resp = await api.call(method, params)
         await api.session.close()
         print(json.dumps(resp["result"], indent=2))
     except KeyError:
@@ -137,7 +140,7 @@ def main(argv=None):
 
     elif method in ['version', '--version', '-v']:
         print("{lbrynet_name} {lbrynet_version}".format(
-            lbrynet_name=lbrynet_name, **get_platform(get_ip=False)
+            lbrynet_name=lbrynet_name, **get_platform()
         ))
         return 0
 

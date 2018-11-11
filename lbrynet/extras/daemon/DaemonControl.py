@@ -7,16 +7,14 @@ if 'win' in sys.platform:
     import certifi
     os.environ['SSL_CERT_FILE'] = certifi.where()
 
-from lbrynet.p2p import log_support
 
 import argparse
 import logging.handlers
 
 from twisted.internet import reactor
-
-from lbrynet.extras.daemon import conf
-from lbrynet.p2p import utils, system_info
-from .Daemon import Daemon
+from lbrynet import utils, conf, log_support
+from lbrynet.extras import system_info
+from lbrynet.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +52,7 @@ def start(argv=None, conf_path=None):
         conf.settings.update({'use_auth_http': args.useauth}, data_types=(conf.TYPE_CLI,))
 
     if args.version:
-        version = system_info.get_platform(get_ip=False)
+        version = system_info.get_platform()
         version['installation_id'] = conf.settings.installation_id
         print(utils.json_dumps_pretty(version))
         return

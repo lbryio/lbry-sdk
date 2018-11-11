@@ -3,7 +3,7 @@ from zope.interface import implementer
 from twisted.cred import portal, checkers, credentials, error as cred_error
 from twisted.internet import defer
 from twisted.web import resource
-from .keyring import Keyring
+from lbrynet.extras.daemon.auth.keyring import Keyring
 
 log = logging.getLogger(__name__)
 

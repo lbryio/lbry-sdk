@@ -7,14 +7,14 @@ from binascii import hexlify, unhexlify
 
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
+from lbrynet import conf
 from lbrynet.extras.reflector.reupload import reflect_file
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.p2p.StreamDescriptor import EncryptedFileStreamType, get_sd_info
 from lbrynet.blob.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.blob.client.CryptStreamDownloader import CurrentlyStoppingError
-from lbrynet.p2p.utils import safe_start_looping_call, safe_stop_looping_call
-from lbrynet.extras.daemon import conf
+from lbrynet.utils import safe_start_looping_call, safe_stop_looping_call
 
 log = logging.getLogger(__name__)
 

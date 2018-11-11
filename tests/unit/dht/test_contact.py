@@ -1,7 +1,7 @@
 from binascii import hexlify
 from twisted.internet import task
 from twisted.trial import unittest
-from lbrynet.p2p.utils import generate_id
+from lbrynet.utils import generate_id
 from lbrynet.dht.contact import ContactManager
 from lbrynet.dht import constants
 

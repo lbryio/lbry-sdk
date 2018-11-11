@@ -16,38 +16,33 @@ from twisted.python.failure import Failure
 
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
+from lbrynet import conf, utils, __version__
+from lbrynet.dht.error import TimeoutError
+from lbrynet.extras import system_info
+from lbrynet.extras.reflector import reupload
+from lbrynet.extras.daemon.Components import d2f, f2d
+from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
+from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
+from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.ComponentManager import RequiredCondition
+from lbrynet.extras.daemon.Downloader import GetStream
+from lbrynet.extras.daemon.Publisher import Publisher
+from lbrynet.extras.daemon.auth.server import AuthJSONRPCServer
+from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.extras.wallet.account import Account as LBCAccount
+from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
+from lbrynet.p2p.StreamDescriptor import download_sd_blob
+from lbrynet.p2p.Error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.p2p.Error import NullFundsError, NegativeFundsError, ResolveError
+from lbrynet.p2p.Peer import Peer
+from lbrynet.p2p.SinglePeerDownloader import SinglePeerDownloader
+from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError
 from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.address import decode_address
 from lbrynet.schema.decode import smart_decode
-
-# TODO: importing this when internet is disabled raises a socket.gaierror
-from lbrynet.p2p.system_info import get_lbrynet_version
-from lbrynet.extras.daemon import conf
-from lbrynet.extras.reflector import reupload
-from .Components import d2f, f2d
-from .Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from .Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
-from .Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
-from .ComponentManager import RequiredCondition
-from .Downloader import GetStream
-from .Publisher import Publisher
-from .auth.server import AuthJSONRPCServer
-from lbrynet.p2p import utils, system_info
-from lbrynet.p2p.StreamDescriptor import download_sd_blob
-from lbrynet.p2p.Error import InsufficientFundsError, UnknownNameError
-from lbrynet.p2p.Error import DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.p2p.Error import NullFundsError, NegativeFundsError
-from lbrynet.p2p.Error import ResolveError
-from lbrynet.dht.error import TimeoutError
-from lbrynet.p2p.Peer import Peer
-from lbrynet.p2p.SinglePeerDownloader import SinglePeerDownloader
-from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.extras.wallet import LbryWalletManager
-from lbrynet.extras.wallet.account import Account as LBCAccount
-from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
@@ -210,7 +205,6 @@ class Daemon(AuthJSONRPCServer):
         DATABASE_COMPONENT: "storage",
         DHT_COMPONENT: "dht_node",
         WALLET_COMPONENT: "wallet_manager",
-        STREAM_IDENTIFIER_COMPONENT: "sd_identifier",
         FILE_MANAGER_COMPONENT: "file_manager",
         EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
         PAYMENT_RATE_COMPONENT: "payment_rate_manager",
@@ -220,7 +214,7 @@ class Daemon(AuthJSONRPCServer):
     }
 
     def __init__(self, analytics_manager=None, component_manager=None):
-        to_skip = list(conf.settings['components_to_skip'])
+        to_skip = conf.settings['components_to_skip']
         if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
             to_skip.append('reflector')
         looping_calls = {
@@ -241,7 +235,6 @@ class Daemon(AuthJSONRPCServer):
         self.storage = None
         self.dht_node = None
         self.wallet_manager: LbryWalletManager = None
-        self.sd_identifier = None
         self.file_manager = None
         self.exchange_rate_manager = None
         self.payment_rate_manager = None
@@ -305,7 +298,7 @@ class Daemon(AuthJSONRPCServer):
         rate_manager = rate_manager or self.payment_rate_manager
         timeout = timeout or 30
         downloader = StandaloneBlobDownloader(
-            blob_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
+            blob_hash, self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
             rate_manager, self.wallet_manager, timeout
         )
         return downloader.download()
@@ -372,8 +365,8 @@ class Daemon(AuthJSONRPCServer):
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
             self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
             self.streams[sd_hash] = GetStream(
-                self.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
-                self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
+                self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
+                self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
                 conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
                 timeout
             )
@@ -432,7 +425,7 @@ class Daemon(AuthJSONRPCServer):
         if blob:
             return self.blob_manager.get_blob(blob[0])
         return download_sd_blob(
-            sd_hash.decode(), self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
+            sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
             self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
             download_mirrors=conf.settings['download_mirrors']
         )
@@ -450,7 +443,7 @@ class Daemon(AuthJSONRPCServer):
         Get total stream size in bytes from a sd blob
         """
 
-        d = self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
+        d = self.file_manager.sd_identifier.get_metadata_for_sd_blob(sd_blob)
         d.addCallback(lambda metadata: metadata.validator.info_to_show())
         d.addCallback(lambda info: int(dict(info)['stream_size']))
         return d
@@ -468,9 +461,7 @@ class Daemon(AuthJSONRPCServer):
         """
         Calculate estimated LBC cost for a stream given its size in bytes
         """
-
         cost = self._get_est_cost_from_stream_size(size)
-
         resolved = await self.wallet_manager.resolve(uri)
 
         if uri in resolved and 'claim' in resolved[uri]:
@@ -535,7 +526,6 @@ class Daemon(AuthJSONRPCServer):
         sd blob will be downloaded to determine the stream size
 
         """
-
         if size is not None:
             return self.get_est_cost_using_known_size(uri, size)
         return self.get_est_cost_from_uri(uri)
@@ -819,7 +809,7 @@ class Daemon(AuthJSONRPCServer):
                 'ip': (str) remote ip, if available,
                 'lbrynet_version': (str) lbrynet_version,
                 'lbryum_version': (str) lbryum_version,
-                'lbrynet.schema_version': (str) lbrynet.schema_version,
+                'lbryschema_version': (str) lbryschema_version,
                 'os_release': (str) os release string
                 'os_system': (str) os name
                 'platform': (str) platform string
@@ -851,7 +841,7 @@ class Daemon(AuthJSONRPCServer):
             message,
             conf.settings.installation_id,
             platform_name,
-            get_lbrynet_version()
+            __version__
         )
         return self._render_response(True)
 
@@ -1776,8 +1766,8 @@ class Daemon(AuthJSONRPCServer):
             results[resolved_uri] = resolved[resolved_uri]
         return results
 
-    @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
-              DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+              RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_get(self, uri, file_name=None, timeout=None):
         """
@@ -1962,7 +1952,7 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(result)
         defer.returnValue(response)
 
-    @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_stream_cost_estimate(self, uri, size=None):

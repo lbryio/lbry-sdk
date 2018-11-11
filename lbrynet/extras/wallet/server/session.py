@@ -8,8 +8,8 @@ from torba.server import util
 
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError
-from .block_processor import LBRYBlockProcessor
-from .db import LBRYDB
+from lbrynet.extras.wallet.server.block_processor import LBRYBlockProcessor
+from lbrynet.extras.wallet.server.db import LBRYDB
 
 
 class LBRYElectrumX(ElectrumX):

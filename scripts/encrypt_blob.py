@@ -9,7 +9,7 @@ from twisted.web.client import FileBodyProducer
 
 from lbrynet import conf
 from lbrynet.core import log_support
-from lbrynet.dht.hashannouncer import DummyHashAnnouncer
+from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator
 

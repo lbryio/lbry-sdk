@@ -3,7 +3,7 @@ from io import StringIO
 from twisted.trial import unittest
 
 from lbrynet.extras.cli import normalize_value, main
-from lbrynet.p2p.system_info import get_platform
+from lbrynet.extras.system_info import get_platform
 
 
 class CLITest(unittest.TestCase):
@@ -67,7 +67,7 @@ class CLITest(unittest.TestCase):
             main(['version'])
         self.assertEqual(
             actual_output.getvalue().strip(),
-            "lbrynet {lbrynet_version}".format(**get_platform(get_ip=False))
+            "lbrynet {lbrynet_version}".format(**get_platform())
         )
 
     def test_invalid_command(self):

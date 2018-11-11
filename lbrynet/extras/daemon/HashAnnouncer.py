@@ -2,8 +2,7 @@ import binascii
 import logging
 
 from twisted.internet import defer, task
-from lbrynet.p2p import utils
-from lbrynet.extras.daemon import conf
+from lbrynet import utils, conf
 
 log = logging.getLogger(__name__)
 

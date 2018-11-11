@@ -1,10 +1,9 @@
 import logging
 import random
 import time
-
+from decimal import Decimal
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
-from decimal import Decimal
 
 log = logging.getLogger(__name__)
 

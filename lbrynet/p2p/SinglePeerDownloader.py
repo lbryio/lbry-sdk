@@ -4,7 +4,7 @@ import tempfile
 
 from twisted.internet import defer, threads, reactor
 
-from lbrynet.blob import BlobFile
+from lbrynet.blob.blob_file import BlobFile
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
@@ -12,7 +12,7 @@ from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.dht.peerfinder import DummyPeerFinder
+from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
 
 
 log = logging.getLogger(__name__)

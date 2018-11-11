@@ -3,7 +3,7 @@ from lbrynet.extras.daemon import ExchangeRateManager
 from lbrynet.p2p.Error import InvalidExchangeRateResponse
 from twisted.trial import unittest
 from twisted.internet import defer
-from tests import util
+from tests import test_utils
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from tests.mocks import BTCLBCFeed, USDBTCFeed
 
@@ -32,18 +32,18 @@ class FeeFormatTest(unittest.TestCase):
 
 class ExchangeRateTest(unittest.TestCase):
     def setUp(self):
-        util.resetTime(self)
+        test_utils.resetTime(self)
 
     def test_invalid_rates(self):
         with self.assertRaises(ValueError):
-            ExchangeRateManager.ExchangeRate('USDBTC', 0, util.DEFAULT_ISO_TIME)
+            ExchangeRateManager.ExchangeRate('USDBTC', 0, test_utils.DEFAULT_ISO_TIME)
         with self.assertRaises(ValueError):
-            ExchangeRateManager.ExchangeRate('USDBTC', -1, util.DEFAULT_ISO_TIME)
+            ExchangeRateManager.ExchangeRate('USDBTC', -1, test_utils.DEFAULT_ISO_TIME)
 
 
 class FeeTest(unittest.TestCase):
     def setUp(self):
-        util.resetTime(self)
+        test_utils.resetTime(self)
 
     def test_fee_converts_to_lbc(self):
         fee = Fee({
@@ -53,8 +53,8 @@ class FeeTest(unittest.TestCase):
             })
 
         rates = {
-            'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
-            'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
+            'BTCLBC': {'spot': 3.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
+            'USDBTC': {'spot': 2.0, 'ts': test_utils.DEFAULT_ISO_TIME + 2}
         }
 
         market_feeds = [BTCLBCFeed(), USDBTCFeed()]
@@ -71,7 +71,7 @@ class FeeTest(unittest.TestCase):
             })
 
         rates = {
-            'BTCLBC': {'spot': 1.0, 'ts': util.DEFAULT_ISO_TIME + 1},
+            'BTCLBC': {'spot': 1.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
         }
         market_feeds = [BTCLBCFeed()]
         manager = DummyExchangeRateManager(market_feeds, rates)

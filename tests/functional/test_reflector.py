@@ -4,8 +4,11 @@ from binascii import hexlify
 from twisted.internet import defer, error
 from twisted.trial import unittest
 from lbrynet.p2p.StreamDescriptor import get_sd_info
-from lbrynet.extras import reflector
-from lbrynet.p2p import BlobManager, PeerManager
+from lbrynet.extras.reflector.server.server import ReflectorServerFactory
+from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
+from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
+from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.p2p import BlobManager
 from lbrynet.p2p import StreamDescriptor
 from lbrynet.blob import EncryptedFileCreator
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
@@ -13,7 +16,7 @@ from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from tests import mocks
-from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 
 class TestReflector(unittest.TestCase):
@@ -25,7 +28,7 @@ class TestReflector(unittest.TestCase):
         self.client_db_dir, self.client_blob_dir = mk_db_and_blob_dir()
         prm = OnlyFreePaymentsManager()
         wallet = mocks.Wallet()
-        peer_manager = PeerManager.PeerManager()
+        peer_manager = PeerManager()
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
         self.server_storage = SQLiteStorage(self.server_db_dir)
         self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir, self.server_storage)
@@ -95,7 +98,7 @@ class TestReflector(unittest.TestCase):
             return d
 
         def start_server():
-            server_factory = reflector.ServerFactory(peer_manager, self.server_blob_manager,
+            server_factory = ReflectorServerFactory(peer_manager, self.server_blob_manager,
                                                      self.server_lbry_file_manager)
             from twisted.internet import reactor
             port = 8943
@@ -179,7 +182,7 @@ class TestReflector(unittest.TestCase):
             return d
 
         def send_to_server():
-            factory = reflector.ClientFactory(self.client_blob_manager, self.stream_hash, self.sd_hash)
+            factory = EncryptedFileReflectorClientFactory(self.client_blob_manager, self.stream_hash, self.sd_hash)
 
             from twisted.internet import reactor
             reactor.connectTCP('localhost', self.port, factory)
@@ -208,7 +211,7 @@ class TestReflector(unittest.TestCase):
             return d
 
         def send_to_server(blob_hashes_to_send):
-            factory = reflector.BlobClientFactory(
+            factory = BlobReflectorClientFactory(
                 self.client_blob_manager,
                 blob_hashes_to_send
             )
@@ -247,7 +250,7 @@ class TestReflector(unittest.TestCase):
             return d
 
         def send_to_server(blob_hashes_to_send):
-            factory = reflector.BlobClientFactory(
+            factory = BlobReflectorClientFactory(
                 self.client_blob_manager,
                 blob_hashes_to_send
             )
@@ -301,7 +304,7 @@ class TestReflector(unittest.TestCase):
             return d
 
         def send_to_server_as_blobs(blob_hashes_to_send):
-            factory = reflector.BlobClientFactory(
+            factory = BlobReflectorClientFactory(
                 self.client_blob_manager,
                 blob_hashes_to_send
             )
@@ -312,7 +315,7 @@ class TestReflector(unittest.TestCase):
             return factory.finished_deferred
 
         def send_to_server_as_stream(result):
-            factory = reflector.ClientFactory(self.client_blob_manager, self.stream_hash, self.sd_hash)
+            factory = EncryptedFileReflectorClientFactory(self.client_blob_manager, self.stream_hash, self.sd_hash)
 
             from twisted.internet import reactor
             reactor.connectTCP('localhost', self.port, factory)

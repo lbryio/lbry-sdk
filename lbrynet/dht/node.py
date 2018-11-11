@@ -5,17 +5,12 @@ from functools import reduce
 
 from twisted.internet import defer, error, task
 
-from lbrynet.p2p.utils import generate_id, DeferredDict
-from lbrynet.p2p.call_later_manager import CallLaterManager
-from lbrynet.p2p.PeerManager import PeerManager
-from .error import TimeoutError
-from . import constants
-from . import routingtable
-from . import datastore
-from . import protocol
-from .peerfinder import DHTPeerFinder
-from .contact import ContactManager
-from .iterativefind import iterativeFind
+from lbrynet.utils import generate_id, DeferredDict
+from lbrynet.dht.call_later_manager import CallLaterManager
+from lbrynet.dht.error import TimeoutError
+from lbrynet.dht import constants, routingtable, datastore, protocol
+from lbrynet.dht.contact import ContactManager
+from lbrynet.dht.iterativefind import iterativeFind
 
 log = logging.getLogger(__name__)
 
@@ -83,8 +78,8 @@ class Node(MockKademliaHelper):
     def __init__(self, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
                  externalIP=None, peerPort=3333, listenUDP=None,
-                 callLater=None, resolve=None, clock=None, peer_finder=None,
-                 peer_manager=None, interface='', externalUDPPort=None):
+                 callLater=None, resolve=None, clock=None,
+                 interface='', externalUDPPort=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -124,20 +119,13 @@ class Node(MockKademliaHelper):
         else:
             self._routingTable = routingTableClass(self.node_id, self.clock.seconds)
 
-        # Initialize this node's network access mechanisms
-        if networkProtocol is None:
-            self._protocol = protocol.KademliaProtocol(self)
-        else:
-            self._protocol = networkProtocol
-        # Initialize the data storage mechanism used by this node
+        self._protocol = networkProtocol or protocol.KademliaProtocol(self)
         self.token_secret = self._generateID()
         self.old_token_secret = None
         self.externalIP = externalIP
         self.peerPort = peerPort
         self.externalUDPPort = externalUDPPort or self.port
         self._dataStore = dataStore or datastore.DictDataStore(self.clock.seconds)
-        self.peer_manager = peer_manager or PeerManager()
-        self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
         self._join_deferred = None
 
     #def __del__(self):
@@ -255,7 +243,7 @@ class Node(MockKademliaHelper):
         yield _iterative_join()
 
     @defer.inlineCallbacks
-    def start(self, known_node_addresses=None):
+    def start(self, known_node_addresses=None, block_on_join=False):
         """ Causes the Node to attempt to join the DHT network by contacting the
         known DHT nodes. This can be called multiple times if the previous attempt
         has failed or if the Node has lost all the contacts.
@@ -270,8 +258,11 @@ class Node(MockKademliaHelper):
         self.start_listening()
         yield self._protocol._listening
         # TODO: Refresh all k-buckets further away than this node's closest neighbour
-        yield self.joinNetwork(known_node_addresses or [])
-        self.start_looping_calls()
+        d = self.joinNetwork(known_node_addresses or [])
+        d.addCallback(lambda _: self.start_looping_calls())
+        d.addCallback(lambda _: log.info("Joined the dht"))
+        if block_on_join:
+            yield d
 
     def start_looping_calls(self):
         self.safe_start_looping_call(self._change_token_lc, constants.tokenSecretChangeInterval)
