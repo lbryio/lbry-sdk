@@ -712,7 +712,7 @@ class UPnPComponent(Component):
         if self.upnp:
             try:
                 external_ip = yield from_future(self.upnp.get_external_ip())
-                if external_ip != "0.0.0.0":
+                if external_ip != "0.0.0.0" and not self.external_ip:
                     log.info("got external ip from UPnP: %s", external_ip)
             except (asyncio.TimeoutError, UPnPError):
                 pass
