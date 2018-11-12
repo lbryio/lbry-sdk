@@ -18,6 +18,7 @@ from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbrynet import conf, utils, __version__
 from lbrynet.dht.error import TimeoutError
+from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload
 from lbrynet.extras.daemon.Components import d2f, f2d
@@ -2837,7 +2838,7 @@ class Daemon(AuthJSONRPCServer):
             (list) List of contact dictionaries {'host': <peer ip>, 'port': <peer port>, 'node_id': <peer node id>}
         """
 
-        if not utils.is_valid_blobhash(blob_hash):
+        if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
         finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
