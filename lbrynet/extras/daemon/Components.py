@@ -202,7 +202,7 @@ class HeadersComponent(Component):
         self.headers_file = os.path.join(self.headers_dir, 'headers')
         self.old_file = os.path.join(conf.settings['lbryum_wallet_dir'], 'blockchain_headers')
         self._downloading_headers = None
-        self._headers_progress_percent = None
+        self._headers_progress_percent = 0
 
     @property
     def component(self):
