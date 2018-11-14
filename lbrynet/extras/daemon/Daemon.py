@@ -2802,7 +2802,7 @@ class Daemon(AuthJSONRPCServer):
         Delete a blob
 
         Usage:
-            blob_delete (<blob_hash> | --blob_hash=<blob_hash)
+            blob_delete (<blob_hash> | --blob_hash=<blob_hash>)
 
         Options:
             --blob_hash=<blob_hash>  : (str) blob hash of the blob to delete
