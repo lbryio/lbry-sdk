@@ -2823,7 +2823,6 @@ class Daemon(AuthJSONRPCServer):
         return "Deleted %s" % blob_hash
 
     @requires(DHT_COMPONENT)
-    @defer.inlineCallbacks
     def jsonrpc_peer_list(self, blob_hash, timeout=None):
         """
         Get peers for blob hash
@@ -2842,24 +2841,25 @@ class Daemon(AuthJSONRPCServer):
         if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
-        finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
-
-        def trap_timeout(err):
-            err.trap(defer.TimeoutError)
-            return []
-
-        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.dht_node.clock)
-        finished_deferred.addErrback(trap_timeout)
-        peers = yield finished_deferred
-        results = [
-            {
-                "node_id": hexlify(node_id).decode(),
-                "host": host,
-                "port": port
-            }
-            for node_id, host, port in peers
-        ]
-        return results
+        return self.component_manager.peer_finder.find_peers_for_blob(blob_hash)
+        # finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
+        #
+        # def trap_timeout(err):
+        #     err.trap(defer.TimeoutError)
+        #     return []
+        #
+        # finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.dht_node.clock)
+        # finished_deferred.addErrback(trap_timeout)
+        # peers = yield finished_deferred
+        # results = [
+        #     {
+        #         "node_id": hexlify(node_id).decode(),
+        #         "host": host,
+        #         "port": port
+        #     }
+        #     for node_id, host, port in peers
+        # ]
+        # return results
 
     @requires(DATABASE_COMPONENT)
     @defer.inlineCallbacks

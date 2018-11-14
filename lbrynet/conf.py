@@ -252,7 +252,7 @@ ADJUSTABLE_SETTINGS = {
     'dht_node_port': (int, 4444),
     'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
-    'download_mirrors': (list, ['blobs.lbry.io']),
+    'download_mirrors': (list, []),
     'is_generous_host': (bool, True),
     'announce_head_blobs_only': (bool, True),
     'concurrent_announcers': (int, DEFAULT_CONCURRENT_ANNOUNCERS),
