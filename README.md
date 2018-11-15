@@ -16,7 +16,9 @@ By default, `lbrynet` will provide a JSON-RPC server at `http://localhost:5279`.
 
 Our [quickstart guide](http://lbry.io/quickstart) provides a simple walkthrough and examples for learning.
 
-The full API is documented [here](https://lbry.tech/api/sdk).
+With the daemon running, `lbrynet commands` will show you a list of commands. 
+
+The full API is documented [here](https://lbry.tech/api/sdk). 
 
 ## Running from source
 
@@ -41,3 +43,7 @@ The primary contact for this project is [@jackrobison](mailto:jack@lbry.io).
 ## Additional information and links
 
 The documentation for the API can be found [here](https://lbry.tech/api/sdk).
+
+Daemon ports, settings, and configurations are documented [here](https://lbry.tech/resources/daemon-settings).
+
+An example configuration file can be found [here](https://github.com/lbryio/lbry/blob/master/lbrynet/conf.py).
