@@ -3114,6 +3114,7 @@ class Daemon(AuthJSONRPCServer):
         result['buckets'] = {}
 
         for i in range(len(self.dht_node._routingTable._buckets)):
+            result['buckets'][i] = []
             for contact in self.dht_node._routingTable._buckets[i]._contacts:
                 blobs = list(hosts.pop(contact)) if contact in hosts else []
                 blob_hashes.update(blobs)
@@ -3123,7 +3124,7 @@ class Daemon(AuthJSONRPCServer):
                     "node_id": hexlify(contact.id).decode(),
                     "blobs": blobs,
                 }
-                result['buckets'].setdefault(i, []).append(host)
+                result['buckets'][i].append(host)
                 contact_set.add(hexlify(contact.id).decode())
 
         result['contacts'] = list(contact_set)
