@@ -6,8 +6,7 @@ from lbrynet import conf
 from lbrynet.schema.fee import Fee
 
 from lbrynet.p2p.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
-from lbrynet.p2p.Error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
-from lbrynet.utils import safe_start_looping_call, safe_stop_looping_call
+from lbrynet.p2p.Error import DownloadDataTimeout, DownloadCanceledError
 from lbrynet.p2p.StreamDescriptor import download_sd_blob
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from torba.client.constants import COIN
@@ -181,7 +180,6 @@ class GetStream:
             downloader - instance of ManagedEncryptedFileDownloader
             finished_deferred - deferred callbacked when download is finished
         """
-
         self.set_status(INITIALIZING_CODE, name)
         key_fee = yield self._initialize(stream_info)
         self.set_status(DOWNLOAD_METADATA_CODE, name)
@@ -191,7 +189,11 @@ class GetStream:
             self.set_status(DOWNLOAD_RUNNING_CODE, name)
             log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
             self.data_downloading_deferred.addTimeout(self.timeout, self.reactor)
-            yield self.data_downloading_deferred
+            try:
+                yield self.data_downloading_deferred
+                self.wrote_data = True
+            except defer.TimeoutError:
+                raise DownloadDataTimeout("data download timed out")
         except (DownloadDataTimeout, InvalidStreamDescriptorError) as err:
             raise err
 
