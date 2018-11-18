@@ -432,7 +432,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 else:
                     result = func()
             except Exception as e:
-                log.exception("error handling request for %s:%i %s", senderContact.address, senderContact.port, method)
+                log.error("error handling request for %s:%i %s", senderContact.address, senderContact.port, method)
                 df.errback(e)
             else:
                 df.callback(result)

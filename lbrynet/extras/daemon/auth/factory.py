@@ -42,7 +42,7 @@ class AuthJSONRPCResource(resource.Resource):
             realm = HttpPasswordRealm(self)
             portal_to_realm = portal.Portal(realm, [checker, ])
             root = guard.HTTPAuthSessionWrapper(
-                portal_to_realm, [guard.BasicCredentialFactory('Login to lbrynet api'), ]
+                portal_to_realm, [guard.BasicCredentialFactory(b'Login to lbrynet api'), ]
             )
         else:
             log.info("Using non-authenticated API")

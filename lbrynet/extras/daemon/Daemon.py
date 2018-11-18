@@ -18,6 +18,7 @@ from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbrynet import conf, utils, __version__
 from lbrynet.dht.error import TimeoutError
+from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload
 from lbrynet.extras.daemon.Components import d2f, f2d
@@ -2801,7 +2802,7 @@ class Daemon(AuthJSONRPCServer):
         Delete a blob
 
         Usage:
-            blob_delete (<blob_hash> | --blob_hash=<blob_hash)
+            blob_delete (<blob_hash> | --blob_hash=<blob_hash>)
 
         Options:
             --blob_hash=<blob_hash>  : (str) blob hash of the blob to delete
@@ -2837,7 +2838,7 @@ class Daemon(AuthJSONRPCServer):
             (list) List of contact dictionaries {'host': <peer ip>, 'port': <peer port>, 'node_id': <peer node id>}
         """
 
-        if not utils.is_valid_blobhash(blob_hash):
+        if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
         finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
@@ -3113,6 +3114,7 @@ class Daemon(AuthJSONRPCServer):
         result['buckets'] = {}
 
         for i in range(len(self.dht_node._routingTable._buckets)):
+            result['buckets'][i] = []
             for contact in self.dht_node._routingTable._buckets[i]._contacts:
                 blobs = list(hosts.pop(contact)) if contact in hosts else []
                 blob_hashes.update(blobs)
@@ -3122,7 +3124,7 @@ class Daemon(AuthJSONRPCServer):
                     "node_id": hexlify(contact.id).decode(),
                     "blobs": blobs,
                 }
-                result['buckets'].setdefault(i, []).append(host)
+                result['buckets'][i].append(host)
                 contact_set.add(hexlify(contact.id).decode())
 
         result['contacts'] = list(contact_set)
