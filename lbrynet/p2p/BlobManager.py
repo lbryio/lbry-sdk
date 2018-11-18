@@ -39,9 +39,16 @@ class DiskBlobManager:
     def get_blob(self, blob_hash, length=None):
         """Return a blob identified by blob_hash, which may be a new blob or a
         blob that is already on the hard disk
+
+        :param str blob_hash: String representing the desired blob's hash
+        :param length: Length of the blob to download. If None is specified, then
+          the blob is assumed to already be saved in the `self.blobs` dict.
+        :raises TypeError: If the blob isn't saved in `self.blobs` and `length` is
+          passed in as a non-`int` type (`None` by default)
         """
         if length is not None and not isinstance(length, int):
-            raise Exception("invalid length type: {} ({})".format(length, str(type(length))))
+            # Shouldn't this be replaced with TypeError
+            raise TypeError("invalid length type: {} ({})".format(length, str(type(length))))
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
         return self._make_new_blob(blob_hash, length)

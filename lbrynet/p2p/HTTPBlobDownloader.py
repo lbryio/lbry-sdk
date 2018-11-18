@@ -5,6 +5,7 @@ from twisted.internet import defer, task
 from twisted.internet.error import ConnectingCancelledError
 from twisted.web._newclient import ResponseNeverReceived
 
+from lbrynet.blob.blob_file import BlobFile  # For type hinting
 from lbrynet.utils import DeferredDict
 from lbrynet.p2p.Error import DownloadCanceledError
 
@@ -121,6 +122,12 @@ class HTTPBlobDownloader:
 
     @defer.inlineCallbacks
     def _download_blob(self, blob):
+        """ Given a `BlobFile` object, attempt to download the given
+        blob from any of the given mirrors. up to self.max_failures times.
+
+        :param BlobFile blob: The BlobFile object which we want to download
+        :return:
+        """
         for _ in range(self.max_failures):
             writer, finished_deferred = blob.open_for_writing('mirror')
             self.writers.append(writer)
@@ -151,6 +158,11 @@ class HTTPBlobDownloader:
                 self.writers.remove(writer)
 
     def download_blob(self, blob):
+        """ Tries to download the given BlobFile object
+
+        :param BlobFile blob:
+        :return:
+        """
         if not blob.verified:
             d = self.semaphore.run(self._download_blob, blob)
             d.addErrback(lambda err: err.trap(defer.TimeoutError, defer.CancelledError))
