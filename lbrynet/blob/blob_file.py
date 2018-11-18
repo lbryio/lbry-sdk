@@ -16,19 +16,19 @@ MAX_BLOB_SIZE = 2 * 2 ** 20
 blobhash_length = get_lbry_hash_obj().digest_size * 2
 
 
-def is_valid_hashcharacter(char):
-    return char in "0123456789abcdef"
+def is_hex_character(char):
+    return 16 > int(char, 16) >= 0
 
 
 def is_valid_blobhash(blobhash):
     """Checks whether the blobhash is the correct length and contains only
-    valid characters (0-9, a-f)
+    hexadecimal characters: (0-9, a-f).
 
     @param blobhash: string, the blobhash to check
 
     @return: True/False
     """
-    return len(blobhash) == blobhash_length and all(is_valid_hashcharacter(l) for l in blobhash)
+    return len(blobhash) == blobhash_length and all(is_hex_character(l) for l in blobhash)
 
 
 class BlobFile:
