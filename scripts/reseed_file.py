@@ -67,7 +67,7 @@ def reseed_file(input_file, sd_blob):
             continue
         blob = yield blob_manager.get_blob(blob_info['blob_hash'], True)
         if not blob.verified:
-            print "Blob {} is not verified".format(blob)
+            print("Blob {} is not verified".format(blob))
 
 
 class SdBlob(object):

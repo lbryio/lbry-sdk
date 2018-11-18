@@ -17,8 +17,10 @@ blobhash_length = get_lbry_hash_obj().digest_size * 2
 
 
 def is_hex_character(char):
-    return 16 > int(char, 16) >= 0
-
+    try:
+        return 16 > int(char, 16) >= 0
+    except ValueError:  # Raised if non base16 string given
+        return False
 
 def is_valid_blobhash(blobhash):
     """Checks whether the blobhash is the correct length and contains only

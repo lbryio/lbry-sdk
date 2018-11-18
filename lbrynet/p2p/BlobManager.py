@@ -116,7 +116,7 @@ class DiskBlobManager:
                 yield blob.delete()
                 bh_to_delete_from_db.append(blob_hash)
                 del self.blobs[blob_hash]
-            except Exception as e:
+            except (Exception, TypeError) as e:
                 log.warning("Failed to delete blob file. Reason: %s", e)
         try:
             yield self.storage.delete_blobs_from_db(bh_to_delete_from_db)
@@ -127,6 +127,7 @@ class DiskBlobManager:
     @defer.inlineCallbacks
     def _completed_blobs(self, blobhashes_to_check):
         """Returns of the blobhashes_to_check, which are valid"""
+        # This iterative method might not be the best since get_blob raises TypeError
         blobs = yield defer.DeferredList([self.get_blob(b) for b in blobhashes_to_check])
         blob_hashes = [b.blob_hash for success, b in blobs if success and b.verified]
         defer.returnValue(blob_hashes)
