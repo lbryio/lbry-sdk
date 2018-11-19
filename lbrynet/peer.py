@@ -18,6 +18,8 @@ def is_valid_ipv4(address):
 
 class BlobPeer:
     def __init__(self, node_id: bytes, host: str, port: int):
+        if not len(node_id) == constants.key_bits // 8:
+            raise ValueError("invalid node id: {}".format(hexlify(node_id).decode()))
         self.node_id = node_id
         self.host = host
         self.port = port
@@ -213,13 +215,13 @@ class PeerManager:
         self._rpc_failures = {}
         self._blob_peers = {}
 
-    def get_contact(self, id, address, port) -> DHTPeer:
+    def get_dht_peer(self, id, address, port) -> DHTPeer:
         for contact in self._contacts.values():
             if contact.id == id and contact.address == address and contact.port == port:
                 return contact
 
     def make_dht_peer(self, id, ipAddress, udpPort, networkProtocol, firstComm=0) -> DHTPeer:
-        contact = self.get_contact(id, ipAddress, udpPort)
+        contact = self.get_dht_peer(id, ipAddress, udpPort)
         if contact:
             return contact
         contact = DHTPeer(self, id, ipAddress, udpPort, networkProtocol, firstComm or self._get_time())

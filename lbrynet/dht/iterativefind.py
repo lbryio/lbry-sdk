@@ -4,7 +4,7 @@ import typing
 import logging
 from twisted.internet import defer
 from lbrynet.dht.distance import Distance
-from lbrynet.dht.error import TimeoutError
+from lbrynet.dht.error import TimeoutError, UnknownRemoteException
 from lbrynet.dht import constants
 from lbrynet.peer import BlobPeer, PeerManager, DHTPeer
 log = logging.getLogger(__name__)
@@ -44,8 +44,9 @@ def get_shortlist(node, key: bytes, shortlist: typing.Optional[typing.List[DHTPe
 
 class IterativeFinder:
     def __init__(self, node, shortlist: typing.List, key: bytes, rpc: str,
-                 exclude: typing.Optional[typing.List] = None):
+                 exclude: typing.Optional[typing.List] = None, bottom_out_limit: int = 3):
         assert rpc in ['findValue', 'findNode'], ValueError(rpc)
+        self.bottom_out_limit = bottom_out_limit
         self.exclude = set(exclude or [])
         if len(key) != constants.key_bits // 8:
             raise ValueError("invalid key length: %i" % len(key))
@@ -80,7 +81,7 @@ class IterativeFinder:
         self.loop = asyncio.get_event_loop()
 
         self.is_find_value_request = rpc == "findValue"
-        self.iteration_fut: asyncio.Future
+        self.iteration_fut: asyncio.Future = asyncio.Future()
 
     def is_closer(self, contact):
         if not self.closest_node:
@@ -99,16 +100,21 @@ class IterativeFinder:
         return contact_triples
 
     async def probe_contact(self, contact: DHTPeer):
-        log.info("probe %s(%s) %s:%i (%s)", self.rpc, binascii.hexlify(self.key)[:8].decode(), contact.address,
+        log.debug("probe %s(%s) %s:%i (%s)", self.rpc, binascii.hexlify(self.key)[:8].decode(), contact.address,
                  contact.port, binascii.hexlify(contact.id)[:8].decode())
         fn = getattr(contact, self.rpc)
         try:
-            response = await fn(self.key).asFuture(self.loop)
-            return self.extend_shortlist(contact, response)
-        except (TimeoutError, defer.CancelledError, ValueError, IndexError):
+            response = await asyncio.wait_for(fn(self.key).asFuture(self.loop), constants.rpcTimeout)
+            # assert contact in self.node.contacts
+            return await self.extend_shortlist(contact, response)
+        except (TimeoutError, defer.CancelledError, ValueError, IndexError, asyncio.TimeoutError) as err:
+            return contact.id
+        except UnknownRemoteException as err:
+            log.exception("%s %s %s:%i %s - %s", self.rpc, binascii.hexlify(self.key).decode(),
+                          contact.address, contact.port, binascii.hexlify(contact.id).decode(), err)
             return contact.id
 
-    def extend_shortlist(self, contact, result):
+    async def extend_shortlist(self, contact, result):
         # The "raw response" tuple contains the response message and the originating address info
         origin_address = (contact.address, contact.port)
         if self.iteration_fut.done():
@@ -136,7 +142,8 @@ class IterativeFinder:
                     self.exclude.add((host, port))
                     self.find_value_result.append(self.peer_manager.make_blob_peer(node_id, host, port))
             if self.find_value_result:
-                self.iteration_fut.set_result(self.find_value_result)
+                async with self.lock:
+                    self.iteration_fut.set_result(self.find_value_result)
         else:
             contact_triples = self.get_contact_triples(result)
             for contact_triple in contact_triples:
@@ -152,7 +159,8 @@ class IterativeFinder:
 
             if not self.iteration_fut.done() and self.should_stop():
                 self.active_contacts.sort(key=lambda c: self.distance(c.id))
-                self.iteration_fut.set_result(self.active_contacts[:min(constants.k, len(self.active_contacts))])
+                async with self.lock:
+                    self.iteration_fut.set_result(self.active_contacts[:min(constants.k, len(self.active_contacts))])
 
         return contact.id
 
@@ -170,6 +178,8 @@ class IterativeFinder:
         return False
 
     async def _search_iteration(self):
+        log.debug("%s %i contacts in shortlist, active: %i, contacted: %i", self.rpc, len(self.shortlist),
+                 len(self.active_contacts), len(self.already_contacted))
         self.iteration_count += 1
         # Sort the discovered active nodes from closest to furthest
         if len(self.active_contacts):
@@ -182,29 +192,27 @@ class IterativeFinder:
         probes = []
         already_contacted_addresses = {(c.address, c.port) for c in self.already_contacted}
         to_remove = []
-        async with self.lock:
-            for contact in self.shortlist:
-                if self.node.peer_manager.is_ignored((contact.address, contact.port)):
-                    to_remove.append(contact)  # a contact became bad during iteration
-                    continue
-                if (contact.address, contact.port) not in already_contacted_addresses:
-                    self.already_contacted.append(contact)
-                    to_remove.append(contact)
-                    probe = self.probe_contact(contact)
-                    probes.append(probe)
-                    self.active_probes.append(probe)
-                if len(probes) == constants.alpha:
-                    break
+        for contact in self.shortlist:
+            if self.node.peer_manager.is_ignored((contact.address, contact.port)):
+                to_remove.append(contact)  # a contact became bad during iteration
+                continue
+            if (contact.address, contact.port) not in already_contacted_addresses:
+                self.already_contacted.append(contact)
+                to_remove.append(contact)
+                probe = self.probe_contact(contact)
+                probes.append(probe)
+                self.active_probes.append(probe)
+            if len(probes) == constants.alpha:
+                break
 
-            for contact in to_remove:  # these contacts will be re-added to the shortlist when they reply successfully
-                self.shortlist.remove(contact)
+        for contact in to_remove:  # these contacts will be re-added to the shortlist when they reply successfully
+            self.shortlist.remove(contact)
 
         if probes:
             self.search_iteration()
             await asyncio.gather(*tuple(probes), loop=self.loop)
-            async with self.lock:
-                for probe in probes:
-                    self.active_probes.remove(probe)
+            for probe in probes:
+                self.active_probes.remove(probe)
         elif not self.active_probes:
             # If no probes were sent, there will not be any improvement, so we're done
             if self.is_find_value_request:
@@ -224,69 +232,70 @@ class IterativeFinder:
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
-        self.iteration_fut = asyncio.Future()
-        self.iteration_futures.append(self.iteration_fut)
-
-        def cancel_pending_iterations(_):
-            while self.pending_iteration_calls:
-                timer = self.pending_iteration_calls.pop()
-                if timer and not timer.cancelled():
-                    timer.cancel()
-
-        self.iteration_fut.add_done_callback(cancel_pending_iterations)
+    async def __anext__(self) -> typing.Union[typing.List[DHTPeer], typing.List[BlobPeer]]:
+        if self.iteration_fut not in self.iteration_futures:
+            self.iteration_futures.append(self.iteration_fut)
         self.search_iteration()
-        return await self.iteration_fut
+        r = await self.iteration_fut
+        async with self.lock:
+            self.iteration_fut = asyncio.Future()
+        return r
 
-    @classmethod
-    async def iterative_find(cls, node, shortlist: typing.Optional[typing.List], key: bytes, rpc: str,
-                             exclude: typing.Optional[typing.List] = None):
+    def stop(self):
+        log.debug("stop %i iteration calls", len(self.pending_iteration_calls))
+        while self.pending_iteration_calls:
+            timer = self.pending_iteration_calls.pop()
+            if timer and not timer.cancelled():
+                timer.cancel()
+
+    async def iterative_find(self, max_results: int = constants.k
+                             ) -> typing.AsyncIterator[typing.Union[typing.List[DHTPeer], typing.List[BlobPeer]]]:
         """
         async generator that yields results from an iterative find as they are found
-
-        :param node: lbrynet.dht.node.Node object
-        :param shortlist: optional list of contacts, if not provided use the k closest from the routing table
-        :param key: the key to search for
-        :param rpc: the search operation, findValue or findNode
-        :param exclude: optional list of (host, port) tuples to exclude from the search and results
         """
-
-        i = 0
-        async for iteration_result in cls(node, shortlist, key, rpc, exclude):
-            yield iteration_result
-            i += 1
+        try:
+            i = 0
+            accumulated = set()
+            bottomed_out = 0
+            async for iteration_result in self:
+                r: typing.List = iteration_result
+                for peer in r:
+                    if peer not in accumulated:
+                        accumulated.add(peer)
+                        bottomed_out = -1
+                bottomed_out += 1
+                if r:
+                    yield r
+                i += 1
+                if (bottomed_out >= self.bottom_out_limit) or (len(accumulated) >= max_results):
+                    log.debug("%s %s bottomed out %i, %i", self.rpc, binascii.hexlify(self.key).decode(),
+                              bottomed_out, len(accumulated))
+                    break
+        finally:
+            self.stop()
 
     @classmethod
     async def cumulative_find(cls, node, shortlist: typing.Optional[typing.List], key: bytes, rpc: str,
-                              exclude: typing.Optional[typing.List] = None, total=constants.k,
+                              exclude: typing.Optional[typing.List] = None, max_results=constants.k,
                               bottom_out_limit: int = 3) -> typing.Union[typing.List[BlobPeer], typing.List[DHTPeer]]:
         """
         Accumulate iterative find results until a given number has been found or until no improvement is made.
 
-        :param node: lbrynet.dht.node.Node object
+        :param node: 'lbrynet.dht.node.Node' object
         :param shortlist: optional list of contacts, if not provided use the k closest from the routing table
         :param key: the key to search for
         :param rpc: the search operation, findValue or findNode
         :param exclude: optional list of (host, port) tuples to exclude from the search and results
-        :param total: the number of results to accumulate
+        :param max_results: the number of results to accumulate
         :param bottom_out_limit: iterations with no improvement before returning if the total has not been met
         """
 
-        results = set()
-        bottomed_out = 0
-        i = 0
-        async for iteration_result in cls.iterative_find(node, shortlist, key, rpc, exclude):
+        results = []
+        finder = cls(node, shortlist, key, rpc, exclude, bottom_out_limit)
+        async for iteration_result in finder.iterative_find(max_results):  # pylint: disable=E1133
             assert isinstance(iteration_result, list)
-            if iteration_result:
-                for peer in iteration_result:
-                    if peer not in results:
-                        results.add(peer)
-                        bottomed_out = 0
-            else:
-                bottomed_out += 1
-            if len(results) >= total:
-                return sort_result(results, key)
-            if bottomed_out >= bottom_out_limit:
-                return sort_result(results, key)
-            i += 1
-        return sort_result(results, key)
+            for i in iteration_result:
+                if i not in results:
+                    results.append(i)
+            log.debug("%s, %i, %i", rpc, len(iteration_result), len(results))
+        return results

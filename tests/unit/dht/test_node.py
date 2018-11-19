@@ -6,12 +6,13 @@ from twisted.internet import defer
 from lbrynet.dht.node import Node
 from lbrynet.dht import constants
 from lbrynet.utils import generate_id
+from lbrynet.peer import PeerManager
 
 
 class NodeIDTest(unittest.TestCase):
 
     def setUp(self):
-        self.node = Node()
+        self.node = Node(PeerManager())
 
     def test_new_node_has_auto_created_id(self):
         self.assertEqual(type(self.node.node_id), bytes)
@@ -32,8 +33,8 @@ class NodeDataTest(unittest.TestCase):
     def setUp(self):
         h = hashlib.sha384()
         h.update(b'test')
-        self.node = Node()
-        self.contact = self.node.contact_manager.make_contact(
+        self.node = Node(PeerManager())
+        self.contact = self.node.peer_manager.make_dht_peer(
             h.digest(), '127.0.0.1', 12345, self.node._protocol)
         self.token = self.node.make_token(self.contact.compact_ip())
         self.cases = []
@@ -61,14 +62,14 @@ class NodeDataTest(unittest.TestCase):
 class NodeContactTest(unittest.TestCase):
     """ Test case for the Node class's contact management-related functions """
     def setUp(self):
-        self.node = Node()
+        self.node = Node(PeerManager())
 
     @defer.inlineCallbacks
     def test_add_contact(self):
         """ Tests if a contact can be added and retrieved correctly """
         # Create the contact
         contact_id = generate_id(b'node1')
-        contact = self.node.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.node._protocol)
+        contact = self.node.peer_manager.make_dht_peer(contact_id, '127.0.0.1', 9182, self.node._protocol)
         # Now add it...
         yield self.node.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
@@ -80,7 +81,7 @@ class NodeContactTest(unittest.TestCase):
     def test_add_self_as_contact(self):
         """ Tests the node's behaviour when attempting to add itself as a contact """
         # Create a contact with the same ID as the local node's ID
-        contact = self.node.contact_manager.make_contact(self.node.node_id, '127.0.0.1', 9182, None)
+        contact = self.node.peer_manager.make_dht_peer(self.node.node_id, '127.0.0.1', 9182, None)
         # Now try to add it
         yield self.node.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE

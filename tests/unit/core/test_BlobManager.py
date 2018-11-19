@@ -9,7 +9,7 @@ from twisted.internet import defer
 from tests.test_utils import random_lbry_hash
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.p2p.Peer import Peer
+from lbrynet.peer import BlobPeer
 from lbrynet import conf
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
@@ -22,7 +22,7 @@ class BlobManagerTest(unittest.TestCase):
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
         self.bm = DiskBlobManager(self.blob_dir, SQLiteStorage(self.db_dir))
-        self.peer = Peer('somehost', 22)
+        self.peer = BlobPeer(b'f' * 48,'somehost', 22)
         yield self.bm.storage.setup()
 
     @defer.inlineCallbacks

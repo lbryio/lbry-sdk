@@ -4,7 +4,6 @@ from twisted.internet import defer
 from twisted.protocols.basic import FileSender
 from twisted.python.failure import Failure
 
-from lbrynet.extras.daemon import analytics
 from lbrynet.p2p.Offer import Offer
 
 log = logging.getLogger(__name__)
@@ -190,7 +189,8 @@ class BlobRequestHandler:
             self.blob_bytes_uploaded += uploaded
             self.peer.update_stats('blob_bytes_uploaded', uploaded)
             if self.analytics_manager is not None:
-                self.analytics_manager.add_observation(analytics.BLOB_BYTES_UPLOADED, uploaded)
+
+                self.analytics_manager.add_observation('Blob Bytes Uploaded', uploaded)
             return data
 
         def start_transfer():

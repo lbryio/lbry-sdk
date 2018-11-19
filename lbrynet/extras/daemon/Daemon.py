@@ -645,7 +645,7 @@ class Daemon(AuthJSONRPCServer):
         unreachable_peers = []
         try:
             peers = yield self.jsonrpc_peer_list(blob_hash, search_timeout)
-            peer_infos = [{"peer": BlobPeer(x['host'], x['port']),
+            peer_infos = [{"peer": BlobPeer(x['node_id'], x['host'], x['port']),
                            "blob_hash": blob_hash,
                            "timeout": blob_timeout} for x in peers]
             dl = []
@@ -3066,11 +3066,9 @@ class Daemon(AuthJSONRPCServer):
 
         contact = None
         if node_id and address and port:
-            contact = self.dht_node.peer_manager.get_dht_peer(unhexlify(node_id), address, int(port))
-            if not contact:
-                contact = self.dht_node.peer_manager.make_dht_peer(
-                    unhexlify(node_id), address, int(port), self.dht_node._protocol
-                )
+            contact = self.dht_node.peer_manager.make_dht_peer(
+                unhexlify(node_id), address, int(port), self.dht_node._protocol
+            )
         if not contact:
             try:
                 contact = yield self.dht_node.findContact(unhexlify(node_id))

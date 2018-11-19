@@ -5,6 +5,7 @@ from twisted.trial import unittest
 from twisted.internet import defer, task
 from lbrynet.dht import constants
 from lbrynet.dht.node import Node
+from lbrynet.peer import PeerManager
 from .mock_transport import resolve, listenUDP, MOCK_DHT_SEED_DNS, mock_node_generator
 
 
@@ -19,7 +20,7 @@ class TestKademliaBase(unittest.TestCase):
 
     def _add_next_node(self):
         node_id, node_ip = next(self.mock_node_generator)
-        node = Node(node_id=node_id, udpPort=4444, peerPort=3333, externalIP=node_ip,
+        node = Node(PeerManager(), node_id=node_id, udpPort=4444, peerPort=3333, externalIP=node_ip,
                     resolve=resolve, listenUDP=listenUDP, callLater=self.clock.callLater, clock=self.clock)
         self.nodes.append(node)
         return node

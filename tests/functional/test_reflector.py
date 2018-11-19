@@ -7,7 +7,7 @@ from lbrynet.p2p.StreamDescriptor import get_sd_info
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 from lbrynet.p2p import BlobManager
 from lbrynet.p2p import StreamDescriptor
 from lbrynet.blob import EncryptedFileCreator

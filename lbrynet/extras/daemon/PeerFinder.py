@@ -2,7 +2,7 @@ import binascii
 import logging
 
 from twisted.internet import defer
-from lbrynet import conf
+# from lbrynet import conf
 
 log = logging.getLogger(__name__)
 

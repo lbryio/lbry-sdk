@@ -6,9 +6,10 @@ import logging
 from twisted.internet.task import Clock
 from twisted.internet import defer
 import lbrynet.dht.protocol
-import lbrynet.dht.contact
+import lbrynet.peer
 from lbrynet.dht.error import TimeoutError
 from lbrynet.dht.node import Node, rpcmethod
+from lbrynet.peer import PeerManager
 from .mock_transport import listenUDP, resolve
 
 log = logging.getLogger()
@@ -21,13 +22,13 @@ class KademliaProtocolTest(unittest.TestCase):
 
     def setUp(self):
         self._reactor = Clock()
-        self.node = Node(node_id=b'1' * 48, udpPort=self.udpPort, externalIP="127.0.0.1", listenUDP=listenUDP,
+        self.node = Node(PeerManager(), node_id=b'1' * 48, udpPort=self.udpPort, externalIP="127.0.0.1", listenUDP=listenUDP,
                          resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
-        self.remote_node = Node(node_id=b'2' * 48, udpPort=self.udpPort, externalIP="127.0.0.2", listenUDP=listenUDP,
+        self.remote_node = Node(PeerManager(), node_id=b'2' * 48, udpPort=self.udpPort, externalIP="127.0.0.2", listenUDP=listenUDP,
                                 resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
-        self.remote_contact = self.node.contact_manager.make_contact(b'2' * 48, '127.0.0.2', 9182, self.node._protocol)
-        self.us_from_them = self.remote_node.contact_manager.make_contact(b'1' * 48, '127.0.0.1', 9182,
-                                                                          self.remote_node._protocol)
+        self.remote_contact = self.node.peer_manager.make_dht_peer(b'2' * 48, '127.0.0.2', 9182, self.node._protocol)
+        self.us_from_them = self.remote_node.peer_manager.make_dht_peer(b'1' * 48, '127.0.0.1', 9182,
+                                                                        self.remote_node._protocol)
         self.node.start_listening()
         self.remote_node.start_listening()
 
@@ -247,8 +248,8 @@ class KademliaProtocolTest(unittest.TestCase):
 
         self.remote_node._protocol._migrate_outgoing_rpc_args = _dont_migrate
 
-        us_from_them = self.remote_node.contact_manager.make_contact(b'1' * 48, '127.0.0.1', self.udpPort,
-                                                                self.remote_node._protocol)
+        us_from_them = self.remote_node.peer_manager.make_dht_peer(b'1' * 48, '127.0.0.1', self.udpPort,
+                                                                   self.remote_node._protocol)
 
         fake_blob = unhexlify("AB" * 48)
 
@@ -272,7 +273,7 @@ class KademliaProtocolTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_find_node(self):
-        self.node.addContact(self.node.contact_manager.make_contact(
+        self.node.addContact(self.node.peer_manager.make_dht_peer(
             self.remote_contact.id, self.remote_contact.address, self.remote_contact.port, self.node._protocol)
         )
         result = self.node.findContact(b'0'*48)

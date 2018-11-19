@@ -36,6 +36,8 @@ class ComponentManager:
 
     def __init__(self, reactor=None, analytics_manager=None, skip_components=None,
                  peer_manager=None, peer_finder=None, **override_components):
+        if not reactor:
+            from twisted.internet import reactor
         self.skip_components = skip_components or []
         self.reactor = reactor
         self.component_classes = {}

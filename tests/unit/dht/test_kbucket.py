@@ -8,7 +8,7 @@ from twisted.trial import unittest
 import struct
 from lbrynet.utils import generate_id
 from lbrynet.dht import kbucket
-from lbrynet.dht.contact import ContactManager
+from lbrynet.peer import PeerManager
 from lbrynet.dht import constants
 
 
@@ -30,7 +30,7 @@ class KBucketTest(unittest.TestCase):
     """ Test case for the KBucket class """
     def setUp(self):
         self.address_generator = address_generator()
-        self.contact_manager = ContactManager()
+        self.contact_manager = PeerManager()
         self.kbucket = kbucket.KBucket(0, 2**constants.key_bits, generate_id())
 
     def testAddContact(self):
@@ -38,7 +38,7 @@ class KBucketTest(unittest.TestCase):
         # Test if contacts can be added to empty list
         # Add k contacts to bucket
         for i in range(constants.k):
-            tmpContact = self.contact_manager.make_contact(generate_id(), next(self.address_generator), 4444, 0, None)
+            tmpContact = self.contact_manager.make_dht_peer(generate_id(), next(self.address_generator), 4444, 0, None)
             self.kbucket.addContact(tmpContact)
             self.assertEqual(
                 self.kbucket._contacts[i],
@@ -46,7 +46,7 @@ class KBucketTest(unittest.TestCase):
                 "Contact in position %d not the same as the newly-added contact" % i)
 
         # Test if contact is not added to full list
-        tmpContact = self.contact_manager.make_contact(generate_id(), next(self.address_generator), 4444, 0, None)
+        tmpContact = self.contact_manager.make_dht_peer(generate_id(), next(self.address_generator), 4444, 0, None)
         self.assertRaises(kbucket.BucketFull, self.kbucket.addContact, tmpContact)
 
         # Test if an existing contact is updated correctly if added again
@@ -69,15 +69,15 @@ class KBucketTest(unittest.TestCase):
         if constants.k >= 2:
             for i in range(constants.k-2):
                 node_ids.append(generate_id())
-                tmpContact = self.contact_manager.make_contact(node_ids[-1], next(self.address_generator), 4444, 0,
-                                                               None)
+                tmpContact = self.contact_manager.make_dht_peer(node_ids[-1], next(self.address_generator), 4444, 0,
+                                                                None)
                 self.kbucket.addContact(tmpContact)
         else:
             # add k contacts
             for i in range(constants.k):
                 node_ids.append(generate_id())
-                tmpContact = self.contact_manager.make_contact(node_ids[-1], next(self.address_generator), 4444, 0,
-                                                               None)
+                tmpContact = self.contact_manager.make_dht_peer(node_ids[-1], next(self.address_generator), 4444, 0,
+                                                                None)
                 self.kbucket.addContact(tmpContact)
 
         # try to get too many contacts
@@ -111,12 +111,12 @@ class KBucketTest(unittest.TestCase):
 
     def testRemoveContact(self):
         # try remove contact from empty list
-        rmContact = self.contact_manager.make_contact(generate_id(), next(self.address_generator), 4444, 0, None)
+        rmContact = self.contact_manager.make_dht_peer(generate_id(), next(self.address_generator), 4444, 0, None)
         self.assertRaises(ValueError, self.kbucket.removeContact, rmContact)
 
         # Add couple contacts
         for i in range(constants.k-2):
-            tmpContact = self.contact_manager.make_contact(generate_id(), next(self.address_generator), 4444, 0, None)
+            tmpContact = self.contact_manager.make_dht_peer(generate_id(), next(self.address_generator), 4444, 0, None)
             self.kbucket.addContact(tmpContact)
 
         # try remove contact from empty list

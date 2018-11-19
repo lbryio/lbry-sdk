@@ -3,7 +3,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 from lbrynet.p2p.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.p2p.BlobManager import DiskBlobManager

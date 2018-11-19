@@ -8,9 +8,9 @@ from lbrynet.p2p.client.ClientRequest import ClientRequest
 from lbrynet.p2p.server.ServerProtocol import ServerProtocol
 from lbrynet.p2p.client.ClientProtocol import ClientProtocol
 from lbrynet.p2p.RateLimiter import RateLimiter
-from lbrynet.p2p.Peer import Peer
+from lbrynet.peer import BlobPeer
 from lbrynet.p2p.Error import NoResponseError
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 
 PEER_PORT = 5551
 LOCAL_HOST = '127.0.0.1'
@@ -120,7 +120,7 @@ class TestIntegrationConnectionManager(TestCase):
 
         conf.initialize_settings(False)
 
-        self.TEST_PEER = Peer(LOCAL_HOST, PEER_PORT)
+        self.TEST_PEER = BlobPeer(LOCAL_HOST, PEER_PORT)
         self.downloader = MocDownloader()
         self.rate_limiter = RateLimiter()
         self.primary_request_creator = MocRequestCreator([self.TEST_PEER])
@@ -192,7 +192,7 @@ class TestIntegrationConnectionManager(TestCase):
         # without it waiting for the connection to complete
 
         self._init_connection_manager()
-        test_peer2 = Peer(LOCAL_HOST, PEER_PORT+1)
+        test_peer2 = BlobPeer(LOCAL_HOST, PEER_PORT + 1)
         self.primary_request_creator.peers_to_return = [self.TEST_PEER, test_peer2]
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(2, self.connection_manager.num_peer_connections())

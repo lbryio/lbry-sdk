@@ -4,7 +4,6 @@ import logging
 import asyncio
 import typing
 from functools import reduce
-from collections import AsyncIterator
 from twisted.internet import defer, error, task
 
 from lbrynet.utils import generate_id, DeferredDict
@@ -361,8 +360,8 @@ class Node(MockKademliaHelper):
             IterativeFinder.cumulative_find(self, shortlist if not self.contacts else None, key, 'findNode')
         ))
 
-    def get_find_value_iterator(self, key: bytes, shortlist: typing.Optional[typing.List] = None) -> AsyncIterator:
-        return IterativeFinder.iterative_find(self, shortlist, key, 'findValue')
+    def get_find_value_iterator(self, key: bytes, shortlist: typing.Optional[typing.List] = None):
+        return IterativeFinder(self, shortlist, key, 'findValue').iterative_find()
 
     def iterativeFindValue(self, key: bytes):
         """ The Kademlia search operation (deterministic)

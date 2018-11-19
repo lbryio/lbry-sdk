@@ -4,7 +4,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet.dht import constants
 from lbrynet.dht.routingtable import TreeRoutingTable
-from lbrynet.dht.contact import ContactManager
+from lbrynet.peer import PeerManager
 from lbrynet.dht.distance import Distance
 from lbrynet.utils import generate_id
 
@@ -18,7 +18,7 @@ class FakeRPCProtocol:
 class TreeRoutingTableTest(unittest.TestCase):
     """ Test case for the RoutingTable class """
     def setUp(self):
-        self.contact_manager = ContactManager()
+        self.contact_manager = PeerManager()
         self.nodeID = generate_id(b'node1')
         self.protocol = FakeRPCProtocol()
         self.routingTable = TreeRoutingTable(self.nodeID)
@@ -35,7 +35,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         """ Tests if a contact can be added and retrieved correctly """
         # Create the contact
         contact_id = generate_id(b'node2')
-        contact = self.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.protocol)
+        contact = self.contact_manager.make_dht_peer(contact_id, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it (will retrieve it)
@@ -47,7 +47,7 @@ class TreeRoutingTableTest(unittest.TestCase):
     def test_get_contact(self):
         """ Tests if a specific existing contact can be retrieved correctly """
         contact_id = generate_id(b'node2')
-        contact = self.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.protocol)
+        contact = self.contact_manager.make_dht_peer(contact_id, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # ...and get it again
@@ -60,7 +60,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         Tests the routing table's behaviour when attempting to add its parent node as a contact
         """
         # Create a contact with the same ID as the local node's ID
-        contact = self.contact_manager.make_contact(self.nodeID, '127.0.0.1', 9182, self.protocol)
+        contact = self.contact_manager.make_dht_peer(self.nodeID, '127.0.0.1', 9182, self.protocol)
         # Now try to add it
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
@@ -72,7 +72,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         """ Tests contact removal """
         # Create the contact
         contact_id = generate_id(b'node2')
-        contact = self.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.protocol)
+        contact = self.contact_manager.make_dht_peer(contact_id, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # Verify addition
@@ -89,7 +89,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         # Add k contacts
         for i in range(constants.k):
             node_id = generate_id(b'remote node %d' % i)
-            contact = self.contact_manager.make_contact(node_id, '127.0.0.1', 9182, self.protocol)
+            contact = self.contact_manager.make_dht_peer(node_id, '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
 
         self.assertEqual(len(self.routingTable._buckets), 1,
@@ -97,7 +97,7 @@ class TreeRoutingTableTest(unittest.TestCase):
                              'be full, but should not yet be split')
         # Now add 1 more contact
         node_id = generate_id(b'yet another remote node')
-        contact = self.contact_manager.make_contact(node_id, '127.0.0.1', 9182, self.protocol)
+        contact = self.contact_manager.make_dht_peer(node_id, '127.0.0.1', 9182, self.protocol)
         yield self.routingTable.addContact(contact)
         self.assertEqual(len(self.routingTable._buckets), 2,
                              'k+1 nodes have been added; the first k-bucket should have been '
@@ -136,7 +136,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         # Add k contacts
         for nodeID in node_ids:
             # self.assertEquals(nodeID, node_ids[i].decode('hex'))
-            contact = self.contact_manager.make_contact(unhexlify(nodeID), '127.0.0.1', 9182, self.protocol)
+            contact = self.contact_manager.make_dht_peer(unhexlify(nodeID), '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
         self.assertEqual(len(self.routingTable._buckets), 2)
         self.assertEqual(len(self.routingTable._buckets[0]._contacts), 8)
@@ -145,7 +145,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         #  try adding a contact who is further from us than the k'th known contact
         nodeID = b'020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
         nodeID = unhexlify(nodeID)
-        contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
+        contact = self.contact_manager.make_dht_peer(nodeID, '127.0.0.1', 9182, self.protocol)
         self.assertFalse(self.routingTable._shouldSplit(self.routingTable._kbucketIndex(contact.id), contact.id))
         yield self.routingTable.addContact(contact)
         self.assertEqual(len(self.routingTable._buckets), 2)

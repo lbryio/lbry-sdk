@@ -463,8 +463,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
         if self._hasProgressBeenMade(messageID):
             # Reset the RPC timeout timer
             timeoutCanceller()
-            timeoutCall, cancelTimeout = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, messageID)
-            self._sentMessages[messageID] = (remoteContact, df, timeoutCall, cancelTimeout, method, args)
+            timeoutCall, cancelTimeout = self._node.reactor_callLater(
+                constants.rpcTimeout, self._msgTimeout, messageID
+            )
+            self._sentMessages[messageID] = (
+                remoteContact, df, timeoutCall, cancelTimeout, method, args
+            )
         else:
             # No progress has been made
             if messageID in self._partialMessagesProgress:

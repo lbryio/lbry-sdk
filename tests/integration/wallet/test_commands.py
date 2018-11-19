@@ -3,7 +3,6 @@ import asyncio
 import tempfile
 import logging
 from binascii import unhexlify
-from functools import partial
 from types import SimpleNamespace
 
 from twisted.trial import unittest
@@ -18,6 +17,7 @@ lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
+from lbrynet.peer import PeerManager
 from lbrynet.extras.daemon.Daemon import Daemon
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
@@ -47,7 +47,7 @@ class FakeUPnP(UPnPComponent):
 class FakeDHT(DHTComponent):
 
     def start(self):
-        self.dht_node = Node()
+        self.dht_node = Node(PeerManager())
 
 
 class FakeExchangeRateComponent(ExchangeRateManagerComponent):

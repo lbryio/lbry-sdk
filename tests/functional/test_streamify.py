@@ -36,7 +36,7 @@ class TestStreamify(TestCase):
         self.db_dir = tempfile.mkdtemp()
         self.blob_dir = os.path.join(self.db_dir, "blobfiles")
         os.mkdir(self.blob_dir)
-        self.dht_node = FakeNode()
+        self.dht_node = FakeNode(PeerManager())
         self.wallet = FakeWallet()
         self.peer_manager = PeerManager()
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)

@@ -2,16 +2,16 @@ from binascii import hexlify
 from twisted.internet import task
 from twisted.trial import unittest
 from lbrynet.utils import generate_id
-from lbrynet.dht.contact import ContactManager
+from lbrynet.peer import PeerManager
 from lbrynet.dht import constants
 
 
 class ContactTest(unittest.TestCase):
     """ Basic tests case for boolean operators on the Contact class """
     def setUp(self):
-        self.contact_manager = ContactManager()
+        self.contact_manager = PeerManager()
         self.node_ids = [generate_id(), generate_id(), generate_id()]
-        make_contact = self.contact_manager.make_contact
+        make_contact = self.contact_manager.make_dht_peer
         self.first_contact = make_contact(self.node_ids[1], '127.0.0.1', 1000, None, 1)
         self.second_contact = make_contact(self.node_ids[0], '192.168.0.1', 1000, None, 32)
         self.second_contact_second_reference = make_contact(self.node_ids[0], '192.168.0.1', 1000, None, 32)
@@ -19,13 +19,13 @@ class ContactTest(unittest.TestCase):
 
     def test_make_contact_error_cases(self):
         self.assertRaises(
-            ValueError, self.contact_manager.make_contact, self.node_ids[1], '192.168.1.20', 100000, None)
+            ValueError, self.contact_manager.make_dht_peer, self.node_ids[1], '192.168.1.20', 100000, None)
         self.assertRaises(
-            ValueError, self.contact_manager.make_contact, self.node_ids[1], '192.168.1.20.1', 1000, None)
+            ValueError, self.contact_manager.make_dht_peer, self.node_ids[1], '192.168.1.20.1', 1000, None)
         self.assertRaises(
-            ValueError, self.contact_manager.make_contact, self.node_ids[1], 'this is not an ip', 1000, None)
+            ValueError, self.contact_manager.make_dht_peer, self.node_ids[1], 'this is not an ip', 1000, None)
         self.assertRaises(
-            ValueError, self.contact_manager.make_contact, b'not valid node id', '192.168.1.20.1', 1000, None)
+            ValueError, self.contact_manager.make_dht_peer, b'not valid node id', '192.168.1.20.1', 1000, None)
 
     def test_no_duplicate_contact_objects(self):
         self.assertIs(self.second_contact, self.second_contact_second_reference)
@@ -34,17 +34,17 @@ class ContactTest(unittest.TestCase):
     def test_boolean(self):
         """ Test "equals" and "not equals" comparisons """
         self.assertNotEqual(
-            self.first_contact, self.contact_manager.make_contact(
+            self.first_contact, self.contact_manager.make_dht_peer(
                 self.first_contact.id, self.first_contact.address, self.first_contact.port + 1, None, 32
             )
         )
         self.assertNotEqual(
-            self.first_contact, self.contact_manager.make_contact(
+            self.first_contact, self.contact_manager.make_dht_peer(
                 self.first_contact.id, '193.168.1.1', self.first_contact.port, None, 32
             )
         )
         self.assertNotEqual(
-            self.first_contact, self.contact_manager.make_contact(
+            self.first_contact, self.contact_manager.make_dht_peer(
                 generate_id(), self.first_contact.address, self.first_contact.port, None, 32
             )
         )
@@ -62,8 +62,8 @@ class ContactTest(unittest.TestCase):
 class TestContactLastReplied(unittest.TestCase):
     def setUp(self):
         self.clock = task.Clock()
-        self.contact_manager = ContactManager(self.clock.seconds)
-        self.contact = self.contact_manager.make_contact(generate_id(), "127.0.0.1", 4444, None)
+        self.contact_manager = PeerManager(self.clock.seconds)
+        self.contact = self.contact_manager.make_dht_peer(generate_id(), "127.0.0.1", 4444, None)
         self.clock.advance(3600)
         self.assertIsNone(self.contact.contact_is_good)
 
@@ -132,8 +132,8 @@ class TestContactLastReplied(unittest.TestCase):
 class TestContactLastRequested(unittest.TestCase):
     def setUp(self):
         self.clock = task.Clock()
-        self.contact_manager = ContactManager(self.clock.seconds)
-        self.contact = self.contact_manager.make_contact(generate_id(), "127.0.0.1", 4444, None)
+        self.contact_manager = PeerManager(self.clock.seconds)
+        self.contact = self.contact_manager.make_dht_peer(generate_id(), "127.0.0.1", 4444, None)
         self.clock.advance(1)
         self.contact.update_last_replied()
         self.clock.advance(3600)
