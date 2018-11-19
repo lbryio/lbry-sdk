@@ -2,7 +2,6 @@ import logging
 import asyncio
 from asyncio import wrap_future
 from concurrent.futures.thread import ThreadPoolExecutor
-from operator import itemgetter
 
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable
 

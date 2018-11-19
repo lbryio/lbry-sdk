@@ -160,7 +160,7 @@ class IntegrationTestCase(AsyncioTestCase):
     async def asyncTearDown(self):
         await self.conductor.stop()
 
-    async def assertBalance(self, account, expected_balance: str):
+    async def assertBalance(self, account, expected_balance: str):  # pylint: disable=C0103
         balance = await account.get_balance()
         self.assertEqual(satoshis_to_coins(balance), expected_balance)
 

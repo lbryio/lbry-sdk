@@ -52,18 +52,18 @@ class TransactionCacheItem:
     __slots__ = '_tx', 'lock', 'has_tx'
 
     def __init__(self,
-            tx: Optional[basetransaction.BaseTransaction] = None,
-            lock: Optional[asyncio.Lock] = None):
+                 tx: Optional[basetransaction.BaseTransaction] = None,
+                 lock: Optional[asyncio.Lock] = None):
         self.has_tx = asyncio.Event()
         self.lock = lock or asyncio.Lock()
-        self.tx = tx
+        self._tx = self.tx = tx
 
     @property
-    def tx(self):
+    def tx(self) -> Optional[basetransaction.BaseTransaction]:
         return self._tx
 
     @tx.setter
-    def tx(self, tx):
+    def tx(self, tx: basetransaction.BaseTransaction):
         self._tx = tx
         if tx is not None:
             self.has_tx.set()
@@ -251,11 +251,8 @@ class BaseLedger(metaclass=LedgerRegistry):
         log.info("Subscribing and updating accounts.")
         await self.update_headers()
         await self.network.subscribe_headers()
-        import time
-        start = time.time()
         await self.subscribe_accounts()
         await self.sync.done.wait()
-        log.info(f'elapsed: {time.time()-start}')
 
     async def stop(self):
         self.sync.cancel()
@@ -397,6 +394,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 if cache_item is not None:
                     if cache_item.tx is None:
                         await cache_item.has_tx.wait()
+                    assert cache_item.tx is not None
                     txi.txo_ref = cache_item.tx.outputs[txi.txo_ref.position].ref
                 else:
                     check_db_for_txos.append(txi.txo_ref.tx_ref.id)
@@ -409,7 +407,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 if txi.txo_ref.txo is not None:
                     continue
                 referenced_txo = referenced_txos.get(txi.txo_ref.tx_ref.id)
-                if referenced_txos:
+                if referenced_txo is not None:
                     txi.txo_ref = referenced_txo.ref
 
             synced_history.write(f'{tx.id}:{tx.height}:')
@@ -423,7 +421,8 @@ class BaseLedger(metaclass=LedgerRegistry):
         if address_manager is None:
             address_manager = await self.get_address_manager_for_address(address)
 
-        await address_manager.ensure_address_gap()
+        if address_manager is not None:
+            await address_manager.ensure_address_gap()
 
     async def cache_transaction(self, txid, remote_height):
         cache_item = self._tx_cache.get(txid)
@@ -456,7 +455,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             if tx is None:
                 raise ValueError(f'Transaction {txid} was not in database and not on network.')
 
-            if 0 < remote_height and not tx.is_verified:
+            if remote_height > 0 and not tx.is_verified:
                 # tx from cache / db is not up-to-date
                 await self.maybe_verify_transaction(tx, remote_height)
                 await self.db.update_transaction(tx)
@@ -475,11 +474,12 @@ class BaseLedger(metaclass=LedgerRegistry):
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
 
-    async def get_address_manager_for_address(self, address) -> baseaccount.AddressManager:
+    async def get_address_manager_for_address(self, address) -> Optional[baseaccount.AddressManager]:
         details = await self.db.get_address(address=address)
         for account in self.accounts:
             if account.id == details['account']:
                 return account.address_managers[details['chain']]
+        return None
 
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw).decode())
