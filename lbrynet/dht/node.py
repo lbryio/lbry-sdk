@@ -1,16 +1,18 @@
 import binascii
 import hashlib
 import logging
+import asyncio
+import typing
 from functools import reduce
-
+from collections import AsyncIterator
 from twisted.internet import defer, error, task
 
 from lbrynet.utils import generate_id, DeferredDict
 from lbrynet.dht.call_later_manager import CallLaterManager
 from lbrynet.dht.error import TimeoutError
 from lbrynet.dht import constants, routingtable, datastore, protocol
-from lbrynet.dht.contact import ContactManager
-from lbrynet.dht.iterativefind import iterativeFind
+from lbrynet.peer import PeerManager
+from lbrynet.dht.iterativefind import IterativeFinder
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ def rpcmethod(func):
 
 
 class MockKademliaHelper:
-    def __init__(self, clock=None, callLater=None, resolve=None, listenUDP=None):
+    def __init__(self, peer_manager: PeerManager, clock=None, callLater=None, resolve=None, listenUDP=None):
         if not listenUDP or not resolve or not callLater or not clock:
             from twisted.internet import reactor
             listenUDP = listenUDP or reactor.listenUDP
@@ -35,7 +37,7 @@ class MockKademliaHelper:
             clock = clock or reactor
 
         self.clock = clock
-        self.contact_manager = ContactManager(self.clock.seconds)
+        self.peer_manager: PeerManager = peer_manager
         self.reactor_listenUDP = listenUDP
         self.reactor_resolve = resolve
         self.call_later_manager = CallLaterManager(callLater)
@@ -75,7 +77,7 @@ class Node(MockKademliaHelper):
     application is performed via this class (or a subclass).
     """
 
-    def __init__(self, node_id=None, udpPort=4000, dataStore=None,
+    def __init__(self, peer_manager: PeerManager, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
                  externalIP=None, peerPort=3333, listenUDP=None,
                  callLater=None, resolve=None, clock=None,
@@ -105,7 +107,7 @@ class Node(MockKademliaHelper):
         @param peerPort: the port at which this node announces it has a blob for
         """
 
-        super().__init__(clock, callLater, resolve, listenUDP)
+        super().__init__(peer_manager, clock, callLater, resolve, listenUDP)
         self.node_id = node_id or self._generateID()
         self.port = udpPort
         self._listen_interface = interface
@@ -197,7 +199,7 @@ class Node(MockKademliaHelper):
                 if (host, port) not in contact_addresses:
                     # Create temporary contact information for the list of addresses of known nodes
                     # The contact node id will be set with the responding node id when we initialize it to None
-                    contact = self.contact_manager.make_contact(None, ip_address, port, self._protocol)
+                    contact = self.peer_manager.make_dht_peer(None, ip_address, port, self._protocol)
                     bootstrap_contacts.append(contact)
                 else:
                     for contact in self.contacts:
@@ -214,7 +216,7 @@ class Node(MockKademliaHelper):
                 defer.returnValue(None)
             else:
                 # find the closest peers to us
-                closest = yield self._iterativeFind(self.node_id, shortlist if not self.contacts else None)
+                closest = yield self.iterativeFindNode(self.node_id, shortlist if not self.contacts else None)
                 yield _ping_contacts(closest)
                 # query random hashes in our bucket key ranges to fill or split them
                 random_ids_in_range = self._routingTable.getRefreshList()
@@ -340,7 +342,7 @@ class Node(MockKademliaHelper):
                 return False
         return True
 
-    def iterativeFindNode(self, key):
+    def iterativeFindNode(self, key: bytes, shortlist: typing.Optional[typing.List] = None):
         """ The basic Kademlia node lookup operation
 
         Call this to find a remote node in the P2P overlay network.
@@ -354,53 +356,41 @@ class Node(MockKademliaHelper):
                  finished.
         @rtype: twisted.internet.defer.Deferred
         """
-        return self._iterativeFind(key)
 
-    @defer.inlineCallbacks
-    def iterativeFindValue(self, key, exclude=None):
+        return defer.Deferred.fromFuture(asyncio.ensure_future(
+            IterativeFinder.cumulative_find(self, shortlist if not self.contacts else None, key, 'findNode')
+        ))
+
+    def get_find_value_iterator(self, key: bytes, shortlist: typing.Optional[typing.List] = None) -> AsyncIterator:
+        return IterativeFinder.iterative_find(self, shortlist, key, 'findValue')
+
+    def iterativeFindValue(self, key: bytes):
         """ The Kademlia search operation (deterministic)
 
         Call this to retrieve data from the DHT.
 
         @param key: the n-bit key (i.e. the value ID) to search for
-        @type key: str
+        @type key: bytes
 
-        @return: This immediately returns a deferred object, which will return
-                 either one of two things:
-                     - If the value was found, it will return a Python
-                     dictionary containing the searched-for key (the C{key}
-                     parameter passed to this method), and its associated
-                     value, in the format:
-                     C{<str>key: <str>data_value}
-                     - If the value was not found, it will return a list of k
-                     "closest" contacts (C{kademlia.contact.Contact} objects)
-                     to the specified key
+        @return: list of BlobPeer objects
         @rtype: twisted.internet.defer.Deferred
         """
+        return defer.Deferred.fromFuture(asyncio.ensure_future(
+            IterativeFinder.cumulative_find(self, None, key, 'findValue')
+        ))
 
-        if len(key) != constants.key_bits // 8:
-            raise ValueError("invalid key length!")
+        # if self._dataStore.hasPeersForBlob(key):
+        #         # Ok, we have the value locally, so use that
+        #         # Send this value to the closest node without it
+        #         peers = self._dataStore.getPeersForBlob(key)
 
-        # Execute the search
-        find_result = yield self._iterativeFind(key, rpc='findValue', exclude=exclude)
-        if isinstance(find_result, dict):
-            # We have found the value; now see who was the closest contact without it...
-            # ...and store the key/value pair
-            pass
-        else:
-            # The value wasn't found, but a list of contacts was returned
-            # Now, see if we have the value (it might seem wasteful to search on the network
-            # first, but it ensures that all values are properly propagated through the
-            # network
-            if self._dataStore.hasPeersForBlob(key):
-                # Ok, we have the value locally, so use that
-                # Send this value to the closest node without it
-                peers = self._dataStore.getPeersForBlob(key)
-                find_result = {key: peers}
-            else:
-                pass
 
-        defer.returnValue(list(set(find_result.get(key, []) if find_result else [])))
+
+        #         find_result = {key: peers}
+        #     else:
+        #         pass
+        #
+        # defer.returnValue(list(set(find_result.get(key, []) if find_result else [])))
         # TODO: get this working
         # if 'closestNodeNoValue' in find_result:
         #     closest_node_without_value = find_result['closestNodeNoValue']
@@ -429,12 +419,12 @@ class Node(MockKademliaHelper):
         """
         self._routingTable.removeContact(contact)
 
-    def findContact(self, contactID):
+    def findContact(self, contactID: bytes):
         """ Find a entangled.kademlia.contact.Contact object for the specified
         cotact ID
 
         @param contactID: The contact ID of the required Contact object
-        @type contactID: str
+        @type contactID: bytes
 
         @return: Contact object of remote node with the specified node ID,
                  or None if the contact was not found
@@ -570,60 +560,6 @@ class Node(MockKademliaHelper):
         @rtype: str
         """
         return generate_id()
-
-    # from lbrynet.p2p.utils import profile_deferred
-    # @profile_deferred()
-    @defer.inlineCallbacks
-    def _iterativeFind(self, key, startupShortlist=None, rpc='findNode', exclude=None):
-        """ The basic Kademlia iterative lookup operation (for nodes/values)
-
-        This builds a list of k "closest" contacts through iterative use of
-        the "FIND_NODE" RPC, or if C{findValue} is set to C{True}, using the
-        "FIND_VALUE" RPC, in which case the value (if found) may be returned
-        instead of a list of contacts
-
-        @param key: the n-bit key (i.e. the node or value ID) to search for
-        @type key: str
-        @param startupShortlist: A list of contacts to use as the starting
-                                 shortlist for this search; this is normally
-                                 only used when the node joins the network
-        @type startupShortlist: list
-        @param rpc: The name of the RPC to issue to remote nodes during the
-                    Kademlia lookup operation (e.g. this sets whether this
-                    algorithm should search for a data value (if
-                    rpc='findValue') or not. It can thus be used to perform
-                    other operations that piggy-back on the basic Kademlia
-                    lookup operation (Entangled's "delete" RPC, for instance).
-        @type rpc: str
-
-        @return: If C{findValue} is C{True}, the algorithm will stop as soon
-                 as a data value for C{key} is found, and return a dictionary
-                 containing the key and the found value. Otherwise, it will
-                 return a list of the k closest nodes to the specified key
-        @rtype: twisted.internet.defer.Deferred
-        """
-
-        if len(key) != constants.key_bits // 8:
-            raise ValueError("invalid key length: %i" % len(key))
-
-        if startupShortlist is None:
-            shortlist = self._routingTable.findCloseNodes(key)
-            # if key != self.node_id:
-            #     # Update the "last accessed" timestamp for the appropriate k-bucket
-            #     self._routingTable.touchKBucket(key)
-            if len(shortlist) == 0:
-                log.warning("This node doesn't know any other nodes")
-                # This node doesn't know of any other nodes
-                fakeDf = defer.Deferred()
-                fakeDf.callback([])
-                result = yield fakeDf
-                defer.returnValue(result)
-        else:
-            # This is used during the bootstrap process
-            shortlist = startupShortlist
-
-        result = yield iterativeFind(self, shortlist, key, rpc, exclude=exclude)
-        defer.returnValue(result)
 
     @defer.inlineCallbacks
     def _refreshNode(self):

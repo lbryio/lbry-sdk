@@ -1,6 +1,10 @@
 import ipaddress
+import typing
 from binascii import hexlify
 from functools import reduce
+import datetime
+from collections import defaultdict
+from lbrynet import utils
 from lbrynet.dht import constants
 
 
@@ -12,7 +16,51 @@ def is_valid_ipv4(address):
         return False
 
 
-class _Contact:
+class BlobPeer:
+    def __init__(self, node_id: bytes, host: str, port: int):
+        self.node_id = node_id
+        self.host = host
+        self.port = port
+        # If a peer is reported down, we wait till this time till reattempting connection
+        self.attempt_connection_at = None
+        # Number of times this Peer has been reported to be down, resets to 0 when it is up
+        self.down_count = 0
+        # Number of successful connections (with full protocol completion) to this peer
+        self.success_count = 0
+        self.score = 0
+        self.stats = defaultdict(float)  # {string stat_type, float count}
+
+    def is_available(self):
+        if self.attempt_connection_at is None or utils.today() > self.attempt_connection_at:
+            return True
+        return False
+
+    def report_up(self):
+        self.down_count = 0
+        self.attempt_connection_at = None
+
+    def report_success(self):
+        self.success_count += 1
+
+    def report_down(self):
+        self.down_count += 1
+        timeout_time = datetime.timedelta(seconds=60 * self.down_count)
+        self.attempt_connection_at = utils.today() + timeout_time
+
+    def update_score(self, score_change):
+        self.score += score_change
+
+    def update_stats(self, stat_type, count):
+        self.stats[stat_type] += count
+
+    def __str__(self):
+        return f'{self.host}:{self.port}'
+
+    def __repr__(self):
+        return f'Peer({self.host!r}, {self.port!r})'
+
+
+class DHTPeer:
     """ Encapsulation for remote contact
 
     This class contains information on a single remote contact, and also
@@ -97,7 +145,7 @@ class _Contact:
         return None
 
     def __eq__(self, other):
-        if not isinstance(other, _Contact):
+        if not isinstance(other, DHTPeer):
             raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
         return (self.id, self.address, self.port) == (other.id, other.address, other.port)
 
@@ -155,7 +203,7 @@ class _Contact:
         return _sendRPC
 
 
-class ContactManager:
+class PeerManager:
     def __init__(self, get_time=None):
         if not get_time:
             from twisted.internet import reactor
@@ -163,27 +211,33 @@ class ContactManager:
         self._get_time = get_time
         self._contacts = {}
         self._rpc_failures = {}
+        self._blob_peers = {}
 
-    def get_contact(self, id, address, port):
+    def get_contact(self, id, address, port) -> DHTPeer:
         for contact in self._contacts.values():
             if contact.id == id and contact.address == address and contact.port == port:
                 return contact
 
-    def make_contact(self, id, ipAddress, udpPort, networkProtocol, firstComm=0):
+    def make_dht_peer(self, id, ipAddress, udpPort, networkProtocol, firstComm=0) -> DHTPeer:
         contact = self.get_contact(id, ipAddress, udpPort)
         if contact:
             return contact
-        contact = _Contact(self, id, ipAddress, udpPort, networkProtocol, firstComm or self._get_time())
+        contact = DHTPeer(self, id, ipAddress, udpPort, networkProtocol, firstComm or self._get_time())
         self._contacts[(id, ipAddress, udpPort)] = contact
         return contact
 
-    def is_ignored(self, origin_tuple):
+    def is_ignored(self, origin_tuple) -> bool:
         failed_rpc_count = len(self._prune_failures(origin_tuple))
         return failed_rpc_count > constants.rpcAttempts
 
-    def _prune_failures(self, origin_tuple):
+    def _prune_failures(self, origin_tuple) -> typing.List:
         # Prunes recorded failures to the last time window of attempts
         pruning_limit = self._get_time() - constants.rpcAttemptsPruningTimeWindow
         pruned = list(filter(lambda t: t >= pruning_limit, self._rpc_failures.get(origin_tuple, [])))
         self._rpc_failures[origin_tuple] = pruned
         return pruned
+
+    def make_blob_peer(self, dht_peer_id: bytes, host: str, port: int) -> BlobPeer:
+        if (host, port) in self._blob_peers:
+            return self._blob_peers[(host, port)]
+        return BlobPeer(dht_peer_id, host, port)

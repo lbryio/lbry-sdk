@@ -35,7 +35,7 @@ from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.p2p.StreamDescriptor import download_sd_blob
 from lbrynet.p2p.Error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.p2p.Error import NullFundsError, NegativeFundsError, ResolveError
-from lbrynet.p2p.Peer import Peer
+from lbrynet.peer import BlobPeer
 from lbrynet.p2p.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.schema.claim import ClaimDict
@@ -645,7 +645,7 @@ class Daemon(AuthJSONRPCServer):
         unreachable_peers = []
         try:
             peers = yield self.jsonrpc_peer_list(blob_hash, search_timeout)
-            peer_infos = [{"peer": Peer(x['host'], x['port']),
+            peer_infos = [{"peer": BlobPeer(x['host'], x['port']),
                            "blob_hash": blob_hash,
                            "timeout": blob_timeout} for x in peers]
             dl = []
@@ -2823,6 +2823,7 @@ class Daemon(AuthJSONRPCServer):
         return "Deleted %s" % blob_hash
 
     @requires(DHT_COMPONENT)
+    @defer.inlineCallbacks
     def jsonrpc_peer_list(self, blob_hash, timeout=None):
         """
         Get peers for blob hash
@@ -2841,7 +2842,17 @@ class Daemon(AuthJSONRPCServer):
         if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
-        return self.component_manager.peer_finder.find_peers_for_blob(blob_hash)
+        import binascii
+
+        peers = yield self.dht_node.iterativeFindValue(binascii.unhexlify(blob_hash))
+        return [
+            {
+                "node_id": hexlify(blob_peer.node_id).decode(),
+                "host": blob_peer.host,
+                "port": blob_peer.port
+            }
+            for blob_peer in peers
+        ]
         # finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
         #
         # def trap_timeout(err):
@@ -3055,9 +3066,9 @@ class Daemon(AuthJSONRPCServer):
 
         contact = None
         if node_id and address and port:
-            contact = self.dht_node.contact_manager.get_contact(unhexlify(node_id), address, int(port))
+            contact = self.dht_node.peer_manager.get_dht_peer(unhexlify(node_id), address, int(port))
             if not contact:
-                contact = self.dht_node.contact_manager.make_contact(
+                contact = self.dht_node.peer_manager.make_dht_peer(
                     unhexlify(node_id), address, int(port), self.dht_node._protocol
                 )
         if not contact:

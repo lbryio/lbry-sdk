@@ -44,28 +44,29 @@ class DHTPeerFinder(DummyPeerFinder):
             return defer.succeed([])
         dht_node = self.component_manager.get_component("dht")
 
-        self.peers.setdefault(blob_hash, {(dht_node.externalIP, dht_node.peerPort,)})
-        if not blob_hash in self._ongoing_searchs or self._ongoing_searchs[blob_hash].called:
-            self._ongoing_searchs[blob_hash] = self._execute_peer_search(dht_node, blob_hash, timeout)
+        return self._execute_peer_search(dht_node, blob_hash, timeout)
+        # self.peers.setdefault(blob_hash, {(dht_node.externalIP, dht_node.peerPort,)})
+        # if not blob_hash in self._ongoing_searchs or self._ongoing_searchs[blob_hash].called:
+        #     self._ongoing_searchs[blob_hash] = self._execute_peer_search(dht_node, blob_hash, timeout)
+        #
+        # def _filter_self(blob_hash):
+        #     my_host, my_port = dht_node.externalIP, dht_node.peerPort
+        #     return {(host, port) for host, port in self.peers[blob_hash] if (host, port) != (my_host, my_port)}
+        #
+        # peers = set(_filter_self(blob_hash) if filter_self else self.peers[blob_hash])
+        # return defer.succeed([self.peer_manager.make_blob_peer(*peer) for peer in peers])
 
-        def _filter_self(blob_hash):
-            my_host, my_port = dht_node.externalIP, dht_node.peerPort
-            return {(host, port) for host, port in self.peers[blob_hash] if (host, port) != (my_host, my_port)}
-
-        peers = set(_filter_self(blob_hash) if filter_self else self.peers[blob_hash])
-        return defer.succeed([self.peer_manager.get_peer(*peer) for peer in peers])
-
-    @defer.inlineCallbacks
+    # @defer.inlineCallbacks
     def _execute_peer_search(self, dht_node, blob_hash, timeout):
         bin_hash = binascii.unhexlify(blob_hash)
-        finished_deferred = dht_node.iterativeFindValue(bin_hash, exclude=self.peers[blob_hash])
-        timeout = timeout or conf.settings['peer_search_timeout']
-        if timeout:
-            finished_deferred.addTimeout(timeout, dht_node.clock)
-        try:
-            peer_list = yield finished_deferred
-            self.peers[blob_hash].update({(host, port) for _, host, port in peer_list})
-        except defer.TimeoutError:
-            log.debug("DHT timed out while looking peers for blob %s after %s seconds", blob_hash, timeout)
-        finally:
-            del self._ongoing_searchs[blob_hash]
+        return dht_node.iterativeFindValue(bin_hash)
+        # timeout = timeout or conf.settings['peer_search_timeout']
+        # if timeout:
+        #     finished_deferred.addTimeout(timeout, dht_node.clock)
+        # try:
+        #     peer_list = yield finished_deferred
+        #     self.peers[blob_hash].update({(host, port) for _, host, port in peer_list})
+        # except defer.TimeoutError:
+        #     log.debug("DHT timed out while looking peers for blob %s after %s seconds", blob_hash, timeout)
+        # finally:
+        #     del self._ongoing_searchs[blob_hash]

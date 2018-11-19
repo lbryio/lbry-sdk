@@ -240,7 +240,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
         if isinstance(message, msgtypes.RequestMessage):
             # This is an RPC method request
-            remoteContact = self._node.contact_manager.make_contact(message.nodeID, address[0], address[1], self)
+            remoteContact = self._node.peer_manager.make_dht_peer(message.nodeID, address[0], address[1], self)
             remoteContact.update_last_requested()
             # only add a requesting contact to the routing table if it has replied to one of our requests
             if remoteContact.contact_is_good is True:

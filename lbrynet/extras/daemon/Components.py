@@ -448,6 +448,7 @@ class DHTComponent(Component):
                 log.warning("failed to get external ip")
 
         self.dht_node = Node(
+            self.component_manager.peer_manager,
             node_id=node_id,
             udpPort=GCS('dht_node_port'),
             externalUDPPort=self.external_udp_port,
