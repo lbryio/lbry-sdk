@@ -112,7 +112,7 @@ class Conductor:
 class WalletNode:
 
     def __init__(self, manager_class: Type[BaseWalletManager], ledger_class: Type[BaseLedger],
-                 verbose: bool = False) -> None:
+                 verbose: bool = False, api_port: int = 5279) -> None:
         self.manager_class = manager_class
         self.ledger_class = ledger_class
         self.verbose = verbose
@@ -121,8 +121,9 @@ class WalletNode:
         self.wallet: Optional[Wallet] = None
         self.account: Optional[BaseAccount] = None
         self.data_path: Optional[str] = None
+        self.api_port = api_port
 
-    async def start(self):
+    async def start(self, seed=None):
         self.data_path = tempfile.mkdtemp()
         wallet_file_name = os.path.join(self.data_path, 'my_wallet.json')
         with open(wallet_file_name, 'w') as wallet_file:
@@ -130,6 +131,7 @@ class WalletNode:
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
+                    'api_port': self.api_port,
                     'default_servers': [('localhost', 1984)],
                     'data_path': self.data_path
                 }
@@ -138,7 +140,12 @@ class WalletNode:
         })
         self.ledger = self.manager.ledgers[self.ledger_class]
         self.wallet = self.manager.default_wallet
-        self.wallet.generate_account(self.ledger)
+        if seed is None:
+            self.wallet.generate_account(self.ledger)
+        else:
+            self.ledger.account_class.from_dict(
+                self.ledger, self.wallet, {'seed': seed}
+            )
         self.account = self.wallet.default_account
         await self.manager.start()
 

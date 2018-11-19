@@ -9,6 +9,7 @@ from torba.client.baseledger import BaseLedger
 from torba.client.baseaccount import BaseAccount
 from torba.client.basemanager import BaseWalletManager
 from torba.client.wallet import Wallet
+from torba.client.util import satoshis_to_coins
 
 
 try:
@@ -159,14 +160,12 @@ class IntegrationTestCase(AsyncioTestCase):
     async def asyncTearDown(self):
         await self.conductor.stop()
 
+    async def assertBalance(self, account, expected_balance: str):
+        balance = await account.get_balance()
+        self.assertEqual(satoshis_to_coins(balance), expected_balance)
+
     def broadcast(self, tx):
         return self.ledger.broadcast(tx)
-
-    def get_balance(self, account=None, confirmations=0):
-        if account is None:
-            return self.manager.get_balance(confirmations=confirmations)
-        else:
-            return account.get_balance(confirmations=confirmations)
 
     async def on_header(self, height):
         if self.ledger.headers.height < height:
@@ -175,8 +174,8 @@ class IntegrationTestCase(AsyncioTestCase):
             )
         return True
 
-    def on_transaction_id(self, txid):
-        return self.ledger.on_transaction.where(
+    def on_transaction_id(self, txid, ledger=None):
+        return (ledger or self.ledger).on_transaction.where(
             lambda e: e.tx.id == txid
         )
 

@@ -261,14 +261,14 @@ class TransactionIOBalancing(AsyncioTestCase):
             .add_inputs([self.txi(self.txo(sum(amounts)+0.1))]) \
             .add_outputs(utxos)
 
-        save_tx = 'insert'
+        await self.ledger.db.insert_transaction(self.funding_tx)
+
         for utxo in utxos:
             await self.ledger.db.save_transaction_io(
-                save_tx, self.funding_tx,
+                self.funding_tx,
                 self.ledger.hash160_to_address(utxo.script.values['pubkey_hash']),
                 utxo.script.values['pubkey_hash'], ''
             )
-            save_tx = 'update'
 
         return utxos
 

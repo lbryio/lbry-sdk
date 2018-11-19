@@ -16,6 +16,7 @@ class MockNetwork:
         self.address = None
         self.get_history_called = []
         self.get_transaction_called = []
+        self.is_connected = False
 
     async def get_history(self, address):
         self.get_history_called.append(address)
@@ -85,16 +86,21 @@ class TestSynchronization(LedgerTestCase):
             'abcd02': hexlify(get_transaction(get_output(2)).raw),
             'abcd03': hexlify(get_transaction(get_output(3)).raw),
         })
-        await self.ledger.update_history(address)
+        await self.ledger.update_history(address, '')
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, ['abcd01', 'abcd02', 'abcd03'])
 
         address_details = await self.ledger.db.get_address(address=address)
-        self.assertEqual(address_details['history'], 'abcd01:0:abcd02:1:abcd03:2:')
+        self.assertEqual(
+            address_details['history'],
+            '252bda9b22cc902ca2aa2de3548ee8baf06b8501ff7bfb3b0b7d980dbd1bf792:0:'
+            'ab9c0654dd484ac20437030f2034e25dcb29fc507e84b91138f80adc3af738f9:1:'
+            'a2ae3d1db3c727e7d696122cab39ee20a7f81856dab7019056dd539f38c548a0:2:'
+        )
 
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
-        await self.ledger.update_history(address)
+        await self.ledger.update_history(address, '')
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, [])
 
@@ -102,11 +108,17 @@ class TestSynchronization(LedgerTestCase):
         self.ledger.network.transaction['abcd04'] = hexlify(get_transaction(get_output(4)).raw)
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
-        await self.ledger.update_history(address)
+        await self.ledger.update_history(address, '')
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, ['abcd04'])
         address_details = await self.ledger.db.get_address(address=address)
-        self.assertEqual(address_details['history'], 'abcd01:0:abcd02:1:abcd03:2:abcd04:3:')
+        self.assertEqual(
+            address_details['history'],
+            '252bda9b22cc902ca2aa2de3548ee8baf06b8501ff7bfb3b0b7d980dbd1bf792:0:'
+            'ab9c0654dd484ac20437030f2034e25dcb29fc507e84b91138f80adc3af738f9:1:'
+            'a2ae3d1db3c727e7d696122cab39ee20a7f81856dab7019056dd539f38c548a0:2:'
+            '047cf1d53ef68f0fd586d46f90c09ff8e57a4180f67e7f4b8dd0135c3741e828:3:'
+        )
 
 
 class MocHeaderNetwork:

@@ -44,7 +44,8 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         self.assertEqual(len(addresses), 26)
 
     async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
-        await self.account.receiving.generate_keys(0, 200)
+        async with self.account.receiving.address_generator_lock:
+            await self.account.receiving._generate_keys(0, 200)
         records = await self.account.receiving.get_address_records()
         self.assertEqual(201, len(records))
 
@@ -53,9 +54,10 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
 
         self.assertIsInstance(account.receiving, HierarchicalDeterministic)
 
-        await account.receiving.generate_keys(4, 7)
-        await account.receiving.generate_keys(0, 3)
-        await account.receiving.generate_keys(8, 11)
+        async with account.receiving.address_generator_lock:
+            await account.receiving._generate_keys(4, 7)
+            await account.receiving._generate_keys(0, 3)
+            await account.receiving._generate_keys(8, 11)
         records = await account.receiving.get_address_records()
         self.assertEqual(
             [r['position'] for r in records],

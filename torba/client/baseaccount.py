@@ -1,6 +1,7 @@
+import asyncio
 import random
 import typing
-from typing import Dict, Tuple, Type, Optional, Any
+from typing import Dict, Tuple, Type, Optional, Any, List
 
 from torba.client.mnemonic import Mnemonic
 from torba.client.bip32 import PrivateKey, PubKey, from_extended_key_string
@@ -15,12 +16,13 @@ class AddressManager:
 
     name: str
 
-    __slots__ = 'account', 'public_key', 'chain_number'
+    __slots__ = 'account', 'public_key', 'chain_number', 'address_generator_lock'
 
     def __init__(self, account, public_key, chain_number):
         self.account = account
         self.public_key = public_key
         self.chain_number = chain_number
+        self.address_generator_lock = asyncio.Lock()
 
     @classmethod
     def from_dict(cls, account: 'BaseAccount', d: dict) \
@@ -60,11 +62,11 @@ class AddressManager:
     def get_address_records(self, only_usable: bool = False, **constraints):
         raise NotImplementedError
 
-    async def get_addresses(self, only_usable: bool = False, **constraints):
+    async def get_addresses(self, only_usable: bool = False, **constraints) -> List[str]:
         records = await self.get_address_records(only_usable=only_usable, **constraints)
         return [r['address'] for r in records]
 
-    async def get_or_create_usable_address(self):
+    async def get_or_create_usable_address(self) -> str:
         addresses = await self.get_addresses(only_usable=True, limit=10)
         if addresses:
             return random.choice(addresses)
@@ -87,8 +89,8 @@ class HierarchicalDeterministic(AddressManager):
     @classmethod
     def from_dict(cls, account: 'BaseAccount', d: dict) -> Tuple[AddressManager, AddressManager]:
         return (
-            cls(account, 0, **d.get('receiving', {'gap': 20, 'maximum_uses_per_address': 2})),
-            cls(account, 1, **d.get('change', {'gap': 6, 'maximum_uses_per_address': 2}))
+            cls(account, 0, **d.get('receiving', {'gap': 20, 'maximum_uses_per_address': 1})),
+            cls(account, 1, **d.get('change', {'gap': 6, 'maximum_uses_per_address': 1}))
         )
 
     def to_dict_instance(self):
@@ -97,19 +99,7 @@ class HierarchicalDeterministic(AddressManager):
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key.child(self.chain_number).child(index)
 
-    async def generate_keys(self, start: int, end: int):
-        keys_batch, final_keys = [], []
-        for index in range(start, end+1):
-            keys_batch.append((index, self.public_key.child(index)))
-            if index % 180 == 0 or index == end:
-                await self.account.ledger.db.add_keys(
-                    self.account, self.chain_number, keys_batch
-                )
-                final_keys.extend(keys_batch)
-                keys_batch.clear()
-        return [key[1].address for key in final_keys]
-
-    async def get_max_gap(self):
+    async def get_max_gap(self) -> int:
         addresses = await self._query_addresses(order_by="position ASC")
         max_gap = 0
         current_gap = 0
@@ -121,27 +111,43 @@ class HierarchicalDeterministic(AddressManager):
                 current_gap = 0
         return max_gap
 
-    async def ensure_address_gap(self):
-        addresses = await self._query_addresses(limit=self.gap, order_by="position DESC")
+    async def ensure_address_gap(self) -> List[str]:
+        async with self.address_generator_lock:
+            addresses = await self._query_addresses(limit=self.gap, order_by="position DESC")
 
-        existing_gap = 0
-        for address in addresses:
-            if address['used_times'] == 0:
-                existing_gap += 1
-            else:
-                break
+            existing_gap = 0
+            for address in addresses:
+                if address['used_times'] == 0:
+                    existing_gap += 1
+                else:
+                    break
 
-        if existing_gap == self.gap:
-            return []
+            if existing_gap == self.gap:
+                return []
 
-        start = addresses[0]['position']+1 if addresses else 0
-        end = start + (self.gap - existing_gap)
-        new_keys = await self.generate_keys(start, end-1)
-        return new_keys
+            start = addresses[0]['position']+1 if addresses else 0
+            end = start + (self.gap - existing_gap)
+            new_keys = await self._generate_keys(start, end-1)
+            await self.account.ledger.subscribe_addresses(self, new_keys)
+            return new_keys
+
+    async def _generate_keys(self, start: int, end: int) -> List[str]:
+        if not self.address_generator_lock.locked():
+            raise RuntimeError('Should not be called outside of address_generator_lock.')
+        keys_batch, final_keys = [], []
+        for index in range(start, end+1):
+            keys_batch.append((index, self.public_key.child(index)))
+            if index % 180 == 0 or index == end:
+                await self.account.ledger.db.add_keys(
+                    self.account, self.chain_number, keys_batch
+                )
+                final_keys.extend(keys_batch)
+                keys_batch.clear()
+        return [key[1].address for key in final_keys]
 
     def get_address_records(self, only_usable: bool = False, **constraints):
         if only_usable:
-            constraints['used_times__lte'] = self.maximum_uses_per_address
+            constraints['used_times__lt'] = self.maximum_uses_per_address
         return self._query_addresses(order_by="used_times ASC, position ASC", **constraints)
 
 
@@ -164,17 +170,20 @@ class SingleKey(AddressManager):
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key
 
-    async def get_max_gap(self):
+    async def get_max_gap(self) -> int:
         return 0
 
-    async def ensure_address_gap(self):
-        exists = await self.get_address_records()
-        if not exists:
-            await self.account.ledger.db.add_keys(
-                self.account, self.chain_number, [(0, self.public_key)]
-            )
-            return [self.public_key.address]
-        return []
+    async def ensure_address_gap(self) -> List[str]:
+        async with self.address_generator_lock:
+            exists = await self.get_address_records()
+            if not exists:
+                await self.account.ledger.db.add_keys(
+                    self.account, self.chain_number, [(0, self.public_key)]
+                )
+                new_keys = [self.public_key.address]
+                await self.account.ledger.subscribe_addresses(self, new_keys)
+                return new_keys
+            return []
 
     def get_address_records(self, only_usable: bool = False, **constraints):
         return self._query_addresses(**constraints)
@@ -211,7 +220,7 @@ class BaseAccount:
         generator_name = address_generator.get('name', HierarchicalDeterministic.name)
         self.address_generator = self.address_generators[generator_name]
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
-        self.address_managers = {self.receiving, self.change}
+        self.address_managers = {am.chain_number: am for am in {self.receiving, self.change}}
         ledger.add_account(self)
         wallet.add_account(self)
 
@@ -320,12 +329,12 @@ class BaseAccount:
 
     async def ensure_address_gap(self):
         addresses = []
-        for address_manager in self.address_managers:
+        for address_manager in self.address_managers.values():
             new_addresses = await address_manager.ensure_address_gap()
             addresses.extend(new_addresses)
         return addresses
 
-    async def get_addresses(self, **constraints):
+    async def get_addresses(self, **constraints) -> List[str]:
         rows = await self.ledger.db.select_addresses('address', account=self, **constraints)
         return [r[0] for r in rows]
 
@@ -337,8 +346,7 @@ class BaseAccount:
 
     def get_private_key(self, chain: int, index: int) -> PrivateKey:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
-        address_manager = {0: self.receiving, 1: self.change}[chain]
-        return address_manager.get_private_key(index)
+        return self.address_managers[chain].get_private_key(index)
 
     def get_balance(self, confirmations: int = 0, **constraints):
         if confirmations > 0:

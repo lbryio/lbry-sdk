@@ -10,10 +10,10 @@ class BasicTransactionTests(IntegrationTestCase):
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)
-        await self.ledger.update_account(account2)
+        await self.ledger.subscribe_account(account2)
 
-        self.assertEqual(await self.get_balance(account1), 0)
-        self.assertEqual(await self.get_balance(account2), 0)
+        await self.assertBalance(account1, '0.0')
+        await self.assertBalance(account2, '0.0')
 
         sendtxids = []
         for i in range(5):
@@ -26,8 +26,8 @@ class BasicTransactionTests(IntegrationTestCase):
             self.on_transaction_id(txid) for txid in sendtxids
         ])
 
-        self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 5.5)
-        self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 0)
+        await self.assertBalance(account1, '5.5')
+        await self.assertBalance(account2, '0.0')
 
         address2 = await account2.receiving.get_or_create_usable_address()
         hash2 = self.ledger.address_to_hash160(address2)
@@ -41,8 +41,8 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.ledger.wait(tx)  # confirmed
 
-        self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 3.5)
-        self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 2.0)
+        await self.assertBalance(account1, '3.499802')
+        await self.assertBalance(account2, '2.0')
 
         utxos = await self.account.get_utxos()
         tx = await self.ledger.transaction_class.create(

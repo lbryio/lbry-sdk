@@ -1,5 +1,25 @@
+import re
 from binascii import unhexlify, hexlify
 from typing import TypeVar, Sequence, Optional
+from torba.client.constants import COIN
+
+
+def coins_to_satoshis(coins):
+    if not isinstance(coins, str):
+        raise ValueError("{coins} must be a string")
+    result = re.search(r'^(\d{1,10})\.(\d{1,8})$', coins)
+    if result is not None:
+        whole, fractional = result.groups()
+        return int(whole+fractional.ljust(8, "0"))
+    raise ValueError("'{lbc}' is not a valid coin decimal")
+
+
+def satoshis_to_coins(satoshis):
+    coins = '{:.8f}'.format(satoshis / COIN).rstrip('0')
+    if coins.endswith('.'):
+        return coins+'0'
+    else:
+        return coins
 
 
 T = TypeVar('T')

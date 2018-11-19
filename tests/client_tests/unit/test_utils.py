@@ -1,6 +1,41 @@
 import unittest
 
 from torba.client.util import ArithUint256
+from torba.client.util import coins_to_satoshis as c2s, satoshis_to_coins as s2c
+
+
+class TestCoinValueParsing(unittest.TestCase):
+
+    def test_good_output(self):
+        self.assertEqual(s2c(1), "0.00000001")
+        self.assertEqual(s2c(10**7), "0.1")
+        self.assertEqual(s2c(2*10**8), "2.0")
+        self.assertEqual(s2c(2*10**17), "2000000000.0")
+
+    def test_good_input(self):
+        self.assertEqual(c2s("0.00000001"), 1)
+        self.assertEqual(c2s("0.1"), 10**7)
+        self.assertEqual(c2s("1.0"), 10**8)
+        self.assertEqual(c2s("2.00000000"), 2*10**8)
+        self.assertEqual(c2s("2000000000.0"), 2*10**17)
+
+    def test_bad_input(self):
+        with self.assertRaises(ValueError):
+            c2s("1")
+        with self.assertRaises(ValueError):
+            c2s("-1.0")
+        with self.assertRaises(ValueError):
+            c2s("10000000000.0")
+        with self.assertRaises(ValueError):
+            c2s("1.000000000")
+        with self.assertRaises(ValueError):
+            c2s("-0")
+        with self.assertRaises(ValueError):
+            c2s("1")
+        with self.assertRaises(ValueError):
+            c2s(".1")
+        with self.assertRaises(ValueError):
+            c2s("1e-7")
 
 
 class TestArithUint256(unittest.TestCase):

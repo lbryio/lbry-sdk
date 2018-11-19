@@ -29,18 +29,18 @@ class BroadcastSubscription:
 
     def _add(self, data):
         if self.can_fire and self._on_data is not None:
-            maybe_coroutine = self._on_data(data)
-            if asyncio.iscoroutine(maybe_coroutine):
-                asyncio.ensure_future(maybe_coroutine)
+            return self._on_data(data)
 
     def _add_error(self, exception):
         if self.can_fire and self._on_error is not None:
-            self._on_error(exception)
+            return self._on_error(exception)
 
     def _close(self):
-        if self.can_fire and self._on_done is not None:
-            self._on_done()
-        self.is_closed = True
+        try:
+            if self.can_fire and self._on_done is not None:
+                return self._on_done()
+        finally:
+            self.is_closed = True
 
 
 class StreamController:
@@ -62,13 +62,28 @@ class StreamController:
             next_sub = next_sub._next
             yield subscription
 
-    def add(self, event):
+    def _notify_and_ensure_future(self, notify):
+        tasks = []
         for subscription in self._iterate_subscriptions:
-            subscription._add(event)
+            maybe_coroutine = notify(subscription)
+            if asyncio.iscoroutine(maybe_coroutine):
+                tasks.append(maybe_coroutine)
+        if tasks:
+            return asyncio.ensure_future(asyncio.wait(tasks))
+        else:
+            f = asyncio.get_event_loop().create_future()
+            f.set_result(None)
+            return f
+
+    def add(self, event):
+        return self._notify_and_ensure_future(
+            lambda subscription: subscription._add(event)
+        )
 
     def add_error(self, exception):
-        for subscription in self._iterate_subscriptions:
-            subscription._add_error(exception)
+        return self._notify_and_ensure_future(
+            lambda subscription: subscription._add_error(exception)
+        )
 
     def close(self):
         for subscription in self._iterate_subscriptions:

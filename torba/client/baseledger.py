@@ -5,7 +5,7 @@ from functools import partial
 from binascii import hexlify, unhexlify
 from io import StringIO
 
-from typing import Dict, Type, Iterable
+from typing import Dict, Type, Iterable, List, Optional
 from operator import itemgetter
 from collections import namedtuple
 
@@ -48,6 +48,51 @@ class BlockHeightEvent(namedtuple('BlockHeightEvent', ('height', 'change'))):
     pass
 
 
+class TransactionCacheItem:
+    __slots__ = '_tx', 'lock', 'has_tx'
+
+    def __init__(self,
+            tx: Optional[basetransaction.BaseTransaction] = None,
+            lock: Optional[asyncio.Lock] = None):
+        self.has_tx = asyncio.Event()
+        self.lock = lock or asyncio.Lock()
+        self.tx = tx
+
+    @property
+    def tx(self):
+        return self._tx
+
+    @tx.setter
+    def tx(self, tx):
+        self._tx = tx
+        if tx is not None:
+            self.has_tx.set()
+
+
+class SynchronizationMonitor:
+
+    def __init__(self):
+        self.done = asyncio.Event()
+        self.tasks = []
+
+    def add(self, coro):
+        len(self.tasks) < 1 and self.done.clear()
+        asyncio.ensure_future(self._monitor(coro))
+
+    def cancel(self):
+        for task in self.tasks:
+            task.cancel()
+
+    async def _monitor(self, coro):
+        task = asyncio.ensure_future(coro)
+        self.tasks.append(task)
+        try:
+            await task
+        finally:
+            self.tasks.remove(task)
+            len(self.tasks) < 1 and self.done.set()
+
+
 class BaseLedger(metaclass=LedgerRegistry):
 
     name: str
@@ -79,7 +124,8 @@ class BaseLedger(metaclass=LedgerRegistry):
         )
         self.network = self.config.get('network') or self.network_class(self)
         self.network.on_header.listen(self.receive_header)
-        self.network.on_status.listen(self.receive_status)
+        self.network.on_status.listen(self.process_status_update)
+
         self.accounts = []
         self.fee_per_byte: int = self.config.get('fee_per_byte', self.default_fee_per_byte)
 
@@ -101,7 +147,8 @@ class BaseLedger(metaclass=LedgerRegistry):
             )
         )
 
-        self._transaction_processing_locks = {}
+        self._tx_cache = {}
+        self.sync = SynchronizationMonitor()
         self._utxo_reservation_lock = asyncio.Lock()
         self._header_processing_lock = asyncio.Lock()
 
@@ -166,16 +213,14 @@ class BaseLedger(metaclass=LedgerRegistry):
     def release_outputs(self, txos):
         return self.db.release_outputs(txos)
 
-    async def get_local_status(self, address):
-        address_details = await self.db.get_address(address=address)
-        history = address_details['history']
-        return hexlify(sha256(history.encode())).decode() if history else None
-
-    async def get_local_history(self, address):
+    async def get_local_status_and_history(self, address):
         address_details = await self.db.get_address(address=address)
         history = address_details['history'] or ''
         parts = history.split(':')[:-1]
-        return list(zip(parts[0::2], map(int, parts[1::2])))
+        return (
+            hexlify(sha256(history.encode())).decode() if history else None,
+            list(zip(parts[0::2], map(int, parts[1::2])))
+        )
 
     @staticmethod
     def get_root_of_merkle_tree(branches, branch_positions, working_branch):
@@ -189,21 +234,13 @@ class BaseLedger(metaclass=LedgerRegistry):
             working_branch = double_sha256(combined)
         return hexlify(working_branch[::-1])
 
-    async def validate_transaction_and_set_position(self, tx, height, merkle):
-        if not height <= len(self.headers):
-            return False
-        merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
-        header = self.headers[height]
-        tx.position = merkle['pos']
-        tx.is_verified = merkle_root == header['merkle_root']
-
     async def start(self):
         if not os.path.exists(self.path):
             os.mkdir(self.path)
-        await asyncio.gather(
+        await asyncio.wait([
             self.db.open(),
             self.headers.open()
-        )
+        ])
         first_connection = self.network.on_connected.first
         asyncio.ensure_future(self.network.start())
         await first_connection
@@ -214,9 +251,15 @@ class BaseLedger(metaclass=LedgerRegistry):
         log.info("Subscribing and updating accounts.")
         await self.update_headers()
         await self.network.subscribe_headers()
-        await self.update_accounts()
+        import time
+        start = time.time()
+        await self.subscribe_accounts()
+        await self.sync.done.wait()
+        log.info(f'elapsed: {time.time()-start}')
 
     async def stop(self):
+        self.sync.cancel()
+        await self.sync.done.wait()
         await self.network.stop()
         await self.db.close()
         await self.headers.close()
@@ -299,89 +342,144 @@ class BaseLedger(metaclass=LedgerRegistry):
                 height=header['height'], headers=header['hex'], subscription_update=True
             )
 
-    async def update_accounts(self):
-        return await asyncio.gather(*(
-            self.update_account(a) for a in self.accounts
-        ))
+    async def subscribe_accounts(self):
+        if self.network.is_connected and self.accounts:
+            await asyncio.wait([
+                self.subscribe_account(a) for a in self.accounts
+            ])
 
-    async def update_account(self, account: baseaccount.BaseAccount):
+    async def subscribe_account(self, account: baseaccount.BaseAccount):
+        for address_manager in account.address_managers.values():
+            await self.subscribe_addresses(address_manager, await address_manager.get_addresses())
         await account.ensure_address_gap()
-        addresses = await account.get_addresses()
-        while addresses:
-            await asyncio.gather(*(self.subscribe_history(a) for a in addresses))
-            addresses = await account.ensure_address_gap()
 
-    def _prefetch_history(self, remote_history, local_history):
-        proofs, network_txs = {}, {}
-        for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
-            if i < len(local_history) and local_history[i] == (hex_id, remote_height):
-                continue
-            if remote_height > 0:
-                proofs[hex_id] = asyncio.ensure_future(self.network.get_merkle(hex_id, remote_height))
-            network_txs[hex_id] = asyncio.ensure_future(self.network.get_transaction(hex_id))
-        return proofs, network_txs
+    async def subscribe_addresses(self, address_manager: baseaccount.AddressManager, addresses: List[str]):
+        if self.network.is_connected and addresses:
+            await asyncio.wait([
+                self.subscribe_address(address_manager, address) for address in addresses
+            ])
 
-    async def update_history(self, address):
-        remote_history = await self.network.get_history(address)
-        local_history = await self.get_local_history(address)
-        proofs, network_txs = self._prefetch_history(remote_history, local_history)
-
-        synced_history = StringIO()
-        for i, (hex_id, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
-
-            synced_history.write('{}:{}:'.format(hex_id, remote_height))
-
-            if i < len(local_history) and local_history[i] == (hex_id, remote_height):
-                continue
-
-            lock = self._transaction_processing_locks.setdefault(hex_id, asyncio.Lock())
-
-            await lock.acquire()
-
-            try:
-
-                # see if we have a local copy of transaction, otherwise fetch it from server
-                tx = await self.db.get_transaction(txid=hex_id)
-                save_tx = None
-                if tx is None:
-                    _raw = await network_txs[hex_id]
-                    tx = self.transaction_class(unhexlify(_raw))
-                    save_tx = 'insert'
-
-                tx.height = remote_height
-
-                if remote_height > 0 and (not tx.is_verified or tx.position == -1):
-                    await self.validate_transaction_and_set_position(tx, remote_height, await proofs[hex_id])
-                    if save_tx is None:
-                        save_tx = 'update'
-
-                await self.db.save_transaction_io(
-                    save_tx, tx, address, self.address_to_hash160(address), synced_history.getvalue()
-                )
-
-                log.debug(
-                    "%s: sync'ed tx %s for address: %s, height: %s, verified: %s",
-                    self.get_id(), hex_id, address, tx.height, tx.is_verified
-                )
-
-                self._on_transaction_controller.add(TransactionEvent(address, tx))
-
-            finally:
-                lock.release()
-                if not lock.locked() and hex_id in self._transaction_processing_locks:
-                    del self._transaction_processing_locks[hex_id]
-
-    async def subscribe_history(self, address):
+    async def subscribe_address(self, address_manager: baseaccount.AddressManager, address: str):
         remote_status = await self.network.subscribe_address(address)
-        local_status = await self.get_local_status(address)
-        if local_status != remote_status:
-            await self.update_history(address)
+        self.sync.add(self.update_history(address, remote_status, address_manager))
 
-    async def receive_status(self, response):
-        address, remote_status = response
-        local_status = await self.get_local_status(address)
-        if local_status != remote_status:
-            await self.update_history(address)
+    def process_status_update(self, update):
+        address, remote_status = update
+        self.sync.add(self.update_history(address, remote_status))
+
+    async def update_history(self, address, remote_status,
+                             address_manager: baseaccount.AddressManager = None):
+        local_status, local_history = await self.get_local_status_and_history(address)
+
+        if local_status == remote_status:
+            return
+
+        remote_history = await self.network.get_history(address)
+
+        cache_tasks = []
+        synced_history = StringIO()
+        for i, (txid, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
+            if i < len(local_history) and local_history[i] == (txid, remote_height):
+                synced_history.write(f'{txid}:{remote_height}:')
+            else:
+                cache_tasks.append(asyncio.ensure_future(
+                    self.cache_transaction(txid, remote_height)
+                ))
+
+        for task in cache_tasks:
+            tx = await task
+
+            check_db_for_txos = []
+            for txi in tx.inputs:
+                if txi.txo_ref.txo is not None:
+                    continue
+                cache_item = self._tx_cache.get(txi.txo_ref.tx_ref.id)
+                if cache_item is not None:
+                    if cache_item.tx is None:
+                        await cache_item.has_tx.wait()
+                    txi.txo_ref = cache_item.tx.outputs[txi.txo_ref.position].ref
+                else:
+                    check_db_for_txos.append(txi.txo_ref.tx_ref.id)
+
+            referenced_txos = {
+                txo.id: txo for txo in await self.db.get_txos(txoid__in=check_db_for_txos)
+            }
+
+            for txi in tx.inputs:
+                if txi.txo_ref.txo is not None:
+                    continue
+                referenced_txo = referenced_txos.get(txi.txo_ref.tx_ref.id)
+                if referenced_txos:
+                    txi.txo_ref = referenced_txo.ref
+
+            synced_history.write(f'{tx.id}:{tx.height}:')
+
+            await self.db.save_transaction_io(
+                tx, address, self.address_to_hash160(address), synced_history.getvalue()
+            )
+
+            self._on_transaction_controller.add(TransactionEvent(address, tx))
+
+        if address_manager is None:
+            address_manager = await self.get_address_manager_for_address(address)
+
+        await address_manager.ensure_address_gap()
+
+    async def cache_transaction(self, txid, remote_height):
+        cache_item = self._tx_cache.get(txid)
+        if cache_item is None:
+            cache_item = self._tx_cache[txid] = TransactionCacheItem()
+        elif cache_item.tx is not None and \
+                cache_item.tx.height >= remote_height and \
+                (cache_item.tx.is_verified or remote_height < 1):
+            return cache_item.tx  # cached tx is already up-to-date
+
+        await cache_item.lock.acquire()
+
+        try:
+            tx = cache_item.tx
+
+            if tx is None:
+                # check local db
+                tx = cache_item.tx = await self.db.get_transaction(txid=txid)
+
+            if tx is None:
+                # fetch from network
+                _raw = await self.network.get_transaction(txid)
+                if _raw:
+                    tx = self.transaction_class(unhexlify(_raw))
+                    await self.maybe_verify_transaction(tx, remote_height)
+                    await self.db.insert_transaction(tx)
+                    cache_item.tx = tx  # make sure it's saved before caching it
+                    return tx
+
+            if tx is None:
+                raise ValueError(f'Transaction {txid} was not in database and not on network.')
+
+            if 0 < remote_height and not tx.is_verified:
+                # tx from cache / db is not up-to-date
+                await self.maybe_verify_transaction(tx, remote_height)
+                await self.db.update_transaction(tx)
+
+            return tx
+
+        finally:
+            cache_item.lock.release()
+
+    async def maybe_verify_transaction(self, tx, remote_height):
+        tx.height = remote_height
+        if 0 < remote_height <= len(self.headers):
+            merkle = await self.network.get_merkle(tx.id, remote_height)
+            merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
+            header = self.headers[remote_height]
+            tx.position = merkle['pos']
+            tx.is_verified = merkle_root == header['merkle_root']
+
+    async def get_address_manager_for_address(self, address) -> baseaccount.AddressManager:
+        details = await self.db.get_address(address=address)
+        for account in self.accounts:
+            if account.id == details['account']:
+                return account.address_managers[details['chain']]
 
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw).decode())

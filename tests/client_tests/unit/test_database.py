@@ -128,7 +128,8 @@ class TestQueries(AsyncioTestCase):
         tx = ledger_class.transaction_class(height=height, is_verified=True) \
             .add_inputs([self.txi(self.txo(1, NULL_HASH))]) \
             .add_outputs([self.txo(1, to_hash)])
-        await self.ledger.db.save_transaction_io('insert', tx, to_address, to_hash, '')
+        await self.ledger.db.insert_transaction(tx)
+        await self.ledger.db.save_transaction_io(tx, to_address, to_hash, '')
         return tx
 
     async def create_tx_from_txo(self, txo, to_account, height):
@@ -139,8 +140,9 @@ class TestQueries(AsyncioTestCase):
         tx = ledger_class.transaction_class(height=height, is_verified=True) \
             .add_inputs([self.txi(txo)]) \
             .add_outputs([self.txo(1, to_hash)])
-        await self.ledger.db.save_transaction_io('insert', tx, from_address, from_hash, '')
-        await self.ledger.db.save_transaction_io('', tx, to_address, to_hash, '')
+        await self.ledger.db.insert_transaction(tx)
+        await self.ledger.db.save_transaction_io(tx, from_address, from_hash, '')
+        await self.ledger.db.save_transaction_io(tx, to_address, to_hash, '')
         return tx
 
     async def create_tx_to_nowhere(self, txo, height):
@@ -150,7 +152,8 @@ class TestQueries(AsyncioTestCase):
         tx = ledger_class.transaction_class(height=height, is_verified=True) \
             .add_inputs([self.txi(txo)]) \
             .add_outputs([self.txo(1, to_hash)])
-        await self.ledger.db.save_transaction_io('insert', tx, from_address, from_hash, '')
+        await self.ledger.db.insert_transaction(tx)
+        await self.ledger.db.save_transaction_io(tx, from_address, from_hash, '')
         return tx
 
     def txo(self, amount, address):
