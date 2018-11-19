@@ -2,7 +2,6 @@ import logging
 from asyncio import CancelledError
 
 from torba.testcase import IntegrationTestCase
-from torba.client.constants import COIN
 
 
 class ReconnectTests(IntegrationTestCase):
@@ -17,7 +16,7 @@ class ReconnectTests(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.on_transaction_id(sendtxid)  # confirmed
 
-        self.assertEqual(round(await self.get_balance(self.account)/COIN, 4), 1.1337)
+        await self.assertBalance(self.account, '1.1337')
         # is it real? are we rich!? let me see this tx...
         d = self.ledger.network.get_transaction(sendtxid)
         # what's that smoke on my ethernet cable? oh no!
