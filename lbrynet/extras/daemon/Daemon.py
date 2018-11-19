@@ -1827,7 +1827,8 @@ class Daemon(AuthJSONRPCServer):
             raise ResolveError(
                 "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
             )
-
+        if 'error' in resolved:
+            raise ResolveError(f"error resolving stream: {resolved['error']}")
         txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
         claim_dict = ClaimDict.load_dict(resolved['value'])
         sd_hash = claim_dict.source_hash.decode()
