@@ -355,7 +355,7 @@ class BaseDatabase(SQLiteMixin):
 
         tx_rows = await self.select_transactions(
             'txid, raw, height, position, is_verified',
-            order_by=["height DESC", "position DESC"],
+            order_by=["height=0 DESC", "height DESC", "position DESC"],
             **constraints
         )
 
@@ -422,6 +422,8 @@ class BaseDatabase(SQLiteMixin):
         my_account = my_account or constraints.get('account', None)
         if isinstance(my_account, BaseAccount):
             my_account = my_account.public_key.address
+        if 'order_by' not in constraints:
+            constraints['order_by'] = ["tx.height=0 DESC", "tx.height DESC", "tx.position DESC"]
         rows = await self.select_txos(
             "amount, script, txid, tx.height, txo.position, chain, account", **constraints
         )

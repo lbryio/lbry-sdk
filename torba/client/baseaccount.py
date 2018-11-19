@@ -128,7 +128,7 @@ class HierarchicalDeterministic(AddressManager):
             start = addresses[0]['position']+1 if addresses else 0
             end = start + (self.gap - existing_gap)
             new_keys = await self._generate_keys(start, end-1)
-            await self.account.ledger.subscribe_addresses(self, new_keys)
+            await self.account.ledger.announce_addresses(self, new_keys)
             return new_keys
 
     async def _generate_keys(self, start: int, end: int) -> List[str]:
@@ -148,7 +148,9 @@ class HierarchicalDeterministic(AddressManager):
     def get_address_records(self, only_usable: bool = False, **constraints):
         if only_usable:
             constraints['used_times__lt'] = self.maximum_uses_per_address
-        return self._query_addresses(order_by="used_times ASC, position ASC", **constraints)
+        if 'order_by' not in constraints:
+            constraints['order_by'] = "used_times ASC, position ASC"
+        return self._query_addresses(**constraints)
 
 
 class SingleKey(AddressManager):
@@ -181,7 +183,7 @@ class SingleKey(AddressManager):
                     self.account, self.chain_number, [(0, self.public_key)]
                 )
                 new_keys = [self.public_key.address]
-                await self.account.ledger.subscribe_addresses(self, new_keys)
+                await self.account.ledger.announce_addresses(self, new_keys)
                 return new_keys
             return []
 

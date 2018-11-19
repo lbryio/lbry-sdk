@@ -44,6 +44,10 @@ class TransactionEvent(namedtuple('TransactionEvent', ('address', 'tx'))):
     pass
 
 
+class AddressesGeneratedEvent(namedtuple('AddressesGeneratedEvent', ('address_manager', 'addresses'))):
+    pass
+
+
 class BlockHeightEvent(namedtuple('BlockHeightEvent', ('height', 'change'))):
     pass
 
@@ -136,6 +140,12 @@ class BaseLedger(metaclass=LedgerRegistry):
                 '(%s) on_transaction: address=%s, height=%s, is_verified=%s, tx.id=%s',
                 self.get_id(), e.address, e.tx.height, e.tx.is_verified, e.tx.id
             )
+        )
+
+        self._on_address_controller = StreamController()
+        self.on_address = self._on_address_controller.stream
+        self.on_address.listen(
+            lambda e: log.info('(%s) on_address: %s', self.get_id(), e.addresses)
         )
 
         self._on_header_controller = StreamController()
@@ -349,6 +359,12 @@ class BaseLedger(metaclass=LedgerRegistry):
         for address_manager in account.address_managers.values():
             await self.subscribe_addresses(address_manager, await address_manager.get_addresses())
         await account.ensure_address_gap()
+
+    async def announce_addresses(self, address_manager: baseaccount.AddressManager, addresses: List[str]):
+        await self.subscribe_addresses(address_manager, addresses)
+        await self._on_address_controller.add(
+            AddressesGeneratedEvent(address_manager, addresses)
+        )
 
     async def subscribe_addresses(self, address_manager: baseaccount.AddressManager, addresses: List[str]):
         if self.network.is_connected and addresses:

@@ -238,3 +238,12 @@ class TestQueries(AsyncioTestCase):
         tx = await self.ledger.db.get_transaction(txid=tx2.id, account=account2)
         self.assertEqual(tx.inputs[0].is_my_account, False)
         self.assertEqual(tx.outputs[0].is_my_account, True)
+
+        # height 0 sorted to the top with the rest in descending order
+        tx4 = await self.create_tx_from_nothing(account1, 0)
+        txos = await self.ledger.db.get_txos()
+        self.assertEqual([0, 2, 1], [txo.tx_ref.height for txo in txos])
+        self.assertEqual([tx4.id, tx2.id, tx1.id], [txo.tx_ref.id for txo in txos])
+        txs = await self.ledger.db.get_transactions()
+        self.assertEqual([0, 3, 2, 1], [tx.height for tx in txs])
+        self.assertEqual([tx4.id, tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
