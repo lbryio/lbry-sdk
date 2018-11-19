@@ -201,7 +201,9 @@ class BaseAccount:
         self.seed = seed
         self.private_key_string = private_key_string
         self.password: Optional[str] = None
-        self.encryption_init_vector = None
+        self.private_key_encryption_init_vector: Optional[bytes] = None
+        self.seed_encryption_init_vector: Optional[bytes] = None
+
         self.encrypted = encrypted
         self.serialize_encrypted = encrypted
         self.private_key = private_key
@@ -264,13 +266,16 @@ class BaseAccount:
         if not self.encrypted and self.private_key:
             private_key_string = self.private_key.extended_key_string()
         if not self.encrypted and self.serialize_encrypted:
-            private_key_string = aes_encrypt(self.password, private_key_string, self.encryption_init_vector)
-            seed = aes_encrypt(self.password, self.seed, self.encryption_init_vector)
+            assert None not in [self.seed_encryption_init_vector, self.private_key_encryption_init_vector]
+            private_key_string = aes_encrypt(
+                self.password, private_key_string, self.private_key_encryption_init_vector
+            )
+            seed = aes_encrypt(self.password, self.seed, self.seed_encryption_init_vector)
         return {
             'ledger': self.ledger.get_id(),
             'name': self.name,
             'seed': seed,
-            'encrypted': self.encrypted,
+            'encrypted': self.serialize_encrypted,
             'private_key': private_key_string,
             'public_key': self.public_key.extended_key_string(),
             'address_generator': self.address_generator.to_dict(self.receiving, self.change)
@@ -293,9 +298,10 @@ class BaseAccount:
 
     def decrypt(self, password: str) -> None:
         assert self.encrypted, "Key is not encrypted."
-        self.seed = aes_decrypt(password, self.seed)
+        self.seed, self.seed_encryption_init_vector = aes_decrypt(password, self.seed)
+        pk_string, self.private_key_encryption_init_vector = aes_decrypt(password, self.private_key_string)
         self.private_key = from_extended_key_string(
-            self.ledger, aes_decrypt(password, self.private_key_string)
+            self.ledger, pk_string
         )
         self.password = password
         self.encrypted = False
@@ -303,9 +309,10 @@ class BaseAccount:
     def encrypt(self, password: str) -> None:
         assert not self.encrypted, "Key is already encrypted."
         assert isinstance(self.private_key, PrivateKey)
-        self.seed = aes_encrypt(password, self.seed, self.encryption_init_vector)
+
+        self.seed = aes_encrypt(password, self.seed, self.seed_encryption_init_vector)
         self.private_key_string = aes_encrypt(
-            password, self.private_key.extended_key_string(), self.encryption_init_vector
+            password, self.private_key.extended_key_string(), self.private_key_encryption_init_vector
         )
         self.private_key = None
         self.password = None

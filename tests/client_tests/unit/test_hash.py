@@ -23,9 +23,13 @@ class TestAESEncryptDecrypt(TestCase):
            'ZmZmZmZmZmZmZmZmZmZmZjlrKptoKD+MFwDxcg3XtCD9qz8UWhEhq/TVJT5+Mtp2a8sE'
            'CaO6WQj7fYsWGu2Hvbc0qYqxdN0HeTsiO+cZRo3eJISgr3F+rXFYi5oSBlD2'
         )
+        self.assertEqual(
+            aes_decrypt(self.password, self.expected),
+            (self.message, b'f' * 16)
+        )
 
     def test_encrypt_decrypt(self):
         self.assertEqual(
-            aes_decrypt('bubblegum', aes_encrypt('bubblegum', self.message)),
+            aes_decrypt('bubblegum', aes_encrypt('bubblegum', self.message))[0],
             self.message
         )

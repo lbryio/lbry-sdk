@@ -12,6 +12,7 @@ import os
 import base64
 import hashlib
 import hmac
+import typing
 from binascii import hexlify, unhexlify
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
@@ -133,14 +134,14 @@ def aes_encrypt(secret: str, value: str, init_vector: bytes = None) -> str:
     return base64.b64encode(init_vector + encrypted_data).decode()
 
 
-def aes_decrypt(secret: str, value: str) -> str:
+def aes_decrypt(secret: str, value: str) -> typing.Tuple[str, bytes]:
     data = base64.b64decode(value.encode())
     key = double_sha256(secret.encode())
     init_vector, data = data[:16], data[16:]
     decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
     unpadder = PKCS7(AES.block_size).unpadder()
     result = unpadder.update(decryptor.update(data)) + unpadder.finalize()
-    return result.decode()
+    return result.decode(), init_vector
 
 
 class Base58Error(Exception):
