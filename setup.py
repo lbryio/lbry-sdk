@@ -54,6 +54,7 @@ setup(
         'test': (
             'mock>=2.0,<3.0',
             'faker==0.8.17',
+            'pylru',
             'pytest',
             'pytest-asyncio',
             'pytest-xprocess',
