@@ -206,7 +206,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         self.announced_startup = False
         self.sessions = {}
         self.server = None
-        self.keyring = Keyring.generate_and_save()
 
     @defer.inlineCallbacks
     def start_listening(self):
@@ -284,7 +283,10 @@ class AuthJSONRPCServer(AuthorizedBase):
         return d
 
     def get_server_factory(self):
-        return AuthJSONRPCResource(self).getServerFactory(self.keyring, self._use_authentication, self._use_https)
+        keyring = None
+        if self._use_authentication or self._use_https:
+            keyring = Keyring.generate_and_save()
+        return AuthJSONRPCResource(self).getServerFactory(keyring, self._use_authentication, self._use_https)
 
     def _set_headers(self, request, data, update_secret=False):
         if conf.settings['allowed_origin']:
