@@ -31,15 +31,17 @@ class BasicAccountingTests(LedgerTestCase):
 
         tx = Transaction(is_verified=True)\
             .add_outputs([Output.pay_pubkey_hash(100, hash160)])
+        await self.ledger.db.insert_transaction(tx)
         await self.ledger.db.save_transaction_io(
-            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
+            tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         self.assertEqual(await self.account.get_balance(), 100)
 
         tx = Transaction(is_verified=True)\
             .add_outputs([Output.pay_claim_name_pubkey_hash(100, 'foo', b'', hash160)])
+        await self.ledger.db.insert_transaction(tx)
         await self.ledger.db.save_transaction_io(
-            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
+            tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         self.assertEqual(await self.account.get_balance(), 100)  # claim names don't count towards balance
         self.assertEqual(await self.account.get_balance(include_claims=True), 200)
