@@ -1439,7 +1439,7 @@ class Daemon(AuthJSONRPCServer):
         return self.get_account_or_error(account_id).get_max_gap()
 
     @requires("wallet")
-    def jsonrpc_account_fund(self, to_account, from_account, amount='0.0',
+    def jsonrpc_account_fund(self, to_account=None, from_account=None, amount='0.0',
                              everything=False, outputs=1, broadcast=False):
         """
         Transfer some amount (or --everything) to an account from another
@@ -1448,8 +1448,8 @@ class Daemon(AuthJSONRPCServer):
         be used together with --everything).
 
         Usage:
-            account_fund (<to_account> | --to_account=<to_account>)
-                (<from_account> | --from_account=<from_account>)
+            account_fund [<to_account> | --to_account=<to_account>]
+                [<from_account> | --from_account=<from_account>]
                 (<amount> | --amount=<amount> | --everything)
                 [<outputs> | --outputs=<outputs>]
                 [--broadcast]
@@ -1466,8 +1466,8 @@ class Daemon(AuthJSONRPCServer):
             (map) transaction performing requested action
 
         """
-        to_account = self.get_account_or_error(to_account, 'to_account')
-        from_account = self.get_account_or_error(from_account, 'from_account')
+        to_account = self.get_account_or_default(to_account, 'to_account')
+        from_account = self.get_account_or_default(from_account, 'from_account')
         amount = self.get_dewies_or_error('amount', amount) if amount else None
         if not isinstance(outputs, int):
             raise ValueError("--outputs must be an integer.")
@@ -1477,6 +1477,35 @@ class Daemon(AuthJSONRPCServer):
             to_account=to_account, amount=amount, everything=everything,
             outputs=outputs, broadcast=broadcast
         )
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_account_send(self, amount, addresses, account_id=None, broadcast=False):
+        """
+        Send the same number of credits to multiple addresses.
+
+        Usage:
+            account_send <amount> <addresses>... [--account_id=<account_id>] [--broadcast]
+
+        Options:
+            --account_id=<account_id>  : (str) account to fund the transaction
+            --broadcast                : (bool) actually broadcast the transaction, default: false.
+
+        Returns:
+        """
+
+        amount = self.get_dewies_or_error("amount", amount)
+        if not amount:
+            raise NullFundsError
+        elif amount < 0:
+            raise NegativeFundsError()
+
+        for address in addresses:
+            decode_address(address)
+
+        account = self.get_account_or_default(account_id)
+        result = await account.send_to_addresses(amount, addresses, broadcast)
+        self.analytics_manager.send_credits_sent()
+        return result
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_is_mine(self, address, account_id=None):
