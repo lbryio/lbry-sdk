@@ -2,6 +2,7 @@ import json
 import asyncio
 import tempfile
 import logging
+from binascii import unhexlify
 from functools import partial
 from types import SimpleNamespace
 
@@ -174,11 +175,9 @@ class CommandTestCase(IntegrationTestCase):
         await self.on_transaction_id(txid)
 
     async def on_transaction_dict(self, tx):
-        await asyncio.wait([
-            self.ledger.on_transaction.where(
-                partial(lambda address, event: address == event.address, address)
-            ) for address in self.get_all_addresses(tx)
-        ])
+        await self.ledger.wait(
+            self.ledger.transaction_class(unhexlify(tx['hex']))
+        )
 
     @staticmethod
     def get_all_addresses(tx):
@@ -479,9 +478,40 @@ class AccountManagement(CommandTestCase):
         self.assertEqual(response['name'], 'recreated account')
 
 
-class PublishCommand(CommandTestCase):
+class ClaimManagement(CommandTestCase):
 
     VERBOSITY = logging.WARN
+
+    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!'):
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(data)
+            file.flush()
+            claim = await self.out(self.daemon.jsonrpc_publish(
+                name, amount, file_path=file.name
+            ))
+            self.assertTrue(claim['success'])
+            await self.on_transaction_dict(claim['tx'])
+            await self.generate(1)
+            return claim
+
+    async def test_update_claim_holding_address(self):
+        other_account_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
+        other_account = self.daemon.get_account_or_error(other_account_id)
+        other_address = await other_account.receiving.get_or_create_usable_address()
+
+        self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
+
+        # create the initial name claim
+        claim = await self.make_claim()
+
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine()), 1)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine(account_id=other_account_id)), 0)
+        tx = await self.daemon.jsonrpc_claim_send_to_address(
+            claim['claim_id'], other_address
+        )
+        await self.ledger.wait(tx)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine()), 0)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine(account_id=other_account_id)), 1)
 
     async def test_publishing_checks_all_accounts_for_certificate(self):
         account1_id, account1 = self.account.id, self.account
@@ -547,49 +577,17 @@ class PublishCommand(CommandTestCase):
                 ))
 
     async def test_updating_claim_includes_claim_value_in_balance_check(self):
-
         self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
 
-        # create the initial name claim
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            claim = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '9.0', file_path=file.name
-            ))
-            self.assertTrue(claim['success'])
-
-        await self.on_transaction_dict(claim['tx'])
-        await self.generate(1)
-
+        await self.make_claim(amount='9.0')
         self.assertEqual('0.979893', await self.daemon.jsonrpc_account_balance())
 
-        # update the claim first time
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            claim = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '9.0', file_path=file.name
-            ))
-            self.assertTrue(claim['success'])
-
-        await self.on_transaction_dict(claim['tx'])
-        await self.generate(1)
-
+        # update the same claim
+        await self.make_claim(amount='9.0')
         self.assertEqual('0.9796205', await self.daemon.jsonrpc_account_balance())
 
         # update the claim a second time but use even more funds
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            claim = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '9.97', file_path=file.name
-            ))
-            self.assertTrue(claim['success'])
-
-        await self.on_transaction_dict(claim['tx'])
-        await self.generate(1)
-
+        await self.make_claim(amount='9.97')
         self.assertEqual('0.009348', await self.daemon.jsonrpc_account_balance())
 
         # fails when specifying more than available
@@ -605,34 +603,12 @@ class PublishCommand(CommandTestCase):
                     'hovercraft', '9.98', file_path=file.name
                 ))
 
-
-class AbandonCommand(CommandTestCase):
-
-    VERBOSITY = logging.WARN
-
     async def test_abandoning_claim_at_loss(self):
-
         self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
-
-        # create the initial name claim
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            claim = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '0.0001', file_path=file.name
-            ))
-            self.assertTrue(claim['success'])
-            await self.on_transaction_dict(claim['tx'])
-            await self.generate(1)
-
+        claim = await self.make_claim(amount='0.0001')
         self.assertEqual('9.979793', await self.daemon.jsonrpc_account_balance())
         await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
         self.assertEqual('9.97968399', await self.daemon.jsonrpc_account_balance())
-
-
-class SupportingSupports(CommandTestCase):
-
-    VERBOSITY = logging.WARN
 
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
@@ -649,14 +625,7 @@ class SupportingSupports(CommandTestCase):
         self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
 
         # create the claim we'll be tipping and supporting
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            claim = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '1.0', file_path=file.name
-            ))
-            self.assertTrue(claim['success'])
-            await self.confirm_tx(claim['tx']['txid'])
+        claim = await self.make_claim()
 
         # account1 and account2 balances:
         self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
