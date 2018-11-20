@@ -5,11 +5,6 @@ from setuptools import setup, find_packages
 BASE = os.path.dirname(__file__)
 README_PATH = os.path.join(BASE, 'README.md')
 
-SERVER_REQUIRES = (
-    'msgpack',
-    'torba[server]',
-)
-
 setup(
     name=__name__,
     version=__version__,
@@ -38,6 +33,7 @@ setup(
         'jsonrpc',
         'cryptography',
         'protobuf==3.6.1',
+        'msgpack',
         'jsonschema',
         'ecdsa',
         'torba',
@@ -50,13 +46,12 @@ setup(
         'six'
     ],
     extras_require={
-        'wallet-server': SERVER_REQUIRES,
         'test': (
             'mock>=2.0,<3.0',
             'faker==0.8.17',
             'pytest',
             'pytest-asyncio',
             'pytest-xprocess',
-        ) + SERVER_REQUIRES,
+        )
     }
 )
