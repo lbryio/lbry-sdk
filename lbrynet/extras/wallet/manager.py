@@ -239,7 +239,10 @@ class LbryWalletManager(BaseWalletManager):
     async def send_claim_to_address(self, claim_id: str, destination_address: str, amount: Optional[int],
                               account=None):
         account = account or self.default_account
-        claims = await account.get_claims(is_claim=1, claim_id=claim_id)
+        claims = await account.get_claims(
+            claim_name_type__any={'is_claim': 1, 'is_update': 1},  # exclude is_supports
+            claim_id=claim_id
+        )
         if not claims:
             raise NameError(f"Claim not found: {claim_id}")
         if not amount:
@@ -371,7 +374,10 @@ class LbryWalletManager(BaseWalletManager):
             claim = claim.sign(
                 certificate.private_key, claim_address, certificate.claim_id, curve=SECP256k1
             )
-        existing_claims = await account.get_claims(claim_name=name)
+        existing_claims = await account.get_claims(
+            claim_name_type__any={'is_claim': 1, 'is_update': 1},  # exclude is_supports
+            claim_name=name
+        )
         if len(existing_claims) == 0:
             tx = await Transaction.claim(
                 name, claim, amount, claim_address, [account], account
