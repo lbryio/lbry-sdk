@@ -1215,7 +1215,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
         if self.ledger.network.is_connected:
-            await self.ledger.update_account(account)
+            await self.ledger.subscribe_account(account)
 
         self.default_wallet.save()
 
@@ -1250,7 +1250,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
         if self.ledger.network.is_connected:
-            await self.ledger.update_account(account)
+            await self.ledger.subscribe_account(account)
 
         self.default_wallet.save()
 

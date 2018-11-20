@@ -137,8 +137,8 @@ class LbryWalletManager(BaseWalletManager):
                 'certificates': unmigrated.get('claim_certificates', {}),
                 'address_generator': {
                     'name': 'deterministic-chain',
-                    'receiving': {'gap': 20, 'maximum_uses_per_address': 2},
-                    'change': {'gap': 6, 'maximum_uses_per_address': 2}
+                    'receiving': {'gap': 20, 'maximum_uses_per_address': 1},
+                    'change': {'gap': 6, 'maximum_uses_per_address': 1}
                 }
             }]
         }, indent=4, sort_keys=True)
@@ -239,11 +239,13 @@ class LbryWalletManager(BaseWalletManager):
     async def send_claim_to_address(self, claim_id: str, destination_address: str, amount: Optional[int],
                               account=None):
         account = account or self.default_account
-        claims = await account.ledger.db.get_utxos(claim_id=claim_id)
+        claims = await account.get_claims(is_claim=1, claim_id=claim_id)
         if not claims:
             raise NameError(f"Claim not found: {claim_id}")
+        if not amount:
+            amount = claims[0].get_estimator(self.ledger).effective_amount
         tx = await Transaction.update(
-            claims[0], ClaimDict.deserialize(claims[0].script.value['claim']), amount,
+            claims[0], ClaimDict.deserialize(claims[0].script.values['claim']), amount,
             destination_address.encode(), [account], account
         )
         await self.ledger.broadcast(tx)
@@ -387,19 +389,6 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: release reserved tx outputs in case anything fails by this point
         return tx
 
-    def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
-        return {
-            "claim_id": txo.claim_id,
-            "name": name,
-            "amount": bid,
-            "address": address,
-            "txid": tx.id,
-            "nout": txo.position,
-            "value": claim_dict,
-            "height": -1,
-            "claim_sequence": -1,
-        }
-
     async def support_claim(self, claim_name, claim_id, amount, account):
         holding_address = await account.receiving.get_or_create_usable_address()
         tx = await Transaction.support(claim_name, claim_id, amount, holding_address, [account], account)
@@ -432,6 +421,19 @@ class LbryWalletManager(BaseWalletManager):
         account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
         return tx
+
+    def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
+        return {
+            "claim_id": txo.claim_id,
+            "name": name,
+            "amount": bid,
+            "address": address,
+            "txid": tx.id,
+            "nout": txo.position,
+            "value": claim_dict,
+            "height": -1,
+            "claim_sequence": -1,
+        }
 
     def get_certificates(self, private_key_accounts, exclude_without_key=True, **constraints):
         return self.db.get_certificates(
