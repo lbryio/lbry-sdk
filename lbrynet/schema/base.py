@@ -76,7 +76,7 @@ def b58decode(v):
         acc, mod = divmod(acc, 256)
         result.append(mod)
 
-    return (b'\0' * (origlen - newlen) + bseq(reversed(result)))
+    return b'\0' * (origlen - newlen) + bseq(reversed(result))
 
 
 def validate_b58_checksum(addr_bytes):
