@@ -9,8 +9,7 @@ import subprocess
 import importlib
 from binascii import hexlify
 from typing import Type, Optional
-
-import requests
+import urllib.request
 
 from torba.server.server import Server
 from torba.server.env import Env
@@ -256,9 +255,9 @@ class BlockchainNode:
 
         if not os.path.exists(downloaded_file):
             self.log.info('Downloading: %s', self.latest_release_url)
-            response = requests.get(self.latest_release_url, stream=True)
-            with open(downloaded_file, 'wb') as f:
-                shutil.copyfileobj(response.raw, f)
+            with urllib.request.urlopen(self.latest_release_url) as response:
+                with open(downloaded_file, 'wb') as out_file:
+                    shutil.copyfileobj(response, out_file)
 
         self.log.info('Extracting: %s', downloaded_file)
 

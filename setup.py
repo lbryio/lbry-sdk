@@ -39,31 +39,25 @@ setup(
         'aiorpcx==0.9.0',
         'coincurve',
         'pbkdf2',
-        'cryptography'
+        'cryptography',
+        'attrs',
+        'plyvel',
+        'pylru'
     ),
     extras_require={
-        'test': (
-            'mock',
-            'requests',
-        ),
-        'server': (
-            'attrs',
-            'plyvel',
-            'pylru'
-        ),
-        'ui': (
+        'gui': (
             'pyside2',
         )
     },
     entry_points={
         'console_scripts': [
             'torba-client=torba.client.cli:main',
-            'torba-server=torba.server.cli:main [server]',
-            'orchstr8=torba.orchstr8.cli:main [server]',
+            'torba-server=torba.server.cli:main',
+            'orchstr8=torba.orchstr8.cli:main',
         ],
         'gui_scripts': [
-            'torba=torba.ui:main [ui]',
-            'torba-workbench=torba.workbench:main [ui]',
+            'torba=torba.ui:main [gui]',
+            'torba-workbench=torba.workbench:main [gui]',
         ]
     }
 )
