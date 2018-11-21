@@ -11,14 +11,14 @@ from twisted.internet import asyncioreactor
 asyncioreactor.install()
 from twisted.internet import defer, threads, reactor
 
-from lbrynet import conf
-from lbrynet.core import log_support, Peer
-from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
-from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
-from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.daemon.Components import f2d
-from lbrynet.database.storage import SQLiteStorage
-from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet import conf, log_support
+from lbrynet.p2p import Peer
+from lbrynet.p2p.SinglePeerDownloader import SinglePeerDownloader
+from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorReader
+from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.daemon.Components import f2d
+from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.extras.wallet import LbryWalletManager
 
 log = logging.getLogger()
 
