@@ -94,10 +94,11 @@ jobs:
     - <<: *build
       name: "Mac"
       os: osx
-      osx_image: xcode9.4
+      osx_image: xcode6.4
       language: generic
       env: OS=mac
       install:
+        - brew install python3
         - pip3 install pyinstaller
         - git clone https://github.com/lbryio/torba.git --depth 1
         - sed -i -e "s/'plyvel',//" torba/setup.py
