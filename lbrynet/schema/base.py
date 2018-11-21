@@ -1,4 +1,3 @@
-import six
 from lbrynet.schema.schema import ADDRESS_CHECKSUM_LENGTH
 from lbrynet.schema.hashing import double_sha256
 from lbrynet.schema.error import InvalidAddress
@@ -7,18 +6,11 @@ from lbrynet.schema.error import InvalidAddress
 alphabet = b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 
-if six.PY2:
-    iseq, bseq, buffer = (
-        lambda s: map(ord, s),
-        lambda s: ''.join(map(chr, s)),
-        lambda s: s,
-    )
-elif six.PY3:
-    iseq, bseq, buffer = (
-        lambda s: s,
-        bytes,
-        lambda s: s.buffer,
-    )
+iseq, bseq, buffer = (
+    lambda s: s,
+    bytes,
+    lambda s: s.buffer,
+)
 
 
 def scrub_input(v):
