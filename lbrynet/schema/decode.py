@@ -58,4 +58,4 @@ def smart_decode(claim_value):
             claim_value = claim_value.encode()
         return ClaimDict.deserialize(claim_value)
     except (DecodeError, InvalidAddress, KeyError, TypeError):
-            raise DecodeError(claim_value)
+        raise DecodeError(claim_value)
