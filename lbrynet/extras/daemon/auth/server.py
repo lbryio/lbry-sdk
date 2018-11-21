@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from six.moves.urllib import parse as urlparse
+from urllib import parse as urlparse
 import json
 import inspect
 import signal
