@@ -11,7 +11,7 @@ jobs:
       install:
         - pip install git+https://github.com/PyCQA/pylint.git
         - pip install mypy
-        - pip install -e .[test,server]
+        - pip install -e .
       script:
         - pylint --rcfile=setup.cfg torba
         - mypy --ignore-missing-imports torba
