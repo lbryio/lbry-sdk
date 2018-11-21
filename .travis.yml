@@ -94,7 +94,7 @@ jobs:
     - <<: *build
       name: "Mac"
       os: osx
-      osx_image: xcode6.4
+      osx_image: xcode8.0
       language: generic
       env: OS=mac
       install:
