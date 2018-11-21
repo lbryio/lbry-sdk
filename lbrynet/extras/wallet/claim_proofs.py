@@ -1,4 +1,3 @@
-import six
 import struct
 import binascii
 from torba.client.hash import double_sha256
@@ -32,7 +31,7 @@ def verify_proof(proof, rootHash, name):
                 if previous_child_character >= child['character']:
                     raise InvalidProofError("children not in increasing order")
             previous_child_character = child['character']
-            to_hash += six.int2byte(child['character'])
+            to_hash += bytes((child['character'], ))
             if 'nodeHash' in child:
                 if len(child['nodeHash']) != 64:
                     raise InvalidProofError("invalid child nodeHash")
