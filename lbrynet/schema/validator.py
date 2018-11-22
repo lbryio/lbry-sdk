@@ -25,7 +25,7 @@ def validate_claim_id(claim_id):
         raise Exception("Claim id is not hex encoded")
 
 
-class Validator(object):
+class Validator:
     CURVE_NAME = None
     HASHFUNC = hashlib.sha256
 
