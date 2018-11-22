@@ -98,7 +98,7 @@ jobs:
       language: generic
       env: OS=mac
       install:
-        - brew install python3
+        - brew upgrade python3
         - pip3 install pyinstaller
         - git clone https://github.com/lbryio/torba.git --depth 1
         - sed -i -e "s/'plyvel',//" torba/setup.py
