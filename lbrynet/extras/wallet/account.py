@@ -180,3 +180,24 @@ class Account(BaseAccount):
 
     def get_channel_count(self, **constraints):
         return self.ledger.db.get_channel_count(account=self, **constraints)
+
+    async def send_to_addresses(self, amount, addresses, broadcast=False):
+        tx_class = self.ledger.transaction_class
+        tx = await tx_class.create(
+            inputs=[],
+            outputs=[
+                tx_class.output_class.pay_pubkey_hash(amount, self.ledger.address_to_hash160(address))
+                for address in addresses
+            ],
+            funding_accounts=[self],
+            change_account=self
+        )
+
+        if broadcast:
+            await self.ledger.broadcast(tx)
+        else:
+            await self.ledger.release_outputs(
+                [txi.txo_ref.txo for txi in tx.inputs]
+            )
+
+        return tx

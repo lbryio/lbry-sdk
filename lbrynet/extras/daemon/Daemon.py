@@ -18,6 +18,7 @@ from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbrynet import conf, utils, __version__
 from lbrynet.dht.error import TimeoutError
+from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload
 from lbrynet.extras.daemon.Components import d2f, f2d
@@ -1214,7 +1215,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
         if self.ledger.network.is_connected:
-            await self.ledger.update_account(account)
+            await self.ledger.subscribe_account(account)
 
         self.default_wallet.save()
 
@@ -1249,7 +1250,7 @@ class Daemon(AuthJSONRPCServer):
         )
 
         if self.ledger.network.is_connected:
-            await self.ledger.update_account(account)
+            await self.ledger.subscribe_account(account)
 
         self.default_wallet.save()
 
@@ -1438,7 +1439,7 @@ class Daemon(AuthJSONRPCServer):
         return self.get_account_or_error(account_id).get_max_gap()
 
     @requires("wallet")
-    def jsonrpc_account_fund(self, to_account, from_account, amount='0.0',
+    def jsonrpc_account_fund(self, to_account=None, from_account=None, amount='0.0',
                              everything=False, outputs=1, broadcast=False):
         """
         Transfer some amount (or --everything) to an account from another
@@ -1447,8 +1448,8 @@ class Daemon(AuthJSONRPCServer):
         be used together with --everything).
 
         Usage:
-            account_fund (<to_account> | --to_account=<to_account>)
-                (<from_account> | --from_account=<from_account>)
+            account_fund [<to_account> | --to_account=<to_account>]
+                [<from_account> | --from_account=<from_account>]
                 (<amount> | --amount=<amount> | --everything)
                 [<outputs> | --outputs=<outputs>]
                 [--broadcast]
@@ -1465,8 +1466,8 @@ class Daemon(AuthJSONRPCServer):
             (map) transaction performing requested action
 
         """
-        to_account = self.get_account_or_error(to_account, 'to_account')
-        from_account = self.get_account_or_error(from_account, 'from_account')
+        to_account = self.get_account_or_default(to_account, 'to_account')
+        from_account = self.get_account_or_default(from_account, 'from_account')
         amount = self.get_dewies_or_error('amount', amount) if amount else None
         if not isinstance(outputs, int):
             raise ValueError("--outputs must be an integer.")
@@ -1476,6 +1477,35 @@ class Daemon(AuthJSONRPCServer):
             to_account=to_account, amount=amount, everything=everything,
             outputs=outputs, broadcast=broadcast
         )
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_account_send(self, amount, addresses, account_id=None, broadcast=False):
+        """
+        Send the same number of credits to multiple addresses.
+
+        Usage:
+            account_send <amount> <addresses>... [--account_id=<account_id>] [--broadcast]
+
+        Options:
+            --account_id=<account_id>  : (str) account to fund the transaction
+            --broadcast                : (bool) actually broadcast the transaction, default: false.
+
+        Returns:
+        """
+
+        amount = self.get_dewies_or_error("amount", amount)
+        if not amount:
+            raise NullFundsError
+        elif amount < 0:
+            raise NegativeFundsError()
+
+        for address in addresses:
+            decode_address(address)
+
+        account = self.get_account_or_default(account_id)
+        result = await account.send_to_addresses(amount, addresses, broadcast)
+        self.analytics_manager.send_credits_sent()
+        return result
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_is_mine(self, address, account_id=None):
@@ -1826,7 +1856,8 @@ class Daemon(AuthJSONRPCServer):
             raise ResolveError(
                 "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
             )
-
+        if 'error' in resolved:
+            raise ResolveError(f"error resolving stream: {resolved['error']}")
         txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
         claim_dict = ClaimDict.load_dict(resolved['value'])
         sd_hash = claim_dict.source_hash.decode()
@@ -2801,7 +2832,7 @@ class Daemon(AuthJSONRPCServer):
         Delete a blob
 
         Usage:
-            blob_delete (<blob_hash> | --blob_hash=<blob_hash)
+            blob_delete (<blob_hash> | --blob_hash=<blob_hash>)
 
         Options:
             --blob_hash=<blob_hash>  : (str) blob hash of the blob to delete
@@ -2837,7 +2868,7 @@ class Daemon(AuthJSONRPCServer):
             (list) List of contact dictionaries {'host': <peer ip>, 'port': <peer port>, 'node_id': <peer node id>}
         """
 
-        if not utils.is_valid_blobhash(blob_hash):
+        if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
         finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
@@ -3113,6 +3144,7 @@ class Daemon(AuthJSONRPCServer):
         result['buckets'] = {}
 
         for i in range(len(self.dht_node._routingTable._buckets)):
+            result['buckets'][i] = []
             for contact in self.dht_node._routingTable._buckets[i]._contacts:
                 blobs = list(hosts.pop(contact)) if contact in hosts else []
                 blob_hashes.update(blobs)
@@ -3122,7 +3154,7 @@ class Daemon(AuthJSONRPCServer):
                     "node_id": hexlify(contact.id).decode(),
                     "blobs": blobs,
                 }
-                result['buckets'].setdefault(i, []).append(host)
+                result['buckets'][i].append(host)
                 contact_set.add(hexlify(contact.id).decode())
 
         result['contacts'] = list(contact_set)
