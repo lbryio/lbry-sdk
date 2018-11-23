@@ -18,4 +18,5 @@ cd lbry
 python scripts/set_build.py
 pip install -e .
 pyinstaller --additional-hooks-dir=scripts/. -F -n lbrynet lbrynet/extras/cli.py
+python --version
 wine dist/lbrynet.exe --version
