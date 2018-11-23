@@ -31,7 +31,7 @@ def verify_proof(proof, root_hash, name):
                 if previous_child_character >= child['character']:
                     raise InvalidProofError("children not in increasing order")
             previous_child_character = child['character']
-            to_hash += bytes((child['character'], ))
+            to_hash += bytes((child['character'],))
             if 'nodeHash' in child:
                 if len(child['nodeHash']) != 64:
                     raise InvalidProofError("invalid child nodeHash")
