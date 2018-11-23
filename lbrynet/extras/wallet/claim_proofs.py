@@ -16,7 +16,7 @@ def get_hash_for_outpoint(txhash, nout, height_of_last_takeover):
 
 
 # noinspection PyPep8
-def verify_proof(proof, rootHash, name):
+def verify_proof(proof, root_hash, name):
     previous_computed_hash = None
     reverse_computed_name = ''
     verified_value = False
@@ -69,7 +69,7 @@ def verify_proof(proof, rootHash, name):
 
         previous_computed_hash = double_sha256(to_hash)
 
-    if previous_computed_hash != binascii.unhexlify(rootHash)[::-1]:
+    if previous_computed_hash != binascii.unhexlify(root_hash)[::-1]:
         raise InvalidProofError("computed hash does not match roothash")
     if 'txhash' in proof and 'nOut' in proof:
         if not verified_value:
