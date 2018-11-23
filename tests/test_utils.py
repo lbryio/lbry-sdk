@@ -26,7 +26,7 @@ def random_lbry_hash():
     return hexlify(os.urandom(48)).decode()
 
 
-def resetTime(test_case, timestamp=DEFAULT_TIMESTAMP):
+def reset_time(test_case, timestamp=DEFAULT_TIMESTAMP):
     iso_time = time.mktime(timestamp.timetuple())
     patcher = mock.patch('time.time')
     patcher.start().return_value = iso_time

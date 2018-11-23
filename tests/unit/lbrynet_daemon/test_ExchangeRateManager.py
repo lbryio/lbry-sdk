@@ -32,7 +32,7 @@ class FeeFormatTest(unittest.TestCase):
 
 class ExchangeRateTest(unittest.TestCase):
     def setUp(self):
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
 
     def test_invalid_rates(self):
         with self.assertRaises(ValueError):
@@ -43,7 +43,7 @@ class ExchangeRateTest(unittest.TestCase):
 
 class FeeTest(unittest.TestCase):
     def setUp(self):
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
 
     def test_fee_converts_to_lbc(self):
         fee = Fee({

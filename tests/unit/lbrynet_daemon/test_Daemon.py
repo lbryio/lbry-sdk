@@ -83,7 +83,7 @@ class TestCostEst(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
 
     @defer.inlineCallbacks
     def test_fee_and_generous_data(self):
@@ -128,7 +128,7 @@ class TestJsonRpc(unittest.TestCase):
             return None
 
         mock_conf_settings(self)
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
         self.test_daemon = get_test_daemon()
         self.test_daemon.wallet_manager.is_first_run = False
         self.test_daemon.wallet_manager.get_best_blockhash = noop
@@ -150,7 +150,7 @@ class TestFileListSorting(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
         self.faker = Faker('en_US')
         self.faker.seed(129)  # contains 3 same points paid (5.9)
         self.test_daemon = get_test_daemon()
