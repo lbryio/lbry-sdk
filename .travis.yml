@@ -58,9 +58,9 @@ jobs:
       services:
         - docker
       install:
-        - docker pull cdrx/pyinstaller-windows:python3-32bit
+        - docker pull vshyba/temporary_pyinstaller_32bits_py37:latest
       script:
-        - docker run -v "$(pwd):/src/lbry" cdrx/pyinstaller-windows:python3-32bit lbry/scripts/wine_build.sh
+        - docker run -v "$(pwd):/src/lbry" vshyba/temporary_pyinstaller_32bits_py37:latest lbry/scripts/wine_build.sh
         - sudo zip -j dist/lbrynet-windows.zip dist/lbrynet.exe
       addons:
         artifacts:
