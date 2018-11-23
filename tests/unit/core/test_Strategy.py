@@ -3,8 +3,7 @@ import random
 from unittest import mock
 
 from twisted.trial import unittest
-import random
-import mock
+
 from lbrynet.p2p.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
 from lbrynet.p2p.Strategy import BasicAvailabilityWeightedStrategy
 from lbrynet.p2p.Offer import Offer

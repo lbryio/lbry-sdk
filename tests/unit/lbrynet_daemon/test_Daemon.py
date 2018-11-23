@@ -13,7 +13,8 @@ from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
 from lbrynet.extras.daemon.Components import f2d
-from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, BLOB_COMPONENT
+from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT
+from lbrynet.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
