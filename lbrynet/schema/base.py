@@ -6,13 +6,6 @@ from lbrynet.schema.error import InvalidAddress
 alphabet = b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 
-iseq, bseq, buffer = (
-    lambda s: s,
-    bytes,
-    lambda s: s.buffer,
-)
-
-
 def scrub_input(v):
     if isinstance(v, str) and not isinstance(v, bytes):
         v = v.encode('ascii')
@@ -40,7 +33,7 @@ def b58encode(v):
     nPad -= len(v)
 
     p, acc = 1, 0
-    for c in iseq(reversed(v)):
+    for c in reversed(v):
         acc += p * c
         p = p << 8
 
@@ -76,7 +69,7 @@ def b58decode(v):
         acc, mod = divmod(acc, 256)
         result.append(mod)
 
-    return b'\0' * (origlen - newlen) + bseq(reversed(result))
+    return b'\0' * (origlen - newlen) + bytes(reversed(result))
 
 
 def validate_b58_checksum(addr_bytes):
