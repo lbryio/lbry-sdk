@@ -1,6 +1,6 @@
 from io import StringIO
 import logging
-import mock
+from unittest import mock
 from unittest import skipIf
 from twisted.internet import defer
 from twisted.trial import unittest

@@ -1,5 +1,5 @@
 import types
-import mock
+from unittest import mock
 from twisted.trial import unittest
 from twisted.internet import defer, task
 

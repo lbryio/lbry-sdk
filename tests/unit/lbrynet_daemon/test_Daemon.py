@@ -1,4 +1,4 @@
-import mock
+from unittest import mock
 import json
 import random
 from os import path

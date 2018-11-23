@@ -1,4 +1,5 @@
 from io import BytesIO
+from unittest import mock
 
 import mock
 from twisted.internet import defer
