@@ -1,7 +1,6 @@
 import json
 import binascii
 from google.protobuf import json_format  # pylint: disable=no-name-in-module
-import six
 
 from lbrynet.schema.error import DecodeError, InvalidAddress
 from lbrynet.schema.legacy.migrate import migrate as schema_migrator
@@ -48,15 +47,15 @@ def smart_decode(claim_value):
 
     if claim_value[0] in ['{', ord('{')]:
         try:
-            if six.PY3 and isinstance(claim_value, six.binary_type):
+            if isinstance(claim_value, bytes):
                 claim_value = claim_value.decode()
             decoded_json = json.loads(claim_value)
             return migrate_json_claim_value(decoded_json)
         except (ValueError, TypeError):
             pass
     try:
-        if six.PY3 and isinstance(claim_value, six.text_type):
+        if isinstance(claim_value, str):
             claim_value = claim_value.encode()
         return ClaimDict.deserialize(claim_value)
     except (DecodeError, InvalidAddress, KeyError, TypeError):
-            raise DecodeError(claim_value)
+        raise DecodeError(claim_value)

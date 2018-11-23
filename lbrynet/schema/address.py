@@ -1,4 +1,3 @@
-import six
 import lbrynet.schema
 from lbrynet.schema.base import b58encode, b58decode, validate_b58_checksum
 from lbrynet.schema.hashing import double_sha256, hash160
@@ -12,10 +11,7 @@ def validate_address_length(addr_bytes):
 
 
 def validate_address_prefix(addr_bytes):
-    if six.PY3:
-        prefix = addr_bytes[0]
-    else:
-        prefix = ord(addr_bytes[0])
+    prefix = addr_bytes[0]
     if prefix not in ADDRESS_PREFIXES[lbrynet.schema.BLOCKCHAIN_NAME].values():
         raise InvalidAddress("Invalid address prefix: %.2X" % prefix)
 

@@ -43,7 +43,6 @@ setup(
         'treq',
         'docopt',
         'colorama==0.3.7',
-        'six'
     ],
     extras_require={
         'test': (
