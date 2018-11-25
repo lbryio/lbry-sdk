@@ -57,9 +57,11 @@ class MainNetLedger(BaseLedger):
         for uri in uris:
             try:
                 parse_lbry_uri(uri)
+                resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
             except URIParseError as err:
                 return {'error': err.args[0]}
-        resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
+            except Exception as e:
+                return {'error': str(e)}
         return await self.resolver._handle_resolutions(resolutions, uris, page, page_size)
 
     async def get_claim_by_claim_id(self, claim_id):
