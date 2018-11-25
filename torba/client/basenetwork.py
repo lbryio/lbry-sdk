@@ -3,7 +3,7 @@ import asyncio
 from asyncio import CancelledError
 from itertools import cycle
 
-from aiorpcx import RPCSession as BaseClientSession, Connector
+from aiorpcx import RPCSession as BaseClientSession, Connector, RPCError
 
 from torba import __version__
 from torba.stream import StreamController
@@ -20,6 +20,13 @@ class ClientSession(BaseClientSession):
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
         self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
+
+    async def send_request(self, method, args=()):
+        try:
+            return await super().send_request(method, args)
+        except RPCError as e:
+            log.warning("Wallet server returned an error. Code: %s Message: %s", *e.args)
+            raise e
 
     async def create_connection(self):
         connector = Connector(lambda: self, *self.server)
