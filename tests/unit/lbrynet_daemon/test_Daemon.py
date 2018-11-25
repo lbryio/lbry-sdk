@@ -1,4 +1,4 @@
-import mock
+from unittest import mock
 import json
 import random
 from os import path
@@ -13,7 +13,8 @@ from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
 from lbrynet.extras.daemon.Components import f2d
-from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, BLOB_COMPONENT
+from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT
+from lbrynet.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
@@ -83,7 +84,7 @@ class TestCostEst(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
 
     @defer.inlineCallbacks
     def test_fee_and_generous_data(self):
@@ -128,7 +129,7 @@ class TestJsonRpc(unittest.TestCase):
             return None
 
         mock_conf_settings(self)
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
         self.test_daemon = get_test_daemon()
         self.test_daemon.wallet_manager.is_first_run = False
         self.test_daemon.wallet_manager.get_best_blockhash = noop
@@ -150,7 +151,7 @@ class TestFileListSorting(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        test_utils.resetTime(self)
+        test_utils.reset_time(self)
         self.faker = Faker('en_US')
         self.faker.seed(129)  # contains 3 same points paid (5.9)
         self.test_daemon = get_test_daemon()

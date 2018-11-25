@@ -1,9 +1,11 @@
 from io import StringIO
 import logging
-import mock
+from unittest import mock
 from unittest import skipIf
+
 from twisted.internet import defer
 from twisted.trial import unittest
+
 from lbrynet import custom_logger
 from tests.test_utils import is_android
 
@@ -34,7 +36,7 @@ class TestLogger(unittest.TestCase):
             return self.stream.getvalue().split('\n')
 
         # the line number could change if this file gets refactored
-        expected_first_line = 'test_customLogger.py:18 - My message: terrible things happened'
+        expected_first_line = 'test_customLogger.py:20 - My message: terrible things happened'
 
         # testing the entirety of the message is futile as the
         # traceback will depend on the system the test is being run on

@@ -1,6 +1,6 @@
 from io import BytesIO
+from unittest import mock
 
-import mock
 from twisted.internet import defer
 from twisted.test import proto_helpers
 from twisted.trial import unittest

@@ -1,4 +1,4 @@
-from mock import MagicMock
+from unittest.mock import MagicMock
 
 from twisted.trial import unittest
 from twisted.internet import defer

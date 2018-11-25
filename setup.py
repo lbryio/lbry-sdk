@@ -46,7 +46,6 @@ setup(
     ],
     extras_require={
         'test': (
-            'mock>=2.0,<3.0',
             'faker==0.8.17',
             'pytest',
             'pytest-asyncio',
