@@ -272,9 +272,10 @@ class LbryWalletManager(BaseWalletManager):
         check_cache = kwargs.get('check_cache', False)  # TODO: put caching back (was force_refresh parameter)
         ledger: MainNetLedger = self.default_account.ledger
         results = await ledger.resolve(page, page_size, *uris)
-        await self.old_db.save_claims_for_resolve(
-            (value for value in results.values() if 'error' not in value)
-        ).asFuture(asyncio.get_event_loop())
+        if 'error' not in results:
+            await self.old_db.save_claims_for_resolve(
+                (value for value in results.values() if 'error' not in value)
+            ).asFuture(asyncio.get_event_loop())
         return results
 
     def get_claims_for_name(self, name: str):

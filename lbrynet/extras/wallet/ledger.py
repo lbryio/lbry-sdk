@@ -2,6 +2,7 @@ import asyncio
 import logging
 from binascii import unhexlify
 
+from lbrynet.schema.validator import validate_claim_id
 from torba.client.baseledger import BaseLedger
 from lbrynet.schema.error import URIParseError
 from lbrynet.schema.uri import parse_lbry_uri
@@ -56,13 +57,18 @@ class MainNetLedger(BaseLedger):
     async def resolve(self, page, page_size, *uris):
         for uri in uris:
             try:
-                parse_lbry_uri(uri)
-                resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
+                parsed_uri = parse_lbry_uri(uri)
+                if parsed_uri.claim_id:
+                    validate_claim_id(parsed_uri.claim_id)
             except URIParseError as err:
                 return {'error': err.args[0]}
             except Exception as e:
                 return {'error': str(e)}
-        return await self.resolver._handle_resolutions(resolutions, uris, page, page_size)
+        try:
+            resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
+            return await self.resolver._handle_resolutions(resolutions, uris, page, page_size)
+        except Exception as e:
+            return {'error': str(e)}
 
     async def get_claim_by_claim_id(self, claim_id):
         result = (await self.network.get_claims_by_ids(claim_id)).pop(claim_id, {})
