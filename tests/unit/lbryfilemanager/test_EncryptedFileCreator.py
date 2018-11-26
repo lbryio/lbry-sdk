@@ -8,7 +8,7 @@ from lbrynet.peer import PeerManager
 from lbrynet.blob.stream_descriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.blob_exchange.rate_limiter import DummyRateLimiter
+from lbrynet.blob_exchange.rate_limiter import RateLimiter
 from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob import EncryptedFileCreator
@@ -42,7 +42,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
         self.wallet = FakeWallet()
         self.peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
-        self.rate_limiter = DummyRateLimiter()
+        self.rate_limiter = RateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
         self.storage = SQLiteStorage(self.tmp_db_dir)
         self.blob_manager = DiskBlobManager(self.tmp_blob_dir, self.storage)

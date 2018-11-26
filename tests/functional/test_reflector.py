@@ -12,7 +12,7 @@ from lbrynet.peer import PeerManager
 from lbrynet.extras.daemon import blob_manager
 from lbrynet.blob import EncryptedFileCreator, stream_descriptor
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.blob_exchange.rate_limiter import DummyRateLimiter
+from lbrynet.blob_exchange.rate_limiter import RateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from tests import mocks
@@ -35,11 +35,11 @@ class TestReflector(unittest.TestCase):
         self.client_storage = SQLiteStorage(self.client_db_dir)
         self.client_blob_manager = blob_manager.DiskBlobManager(self.client_blob_dir, self.client_storage)
         self.server_lbry_file_manager = EncryptedFileManager(
-            peer_finder, DummyRateLimiter(), self.server_blob_manager, wallet, prm, self.server_storage,
+            peer_finder, RateLimiter(), self.server_blob_manager, wallet, prm, self.server_storage,
             stream_descriptor.StreamDescriptorIdentifier()
         )
         self.client_lbry_file_manager = EncryptedFileManager(
-            peer_finder, DummyRateLimiter(), self.client_blob_manager, wallet, prm, self.client_storage,
+            peer_finder, RateLimiter(), self.client_blob_manager, wallet, prm, self.client_storage,
             stream_descriptor.StreamDescriptorIdentifier()
         )
 

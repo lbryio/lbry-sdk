@@ -6,7 +6,7 @@ from twisted.internet import defer, threads, reactor
 
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.blob_exchange.rate_limiter import DummyRateLimiter
+from lbrynet.blob_exchange.rate_limiter import RateLimiter
 from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.blob_exchange.client.BlobRequester import BlobRequester
 from lbrynet.blob_exchange.client.StandaloneBlobDownloader import StandaloneBlobDownloader
@@ -61,7 +61,7 @@ class SingleBlobDownloadManager:
 class SinglePeerDownloader:
     def __init__(self):
         self._payment_rate_manager = OnlyFreePaymentsManager()
-        self._rate_limiter = DummyRateLimiter()
+        self._rate_limiter = RateLimiter()
         self._wallet = None
         self._blob_manager = None
 

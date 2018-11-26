@@ -6,44 +6,6 @@ from twisted.internet import task
 log = logging.getLogger(__name__)
 
 
-class DummyRateLimiter:
-    def __init__(self):
-        self.dl_bytes_this_second = 0
-        self.ul_bytes_this_second = 0
-        self.total_dl_bytes = 0
-        self.total_ul_bytes = 0
-        self.target_dl = 0
-        self.target_ul = 0
-        self.tick_call = None
-
-    def start(self):
-        self.tick_call = task.LoopingCall(self.tick)
-        self.tick_call.start(1)
-
-    def tick(self):
-        self.dl_bytes_this_second = 0
-        self.ul_bytes_this_second = 0
-
-    def stop(self):
-        if self.tick_call is not None:
-            self.tick_call.stop()
-            self.tick_call = None
-
-    def set_dl_limit(self, limit):
-        pass
-
-    def set_ul_limit(self, limit):
-        pass
-
-    def report_dl_bytes(self, num_bytes):
-        self.dl_bytes_this_second += num_bytes
-        self.total_dl_bytes += num_bytes
-
-    def report_ul_bytes(self, num_bytes):
-        self.ul_bytes_this_second += num_bytes
-        self.total_ul_bytes += num_bytes
-
-
 class RateLimiter:
     """This class ensures that upload and download rates don't exceed specified maximums"""
 
