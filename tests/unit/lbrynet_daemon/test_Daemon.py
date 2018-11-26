@@ -19,7 +19,7 @@ from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
-from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from tests import test_utils
 from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager

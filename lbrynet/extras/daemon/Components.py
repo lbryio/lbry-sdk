@@ -28,12 +28,12 @@ from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
 from lbrynet.utils import DeferredDict, generate_id
-from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
-from lbrynet.p2p.rate_limiter import RateLimiter
+from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.rate_limiter import RateLimiter
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
-from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
-from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
+from lbrynet.blob_exchange.server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.blob_exchange.server.ServerProtocol import ServerProtocolFactory
 
 
 log = logging.getLogger(__name__)

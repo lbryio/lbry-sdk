@@ -36,7 +36,7 @@ from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError
 from lbrynet.extras.daemon.single_peer_downloader import SinglePeerDownloader
-from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.blob_exchange.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError

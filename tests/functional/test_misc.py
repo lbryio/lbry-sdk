@@ -4,15 +4,15 @@ from hashlib import md5
 from twisted.internet import defer, reactor
 from twisted.trial import unittest
 from lbrynet import conf
-from lbrynet.p2p.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
+from lbrynet.blob_exchange.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.blob.stream_descriptor import download_sd_blob
-from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.peer import PeerManager
-from lbrynet.p2p.rate_limiter import RateLimiter
-from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
-from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
+from lbrynet.blob_exchange.rate_limiter import RateLimiter
+from lbrynet.blob_exchange.server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.blob_exchange.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.EncryptedFileCreator import create_lbry_file
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager

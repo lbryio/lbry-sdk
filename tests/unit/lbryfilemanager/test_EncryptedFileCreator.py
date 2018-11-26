@@ -8,8 +8,8 @@ from lbrynet.peer import PeerManager
 from lbrynet.blob.stream_descriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.p2p.rate_limiter import DummyRateLimiter
-from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.rate_limiter import DummyRateLimiter
+from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob import EncryptedFileCreator
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager

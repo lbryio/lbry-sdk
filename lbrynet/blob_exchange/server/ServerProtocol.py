@@ -2,7 +2,7 @@ import logging
 from twisted.internet import error
 from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.python import failure
-from lbrynet.p2p.server.ServerRequestHandler import ServerRequestHandler
+from lbrynet.blob_exchange.server.ServerRequestHandler import ServerRequestHandler
 
 
 log = logging.getLogger(__name__)

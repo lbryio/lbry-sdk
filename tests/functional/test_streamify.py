@@ -8,10 +8,10 @@ from twisted.internet import defer, threads
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.blob.stream_descriptor import get_sd_info
-from lbrynet.p2p.rate_limiter import DummyRateLimiter
+from lbrynet.blob_exchange.rate_limiter import DummyRateLimiter
 from lbrynet.peer import PeerManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.blob.EncryptedFileCreator import create_lbry_file
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from tests import mocks
