@@ -12,7 +12,7 @@ asyncioreactor.install()
 from twisted.internet import defer, threads, reactor
 
 from lbrynet import conf, log_support
-from lbrynet.p2p import Peer
+from lbrynet.blob_exchange import Peer
 from lbrynet.extras.daemon.single_peer_downloader import SinglePeerDownloader
 from lbrynet.blob.stream_descriptor import BlobStreamDescriptorReader
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
