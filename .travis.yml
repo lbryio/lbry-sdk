@@ -18,7 +18,7 @@ jobs:
 
     - &tests
       stage: test
-      name: "Unit Tests w/ Python 3.7"
+      name: "Unit Tests"
       install:
         - pip install coverage
         - pip install git+https://github.com/lbryio/torba.git#egg=torba
@@ -31,16 +31,7 @@ jobs:
         - bash <(curl -s https://codecov.io/bash)
 
     - <<: *tests
-      name: "Unit Tests w/ Python 3.6"
-      python: "3.6"
-
-    - <<: *tests
-      name: "DHT Tests w/ Python 3.7"
-      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
-
-    - <<: *tests
-      name: "DHT Tests w/ Python 3.6"
-      python: "3.6"
+      name: "DHT Tests"
       script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
 
     - name: "Integration Tests"
@@ -72,7 +63,6 @@ jobs:
 
     - &build
       name: "Linux"
-      python: "3.6"
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
