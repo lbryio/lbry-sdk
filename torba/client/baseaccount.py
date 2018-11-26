@@ -309,11 +309,26 @@ class BaseAccount:
 
     def decrypt(self, password: str) -> None:
         assert self.encrypted, "Key is not encrypted."
-        self.seed, self.seed_encryption_init_vector = aes_decrypt(password, self.seed)
-        pk_string, self.private_key_encryption_init_vector = aes_decrypt(password, self.private_key_string)
-        self.private_key = from_extended_key_string(
-            self.ledger, pk_string
-        )
+        try:
+            seed, seed_iv = aes_decrypt(password, self.seed)
+            pk_string, pk_iv = aes_decrypt(password, self.private_key_string)
+        except ValueError:  # failed to remove padding, password is wrong
+            return
+        try:
+            Mnemonic().mnemonic_decode(seed)
+        except IndexError:  # failed to decode the seed, this either means it decrypted and is invalid
+                            # or that we hit an edge case where an incorrect password gave valid padding
+            return
+        try:
+            private_key = from_extended_key_string(
+                self.ledger, pk_string
+            )
+        except (TypeError, ValueError):
+            return
+        self.seed = seed
+        self.seed_encryption_init_vector = seed_iv
+        self.private_key = private_key
+        self.private_key_encryption_init_vector = pk_iv
         self.password = password
         self.encrypted = False
 
