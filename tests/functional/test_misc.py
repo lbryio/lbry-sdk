@@ -4,8 +4,8 @@ from twisted.internet import defer, reactor
 from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.p2p.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
-from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.p2p.StreamDescriptor import download_sd_blob
+from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
+from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.extras.daemon.PeerManager import PeerManager

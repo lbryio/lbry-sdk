@@ -4,15 +4,15 @@ from twisted.internet import defer
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbrynet.extras.daemon.PeerManager import PeerManager
-from lbrynet.p2p.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
-from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.blob.stream_descriptor import get_sd_info, BlobStreamDescriptorReader
+from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob import EncryptedFileCreator
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.p2p.StreamDescriptor import JSONBytesEncoder
+from lbrynet.blob.stream_descriptor import JSONBytesEncoder
 from tests import mocks
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 

@@ -3,14 +3,13 @@ from binascii import hexlify
 
 from twisted.internet import defer, error
 from twisted.trial import unittest
-from lbrynet.p2p.StreamDescriptor import get_sd_info
+from lbrynet.blob.stream_descriptor import get_sd_info
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
 from lbrynet.extras.daemon.PeerManager import PeerManager
 from lbrynet.p2p import BlobManager
-from lbrynet.p2p import StreamDescriptor
-from lbrynet.blob import EncryptedFileCreator
+from lbrynet.blob import EncryptedFileCreator, stream_descriptor
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -36,11 +35,11 @@ class TestReflector(unittest.TestCase):
         self.client_blob_manager = BlobManager.DiskBlobManager(self.client_blob_dir, self.client_storage)
         self.server_lbry_file_manager = EncryptedFileManager(
             peer_finder, DummyRateLimiter(), self.server_blob_manager, wallet, prm, self.server_storage,
-            StreamDescriptor.StreamDescriptorIdentifier()
+            stream_descriptor.StreamDescriptorIdentifier()
         )
         self.client_lbry_file_manager = EncryptedFileManager(
             peer_finder, DummyRateLimiter(), self.client_blob_manager, wallet, prm, self.client_storage,
-            StreamDescriptor.StreamDescriptorIdentifier()
+            stream_descriptor.StreamDescriptorIdentifier()
         )
 
         self.expected_blobs = [

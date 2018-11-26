@@ -31,7 +31,7 @@ from lbrynet.utils import DeferredDict, generate_id
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.BlobManager import DiskBlobManager
-from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
+from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
 from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
 

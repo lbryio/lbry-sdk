@@ -3,7 +3,7 @@ import logging
 import os
 
 from lbrynet.error import InvalidStreamDescriptorError
-from lbrynet.p2p.StreamDescriptor import EncryptedFileStreamType, format_sd_info, format_blobs, validate_descriptor
+from lbrynet.blob.stream_descriptor import EncryptedFileStreamType, format_sd_info, format_blobs, validate_descriptor
 from lbrynet.blob.CryptBlob import CryptBlobInfo
 
 log = logging.getLogger(__name__)

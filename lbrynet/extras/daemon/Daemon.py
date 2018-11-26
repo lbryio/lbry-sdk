@@ -32,7 +32,7 @@ from lbrynet.extras.daemon.mime_types import guess_mime_type
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.p2p.StreamDescriptor import download_sd_blob
+from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError
 from lbrynet.p2p.Peer import Peer

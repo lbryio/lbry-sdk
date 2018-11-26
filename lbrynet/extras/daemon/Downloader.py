@@ -7,7 +7,7 @@ from lbrynet.schema.fee import Fee
 
 from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
 from lbrynet.error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
-from lbrynet.p2p.StreamDescriptor import download_sd_blob
+from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from torba.client.constants import COIN
 from lbrynet.extras.wallet.dewies import dewies_to_lbc
