@@ -14,7 +14,7 @@ from twisted.internet import defer, threads, reactor
 from lbrynet import conf, log_support
 from lbrynet.p2p import Peer
 from lbrynet.p2p.SinglePeerDownloader import SinglePeerDownloader
-from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorReader
+from lbrynet.blob.stream_descriptor import BlobStreamDescriptorReader
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.extras.daemon.Components import f2d
 from lbrynet.extras.daemon.storage import SQLiteStorage
