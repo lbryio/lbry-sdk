@@ -15,7 +15,7 @@ from lbrynet import conf, log_support
 from lbrynet.p2p import Peer
 from lbrynet.extras.daemon.single_peer_downloader import SinglePeerDownloader
 from lbrynet.blob.stream_descriptor import BlobStreamDescriptorReader
-from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.extras.daemon.Components import f2d
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.wallet import LbryWalletManager
