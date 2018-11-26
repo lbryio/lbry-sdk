@@ -7,7 +7,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from tests.test_utils import random_lbry_hash
-from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.peer import Peer
 from lbrynet import conf

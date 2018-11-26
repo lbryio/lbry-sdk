@@ -6,7 +6,7 @@ from twisted.internet import defer, task
 from lbrynet.p2p.price_negotiation import payment_rate_manager
 from lbrynet.error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
-from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.p2p.client.DownloadManager import DownloadManager
 from lbrynet.extras.daemon import Downloader

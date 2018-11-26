@@ -9,7 +9,7 @@ from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
 from lbrynet.peer import PeerManager
-from lbrynet.p2p import BlobManager
+from lbrynet.extras.daemon import blob_manager
 from lbrynet.blob import EncryptedFileCreator, stream_descriptor
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
@@ -31,9 +31,9 @@ class TestReflector(unittest.TestCase):
         peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
         self.server_storage = SQLiteStorage(self.server_db_dir)
-        self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir, self.server_storage)
+        self.server_blob_manager = blob_manager.DiskBlobManager(self.server_blob_dir, self.server_storage)
         self.client_storage = SQLiteStorage(self.client_db_dir)
-        self.client_blob_manager = BlobManager.DiskBlobManager(self.client_blob_dir, self.client_storage)
+        self.client_blob_manager = blob_manager.DiskBlobManager(self.client_blob_dir, self.client_storage)
         self.server_lbry_file_manager = EncryptedFileManager(
             peer_finder, DummyRateLimiter(), self.server_blob_manager, wallet, prm, self.server_storage,
             stream_descriptor.StreamDescriptorIdentifier()

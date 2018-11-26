@@ -8,7 +8,7 @@ from lbrynet.p2p.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFa
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
-from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.peer import PeerManager
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory

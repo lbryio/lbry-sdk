@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbrynet.peer import PeerManager
 from lbrynet.blob.stream_descriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
-from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
