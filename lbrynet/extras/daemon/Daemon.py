@@ -35,7 +35,6 @@ from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError
-from lbrynet.p2p.Peer import Peer
 from lbrynet.extras.daemon.single_peer_downloader import SinglePeerDownloader
 from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.schema.claim import ClaimDict

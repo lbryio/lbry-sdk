@@ -1,4 +1,5 @@
 import os
+import asyncio
 from hashlib import md5
 from twisted.internet import defer, reactor
 from twisted.trial import unittest
@@ -8,7 +9,7 @@ from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.p2p.BlobManager import DiskBlobManager
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
@@ -64,7 +65,7 @@ class LbryUploader:
 
         self.db_dir, self.blob_dir = mk_db_and_blob_dir()
         self.wallet = FakeWallet()
-        self.peer_manager = PeerManager()
+        self.peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         self.rate_limiter = RateLimiter()
         if self.ul_rate_limit is not None:
             self.rate_limiter.set_ul_limit(self.ul_rate_limit)
@@ -116,7 +117,7 @@ class TestTransfer(unittest.TestCase):
         mocks.mock_conf_settings(self)
         self.db_dir, self.blob_dir = mk_db_and_blob_dir()
         self.wallet = FakeWallet()
-        self.peer_manager = PeerManager()
+        self.peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 1)
         self.rate_limiter = RateLimiter()
         self.prm = OnlyFreePaymentsManager()

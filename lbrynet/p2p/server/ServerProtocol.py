@@ -30,7 +30,7 @@ class ServerProtocol(Protocol):
     def connectionMade(self):
         log.debug("Got a connection")
         peer_info = self.transport.getPeer()
-        self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
+        self.peer = self.factory.peer_manager.get_peer(peer_info.host, tcp_port=peer_info.port)
         self.request_handler = ServerRequestHandler(self)
         for query_handler_factory in self.factory.query_handler_factories.values():
             query_handler = query_handler_factory.build_query_handler()

@@ -1,5 +1,6 @@
 import os
 import shutil
+import asyncio
 import tempfile
 from hashlib import md5
 from twisted.trial.unittest import TestCase
@@ -8,7 +9,7 @@ from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.blob.stream_descriptor import get_sd_info
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.blob.EncryptedFileCreator import create_lbry_file
@@ -37,7 +38,7 @@ class TestStreamify(TestCase):
         os.mkdir(self.blob_dir)
         self.dht_node = FakeNode()
         self.wallet = FakeWallet()
-        self.peer_manager = PeerManager()
+        self.peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
         self.rate_limiter = DummyRateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()

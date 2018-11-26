@@ -1,4 +1,5 @@
 import os
+import asyncio
 from binascii import hexlify
 
 from twisted.internet import defer, error
@@ -7,7 +8,7 @@ from lbrynet.blob.stream_descriptor import get_sd_info
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 from lbrynet.p2p import BlobManager
 from lbrynet.blob import EncryptedFileCreator, stream_descriptor
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
@@ -27,7 +28,7 @@ class TestReflector(unittest.TestCase):
         self.client_db_dir, self.client_blob_dir = mk_db_and_blob_dir()
         prm = OnlyFreePaymentsManager()
         wallet = mocks.Wallet()
-        peer_manager = PeerManager()
+        peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
         self.server_storage = SQLiteStorage(self.server_db_dir)
         self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir, self.server_storage)

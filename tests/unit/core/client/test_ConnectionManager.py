@@ -1,3 +1,4 @@
+import asyncio
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, reactor, task
 from twisted.internet.task import deferLater
@@ -10,7 +11,7 @@ from lbrynet.p2p.client.ClientProtocol import ClientProtocol
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.Peer import Peer
 from lbrynet.error import NoResponseError
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 
 PEER_PORT = 5551
 LOCAL_HOST = '127.0.0.1'
@@ -110,7 +111,7 @@ class MocServerProtocolFactory(ServerFactory):
             }
         else:
             self.query_handler_factories = {}
-        self.peer_manager = PeerManager()
+        self.peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
 
 
 class TestIntegrationConnectionManager(TestCase):

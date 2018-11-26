@@ -1,7 +1,8 @@
 import logging
+import asyncio
 from twisted.internet import defer
 from lbrynet.error import ComponentStartConditionNotMet
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 from lbrynet.extras.daemon.PeerFinder import DHTPeerFinder
 
 log = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class ComponentManager:
         self.component_classes = {}
         self.components = set()
         self.analytics_manager = analytics_manager
-        self.peer_manager = peer_manager or PeerManager()
+        self.peer_manager = peer_manager or PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         self.peer_finder = peer_finder or DHTPeerFinder(self)
 
         for component_name, component_class in self.default_component_classes.items():

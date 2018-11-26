@@ -1,9 +1,10 @@
 import json
+import asyncio
 from twisted.trial import unittest
 from twisted.internet import defer
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.peer import PeerManager
 from lbrynet.blob.stream_descriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.p2p.BlobManager import DiskBlobManager
@@ -39,7 +40,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
         mocks.mock_conf_settings(self)
         self.tmp_db_dir, self.tmp_blob_dir = mk_db_and_blob_dir()
         self.wallet = FakeWallet()
-        self.peer_manager = PeerManager()
+        self.peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
         self.rate_limiter = DummyRateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()

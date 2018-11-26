@@ -224,14 +224,24 @@ class PeerManager:
         self._rpc_failures = {}
         self._blob_peers = {}
 
-    def get_peer(self, node_id: bytes, address: str, udp_port: int) -> Peer:
+    def get_peer(self, address: str, node_id: typing.Optional[bytes] = None, udp_port: typing.Optional[int] = None,
+                 tcp_port: typing.Optional[int] = None) -> Peer:
+        assert not all((udp_port is None, tcp_port is None))
         for contact in self._contacts.values():
-            if contact.node_id == node_id and contact.address == address and contact.port == udp_port:
-                return contact
+            if address != contact.address:
+                continue
+            if node_id and contact.node_id != node_id:
+                continue
+            if udp_port and contact.udp_port != udp_port:
+                continue
+            if tcp_port and tcp_port != contact.tcp_port:
+                contact.update_tcp_port(tcp_port)
+            return contact
 
-    def make_peer(self, address: str, node_id: bytes, dht_protocol=None, udp_port: typing.Optional[int] = None,
-                  first_contacted: typing.Optional[int] = None, tcp_port: typing.Optional[int] = None) -> Peer:
-        contact = self.get_peer(node_id, address, udp_port)
+    def make_peer(self, address: str, node_id: typing.Optional[bytes] = None, dht_protocol=None,
+                  udp_port: typing.Optional[int] = None, first_contacted: typing.Optional[int] = None,
+                  tcp_port: typing.Optional[int] = None) -> Peer:
+        contact = self.get_peer(address, node_id, udp_port, tcp_port)
         if contact:
             if tcp_port:
                 contact.update_tcp_port(tcp_port)

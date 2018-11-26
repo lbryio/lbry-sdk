@@ -236,7 +236,7 @@ class PeerFinder:
         self.count += 1
         if self.count >= self.num_peers:
             self.count = 0
-        return defer.succeed([self.peer_manager.get_peer("127.0.0.1", peer_port)])
+        return defer.succeed([self.peer_manager.get_peer("127.0.0.1", tcp_port=peer_port)])
 
     def run_manage_loop(self):
         pass
