@@ -3,12 +3,12 @@ from unittest import mock
 from twisted.trial import unittest
 from twisted.internet import defer, task
 
-from lbrynet.p2p.price_negotiation import payment_rate_manager
+from lbrynet.blob_exchange.price_negotiation import payment_rate_manager
 from lbrynet.error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.p2p.RateLimiter import DummyRateLimiter
-from lbrynet.p2p.client.DownloadManager import DownloadManager
+from lbrynet.blob_exchange.client.DownloadManager import DownloadManager
+from lbrynet.blob_exchange.rate_limiter import RateLimiter
 from lbrynet.extras.daemon import Downloader
 from lbrynet.extras.daemon import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -82,7 +82,7 @@ class GetStreamTests(unittest.TestCase):
         disable_max_key_fee = False
         data_rate = {'currency': "LBC", 'amount': 0, 'address': ''}
         getstream = Downloader.GetStream(
-            sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, DummyRateLimiter(), prm,
+            sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, RateLimiter(), prm,
             storage, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate
         )
         getstream.download_manager = mock.Mock(spec=DownloadManager)

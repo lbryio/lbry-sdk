@@ -8,7 +8,7 @@ from lbrynet import conf, utils
 from lbrynet.p2p.client.ClientRequest import ClientRequest
 from lbrynet.p2p.server.ServerProtocol import ServerProtocol
 from lbrynet.p2p.client.ClientProtocol import ClientProtocol
-from lbrynet.p2p.RateLimiter import RateLimiter
+from lbrynet.p2p.rate_limiter import RateLimiter
 from lbrynet.p2p.Peer import Peer
 from lbrynet.error import NoResponseError
 from lbrynet.peer import PeerManager

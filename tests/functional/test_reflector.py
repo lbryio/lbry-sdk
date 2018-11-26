@@ -12,7 +12,7 @@ from lbrynet.peer import PeerManager
 from lbrynet.extras.daemon import blob_manager
 from lbrynet.blob import EncryptedFileCreator, stream_descriptor
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.p2p.RateLimiter import DummyRateLimiter
+from lbrynet.p2p.rate_limiter import DummyRateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from tests import mocks

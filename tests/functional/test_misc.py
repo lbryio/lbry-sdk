@@ -10,7 +10,7 @@ from lbrynet.blob.stream_descriptor import download_sd_blob
 from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.extras.daemon.blob_manager import DiskBlobManager
 from lbrynet.peer import PeerManager
-from lbrynet.p2p.RateLimiter import RateLimiter
+from lbrynet.p2p.rate_limiter import RateLimiter
 from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.extras.daemon.storage import SQLiteStorage
