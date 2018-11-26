@@ -22,7 +22,7 @@ def db_class(name):
     raise RuntimeError('unrecognised DB engine "{}"'.format(name))
 
 
-class Storage(object):
+class Storage:
     '''Abstract base class of the DB backend abstraction.'''
 
     def __init__(self, name, for_sync):
@@ -121,7 +121,7 @@ class RocksDB(Storage):
         return RocksDBIterator(self.db, prefix, reverse)
 
 
-class RocksDBWriteBatch(object):
+class RocksDBWriteBatch:
     '''A write batch for RocksDB.'''
 
     def __init__(self, db):
@@ -136,7 +136,7 @@ class RocksDBWriteBatch(object):
             self.db.write(self.batch)
 
 
-class RocksDBIterator(object):
+class RocksDBIterator:
     '''An iterator for RocksDB.'''
 
     def __init__(self, db, prefix, reverse):

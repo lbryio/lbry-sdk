@@ -33,7 +33,7 @@ from aiorpcx import Event
 from torba.server.hash import double_sha256
 
 
-class Merkle(object):
+class Merkle:
     '''Perform merkle tree calculations on binary hashes using a given hash
     function.
 
@@ -157,7 +157,7 @@ class Merkle(object):
         return leaf_branch + level_branch, root
 
 
-class MerkleCache(object):
+class MerkleCache:
     '''A cache to calculate merkle branches efficiently.'''
 
     def __init__(self, merkle, source_func):

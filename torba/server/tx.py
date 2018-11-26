@@ -85,7 +85,7 @@ class TxOutput(namedtuple("TxOutput", "value pk_script")):
         ))
 
 
-class Deserializer(object):
+class Deserializer:
     '''Deserializes blocks into transactions.
 
     External entry points are read_tx(), read_tx_and_hash(),

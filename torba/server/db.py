@@ -33,7 +33,7 @@ UTXO = namedtuple("UTXO", "tx_num tx_pos tx_hash height value")
 
 
 @attr.s(slots=True)
-class FlushData(object):
+class FlushData:
     height = attr.ib()
     tx_count = attr.ib()
     headers = attr.ib()
@@ -45,7 +45,7 @@ class FlushData(object):
     tip = attr.ib()
 
 
-class DB(object):
+class DB:
     '''Simple wrapper of the backend database for querying.
 
     Performs no DB update, though the DB will be cleaned on opening if

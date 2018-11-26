@@ -91,7 +91,7 @@ def _match_ops(ops, pattern):
     return True
 
 
-class ScriptPubKey(object):
+class ScriptPubKey:
     '''A class for handling a tx output script that gives conditions
     necessary for spending.
     '''
@@ -177,7 +177,7 @@ class ScriptPubKey(object):
                 + bytes([OP_1 + n - 1, OP_CHECK_MULTISIG]))
 
 
-class Script(object):
+class Script:
 
     @classmethod
     def get_ops(cls, script):

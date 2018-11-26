@@ -33,7 +33,7 @@ from torba.server.util import cachedproperty
 from typing import Dict
 
 
-class Peer(object):
+class Peer:
 
     # Protocol version
     ATTRS = ('host', 'features',

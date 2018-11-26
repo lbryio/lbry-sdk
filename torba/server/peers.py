@@ -49,7 +49,7 @@ class PeerSession(RPCSession):
             await handler_invocation(None, request)   # Raises
 
 
-class PeerManager(object):
+class PeerManager:
     '''Looks after the DB of peer network servers.
 
     Attempts to maintain a connection with up to 8 peers.

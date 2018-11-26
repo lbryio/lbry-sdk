@@ -84,7 +84,7 @@ class Base58Error(Exception):
     '''Exception used for Base58 errors.'''
 
 
-class Base58(object):
+class Base58:
     '''Class providing base 58 functionality.'''
 
     chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'

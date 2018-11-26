@@ -58,7 +58,7 @@ class CoinError(Exception):
     '''Exception raised for coin-related errors.'''
 
 
-class Coin(object):
+class Coin:
     '''Base class of coin hierarchy.'''
 
     REORG_LIMIT = 200
@@ -268,7 +268,7 @@ class Coin(object):
         return h
 
 
-class AuxPowMixin(object):
+class AuxPowMixin:
     STATIC_BLOCK_HEADERS = False
     DESERIALIZER = lib_tx.DeserializerAuxPow
 
@@ -284,7 +284,7 @@ class AuxPowMixin(object):
         return deserializer.read_header(height, cls.BASIC_HEADER_SIZE)
 
 
-class EquihashMixin(object):
+class EquihashMixin:
     STATIC_BLOCK_HEADERS = False
     BASIC_HEADER_SIZE = 140  # Excluding Equihash solution
     DESERIALIZER = lib_tx.DeserializerEquihash
@@ -311,7 +311,7 @@ class EquihashMixin(object):
         return deserializer.read_header(height, cls.BASIC_HEADER_SIZE)
 
 
-class ScryptMixin(object):
+class ScryptMixin:
 
     DESERIALIZER = lib_tx.DeserializerTxTime
     HEADER_HASH = None
@@ -330,7 +330,7 @@ class ScryptMixin(object):
             return cls.HEADER_HASH(header)
 
 
-class KomodoMixin(object):
+class KomodoMixin:
     P2PKH_VERBYTE = bytes.fromhex("3C")
     P2SH_VERBYTES = [bytes.fromhex("55")]
     WIF_BYTE = bytes.fromhex("BC")
@@ -339,7 +339,7 @@ class KomodoMixin(object):
     DESERIALIZER = lib_tx.DeserializerZcash
 
 
-class BitcoinMixin(object):
+class BitcoinMixin:
     SHORTNAME = "BTC"
     NET = "mainnet"
     XPUB_VERBYTES = bytes.fromhex("0488b21e")
@@ -524,7 +524,7 @@ class Emercoin(Coin):
         return double_sha256(header[:cls.BASIC_HEADER_SIZE])
 
 
-class BitcoinTestnetMixin(object):
+class BitcoinTestnetMixin:
     SHORTNAME = "XTN"
     NET = "testnet"
     XPUB_VERBYTES = bytes.fromhex("043587cf")

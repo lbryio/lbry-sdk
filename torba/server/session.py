@@ -79,7 +79,7 @@ def assert_tx_hash(value):
     raise RPCError(BAD_REQUEST, f'{value} should be a transaction hash')
 
 
-class Semaphores(object):
+class Semaphores:
     '''For aiorpcX's semaphore handling.'''
 
     def __init__(self, semaphores):
@@ -96,7 +96,7 @@ class Semaphores(object):
             semaphore.release()
 
 
-class SessionGroup(object):
+class SessionGroup:
 
     def __init__(self, gid):
         self.gid = gid
@@ -104,7 +104,7 @@ class SessionGroup(object):
         self.semaphore = asyncio.Semaphore(20)
 
 
-class SessionManager(object):
+class SessionManager:
     '''Holds global state about all sessions.'''
 
     def __init__(self, env, db, bp, daemon, mempool, shutdown_event):

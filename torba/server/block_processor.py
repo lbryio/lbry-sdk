@@ -24,7 +24,7 @@ from torba.server.util import chunks, class_logger
 from torba.server.db import FlushData
 
 
-class Prefetcher(object):
+class Prefetcher:
     '''Prefetches blocks (in the forward direction only).'''
 
     def __init__(self, daemon, coin, blocks_event):
@@ -143,7 +143,7 @@ class ChainError(Exception):
     '''Raised on error processing blocks.'''
 
 
-class BlockProcessor(object):
+class BlockProcessor:
     '''Process blocks and update the DB state to match.
 
     Employ a prefetcher to prefetch blocks in batches for processing.

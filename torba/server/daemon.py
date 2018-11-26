@@ -37,7 +37,7 @@ class WorkQueueFullError(Exception):
     '''Internal - when the daemon's work queue is full.'''
 
 
-class Daemon(object):
+class Daemon:
     '''Handles connections to a daemon at the given URL.'''
 
     WARMING_UP = -28

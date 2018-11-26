@@ -22,7 +22,7 @@ from torba.server.db import UTXO
 
 
 @attr.s(slots=True)
-class MemPoolTx(object):
+class MemPoolTx:
     prevouts = attr.ib()
     # A pair is a (hashX, value) tuple
     in_pairs = attr.ib()
@@ -32,7 +32,7 @@ class MemPoolTx(object):
 
 
 @attr.s(slots=True)
-class MemPoolTxSummary(object):
+class MemPoolTxSummary:
     hash = attr.ib()
     fee = attr.ib()
     has_unconfirmed_inputs = attr.ib()
@@ -79,7 +79,7 @@ class MemPoolAPI(ABC):
         daemon's height at the time the mempool was obtained.'''
 
 
-class MemPool(object):
+class MemPool:
     '''Representation of the daemon's mempool.
 
         coin - a coin class from coins.py

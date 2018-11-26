@@ -20,7 +20,7 @@ from torba.server.util import pack_be_uint16, unpack_be_uint16_from
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
 
 
-class History(object):
+class History:
 
     DB_VERSIONS = [0]
 
