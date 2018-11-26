@@ -23,7 +23,6 @@ FakePeerFinder = mocks.PeerFinder
 FakeAnnouncer = mocks.Announcer
 GenFile = mocks.GenFile
 test_create_stream_sd_file = mocks.create_stream_sd_file
-DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 MB = 2**20
 
