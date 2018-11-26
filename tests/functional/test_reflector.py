@@ -14,7 +14,7 @@ from lbrynet.blob import EncryptedFileCreator
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from tests import mocks
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 

@@ -10,7 +10,7 @@ from lbrynet.error import ConnectionClosedBeforeResponseError
 from lbrynet.error import InvalidResponseError, RequestCanceledError, NoResponseError
 from lbrynet.error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
 from lbrynet.p2p.client.ClientRequest import ClientRequest, ClientBlobRequest
-from lbrynet.p2p.Offer import Offer
+from lbrynet.p2p.price_negotiation.offer import Offer
 
 
 log = logging.getLogger(__name__)

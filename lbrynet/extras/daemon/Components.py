@@ -28,7 +28,7 @@ from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
 from lbrynet.utils import DeferredDict, generate_id
-from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType

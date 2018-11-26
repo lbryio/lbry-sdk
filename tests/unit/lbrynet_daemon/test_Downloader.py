@@ -3,8 +3,7 @@ from unittest import mock
 from twisted.trial import unittest
 from twisted.internet import defer, task
 
-
-from lbrynet.p2p import PaymentRateManager
+from lbrynet.p2p.price_negotiation import payment_rate_manager
 from lbrynet.error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.p2p.BlobManager import DiskBlobManager
@@ -74,7 +73,7 @@ class GetStreamTests(unittest.TestCase):
 
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
         wallet = mock.Mock(spec=LbryWalletManager)
-        prm = mock.Mock(spec=PaymentRateManager.NegotiatedPaymentRateManager)
+        prm = mock.Mock(spec=payment_rate_manager.NegotiatedPaymentRateManager)
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
         storage = mock.Mock(spec=SQLiteStorage)
         peer_finder = DummyPeerFinder()

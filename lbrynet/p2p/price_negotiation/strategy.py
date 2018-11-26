@@ -1,7 +1,7 @@
 from decimal import Decimal
 from lbrynet import conf
-from lbrynet.p2p.Offer import Offer
-from lbrynet.p2p.PriceModel import MeanAvailabilityWeightedPrice, ZeroPrice
+from lbrynet.p2p.price_negotiation.offer import Offer
+from lbrynet.p2p.price_negotiation.price_model import MeanAvailabilityWeightedPrice, ZeroPrice
 
 
 def get_default_strategy(blob_tracker, **kwargs):
