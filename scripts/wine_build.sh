@@ -16,7 +16,17 @@ cd torba && pip install -e . && cd ..
 
 cd lbry
 python scripts/set_build.py
+
+# Download from their CI until its not released. Remove later!
+wget -Onetifaces-0.10.7-cp37-cp37m-win32.whl https://ci.appveyor.com/api/buildjobs/6hworunifsymrhp2/artifacts/dist%2Fnetifaces-0.10.7-cp37-cp37m-win32.whl
+pip install netifaces-0.10.7-cp37-cp37m-win32.whl
+
 pip install -e .
+
+# Twisted needs that, but installing before lbry makes everything hang
+# PyInstaller removed that as a dependency in 3.4
+# The source file from Twisted that requires it is "src/twisted/internet/stdio.py"
+pip install pywin32
+
 pyinstaller --additional-hooks-dir=scripts/. -F -n lbrynet lbrynet/extras/cli.py
-python --version
 wine dist/lbrynet.exe --version
