@@ -47,9 +47,6 @@ setup(
     extras_require={
         'test': (
             'faker==0.8.17',
-            'pytest',
-            'pytest-asyncio',
-            'pytest-xprocess',
         )
     }
 )
