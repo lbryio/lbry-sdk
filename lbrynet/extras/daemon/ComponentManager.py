@@ -1,6 +1,6 @@
 import logging
 from twisted.internet import defer
-from lbrynet.p2p.Error import ComponentStartConditionNotMet
+from lbrynet.error import ComponentStartConditionNotMet
 from lbrynet.extras.daemon.PeerManager import PeerManager
 from lbrynet.extras.daemon.PeerFinder import DHTPeerFinder
 

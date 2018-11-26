@@ -6,9 +6,9 @@ from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import failure
 from lbrynet import conf, utils
-from lbrynet.p2p.Error import ConnectionClosedBeforeResponseError, NoResponseError
-from lbrynet.p2p.Error import DownloadCanceledError, MisbehavingPeerError
-from lbrynet.p2p.Error import RequestCanceledError
+from lbrynet.error import ConnectionClosedBeforeResponseError, NoResponseError
+from lbrynet.error import DownloadCanceledError, MisbehavingPeerError
+from lbrynet.error import RequestCanceledError
 
 
 log = logging.getLogger(__name__)

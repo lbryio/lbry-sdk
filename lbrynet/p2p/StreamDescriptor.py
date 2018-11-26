@@ -7,7 +7,7 @@ from twisted.internet import threads, defer
 
 from lbrynet.cryptoutils import get_lbry_hash_obj
 from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.p2p.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
+from lbrynet.error import UnknownStreamTypeError, InvalidStreamDescriptorError
 from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
 
 log = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ from twisted.python import failure
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
 from lbrynet.blob.blob_file import is_valid_blobhash
-from lbrynet.p2p.Error import DownloadCanceledError, InvalidBlobHashError
+from lbrynet.error import DownloadCanceledError, InvalidBlobHashError
 from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.p2p.StreamDescriptor import save_sd_info
 from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2

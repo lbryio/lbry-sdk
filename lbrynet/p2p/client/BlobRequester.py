@@ -6,9 +6,9 @@ from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionAborted
 
-from lbrynet.p2p.Error import ConnectionClosedBeforeResponseError
-from lbrynet.p2p.Error import InvalidResponseError, RequestCanceledError, NoResponseError
-from lbrynet.p2p.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
+from lbrynet.error import ConnectionClosedBeforeResponseError
+from lbrynet.error import InvalidResponseError, RequestCanceledError, NoResponseError
+from lbrynet.error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
 from lbrynet.p2p.client.ClientRequest import ClientRequest, ClientBlobRequest
 from lbrynet.p2p.Offer import Offer
 

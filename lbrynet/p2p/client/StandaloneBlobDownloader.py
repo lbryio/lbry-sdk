@@ -3,7 +3,7 @@ from lbrynet.p2p.BlobInfo import BlobInfo
 from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.p2p.client.DownloadManager import DownloadManager
-from lbrynet.p2p.Error import InvalidBlobHashError, DownloadSDTimeout
+from lbrynet.error import InvalidBlobHashError, DownloadSDTimeout
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.utils import safe_start_looping_call, safe_stop_looping_call
 from twisted.python.failure import Failure

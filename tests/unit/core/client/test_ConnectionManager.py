@@ -9,7 +9,7 @@ from lbrynet.p2p.server.ServerProtocol import ServerProtocol
 from lbrynet.p2p.client.ClientProtocol import ClientProtocol
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.Peer import Peer
-from lbrynet.p2p.Error import NoResponseError
+from lbrynet.error import NoResponseError
 from lbrynet.extras.daemon.PeerManager import PeerManager
 
 PEER_PORT = 5551

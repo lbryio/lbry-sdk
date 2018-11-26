@@ -9,7 +9,7 @@ import base58
 import yaml
 from appdirs import user_data_dir, user_config_dir
 from lbrynet import utils
-from lbrynet.p2p.Error import InvalidCurrencyError
+from lbrynet.error import InvalidCurrencyError
 
 log = logging.getLogger(__name__)
 

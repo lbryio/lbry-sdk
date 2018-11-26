@@ -7,7 +7,7 @@ from unittest import skipIf
 from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet import conf
-from lbrynet.p2p.Error import InvalidCurrencyError
+from lbrynet.error import InvalidCurrencyError
 
 
 class SettingsTest(unittest.TestCase):

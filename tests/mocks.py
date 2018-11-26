@@ -9,7 +9,7 @@ from twisted.internet import defer
 from twisted.python.failure import Failure
 from lbrynet import conf
 from lbrynet.p2p.client.ClientRequest import ClientRequest
-from lbrynet.p2p.Error import RequestCanceledError
+from lbrynet.error import RequestCanceledError
 from lbrynet.p2p import BlobAvailability
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.dht.node import Node as RealNode

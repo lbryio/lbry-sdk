@@ -6,7 +6,7 @@ from twisted.internet.error import ConnectingCancelledError
 from twisted.web._newclient import ResponseNeverReceived
 
 from lbrynet.utils import DeferredDict
-from lbrynet.p2p.Error import DownloadCanceledError
+from lbrynet.error import DownloadCanceledError
 
 log = logging.getLogger(__name__)
 

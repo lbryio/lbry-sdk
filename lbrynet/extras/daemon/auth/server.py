@@ -15,8 +15,8 @@ from traceback import format_exc
 
 from lbrynet import conf, utils
 from lbrynet.extras.daemon import analytics
-from lbrynet.p2p.Error import InvalidAuthenticationToken
-from lbrynet.p2p.Error import ComponentsNotStarted, ComponentStartConditionNotMet
+from lbrynet.error import InvalidAuthenticationToken
+from lbrynet.error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.extras.looping_call_manager import LoopingCallManager
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.auth.keyring import APIKey, Keyring

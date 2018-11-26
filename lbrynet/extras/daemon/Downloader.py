@@ -5,8 +5,8 @@ from twisted.internet import defer
 from lbrynet import conf
 from lbrynet.schema.fee import Fee
 
-from lbrynet.p2p.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
-from lbrynet.p2p.Error import DownloadDataTimeout, DownloadCanceledError
+from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
+from lbrynet.error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
 from lbrynet.p2p.StreamDescriptor import download_sd_blob
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from torba.client.constants import COIN

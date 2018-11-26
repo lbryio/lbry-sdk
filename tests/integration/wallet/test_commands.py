@@ -3,17 +3,14 @@ import asyncio
 import tempfile
 import logging
 from binascii import unhexlify
-from functools import partial
 from types import SimpleNamespace
 
 from twisted.trial import unittest
 from twisted.internet import utils, defer
 from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
-
-from lbrynet.extras.wallet.transaction import Transaction
-from lbrynet.p2p.Error import InsufficientFundsError
+from lbrynet.error import InsufficientFundsError
 from lbrynet.schema.claim import ClaimDict
-
+from lbrynet.extras.wallet.transaction import Transaction
 from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
 import lbrynet.schema
