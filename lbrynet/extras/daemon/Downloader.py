@@ -1,14 +1,12 @@
 import logging
 import os
 from twisted.internet import defer
-from twisted.internet.task import LoopingCall
 
 from lbrynet import conf
 from lbrynet.schema.fee import Fee
 
 from lbrynet.p2p.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
-from lbrynet.p2p.Error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
-from lbrynet.utils import safe_start_looping_call, safe_stop_looping_call
+from lbrynet.p2p.Error import DownloadDataTimeout, DownloadCanceledError
 from lbrynet.p2p.StreamDescriptor import download_sd_blob
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from torba.client.constants import COIN
@@ -34,8 +32,11 @@ log = logging.getLogger(__name__)
 
 class GetStream:
     def __init__(self, sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, rate_limiter,
-                 payment_rate_manager, storage, max_key_fee, disable_max_key_fee, data_rate=None, timeout=None):
-
+                 payment_rate_manager, storage, max_key_fee, disable_max_key_fee, data_rate=None, timeout=None,
+                 reactor=None):
+        if not reactor:
+            from twisted.internet import reactor
+        self.reactor = reactor
         self.timeout = timeout or conf.settings['download_timeout']
         self.data_rate = data_rate or conf.settings['data_rate']
         self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
@@ -53,43 +54,16 @@ class GetStream:
         self.sd_identifier = sd_identifier
         self.storage = storage
         self.downloader = None
-        self.checker = LoopingCall(self.check_status)
 
         # fired when the download is complete
         self.finished_deferred = None
         # fired after the metadata and the first data blob have been downloaded
         self.data_downloading_deferred = defer.Deferred(None)
+        self.wrote_data = False
 
     @property
     def download_path(self):
         return os.path.join(self.download_directory, self.downloader.file_name)
-
-    def _check_status(self, status):
-        if status.num_completed > 0 and not self.data_downloading_deferred.called:
-            self.data_downloading_deferred.callback(True)
-        if self.data_downloading_deferred.called:
-            safe_stop_looping_call(self.checker)
-        else:
-            log.debug("Waiting for stream data (%i seconds)", self.timeout_counter)
-
-    def check_status(self):
-        """
-        Check if we've got the first data blob in the stream yet
-        """
-        self.timeout_counter += 1
-        if self.timeout_counter > self.timeout:
-            if not self.data_downloading_deferred.called:
-                if self.downloader:
-                    err = DownloadDataTimeout(self.sd_hash)
-                else:
-                    err = DownloadSDTimeout(self.sd_hash)
-                self.data_downloading_deferred.errback(err)
-            safe_stop_looping_call(self.checker)
-        elif self.downloader:
-            d = self.downloader.status()
-            d.addCallback(self._check_status)
-        else:
-            log.debug("Waiting for stream descriptor (%i seconds)", self.timeout_counter)
 
     def convert_max_fee(self):
         currency, amount = self.max_key_fee['currency'], self.max_key_fee['amount']
@@ -151,18 +125,13 @@ class GetStream:
         else:
             defer.returnValue(None)
 
-    @defer.inlineCallbacks
     def finish(self, results, name):
         self.set_status(DOWNLOAD_STOPPED_CODE, name)
         log.info("Finished downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6],
                  self.download_path)
-        safe_stop_looping_call(self.checker)
-        status = yield self.downloader.status()
-        self._check_status(status)
-        defer.returnValue(self.download_path)
+        return defer.succeed(self.download_path)
 
     def fail(self, err):
-        safe_stop_looping_call(self.checker)
         raise err
 
     @defer.inlineCallbacks
@@ -194,8 +163,10 @@ class GetStream:
         self.downloader = yield self._create_downloader(sd_blob, file_name=file_name)
         yield self.pay_key_fee(key_fee, name)
         yield self.storage.save_content_claim(self.downloader.stream_hash, "%s:%i" % (txid, nout))
-        log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
+        self.downloader.download_manager.progress_manager.wrote_first_data.addCallback(
+            self.data_downloading_deferred.callback
+        )
         self.finished_deferred.addCallbacks(lambda result: self.finish(result, name), self.fail)
 
     @defer.inlineCallbacks
@@ -211,16 +182,19 @@ class GetStream:
         """
         self.set_status(INITIALIZING_CODE, name)
         key_fee = yield self._initialize(stream_info)
-
-        safe_start_looping_call(self.checker, 1)
         self.set_status(DOWNLOAD_METADATA_CODE, name)
         try:
             sd_blob = yield self._download_sd_blob()
             yield self._download(sd_blob, name, key_fee, txid, nout, file_name)
             self.set_status(DOWNLOAD_RUNNING_CODE, name)
-            yield self.data_downloading_deferred
+            log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
+            self.data_downloading_deferred.addTimeout(self.timeout, self.reactor)
+            try:
+                yield self.data_downloading_deferred
+                self.wrote_data = True
+            except defer.TimeoutError:
+                raise DownloadDataTimeout("data download timed out")
         except (DownloadDataTimeout, InvalidStreamDescriptorError) as err:
-            safe_stop_looping_call(self.checker)
             raise err
 
         defer.returnValue((self.downloader, self.finished_deferred))

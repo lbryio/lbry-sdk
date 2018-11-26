@@ -1,15 +1,16 @@
 import logging
-from twisted.internet import defer
+from twisted.internet import defer, task
 
 
 log = logging.getLogger(__name__)
 
 
-class StreamProgressManager:
-    #implements(IProgressManager)
-
-    def __init__(self, finished_callback, blob_manager,
-                 download_manager, delete_blob_after_finished=False):
+class FullStreamProgressManager:
+    def __init__(self, finished_callback, blob_manager, download_manager,
+                 delete_blob_after_finished: bool = False, reactor: task.Clock = None):
+        if not reactor:
+            from twisted.internet import reactor
+        self.reactor = reactor
         self.finished_callback = finished_callback
         self.blob_manager = blob_manager
         self.delete_blob_after_finished = delete_blob_after_finished
@@ -19,15 +20,11 @@ class StreamProgressManager:
         self.stopped = True
         self._next_try_to_output_call = None
         self.outputting_d = None
-
-    ######### IProgressManager #########
+        self.wrote_first_data = defer.Deferred()
 
     def start(self):
-
-        from twisted.internet import reactor
-
         self.stopped = False
-        self._next_try_to_output_call = reactor.callLater(0, self._try_to_output)
+        self._next_try_to_output_call = self.reactor.callLater(0, self._try_to_output)
         return defer.succeed(True)
 
     def stop(self):
@@ -37,64 +34,9 @@ class StreamProgressManager:
         self._next_try_to_output_call = None
         return self._stop_outputting()
 
-    def blob_downloaded(self, blob, blob_num):
-        if self.outputting_d is None:
-            self._output_loop()
-
-    ######### internal #########
-
-    def _finished_outputting(self):
-        self.finished_callback(True)
-
-    def _try_to_output(self):
-
-        from twisted.internet import reactor
-
-        self._next_try_to_output_call = reactor.callLater(1, self._try_to_output)
-        if self.outputting_d is None:
-            self._output_loop()
-
-    def _output_loop(self):
-        pass
-
-    def _stop_outputting(self):
-        if self.outputting_d is not None:
-            return self.outputting_d
-        return defer.succeed(None)
-
-    def _finished_with_blob(self, blob_num):
-        log.debug("In _finished_with_blob, blob_num = %s", str(blob_num))
-        if self.delete_blob_after_finished is True:
-            log.debug("delete_blob_after_finished is True")
-            blobs = self.download_manager.blobs
-            if blob_num in blobs:
-                log.debug("Telling the blob manager, %s, to delete blob %s",
-                          self.blob_manager, blobs[blob_num].blob_hash)
-                self.blob_manager.delete_blobs([blobs[blob_num].blob_hash])
-            else:
-                log.debug("Blob number %s was not in blobs", str(blob_num))
-        else:
-            log.debug("delete_blob_after_finished is False")
-
-
-class FullStreamProgressManager(StreamProgressManager):
-    def __init__(self, finished_callback, blob_manager,
-                 download_manager, delete_blob_after_finished=False):
-        super().__init__(finished_callback, blob_manager, download_manager,
-                         delete_blob_after_finished)
-        self.outputting_d = None
-
-    ######### IProgressManager #########
-
-    def _done(self, i, blobs):
-        """Return true if `i` is a blob number we don't have"""
-        return (
-            i not in blobs or
-            (
-                not blobs[i].get_is_verified() and
-                i not in self.provided_blob_nums
-            )
-        )
+    # def blob_downloaded(self, blob, blob_num):
+    #     if self.outputting_d is None:
+    #         self._output_loop()
 
     def stream_position(self):
         blobs = self.download_manager.blobs
@@ -113,12 +55,46 @@ class FullStreamProgressManager(StreamProgressManager):
             if not b.get_is_verified() and not n in self.provided_blob_nums
         ]
 
-    ######### internal #########
+    def _finished_outputting(self):
+        self.finished_callback(True)
+
+    def _try_to_output(self):
+        self._next_try_to_output_call = self.reactor.callLater(1, self._try_to_output)
+        if self.outputting_d is None:
+            self._output_loop()
+
+    def _stop_outputting(self):
+        if self.outputting_d is not None:
+            return self.outputting_d
+        return defer.succeed(None)
+
+    def _finished_with_blob(self, blob_num: int) -> None:
+        if blob_num == 0 and not self.wrote_first_data.called:
+            self.wrote_first_data.callback(True)
+        log.debug("In _finished_with_blob, blob_num = %s", str(blob_num))
+        if self.delete_blob_after_finished is True:
+            log.debug("delete_blob_after_finished is True")
+            blobs = self.download_manager.blobs
+            if blob_num in blobs:
+                log.debug("Telling the blob manager, %s, to delete blob %s",
+                          self.blob_manager, blobs[blob_num].blob_hash)
+                self.blob_manager.delete_blobs([blobs[blob_num].blob_hash])
+            else:
+                log.debug("Blob number %s was not in blobs", str(blob_num))
+        else:
+            log.debug("delete_blob_after_finished is False")
+
+    def _done(self, i: int, blobs: list) -> bool:
+        """Return true if `i` is a blob number we don't have"""
+        return (
+                i not in blobs or
+                (
+                        not blobs[i].get_is_verified() and
+                        i not in self.provided_blob_nums
+                )
+        )
 
     def _output_loop(self):
-
-        from twisted.internet import reactor
-
         if self.stopped:
             if self.outputting_d is not None:
                 self.outputting_d.callback(True)
@@ -139,7 +115,7 @@ class FullStreamProgressManager(StreamProgressManager):
                 self.outputting_d.callback(True)
                 self.outputting_d = None
             else:
-                reactor.callLater(0, self._output_loop)
+                self.reactor.callLater(0, self._output_loop)
 
         current_blob_num = self.last_blob_outputted + 1
 

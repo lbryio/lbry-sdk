@@ -44,8 +44,19 @@ class EncryptedFileDownloader(CryptStreamDownloader):
                                          self.blob_manager, download_manager)
 
     def _start(self):
+        def check_start_succeeded(success):
+            if success:
+                self.starting = False
+                self.stopped = False
+                self.completed = False
+                return True
+            else:
+                return self._start_failed()
+
+        self.download_manager = self._get_download_manager()
         d = self._setup_output()
-        d.addCallback(lambda _: CryptStreamDownloader._start(self))
+        d.addCallback(lambda _: self.download_manager.start_downloading())
+        d.addCallbacks(check_start_succeeded)
         return d
 
     def _setup_output(self):
