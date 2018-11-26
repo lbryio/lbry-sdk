@@ -482,12 +482,12 @@ class ClaimManagement(CommandTestCase):
 
     VERBOSITY = logging.WARN
 
-    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!'):
+    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!', channel_name=None):
         with tempfile.NamedTemporaryFile() as file:
             file.write(data)
             file.flush()
             claim = await self.out(self.daemon.jsonrpc_publish(
-                name, amount, file_path=file.name
+                name, amount, file_path=file.name, channel_name=channel_name
             ))
             self.assertTrue(claim['success'])
             await self.on_transaction_dict(claim['tx'])
@@ -609,6 +609,28 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual('9.979793', await self.daemon.jsonrpc_account_balance())
         await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
         self.assertEqual('9.97968399', await self.daemon.jsonrpc_account_balance())
+
+    async def test_abandoned_channel_with_signed_claims(self):
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+        claim = await self.make_claim(amount='0.0001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(claim['success'])
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        self.assertTrue(abandon['success'])
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+
+        # Original channel doesnt exists anymore, so the signature is invalid. For invalid signatures, resolution is
+        # only possible when using the name + claim id
+        response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://@abc/on-channel-claim'))
+        self.assertNotIn('claim', response['lbry://@abc/on-channel-claim'])
+        response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://on-channel-claim'))
+        self.assertNotIn('claim', response['lbry://on-channel-claim'])
+        direct_uri = 'lbry://on-channel-claim#' + claim['claim_id']
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=direct_uri))
+        self.assertIn('claim', response[direct_uri])
 
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
