@@ -13,14 +13,12 @@ class DecodeError(Exception):
     Should be raised by an C{Encoding} implementation if decode operation
     fails
     """
-    pass
 
 
 class BucketFull(Exception):
     """
     Raised when the bucket is full
     """
-    pass
 
 
 class UnknownRemoteException(Exception):

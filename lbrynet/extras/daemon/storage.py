@@ -418,7 +418,7 @@ class SQLiteStorage:
 
     def check_if_stream_exists(self, stream_hash):
         d = self.db.runQuery("select stream_hash from stream where stream_hash=?", (stream_hash, ))
-        d.addCallback(lambda r: True if len(r) else False)
+        d.addCallback(lambda r: bool(len(r)))
         return d
 
     def get_blob_num_by_hash(self, stream_hash, blob_hash):
