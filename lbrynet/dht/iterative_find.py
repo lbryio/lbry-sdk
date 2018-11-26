@@ -3,12 +3,11 @@ import asyncio
 import typing
 import logging
 
-from lbrynet.dht.routing.distance import Distance
-from lbrynet.dht.error import UnknownRemoteException
-from lbrynet.dht import constants
-
-from lbrynet.dht.routing.routing_table import TreeRoutingTable
 from lbrynet.peer import Peer, PeerManager
+from lbrynet.dht import constants
+from lbrynet.dht.error import UnknownRemoteException
+from lbrynet.dht.routing.distance import Distance
+from lbrynet.dht.routing.routing_table import TreeRoutingTable
 
 log = logging.getLogger(__name__)
 

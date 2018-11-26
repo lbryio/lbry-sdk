@@ -2,8 +2,9 @@ import functools
 import hashlib
 import asyncio
 import typing
-from lbrynet.dht import constants
+
 from lbrynet.peer import Peer
+from lbrynet.dht import constants
 
 
 class KademliaRPC:

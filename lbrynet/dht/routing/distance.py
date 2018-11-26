@@ -1,5 +1,5 @@
-from lbrynet.dht import constants
 from lbrynet.peer import Peer
+from lbrynet.dht import constants
 
 
 class Distance:

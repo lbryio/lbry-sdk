@@ -4,7 +4,7 @@ from twisted.internet import defer, threads
 from twisted.web.client import FileBodyProducer
 from twisted.python.failure import Failure
 from lbrynet.cryptoutils import get_lbry_hash_obj
-from lbrynet.p2p.Error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
+from lbrynet.error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
 from lbrynet.blob.writer import HashBlobWriter
 from lbrynet.blob.reader import HashBlobReader
 

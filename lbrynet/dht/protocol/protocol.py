@@ -1,11 +1,12 @@
 import binascii
-import asyncio
 import logging
 import typing
 import socket
+import asyncio
 from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
 
+from lbrynet.peer import Peer, PeerManager
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
 from lbrynet.dht.error import DecodeError, UnknownRemoteException, TransportNotConnected
@@ -14,7 +15,6 @@ from lbrynet.dht.protocol.rpc import KademliaRPC
 from lbrynet.dht.routing.routing_table import TreeRoutingTable
 from lbrynet.dht.protocol.data_store import DictDataStore
 from lbrynet.dht.iterative_find import IterativeFinder
-from lbrynet.peer import Peer, PeerManager
 
 log = logging.getLogger(__name__)
 

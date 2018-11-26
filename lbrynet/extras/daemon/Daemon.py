@@ -16,7 +16,6 @@ from twisted.python.failure import Failure
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbrynet import conf, utils, __version__
-from lbrynet.dht.error import TimeoutError
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload

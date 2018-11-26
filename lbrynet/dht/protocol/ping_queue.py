@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import typing
-from lbrynet.dht import constants
+
 from lbrynet.peer import PeerManager, Peer
+from lbrynet.dht import constants
 
 log = logging.getLogger(__name__)
 

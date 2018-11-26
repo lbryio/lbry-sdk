@@ -1,8 +1,9 @@
 import asyncio
-from collections import UserDict
 import typing
-from lbrynet.dht import constants
+from collections import UserDict
+
 from lbrynet.peer import Peer
+from lbrynet.dht import constants
 
 
 class DictDataStore(UserDict):

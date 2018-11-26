@@ -2,8 +2,9 @@ import logging
 import asyncio
 import typing
 import socket
-from lbrynet.dht.protocol.protocol import KademliaProtocol
+
 from lbrynet.peer import PeerManager
+from lbrynet.dht.protocol.protocol import KademliaProtocol
 
 log = logging.getLogger(__name__)
 

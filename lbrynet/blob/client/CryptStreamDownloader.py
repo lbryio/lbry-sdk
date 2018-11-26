@@ -3,10 +3,10 @@ from binascii import unhexlify
 from twisted.internet import defer
 from twisted.python.failure import Failure
 
-from lbrynet.p2p.client.BlobRequester import BlobRequester
-from lbrynet.p2p.client.ConnectionManager import ConnectionManager
-from lbrynet.p2p.client.DownloadManager import DownloadManager
-from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
+from lbrynet.blob_exchange.client.BlobRequester import BlobRequester
+from lbrynet.blob_exchange.client.ConnectionManager import ConnectionManager
+from lbrynet.blob_exchange.client.DownloadManager import DownloadManager
+from lbrynet.blob_exchange.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.blob.client.CryptBlobHandler import CryptBlobHandler
 
 

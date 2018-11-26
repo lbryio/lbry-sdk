@@ -11,7 +11,7 @@ from lbrynet import conf
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
 from lbrynet.blob.CryptBlob import CryptBlobInfo
-from lbrynet.dht.constants import dataExpireTimeout
+from lbrynet.dht.constants import data_expiration
 
 log = logging.getLogger(__name__)
 
@@ -282,7 +282,7 @@ class SQLiteStorage:
     def update_last_announced_blob(self, blob_hash, last_announced):
         return self.db.runOperation(
                     "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 where blob_hash=?",
-                    (int(last_announced + (dataExpireTimeout / 2)), int(last_announced), blob_hash)
+                    (int(last_announced + (data_expiration / 2)), int(last_announced), blob_hash)
                 )
 
     def should_single_announce_blobs(self, blob_hashes, immediate=False):

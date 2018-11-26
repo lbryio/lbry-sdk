@@ -3,10 +3,10 @@ import random
 import logging
 import typing
 
+from lbrynet.peer import Peer
 from lbrynet.dht import constants
 from lbrynet.dht.routing import kbucket
 from lbrynet.dht.routing.distance import Distance
-from lbrynet.peer import Peer
 
 log = logging.getLogger(__name__)
 

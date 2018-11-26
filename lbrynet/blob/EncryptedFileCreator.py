@@ -9,8 +9,8 @@ from binascii import hexlify
 from twisted.internet import defer
 from twisted.protocols.basic import FileSender
 
-from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorWriter, EncryptedFileStreamType
-from lbrynet.p2p.StreamDescriptor import format_sd_info, get_stream_hash, validate_descriptor
+from lbrynet.blob.stream_descriptor import BlobStreamDescriptorWriter, EncryptedFileStreamType
+from lbrynet.blob.stream_descriptor import format_sd_info, get_stream_hash, validate_descriptor
 from lbrynet.blob.CryptStreamCreator import CryptStreamCreator
 
 log = logging.getLogger(__name__)

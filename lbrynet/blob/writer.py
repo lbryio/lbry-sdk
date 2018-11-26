@@ -1,7 +1,7 @@
 import logging
 from io import BytesIO
 from twisted.python.failure import Failure
-from lbrynet.p2p.Error import DownloadCanceledError, InvalidDataError
+from lbrynet.error import DownloadCanceledError, InvalidDataError
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
