@@ -1,5 +1,5 @@
 import logging
-from lbrynet.p2p.BlobInfo import BlobInfo
+from lbrynet.blob.blob_info import BlobInfo
 from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.p2p.client.DownloadManager import DownloadManager
