@@ -29,7 +29,6 @@ class StreamDescriptorReader:
     def _get_raw_data(self):
         """This method must be overridden by subclasses. It should return a deferred
            which fires with the raw data in the stream descriptor"""
-        pass
 
     def get_info(self):
         """Return the fields contained in the file"""
@@ -89,7 +88,6 @@ class StreamDescriptorWriter:
         """This method must be overridden by subclasses to write raw data to
         the stream descriptor
         """
-        pass
 
 
 class PlainStreamDescriptorWriter(StreamDescriptorWriter):
@@ -389,7 +387,7 @@ def validate_descriptor(stream_info):
         raise InvalidStreamDescriptorError("Missing '%s'" % (e.args[0]))
     if stream_info['blobs'][-1]['length'] != 0:
         raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
-    if any([False if blob_info['length'] > 0 else True for blob_info in stream_info['blobs'][:-1]]):
+    if any([blob_info['length'] == 0 for blob_info in stream_info['blobs'][:-1]]):
         raise InvalidStreamDescriptorError("Contains zero-length data blob")
     if 'blob_hash' in stream_info['blobs'][-1]:
         raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")

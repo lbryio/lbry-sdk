@@ -201,15 +201,12 @@ class DeferredProfiler:
             from twisted.internet import reactor
 
         def _cb(result, fn, start, caller_info):
-            if isinstance(result, (Failure, Exception)):
-                error = result
-                result = None
+            got_error = isinstance(result, (Failure, Exception))
+            self.add_result(fn, start, reactor.seconds(), caller_info, not got_error)
+            if got_error:
+                raise result
             else:
-                error = None
-            self.add_result(fn, start, reactor.seconds(), caller_info, error is None)
-            if error is None:
                 return result
-            raise error
 
         def _profiled_deferred(fn):
             reactor.addSystemEventTrigger("after", "shutdown", self.show_profile_results, fn)

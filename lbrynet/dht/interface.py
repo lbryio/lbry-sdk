@@ -10,7 +10,6 @@ class IDataStore(Interface):
 
     def keys(self):
         """ Return a list of the keys in this data store """
-        pass
 
     def removeExpiredPeers(self):
         pass
