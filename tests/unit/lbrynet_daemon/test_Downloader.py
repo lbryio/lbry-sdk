@@ -80,11 +80,10 @@ class GetStreamTests(unittest.TestCase):
         peer_finder = DummyPeerFinder()
         blob_manager = mock.Mock(spec=DiskBlobManager)
         max_key_fee = {'currency': "LBC", 'amount': 10, 'address': ''}
-        disable_max_key_fee = False
         data_rate = {'currency': "LBC", 'amount': 0, 'address': ''}
         getstream = Downloader.GetStream(
             sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, DummyRateLimiter(), prm,
-            storage, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate
+            storage, max_key_fee, timeout=3, data_rate=data_rate
         )
         getstream.download_manager = mock.Mock(spec=DownloadManager)
         return getstream
