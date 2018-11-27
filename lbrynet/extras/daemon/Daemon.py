@@ -872,7 +872,6 @@ class Daemon(AuthJSONRPCServer):
                          [--download_timeout=<download_timeout>]
                          [--peer_port=<peer_port>]
                          [--max_key_fee=<max_key_fee>]
-                         [--disable_max_key_fee=<disable_max_key_fee>]
                          [--use_upnp=<use_upnp>]
                          [--run_reflector_server=<run_reflector_server>]
                          [--cache_time=<cache_time>]
@@ -895,7 +894,6 @@ class Daemon(AuthJSONRPCServer):
                                                           }.
                                                           In the CLI, it must be an escaped JSON string
                                                           Supported currency symbols: LBC, USD, BTC
-            --disable_max_key_fee=<disable_max_key_fee> : (bool) False
             --use_upnp=<use_upnp>            : (bool) True
             --run_reflector_server=<run_reflector_server>  : (bool) False
             --cache_time=<cache_time>  : (int) 150
@@ -927,7 +925,6 @@ class Daemon(AuthJSONRPCServer):
             'cache_time': int,
             'reflect_uploads': bool,
             'share_usage_data': bool,
-            'disable_max_key_fee': bool,
             'peer_search_timeout': int,
             'sd_download_timeout': int,
             'auto_renew_claim_height_delta': int
