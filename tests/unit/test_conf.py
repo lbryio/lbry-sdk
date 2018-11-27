@@ -2,8 +2,10 @@ import os
 import json
 import sys
 import tempfile
+import shutil
 from unittest import skipIf
 from twisted.trial import unittest
+from twisted.internet import defer
 from lbrynet import conf
 from lbrynet.p2p.Error import InvalidCurrencyError
 
@@ -15,11 +17,12 @@ class SettingsTest(unittest.TestCase):
     def tearDown(self):
         del os.environ['LBRY_TEST']
 
-    @staticmethod
-    def get_mock_config_instance():
+    def get_mock_config_instance(self):
         settings = {'test': (str, '')}
         env = conf.Env(**settings)
-        return conf.Config({}, settings, environment=env)
+        self.tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda : defer.succeed(shutil.rmtree(self.tmp_dir)))
+        return conf.Config({}, settings, environment=env, data_dir=self.tmp_dir, wallet_dir=self.tmp_dir, download_dir=self.tmp_dir)
 
     def test_envvar_is_read(self):
         settings = self.get_mock_config_instance()
@@ -72,20 +75,19 @@ class SettingsTest(unittest.TestCase):
         out = settings.get('max_key_fee')
         self.assertEqual(out, valid_setting)
 
-
     def test_data_dir(self):
         # check if these directories are returned as string and not unicode
         # otherwise there will be problems when calling os.path.join on
         # unicode directory names with string file names
-        self.assertEqual(str, type(conf.default_download_dir))
-        self.assertEqual(str, type(conf.default_data_dir))
-        self.assertEqual(str, type(conf.default_lbryum_dir))
+        settings = conf.Config({}, {})
+        self.assertEqual(str, type(settings.download_dir))
+        self.assertEqual(str, type(settings.data_dir))
+        self.assertEqual(str, type(settings.wallet_dir))
 
     @skipIf('win' in sys.platform, 'fix me!')
     def test_load_save_config_file(self):
         # setup settings
-        adjustable_settings = {'data_dir': (str, conf.default_data_dir),
-                'lbryum_servers': (list, [])}
+        adjustable_settings = {'lbryum_servers': (list, [])}
         env = conf.Env(**adjustable_settings)
         settings = conf.Config({}, adjustable_settings, environment=env)
         conf.settings = settings
@@ -111,12 +113,14 @@ class SettingsTest(unittest.TestCase):
         settings = self.get_mock_config_instance()
 
         # nonexistent file
-        conf.conf_file = 'monkey.yml'
+        settings.file_name = 'monkey.yml'
         with self.assertRaises(FileNotFoundError):
             settings.load_conf_file_settings()
 
         # invalid extensions
         for filename in ('monkey.yymmll', 'monkey'):
-            conf.conf_file = filename
+            settings.file_name = filename
+            with open(os.path.join(self.tmp_dir, filename), "w"):
+                pass
             with self.assertRaises(ValueError):
                 settings.load_conf_file_settings()

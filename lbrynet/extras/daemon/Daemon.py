@@ -166,9 +166,9 @@ def sort_claim_results(claims):
 def is_first_run():
     if os.path.isfile(conf.settings.get_db_revision_filename()):
         return False
-    if os.path.isfile(os.path.join(conf.settings['data_dir'], 'lbrynet.sqlite')):
+    if os.path.isfile(os.path.join(conf.settings.data_dir, 'lbrynet.sqlite')):
         return False
-    if os.path.isfile(os.path.join(conf.settings['lbryum_wallet_dir'], 'blockchain_headers')):
+    if os.path.isfile(os.path.join(conf.settings.wallet_dir, 'blockchain_headers')):
         return False
     return True
 
