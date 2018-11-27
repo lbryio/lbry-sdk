@@ -16,19 +16,23 @@ at anytime.
 
 ### API
   * add `aioupnp_version` to `upnp` field in the response to `status`
-  * fix uncaught claim signature errors
+  * fixed uncaught claim signature errors
+
+### Schema
+  * updated `protobuf` to `3.2.0` (https://github.com/lbryio/lbry/issues/1602)
+
 
 ### Wallet
-  *
-  *
+  * fixed resolving names with invalid channel signatures
+  * fixed wallet sync issues
 
 ### File Manager
   *
   *
 
 ### DHT
-  *
-  *
+  * fixed retrying kademlia rpc calls (https://github.com/lbryio/lbry/pull/1495)
+  * fixed `KeyError` in `iterativeFindValue`, this is used by `peer_list` and when finding peers to download blobs from (https://github.com/lbryio/lbry/issues/1638)
 
 ### P2P
   *

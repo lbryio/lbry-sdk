@@ -3,7 +3,7 @@ from lbrynet.custom_logger import install_logger
 
 
 __name__ = "lbrynet"
-__version__ = "0.30.1rc5"
+__version__ = "0.30.1rc6"
 version = tuple(__version__.split('.'))
 
 install_logger()
