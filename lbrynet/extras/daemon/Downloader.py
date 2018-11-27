@@ -83,10 +83,11 @@ class GetStream:
                                            fee.amount)
 
         if converted_fee_amount > (yield f2d(self.wallet.default_account.get_balance())):
-            raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
+            raise InsufficientFundsError(f"Unable to pay the key fee of "
+                                         f"{converted_fee_amount}")
         if converted_fee_amount > max_key_fee_amount and amount >= 0:
-            raise KeyFeeAboveMaxAllowed('Key fee {} above max allowed {}'.format(converted_fee_amount,
-                                                                                 max_key_fee_amount))
+            raise KeyFeeAboveMaxAllowed(f"Key fee {converted_fee_amount} above "
+                                        f"max allowed {max_key_fee_amount}")
         converted_fee = {
             'currency': 'LBC',
             'amount': converted_fee_amount,
