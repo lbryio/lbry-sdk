@@ -3,12 +3,8 @@ import errno
 from binascii import hexlify
 
 from twisted.internet import protocol, defer
-from .error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
-
-from . import constants
-from . import encoding
-from . import msgtypes
-from . import msgformat
+from lbrynet.dht import constants, encoding, msgformat, msgtypes
+from lbrynet.dht.error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
 
 log = logging.getLogger(__name__)
 
@@ -118,7 +114,20 @@ class KademliaProtocol(protocol.DatagramProtocol):
             return args
         return args + ({b'protocolVersion': self._protocolVersion},)
 
+    @defer.inlineCallbacks
     def sendRPC(self, contact, method, args):
+        for _ in range(constants.rpcAttempts):
+            try:
+                response = yield self._sendRPC(contact, method, args)
+                return response
+            except TimeoutError:
+                if contact.contact_is_good:
+                    log.debug("RETRY %s ON %s", method, contact)
+                    continue
+                else:
+                    raise
+
+    def _sendRPC(self, contact, method, args):
         """
         Sends an RPC to the specified contact
 
@@ -153,11 +162,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
         df = defer.Deferred()
 
         def _remove_contact(failure):  # remove the contact from the routing table and track the failure
+            contact.update_last_failed()
             try:
-                self._node.removeContact(contact)
+                if not contact.contact_is_good:
+                    self._node.removeContact(contact)
             except (ValueError, IndexError):
                 pass
-            contact.update_last_failed()
             return failure
 
         def _update_contact(result):  # refresh the contact in the routing table
@@ -422,7 +432,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 else:
                     result = func()
             except Exception as e:
-                log.exception("error handling request for %s:%i %s", senderContact.address, senderContact.port, method)
+                log.error("error handling request for %s:%i %s", senderContact.address, senderContact.port, method)
                 df.errback(e)
             else:
                 df.callback(result)

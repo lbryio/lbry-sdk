@@ -2,31 +2,31 @@ import json
 import asyncio
 import tempfile
 import logging
+from binascii import unhexlify
+from functools import partial
 from types import SimpleNamespace
 
 from twisted.trial import unittest
 from twisted.internet import utils, defer
 from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
+from lbrynet.p2p.Error import InsufficientFundsError
 
-from orchstr8.testcase import IntegrationTestCase as BaseIntegrationTestCase
+from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
-import lbryschema
-lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
+import lbrynet.schema
+lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 from lbrynet import conf as lbry_conf
 from lbrynet.dht.node import Node
-from lbrynet.daemon.Daemon import Daemon
-from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
+from lbrynet.extras.daemon.Daemon import Daemon
+from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.extras.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
     ExchangeRateManagerComponent
-from lbrynet.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT
-from lbrynet.daemon.Components import UPnPComponent
-from lbrynet.daemon.Components import d2f
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.auth.server import jsonrpc_dumps_pretty
-
-
-log = logging.getLogger(__name__)
+from lbrynet.extras.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT
+from lbrynet.extras.daemon.Components import UPnPComponent
+from lbrynet.extras.daemon.Components import d2f
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.auth.server import jsonrpc_dumps_pretty
 
 
 class FakeUPnP(UPnPComponent):
@@ -114,20 +114,19 @@ utils.runWithWarningsSuppressed = run_with_async_support
 class CommandTestCase(IntegrationTestCase):
 
     timeout = 180
-    WALLET_MANAGER = LbryWalletManager
+    MANAGER = LbryWalletManager
 
     async def setUp(self):
         await super().setUp()
 
-        if self.VERBOSE:
-            log.setLevel(logging.DEBUG)
-            logging.getLogger('lbrynet.core').setLevel(logging.DEBUG)
+        logging.getLogger('lbrynet.p2p').setLevel(self.VERBOSITY)
+        logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
         lbry_conf.settings = None
         lbry_conf.initialize_settings(load_conf_file=False)
-        lbry_conf.settings['data_dir'] = self.stack.wallet.data_path
-        lbry_conf.settings['lbryum_wallet_dir'] = self.stack.wallet.data_path
-        lbry_conf.settings['download_directory'] = self.stack.wallet.data_path
+        lbry_conf.settings['data_dir'] = self.wallet_node.data_path
+        lbry_conf.settings['lbryum_wallet_dir'] = self.wallet_node.data_path
+        lbry_conf.settings['download_directory'] = self.wallet_node.data_path
         lbry_conf.settings['use_upnp'] = False
         lbry_conf.settings['reflect_uploads'] = False
         lbry_conf.settings['blockchain_name'] = 'lbrycrd_regtest'
@@ -175,6 +174,20 @@ class CommandTestCase(IntegrationTestCase):
         await self.generate(1)
         await self.on_transaction_id(txid)
 
+    async def on_transaction_dict(self, tx):
+        await self.ledger.wait(
+            self.ledger.transaction_class(unhexlify(tx['hex']))
+        )
+
+    @staticmethod
+    def get_all_addresses(tx):
+        addresses = set()
+        for txi in tx['inputs']:
+            addresses.add(txi['address'])
+        for txo in tx['outputs']:
+            addresses.add(txo['address'])
+        return list(addresses)
+
     async def generate(self, blocks):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
         await self.blockchain.generate(blocks)
@@ -187,7 +200,8 @@ class CommandTestCase(IntegrationTestCase):
 
 
 class EpicAdventuresOfChris45(CommandTestCase):
-    VERBOSE = False
+
+    VERBOSITY = logging.WARN
 
     async def test_no_this_is_not_a_test_its_an_adventure(self):
         # Chris45 is an avid user of LBRY and this is his story. It's fact and fiction
@@ -283,7 +297,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # After some soul searching Chris decides that his story needs more
         # heart and a better ending. He takes down the story and begins the rewrite.
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(claim1['claim_id']))
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(claim1['claim_id'], blocking=False))
         self.assertTrue(abandon['success'])
         await self.confirm_tx(abandon['tx']['txid'])
 
@@ -398,7 +412,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # But sadly Ramsey wasn't so pleased. It was hard for him to tell Chris...
         # Chris, though a bit heartbroken, abandoned the claim for now, but instantly started working on new hit lyrics
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=claim4['tx']['txid'], nout=0))
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=claim4['tx']['txid'], nout=0, blocking=False))
         self.assertTrue(abandon['success'])
         await self.confirm_tx(abandon['tx']['txid'])
 
@@ -464,9 +478,40 @@ class AccountManagement(CommandTestCase):
         self.assertEqual(response['name'], 'recreated account')
 
 
-class PublishCommand(CommandTestCase):
+class ClaimManagement(CommandTestCase):
 
-    VERBOSE = False
+    VERBOSITY = logging.WARN
+
+    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!', channel_name=None):
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(data)
+            file.flush()
+            claim = await self.out(self.daemon.jsonrpc_publish(
+                name, amount, file_path=file.name, channel_name=channel_name
+            ))
+            self.assertTrue(claim['success'])
+            await self.on_transaction_dict(claim['tx'])
+            await self.generate(1)
+            return claim
+
+    async def test_update_claim_holding_address(self):
+        other_account_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
+        other_account = self.daemon.get_account_or_error(other_account_id)
+        other_address = await other_account.receiving.get_or_create_usable_address()
+
+        self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
+
+        # create the initial name claim
+        claim = await self.make_claim()
+
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine()), 1)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine(account_id=other_account_id)), 0)
+        tx = await self.daemon.jsonrpc_claim_send_to_address(
+            claim['claim_id'], other_address
+        )
+        await self.ledger.wait(tx)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine()), 0)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine(account_id=other_account_id)), 1)
 
     async def test_publishing_checks_all_accounts_for_certificate(self):
         account1_id, account1 = self.account.id, self.account
@@ -530,3 +575,132 @@ class PublishCommand(CommandTestCase):
                     'hovercraft', '1.0', file_path=file.name,
                     channel_name='@baz', channel_account_id=[account1_id]
                 ))
+
+    async def test_updating_claim_includes_claim_value_in_balance_check(self):
+        self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
+
+        await self.make_claim(amount='9.0')
+        self.assertEqual('0.979893', await self.daemon.jsonrpc_account_balance())
+
+        # update the same claim
+        await self.make_claim(amount='9.0')
+        self.assertEqual('0.9796205', await self.daemon.jsonrpc_account_balance())
+
+        # update the claim a second time but use even more funds
+        await self.make_claim(amount='9.97')
+        self.assertEqual('0.009348', await self.daemon.jsonrpc_account_balance())
+
+        # fails when specifying more than available
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi!')
+            file.flush()
+            with self.assertRaisesRegex(
+                InsufficientFundsError,
+                "Please lower the bid value, the maximum amount"
+                " you can specify for this claim is 9.979274."
+            ):
+                await self.out(self.daemon.jsonrpc_publish(
+                    'hovercraft', '9.98', file_path=file.name
+                ))
+
+    async def test_abandoning_claim_at_loss(self):
+        self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
+        claim = await self.make_claim(amount='0.0001')
+        self.assertEqual('9.979793', await self.daemon.jsonrpc_account_balance())
+        await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
+        self.assertEqual('9.97968399', await self.daemon.jsonrpc_account_balance())
+
+    async def test_abandoned_channel_with_signed_claims(self):
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+        claim = await self.make_claim(amount='0.0001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(claim['success'])
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        self.assertTrue(abandon['success'])
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+
+        # Original channel doesnt exists anymore, so the signature is invalid. For invalid signatures, resolution is
+        # only possible outside a channel
+        response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://@abc/on-channel-claim'))
+        self.assertNotIn('claim', response['lbry://@abc/on-channel-claim'])
+        response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://on-channel-claim'))
+        self.assertIn('claim', response['lbry://on-channel-claim'])
+        self.assertFalse(response['lbry://on-channel-claim']['claim']['signature_is_valid'])
+        direct_uri = 'lbry://on-channel-claim#' + claim['claim_id']
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=direct_uri))
+        self.assertIn('claim', response[direct_uri])
+        self.assertFalse(response[direct_uri]['claim']['signature_is_valid'])
+
+    async def test_regular_supports_and_tip_supports(self):
+        # account2 will be used to send tips and supports to account1
+        account2_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
+
+        # send account2 5 LBC out of the 10 LBC in account1
+        result = await self.out(self.daemon.jsonrpc_wallet_send(
+            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+        ))
+        await self.confirm_tx(result['txid'])
+
+        # account1 and account2 balances:
+        self.assertEqual('4.999876', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
+
+        # create the claim we'll be tipping and supporting
+        claim = await self.make_claim()
+
+        # account1 and account2 balances:
+        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
+
+        # send a tip to the claim using account2
+        tip = await self.out(
+            self.daemon.jsonrpc_claim_tip(claim['claim_id'], '1.0', account2_id)
+        )
+        await self.on_transaction_dict(tip)
+        await self.generate(1)
+        await self.on_transaction_dict(tip)
+
+        # tips don't affect balance so account1 balance is same but account2 balance went down
+        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('3.9998585', await self.daemon.jsonrpc_account_balance(account2_id))
+
+        # verify that the incoming tip is marked correctly as is_tip=True in account1
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['support_info']), 1)
+        self.assertEqual(txs[0]['support_info'][0]['balance_delta'], '1.0')
+        self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs[0]['support_info'][0]['is_tip'], True)
+        self.assertEqual(txs[0]['value'], '1.0')
+
+        # verify that the outgoing tip is marked correctly as is_tip=True in account2
+        txs2 = await self.out(
+            self.daemon.jsonrpc_transaction_list(account2_id)
+        )
+        self.assertEqual(len(txs2[0]['support_info']), 1)
+        self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
+        self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], True)
+        self.assertEqual(txs2[0]['value'], '-1.0001415')
+
+        # send a support to the claim using account2
+        support = await self.out(
+            self.daemon.jsonrpc_claim_new_support('hovercraft', claim['claim_id'], '2.0', account2_id)
+        )
+        await self.on_transaction_dict(support)
+        await self.generate(1)
+        await self.on_transaction_dict(support)
+
+        # account2 balance went down ~2
+        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('1.999717', await self.daemon.jsonrpc_account_balance(account2_id))
+
+        # verify that the outgoing support is marked correctly as is_tip=False in account2
+        txs2 = await self.out(self.daemon.jsonrpc_transaction_list(account2_id))
+        self.assertEqual(len(txs2[0]['support_info']), 1)
+        self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
+        self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
+        self.assertEqual(txs2[0]['value'], '-0.0001415')

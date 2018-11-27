@@ -6,7 +6,7 @@
 
 from twisted.trial import unittest
 import struct
-from lbrynet.core.utils import generate_id
+from lbrynet.utils import generate_id
 from lbrynet.dht import kbucket
 from lbrynet.dht.contact import ContactManager
 from lbrynet.dht import constants

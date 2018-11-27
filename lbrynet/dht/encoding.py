@@ -1,4 +1,4 @@
-from .error import DecodeError
+from lbrynet.dht.error import DecodeError
 
 
 def bencode(data):

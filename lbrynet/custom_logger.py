@@ -102,5 +102,8 @@ class Logger(logging.Logger):
             self._log(TRACE, msg, args, **kwargs)
 
 
-logging.setLoggerClass(Logger)
-logging.addLevelName(TRACE, 'TRACE')
+def install_logger():
+    current = logging.getLoggerClass()
+    if current is not Logger:
+        logging.setLoggerClass(Logger)
+        logging.addLevelName(TRACE, 'TRACE')

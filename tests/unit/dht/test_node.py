@@ -5,7 +5,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet.dht.node import Node
 from lbrynet.dht import constants
-from lbrynet.core.utils import generate_id
+from lbrynet.utils import generate_id
 
 
 class NodeIDTest(unittest.TestCase):

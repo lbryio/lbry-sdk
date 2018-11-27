@@ -1,6 +1,6 @@
 from twisted.trial import unittest
 from twisted.internet import defer
-from lbrynet.cryptstream import CryptBlob
+from lbrynet.blob import CryptBlob
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 from tests.mocks import mock_conf_settings
@@ -8,7 +8,7 @@ from tests.mocks import mock_conf_settings
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 import random
 import string
-from six import BytesIO
+from io import BytesIO
 import os
 
 AES_BLOCK_SIZE_BYTES = int(AES.block_size / 8)

@@ -6,7 +6,7 @@ from lbrynet.dht import constants
 from lbrynet.dht.routingtable import TreeRoutingTable
 from lbrynet.dht.contact import ContactManager
 from lbrynet.dht.distance import Distance
-from lbrynet.core.utils import generate_id
+from lbrynet.utils import generate_id
 
 
 class FakeRPCProtocol:

@@ -1,4 +1,4 @@
-from lbrynet import analytics
+from lbrynet.extras.daemon import analytics
 
 from twisted.trial import unittest
 

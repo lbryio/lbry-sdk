@@ -20,7 +20,7 @@ setup(
     packages=find_packages(exclude=('tests',)),
     zip_safe=False,
     entry_points={
-        'console_scripts': 'lbrynet=lbrynet.cli:main'
+        'console_scripts': 'lbrynet=lbrynet.extras.cli:main'
     },
     install_requires=[
         'aiohttp',
@@ -32,7 +32,10 @@ setup(
         'envparse',
         'jsonrpc',
         'cryptography',
-        'lbryschema',
+        'protobuf==3.6.1',
+        'msgpack',
+        'jsonschema',
+        'ecdsa',
         'torba',
         'pyyaml',
         'requests',
@@ -40,13 +43,10 @@ setup(
         'treq',
         'docopt',
         'colorama==0.3.7',
-        'six'
     ],
     extras_require={
         'test': (
-            'mock>=2.0,<3.0',
             'faker==0.8.17',
-            'orchstr8>=0.0.4'
         )
     }
 )

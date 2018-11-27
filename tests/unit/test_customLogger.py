@@ -1,16 +1,16 @@
 from io import StringIO
 import logging
+from unittest import mock
+from unittest import skipIf
 
-import mock
-import unittest
 from twisted.internet import defer
-from twisted import trial
+from twisted.trial import unittest
 
 from lbrynet import custom_logger
-from tests.util import is_android
+from tests.test_utils import is_android
 
 
-class TestLogger(trial.unittest.TestCase):
+class TestLogger(unittest.TestCase):
     def raiseError(self):
         raise Exception('terrible things happened')
 
@@ -28,7 +28,7 @@ class TestLogger(trial.unittest.TestCase):
         handler.setFormatter(logging.Formatter("%(filename)s:%(lineno)d - %(message)s"))
         self.log.addHandler(handler)
 
-    @unittest.skipIf(is_android(),
+    @skipIf(is_android(),
                      'Test cannot pass on Android because the tests package is compiled '
                      'which results in a different method call stack')
     def test_can_log_failure(self):

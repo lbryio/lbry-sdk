@@ -1,11 +1,11 @@
-from mock import MagicMock
+from unittest.mock import MagicMock
 
 from twisted.trial import unittest
 from twisted.internet import defer
 
-from lbrynet.blob import BlobFile
-from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
-from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+from lbrynet.blob.blob_file import BlobFile
+from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
+from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 
 class HTTPBlobDownloaderTest(unittest.TestCase):

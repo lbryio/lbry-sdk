@@ -6,9 +6,9 @@ from copy import deepcopy
 from twisted.internet import defer
 from twisted.trial import unittest
 from lbrynet import conf
-from lbrynet.database.storage import SQLiteStorage, open_file_for_writing
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from tests.util import random_lbry_hash
+from lbrynet.extras.daemon.storage import SQLiteStorage, open_file_for_writing
+from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from tests.test_utils import random_lbry_hash
 
 log = logging.getLogger()
 

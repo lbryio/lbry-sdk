@@ -9,22 +9,19 @@ jobs:
     - stage: code quality
       name: "pylint lbrynet"
       install:
+        - pip install astroid==2.0.4
+        # newer astroid fails in pylint so we pre-install older version
         - pip install pylint
-        - pip install git+https://github.com/lbryio/torba.git
-        - pip install git+https://github.com/lbryio/lbryschema.git
+        - pip install git+https://github.com/lbryio/torba.git#egg=torba
         - pip install -e .
       script: pylint lbrynet
 
     - &tests
       stage: test
-      name: "Unit Tests w/ Python 3.7"
+      name: "Unit Tests"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/electrumx.git#lbryumx
-        - pip install git+https://github.com/lbryio/orchstr8.git
-        - pip install git+https://github.com/lbryio/lbryschema.git
-        - pip install git+https://github.com/lbryio/lbryumx.git
-        - pip install git+https://github.com/lbryio/torba.git
+        - pip install git+https://github.com/lbryio/torba.git#egg=torba
         - pip install -e .[test]
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -v tests.unit.wallet
@@ -34,25 +31,12 @@ jobs:
         - bash <(curl -s https://codecov.io/bash)
 
     - <<: *tests
-      name: "Unit Tests w/ Python 3.6"
-      python: "3.6"
-
-    - <<: *tests
-      name: "DHT Tests w/ Python 3.7"
-      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
-
-    - <<: *tests
-      name: "DHT Tests w/ Python 3.6"
-      python: "3.6"
+      name: "DHT Tests"
       script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial --reactor=asyncio tests.functional
 
     - name: "Integration Tests"
       install:
         - pip install tox-travis coverage
-        - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
-        - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
-        - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
-        - pushd .. && git clone https://github.com/lbryio/lbryumx.git && cd lbryumx && git checkout afd34f323dd94c516108a65240f7d17aea8efe85 && cd .. && popd
         - pushd .. && git clone https://github.com/lbryio/torba.git && popd
       script: tox
       after_success:
@@ -65,9 +49,9 @@ jobs:
       services:
         - docker
       install:
-        - docker pull cdrx/pyinstaller-windows:python3-32bit
+        - docker pull lbry/pyinstaller34_32bits:py371
       script:
-        - docker run -v "$(pwd):/src/lbry" cdrx/pyinstaller-windows:python3-32bit lbry/scripts/wine_build.sh
+        - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh
         - sudo zip -j dist/lbrynet-windows.zip dist/lbrynet.exe
       addons:
         artifacts:
@@ -79,15 +63,13 @@ jobs:
 
     - &build
       name: "Linux"
-      python: "3.6"
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
-        - pip3 install git+https://github.com/lbryio/lbryschema.git
         - python scripts/set_build.py
         - pip3 install -e .
       script:
-        - pyinstaller -F -n lbrynet lbrynet/cli.py
+        - pyinstaller -F -n lbrynet lbrynet/extras/cli.py
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
@@ -104,9 +86,19 @@ jobs:
     - <<: *build
       name: "Mac"
       os: osx
-      osx_image: xcode9.4
+      osx_image: xcode6.4
       language: generic
       env: OS=mac
+      cache: false
+      install:
+        - brew update
+        - brew install python3
+        - pip3 install pyinstaller
+        - git clone https://github.com/lbryio/torba.git --depth 1
+        - sed -i -e "s/'plyvel',//" torba/setup.py
+        - cd torba && pip3 install -e . && cd ..
+        - python scripts/set_build.py
+        - pip3 install -e .
 
 cache:
   directories:

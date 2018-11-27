@@ -3,7 +3,7 @@ import logging
 from io import BytesIO
 from twisted.internet import defer
 from twisted.web.client import FileBodyProducer
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
+from lbrynet.cryptoutils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
 

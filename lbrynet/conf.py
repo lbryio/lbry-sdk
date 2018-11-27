@@ -7,15 +7,15 @@ import sys
 import yaml
 import envparse
 from appdirs import user_data_dir, user_config_dir
-from lbrynet.core import utils
-from lbrynet.core.Error import InvalidCurrencyError, NoSuchDirectoryError
+from lbrynet import utils
+from lbrynet.p2p.Error import InvalidCurrencyError, NoSuchDirectoryError
 from lbrynet.androidhelpers.paths import (
     android_internal_storage_dir,
     android_app_internal_storage_dir
 )
 
 try:
-    from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
+    from lbrynet.winpaths import get_path, FOLDERID, UserHandle
 except (ImportError, ValueError, NameError):
     # Android platform: NameError: name 'c_wchar' is not defined
     pass

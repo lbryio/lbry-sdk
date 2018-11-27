@@ -1,18 +1,19 @@
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, STREAM_IDENTIFIER_COMPONENT
-from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
-from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
-from lbrynet.daemon import Components
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
+from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
+from lbrynet.extras.daemon import Components
 from tests import mocks
 
 
 class TestComponentManager(unittest.TestCase):
     def setUp(self):
         mocks.mock_conf_settings(self)
+
         self.default_components_sort = [
             [
                 Components.HeadersComponent,
@@ -23,19 +24,14 @@ class TestComponentManager(unittest.TestCase):
                 Components.UPnPComponent
             ],
             [
+                Components.BlobComponent,
                 Components.DHTComponent,
                 Components.WalletComponent
             ],
             [
-                Components.BlobComponent,
-                Components.HashAnnouncerComponent
-            ],
-            [
-                Components.PeerProtocolServerComponent,
-                Components.StreamIdentifierComponent
-            ],
-            [
-                Components.FileManagerComponent
+                Components.FileManagerComponent,
+                Components.HashAnnouncerComponent,
+                Components.PeerProtocolServerComponent
             ],
             [
                 Components.ReflectorComponent
@@ -48,7 +44,6 @@ class TestComponentManager(unittest.TestCase):
 
     def test_sort_components(self):
         stages = self.component_manager.sort_components()
-
         for stage_list, sorted_stage_list in zip(stages, self.default_components_sort):
             self.assertEqual([type(stage) for stage in stage_list], sorted_stage_list)
 
@@ -101,7 +96,7 @@ class TestComponentManagerProperStart(unittest.TestCase):
         self.reactor = Clock()
         mocks.mock_conf_settings(self)
         self.component_manager = ComponentManager(
-            skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, STREAM_IDENTIFIER_COMPONENT,
+            skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT,
                              PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT,
                              HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT, RATE_LIMITER_COMPONENT,
                              EXCHANGE_RATE_MANAGER_COMPONENT],

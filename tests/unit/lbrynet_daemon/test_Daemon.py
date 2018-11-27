@@ -1,4 +1,4 @@
-import mock
+from unittest import mock
 import json
 import random
 from os import path
@@ -7,45 +7,40 @@ from twisted.internet import defer
 from twisted.trial import unittest
 
 from faker import Faker
-
-from lbryschema.decode import smart_decode
 from lbrynet import conf
-from lbrynet.database.storage import SQLiteStorage
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
-from lbrynet.daemon.Components import f2d
-from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, BLOB_COMPONENT
-from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
-from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.wallet.manager import LbryWalletManager
-from torba.wallet import Wallet
+from lbrynet.schema.decode import smart_decode
+from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
+from lbrynet.extras.daemon.Components import f2d
+from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT
+from lbrynet.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
+from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
+from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.extras.wallet import LbryWalletManager
+from torba.client.wallet import Wallet
 
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from tests import util
+from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
+from tests import test_utils
 from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from tests.mocks import BTCLBCFeed, USDBTCFeed
-from tests.util import is_android
-
-
-import logging
-logging.getLogger("lbryum").setLevel(logging.WARNING)
+from tests.test_utils import is_android
 
 
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
-
     rates = {
-        'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
-        'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
+        'BTCLBC': {'spot': 3.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
+        'USDBTC': {'spot': 2.0, 'ts': test_utils.DEFAULT_ISO_TIME + 2}
     }
     component_manager = ComponentManager(
         skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, UPNP_COMPONENT,
                          PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-                         STREAM_IDENTIFIER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+                         EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
                          HEADERS_COMPONENT, RATE_LIMITER_COMPONENT],
         file_manager=FakeFileManager
     )
@@ -89,7 +84,7 @@ class TestCostEst(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        util.resetTime(self)
+        test_utils.reset_time(self)
 
     @defer.inlineCallbacks
     def test_fee_and_generous_data(self):
@@ -134,7 +129,7 @@ class TestJsonRpc(unittest.TestCase):
             return None
 
         mock_conf_settings(self)
-        util.resetTime(self)
+        test_utils.reset_time(self)
         self.test_daemon = get_test_daemon()
         self.test_daemon.wallet_manager.is_first_run = False
         self.test_daemon.wallet_manager.get_best_blockhash = noop
@@ -156,7 +151,7 @@ class TestFileListSorting(unittest.TestCase):
 
     def setUp(self):
         mock_conf_settings(self)
-        util.resetTime(self)
+        test_utils.reset_time(self)
         self.faker = Faker('en_US')
         self.faker.seed(129)  # contains 3 same points paid (5.9)
         self.test_daemon = get_test_daemon()

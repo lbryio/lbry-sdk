@@ -1,8 +1,8 @@
 import logging
 from twisted.internet import defer
-from .distance import Distance
-from .error import TimeoutError
-from . import constants
+from lbrynet.dht.distance import Distance
+from lbrynet.dht.error import TimeoutError
+from lbrynet.dht import constants
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class _IterativeFind:
 
     def getContactTriples(self, result):
         if self.is_find_value_request:
-            contact_triples = result['contacts']
+            contact_triples = result[b'contacts']
         else:
             contact_triples = result
         for contact_tup in contact_triples:
@@ -112,11 +112,11 @@ class _IterativeFind:
                 # We are looking for a value, and the remote node didn't have it
                 # - mark it as the closest "empty" node, if it is
                 # TODO: store to this peer after finding the value as per the kademlia spec
-                if 'closestNodeNoValue' in self.find_value_result:
+                if b'closestNodeNoValue' in self.find_value_result:
                     if self.is_closer(contact):
-                        self.find_value_result['closestNodeNoValue'] = contact
+                        self.find_value_result[b'closestNodeNoValue'] = contact
                 else:
-                    self.find_value_result['closestNodeNoValue'] = contact
+                    self.find_value_result[b'closestNodeNoValue'] = contact
             contactTriples = self.getContactTriples(result)
             for contactTriple in contactTriples:
                 if (contactTriple[1], contactTriple[2]) in ((c.address, c.port) for c in self.already_contacted):

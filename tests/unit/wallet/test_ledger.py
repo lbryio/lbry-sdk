@@ -1,9 +1,9 @@
-from orchstr8.testcase import AsyncioTestCase
-from torba.wallet import Wallet
+from torba.testcase import AsyncioTestCase
+from torba.client.wallet import Wallet
 
-from lbrynet.wallet.account import Account
-from lbrynet.wallet.transaction import Transaction, Output, Input
-from lbrynet.wallet.ledger import MainNetLedger
+from lbrynet.extras.wallet.account import Account
+from lbrynet.extras.wallet.transaction import Transaction, Output, Input
+from lbrynet.extras.wallet.ledger import MainNetLedger
 
 
 class LedgerTestCase(AsyncioTestCase):
@@ -31,15 +31,17 @@ class BasicAccountingTests(LedgerTestCase):
 
         tx = Transaction(is_verified=True)\
             .add_outputs([Output.pay_pubkey_hash(100, hash160)])
+        await self.ledger.db.insert_transaction(tx)
         await self.ledger.db.save_transaction_io(
-            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
+            tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         self.assertEqual(await self.account.get_balance(), 100)
 
         tx = Transaction(is_verified=True)\
             .add_outputs([Output.pay_claim_name_pubkey_hash(100, 'foo', b'', hash160)])
+        await self.ledger.db.insert_transaction(tx)
         await self.ledger.db.save_transaction_io(
-            'insert', tx, address, hash160, '{}:{}:'.format(tx.id, 1)
+            tx, address, hash160, '{}:{}:'.format(tx.id, 1)
         )
         self.assertEqual(await self.account.get_balance(), 100)  # claim names don't count towards balance
         self.assertEqual(await self.account.get_balance(include_claims=True), 200)

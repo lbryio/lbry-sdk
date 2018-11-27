@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+enum KeyType {
+        UNKNOWN_PUBLIC_KEY_TYPE = 0;
+        NIST256p = 1;
+        NIST384p = 2;
+        SECP256k1 = 3;
+}
+
+message Certificate {
+    enum Version {
+        UNKNOWN_VERSION = 0;
+        _0_0_1 = 1;
+    }
+    required Version version = 1;
+    required KeyType keyType = 2;
+    required bytes publicKey = 4;
+}

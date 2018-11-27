@@ -3,22 +3,22 @@ from hashlib import md5
 from twisted.internet import defer, reactor
 from twisted.trial import unittest
 from lbrynet import conf
-from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.PeerManager import PeerManager
-from lbrynet.core.RateLimiter import RateLimiter
-from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
-from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.database.storage import SQLiteStorage
-from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
-from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.p2p.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
+from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.p2p.StreamDescriptor import download_sd_blob
+from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.p2p.RateLimiter import RateLimiter
+from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
+from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.blob.EncryptedFileCreator import create_lbry_file
+from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
+from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 
 from tests import mocks
-from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 FakeNode = mocks.Node
 FakeWallet = mocks.Wallet

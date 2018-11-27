@@ -1,10 +1,12 @@
 import itertools
-from twisted.trial import unittest
 import random
-import mock
-from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
-from lbrynet.core.Strategy import BasicAvailabilityWeightedStrategy
-from lbrynet.core.Offer import Offer
+from unittest import mock
+
+from twisted.trial import unittest
+
+from lbrynet.p2p.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
+from lbrynet.p2p.Strategy import BasicAvailabilityWeightedStrategy
+from lbrynet.p2p.Offer import Offer
 from tests.mocks\
     import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
 

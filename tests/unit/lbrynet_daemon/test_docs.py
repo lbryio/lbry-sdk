@@ -1,6 +1,6 @@
 import docopt
 from twisted.trial import unittest
-from lbrynet.daemon.Daemon import Daemon
+from lbrynet.extras.daemon.Daemon import Daemon
 
 
 class DaemonDocsTests(unittest.TestCase):

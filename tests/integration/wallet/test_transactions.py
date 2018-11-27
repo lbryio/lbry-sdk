@@ -1,13 +1,14 @@
+import logging
 import asyncio
 
-from orchstr8.testcase import IntegrationTestCase
-from lbryschema.claim import ClaimDict
-from lbrynet.wallet.transaction import Transaction
-from lbrynet.wallet.account import generate_certificate
-from lbrynet.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
+from torba.testcase import IntegrationTestCase
+from lbrynet.schema.claim import ClaimDict
+from lbrynet.extras.wallet.transaction import Transaction
+from lbrynet.extras.wallet.account import generate_certificate
+from lbrynet.extras.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
 
-import lbryschema
-lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
+import lbrynet.schema
+lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 
 example_claim_dict = {
@@ -39,7 +40,7 @@ example_claim_dict = {
 
 class BasicTransactionTest(IntegrationTestCase):
 
-    VERBOSE = False
+    VERBOSITY = logging.WARN
 
     async def test_creating_updating_and_abandoning_claim_with_channel(self):
 
@@ -65,13 +66,13 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.broadcast(cert_tx)
         await self.broadcast(claim_tx)
         await asyncio.wait([  # mempool
-            self.on_transaction(claim_tx),
-            self.on_transaction(cert_tx)
+            self.ledger.wait(claim_tx),
+            self.ledger.wait(cert_tx)
         ])
         await self.blockchain.generate(1)
         await asyncio.wait([  # confirmed
-            self.on_transaction(claim_tx),
-            self.on_transaction(cert_tx)
+            self.ledger.wait(claim_tx),
+            self.ledger.wait(cert_tx)
         ])
 
         self.assertEqual(d2l(await self.account.get_balance()), '7.985786')
@@ -83,9 +84,9 @@ class BasicTransactionTest(IntegrationTestCase):
 
         abandon_tx = await Transaction.abandon([claim_tx.outputs[0]], [self.account], self.account)
         await self.broadcast(abandon_tx)
-        await self.on_transaction(abandon_tx)
+        await self.ledger.wait(abandon_tx)
         await self.blockchain.generate(1)
-        await self.on_transaction(abandon_tx)
+        await self.ledger.wait(abandon_tx)
 
         response = await self.ledger.resolve(0, 10, 'lbry://@bar/foo')
         self.assertNotIn('claim', response['lbry://@bar/foo'])

@@ -6,14 +6,12 @@
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
 import random
-from binascii import unhexlify
-
-from twisted.internet import defer
-from . import constants
-from . import kbucket
-from .error import TimeoutError
-from .distance import Distance
 import logging
+from twisted.internet import defer
+
+from lbrynet.dht import constants, kbucket
+from lbrynet.dht.error import TimeoutError
+from lbrynet.dht.distance import Distance
 
 log = logging.getLogger(__name__)
 
@@ -215,7 +213,7 @@ class TreeRoutingTable:
         now = int(self._getTime())
         for bucket in self._buckets[startIndex:]:
             if force or now - bucket.lastAccessed >= constants.refreshTimeout:
-                searchID = self._randomIDInBucketRange(bucketIndex)
+                searchID = self.midpoint_id_in_bucket_range(bucketIndex)
                 refreshIDs.append(searchID)
             bucketIndex += 1
         return refreshIDs
@@ -263,22 +261,25 @@ class TreeRoutingTable:
                 i += 1
         return i
 
-    def _randomIDInBucketRange(self, bucketIndex):
+    def random_id_in_bucket_range(self, bucketIndex):
         """ Returns a random ID in the specified k-bucket's range
 
         @param bucketIndex: The index of the k-bucket to use
         @type bucketIndex: int
         """
-        idValue = random.randrange(
-            self._buckets[bucketIndex].rangeMin, self._buckets[bucketIndex].rangeMax)
-        randomID = hex(idValue)[2:]
-        if randomID[-1] == 'L':
-            randomID = randomID[:-1]
-        if len(randomID) % 2 != 0:
-            randomID = '0' + randomID
-        randomID = unhexlify(randomID)
-        randomID = ((constants.key_bits // 8) - len(randomID)) * b'\x00' + randomID
-        return randomID
+
+        random_id = int(random.randrange(self._buckets[bucketIndex].rangeMin, self._buckets[bucketIndex].rangeMax))
+        return random_id.to_bytes(constants.key_bits // 8, 'big')
+
+    def midpoint_id_in_bucket_range(self, bucketIndex):
+        """ Returns the middle ID in the specified k-bucket's range
+
+        @param bucketIndex: The index of the k-bucket to use
+        @type bucketIndex: int
+        """
+
+        half = int((self._buckets[bucketIndex].rangeMax - self._buckets[bucketIndex].rangeMin) // 2)
+        return int(self._buckets[bucketIndex].rangeMin + half).to_bytes(constants.key_bits // 8, 'big')
 
     def _splitBucket(self, oldBucketIndex):
         """ Splits the specified k-bucket into two new buckets which together

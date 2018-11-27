@@ -1,5 +1,5 @@
 from collections import UserDict
-from . import constants
+from lbrynet.dht import constants
 
 
 class DictDataStore(UserDict):
@@ -44,7 +44,7 @@ class DictDataStore(UserDict):
             del self[key]
 
     def hasPeersForBlob(self, key):
-        return True if key in self and len(tuple(self.filter_bad_and_expired_peers(key))) else False
+        return bool(key in self and len(tuple(self.filter_bad_and_expired_peers(key))))
 
     def addPeerToBlob(self, contact, key, compact_address, lastPublished, originallyPublished, originalPublisherID):
         if key in self:
