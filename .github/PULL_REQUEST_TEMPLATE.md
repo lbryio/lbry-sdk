@@ -9,6 +9,8 @@ Please check all that apply to this PR using "x":
 ## PR Type
 What kind of change does this PR introduce?
 
+Why is this change necessary?
+
 <!-- Please check all that apply to this PR using "x". -->
 
 - [ ] Bugfix
