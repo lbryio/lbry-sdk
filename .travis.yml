@@ -89,6 +89,7 @@ jobs:
       osx_image: xcode6.4
       language: generic
       env: OS=mac
+      cache: false
       install:
         - brew update
         - brew install python3
