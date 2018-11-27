@@ -138,11 +138,10 @@ class Resolver:
         elif 'error' not in result:
             return {'error': 'claim not found', 'success': False, 'uri': str(parsed_uri)}
 
-        # invalid signatures can only return in the form of name#claim_id
+        # invalid signatures can only return outside a channel
         if result.get('claim', {}).get('has_signature', False):
-            if not result['claim']['signature_is_valid']:
-                if parsed_uri.path or parsed_uri.is_channel or not parsed_uri.claim_id or not parsed_uri.name:
-                    return {'error': 'claim not found', 'success': False, 'uri': str(parsed_uri)}
+            if parsed_uri.path and not result['claim']['signature_is_valid']:
+                return {'error': 'claim not found', 'success': False, 'uri': str(parsed_uri)}
         return result
 
     async def get_certificate_and_validate_result(self, claim_result):
