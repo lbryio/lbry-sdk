@@ -623,14 +623,16 @@ class ClaimManagement(CommandTestCase):
         await self.confirm_tx(channel['tx']['txid'])
 
         # Original channel doesnt exists anymore, so the signature is invalid. For invalid signatures, resolution is
-        # only possible when using the name + claim id
+        # only possible outside a channel
         response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://@abc/on-channel-claim'))
         self.assertNotIn('claim', response['lbry://@abc/on-channel-claim'])
         response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://on-channel-claim'))
-        self.assertNotIn('claim', response['lbry://on-channel-claim'])
+        self.assertIn('claim', response['lbry://on-channel-claim'])
+        self.assertFalse(response['lbry://on-channel-claim']['claim']['signature_is_valid'])
         direct_uri = 'lbry://on-channel-claim#' + claim['claim_id']
         response = await self.out(self.daemon.jsonrpc_resolve(uri=direct_uri))
         self.assertIn('claim', response[direct_uri])
+        self.assertFalse(response[direct_uri]['claim']['signature_is_valid'])
 
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
