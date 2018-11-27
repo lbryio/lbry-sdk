@@ -368,7 +368,7 @@ class Daemon(AuthJSONRPCServer):
             self.streams[sd_hash] = GetStream(
                 self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
                 self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
-                conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
+                conf.settings['max_key_fee'], conf.settings['data_rate'],
                 timeout
             )
             try:

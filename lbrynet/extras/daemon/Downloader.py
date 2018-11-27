@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 class GetStream:
     def __init__(self, sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, rate_limiter,
-                 payment_rate_manager, storage, max_key_fee, disable_max_key_fee, data_rate=None, timeout=None,
+                 payment_rate_manager, storage, max_key_fee, data_rate=None, timeout=None,
                  reactor=None):
         if not reactor:
             from twisted.internet import reactor
@@ -40,7 +40,6 @@ class GetStream:
         self.timeout = timeout or conf.settings['download_timeout']
         self.data_rate = data_rate or conf.settings['data_rate']
         self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
-        self.disable_max_key_fee = disable_max_key_fee or conf.settings['disable_max_key_fee']
         self.download_directory = conf.settings['download_directory']
         self.timeout_counter = 0
         self.code = None
@@ -65,22 +64,27 @@ class GetStream:
     def download_path(self):
         return os.path.join(self.download_directory, self.downloader.file_name)
 
-    def convert_max_fee(self):
-        currency, amount = self.max_key_fee['currency'], self.max_key_fee['amount']
-        return self.exchange_rate_manager.convert_currency(currency, "LBC", amount)
-
     def set_status(self, status, name):
         log.info("Download lbry://%s status changed to %s" % (name, status))
         self.code = next(s for s in STREAM_STAGES if s[0] == status)
 
     @defer.inlineCallbacks
     def check_fee_and_convert(self, fee):
-        max_key_fee_amount = self.convert_max_fee()
-        converted_fee_amount = self.exchange_rate_manager.convert_currency(fee.currency, "LBC",
-                                                                           fee.amount)
+        from_currency = self.max_key_fee['currency']
+        to_currency = 'LBC'
+        amount = self.max_key_fee['amount']
+
+        convert_fee = self.exchange_rate_manager.convert_currency
+        max_key_fee_amount = convert_fee(from_currency,
+                                         to_currency,
+                                         amount)
+        converted_fee_amount = convert_fee(fee.currency,
+                                           to_currency,
+                                           fee.amount)
+
         if converted_fee_amount > (yield f2d(self.wallet.default_account.get_balance())):
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
-        if converted_fee_amount > max_key_fee_amount and not self.disable_max_key_fee:
+        if converted_fee_amount > max_key_fee_amount and amount >= 0:
             raise KeyFeeAboveMaxAllowed('Key fee {} above max allowed {}'.format(converted_fee_amount,
                                                                                  max_key_fee_amount))
         converted_fee = {
