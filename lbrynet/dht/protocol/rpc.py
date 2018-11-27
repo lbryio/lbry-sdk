@@ -47,7 +47,7 @@ class KademliaRPC:
         contacts = self.protocol.routing_table.find_close_nodes(key, sender_node_id=rpc_contact.node_id)
         contact_triples = []
         for contact in contacts:
-            contact_triples.append((contact.node_id, contact.address, contact.port))
+            contact_triples.append((contact.node_id, contact.address, contact.udp_port))
         return contact_triples
 
     def find_value(self, rpc_contact: Peer, key: bytes):

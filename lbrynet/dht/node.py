@@ -2,9 +2,11 @@ import logging
 import asyncio
 import typing
 import socket
+import binascii
 
 from lbrynet.peer import PeerManager
 from lbrynet.dht.protocol.protocol import KademliaProtocol
+from lbrynet.dht import constants
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ class Node:
     async def start_listening(self, interface: str = '') -> None:
         if not self.listening_port:
             self.listening_port, _ = await self.loop.create_datagram_endpoint(
-                lambda: self, (interface, self.internal_udp_port)
+                lambda: self.protocol, (interface, self.internal_udp_port)
             )
             log.info("listening on %i", self.internal_udp_port)
         else:
@@ -51,3 +53,7 @@ class Node:
             futs.append(peer.ping())
         await asyncio.gather(*futs)
         await self.protocol.cumulative_find_node(self.protocol.node_id)
+
+    def get_iterative_value_finder(self, key: bytes, bottom_out_limit: int = constants.bottom_out_limit,
+                                   max_results: int = constants.k):
+        return self.protocol.get_find_iterator('findValue', key, bottom_out_limit=bottom_out_limit, max_results=max_results)

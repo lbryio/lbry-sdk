@@ -1,5 +1,6 @@
 import ipaddress
 import typing
+import binascii
 import asyncio
 from binascii import hexlify
 from collections import defaultdict
@@ -33,7 +34,7 @@ class Peer:
         self.peer_manager: PeerManager = peer_manager
         self._node_id = node_id
         self.address = address
-        self.port = udp_port
+        self.udp_port = udp_port
         self.tcp_port = tcp_port
         self.dht_protocol = dht_protocol
         self.first_contacted = first_contacted
@@ -50,6 +51,9 @@ class Peer:
 
     def update_tcp_port(self, tcp_port: int):
         self.tcp_port = tcp_port
+
+    def update_udp_port(self, udp_port: int):
+        self.udp_port = udp_port
 
     def update_token(self, token):
         self._token = token, self.loop.time() if token else 0
@@ -84,7 +88,7 @@ class Peer:
 
     @property
     def failures(self):
-        return self.peer_manager._rpc_failures.get((self.address, self.port), [])
+        return self.peer_manager._rpc_failures.get((self.address, self.udp_port), [])
 
     @property
     def contact_is_good(self):
@@ -112,10 +116,10 @@ class Peer:
     def __eq__(self, other):
         if not isinstance(other, Peer):
             raise TypeError("invalid type to compare with Contact: %s" % str(type(other)))
-        return (self.node_id, self.address, self.port) == (other.node_id, other.address, other.port)
+        return (self.node_id, self.address, self.udp_port) == (other.node_id, other.address, other.udp_port)
 
     def __hash__(self):
-        return hash((self.node_id, self.address, self.port))
+        return hash((self.node_id, self.address, self.udp_port))
 
     def compact_ip(self):
         compact_ip = reduce(
@@ -133,16 +137,16 @@ class Peer:
         self.last_requested = int(self.loop.time())
 
     def update_last_failed(self):
-        failures = self.peer_manager._rpc_failures.get((self.address, self.port), [])
+        failures = self.peer_manager._rpc_failures.get((self.address, self.udp_port), [])
         failures.append(self.loop.time())
-        self.peer_manager._rpc_failures[(self.address, self.port)] = failures
+        self.peer_manager._rpc_failures[(self.address, self.udp_port)] = failures
 
     def update_protocol_version(self, version):
         self.protocol_version = version
 
     def __str__(self):
-        return '<%s.%s object; IP address: %s, UDP port: %d>' % (
-            self.__module__, self.__class__.__name__, self.address, self.port)
+        return '<%s IP address: %s, UDP port: %s TCP port: %s>' % (
+            "Peer" if not self.node_id else binascii.hexlify(self.node_id).decode(), self.address, self.udp_port, self.tcp_port)
 
     # DHT RPC functions
 
@@ -152,7 +156,7 @@ class Peer:
             REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.dht_protocol.node_id, 'ping', []
         )
         return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.port))),
+            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
             constants.rpc_timeout
         )
 
@@ -163,7 +167,7 @@ class Peer:
             [blob_hash, token, port, original_publisher_id, age]
         )
         return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.port))),
+            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
             constants.rpc_timeout
         )
 
@@ -174,7 +178,7 @@ class Peer:
             [key]
         )
         return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.port))),
+            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
             constants.rpc_timeout
         )
 
@@ -185,7 +189,7 @@ class Peer:
             [key]
         )
         return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.port))),
+            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
             constants.rpc_timeout
         )
 
@@ -220,7 +224,7 @@ class PeerManager:
     def __init__(self, loop: asyncio.BaseEventLoop):
 
         self._loop = loop
-        self._contacts = {}
+        self._contacts: typing.Dict[typing.Tuple[bytes, str, int], Peer] = {}
         self._rpc_failures = {}
         self._blob_peers = {}
 
@@ -232,8 +236,10 @@ class PeerManager:
                 continue
             if node_id and contact.node_id != node_id:
                 continue
-            if udp_port and contact.udp_port != udp_port:
+            if udp_port and contact.udp_port and contact.udp_port != udp_port:
                 continue
+            if udp_port and not contact.udp_port:
+                contact.update_udp_port(udp_port)
             if tcp_port and tcp_port != contact.tcp_port:
                 contact.update_tcp_port(tcp_port)
             return contact

@@ -79,8 +79,8 @@ class ErrorDatagram(ResponseDatagram):
         'exception_type'
     ]
 
-    def __init__(self, packet_type, rpc_id, node_id, exception_type, error_message):
-        super().__init__(packet_type, rpc_id, node_id, error_message)
+    def __init__(self, packet_type, rpc_id, node_id, exception_type, response):
+        super().__init__(packet_type, rpc_id, node_id, response)
         self.exception_type = exception_type
         if self.packet_type != ERROR_TYPE:
             raise ValueError

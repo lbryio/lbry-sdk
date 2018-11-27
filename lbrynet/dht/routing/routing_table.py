@@ -106,14 +106,14 @@ class TreeRoutingTable:
                 to_replace = not_good_contacts[0]
             else:
                 to_replace = self._buckets[bucket_index]._contacts[0]
-            log.debug("pinging %s:%s", to_replace.address, to_replace.port)
+            log.debug("pinging %s:%s", to_replace.address, to_replace.udp_port)
             try:
                 await to_replace.ping()
                 return False
             except asyncio.TimeoutError:
                 log.debug("Replacing dead contact in bucket %i: %s:%i (%s) with %s:%i (%s)", bucket_index,
-                          to_replace.address, to_replace.port, to_replace.log_id(), contact.address,
-                          contact.port, contact.log_id())
+                          to_replace.address, to_replace.udp_port, to_replace.log_id(), contact.address,
+                          contact.udp_port, contact.log_id())
                 if to_replace in self._buckets[bucket_index]:
                     self._buckets[bucket_index].remove_contact(to_replace)
                 return await self.add_contact(contact)
@@ -224,7 +224,7 @@ class TreeRoutingTable:
     def contact_in_routing_table(self, address_tuple: typing.Tuple[str, int]) -> bool:
         for bucket in self._buckets:
             for contact in bucket.get_contacts(sort_distance_to=False):
-                if address_tuple[0] == contact.address and address_tuple[1] == contact.port:
+                if address_tuple[0] == contact.address and address_tuple[1] == contact.udp_port:
                     return True
         return False
 

@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 def get_contact(contact_list, node_id, address, port):
     for contact in contact_list:
-        if contact.node_id == node_id and contact.address == address and contact.port == port:
+        if contact.node_id == node_id and contact.address == address and contact.udp_port == port:
             return contact
     raise IndexError(node_id)
 
@@ -105,7 +105,7 @@ class IterativeFinder:
 
     async def probe_contact(self, contact: Peer):
         log.debug("probe %s(%s) %s:%i (%s)", self.rpc, binascii.hexlify(self.key)[:8].decode(), contact.address,
-                  contact.port, binascii.hexlify(contact.node_id)[:8].decode())
+                  contact.udp_port, binascii.hexlify(contact.node_id)[:8].decode())
         if self.rpc == "findNode":
             fn = contact.find_node
         else:
@@ -118,12 +118,12 @@ class IterativeFinder:
             return contact.node_id
         except UnknownRemoteException as err:
             log.exception("%s %s %s:%i %s - %s", self.rpc, binascii.hexlify(self.key).decode(),
-                          contact.address, contact.port, binascii.hexlify(contact.node_id).decode(), err)
+                          contact.address, contact.udp_port, binascii.hexlify(contact.node_id).decode(), err)
             return contact.node_id
 
     async def extend_shortlist(self, contact, result):
         # The "raw response" tuple contains the response message and the originating address info
-        origin_address = (contact.address, contact.port)
+        origin_address = (contact.address, contact.udp_port)
         if self.iteration_fut.done():
             return contact.node_id
         if self.peer_manager.is_ignored(origin_address):
@@ -148,14 +148,15 @@ class IterativeFinder:
                 if (host, port) not in self.exclude:
                     self.exclude.add((host, port))
                     self.find_value_result.append(self.peer_manager.make_peer(host, node_id, self.protocol,
-                                                                              udp_port=None, tcp_port=port))
+                                                                              tcp_port=port))
+                    log.info("found new peer: %s", self.find_value_result[-1])
             if self.find_value_result:
                 async with self.lock:
                     self.iteration_fut.set_result(self.find_value_result)
         else:
             contact_triples = self.get_contact_triples(result)
             for contact_triple in contact_triples:
-                if (contact_triple[1], contact_triple[2]) in ((c.address, c.port) for c in self.already_contacted):
+                if (contact_triple[1], contact_triple[2]) in ((c.address, c.udp_port) for c in self.already_contacted):
                     continue
                 elif self.peer_manager.is_ignored((contact_triple[1], contact_triple[2])):
                     continue
@@ -198,13 +199,13 @@ class IterativeFinder:
         # Sort the current shortList before contacting other nodes
         self.shortlist.sort(key=lambda c: self.distance(c.node_id))
         probes = []
-        already_contacted_addresses = {(c.address, c.port) for c in self.already_contacted}
+        already_contacted_addresses = {(c.address, c.udp_port) for c in self.already_contacted}
         to_remove = []
         for contact in self.shortlist:
-            if self.peer_manager.is_ignored((contact.address, contact.port)):
+            if self.peer_manager.is_ignored((contact.address, contact.udp_port)):
                 to_remove.append(contact)  # a contact became bad during iteration
                 continue
-            if (contact.address, contact.port) not in already_contacted_addresses:
+            if (contact.address, contact.udp_port) not in already_contacted_addresses:
                 self.already_contacted.append(contact)
                 to_remove.append(contact)
                 probe = self.probe_contact(contact)
@@ -221,14 +222,14 @@ class IterativeFinder:
             await asyncio.gather(*tuple(probes), loop=self.loop)
             for probe in probes:
                 self.active_probes.remove(probe)
-        elif not self.active_probes:
+        elif not self.active_probes and not self.iteration_fut.done() and not self.iteration_fut.cancelled():
             # If no probes were sent, there will not be any improvement, so we're done
             if self.is_find_value_request:
                 self.iteration_fut.set_result(self.find_value_result)
             else:
                 self.active_contacts.sort(key=lambda c: self.distance(c.node_id))
                 self.iteration_fut.set_result(self.active_contacts[:min(constants.k, len(self.active_contacts))])
-        elif not self.iteration_fut.done():
+        elif not self.iteration_fut.done() and not self.iteration_fut.cancelled():
             # Force the next iteration
             self.search_iteration()
 
@@ -243,9 +244,11 @@ class IterativeFinder:
     async def __anext__(self) -> typing.List[Peer]:
         self.iteration += 1
         if self.iteration == 1 and self.rpc == 'findValue' and self.protocol.data_store.has_peers_for_blob(self.key):
+            log.info("had cached peers")
             return self.protocol.data_store.get_peers_for_blob(self.key)
         self.search_iteration()
-        return await self.next()
+        result = await self.next()
+        return result
 
     async def next(self) -> typing.List[Peer]:
         try:
@@ -280,6 +283,8 @@ class IterativeFinder:
                     bottomed_out += 1
                 else:
                     bottomed_out = 0
+                    if self.rpc == 'findValue':
+                        log.info("new peers: %i", len(new_peers))
                     yield new_peers
                 if (bottomed_out >= self.bottom_out_limit) or (len(accumulated) >= max_results):
                     log.info("%s(%s...) has %i results, bottom out counter: %i", self.rpc, binascii.hexlify(self.key).decode()[:8],

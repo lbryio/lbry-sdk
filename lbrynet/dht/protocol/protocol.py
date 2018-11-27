@@ -44,11 +44,13 @@ class KademliaProtocol(DatagramProtocol):
         self._lock = asyncio.Lock()
 
     def connection_made(self, transport: DatagramTransport):
+        log.info("create refresh task")
         self.transport = transport
         self.ping_queue.start()
         self.refresh_task = asyncio.create_task(self.refresh_node())
 
     def connection_lost(self, exc):
+        log.info("stop refresh task")
         self.refresh_task.cancel()
         self.ping_queue.stop()
 
@@ -113,11 +115,8 @@ class KademliaProtocol(DatagramProtocol):
                 return
         try:
             message = decode_datagram(datagram)
-        except (DecodeError, ValueError) as err:
-            # We received some rubbish here
-            return
-        except (IndexError, KeyError):
-            log.warning("Couldn't decode dht datagram from %s", address)
+        except Exception as err:
+            log.warning("Couldn't decode dht datagram from %s: %s", address, binascii.hexlify(datagram).decode())
             return
 
         if isinstance(message, RequestDatagram):
@@ -145,10 +144,10 @@ class KademliaProtocol(DatagramProtocol):
                 remote_contact, df, method = self.sent_messages.pop(message.rpc_id)
 
                 # reject replies coming from a different address than what we sent our request to
-                if (remote_contact.address, remote_contact.port) != address:
+                if (remote_contact.address, remote_contact.udp_port) != address:
                     print("Sent request to node %s at %s:%i, got reply from %s:%i" % (
-                                remote_contact.log_id(), remote_contact.address,
-                                remote_contact.port, address[0], address[1]))
+                        remote_contact.log_id(), remote_contact.address,
+                        remote_contact.udp_port, address[0], address[1]))
                     df.set_exception(TimeoutError(remote_contact.node_id))
                     return
 
@@ -167,8 +166,8 @@ class KademliaProtocol(DatagramProtocol):
             if message.rpc_id in self.sent_messages:
                 # Cancel timeout timer for this RPC
                 remote_contact, df, method = self.sent_messages[message.rpc_id]
-                # print("%s:%i RECV response to %s from %s:%i" % (self.external_ip, self.udp_port,
-                #           method, remote_contact.address, remote_contact.port))
+                log.debug("%s:%i got response to %s from %s:%i" % (self.external_ip, self.udp_port,
+                          method, remote_contact.address, remote_contact.udp_port))
 
                 # When joining the network we made Contact objects for the seed nodes with node ids set to None
                 # Thus, the sent_to_id will also be None, and the contact objects need the ids to be manually set.
@@ -184,9 +183,17 @@ class KademliaProtocol(DatagramProtocol):
                 #     remote_contact.set_id(message.node_id)
 
                 # We got a result from the RPC
-                assert remote_contact.node_id != self.node_id
-                assert (remote_contact.address, remote_contact.port) == address
-                assert message.node_id == self.node_id
+                try:
+                    assert remote_contact.node_id != self.node_id
+                    assert message.node_id != self.node_id
+                    if remote_contact.node_id is None:
+                        remote_contact.set_id(message.node_id)
+                    assert (remote_contact.address, remote_contact.udp_port) == address
+                except AssertionError as err:
+                    df.set_exception(err)
+                    return
+                # else:
+                #     assert message.node_id == self.node_id
                 asyncio.create_task(self.routing_table.add_contact(remote_contact))
                 df.set_result(message.response)
             else:
@@ -221,10 +228,10 @@ class KademliaProtocol(DatagramProtocol):
             key, = a
             result = self.node_rpc.find_value(sender_contact, key)
         log.debug("%s:%i RECV CALL %s %s:%i", self.external_ip, self.udp_port, message.method.decode(),
-                  sender_contact.address, sender_contact.port)
+                  sender_contact.address, sender_contact.udp_port)
         asyncio.create_task(self.send(
             sender_contact,
-            ResponseDatagram(1, message.rpc_id, sender_contact.node_id, result), (sender_contact.address, sender_contact.port)
+            ResponseDatagram(1, message.rpc_id, sender_contact.node_id, result), (sender_contact.address, sender_contact.udp_port)
         ))
 
     async def send(self, peer: Peer, message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
@@ -249,7 +256,6 @@ class KademliaProtocol(DatagramProtocol):
             assert message.node_id == self.node_id, message.method
         elif isinstance(message, ResponseDatagram):
             assert message.node_id == peer.node_id
-
         data = message.bencode()
         if len(data) > constants.msg_size_limit:
             # We have to spread the data over multiple UDP datagrams,
@@ -274,6 +280,13 @@ class KademliaProtocol(DatagramProtocol):
         else:
             self._schedule_send_next(data, address)
         fut = asyncio.Future()
+
+        def timeout(_):
+            if message.rpc_id in self.sent_messages:
+                self.sent_messages.pop(message.rpc_id)
+
+        fut.add_done_callback(timeout)
+
         if isinstance(message, RequestDatagram):
             assert self.node_id != peer.node_id
             assert self.node_id == message.node_id
@@ -330,8 +343,12 @@ class KademliaProtocol(DatagramProtocol):
     def get_find_iterator(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
                           bottom_out_limit: int = constants.bottom_out_limit,
                           max_results: int = constants.k):
+        return self._get_find_iterator(rpc, key, shortlist, bottom_out_limit).iterative_find(max_results)
+
+    def _get_find_iterator(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
+                          bottom_out_limit: int = constants.bottom_out_limit) -> IterativeFinder:
         return IterativeFinder(self.loop, self.peer_manager, self.routing_table, self, shortlist, key, rpc,
-                               bottom_out_limit=bottom_out_limit).iterative_find(max_results)
+                               bottom_out_limit=bottom_out_limit)
 
     async def cumulative_find(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
                               bottom_out_limit: int = constants.bottom_out_limit,
