@@ -494,6 +494,36 @@ class ClaimManagement(CommandTestCase):
             await self.generate(1)
             return claim
 
+    async def test_create_update_and_abandon_claim(self):
+        self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
+
+        claim = await self.make_claim(amount='2.5')  # creates new claim
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['claim_info']), 1)
+        self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
+        self.assertEqual(txs[0]['claim_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs[0]['value'], '0.0')
+        self.assertEqual(txs[0]['fee'], '-0.020107')
+        self.assertEqual('7.479893', await self.daemon.jsonrpc_account_balance())
+
+        await self.make_claim(amount='1.0')  # updates previous claim
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['update_info']), 1)
+        self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
+        self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs[0]['value'], '0.0')
+        self.assertEqual(txs[0]['fee'], '-0.0001985')
+        self.assertEqual('8.9796945', await self.daemon.jsonrpc_account_balance())
+
+        await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['abandon_info']), 1)
+        self.assertEqual(txs[0]['abandon_info'][0]['balance_delta'], '1.0')
+        self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs[0]['value'], '0.0')
+        self.assertEqual(txs[0]['fee'], '-0.000107')
+        self.assertEqual('9.9795875', await self.daemon.jsonrpc_account_balance())
+
     async def test_update_claim_holding_address(self):
         other_account_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
         other_account = self.daemon.get_account_or_error(other_account_id)
