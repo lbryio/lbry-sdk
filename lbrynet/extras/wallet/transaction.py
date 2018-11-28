@@ -40,6 +40,10 @@ class Output(BaseOutput):
         return max(name_fee, super().get_fee(ledger))
 
     @property
+    def is_claim(self) -> bool:
+        return self.script.is_claim_name or self.script.is_update_claim
+
+    @property
     def claim_id(self) -> str:
         if self.script.is_claim_name:
             claim_id = hash160(self.tx_ref.hash + struct.pack('>I', self.position))
@@ -57,7 +61,7 @@ class Output(BaseOutput):
 
     @property
     def claim(self) -> ClaimDict:
-        if self.script.is_claim_name or self.script.is_update_claim:
+        if self.is_claim:
             return smart_decode(self.script.values['claim'])
         raise ValueError('Only claim name and claim update have the claim payload.')
 

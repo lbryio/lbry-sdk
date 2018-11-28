@@ -307,7 +307,8 @@ class LbryWalletManager(BaseWalletManager):
                 'support_info': [],
                 'abandon_info': []
             }
-            if all([txi.is_my_account for txi in tx.inputs]):
+            is_my_inputs = all([txi.is_my_account for txi in tx.inputs])
+            if is_my_inputs:
                 # fees only matter if we are the ones paying them
                 item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)
                 item['fee'] = dewies_to_lbc(-tx.fee)
@@ -325,34 +326,53 @@ class LbryWalletManager(BaseWalletManager):
                     'nout': txo.position
                 })
             for txo in tx.my_update_outputs:
-                item['update_info'].append({
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
-                })
+                if is_my_inputs:  # updating my own claim
+                    previous = None
+                    for txi in tx.inputs:
+                        if txi.txo_ref.txo is not None:
+                            other_txo = txi.txo_ref.txo
+                            if other_txo.is_claim and other_txo.claim_id == txo.claim_id:
+                                previous = other_txo
+                                break
+                    if previous is None:
+                        raise ValueError(
+                            "Invalid claim update state, expected to find previous claim in input."
+                        )
+                    item['update_info'].append({
+                        'address': txo.get_address(account.ledger),
+                        'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
+                        'amount': dewies_to_lbc(txo.amount),
+                        'claim_id': txo.claim_id,
+                        'claim_name': txo.claim_name,
+                        'nout': txo.position
+                    })
+                else:  # someone sent us their claim
+                    item['update_info'].append({
+                        'address': txo.get_address(account.ledger),
+                        'balance_delta': dewies_to_lbc(0),
+                        'amount': dewies_to_lbc(txo.amount),
+                        'claim_id': txo.claim_id,
+                        'claim_name': txo.claim_name,
+                        'nout': txo.position
+                    })
             for txo in tx.my_support_outputs:
-                is_tip = next(tx.my_inputs, None) is None
                 item['support_info'].append({
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(txo.amount if is_tip else -txo.amount),
+                    'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
-                    'is_tip': is_tip,
+                    'is_tip': not is_my_inputs,
                     'nout': txo.position
                 })
             for txo in tx.other_support_outputs:
-                is_tip = next(tx.my_inputs, None) is not None
                 item['support_info'].append({
                     'address': txo.get_address(account.ledger),
                     'balance_delta': dewies_to_lbc(-txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
-                    'is_tip': is_tip,
+                    'is_tip': is_my_inputs,
                     'nout': txo.position
                 })
             for txo in tx.my_abandon_outputs:
