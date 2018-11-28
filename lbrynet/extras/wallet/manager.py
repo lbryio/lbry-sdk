@@ -49,6 +49,9 @@ class LbryWalletManager(BaseWalletManager):
     def ledger(self) -> MainNetLedger:
         return self.default_account.ledger
 
+    def get_ledger_for_account(self, account) -> MainNetLedger:
+        return account.ledger
+
     @property
     def db(self) -> WalletDatabase:
         return self.ledger.db
@@ -65,6 +68,9 @@ class LbryWalletManager(BaseWalletManager):
     def use_encryption(self):
         return self.default_account.serialize_encrypted
 
+    def get_encryption_flag_for_account(self, account):
+        return account.serialize_encrypted
+
     @property
     def is_first_run(self):
         return True
@@ -72,6 +78,9 @@ class LbryWalletManager(BaseWalletManager):
     @property
     def is_wallet_unlocked(self):
         return not self.default_account.encrypted
+
+    def get_wallet_lock_flag_for_account(self, account):
+        return account.encrypted
 
     def check_locked(self):
         return self.default_account.encrypted
@@ -219,8 +228,12 @@ class LbryWalletManager(BaseWalletManager):
             log.warning("Failed to migrate %s receiving addresses!",
                         len(set(receiving_addresses).difference(set(migrated_receiving))))
 
-    def get_best_blockhash(self):
-        return self.ledger.headers.hash(self.ledger.headers.height).decode()
+    def get_best_blockhash(self, account=None):
+        if account:
+            ledger = self.get_ledger_for_account(account)
+        else:
+            ledger = self.ledger
+        return ledger.headers.hash(self.ledger.headers.height).decode()
 
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()

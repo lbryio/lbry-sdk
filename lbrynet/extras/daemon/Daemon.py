@@ -6,6 +6,7 @@ import urllib
 import json
 import textwrap
 
+from inspect import signature
 from typing import Callable, Optional, List
 from operator import itemgetter
 from binascii import hexlify, unhexlify
@@ -702,7 +703,7 @@ class Daemon(AuthJSONRPCServer):
         return "Shutting down"
 
     @defer.inlineCallbacks
-    def jsonrpc_status(self):
+    def jsonrpc_status(self, account_id=None):
         """
         Get daemon status
 
@@ -710,7 +711,8 @@ class Daemon(AuthJSONRPCServer):
             status
 
         Options:
-            None
+            --account_id=<account_id>       : (str) If provided, only the wallet status for this
+                                              account will be given. Otherwise default account.
 
         Returns:
             (dict) lbrynet-daemon status
@@ -788,7 +790,10 @@ class Daemon(AuthJSONRPCServer):
             },
         }
         for component in self.component_manager.components:
-            status = yield defer.maybeDeferred(component.get_status)
+            params = {}
+            if account_id and 'account' in signature(component.get_status).parameters:
+                params['account'] = self.get_account_or_default(account_id, lbc_only=False)
+            status = yield defer.maybeDeferred(component.get_status, **params)
             if status:
                 response[component.component_name] = status
         defer.returnValue(response)
