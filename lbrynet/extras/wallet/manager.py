@@ -307,12 +307,14 @@ class LbryWalletManager(BaseWalletManager):
                 'support_info': [],
                 'abandon_info': []
             }
-            if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
-                item['value'] = dewies_to_lbc(tx.net_account_balance - tx.fee)
-                item['fee'] = dewies_to_lbc(tx.fee)
+            if all([txi.is_my_account for txi in tx.inputs]):
+                # fees only matter if we are the ones paying them
+                item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)
+                item['fee'] = dewies_to_lbc(-tx.fee)
             else:
+                # someone else paid the fees
                 item['value'] = dewies_to_lbc(tx.net_account_balance)
-                item['fee'] = '0'  # can't calculate fee without all input txos
+                item['fee'] = '0.0'
             for txo in tx.my_claim_outputs:
                 item['claim_info'].append({
                     'address': txo.get_address(account.ledger),

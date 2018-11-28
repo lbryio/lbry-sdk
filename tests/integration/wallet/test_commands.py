@@ -674,6 +674,7 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['support_info'][0]['is_tip'], True)
         self.assertEqual(txs[0]['value'], '1.0')
+        self.assertEqual(txs[0]['fee'], '0.0')
 
         # verify that the outgoing tip is marked correctly as is_tip=True in account2
         txs2 = await self.out(
@@ -683,7 +684,8 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs2[0]['support_info'][0]['is_tip'], True)
-        self.assertEqual(txs2[0]['value'], '-1.0001415')
+        self.assertEqual(txs2[0]['value'], '-1.0')
+        self.assertEqual(txs2[0]['fee'], '-0.0001415')
 
         # send a support to the claim using account2
         support = await self.out(
@@ -703,4 +705,5 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
-        self.assertEqual(txs2[0]['value'], '-0.0001415')
+        self.assertEqual(txs2[0]['value'], '0.0')
+        self.assertEqual(txs2[0]['fee'], '-0.0001415')
