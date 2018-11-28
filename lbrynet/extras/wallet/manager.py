@@ -308,7 +308,7 @@ class LbryWalletManager(BaseWalletManager):
                 'abandon_info': []
             }
             if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
-                item['value'] -= dewies_to_lbc(tx.net_account_balance - tx.fee)
+                item['value'] = dewies_to_lbc(tx.net_account_balance - tx.fee)
                 item['fee'] = dewies_to_lbc(tx.fee)
             else:
                 item['value'] = dewies_to_lbc(tx.net_account_balance)
