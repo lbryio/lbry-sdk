@@ -334,10 +334,8 @@ class LbryWalletManager(BaseWalletManager):
                             if other_txo.is_claim and other_txo.claim_id == txo.claim_id:
                                 previous = other_txo
                                 break
-                    if previous is None:
-                        raise ValueError(
-                            "Invalid claim update state, expected to find previous claim in input."
-                        )
+                    assert previous is not None,\
+                        "Invalid claim update state, expected to find previous claim in input."
                     item['update_info'].append({
                         'address': txo.get_address(account.ledger),
                         'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
