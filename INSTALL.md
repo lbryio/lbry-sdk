@@ -29,7 +29,7 @@ macOS users will need to install [xcode command line tools](https://developer.xa
 Remaining dependencies can then be installed by running:
 
 ```
-brew install python3 protobuf
+brew install python3 protobuf leveldb
 ```
 
 ### Linux
