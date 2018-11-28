@@ -352,7 +352,7 @@ class LbryWalletManager(BaseWalletManager):
             for txo in tx.my_abandon_outputs:
                 item['abandon_info'].append({
                     'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'balance_delta': dewies_to_lbc(txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
@@ -360,6 +360,7 @@ class LbryWalletManager(BaseWalletManager):
                 })
             if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
                 item['fee'] = dewies_to_lbc(tx.fee)
+                item['value'] -= item['fee']
             else:
                 item['fee'] = '0'  # can't calculate fee without all input txos
             history.append(item)
