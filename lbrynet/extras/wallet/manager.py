@@ -300,8 +300,6 @@ class LbryWalletManager(BaseWalletManager):
             item = {
                 'txid': tx.id,
                 'timestamp': ts,
-                'value': dewies_to_lbc(tx.net_account_balance),
-                'fee': dewies_to_lbc(tx.fee),
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
                 'confirmations': headers.height - tx.height if tx.height > 0 else 0,
                 'claim_info': [],
@@ -309,6 +307,12 @@ class LbryWalletManager(BaseWalletManager):
                 'support_info': [],
                 'abandon_info': []
             }
+            if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
+                item['value'] -= dewies_to_lbc(tx.net_account_balance - tx.fee)
+                item['fee'] = dewies_to_lbc(tx.fee)
+            else:
+                item['value'] = dewies_to_lbc(tx.net_account_balance)
+                item['fee'] = '0'  # can't calculate fee without all input txos
             for txo in tx.my_claim_outputs:
                 item['claim_info'].append({
                     'address': txo.get_address(account.ledger),
@@ -358,11 +362,6 @@ class LbryWalletManager(BaseWalletManager):
                     'claim_name': txo.claim_name,
                     'nout': txo.position
                 })
-            if all([txi.txo_ref.txo is not None for txi in tx.inputs]):
-                item['fee'] = dewies_to_lbc(tx.fee)
-                item['value'] -= item['fee']
-            else:
-                item['fee'] = '0'  # can't calculate fee without all input txos
             history.append(item)
         return history
 
