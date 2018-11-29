@@ -231,7 +231,8 @@ class KademliaProtocol(DatagramProtocol):
                   sender_contact.address, sender_contact.udp_port)
         asyncio.create_task(self.send(
             sender_contact,
-            ResponseDatagram(1, message.rpc_id, sender_contact.node_id, result), (sender_contact.address, sender_contact.udp_port)
+            ResponseDatagram(1, message.rpc_id, self.node_id, result),
+            (sender_contact.address, sender_contact.udp_port)
         ))
 
     async def send(self, peer: Peer, message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
@@ -252,10 +253,8 @@ class KademliaProtocol(DatagramProtocol):
                future, into something similar to a message translator/encoder
                class (see C{kademlia.msgformat} and C{kademlia.encoding}).
         """
-        if isinstance(message, RequestDatagram):
-            assert message.node_id == self.node_id, message.method
-        elif isinstance(message, ResponseDatagram):
-            assert message.node_id == peer.node_id
+        if isinstance(message, (RequestDatagram, ResponseDatagram)):
+            assert message.node_id == self.node_id, message
         data = message.bencode()
         if len(data) > constants.msg_size_limit:
             # We have to spread the data over multiple UDP datagrams,
