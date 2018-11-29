@@ -75,7 +75,9 @@ class TreeRoutingTable:
         if self._should_split(bucket_index, contact.node_id):
             self._split_bucket(bucket_index)
             # Retry the insertion attempt
-            return await self.add_contact(contact)
+            result = await self.add_contact(contact)
+            self.join_buckets()
+            return result
         else:
             # We can't split the k-bucket
             #
@@ -220,6 +222,27 @@ class TreeRoutingTable:
         # ...and remove them from the old bucket
         for contact in new_bucket._contacts:
             old_bucket.remove_contact(contact)
+
+    def join_buckets(self):
+        to_pop = [i for i, bucket in enumerate(self._buckets) if not len(bucket)]
+        if not to_pop:
+            return
+        bucket_index_to_pop = to_pop[0]
+        assert len(self._buckets[bucket_index_to_pop]) == 0
+        can_go_lower = bucket_index_to_pop - 1 >= 0
+        can_go_higher = bucket_index_to_pop + 1 >= len(self._buckets)
+        assert can_go_higher or can_go_lower
+        bucket = self._buckets[bucket_index_to_pop]
+        if can_go_lower and can_go_higher:
+            midpoint = ((bucket.range_max - bucket.range_min) // 2) + bucket.range_min
+            self._buckets[bucket_index_to_pop - 1].range_max = midpoint - 1
+            self._buckets[bucket_index_to_pop + 1].range_min = midpoint
+        elif can_go_lower:
+            self._buckets[bucket_index_to_pop - 1].range_max = bucket.range_max
+        elif can_go_higher:
+            self._buckets[bucket_index_to_pop + 1].range_min = bucket.range_min
+        self._buckets.remove(bucket)
+        return self.join_buckets()
 
     def contact_in_routing_table(self, address_tuple: typing.Tuple[str, int]) -> bool:
         for bucket in self._buckets:
