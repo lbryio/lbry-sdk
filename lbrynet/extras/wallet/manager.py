@@ -88,7 +88,8 @@ class LbryWalletManager(BaseWalletManager):
         account.encrypt(password)
         account.serialize_encrypted = True
         self.save()
-        return account.encrypted and account.serialize_encrypted
+        self.unlock_account(password, account)
+        return account.serialize_encrypted
 
     def unlock_account(self, password, account):
         assert account.encrypted, "account is not locked"
