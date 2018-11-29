@@ -1,6 +1,7 @@
 import json
 import logging
 
+from lbrynet.schema.validator import validate_claim_id
 from torba.client.baseaccount import BaseAccount
 from torba.client.basetransaction import TXORef
 
@@ -46,6 +47,15 @@ class Account(BaseAccount):
         for maybe_claim_id in list(self.certificates):
             results['total'] += 1
             if ':' not in maybe_claim_id:
+                try:
+                    validate_claim_id(maybe_claim_id)
+                except Exception as e:
+                    log.warning(
+                        "Failed to migrate claim '%s': %s",
+                        maybe_claim_id, str(e)
+                    )
+                    results['migrate-failed'] += 1
+                    continue
                 claims = await self.ledger.network.get_claims_by_ids(maybe_claim_id)
                 if maybe_claim_id not in claims:
                     log.warning(
