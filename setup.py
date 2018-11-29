@@ -1,4 +1,5 @@
 import os
+import sys
 from setuptools import setup, find_packages
 
 import torba
@@ -6,6 +7,20 @@ import torba
 BASE = os.path.dirname(__file__)
 with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
     long_description = fh.read()
+
+REQUIRES = [
+    'aiohttp',
+    'aiorpcx==0.9.0',
+    'coincurve',
+    'pbkdf2',
+    'cryptography',
+    'attrs',
+    'plyvel',
+    'pylru'
+]
+if sys.platform.startswith('win32'):
+    REQUIRES.remove('plyvel')
+
 
 setup(
     name='torba',
@@ -33,17 +48,8 @@ setup(
         'Topic :: Utilities',
     ],
     packages=find_packages(exclude=('tests',)),
-    python_requires='>=3.6',
-    install_requires=(
-        'aiohttp',
-        'aiorpcx==0.9.0',
-        'coincurve',
-        'pbkdf2',
-        'cryptography',
-        'attrs',
-        'plyvel',
-        'pylru'
-    ),
+    python_requires='>=3.7',
+    install_requires=REQUIRES,
     extras_require={
         'gui': (
             'pyside2',
