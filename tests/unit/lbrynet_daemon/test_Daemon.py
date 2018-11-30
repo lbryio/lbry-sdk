@@ -6,7 +6,6 @@ from os import path
 from twisted.internet import defer
 from twisted.trial import unittest
 
-from faker import Faker
 from lbrynet import conf
 from lbrynet.schema.decode import smart_decode
 from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -152,8 +151,6 @@ class TestFileListSorting(unittest.TestCase):
     def setUp(self):
         mock_conf_settings(self)
         test_utils.reset_time(self)
-        self.faker = Faker('en_US')
-        self.faker.seed(129)  # contains 3 same points paid (5.9)
         self.test_daemon = get_test_daemon()
         self.test_daemon.file_manager.lbry_files = self._get_fake_lbry_files()
 
@@ -274,10 +271,6 @@ class TestFileListSorting(unittest.TestCase):
     def _get_fake_lbry_file(self):
         lbry_file = mock.Mock(spec=ManagedEncryptedFileDownloader)
 
-        file_path = self.faker.file_path()
-        stream_name = self.faker.file_name()
-        channel_claim_id = self.faker.sha1()
-        channel_name = self.faker.simple_profile()['username']
         faked_attributes = {
             'channel_claim_id': channel_claim_id,
             'channel_name': '@' + channel_name,
