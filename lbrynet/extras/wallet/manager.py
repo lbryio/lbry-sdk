@@ -279,8 +279,12 @@ class LbryWalletManager(BaseWalletManager):
             ).asFuture(asyncio.get_event_loop())
         return results
 
-    def get_claims_for_name(self, name: str):
-        return self.ledger.network.get_claims_for_name(name)
+    async def get_claims_for_name(self, name: str):
+        response = await self.ledger.network.get_claims_for_name(name)
+        if 'claims' in response:
+            to_resolve = [(claim['name'] + '#' + claim['claim_id']) for claim in response['claims']]
+            response['claims'] = [resolution['claim'] for resolution in (await self.resolve(*to_resolve)).values()]
+        return response
 
     async def address_is_mine(self, unknown_address, account):
         match = await self.ledger.db.get_address(address=unknown_address, account=account)
