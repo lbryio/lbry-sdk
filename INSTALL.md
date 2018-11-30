@@ -57,7 +57,7 @@ To install:
 
  python --version # Python 2 is not supported. Make sure you're on Python 3.7
 
- pip install --editable .[test]  # [test] installs extras needed for running the tests
+ pip install -e .
  ```
 
 To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `virtualenv` command.
