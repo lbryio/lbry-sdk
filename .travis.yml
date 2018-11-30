@@ -91,8 +91,11 @@ jobs:
       env: OS=mac
       cache: false
       install:
-        - brew update
-        - brew install python
+        #- brew update
+        #- brew install python
+        - python --version
+        - pip --version
+        - pip3 --version
         - pip3 install pyinstaller
         - git clone https://github.com/lbryio/torba.git --depth 1
         - sed -i -e "s/'plyvel',//" torba/setup.py
