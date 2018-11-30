@@ -92,7 +92,7 @@ jobs:
       cache: false
       install:
         - brew update
-        - brew install python3
+        - brew install python
         - pip3 install pyinstaller
         - git clone https://github.com/lbryio/torba.git --depth 1
         - sed -i -e "s/'plyvel',//" torba/setup.py
