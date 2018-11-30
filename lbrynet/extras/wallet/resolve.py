@@ -2,7 +2,7 @@ import logging
 
 from ecdsa import BadSignatureError
 from binascii import unhexlify, hexlify
-
+from lbrynet.extras.wallet.dewies import dewies_to_lbc
 from lbrynet.p2p.Error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
 from lbrynet.schema.address import is_address
 from lbrynet.schema.claim import ClaimDict
@@ -189,7 +189,7 @@ class Resolver:
         if 'height' in claim_result and claim_result['height'] is None:
             claim_result['height'] = -1
 
-        if 'amount' in claim_result and not isinstance(claim_result['amount'], float):
+        if 'amount' in claim_result:
             claim_result = format_amount_value(claim_result)
 
         claim_result['permanent_url'] = _get_permanent_url(claim_result)
@@ -287,14 +287,13 @@ class Resolver:
 # Format value to be hex encoded string
 # TODO: refactor. Came from lbryum, there could be another part of torba doing it
 def format_amount_value(obj):
-    COIN = 100000000
     if isinstance(obj, dict):
         for k, v in obj.items():
             if k in ('amount', 'effective_amount'):
                 if not isinstance(obj[k], float):
-                    obj[k] = float(obj[k]) / float(COIN)
+                    obj[k] = dewies_to_lbc(obj[k])
             elif k == 'supports' and isinstance(v, list):
-                obj[k] = [{'txid': txid, 'nout': nout, 'amount': float(amount) / float(COIN)}
+                obj[k] = [{'txid': txid, 'nout': nout, 'amount': dewies_to_lbc(amount)}
                           for (txid, nout, amount) in v]
             elif isinstance(v, (list, dict)):
                 obj[k] = format_amount_value(v)
@@ -436,6 +435,7 @@ def _decode_claim_result(claim):
         claim['value'] = None
         claim['error'] = "Failed to decode value"
     return claim
+
 
 def _handle_claim_result(results):
     if not results:

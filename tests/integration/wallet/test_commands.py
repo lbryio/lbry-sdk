@@ -360,7 +360,9 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And check if his support showed up
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
         # It obviously did! Because, blockchain baby \O/
-        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['amount'], 0.2)
+        self.assertEqual(resolve_result[uri]['claim']['amount'], '1.0')
+        self.assertEqual(resolve_result[uri]['claim']['effective_amount'], '1.2')
+        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['amount'], '0.2')
         self.assertEqual(resolve_result[uri]['claim']['supports'][0]['txid'], tx['txid'])
         await self.generate(5)
 
@@ -373,7 +375,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And again checks if it went to the just right place
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
         # Which it obviously did. Because....?????
-        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], 0.3)
+        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], '0.3')
         self.assertEqual(resolve_result[uri]['claim']['supports'][1]['txid'], tx['txid'])
         await self.generate(5)
 
@@ -384,7 +386,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And check if his support showed up
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
         # It did!
-        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], 0.4)
+        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], '0.4')
         self.assertEqual(resolve_result[uri]['claim']['supports'][2]['txid'], tx['txid'])
         await self.generate(5)
 

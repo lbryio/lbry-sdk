@@ -55,8 +55,8 @@ fake_claim_info = {
         }
     },
     'height': 10000,
-    'amount': 1.0,
-    'effective_amount': 1.0,
+    'amount': '1.0',
+    'effective_amount': '1.0',
     'nout': 0,
     'txid': "deadbeef" * 8,
     'supports': [],
@@ -168,7 +168,7 @@ class SupportsStorageTests(StorageTest):
             "txid": random_lbry_hash(),
             "nout": i,
             "address": f"addr{i}",
-            "amount": i
+            "amount": f"{i}.0"
         } for i in range(20)]
         expected_supports = {}
         for idx, claim_id in enumerate(claim_ids):
