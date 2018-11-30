@@ -91,7 +91,7 @@ jobs:
       env: OS=mac
       cache: false
       install:
-        - brew update
+        #- brew update
         - brew upgrade python
         - python --version
         - pip --version
