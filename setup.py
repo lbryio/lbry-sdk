@@ -44,9 +44,4 @@ setup(
         'docopt',
         'colorama==0.3.7',
     ],
-    extras_require={
-        'test': (
-            'faker==0.8.17',
-        )
-    }
 )
