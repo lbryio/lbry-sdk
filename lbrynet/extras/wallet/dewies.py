@@ -31,3 +31,7 @@ def lbc_to_dewies(lbc):
 
 def dewies_to_lbc(dewies):
     return satoshis_to_coins(dewies)
+
+
+def lbc_sum(*amounts_in_lbc):
+    return dewies_to_lbc(sum(lbc_to_dewies(amount) for amount in amounts_in_lbc))

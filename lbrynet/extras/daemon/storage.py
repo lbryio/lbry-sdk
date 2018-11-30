@@ -3,10 +3,10 @@ import os
 import sqlite3
 import traceback
 from binascii import hexlify, unhexlify
-from decimal import Decimal
 from twisted.internet import defer, task, threads
 from twisted.enterprise import adbapi
-from torba.client.constants import COIN
+
+from lbrynet.extras.wallet.dewies import lbc_to_dewies, dewies_to_lbc, lbc_sum
 
 from lbrynet import conf
 from lbrynet.schema.claim import ClaimDict
@@ -557,7 +557,7 @@ class SQLiteStorage:
             for support in supports:
                 transaction.execute(
                     "insert into support values (?, ?, ?, ?)",
-                    ("%s:%i" % (support['txid'], support['nout']), claim_id, int(support['amount'] * COIN),
+                    ("%s:%i" % (support['txid'], support['nout']), claim_id, lbc_to_dewies(support['amount']),
                      support.get('address', ""))
                 )
         return self.db.runInteraction(_save_support)
@@ -568,7 +568,7 @@ class SQLiteStorage:
                 "txid": outpoint.split(":")[0],
                 "nout": int(outpoint.split(":")[1]),
                 "claim_id": supported_id,
-                "amount": float(Decimal(amount) / Decimal(COIN)),
+                "amount": dewies_to_lbc(amount),
                 "address": address,
             }
 
@@ -595,7 +595,7 @@ class SQLiteStorage:
                 outpoint = "%s:%i" % (claim_info['txid'], claim_info['nout'])
                 claim_id = claim_info['claim_id']
                 name = claim_info['name']
-                amount = int(COIN * claim_info['amount'])
+                amount = lbc_to_dewies(claim_info['amount'])
                 height = claim_info['height']
                 address = claim_info['address']
                 sequence = claim_info['claim_sequence']
@@ -744,9 +744,7 @@ class SQLiteStorage:
         if result and include_supports:
             supports = yield self.get_supports(result['claim_id'])
             result['supports'] = supports
-            result['effective_amount'] = float(
-                sum([support['amount'] for support in supports]) + result['amount']
-            )
+            result['effective_amount'] = lbc_sum(result['amount'], *[support['amount'] for support in supports])
         defer.returnValue(result)
 
     @defer.inlineCallbacks
@@ -787,9 +785,7 @@ class SQLiteStorage:
                 claim = claims[stream_hash]
                 supports = all_supports.get(claim['claim_id'], [])
                 claim['supports'] = supports
-                claim['effective_amount'] = float(
-                    sum([support['amount'] for support in supports]) + claim['amount']
-                )
+                claim['effective_amount'] = lbc_sum(claim['amount'], *[support['amount'] for support in supports])
                 claims[stream_hash] = claim
         defer.returnValue(claims)
 
@@ -811,9 +807,7 @@ class SQLiteStorage:
         if include_supports:
             supports = yield self.get_supports(result['claim_id'])
             result['supports'] = supports
-            result['effective_amount'] = float(
-                sum([support['amount'] for support in supports]) + result['amount']
-            )
+            result['effective_amount'] = lbc_sum(result['amount'], *[support['amount'] for support in supports])
         defer.returnValue(result)
 
     def get_unknown_certificate_ids(self):
@@ -881,7 +875,7 @@ def _format_claim_response(outpoint, claim_id, name, amount, height, serialized,
         "claim_sequence": claim_sequence,
         "value": ClaimDict.deserialize(unhexlify(serialized)).claim_dict,
         "height": height,
-        "amount": float(Decimal(amount) / Decimal(COIN)),
+        "amount": dewies_to_lbc(amount),
         "nout": int(outpoint.split(":")[1]),
         "txid": outpoint.split(":")[0],
         "channel_claim_id": channel_id,
