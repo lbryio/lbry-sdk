@@ -25,7 +25,7 @@ from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from tests.mocks import BTCLBCFeed, USDBTCFeed
 from tests.test_utils import is_android
-
+from tests.unit.lbrynet_daemon._faked_attributes import FAKED_ATTRIBUTES
 
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:
@@ -268,32 +268,6 @@ class TestFileListSorting(unittest.TestCase):
 
     def _get_fake_lbry_file(self):
         lbry_file = mock.Mock(spec=ManagedEncryptedFileDownloader)
-
-        faked_attributes = {
-            'channel_claim_id': '5eaed845fe7c6c3c6a54d444aff39003d215a57f',
-            'channel_name': '@underwoodcandice',
-            'claim_id': 'a50900b00709207da9abfe1e1a6cada35361c2a4',
-            'claim_name': 'teacher-leave-appear-generation',
-            'completed': False,
-            'download_directory': '/including',
-            'download_path': '/including/in.mp4',
-            'file_name': 'in.mp4',
-            'key': b'\x8a\x9d\xac\xd7\x99\xaf\x19\x7f\x00\x86\xcc\xc0\xfc\xac\x82\x13',
-            'metadata': {'author': 'underwoodcandice', 'nsfw': True},
-            'mime_type': 'application/xop+xml',
-            'nout': 1696,
-            'outpoint': '52b5529d48511374e5ccc0d5f2dcee0e36dda5146bebd2fee5d6d6cc7eec969b',
-            'points_paid': 9.3,
-            'sd_hash': '1ae6e81f85e3cd1b339be0f887f36af8bad8985de1a686a0b609bd4d96abc9ae17e6193847e333836efc26909fe4390b',
-            'stopped': False,
-            'stream_hash': '747bd138edac8f0e8092e29977d9d4eea2a136e11425e7e7ef1a3cad8cb2b7d4174b02afe5941bacffa341037b154d5d',
-            'stream_name': 'board.txt',
-            'suggested_file_name': 'board.txt',
-            'txid': '577cefb408f4c90cfee3050c39513bafee3e95ea22b3376d521d9516dd57c0dc',
-            'written_bytes': 713
-        }
-
         for key in faked_attributes:
             setattr(lbry_file, key, faked_attributes[key])
-
         return lbry_file
