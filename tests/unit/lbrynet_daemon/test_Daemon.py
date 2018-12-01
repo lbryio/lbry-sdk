@@ -25,7 +25,7 @@ from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from tests.mocks import BTCLBCFeed, USDBTCFeed
 from tests.test_utils import is_android
-from tests.unit.lbrynet_daemon._faked_attributes import FAKED_ATTRIBUTES
+from tests.unit.lbrynet_daemon._sample_attributes_list import FAKED_ATTRIBUTES
 
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:
