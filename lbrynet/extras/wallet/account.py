@@ -1,6 +1,8 @@
 import json
 import logging
+import binascii
 
+from lbrynet.schema.validator import validate_claim_id
 from torba.client.baseaccount import BaseAccount
 from torba.client.basetransaction import TXORef
 
@@ -42,10 +44,43 @@ class Account(BaseAccount):
             'previous-success': 0,
             'previous-corrupted': 0
         }
+        double_hex_encoded_to_pop = []
+
+        for maybe_claim_id in list(self.certificates):
+            if ':' not in maybe_claim_id:
+                try:
+                    validate_claim_id(maybe_claim_id)
+                    continue
+                except Exception:
+                    try:
+                        maybe_claim_id_bytes = maybe_claim_id
+                        if isinstance(maybe_claim_id_bytes, str):
+                            maybe_claim_id_bytes = maybe_claim_id_bytes.encode()
+                        decoded_double_hex = binascii.unhexlify(maybe_claim_id_bytes).decode()
+                        validate_claim_id(decoded_double_hex)
+                        if decoded_double_hex in self.certificates:
+                            log.warning("don't know how to migrate certificate %s", decoded_double_hex)
+                        else:
+                            log.info("claim id was double hex encoded, fixing it")
+                            double_hex_encoded_to_pop.append((maybe_claim_id, decoded_double_hex))
+                    except Exception:
+                        continue
+
+        for double_encoded_claim_id, correct_claim_id in double_hex_encoded_to_pop:
+            self.certificates[correct_claim_id] = self.certificates.pop(double_encoded_claim_id)
 
         for maybe_claim_id in list(self.certificates):
             results['total'] += 1
             if ':' not in maybe_claim_id:
+                try:
+                    validate_claim_id(maybe_claim_id)
+                except Exception as e:
+                    log.warning(
+                        "Failed to migrate claim '%s': %s",
+                        maybe_claim_id, str(e)
+                    )
+                    results['migrate-failed'] += 1
+                    continue
                 claims = await self.ledger.network.get_claims_by_ids(maybe_claim_id)
                 if maybe_claim_id not in claims:
                     log.warning(
