@@ -93,7 +93,7 @@ jobs:
       install:
         - brew update
         - brew upgrade python
-        - brew reinstall $(brew deps --include-build python3)
+        - brew reinstall $(brew deps --include-build python)
         - python --version
         - pip --version
         - pip install pyinstaller
