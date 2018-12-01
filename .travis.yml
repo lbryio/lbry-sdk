@@ -92,8 +92,9 @@ jobs:
       cache: false
       install:
         - brew update
+        - brew upgrade
         - brew upgrade python
-        - brew reinstall $(brew deps --include-build python)
+
         - python --version
         - pip --version
         - pip install pyinstaller
