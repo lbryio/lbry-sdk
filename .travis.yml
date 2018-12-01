@@ -91,7 +91,7 @@ jobs:
       env: OS=mac
       cache: false
       install:
-        #- brew update
+        - brew update
         - brew upgrade python
         - brew reinstall $(brew deps --include-build python3)
         - python --version
