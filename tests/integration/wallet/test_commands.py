@@ -737,3 +737,29 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
+
+
+class TransactionCommandsTestCase(CommandTestCase):
+
+    async def test_transaction_show(self):
+        # local tx
+        result = await self.out(self.daemon.jsonrpc_wallet_send(
+            '5.0', await self.daemon.jsonrpc_address_unused(self.account.id)
+        ))
+        await self.confirm_tx(result['txid'])
+        tx = await self.daemon.jsonrpc_transaction_show(result['txid'])
+        self.assertEqual(tx.id, result['txid'])
+
+        # someone's tx
+        change_address = await self.blockchain.get_raw_change_address()
+        sendtxid = await self.blockchain.send_to_address(change_address, 10)
+        tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
+        self.assertEqual(tx.id, sendtxid)
+        self.assertEqual(tx.height, -1)
+        await self.generate(1)
+        tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
+        self.assertEqual(tx.height, self.ledger.headers.height)
+
+        # inexistent
+        result = await self.daemon.jsonrpc_transaction_show('0'*64)
+        self.assertFalse(result['success'])
