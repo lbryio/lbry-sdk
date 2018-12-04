@@ -86,7 +86,7 @@ jobs:
     - <<: *build
       name: "Mac"
       os: osx
-      osx_image: xcode8
+      osx_image: xcode6.4
       language: generic
       env: OS=mac
       cache: false
