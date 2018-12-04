@@ -2,7 +2,7 @@ import textwrap
 from torba.client.util import coins_to_satoshis, satoshis_to_coins
 
 
-def lbc_to_dewies(lbc):
+def lbc_to_dewies(lbc: str) -> int:
     try:
         return coins_to_satoshis(lbc)
     except ValueError:
@@ -29,5 +29,5 @@ def lbc_to_dewies(lbc):
         ))
 
 
-def dewies_to_lbc(dewies):
+def dewies_to_lbc(dewies) -> str:
     return satoshis_to_coins(dewies)
