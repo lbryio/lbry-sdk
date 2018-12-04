@@ -90,17 +90,19 @@ jobs:
       language: generic
       env: OS=mac
       cache: false
-      install:
-        #- brew update
+      before_install:
+        - brew update
         - brew upgrade python
-        - python --version
-        - pip --version
-        - pip install pyinstaller
+        - brew postinstall python
+      install:
+        - python3 --version
+        - pip3 --version
+        - pip3 install pyinstaller
         - git clone https://github.com/lbryio/torba.git --depth 1
         - sed -i -e "s/'plyvel',//" torba/setup.py
-        - cd torba && pip install -e . && cd ..
-        - python scripts/set_build.py
-        - pip install -e .
+        - cd torba && pip3 install -e . && cd ..
+        - python3 scripts/set_build.py
+        - pip3 install -e .
 
 cache:
   directories:
