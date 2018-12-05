@@ -4,7 +4,6 @@ import asyncio
 import logging
 from binascii import unhexlify
 
-from aiorpcx.jsonrpc import CodeMessageError
 from datetime import datetime
 from typing import Optional
 
@@ -12,6 +11,7 @@ from twisted.internet import defer
 
 from lbrynet.schema.schema import SECP256k1
 from torba.client.basemanager import BaseWalletManager
+from torba.rpc.jsonrpc import CodeMessageError
 
 from lbrynet.schema.claim import ClaimDict
 

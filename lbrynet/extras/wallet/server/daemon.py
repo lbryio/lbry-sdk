@@ -1,6 +1,6 @@
-from aiorpcx import RPCError
 from functools import wraps
 
+from torba.rpc.jsonrpc import RPCError
 from torba.server.daemon import Daemon, DaemonError
 
 
