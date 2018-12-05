@@ -92,8 +92,7 @@ jobs:
       cache: false
       before_install:
         - brew update
-        - brew upgrade python
-        - brew postinstall python
+        - brew postinstall python3
       install:
         - python3 --version
         - pip3 --version
