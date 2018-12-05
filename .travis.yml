@@ -93,6 +93,8 @@ jobs:
       before_install:
         - brew update
         - brew install python3
+        - brew reinstall python3
+        
       install:
         - python3 --version
         - pip3 --version
