@@ -515,6 +515,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         records = await self.db.get_addresses(cols=('address',), address__in=addresses)
         await asyncio.wait([
             self.on_transaction.where(partial(
-                lambda a, e: a == e.address and e.tx.height >= height and e.tx.id == tx.id, address_record['address']
+                lambda a, e: a == e.address and e.tx.height >= height and e.tx.id == tx.id,
+                address_record['address']
             )) for address_record in records
         ])
