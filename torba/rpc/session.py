@@ -37,7 +37,7 @@ from contextlib import suppress
 from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
 from .jsonrpc import RPCError, ProtocolError
 from .curio import TaskGroup, TaskTimeout, spawn_sync, ignore_after, timeout_after
-from .framing import BadMagicError, BadChecksumError, OversizedPayloadError
+from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
 from .util import Concurrency
 
 
