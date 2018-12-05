@@ -88,13 +88,18 @@ jobs:
       os: osx
       osx_image: xcode8
       language: generic
-      env: OS=mac
+      env: 
+        - OS=mac
+        - mmacosx-version-min=10.12
       cache: false
       before_install:
         - brew update
         - brew upgrade python
         - brew postinstall python
+        - pip3 install virtualenv
       install:
+        - virtualenv lbry-venv --python=python3.7
+        - source lbry-venv/bin/activate
         - python3 --version
         - pip3 --version
         - pip3 install pyinstaller
