@@ -88,12 +88,14 @@ jobs:
       os: osx
       osx_image: xcode6.4
       language: generic
-      env: OS=mac
+      env: 
+        - OS=mac
+        - MACOSX_DEPLOYMENT_TARGET=10.10
       cache: false
       before_install:
         - brew update
         - brew install python3
-        - brew reinstall python3
+        - pip3 install virtualenv
         
       install:
         - virtualenv lbry-venv --python=python3.7
