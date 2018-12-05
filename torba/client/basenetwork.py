@@ -3,7 +3,7 @@ import asyncio
 from asyncio import CancelledError
 from itertools import cycle
 
-from aiorpcx import RPCSession as BaseClientSession, Connector, RPCError
+from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
 from torba import __version__
 from torba.stream import StreamController

@@ -70,7 +70,7 @@ class Notification(SingleRequest):
     pass
 
 
-class Batch(object):
+class Batch:
     __slots__ = ('items', )
 
     def __init__(self, items):
@@ -646,9 +646,9 @@ class JSONRPCConnection(object):
                 parts.append(error.error_message)
 
         if not items and parts:
-            error = ProtocolError(0, "")
-            error.error_message = protocol.batch_message_from_parts(parts)
-            raise error
+            protocol_error = ProtocolError(0, "")
+            protocol_error.error_message = protocol.batch_message_from_parts(parts)
+            raise protocol_error
         return items
 
     def _receive_response_batch(self, payloads):

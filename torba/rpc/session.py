@@ -29,15 +29,19 @@ __all__ = ('Connector', 'RPCSession', 'MessageSession', 'Server',
 
 
 import asyncio
+from asyncio import Event, CancelledError
 import logging
 import time
 from contextlib import suppress
 
-from . import *
+from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
+from .jsonrpc import RPCError, ProtocolError
+from .curio import TaskGroup, TaskTimeout, spawn_sync, ignore_after, timeout_after
+from .framing import BadMagicError, BadChecksumError, OversizedPayloadError
 from .util import Concurrency
 
 
-class Connector(object):
+class Connector:
 
     def __init__(self, session_factory, host=None, port=None, proxy=None,
                  **kwargs):
