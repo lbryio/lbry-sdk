@@ -96,6 +96,7 @@ jobs:
         - brew update
         - brew upgrade python
         - brew postinstall python
+        - pip3 install virtualenv
         
       install:
         - virtualenv lbry-venv --python=python3.7
