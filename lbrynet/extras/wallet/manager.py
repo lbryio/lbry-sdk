@@ -349,7 +349,8 @@ class LbryWalletManager(BaseWalletManager):
                     for txi in tx.inputs:
                         if txi.txo_ref.txo is not None:
                             other_txo = txi.txo_ref.txo
-                            if other_txo.is_claim and other_txo.claim_id == txo.claim_id:
+                            if (other_txo.is_claim or other_txo.script.is_support_claim) \
+                                    and other_txo.claim_id == txo.claim_id:
                                 previous = other_txo
                                 break
                     assert previous is not None,\
