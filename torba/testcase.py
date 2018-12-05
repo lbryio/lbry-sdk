@@ -1,8 +1,8 @@
 import sys
 import logging
-import unittest
 import asyncio
 from asyncio.runners import _cancel_all_tasks  # type: ignore
+import unittest
 from unittest.case import _Outcome
 from typing import Optional
 from torba.orchstr8 import Conductor
