@@ -86,14 +86,11 @@ jobs:
     - <<: *build
       name: "Mac"
       os: osx
-      osx_image: xcode8
+      osx_image: xcode8.3
       language: generic
       env: OS=mac
-      cache: false
       before_install:
-        - brew update
         - brew upgrade python
-        - brew postinstall python
       install:
         - python3 --version
         - pip3 --version
