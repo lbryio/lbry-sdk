@@ -18,11 +18,16 @@ class BasicTransactionTests(IntegrationTestCase):
         address1 = await self.account.receiving.get_or_create_usable_address()
         hash1 = self.ledger.address_to_hash160(address1)
 
-        tasks = []
-        for _ in range(10):
-            sendtxid = await self.blockchain.send_to_address(address1, 100)
-            tasks.append(self.on_transaction_id(sendtxid))
-        await asyncio.wait(tasks)
+        txids = await asyncio.gather(*(
+            self.blockchain.send_to_address(address1, 100)
+            for _ in range(10)
+        ))
+
+        await asyncio.wait([
+            self.on_transaction_id(txid)
+            for txid in txids
+        ])
+
         await self.assertBalance(self.account, '1000.0')
 
         tasks = []
@@ -37,11 +42,7 @@ class BasicTransactionTests(IntegrationTestCase):
 
         await asyncio.wait(tasks)
 
-        #await asyncio.sleep(5)
-
-        await self.assertBalance(self.account, '1000.0')
-
-        await self.blockchain.generate(1)
+        await self.assertBalance(self.account, '999.99876')
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)

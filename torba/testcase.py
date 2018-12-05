@@ -18,14 +18,22 @@ class ColorHandler(logging.StreamHandler):
 
     level_color = {
         logging.DEBUG: "black",
-        logging.INFO: "black",
+        logging.INFO: "light_gray",
         logging.WARNING: "yellow",
         logging.ERROR: "red"
     }
 
     color_code = dict(
-        black=30, red=31, green=32, yellow=33,
-        blue=34, magenta=35, cyan=36, white=37
+        black=30,
+        red=31,
+        green=32,
+        yellow=33,
+        blue=34,
+        magenta=35,
+        cyan=36,
+        white=37,
+        light_gray='0;37',
+        dark_gray='1;30'
     )
 
     def emit(self, record):
