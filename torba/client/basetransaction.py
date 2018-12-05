@@ -247,7 +247,7 @@ class BaseTransaction:
     output_class = BaseOutput
 
     def __init__(self, raw=None, version: int = 1, locktime: int = 0, is_verified: bool = False,
-                 height: int = -1, position: int = -1) -> None:
+                 height: int = -2, position: int = -1) -> None:
         self._raw = raw
         self.ref = TXRefMutable(self)
         self.version = version
@@ -255,10 +255,27 @@ class BaseTransaction:
         self._inputs: List[BaseInput] = []
         self._outputs: List[BaseOutput] = []
         self.is_verified = is_verified
+        # Height Progression
+        #   -2: not broadcast
+        #   -1: in mempool but has unconfirmed inputs
+        #    0: in mempool and all inputs confirmed
+        # +num: confirmed in a specific block (height)
         self.height = height
         self.position = position
         if raw is not None:
             self._deserialize()
+
+    @property
+    def is_broadcast(self):
+        return self.height > -2
+
+    @property
+    def is_mempool(self):
+        return self.height in (-1, 0)
+
+    @property
+    def is_confirmed(self):
+        return self.height > 0
 
     @property
     def id(self):

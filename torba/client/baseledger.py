@@ -500,7 +500,7 @@ class BaseLedger(metaclass=LedgerRegistry):
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw).decode())
 
-    async def wait(self, tx: basetransaction.BaseTransaction, height=0):
+    async def wait(self, tx: basetransaction.BaseTransaction, height=-1):
         addresses = set()
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:

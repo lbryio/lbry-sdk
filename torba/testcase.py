@@ -1,6 +1,8 @@
 import sys
 import logging
 import unittest
+import asyncio
+from asyncio.runners import _cancel_all_tasks  # type: ignore
 from unittest.case import _Outcome
 from typing import Optional
 from torba.orchstr8 import Conductor
@@ -12,17 +14,34 @@ from torba.client.wallet import Wallet
 from torba.client.util import satoshis_to_coins
 
 
-try:
-    import asyncio
-    from asyncio.runners import _cancel_all_tasks  # type: ignore
-except ImportError:
-    import asyncio
+class ColorHandler(logging.StreamHandler):
 
-    # this is only available in py3.7
-    def _cancel_all_tasks(loop):
-        pass
+    level_color = {
+        logging.DEBUG: "black",
+        logging.INFO: "black",
+        logging.WARNING: "yellow",
+        logging.ERROR: "red"
+    }
 
-HANDLER = logging.StreamHandler(sys.stdout)
+    color_code = dict(
+        black=30, red=31, green=32, yellow=33,
+        blue=34, magenta=35, cyan=36, white=37
+    )
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            color_name = self.level_color.get(record.levelno, "black")
+            color_code = self.color_code[color_name]
+            stream = self.stream
+            stream.write('\x1b[%sm%s\x1b[0m' % (color_code, msg))
+            stream.write(self.terminator)
+            self.flush()
+        except Exception:
+            self.handleError(record)
+
+
+HANDLER = ColorHandler(sys.stdout)
 HANDLER.setFormatter(
     logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 )

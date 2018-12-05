@@ -4,9 +4,44 @@ from torba.testcase import IntegrationTestCase
 from torba.client.constants import COIN
 
 
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+
+
 class BasicTransactionTests(IntegrationTestCase):
 
     VERBOSITY = logging.WARN
+
+    async def test_stressing(self):
+        await self.blockchain.generate(1000)
+        await self.assertBalance(self.account, '0.0')
+        address1 = await self.account.receiving.get_or_create_usable_address()
+        hash1 = self.ledger.address_to_hash160(address1)
+
+        tasks = []
+        for _ in range(10):
+            sendtxid = await self.blockchain.send_to_address(address1, 100)
+            tasks.append(self.on_transaction_id(sendtxid))
+        await asyncio.wait(tasks)
+        await self.assertBalance(self.account, '1000.0')
+
+        tasks = []
+        for _ in range(10):
+            tx = await self.ledger.transaction_class.create(
+                [],
+                [self.ledger.transaction_class.output_class.pay_pubkey_hash(1*COIN, hash1)],
+                [self.account], self.account
+            )
+            await self.broadcast(tx)
+            tasks.append(asyncio.create_task(self.ledger.wait(tx)))
+
+        await asyncio.wait(tasks)
+
+        #await asyncio.sleep(5)
+
+        await self.assertBalance(self.account, '1000.0')
+
+        await self.blockchain.generate(1)
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)
