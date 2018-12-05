@@ -102,12 +102,12 @@ jobs:
         - source lbry-venv/bin/activate
         - python3 --version
         - pip3 --version
-        - pip3 install pyinstaller
+        - pip3 install --no-binary :all: pyinstaller
         - git clone https://github.com/lbryio/torba.git --depth 1
         - sed -i -e "s/'plyvel',//" torba/setup.py
-        - cd torba && pip3 install -e . && cd ..
+        - cd torba && pip3 install --no-binary :all: -e . && cd ..
         - python3 scripts/set_build.py
-        - pip3 install -e .
+        - pip3 install --no-binary :all: -e .
 
 cache:
   directories:
