@@ -14,8 +14,8 @@ from asyncio import Lock
 from collections import defaultdict
 
 import attr
-from aiorpcx import TaskGroup, run_in_thread, sleep
 
+from torba.rpc import TaskGroup, run_in_thread, sleep
 from torba.server.hash import hash_to_hex_str, hex_str_to_hash
 from torba.server.util import class_logger, chunks
 from torba.server.db import UTXO

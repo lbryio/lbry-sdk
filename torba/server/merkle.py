@@ -28,8 +28,7 @@
 
 from math import ceil, log
 
-from aiorpcx import Event
-
+from torba.rpc import Event
 from torba.server.hash import double_sha256
 
 

@@ -19,8 +19,8 @@ from glob import glob
 from struct import pack, unpack
 
 import attr
-from aiorpcx import run_in_thread, sleep
 
+from torba.rpc import run_in_thread, sleep
 from torba.server import util
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
 from torba.server.merkle import Merkle, MerkleCache

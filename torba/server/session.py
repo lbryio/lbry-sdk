@@ -19,13 +19,12 @@ import time
 from collections import defaultdict
 from functools import partial
 
-from aiorpcx import (
+import torba
+from torba.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
     TaskGroup, handler_invocation, RPCError, Request, ignore_after, sleep,
     Event
 )
-
-import torba
 from torba.server import text
 from torba.server import util
 from torba.server.hash import (sha256, hash_to_hex_str, hex_str_to_hash,
@@ -664,9 +663,9 @@ class SessionBase(RPCSession):
         super().connection_lost(exc)
         self.session_mgr.remove_session(self)
         msg = ''
-        if not self.can_send.is_set():
+        if not self._can_send.is_set():
             msg += ' whilst paused'
-        if self.concurrency.max_concurrent != self.max_concurrent:
+        if self._concurrency.max_concurrent != self.max_concurrent:
             msg += ' whilst throttled'
         if self.send_size >= 1024*1024:
             msg += ('.  Sent {:,d} bytes in {:,d} messages'

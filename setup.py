@@ -10,7 +10,6 @@ with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
 
 REQUIRES = [
     'aiohttp',
-    'aiorpcx==0.9.0',
     'coincurve',
     'pbkdf2',
     'cryptography',

@@ -14,11 +14,10 @@ import ssl
 import time
 from collections import defaultdict, Counter
 
-from aiorpcx import (Connector, RPCSession, SOCKSProxy,
+from torba.rpc import (Connector, RPCSession, SOCKSProxy,
                      Notification, handler_invocation,
                      SOCKSError, RPCError, TaskTimeout, TaskGroup, Event,
                      sleep, run_in_thread, ignore_after, timeout_after)
-
 from torba.server.peer import Peer
 from torba.server.util import class_logger, protocol_tuple
 

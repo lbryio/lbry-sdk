@@ -15,7 +15,7 @@ from struct import pack, unpack
 import time
 from functools import partial
 
-from aiorpcx import TaskGroup, run_in_thread
+from torba.rpc import TaskGroup, run_in_thread
 
 import torba
 from torba.server.daemon import DaemonError

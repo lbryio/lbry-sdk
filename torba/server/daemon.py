@@ -22,7 +22,7 @@ from torba.server.util import hex_to_bytes, class_logger,\
     unpack_le_uint16_from, pack_varint
 from torba.server.hash import hex_str_to_hash, hash_to_hex_str
 from torba.server.tx import DeserializerDecred
-from aiorpcx import JSONRPC
+from torba.rpc import JSONRPC
 
 
 class DaemonError(Exception):
