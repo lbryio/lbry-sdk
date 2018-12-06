@@ -91,7 +91,7 @@ class SynchronizationMonitor:
     async def _monitor(self, coro):
         task = self.loop.create_task(coro)
         self.tasks.append(task)
-        log.info('sync tasks: %s', len(self.tasks))
+        log.debug('sync tasks: %s', len(self.tasks))
         try:
             await task
         finally:
