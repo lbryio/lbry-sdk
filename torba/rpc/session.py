@@ -36,7 +36,7 @@ from contextlib import suppress
 
 from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
 from .jsonrpc import RPCError, ProtocolError
-from .curio import TaskGroup, TaskTimeout, spawn_sync, ignore_after, timeout_after
+from .curio import TaskGroup
 from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
 from .util import Concurrency
 
@@ -151,17 +151,15 @@ class SessionBase(asyncio.Protocol):
 
         task_group = self._task_group
         async with task_group:
-            await self.spawn(self._receive_messages)
-            await self.spawn(collect_tasks)
+            await self.spawn(self._receive_messages())
+            await self.spawn(collect_tasks())
 
     async def _limited_wait(self, secs):
-        # Wait at most secs seconds to send, otherwise abort the connection
         try:
-            async with timeout_after(secs):
-                await self._can_send.wait()
-        except TaskTimeout:
+            await asyncio.wait_for(self._can_send.wait(), secs)
+        except asyncio.TimeoutError:
             self.abort()
-            raise
+            raise asyncio.CancelledError(f'task timed out after {secs}s')
 
     async def _send_message(self, message):
         if not self._can_send.is_set():
@@ -221,7 +219,7 @@ class SessionBase(asyncio.Protocol):
             self._proxy_address = peer_address
         else:
             self._address = peer_address
-        self._pm_task = spawn_sync(self._process_messages(), loop=self.loop)
+        self._pm_task = self.loop.create_task(self._process_messages())
 
     def connection_lost(self, exc):
         '''Called by asyncio when the connection closes.
@@ -281,8 +279,7 @@ class SessionBase(asyncio.Protocol):
         self._close()
         if self._pm_task:
             with suppress(CancelledError):
-                async with ignore_after(force_after):
-                    await self._pm_task
+                await asyncio.wait([self._pm_task], timeout=force_after)
                 self.abort()
                 await self._pm_task
 

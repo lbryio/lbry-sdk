@@ -16,7 +16,7 @@ from collections import defaultdict, Counter
 
 from torba.rpc import (
     Connector, RPCSession, SOCKSProxy, Notification, handler_invocation,
-    SOCKSError, RPCError, TaskTimeout, TaskGroup, ignore_after, timeout_after
+    SOCKSError, RPCError, TaskGroup
 )
 from torba.server.peer import Peer
 from torba.server.util import class_logger, protocol_tuple
@@ -194,8 +194,8 @@ class PeerManager:
                 pause = STALE_SECS - WAKEUP_SECS * 2
             else:
                 pause = WAKEUP_SECS * 2 ** peer.try_count
-            async with ignore_after(pause):
-                await peer.retry_event.wait()
+            pending, done = await asyncio.wait([peer.retry_event.wait()], timeout=pause)
+            if done:
                 peer.retry_event.clear()
 
     async def _should_drop_peer(self, peer):
@@ -224,10 +224,12 @@ class PeerManager:
 
             peer_text = f'[{peer}:{port} {kind}]'
             try:
-                async with timeout_after(120 if peer.is_tor else 30):
-                    async with Connector(PeerSession, peer.host, port,
-                                         **kwargs) as session:
-                        await self._verify_peer(session, peer)
+                async with Connector(PeerSession, peer.host, port,
+                                     **kwargs) as session:
+                    await asyncio.wait_for(
+                        self._verify_peer(session, peer),
+                        120 if peer.is_tor else 30
+                    )
                 is_good = True
                 break
             except BadPeerError as e:
@@ -237,7 +239,7 @@ class PeerManager:
             except RPCError as e:
                 self.logger.error(f'{peer_text} RPC error: {e.message} '
                                   f'({e.code})')
-            except (OSError, SOCKSError, ConnectionError, TaskTimeout) as e:
+            except (OSError, SOCKSError, ConnectionError, asyncio.TimeoutError) as e:
                 self.logger.info(f'{peer_text} {e}')
 
         if is_good:
