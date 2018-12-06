@@ -7,6 +7,7 @@
 
 '''Mempool handling.'''
 
+import asyncio
 import itertools
 import time
 from abc import ABC, abstractmethod
@@ -15,7 +16,7 @@ from collections import defaultdict
 
 import attr
 
-from torba.rpc import TaskGroup, run_in_thread, sleep
+from torba.rpc import TaskGroup
 from torba.server.hash import hash_to_hex_str, hex_str_to_hash
 from torba.server.util import class_logger, chunks
 from torba.server.db import UTXO
@@ -117,7 +118,7 @@ class MemPool:
         while True:
             self.logger.info(f'{len(self.txs):,d} txs '
                              f'touching {len(self.hashXs):,d} addresses')
-            await sleep(self.log_status_secs)
+            await asyncio.sleep(self.log_status_secs)
             await synchronized_event.wait()
 
     async def _refresh_histogram(self, synchronized_event):
@@ -125,8 +126,8 @@ class MemPool:
             await synchronized_event.wait()
             async with self.lock:
                 # Threaded as can be expensive
-                await run_in_thread(self._update_histogram, 100_000)
-            await sleep(self.coin.MEMPOOL_HISTOGRAM_REFRESH_SECS)
+                await asyncio.get_event_loop().run_in_executor(None, self._update_histogram, 100_000)
+            await asyncio.sleep(self.coin.MEMPOOL_HISTOGRAM_REFRESH_SECS)
 
     def _update_histogram(self, bin_size):
         # Build a histogram by fee rate
@@ -212,7 +213,7 @@ class MemPool:
             synchronized_event.set()
             synchronized_event.clear()
             await self.api.on_mempool(touched, height)
-            await sleep(self.refresh_secs)
+            await asyncio.sleep(self.refresh_secs)
 
     async def _process_mempool(self, all_hashes):
         # Re-sync with the new set of hashes
@@ -284,7 +285,7 @@ class MemPool:
             return txs
 
         # Thread this potentially slow operation so as not to block
-        tx_map = await run_in_thread(deserialize_txs)
+        tx_map = await asyncio.get_event_loop().run_in_executor(None, deserialize_txs)
 
         # Determine all prevouts not in the mempool, and fetch the
         # UTXO information from the database.  Failed prevout lookups

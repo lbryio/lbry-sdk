@@ -9,6 +9,7 @@
 '''Interface to the blockchain database.'''
 
 
+import asyncio
 import array
 import ast
 import os
@@ -20,7 +21,6 @@ from struct import pack, unpack
 
 import attr
 
-from torba.rpc import run_in_thread, sleep
 from torba.server import util
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
 from torba.server.merkle import Merkle, MerkleCache
@@ -403,7 +403,7 @@ class DB:
                 return self.headers_file.read(offset, size), disk_count
             return b'', 0
 
-        return await run_in_thread(read_headers)
+        return await asyncio.get_event_loop().run_in_executor(None, read_headers)
 
     def fs_tx_hash(self, tx_num):
         '''Return a par (tx_hash, tx_height) for the given tx number.
@@ -443,12 +443,12 @@ class DB:
             return [fs_tx_hash(tx_num) for tx_num in tx_nums]
 
         while True:
-            history = await run_in_thread(read_history)
+            history = await asyncio.get_event_loop().run_in_executor(None, read_history)
             if all(hash is not None for hash, height in history):
                 return history
             self.logger.warning(f'limited_history: tx hash '
                                 f'not found (reorg?), retrying...')
-            await sleep(0.25)
+            await asyncio.sleep(0.25)
 
     # -- Undo information
 
@@ -612,12 +612,12 @@ class DB:
             return utxos
 
         while True:
-            utxos = await run_in_thread(read_utxos)
+            utxos = await asyncio.get_event_loop().run_in_executor(None, read_utxos)
             if all(utxo.tx_hash is not None for utxo in utxos):
                 return utxos
             self.logger.warning(f'all_utxos: tx hash not '
                                 f'found (reorg?), retrying...')
-            await sleep(0.25)
+            await asyncio.sleep(0.25)
 
     async def lookup_utxos(self, prevouts):
         '''For each prevout, lookup it up in the DB and return a (hashX,
@@ -665,5 +665,5 @@ class DB:
                 return hashX, value
             return [lookup_utxo(*hashX_pair) for hashX_pair in hashX_pairs]
 
-        hashX_pairs = await run_in_thread(lookup_hashXs)
-        return await run_in_thread(lookup_utxos, hashX_pairs)
+        hashX_pairs = await asyncio.get_event_loop().run_in_executor(None, lookup_hashXs)
+        return await asyncio.get_event_loop().run_in_executor(None, lookup_utxos, hashX_pairs)

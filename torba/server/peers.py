@@ -14,10 +14,10 @@ import ssl
 import time
 from collections import defaultdict, Counter
 
-from torba.rpc import (Connector, RPCSession, SOCKSProxy,
-                     Notification, handler_invocation,
-                     SOCKSError, RPCError, TaskTimeout, TaskGroup, Event,
-                     sleep, run_in_thread, ignore_after, timeout_after)
+from torba.rpc import (
+    Connector, RPCSession, SOCKSProxy, Notification, handler_invocation,
+    SOCKSError, RPCError, TaskTimeout, TaskGroup, ignore_after, timeout_after
+)
 from torba.server.peer import Peer
 from torba.server.util import class_logger, protocol_tuple
 
@@ -149,7 +149,7 @@ class PeerManager:
                 self.logger.info(f'detected {proxy}')
                 return
             self.logger.info('no proxy detected, will try later')
-            await sleep(900)
+            await asyncio.sleep(900)
 
     async def _note_peers(self, peers, limit=2, check_ports=False,
                           source=None):
@@ -177,7 +177,7 @@ class PeerManager:
                 use_peers = new_peers
             for peer in use_peers:
                 self.logger.info(f'accepted new peer {peer} from {source}')
-                peer.retry_event = Event()
+                peer.retry_event = asyncio.Event()
                 self.peers.add(peer)
                 await self.group.spawn(self._monitor_peer(peer))
 
@@ -385,7 +385,7 @@ class PeerManager:
 
         self.logger.info(f'beginning peer discovery. Force use of '
                          f'proxy: {self.env.force_proxy}')
-        forever = Event()
+        forever = asyncio.Event()
         async with self.group as group:
             await group.spawn(forever.wait())
             await group.spawn(self._detect_proxy())

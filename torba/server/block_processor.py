@@ -9,13 +9,11 @@
 '''Block prefetcher and chain processor.'''
 
 
-import array
 import asyncio
 from struct import pack, unpack
 import time
-from functools import partial
 
-from torba.rpc import TaskGroup, run_in_thread
+from torba.rpc import TaskGroup
 
 import torba
 from torba.server.daemon import DaemonError
@@ -187,7 +185,7 @@ class BlockProcessor:
         # consistent and not being updated elsewhere.
         async def run_in_thread_locked():
             async with self.state_lock:
-                return await run_in_thread(func, *args)
+                return await asyncio.get_event_loop().run_in_executor(None, func, *args)
         return await asyncio.shield(run_in_thread_locked())
 
     async def check_and_advance_blocks(self, raw_blocks):

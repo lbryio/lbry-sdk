@@ -26,9 +26,9 @@
 
 '''Merkle trees, branches, proofs and roots.'''
 
+import asyncio
 from math import ceil, log
 
-from torba.rpc import Event
 from torba.server.hash import double_sha256
 
 
@@ -169,7 +169,7 @@ class MerkleCache:
         self.source_func = source_func
         self.length = 0
         self.depth_higher = 0
-        self.initialized = Event()
+        self.initialized = asyncio.Event()
 
     def _segment_length(self):
         return 1 << self.depth_higher

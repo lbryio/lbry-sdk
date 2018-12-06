@@ -22,8 +22,7 @@ from functools import partial
 import torba
 from torba.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
-    TaskGroup, handler_invocation, RPCError, Request, ignore_after, sleep,
-    Event
+    TaskGroup, handler_invocation, RPCError, Request
 )
 from torba.server import text
 from torba.server import util
@@ -131,7 +130,7 @@ class SessionManager:
             self.mn_cache_height = 0
             self.mn_cache = []
 
-        self.session_event = Event()
+        self.session_event = asyncio.Event()
 
         # Set up the RPC request handlers
         cmds = ('add_peer daemon_url disconnect getinfo groups log peers '
@@ -207,7 +206,7 @@ class SessionManager:
         log_interval = self.env.log_sessions
         if log_interval:
             while True:
-                await sleep(log_interval)
+                await asyncio.sleep(log_interval)
                 data = self._session_data(for_log=True)
                 for line in text.sessions_lines(data):
                     self.logger.info(line)
@@ -249,7 +248,7 @@ class SessionManager:
     async def _clear_stale_sessions(self):
         '''Cut off sessions that haven't done anything for 10 minutes.'''
         while True:
-            await sleep(60)
+            await asyncio.sleep(60)
             stale_cutoff = time.time() - self.env.session_timeout
             stale_sessions = [session for session in self.sessions
                               if session.last_recv < stale_cutoff]

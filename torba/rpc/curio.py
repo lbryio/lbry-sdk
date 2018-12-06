@@ -38,10 +38,6 @@
 
 import logging
 import asyncio
-from asyncio import (
-    CancelledError, get_event_loop, Queue, Event, Lock, Semaphore,
-    sleep, Task
-)
 from collections import deque
 from contextlib import suppress
 from functools import partial
@@ -50,32 +46,22 @@ from .util import normalize_corofunc, check_task
 
 
 __all__ = (
-    'Queue', 'Event', 'Lock', 'Semaphore', 'sleep', 'CancelledError',
-    'run_in_thread', 'spawn', 'spawn_sync', 'TaskGroup',
+    'spawn_sync', 'TaskGroup',
     'TaskTimeout', 'TimeoutCancellationError', 'UncaughtTimeoutError',
-    'timeout_after', 'timeout_at', 'ignore_after', 'ignore_at',
+    'timeout_after', 'ignore_after'
 )
-
-
-async def run_in_thread(func, *args):
-    '''Run a function in a separate thread, and await its completion.'''
-    return await get_event_loop().run_in_executor(None, func, *args)
-
-
-async def spawn(coro, *args, loop=None, report_crash=True):
-    return spawn_sync(coro, *args, loop=loop, report_crash=report_crash)
 
 
 def spawn_sync(coro, *args, loop=None, report_crash=True):
     coro = normalize_corofunc(coro, args)
-    loop = loop or get_event_loop()
+    loop = loop or asyncio.get_event_loop()
     task = loop.create_task(coro)
     if report_crash:
         task.add_done_callback(partial(check_task, logging))
     return task
 
 
-class TaskGroup(object):
+class TaskGroup:
     '''A class representing a group of executing tasks. tasks is an
     optional set of existing tasks to put into the group. New tasks
     can later be added using the spawn() method below. wait specifies
@@ -98,7 +84,7 @@ class TaskGroup(object):
         self._done = deque()
         self._pending = set()
         self._wait = wait
-        self._done_event = Event()
+        self._done_event = asyncio.Event()
         self._logger = logging.getLogger(self.__class__.__name__)
         self._closed = False
         self.completed = None
@@ -134,7 +120,7 @@ class TaskGroup(object):
         '''Create a new task that’s part of the group. Returns a Task
         instance.
         '''
-        task = await spawn(coro, *args, report_crash=False)
+        task = spawn_sync(coro, *args, report_crash=False)
         self._add_task(task)
         return task
 
@@ -205,7 +191,7 @@ class TaskGroup(object):
         self._closed = True
         for task in list(self._pending):
             task.cancel()
-            with suppress(CancelledError):
+            with suppress(asyncio.CancelledError):
                 await task
 
     def closed(self):
@@ -230,7 +216,7 @@ class TaskGroup(object):
             await self.join()
 
 
-class TaskTimeout(CancelledError):
+class TaskTimeout(asyncio.CancelledError):
 
     def __init__(self, secs):
         self.secs = secs
@@ -239,7 +225,7 @@ class TaskTimeout(CancelledError):
         return f'task timed out after {self.args[0]}s'
 
 
-class TimeoutCancellationError(CancelledError):
+class TimeoutCancellationError(asyncio.CancelledError):
     pass
 
 
@@ -302,7 +288,7 @@ class TimeoutAfter(object):
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         timed_out_deadline, uncaught = _unset_task_deadline(self._task)
-        if exc_type not in (CancelledError, TaskTimeout,
+        if exc_type not in (asyncio.CancelledError, TaskTimeout,
                             TimeoutCancellationError):
             return False
         if timed_out_deadline == self._deadline:
@@ -311,7 +297,7 @@ class TimeoutAfter(object):
                 return True
             raise TaskTimeout(self._secs) from None
         if timed_out_deadline is None:
-            assert exc_type is CancelledError
+            assert exc_type is asyncio.CancelledError
             return False
         if uncaught:
             raise UncaughtTimeoutError('uncaught timeout received')
@@ -348,28 +334,6 @@ def timeout_after(seconds, coro=None, *args):
     return TimeoutAfter(seconds)
 
 
-def timeout_at(clock, coro=None, *args):
-    '''Execute the specified coroutine and return its result. However,
-    issue a cancellation request to the calling task after seconds
-    have elapsed.  When this happens, a TaskTimeout exception is
-    raised.  If coro is None, the result of this function serves
-    as an asynchronous context manager that applies a timeout to a
-    block of statements.
-
-    timeout_after() may be composed with other timeout_after()
-    operations (i.e., nested timeouts).  If an outer timeout expires
-    first, then TimeoutCancellationError is raised instead of
-    TaskTimeout.  If an inner timeout expires and fails to properly
-    TaskTimeout, a UncaughtTimeoutError is raised in the outer
-    timeout.
-
-    '''
-    if coro:
-        return _timeout_after_func(clock, True, coro, args)
-
-    return TimeoutAfter(clock, absolute=True)
-
-
 async def _ignore_after_func(seconds, absolute, coro, args, timeout_result):
     coro = normalize_corofunc(coro, args)
     async with TimeoutAfter(seconds, absolute=absolute, ignore=True):
@@ -398,14 +362,3 @@ def ignore_after(seconds, coro=None, *args, timeout_result=None):
         return _ignore_after_func(seconds, False, coro, args, timeout_result)
 
     return TimeoutAfter(seconds, ignore=True)
-
-
-def ignore_at(clock, coro=None, *args, timeout_result=None):
-    '''
-    Stop the enclosed task or block of code at an absolute
-    clock value. Same usage as ignore_after().
-    '''
-    if coro:
-        return _ignore_after_func(clock, True, coro, args, timeout_result)
-
-    return TimeoutAfter(clock, absolute=True, ignore=True)
