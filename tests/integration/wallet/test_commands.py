@@ -503,7 +503,7 @@ class ClaimManagement(CommandTestCase):
         claim = await self.make_claim(amount='2.5')  # creates new claim
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
         self.assertEqual(len(txs[0]['claim_info']), 1)
-        self.assertEqual(txs[0]['confirmations'], '1')
+        self.assertEqual(txs[0]['confirmations'], 1)
         self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
         self.assertEqual(txs[0]['claim_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['value'], '0.0')
