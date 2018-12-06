@@ -1,11 +1,8 @@
 import logging
 import asyncio
+from itertools import chain
 from torba.testcase import IntegrationTestCase
 from torba.client.constants import COIN
-
-
-log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
 
 
 class BasicTransactionTests(IntegrationTestCase):
@@ -15,34 +12,37 @@ class BasicTransactionTests(IntegrationTestCase):
     async def test_stressing(self):
         await self.blockchain.generate(1000)
         await self.assertBalance(self.account, '0.0')
-        address1 = await self.account.receiving.get_or_create_usable_address()
-        hash1 = self.ledger.address_to_hash160(address1)
+        addresses = await self.account.receiving.get_addresses()
 
-        txids = await asyncio.gather(*(
-            self.blockchain.send_to_address(address1, 100)
-            for _ in range(10)
+        sends = list(chain(
+            (self.blockchain.send_to_address(address, 10) for address in addresses),
+            (self.blockchain.send_to_address(addresses[-1], 10) for _ in range(10))
         ))
 
-        await asyncio.wait([
-            self.on_transaction_id(txid)
-            for txid in txids
-        ])
+        for batch in range(0, len(sends), 10):
+            txids = await asyncio.gather(*sends[batch:batch+10])
+            await asyncio.wait([
+                self.on_transaction_id(txid) for txid in txids
+            ])
 
-        await self.assertBalance(self.account, '1000.0')
+        await self.assertBalance(self.account, '300.0')
+        addresses = await self.account.receiving.get_addresses()
+        self.assertEqual(40, len(addresses))
 
-        tasks = []
-        for _ in range(10):
-            tx = await self.ledger.transaction_class.create(
-                [],
-                [self.ledger.transaction_class.output_class.pay_pubkey_hash(1*COIN, hash1)],
-                [self.account], self.account
-            )
-            await self.broadcast(tx)
-            tasks.append(asyncio.create_task(self.ledger.wait(tx)))
+        await self.blockchain.generate(1)
 
-        await asyncio.wait(tasks)
+        self.assertEqual(30, await self.account.get_utxo_count())
 
-        await self.assertBalance(self.account, '999.99876')
+        hash1 = self.ledger.address_to_hash160(addresses[-1])
+        tx = await self.ledger.transaction_class.create(
+            [],
+            [self.ledger.transaction_class.output_class.pay_pubkey_hash(299*COIN, hash1)],
+            [self.account], self.account
+        )
+        await self.broadcast(tx)
+        await self.ledger.wait(tx)
+
+        self.assertEqual(2, await self.account.get_utxo_count())  # 299 + change
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)

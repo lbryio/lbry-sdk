@@ -49,7 +49,7 @@ def get_blockchain_node_from_ledger(ledger_module):
 
 def set_logging(ledger_module, level):
     logging.getLogger('torba').setLevel(level)
-    logging.getLogger('torba.client').setLevel(logging.INFO)
+    logging.getLogger('torba.client').setLevel(level)
     logging.getLogger('torba.server').setLevel(level)
     #logging.getLogger('asyncio').setLevel(level)
     logging.getLogger('blockchain').setLevel(level)

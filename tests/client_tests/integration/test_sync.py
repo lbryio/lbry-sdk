@@ -6,7 +6,7 @@ from torba.client.constants import CENT
 
 class SyncTests(IntegrationTestCase):
 
-    VERBOSITY = logging.INFO
+    VERBOSITY = logging.WARN
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
