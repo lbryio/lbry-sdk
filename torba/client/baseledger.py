@@ -91,6 +91,7 @@ class SynchronizationMonitor:
     async def _monitor(self, coro):
         task = self.loop.create_task(coro)
         self.tasks.append(task)
+        log.info('sync tasks: %s', len(self.tasks))
         try:
             await task
         finally:
@@ -418,7 +419,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                         assert cache_item.tx is not None
                         txi.txo_ref = cache_item.tx.outputs[txi.txo_ref.position].ref
                     else:
-                        check_db_for_txos.append(txi.txo_ref.tx_ref.id)
+                        check_db_for_txos.append(txi.txo_ref.id)
 
                 referenced_txos = {
                     txo.id: txo for txo in await self.db.get_txos(txoid__in=check_db_for_txos)
@@ -427,7 +428,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 for txi in tx.inputs:
                     if txi.txo_ref.txo is not None:
                         continue
-                    referenced_txo = referenced_txos.get(txi.txo_ref.tx_ref.id)
+                    referenced_txo = referenced_txos.get(txi.txo_ref.id)
                     if referenced_txo is not None:
                         txi.txo_ref = referenced_txo.ref
 
