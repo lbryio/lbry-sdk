@@ -1,9 +1,9 @@
 import asyncio
 import logging
-import mimetypes
 import os
 
 from lbrynet.blob.EncryptedFileCreator import create_lbry_file
+from lbrynet.extras.daemon.mime_types import guess_mime_type
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class Publisher:
             claim_dict['stream']['source'] = {}
         claim_dict['stream']['source']['source'] = self.lbry_file.sd_hash
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
-        claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
+        claim_dict['stream']['source']['contentType'] = guess_mime_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
         tx = await self.wallet.claim_name(
             self.account, name, bid, claim_dict, self.certificate, holding_address
@@ -75,7 +75,3 @@ class Publisher:
             ))
             self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         return tx
-
-
-def get_content_type(filename):
-    return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
