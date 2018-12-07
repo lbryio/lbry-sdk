@@ -14,6 +14,7 @@ import array
 import ast
 import os
 import time
+from asyncio import sleep
 from bisect import bisect_right
 from collections import namedtuple
 from glob import glob
@@ -448,7 +449,7 @@ class DB:
                 return history
             self.logger.warning(f'limited_history: tx hash '
                                 f'not found (reorg?), retrying...')
-            await asyncio.sleep(0.25)
+            await sleep(0.25)
 
     # -- Undo information
 
@@ -617,7 +618,7 @@ class DB:
                 return utxos
             self.logger.warning(f'all_utxos: tx hash not '
                                 f'found (reorg?), retrying...')
-            await asyncio.sleep(0.25)
+            await sleep(0.25)
 
     async def lookup_utxos(self, prevouts):
         '''For each prevout, lookup it up in the DB and return a (hashX,

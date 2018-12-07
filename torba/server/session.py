@@ -16,6 +16,7 @@ import os
 import pylru
 import ssl
 import time
+from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
 
@@ -130,7 +131,7 @@ class SessionManager:
             self.mn_cache_height = 0
             self.mn_cache = []
 
-        self.session_event = asyncio.Event()
+        self.session_event = Event()
 
         # Set up the RPC request handlers
         cmds = ('add_peer daemon_url disconnect getinfo groups log peers '
@@ -206,7 +207,7 @@ class SessionManager:
         log_interval = self.env.log_sessions
         if log_interval:
             while True:
-                await asyncio.sleep(log_interval)
+                await sleep(log_interval)
                 data = self._session_data(for_log=True)
                 for line in text.sessions_lines(data):
                     self.logger.info(line)
@@ -248,7 +249,7 @@ class SessionManager:
     async def _clear_stale_sessions(self):
         '''Cut off sessions that haven't done anything for 10 minutes.'''
         while True:
-            await asyncio.sleep(60)
+            await sleep(60)
             stale_cutoff = time.time() - self.env.session_timeout
             stale_sessions = [session for session in self.sessions
                               if session.last_recv < stale_cutoff]

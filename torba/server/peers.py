@@ -12,6 +12,7 @@ import random
 import socket
 import ssl
 import time
+from asyncio import Event, sleep
 from collections import defaultdict, Counter
 
 from torba.tasks import TaskGroup
@@ -150,7 +151,7 @@ class PeerManager:
                 self.logger.info(f'detected {proxy}')
                 return
             self.logger.info('no proxy detected, will try later')
-            await asyncio.sleep(900)
+            await sleep(900)
 
     async def _note_peers(self, peers, limit=2, check_ports=False,
                           source=None):
@@ -178,7 +179,7 @@ class PeerManager:
                 use_peers = new_peers
             for peer in use_peers:
                 self.logger.info(f'accepted new peer {peer} from {source}')
-                peer.retry_event = asyncio.Event()
+                peer.retry_event = Event()
                 self.peers.add(peer)
                 await self.group.add(self._monitor_peer(peer))
 
