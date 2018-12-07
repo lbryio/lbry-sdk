@@ -9,7 +9,10 @@ from types import SimpleNamespace
 from twisted.trial import unittest
 from twisted.internet import utils, defer
 from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
+
+from lbrynet.extras.wallet.transaction import Transaction
 from lbrynet.p2p.Error import InsufficientFundsError
+from lbrynet.schema.claim import ClaimDict
 
 from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
@@ -497,6 +500,18 @@ class ClaimManagement(CommandTestCase):
             await self.on_transaction_dict(claim['tx'])
             return claim
 
+    async def craft_claim(self, name, amount_dewies, claim_dict, address):
+        # FIXME: this is here mostly because publish has defensive code for situations that happens accidentally
+        # However, it still happens... So, let's reproduce them.
+        claim = ClaimDict.load_dict(claim_dict)
+        address = address or (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
+        tx = await Transaction.claim(name, claim, amount_dewies, address, [self.account], self.account)
+        await self.broadcast(tx)
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.ledger.wait(tx)
+        return tx
+
     async def test_create_update_and_abandon_claim(self):
         self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
 
@@ -667,6 +682,34 @@ class ClaimManagement(CommandTestCase):
         response = await self.out(self.daemon.jsonrpc_resolve(uri=direct_uri))
         self.assertIn('claim', response[direct_uri])
         self.assertFalse(response[direct_uri]['claim']['signature_is_valid'])
+
+        uri = 'lbry://@abc/on-channel-claim'
+        # now, claim something on this channel (it will update the invalid claim, but we save and forcefully restore)
+        original_claim = await self.make_claim(amount='0.00000001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(original_claim['success'])
+        # resolves normally
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertIn('claim', response[uri])
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+
+        # tamper it, invalidating the signature
+        value = response[uri]['claim']['value'].copy()
+        value['stream']['metadata']['author'] = 'some troll'
+        address = response[uri]['claim']['address']
+        await self.craft_claim('on-channel-claim', 1, value, address)
+        # it resolves to the now only valid claim under the channel, ignoring the fake one
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertIn('claim', response[uri])
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+
+        # ooops! claimed a valid conflict! (this happens on the wild, mostly by accident or race condition)
+        await self.craft_claim('on-channel-claim', 1, response[uri]['claim']['value'], address)
+
+        # it still resolves! but to the older claim
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertIn('claim', response[uri])
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+        self.assertEqual(response[uri]['claim']['txid'], original_claim['tx']['txid'])
 
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
