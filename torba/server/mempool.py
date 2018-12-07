@@ -16,7 +16,6 @@ from collections import defaultdict
 
 import attr
 
-from torba.rpc import TaskGroup
 from torba.server.hash import hash_to_hex_str, hex_str_to_hash
 from torba.server.util import class_logger, chunks
 from torba.server.db import UTXO
@@ -235,14 +234,13 @@ class MemPool:
         # Process new transactions
         new_hashes = list(all_hashes.difference(txs))
         if new_hashes:
-            group = TaskGroup()
+            fetches = []
             for hashes in chunks(new_hashes, 200):
-                coro = self._fetch_and_accept(hashes, all_hashes, touched)
-                await group.spawn(coro)
+                fetches.append(self._fetch_and_accept(hashes, all_hashes, touched))
             tx_map = {}
             utxo_map = {}
-            async for task in group:
-                deferred, unspent = task.result()
+            for fetch in asyncio.as_completed(fetches):
+                deferred, unspent = await fetch
                 tx_map.update(deferred)
                 utxo_map.update(unspent)
 
@@ -306,10 +304,11 @@ class MemPool:
 
     async def keep_synchronized(self, synchronized_event):
         '''Keep the mempool synchronized with the daemon.'''
-        async with TaskGroup() as group:
-            await group.spawn(self._refresh_hashes(synchronized_event))
-            await group.spawn(self._refresh_histogram(synchronized_event))
-            await group.spawn(self._logging(synchronized_event))
+        await asyncio.wait([
+            self._refresh_hashes(synchronized_event),
+            self._refresh_histogram(synchronized_event),
+            self._logging(synchronized_event)
+        ])
 
     async def balance_delta(self, hashX):
         '''Return the unconfirmed amount in the mempool for hashX.

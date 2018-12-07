@@ -28,24 +28,7 @@ __all__ = ()
 
 import asyncio
 from collections import namedtuple
-from functools import partial
 import inspect
-
-
-def normalize_corofunc(corofunc, args):
-    if asyncio.iscoroutine(corofunc):
-        if args != ():
-            raise ValueError('args cannot be passed with a coroutine')
-        return corofunc
-    return corofunc(*args)
-
-
-def is_async_call(func):
-    '''inspect.iscoroutinefunction that looks through partials.'''
-    while isinstance(func, partial):
-        func = func.func
-    return inspect.iscoroutinefunction(func)
-
 
 # other_params: None means cannot be called with keyword arguments only
 # any means any name is good
@@ -110,11 +93,3 @@ class Concurrency(object):
         else:
             for _ in range(-diff):
                 await self.semaphore.acquire()
-
-
-def check_task(logger, task):
-    if not task.cancelled():
-        try:
-            task.result()
-        except Exception:
-            logger.error('task crashed: %r', task, exc_info=True)

@@ -22,7 +22,7 @@ from functools import partial
 import torba
 from torba.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
-    TaskGroup, handler_invocation, RPCError, Request
+    handler_invocation, RPCError, Request
 )
 from torba.server import text
 from torba.server import util
@@ -257,9 +257,10 @@ class SessionManager:
                                  for session in stale_sessions)
                 self.logger.info(f'closing stale connections {text}')
                 # Give the sockets some time to close gracefully
-                async with TaskGroup() as group:
-                    for session in stale_sessions:
-                        await group.spawn(session.close())
+                if stale_sessions:
+                    await asyncio.wait([
+                        session.close() for session in stale_sessions
+                    ])
 
             # Consolidate small groups
             bw_limit = self.env.bandwidth_limit
@@ -499,17 +500,18 @@ class SessionManager:
             server_listening_event.set()
             # Peer discovery should start after the external servers
             # because we connect to ourself
-            async with TaskGroup() as group:
-                await group.spawn(self.peer_mgr.discover_peers())
-                await group.spawn(self._clear_stale_sessions())
-                await group.spawn(self._log_sessions())
-                await group.spawn(self._manage_servers())
+            await asyncio.wait([
+                self.peer_mgr.discover_peers(),
+                self._clear_stale_sessions(),
+                self._log_sessions(),
+                self._manage_servers()
+            ])
         finally:
-            # Close servers and sessions
             await self._close_servers(list(self.servers.keys()))
-            async with TaskGroup() as group:
-                for session in list(self.sessions):
-                    await group.spawn(session.close(force_after=1))
+            if self.sessions:
+                await asyncio.wait([
+                    session.close(force_after=1) for session in self.sessions
+                ])
 
     def session_count(self):
         '''The number of connections that we've sent something to.'''
@@ -562,9 +564,10 @@ class SessionManager:
             for hashX in set(hc).intersection(touched):
                 del hc[hashX]
 
-        async with TaskGroup() as group:
-            for session in self.sessions:
-                await group.spawn(session.notify(touched, height_changed))
+        if self.sessions:
+            await asyncio.wait([
+                session.notify(touched, height_changed) for session in self.sessions
+            ])
 
     def add_session(self, session):
         self.sessions.add(session)

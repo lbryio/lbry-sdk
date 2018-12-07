@@ -34,9 +34,10 @@ import logging
 import time
 from contextlib import suppress
 
+from torba.tasks import TaskGroup
+
 from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
 from .jsonrpc import RPCError, ProtocolError
-from .curio import TaskGroup
 from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
 from .util import Concurrency
 
@@ -98,7 +99,7 @@ class SessionBase(asyncio.Protocol):
         self._can_send = Event()
         self._can_send.set()
         self._pm_task = None
-        self._task_group = TaskGroup()
+        self._task_group = TaskGroup(self.loop)
         # Force-close a connection if a send doesn't succeed in this time
         self.max_send_delay = 60
         # Statistics.  The RPC object also keeps its own statistics.
@@ -139,20 +140,6 @@ class SessionBase(asyncio.Protocol):
     def _using_bandwidth(self, size):
         '''Called when sending or receiving size bytes.'''
         self.bw_charge += size
-
-    async def _process_messages(self):
-        '''Process incoming messages asynchronously and consume the
-        results.
-        '''
-        async def collect_tasks():
-            next_done = task_group.next_done
-            while True:
-                await next_done()
-
-        task_group = self._task_group
-        async with task_group:
-            await self.spawn(self._receive_messages())
-            await self.spawn(collect_tasks())
 
     async def _limited_wait(self, secs):
         try:
@@ -219,7 +206,7 @@ class SessionBase(asyncio.Protocol):
             self._proxy_address = peer_address
         else:
             self._address = peer_address
-        self._pm_task = self.loop.create_task(self._process_messages())
+        self._pm_task = self.loop.create_task(self._receive_messages())
 
     def connection_lost(self, exc):
         '''Called by asyncio when the connection closes.
@@ -227,6 +214,7 @@ class SessionBase(asyncio.Protocol):
         Tear down things done in connection_made.'''
         self._address = None
         self.transport = None
+        self._task_group.cancel()
         self._pm_task.cancel()
         # Release waiting tasks
         self._can_send.set()
@@ -255,15 +243,6 @@ class SessionBase(asyncio.Protocol):
             return f'[{ip_addr_str}]:{port}'
         else:
             return f'{ip_addr_str}:{port}'
-
-    async def spawn(self, coro, *args):
-        '''If the session is connected, spawn a task that is cancelled
-        on disconnect, and return it.  Otherwise return None.'''
-        group = self._task_group
-        if not group.closed():
-            return await group.spawn(coro, *args)
-        else:
-            return None
 
     def is_closing(self):
         '''Return True if the connection is closing.'''
@@ -321,7 +300,7 @@ class MessageSession(SessionBase):
                 self.recv_count += 1
                 if self.recv_count % 10 == 0:
                     await self._update_concurrency()
-                await self.spawn(self._throttled_message(message))
+                await self._task_group.add(self._throttled_message(message))
 
     async def _throttled_message(self, message):
         '''Process a single request, respecting the concurrency limit.'''
@@ -453,7 +432,7 @@ class RPCSession(SessionBase):
                 self._bump_errors()
             else:
                 for request in requests:
-                    await self.spawn(self._throttled_request(request))
+                    await self._task_group.add(self._throttled_request(request))
 
     async def _throttled_request(self, request):
         '''Process a single request, respecting the concurrency limit.'''

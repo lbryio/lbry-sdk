@@ -9,6 +9,7 @@ from typing import Dict, Type, Iterable, List, Optional
 from operator import itemgetter
 from collections import namedtuple
 
+from torba.tasks import TaskGroup
 from torba.client import baseaccount, basenetwork, basetransaction
 from torba.client.basedatabase import BaseDatabase
 from torba.client.baseheader import BaseHeaders
@@ -73,32 +74,6 @@ class TransactionCacheItem:
             self.has_tx.set()
 
 
-class SynchronizationMonitor:
-
-    def __init__(self, loop=None):
-        self.done = asyncio.Event()
-        self.tasks = []
-        self.loop = loop or asyncio.get_event_loop()
-
-    def add(self, coro):
-        len(self.tasks) < 1 and self.done.clear()
-        self.loop.create_task(self._monitor(coro))
-
-    def cancel(self):
-        for task in self.tasks:
-            task.cancel()
-
-    async def _monitor(self, coro):
-        task = self.loop.create_task(coro)
-        self.tasks.append(task)
-        log.debug('sync tasks: %s', len(self.tasks))
-        try:
-            await task
-        finally:
-            self.tasks.remove(task)
-            len(self.tasks) < 1 and self.done.set()
-
-
 class BaseLedger(metaclass=LedgerRegistry):
 
     name: str
@@ -160,7 +135,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         )
 
         self._tx_cache = {}
-        self.sync = SynchronizationMonitor()
+        self._update_tasks = TaskGroup()
         self._utxo_reservation_lock = asyncio.Lock()
         self._header_processing_lock = asyncio.Lock()
         self._address_update_locks: Dict[str, asyncio.Lock] = {}
@@ -265,11 +240,11 @@ class BaseLedger(metaclass=LedgerRegistry):
         await self.update_headers()
         await self.network.subscribe_headers()
         await self.subscribe_accounts()
-        await self.sync.done.wait()
+        await self._update_tasks.done.wait()
 
     async def stop(self):
-        self.sync.cancel()
-        await self.sync.done.wait()
+        self._update_tasks.cancel()
+        await self._update_tasks.done.wait()
         await self.network.stop()
         await self.db.close()
         await self.headers.close()
@@ -377,11 +352,11 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     async def subscribe_address(self, address_manager: baseaccount.AddressManager, address: str):
         remote_status = await self.network.subscribe_address(address)
-        self.sync.add(self.update_history(address, remote_status, address_manager))
+        self._update_tasks.add(self.update_history(address, remote_status, address_manager))
 
     def process_status_update(self, update):
         address, remote_status = update
-        self.sync.add(self.update_history(address, remote_status))
+        self._update_tasks.add(self.update_history(address, remote_status))
 
     async def update_history(self, address, remote_status,
                              address_manager: baseaccount.AddressManager = None):

@@ -14,9 +14,10 @@ import ssl
 import time
 from collections import defaultdict, Counter
 
+from torba.tasks import TaskGroup
 from torba.rpc import (
     Connector, RPCSession, SOCKSProxy, Notification, handler_invocation,
-    SOCKSError, RPCError, TaskGroup
+    SOCKSError, RPCError
 )
 from torba.server.peer import Peer
 from torba.server.util import class_logger, protocol_tuple
@@ -179,7 +180,7 @@ class PeerManager:
                 self.logger.info(f'accepted new peer {peer} from {source}')
                 peer.retry_event = asyncio.Event()
                 self.peers.add(peer)
-                await self.group.spawn(self._monitor_peer(peer))
+                await self.group.add(self._monitor_peer(peer))
 
     async def _monitor_peer(self, peer):
         # Stop monitoring if we were dropped (a duplicate peer)
@@ -292,10 +293,11 @@ class PeerManager:
         peer.features['server_version'] = server_version
         ptuple = protocol_tuple(protocol_version)
 
-        async with TaskGroup() as g:
-            await g.spawn(self._send_headers_subscribe(session, peer, ptuple))
-            await g.spawn(self._send_server_features(session, peer))
-            await g.spawn(self._send_peers_subscribe(session, peer))
+        await asyncio.wait([
+            self._send_headers_subscribe(session, peer, ptuple),
+            self._send_server_features(session, peer),
+            self._send_peers_subscribe(session, peer)
+        ])
 
     async def _send_headers_subscribe(self, session, peer, ptuple):
         message = 'blockchain.headers.subscribe'
@@ -387,18 +389,9 @@ class PeerManager:
 
         self.logger.info(f'beginning peer discovery. Force use of '
                          f'proxy: {self.env.force_proxy}')
-        forever = asyncio.Event()
-        async with self.group as group:
-            await group.spawn(forever.wait())
-            await group.spawn(self._detect_proxy())
-            await group.spawn(self._import_peers())
-            # Consume tasks as they complete, logging unexpected failures
-            async for task in group:
-                if not task.cancelled():
-                    try:
-                        task.result()
-                    except Exception:
-                        self.logger.exception('task failed unexpectedly')
+
+        self.group.add(self._detect_proxy())
+        self.group.add(self._import_peers())
 
     def info(self):
         '''The number of peers.'''
