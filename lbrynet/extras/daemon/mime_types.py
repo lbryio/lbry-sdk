@@ -26,6 +26,7 @@ types_map = {
     '.dvi': 'application/x-dvi',
     '.eml': 'message/rfc822',
     '.eps': 'application/postscript',
+    '.epub': 'application/epub+zip',
     '.etx': 'text/x-setext',
     '.exe': 'application/octet-stream',
     '.gif': 'image/gif',
@@ -142,7 +143,11 @@ types_map = {
     '.pic': 'image/pict',
     '.pict': 'image/pict',
     '.rtf': 'application/rtf',
-    '.xul': 'text/xul'
+    '.xul': 'text/xul',
+
+    # microsoft is special and has its own 'standard'
+    # https://docs.microsoft.com/en-us/windows/desktop/wmp/file-name-extensions
+    '.wmv': 'video/x-ms-wmv'
 }
 
 
