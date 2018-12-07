@@ -122,7 +122,12 @@ class Resolver:
             if not claims_in_channel:
                 log.error("No valid claims for this name for this channel")
             elif len(claims_in_channel) > 1:
-                log.error("Multiple signed claims for the same name")
+                log.warning("Multiple signed claims for the same name.")
+                winner = pick_winner_from_channel_path_collision(claims_in_channel)
+                if winner:
+                    result['claim'] = winner
+                else:
+                    log.error("No valid claims for this name for this channel")
             else:
                 result['claim'] = claims_in_channel[0]
 
@@ -475,3 +480,19 @@ def _handle_claim_result(results):
         assert False, msg
 
     return results
+
+
+def pick_winner_from_channel_path_collision(claims_in_channel):
+    # we should be doing this by effective amount so we pick the controlling claim, however changing the resolved
+    # claim triggers another issue where 2 claims cant be saved for the same file. This code picks the oldest, so it
+    # stays the same. Using effective amount would change the resolved claims for a channel path on takeovers,
+    # potentially triggering that.
+    winner = None
+    for claim in claims_in_channel:
+        if not claim['signature_is_valid']:
+            continue
+        if winner is None:
+            winner = claim
+        elif claim['claim_sequence'] < winner['claim_sequence']:
+            winner = claim
+    return winner
