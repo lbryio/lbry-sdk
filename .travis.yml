@@ -92,10 +92,7 @@ jobs:
       cache: false
       before_install:
         - brew upgrade python
-        - pip3 install virtualenv
       install:
-        - virtualenv lbry-venv --python=python3.7
-        - source lbry-venv/bin/activate
         - python3 --version
         - pip3 --version
         - pip3 install pyinstaller
