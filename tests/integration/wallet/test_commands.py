@@ -494,6 +494,7 @@ class ClaimManagement(CommandTestCase):
             self.assertTrue(claim['success'])
             await self.on_transaction_dict(claim['tx'])
             await self.generate(1)
+            await self.on_transaction_dict(claim['tx'])
             return claim
 
     async def test_create_update_and_abandon_claim(self):
@@ -502,6 +503,7 @@ class ClaimManagement(CommandTestCase):
         claim = await self.make_claim(amount='2.5')  # creates new claim
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
         self.assertEqual(len(txs[0]['claim_info']), 1)
+        self.assertEqual(txs[0]['confirmations'], 1)
         self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
         self.assertEqual(txs[0]['claim_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['value'], '0.0')
@@ -757,7 +759,7 @@ class TransactionCommandsTestCase(CommandTestCase):
         sendtxid = await self.blockchain.send_to_address(change_address, 10)
         tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
         self.assertEqual(tx.id, sendtxid)
-        self.assertEqual(tx.height, -1)
+        self.assertEqual(tx.height, -2)
         await self.generate(1)
         tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
         self.assertEqual(tx.height, self.ledger.headers.height)

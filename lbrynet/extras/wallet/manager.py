@@ -319,7 +319,7 @@ class LbryWalletManager(BaseWalletManager):
                 'txid': tx.id,
                 'timestamp': ts,
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-                'confirmations': headers.height - tx.height if tx.height > 0 else 0,
+                'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
                 'claim_info': [],
                 'update_info': [],
                 'support_info': [],
@@ -349,19 +349,19 @@ class LbryWalletManager(BaseWalletManager):
                     for txi in tx.inputs:
                         if txi.txo_ref.txo is not None:
                             other_txo = txi.txo_ref.txo
-                            if other_txo.is_claim and other_txo.claim_id == txo.claim_id:
+                            if (other_txo.is_claim or other_txo.script.is_support_claim) \
+                                    and other_txo.claim_id == txo.claim_id:
                                 previous = other_txo
                                 break
-                    assert previous is not None,\
-                        "Invalid claim update state, expected to find previous claim in input."
-                    item['update_info'].append({
-                        'address': txo.get_address(account.ledger),
-                        'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
-                        'amount': dewies_to_lbc(txo.amount),
-                        'claim_id': txo.claim_id,
-                        'claim_name': txo.claim_name,
-                        'nout': txo.position
-                    })
+                    if previous is not None:
+                        item['update_info'].append({
+                            'address': txo.get_address(account.ledger),
+                            'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
+                            'amount': dewies_to_lbc(txo.amount),
+                            'claim_id': txo.claim_id,
+                            'claim_name': txo.claim_name,
+                            'nout': txo.position
+                        })
                 else:  # someone sent us their claim
                     item['update_info'].append({
                         'address': txo.get_address(account.ledger),
