@@ -526,7 +526,7 @@ class Config:
         self.initialize_post_conf_load()
 
     def _read_conf_file(self, path):
-        if not path:
+        if not path or not os.path.exists(path):
             return
         ext = os.path.splitext(path)[1]
         decoder = settings_decoders.get(ext, False)
