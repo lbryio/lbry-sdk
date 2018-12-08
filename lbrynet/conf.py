@@ -49,8 +49,6 @@ DEFAULT_DHT_NODES = [
     ('lbrynet3.lbry.io', 4444)
 ]
 
-DEFAULT_SETTINGS_FILENAME = 'daemon_settings.yml'
-
 settings_decoders = {
     '.json': json.loads,
     '.yml': yaml.load
@@ -485,7 +483,7 @@ class Config:
             }
 
     def save_conf_file_settings(self):
-        path = conf_file or self.get_valid_settings_filename() or DEFAULT_SETTINGS_FILENAME
+        path = conf_file or self.get_valid_settings_filename()
         # reverse the conversions done after loading the settings from the conf
         # file
         rev = self._convert_conf_file_lists_reverse(self._data[TYPE_PERSISTED])
@@ -593,12 +591,10 @@ class Config:
 
     def get_valid_settings_filename(self):
         data_dir = self.ensure_data_dir()
-        yml_path = os.path.join(data_dir, 'daemon_settings.yml')
         json_path = os.path.join(data_dir, 'daemon_settings.json')
-        if os.path.isfile(yml_path):
-            return yml_path
-        elif os.path.isfile(json_path):
+        if os.path.isfile(json_path):
             return json_path
+        return os.path.join(data_dir, 'daemon_settings.yml')
 
     def get_installation_id(self):
         install_id_filename = os.path.join(self.ensure_data_dir(), "install_id")
