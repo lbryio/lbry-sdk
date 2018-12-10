@@ -63,6 +63,7 @@ jobs:
 
     - &build
       name: "Linux"
+      env: OS=linux
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
@@ -73,7 +74,13 @@ jobs:
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
-      env: OS=linux
+      deploy:
+        provider: releases
+        api_key: $GITHUB_OAUTH_TOKEN
+        file: lbrynet-${OS}.zip
+        skip_cleanup: true
+        draft: true
+        #on.tags: true
       addons:
         artifacts:
           working_dir: dist
