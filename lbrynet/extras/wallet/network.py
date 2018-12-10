@@ -20,3 +20,7 @@ class Network(BaseNetwork):
 
     def get_claims_for_name(self, name):
         return self.rpc('blockchain.claimtrie.getclaimsforname', name)
+
+    def get_transaction_height(self, txid):
+        # 1.0 protocol specific workaround. Newer protocol should use get_transaction with verbose True
+        return self.rpc('blockchain.transaction.get_height', txid)

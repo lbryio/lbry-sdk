@@ -9,7 +9,10 @@ from types import SimpleNamespace
 from twisted.trial import unittest
 from twisted.internet import utils, defer
 from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
+
+from lbrynet.extras.wallet.transaction import Transaction
 from lbrynet.p2p.Error import InsufficientFundsError
+from lbrynet.schema.claim import ClaimDict
 
 from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
 
@@ -360,7 +363,9 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And check if his support showed up
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
         # It obviously did! Because, blockchain baby \O/
-        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['amount'], 0.2)
+        self.assertEqual(resolve_result[uri]['claim']['amount'], '1.0')
+        self.assertEqual(resolve_result[uri]['claim']['effective_amount'], '1.2')
+        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['amount'], '0.2')
         self.assertEqual(resolve_result[uri]['claim']['supports'][0]['txid'], tx['txid'])
         await self.generate(5)
 
@@ -373,7 +378,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And again checks if it went to the just right place
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
         # Which it obviously did. Because....?????
-        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], 0.3)
+        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], '0.3')
         self.assertEqual(resolve_result[uri]['claim']['supports'][1]['txid'], tx['txid'])
         await self.generate(5)
 
@@ -384,7 +389,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And check if his support showed up
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
         # It did!
-        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], 0.4)
+        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], '0.4')
         self.assertEqual(resolve_result[uri]['claim']['supports'][2]['txid'], tx['txid'])
         await self.generate(5)
 
@@ -492,7 +497,20 @@ class ClaimManagement(CommandTestCase):
             self.assertTrue(claim['success'])
             await self.on_transaction_dict(claim['tx'])
             await self.generate(1)
+            await self.on_transaction_dict(claim['tx'])
             return claim
+
+    async def craft_claim(self, name, amount_dewies, claim_dict, address):
+        # FIXME: this is here mostly because publish has defensive code for situations that happens accidentally
+        # However, it still happens... So, let's reproduce them.
+        claim = ClaimDict.load_dict(claim_dict)
+        address = address or (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
+        tx = await Transaction.claim(name, claim, amount_dewies, address, [self.account], self.account)
+        await self.broadcast(tx)
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.ledger.wait(tx)
+        return tx
 
     async def test_create_update_and_abandon_claim(self):
         self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
@@ -500,6 +518,7 @@ class ClaimManagement(CommandTestCase):
         claim = await self.make_claim(amount='2.5')  # creates new claim
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
         self.assertEqual(len(txs[0]['claim_info']), 1)
+        self.assertEqual(txs[0]['confirmations'], 1)
         self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
         self.assertEqual(txs[0]['claim_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['value'], '0.0')
@@ -664,6 +683,34 @@ class ClaimManagement(CommandTestCase):
         self.assertIn('claim', response[direct_uri])
         self.assertFalse(response[direct_uri]['claim']['signature_is_valid'])
 
+        uri = 'lbry://@abc/on-channel-claim'
+        # now, claim something on this channel (it will update the invalid claim, but we save and forcefully restore)
+        original_claim = await self.make_claim(amount='0.00000001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(original_claim['success'])
+        # resolves normally
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertIn('claim', response[uri])
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+
+        # tamper it, invalidating the signature
+        value = response[uri]['claim']['value'].copy()
+        value['stream']['metadata']['author'] = 'some troll'
+        address = response[uri]['claim']['address']
+        await self.craft_claim('on-channel-claim', 1, value, address)
+        # it resolves to the now only valid claim under the channel, ignoring the fake one
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertIn('claim', response[uri])
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+
+        # ooops! claimed a valid conflict! (this happens on the wild, mostly by accident or race condition)
+        await self.craft_claim('on-channel-claim', 1, response[uri]['claim']['value'], address)
+
+        # it still resolves! but to the older claim
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertIn('claim', response[uri])
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+        self.assertEqual(response[uri]['claim']['txid'], original_claim['tx']['txid'])
+
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
         account2_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
@@ -737,3 +784,29 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
+
+
+class TransactionCommandsTestCase(CommandTestCase):
+
+    async def test_transaction_show(self):
+        # local tx
+        result = await self.out(self.daemon.jsonrpc_wallet_send(
+            '5.0', await self.daemon.jsonrpc_address_unused(self.account.id)
+        ))
+        await self.confirm_tx(result['txid'])
+        tx = await self.daemon.jsonrpc_transaction_show(result['txid'])
+        self.assertEqual(tx.id, result['txid'])
+
+        # someone's tx
+        change_address = await self.blockchain.get_raw_change_address()
+        sendtxid = await self.blockchain.send_to_address(change_address, 10)
+        tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
+        self.assertEqual(tx.id, sendtxid)
+        self.assertEqual(tx.height, -2)
+        await self.generate(1)
+        tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
+        self.assertEqual(tx.height, self.ledger.headers.height)
+
+        # inexistent
+        result = await self.daemon.jsonrpc_transaction_show('0'*64)
+        self.assertFalse(result['success'])

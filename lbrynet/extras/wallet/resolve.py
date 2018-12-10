@@ -2,7 +2,7 @@ import logging
 
 from ecdsa import BadSignatureError
 from binascii import unhexlify, hexlify
-
+from lbrynet.extras.wallet.dewies import dewies_to_lbc
 from lbrynet.p2p.Error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
 from lbrynet.schema.address import is_address
 from lbrynet.schema.claim import ClaimDict
@@ -122,7 +122,12 @@ class Resolver:
             if not claims_in_channel:
                 log.error("No valid claims for this name for this channel")
             elif len(claims_in_channel) > 1:
-                log.error("Multiple signed claims for the same name")
+                log.warning("Multiple signed claims for the same name.")
+                winner = pick_winner_from_channel_path_collision(claims_in_channel)
+                if winner:
+                    result['claim'] = winner
+                else:
+                    log.error("No valid claims for this name for this channel")
             else:
                 result['claim'] = claims_in_channel[0]
 
@@ -189,7 +194,7 @@ class Resolver:
         if 'height' in claim_result and claim_result['height'] is None:
             claim_result['height'] = -1
 
-        if 'amount' in claim_result and not isinstance(claim_result['amount'], float):
+        if 'amount' in claim_result:
             claim_result = format_amount_value(claim_result)
 
         claim_result['permanent_url'] = _get_permanent_url(claim_result)
@@ -287,14 +292,13 @@ class Resolver:
 # Format value to be hex encoded string
 # TODO: refactor. Came from lbryum, there could be another part of torba doing it
 def format_amount_value(obj):
-    COIN = 100000000
     if isinstance(obj, dict):
         for k, v in obj.items():
             if k in ('amount', 'effective_amount'):
                 if not isinstance(obj[k], float):
-                    obj[k] = float(obj[k]) / float(COIN)
+                    obj[k] = dewies_to_lbc(obj[k])
             elif k == 'supports' and isinstance(v, list):
-                obj[k] = [{'txid': txid, 'nout': nout, 'amount': float(amount) / float(COIN)}
+                obj[k] = [{'txid': txid, 'nout': nout, 'amount': dewies_to_lbc(amount)}
                           for (txid, nout, amount) in v]
             elif isinstance(v, (list, dict)):
                 obj[k] = format_amount_value(v)
@@ -437,6 +441,7 @@ def _decode_claim_result(claim):
         claim['error'] = "Failed to decode value"
     return claim
 
+
 def _handle_claim_result(results):
     if not results:
         #TODO: cannot determine what name we searched for here
@@ -475,3 +480,19 @@ def _handle_claim_result(results):
         assert False, msg
 
     return results
+
+
+def pick_winner_from_channel_path_collision(claims_in_channel):
+    # we should be doing this by effective amount so we pick the controlling claim, however changing the resolved
+    # claim triggers another issue where 2 claims cant be saved for the same file. This code picks the oldest, so it
+    # stays the same. Using effective amount would change the resolved claims for a channel path on takeovers,
+    # potentially triggering that.
+    winner = None
+    for claim in claims_in_channel:
+        if not claim['signature_is_valid']:
+            continue
+        if winner is None:
+            winner = claim
+        elif claim['claim_sequence'] < winner['claim_sequence']:
+            winner = claim
+    return winner

@@ -1,7 +1,7 @@
 import math
 from binascii import unhexlify, hexlify
 
-from aiorpcx import RPCError
+from torba.rpc.jsonrpc import RPCError
 from torba.server.hash import hash_to_hex_str
 from torba.server.session import ElectrumX
 from torba.server import util

@@ -11,6 +11,7 @@ from twisted.internet import defer
 
 from lbrynet.schema.schema import SECP256k1
 from torba.client.basemanager import BaseWalletManager
+from torba.rpc.jsonrpc import CodeMessageError
 
 from lbrynet.schema.claim import ClaimDict
 
@@ -274,9 +275,9 @@ class LbryWalletManager(BaseWalletManager):
         ledger: MainNetLedger = self.default_account.ledger
         results = await ledger.resolve(page, page_size, *uris)
         if 'error' not in results:
-            await self.old_db.save_claims_for_resolve(
-                (value for value in results.values() if 'error' not in value)
-            ).asFuture(asyncio.get_event_loop())
+            await self.old_db.save_claims_for_resolve([
+                value for value in results.values() if 'error' not in value
+            ]).asFuture(asyncio.get_event_loop())
         return results
 
     async def get_claims_for_name(self, name: str):
@@ -292,8 +293,20 @@ class LbryWalletManager(BaseWalletManager):
             return True
         return False
 
-    def get_transaction(self, txid: str):
-        return self.default_account.ledger.get_transaction(txid)
+    async def get_transaction(self, txid):
+        tx = await self.db.get_transaction(txid=txid)
+        if not tx:
+            try:
+                _raw = await self.ledger.network.get_transaction(txid)
+            except CodeMessageError as e:
+                return {'success': False, 'code': e.code, 'message': e.message}
+            # this is a workaround for the current protocol. Should be fixed when lbryum support is over and we
+            # are able to use the modern get_transaction call, which accepts verbose to show height and other fields
+            height = await self.ledger.network.get_transaction_height(txid)
+            tx = self.ledger.transaction_class(unhexlify(_raw))
+            if tx and height > 0:
+                await self.ledger.maybe_verify_transaction(tx, height + 1)  # off by one from server side, yes...
+        return tx
 
     @staticmethod
     async def get_history(account: BaseAccount, **constraints):
@@ -306,7 +319,7 @@ class LbryWalletManager(BaseWalletManager):
                 'txid': tx.id,
                 'timestamp': ts,
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-                'confirmations': headers.height - tx.height if tx.height > 0 else 0,
+                'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
                 'claim_info': [],
                 'update_info': [],
                 'support_info': [],
@@ -336,19 +349,19 @@ class LbryWalletManager(BaseWalletManager):
                     for txi in tx.inputs:
                         if txi.txo_ref.txo is not None:
                             other_txo = txi.txo_ref.txo
-                            if other_txo.is_claim and other_txo.claim_id == txo.claim_id:
+                            if (other_txo.is_claim or other_txo.script.is_support_claim) \
+                                    and other_txo.claim_id == txo.claim_id:
                                 previous = other_txo
                                 break
-                    assert previous is not None,\
-                        "Invalid claim update state, expected to find previous claim in input."
-                    item['update_info'].append({
-                        'address': txo.get_address(account.ledger),
-                        'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
-                        'amount': dewies_to_lbc(txo.amount),
-                        'claim_id': txo.claim_id,
-                        'claim_name': txo.claim_name,
-                        'nout': txo.position
-                    })
+                    if previous is not None:
+                        item['update_info'].append({
+                            'address': txo.get_address(account.ledger),
+                            'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
+                            'amount': dewies_to_lbc(txo.amount),
+                            'claim_id': txo.claim_id,
+                            'claim_name': txo.claim_name,
+                            'nout': txo.position
+                        })
                 else:  # someone sent us their claim
                     item['update_info'].append({
                         'address': txo.get_address(account.ledger),
@@ -418,7 +431,7 @@ class LbryWalletManager(BaseWalletManager):
             raise NameError(f"More than one other claim exists with the name '{name}'.")
         await account.ledger.broadcast(tx)
         await self.old_db.save_claims([self._old_get_temp_claim_info(
-            tx, tx.outputs[0], claim_address, claim_dict, name, amount
+            tx, tx.outputs[0], claim_address, claim_dict, name, dewies_to_lbc(amount)
         )]).asFuture(asyncio.get_event_loop())
         # TODO: release reserved tx outputs in case anything fails by this point
         return tx
@@ -427,6 +440,13 @@ class LbryWalletManager(BaseWalletManager):
         holding_address = await account.receiving.get_or_create_usable_address()
         tx = await Transaction.support(claim_name, claim_id, amount, holding_address, [account], account)
         await account.ledger.broadcast(tx)
+        await self.old_db.save_supports(claim_id, [{
+                'txid': tx.id,
+                'nout': tx.position,
+                'address': holding_address,
+                'claim_id': claim_id,
+                'amount': dewies_to_lbc(amount)
+        }]).asFuture(asyncio.get_event_loop())
         return tx
 
     async def tip_claim(self, amount, claim_id, account):
@@ -435,6 +455,13 @@ class LbryWalletManager(BaseWalletManager):
             claim_to_tip['name'], claim_id, amount, claim_to_tip['address'], [account], account
         )
         await account.ledger.broadcast(tx)
+        await self.old_db.save_supports(claim_id, [{
+                'txid': tx.id,
+                'nout': tx.position,
+                'address': claim_to_tip['address'],
+                'claim_id': claim_id,
+                'amount': dewies_to_lbc(amount)
+        }]).asFuture(asyncio.get_event_loop())
         return tx
 
     async def abandon_claim(self, claim_id, txid, nout, account):
@@ -454,6 +481,10 @@ class LbryWalletManager(BaseWalletManager):
         await account.ledger.broadcast(tx)
         account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
+
+        await self.old_db.save_claims([self._old_get_temp_claim_info(
+            tx, tx.outputs[0], address, cert, channel_name, dewies_to_lbc(amount)
+        )]).asFuture(asyncio.get_event_loop())
         return tx
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
