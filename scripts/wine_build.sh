@@ -14,7 +14,6 @@ cd twisted && pip install -e .[tls] && cd ..
 cd torba && pip install -e . && cd ..
 
 cd lbry
-python scripts/set_build.py
 
 # Download from their CI until its not released. Remove later!
 wget -Onetifaces-0.10.7-cp37-cp37m-win32.whl https://ci.appveyor.com/api/buildjobs/6hworunifsymrhp2/artifacts/dist%2Fnetifaces-0.10.7-cp37-cp37m-win32.whl
