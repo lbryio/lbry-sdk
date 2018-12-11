@@ -264,7 +264,7 @@ class TestFileListSorting(unittest.TestCase):
             yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
 
     def _get_fake_lbry_files(self):
-        return list(map(lambda meta: self._get_fake_lbry_file(meta), FAKED_ATTRIBUTES))
+        return [self._get_fake_lbry_file(meta) for meta in FAKED_ATTRIBUTES]
 
     def _get_fake_lbry_file(self, attributes):
         lbry_file = mock.Mock(spec=ManagedEncryptedFileDownloader)
