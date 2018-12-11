@@ -167,6 +167,7 @@ class CommandTestCase(IntegrationTestCase):
         self.manager.old_db = self.daemon.storage
 
     async def tearDown(self):
+        self.conductor.spv_node.server.stop()
         await super().tearDown()
         self.wallet_component._running = False
         await d2f(self.daemon._shutdown())
@@ -487,7 +488,7 @@ class ClaimManagement(CommandTestCase):
 
     VERBOSITY = logging.WARN
 
-    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!', channel_name=None):
+    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!', channel_name=None, confirm=True):
         with tempfile.NamedTemporaryFile() as file:
             file.write(data)
             file.flush()
@@ -495,9 +496,10 @@ class ClaimManagement(CommandTestCase):
                 name, amount, file_path=file.name, channel_name=channel_name
             ))
             self.assertTrue(claim['success'])
-            await self.on_transaction_dict(claim['tx'])
-            await self.generate(1)
-            await self.on_transaction_dict(claim['tx'])
+            if confirm:
+                await self.on_transaction_dict(claim['tx'])
+                await self.generate(1)
+                await self.on_transaction_dict(claim['tx'])
             return claim
 
     async def craft_claim(self, name, amount_dewies, claim_dict, address):
@@ -710,6 +712,40 @@ class ClaimManagement(CommandTestCase):
         self.assertIn('claim', response[uri])
         self.assertTrue(response[uri]['claim']['signature_is_valid'])
         self.assertEqual(response[uri]['claim']['txid'], original_claim['tx']['txid'])
+
+    async def test_claim_list_by_channel(self):
+        self.maxDiff = None
+        tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.ledger.wait(tx)
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "0.0001"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+
+        # 4 claims per block, 3 blocks. Sorted by height (descending) then claim_id (ascending).
+        claims = []
+        for j in range(3):
+            same_height_claims = []
+            for k in range(3):
+                claim = await self.make_claim(amount='0.000001', name=f'c{j}-{k}', channel_name='@abc', confirm=False)
+                self.assertTrue(claim['success'])
+                same_height_claims.append(claim['claim_id'])
+                await self.on_transaction_dict(claim['tx'])
+            claim = await self.make_claim(amount='0.000001', name=f'c{j}-4', channel_name='@abc', confirm=True)
+            self.assertTrue(claim['success'])
+            same_height_claims.append(claim['claim_id'])
+            same_height_claims.sort(key=lambda x: int(x, 16))
+            claims = same_height_claims + claims
+
+        page = await self.out(self.daemon.jsonrpc_claim_list_by_channel(1, page_size=20, uri='@abc'))
+        page_claim_ids = [item['claim_id'] for item in page['@abc']['claims_in_channel']]
+        self.assertEqual(page_claim_ids, claims)
+        page = await self.out(self.daemon.jsonrpc_claim_list_by_channel(1, page_size=6, uri='@abc'))
+        page_claim_ids = [item['claim_id'] for item in page['@abc']['claims_in_channel']]
+        self.assertEqual(page_claim_ids, claims[:6])
+        out_of_bounds = await self.out(self.daemon.jsonrpc_claim_list_by_channel(2, page_size=20, uri='@abc'))
+        self.assertEqual(out_of_bounds['error'], 'claim 20 greater than max 12')
 
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1

@@ -2633,6 +2633,8 @@ class Daemon(AuthJSONRPCServer):
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
 
         resolved = await self.wallet_manager.resolve(*valid_uris, page=page, page_size=page_size)
+        if 'error' in resolved:
+            return {'error': resolved['error']}
         for u in resolved:
             if 'error' in resolved[u]:
                 results[u] = resolved[u]
