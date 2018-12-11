@@ -55,17 +55,7 @@ class TreeRoutingTable:
         return distance(to_add) < distance(kth_contact.node_id)
 
     async def add_contact(self, contact: Peer) -> bool:
-        """ Add the given contact to the correct k-bucket; if it already
-        exists, its status will be updated
-
-        @param contact: The contact to add to this node's k-buckets
-        @type contact: kademlia.contact.Contact
-
-        @rtype: defer.Deferred
-        """
-
         if contact.node_id == self._parent_node_id:
-            print("self")
             return False
         bucket_index = self._kbucket_index(contact.node_id)
 
@@ -122,10 +112,6 @@ class TreeRoutingTable:
 
     def find_close_nodes(self, key: bytes, count: typing.Optional[int] = None,
                          sender_node_id: typing.Optional[bytes] = None) -> typing.List[Peer]:
-        """ Finds a number of known nodes closest to the node/value with the
-        specified key.
-        """
-
         exclude = [self._parent_node_id]
         if sender_node_id:
             exclude.append(sender_node_id)
@@ -141,18 +127,13 @@ class TreeRoutingTable:
         return []
 
     def get_contact(self, contact_id: bytes) -> Peer:
-        """ Returns the (known) contact with the specified node ID
-
-        @raise ValueError: No contact with the specified contact ID is known
+        """
+        @raise IndexError: No contact with the specified contact ID is known
                            by this node
         """
         return self._buckets[self._kbucket_index(contact_id)].get_contact(contact_id)
 
     def get_refresh_list(self, start_index: int = 0, force: bool = False) -> typing.List[bytes]:
-        """ Finds all k-buckets that need refreshing, starting at the
-        k-bucket with the specified index, and returns IDs to be searched for
-        in order to refresh those k-buckets
-        """
         bucket_index = start_index
         refresh_ids = []
         now = int(self._loop.time())
@@ -190,12 +171,6 @@ class TreeRoutingTable:
         return random_id.to_bytes(constants.hash_length, 'big')
 
     def midpoint_id_in_bucket_range(self, bucket_index: int) -> bytes:
-        """ Returns the middle ID in the specified k-bucket's range
-
-        @param bucketIndex: The index of the k-bucket to use
-        @type bucketIndex: int
-        """
-
         half = int((self._buckets[bucket_index].range_max - self._buckets[bucket_index].range_min) // 2)
         return int(self._buckets[bucket_index].range_min + half).to_bytes(constants.hash_length, 'big')
 
@@ -203,9 +178,9 @@ class TreeRoutingTable:
         """ Splits the specified k-bucket into two new buckets which together
         cover the same range in the key/ID space
 
-        @param oldBucketIndex: The index of k-bucket to split (in this table's
-                               list of k-buckets)
-        @type oldBucketIndex: int
+        @param old_bucket_index: The index of k-bucket to split (in this table's
+                                 list of k-buckets)
+        @type old_bucket_index: int
         """
         # Resize the range of the current (old) k-bucket
         old_bucket = self._buckets[old_bucket_index]
