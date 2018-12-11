@@ -167,8 +167,18 @@ def main():
     shutil.rmtree(tempfile.tempdir)
 
     max_len = len(max(uris, key=len))
+    _sum = num = 0
     for result, value in results.items():
+        if not isinstance(value, str):
+            _sum += value
+            num += 1
         print("{0:>{1:d}s}: {2}".format(result, max_len, value))
+
+    avg = _sum / num
+    print("Average for {0:d} downloaded files is: {1:f}".format(num, avg))
+    could_not_download = len(uris) - num
+    smiley = ":-)" if could_not_download == 0 else ":-("
+    print("{0:d} files could not be downloaded {1:s}".format(could_not_download, smiley))
 
     reactor.callLater(0, reactor.stop)
 
