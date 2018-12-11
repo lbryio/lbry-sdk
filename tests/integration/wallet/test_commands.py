@@ -167,6 +167,7 @@ class CommandTestCase(IntegrationTestCase):
         self.manager.old_db = self.daemon.storage
 
     async def tearDown(self):
+        self.conductor.spv_node.server.stop()
         await super().tearDown()
         self.wallet_component._running = False
         await d2f(self.daemon._shutdown())
