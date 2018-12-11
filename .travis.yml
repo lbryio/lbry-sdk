@@ -53,6 +53,16 @@ jobs:
       script:
         - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh
         - sudo zip -j dist/lbrynet-windows.zip dist/lbrynet.exe
+      deploy:
+        provider: releases
+        api_key: $GITHUB_OAUTH_TOKEN
+        file: dist/lbrynet-windows.zip
+        skip_cleanup: true
+        overwrite: true
+        draft: true
+        #on.tags: true
+        on:
+          branch: release_tool
       addons:
         artifacts:
           working_dir: dist
@@ -83,7 +93,6 @@ jobs:
         skip_cleanup: true
         overwrite: true
         draft: true
-        prerelease: true
         #on.tags: true
         on:
           branch: release_tool
