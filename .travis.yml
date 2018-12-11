@@ -74,12 +74,16 @@ jobs:
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
+      before_deploy:
+        - export TRAVIS_TAG=test-release-build
       deploy:
         provider: releases
         api_key: $GITHUB_OAUTH_TOKEN
         file: dist/lbrynet-${OS}.zip
         skip_cleanup: true
+        overwrite: true
         draft: true
+        prerelease: true
         #on.tags: true
         on:
           branch: release_tool
