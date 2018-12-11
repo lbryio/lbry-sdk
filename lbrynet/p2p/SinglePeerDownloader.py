@@ -92,7 +92,7 @@ class SinglePeerDownloader:
         result = yield blob.callback
         if not result:
             log.debug("Failed to downloaded %s from %s", blob_hash[:16], peer.host)
-            yield connection_manager.stop()
+        yield connection_manager.stop()
         defer.returnValue(result)
 
     async def download_temp_blob_from_peer(self, peer, timeout, blob_hash):
