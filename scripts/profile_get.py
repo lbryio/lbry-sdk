@@ -118,7 +118,7 @@ def benchmark_performance(uris: list) -> dict:
         else:
             results[uri] = "Could not download"
 
-        print(results[uri], uri, file=open("/home/hackrush/benchmark.txt", "a"))
+        print(results[uri], uri, file=open({YOUR OUTPUT FILENAME HERE}, "a"))
 
     return results
 
@@ -181,7 +181,7 @@ if __name__ == "__main__":
 
     conf.initialize_settings()
     conf.settings.set('download_directory', tempfile.tempdir)
-    conf.settings.set('lbryum_wallet_dir', "/home/hackrush/git-repos/lbry-repos/test-files/")
+    conf.settings.set('lbryum_wallet_dir', {YOUR WALLET DIRECTORY HERE})
     conf.settings.set('data_dir', tempfile.tempdir)
     conf.settings.set('use_upnp', False)
 
