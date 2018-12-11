@@ -2,6 +2,7 @@ import logging
 import asyncio
 from asyncio import CancelledError
 from itertools import cycle
+from time import time
 
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
@@ -20,6 +21,8 @@ class ClientSession(BaseClientSession):
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
         self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
+        self.max_seconds_idle = 60
+        self.ping_task = None
 
     async def send_request(self, method, args=()):
         try:
@@ -28,9 +31,17 @@ class ClientSession(BaseClientSession):
             log.warning("Wallet server returned an error. Code: %s Message: %s", *e.args)
             raise e
 
+    async def ping_forever(self):
+        # TODO: change to 'ping' on newer protocol (above 1.2)
+        while not self.is_closing():
+            if (time() - self.last_send) > self.max_seconds_idle:
+                await self.send_request('server.banner')
+            await asyncio.sleep(self.max_seconds_idle//3)
+
     async def create_connection(self):
         connector = Connector(lambda: self, *self.server)
         await connector.create_connection()
+        self.ping_task = asyncio.create_task(self.ping_forever())
 
     async def handle_request(self, request):
         controller = self.network.subscription_controllers[request.method]
@@ -39,6 +50,8 @@ class ClientSession(BaseClientSession):
     def connection_lost(self, exc):
         super().connection_lost(exc)
         self._on_disconnect_controller.add(True)
+        if self.ping_task:
+            self.ping_task.cancel()
 
 
 class BaseNetwork:
