@@ -8,48 +8,44 @@ can and probably will change functionality and break backwards compatibility
 at anytime.
 
 
-## Unreleased
-
-### Security
-  *
-  *
+## [0.30.1] - 2018-12-09
 
 ### API
   * add `aioupnp_version` to `upnp` field in the response to `status`
   * fixed uncaught claim signature errors
+  * `--blocking` support for `abandon` command (https://github.com/lbryio/lbry/pull/1618)
+  * don't create SSL keys if SSL is disabled (https://github.com/lbryio/lbry/pull/1644)
+  * added `account_send` command (https://github.com/lbryio/lbry/pull/1654)
+  * fixes for claim send to address (https://github.com/lbryio/lbry/pull/1651)
+  * better handle errors on resolve (https://github.com/lbryio/lbry/pull/1662)
+  * fix `transaction_show` (https://github.com/lbryio/lbry/pull/1689)
 
 ### Schema
+  * merged `lbryschema` repository into `lbrynet` (https://github.com/lbryio/lbry/pull/1444)
   * updated `protobuf` to `3.2.0` (https://github.com/lbryio/lbry/issues/1602)
-
+  * use `types` repo for generating python protobufs (https://github.com/lbryio/lbry/pull/1605)
 
 ### Wallet
   * fixed resolving names with invalid channel signatures
   * fixed wallet sync issues
-
-### File Manager
-  *
-  *
+  * fixed wallet locking/encryption issues
 
 ### DHT
   * fixed retrying kademlia rpc calls (https://github.com/lbryio/lbry/pull/1495)
   * fixed `KeyError` in `iterativeFindValue`, this is used by `peer_list` and when finding peers to download blobs from (https://github.com/lbryio/lbry/issues/1638)
-
-### P2P
-  *
-  *
-
-### Reflector
-  *
-  *
+  * settings external ip address and ability to disable more DHT components (https://github.com/lbryio/lbry/pull/1604)
+  * improved routing table bucket initialization (https://github.com/lbryio/lbry/pull/1633)
 
 ### Database
-  *
-  *
+  * resolved too many variables in sqlite issue (https://github.com/lbryio/lbry/pull/1612)
 
-### Known Issues
-  *
-  *
-
+### Misc
+  * switch to Python 3.7
+  * brought back icon for windows binary
+  * using custom list of mime types with more types (https://github.com/lbryio/lbry/pull/1700)
+  * add balance to startup report (https://github.com/lbryio/lbry/pull/1613)
+  * drop `six` dependency (https://github.com/lbryio/lbry/pull/1660)
+  * drop `mock` dependency (https://github.com/lbryio/lbry/pull/1661)
 
 ## [0.30.0] - 2018-10-22
 This release is the most ambitious upgrade to lbrynet yet; including a brand
