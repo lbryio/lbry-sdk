@@ -54,6 +54,13 @@ jobs:
         - python scripts/set_build.py
         - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh
         - sudo zip -j dist/lbrynet-windows.zip dist/lbrynet.exe
+      deploy:
+        provider: releases
+        api_key: $GITHUB_OAUTH_TOKEN
+        file: dist/lbrynet-windows.zip
+        skip_cleanup: true
+        overwrite: true
+        draft: true
       addons:
         artifacts:
           working_dir: dist
@@ -64,6 +71,7 @@ jobs:
 
     - &build
       name: "Linux"
+      env: OS=linux
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
@@ -74,7 +82,13 @@ jobs:
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
-      env: OS=linux
+      deploy:
+        provider: releases
+        api_key: $GITHUB_OAUTH_TOKEN
+        file: dist/lbrynet-${OS}.zip
+        skip_cleanup: true
+        overwrite: true
+        draft: true
       addons:
         artifacts:
           working_dir: dist
