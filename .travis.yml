@@ -61,6 +61,8 @@ jobs:
         skip_cleanup: true
         overwrite: true
         draft: true
+        on:
+          tags: true
       addons:
         artifacts:
           working_dir: dist
@@ -89,6 +91,8 @@ jobs:
         skip_cleanup: true
         overwrite: true
         draft: true
+        on:
+          tags: true
       addons:
         artifacts:
           working_dir: dist
