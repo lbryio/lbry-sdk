@@ -262,17 +262,18 @@ class TestFileListSorting(unittest.TestCase):
         with self.assertRaisesRegex(Exception, expected_message):
             yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
 
-    def _get_fake_lbry_files(self):
-        return [self._get_fake_lbry_file(meta) for meta in FAKED_ATTRIBUTES]
+    @staticmethod
+    def _get_fake_lbry_files():
+        faked_lbry_files = []
+        for metadata in FAKED_LBRY_FILES:
+            lbry_file = mock.Mock(spec=ManagedEncryptedFileDownloader)
+            for attribute in metadata:
+                setattr(lbry_file, attribute, metadata[attribute])
+            faked_lbry_files.append(lbry_file)
+        return faked_lbry_files
 
-    def _get_fake_lbry_file(self, attributes):
-        lbry_file = mock.Mock(spec=ManagedEncryptedFileDownloader)
-        for key in attributes:
-            setattr(lbry_file, key, attributes[key])
-        return lbry_file
 
-
-FAKED_ATTRIBUTES = (
+FAKED_LBRY_FILES = (
     {
         'channel_claim_id': '3aace03b007d108c668d201533b7b07ab2981d47',
         'channel_name': '@ashlee27',
