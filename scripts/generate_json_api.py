@@ -3,7 +3,7 @@ import re
 import json
 import inspect
 from textwrap import dedent
-from lbrynet.daemon.Daemon import Daemon
+from lbrynet.extras.daemon.Daemon import Daemon
 
 
 SECTIONS = re.compile("(.*?)Usage:(.*?)Options:(.*?)Returns:(.*)", re.DOTALL)
