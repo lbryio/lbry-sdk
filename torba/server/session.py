@@ -648,7 +648,7 @@ class SessionBase(RPCSession):
             status += 'C'
         if self.log_me:
             status += 'L'
-        status += str(self.concurrency.max_concurrent)
+        status += str(self._concurrency.max_concurrent)
         return status
 
     def connection_made(self, transport):
@@ -681,7 +681,7 @@ class SessionBase(RPCSession):
         return len(self.connection.pending_requests())
 
     def semaphore(self):
-        return Semaphores([self.concurrency.semaphore, self.group.semaphore])
+        return Semaphores([self._concurrency.semaphore, self.group.semaphore])
 
     def sub_count(self):
         return 0
