@@ -43,19 +43,13 @@
             {
                 "name": "account_id",
                 "type": "str",
-                "description": "If provided only the balance for this account will be given",
+                "description": "If provided only the balance for this account will be given. Otherwise default account.",
                 "is_required": false
             },
             {
-                "name": "address",
-                "type": "str",
-                "description": "If provided only the balance for this address will be given",
-                "is_required": false
-            },
-            {
-                "name": "include_unconfirmed",
-                "type": "bool",
-                "description": "Include unconfirmed",
+                "name": "confirmations",
+                "type": "int",
+                "description": "Only include transactions with this many confirmed blocks.",
                 "is_required": false
             }
         ],
@@ -83,18 +77,25 @@
     {
         "name": "account_decrypt",
         "description": "Decrypt an encrypted account, this will remove the wallet password",
-        "arguments": [],
+        "arguments": [
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id for the account to decrypt",
+                "is_required": false
+            }
+        ],
         "returns": "(bool) true if wallet is decrypted, otherwise false"
     },
     {
         "name": "account_encrypt",
-        "description": "Encrypt a wallet with a password, if the wallet is already encrypted this will update\nthe password",
+        "description": "Encrypt an unencrypted account with a password",
         "arguments": [
             {
-                "name": "new_password",
+                "name": "account_id",
                 "type": "str",
-                "description": "password string to be used for encrypting wallet",
-                "is_required": true
+                "description": "id for the account to encrypt",
+                "is_required": false
             }
         ],
         "returns": "(bool) true if wallet is decrypted, otherwise false"
@@ -107,13 +108,13 @@
                 "name": "to_account",
                 "type": "str",
                 "description": "send to this account",
-                "is_required": true
+                "is_required": false
             },
             {
                 "name": "from_account",
                 "type": "str",
                 "description": "spend from this account",
-                "is_required": true
+                "is_required": false
             },
             {
                 "name": "amount",
@@ -155,13 +156,7 @@
             {
                 "name": "confirmations",
                 "type": "int",
-                "description": "required confirmations (default: 6)",
-                "is_required": false
-            },
-            {
-                "name": "include_reserved",
-                "type": "bool",
-                "description": "include reserved UTXOs (default: false)",
+                "description": "required confirmations (default: 0)",
                 "is_required": false
             },
             {
@@ -178,6 +173,19 @@
             }
         ],
         "returns": "(map) balance of account(s)"
+    },
+    {
+        "name": "account_lock",
+        "description": "Lock an unlocked account",
+        "arguments": [
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id for the account to lock",
+                "is_required": false
+            }
+        ],
+        "returns": "(bool) true if account is locked, otherwise false"
     },
     {
         "name": "account_max_address_gap",
@@ -204,6 +212,25 @@
             }
         ],
         "returns": "(map) details of removed account"
+    },
+    {
+        "name": "account_send",
+        "description": "Send the same number of credits to multiple addresses.",
+        "arguments": [
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "account to fund the transaction",
+                "is_required": false
+            },
+            {
+                "name": "broadcast",
+                "type": "bool",
+                "description": "actually broadcast the transaction, default: false.",
+                "is_required": false
+            }
+        ],
+        "returns": ""
     },
     {
         "name": "account_set",
@@ -259,10 +286,10 @@
         "description": "Unlock an encrypted account",
         "arguments": [
             {
-                "name": "password",
+                "name": "account_id",
                 "type": "str",
-                "description": "password for unlocking wallet",
-                "is_required": true
+                "description": "id for the account to unlock",
+                "is_required": false
             }
         ],
         "returns": "(bool) true if account is unlocked, otherwise false"
@@ -295,22 +322,21 @@
                 "type": "str",
                 "description": "id of the account to use",
                 "is_required": false
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "description": "page to return during paginating",
+                "is_required": false
+            },
+            {
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
+                "is_required": false
             }
         ],
         "returns": "List of wallet addresses"
-    },
-    {
-        "name": "address_public_key",
-        "description": "Get public key from wallet address",
-        "arguments": [
-            {
-                "name": "address",
-                "type": "str",
-                "description": "address for which to get the public key",
-                "is_required": true
-            }
-        ],
-        "returns": "(list) list of public keys associated with address.\n        Could contain more than one public key if multisig."
     },
     {
         "name": "address_unused",
@@ -535,7 +561,26 @@
     {
         "name": "channel_list",
         "description": "Get certificate claim infos for channels that can be published to",
-        "arguments": [],
+        "arguments": [
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to use",
+                "is_required": false
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "description": "page to return during paginating",
+                "is_required": false
+            },
+            {
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
+                "is_required": false
+            }
+        ],
         "returns": "(list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim\n    is in the wallet."
     },
     {
@@ -553,6 +598,12 @@
                 "type": "decimal",
                 "description": "bid amount on the channel",
                 "is_required": true
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to store channel",
+                "is_required": false
             }
         ],
         "returns": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (float) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }"
@@ -583,6 +634,12 @@
                 "name": "account_id",
                 "type": "str",
                 "description": "id of the account to use",
+                "is_required": false
+            },
+            {
+                "name": "blocking",
+                "type": "bool",
+                "description": "wait until abandon is in mempool",
                 "is_required": false
             }
         ],
@@ -641,6 +698,18 @@
                 "type": "str",
                 "description": "id of the account to query",
                 "is_required": false
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "description": "page to return during paginating",
+                "is_required": false
+            },
+            {
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
+                "is_required": false
             }
         ],
         "returns": "(list) List of name claims owned by user\n    [\n        {\n            'address': (str) address that owns the claim\n            'amount': (float) amount assigned to the claim\n            'blocks_to_expiration': (int) number of blocks until it expires\n            'category': (str) \"claim\", \"update\" , or \"support\"\n            'claim_id': (str) claim ID of the claim\n            'confirmations': (int) number of blocks of confirmations for the claim\n            'expiration_height': (int) the block height which the claim will expire\n            'expired': (bool) true if expired, false otherwise\n            'height': (int) height of the block containing the claim\n            'is_spent': (bool) true if claim is abandoned, false otherwise\n            'name': (str) name of the claim\n            'permanent_url': (str) permanent url of the claim,\n            'txid': (str) txid of the claim\n            'nout': (int) nout of the claim\n            'value': (str) value of the claim\n        },\n   ]"
@@ -675,25 +744,6 @@
             }
         ],
         "returns": "(dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }"
-    },
-    {
-        "name": "claim_renew",
-        "description": "Renew claim(s) or support(s)",
-        "arguments": [
-            {
-                "name": "outpoint",
-                "type": "str",
-                "description": "outpoint of the claim to renew",
-                "is_required": true
-            },
-            {
-                "name": "height",
-                "type": "str",
-                "description": "update claims expiring before or at this block height",
-                "is_required": true
-            }
-        ],
-        "returns": "(dict) Dictionary where key is the the original claim's outpoint and\n    value is the result of the renewal\n    {\n        outpoint:{\n\n            'tx' : (str) hex encoded transaction\n            'txid' : (str) txid of resulting claim\n            'nout' : (int) nout of the resulting claim\n            'fee' : (float) fee paid for the claim transaction\n            'claim_id' : (str) claim ID of the resulting claim\n        },\n    }"
     },
     {
         "name": "claim_send_to_address",
@@ -1191,6 +1241,18 @@
                 "is_required": false
             },
             {
+                "name": "channel_account_id",
+                "type": "str",
+                "description": "one or more account ids for accounts to look in for channel certificates, defaults to all accounts.",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "account to use for funding the transaction",
+                "is_required": false
+            },
+            {
                 "name": "claim_address",
                 "type": "str",
                 "description": "address where the claim is sent to, if not specified new address will automatically be created",
@@ -1363,7 +1425,7 @@
         "name": "status",
         "description": "Get daemon status",
         "arguments": [],
-        "returns": "(dict) lbrynet-daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'is_first_run': bool,\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'database': (bool),\n            'wallet': (bool),\n            'session': (bool),\n            'dht': (bool),\n            'hash_announcer': (bool),\n            'stream_identifier': (bool),\n            'file_manager': (bool),\n            'blob_manager': (bool),\n            'blockchain_headers': (bool),\n            'peer_protocol_server': (bool),\n            'reflector': (bool),\n            'upnp': (bool),\n            'exchange_rate_manager': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_headers': {\n            'downloading_headers': (bool),\n            'download_progress': (float) 0-100.0\n        },\n        'wallet': {\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n            'is_encrypted': (bool),\n            'is_locked': (bool),\n        },\n        'dht': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'blob_manager': {\n            'finished_blobs': (int) number of finished blobs in the blob manager,\n        },\n        'hash_announcer': {\n            'announce_queue_size': (int) number of blobs currently queued to be announced\n        },\n        'file_manager': {\n            'managed_files': (int) count of files in the file manager,\n        }\n    }"
+        "returns": "(dict) lbrynet-daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'is_first_run': bool,\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'database': (bool),\n            'wallet': (bool),\n            'session': (bool),\n            'dht': (bool),\n            'hash_announcer': (bool),\n            'stream_identifier': (bool),\n            'file_manager': (bool),\n            'blob_manager': (bool),\n            'blockchain_headers': (bool),\n            'peer_protocol_server': (bool),\n            'reflector': (bool),\n            'upnp': (bool),\n            'exchange_rate_manager': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_headers': {\n            'downloading_headers': (bool),\n            'download_progress': (float) 0-100.0\n        },\n        'wallet': {\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n            'is_encrypted': (bool),\n            'is_locked': (bool),\n        },\n        'dht': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'blob_manager': {\n            'finished_blobs': (int) number of finished blobs in the blob manager,\n        },\n        'hash_announcer': {\n            'announce_queue_size': (int) number of blobs currently queued to be announced\n        },\n        'file_manager': {\n            'managed_files': (int) count of files in the file manager,\n        },\n        'upnp': {\n            'aioupnp_version': (str),\n            'redirects': {\n                <TCP | UDP>: (int) external_port,\n            },\n            'gateway': (str) manufacturer and model,\n            'dht_redirect_set': (bool),\n            'peer_redirect_set': (bool),\n            'external_ip': (str) external ip address,\n        }\n    }"
     },
     {
         "name": "stop",
@@ -1424,6 +1486,18 @@
                 "type": "str",
                 "description": "id of the account to query",
                 "is_required": false
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "description": "page to return during paginating",
+                "is_required": false
+            },
+            {
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
+                "is_required": false
             }
         ],
         "returns": "(list) List of transactions\n\n    {\n        \"claim_info\": (list) claim info if in txn [{\n                                                \"address\": (str) address of claim,\n                                                \"balance_delta\": (float) bid amount,\n                                                \"amount\": (float) claim amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"abandon_info\": (list) abandon info if in txn [{\n                                                \"address\": (str) address of abandoned claim,\n                                                \"balance_delta\": (float) returned amount,\n                                                \"amount\": (float) claim amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"confirmations\": (int) number of confirmations for the txn,\n        \"date\": (str) date and time of txn,\n        \"fee\": (float) txn fee,\n        \"support_info\": (list) support info if in txn [{\n                                                \"address\": (str) address of support,\n                                                \"balance_delta\": (float) support amount,\n                                                \"amount\": (float) support amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"is_tip\": (bool),\n                                                \"nout\": (int) nout\n                                                }],\n        \"timestamp\": (int) timestamp,\n        \"txid\": (str) txn id,\n        \"update_info\": (list) update info if in txn [{\n                                                \"address\": (str) address of claim,\n                                                \"balance_delta\": (float) credited/debited\n                                                \"amount\": (float) absolute amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"value\": (float) value of txn\n    }"
@@ -1449,6 +1523,18 @@
                 "name": "account_id",
                 "type": "str",
                 "description": "id of the account to query",
+                "is_required": false
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "description": "page to return during paginating",
+                "is_required": false
+            },
+            {
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
                 "is_required": false
             }
         ],
