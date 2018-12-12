@@ -1,8 +1,15 @@
-# <img src="https://raw.githubusercontent.com/lbryio/lbry/master/lbry.png" alt="LBRY" width="48" height="36" /> LBRY [![Build Status](https://travis-ci.org/lbryio/lbry.svg?branch=master)](https://travis-ci.org/lbryio/lbry) [![Test Coverage](https://codecov.io/gh/lbryio/lbry/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry)
+# <img src="https://raw.githubusercontent.com/lbryio/lbry/master/lbry.png" alt="LBRY" width="48" height="36" /> LBRY SDK [![Build Status](https://travis-ci.org/lbryio/lbry.svg?branch=master)](https://travis-ci.org/lbryio/lbry) [![Test Coverage](https://codecov.io/gh/lbryio/lbry/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry)
 
-LBRY is an open-source protocol providing distribution, discovery, and purchase of digital content (data) via a decentralized peer-to-peer network. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, rights and access rules. LBRY also provides a data network that consists of peers (seeders) uploading and downloading data from other peers, possibly in exchange for payments, as well as a distributed hash table used by peers to discover other peers.
+LBRY is a decentralized peer-to-peer network providing distribution, discovery, and purchase of digital content (data). It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, rights and access rules. LBRY also provides a data network that consists of peers (seeders) uploading and downloading data from other peers, possibly in exchange for payments, as well as a distributed hash table used by peers to discover other peers.
 
-This project provides an SDK for building applications using the LBRY protocol. The SDK is written in Python 3.7+ using Twisted. For other languages or platforms, a JSON-RPC API is provided.
+LBRY SDK for Python is currently the most full featured implementation of the LBRY Network protocols and includes many useful components and tools for building decentralized applications. Primary features and components:
+
+ * Built on Python 3.7+ and `asyncio`.
+ * DHT (Distributed Hash Table) implementation for finding peers ([lbrynet.dht](https://github.com/lbryio/lbry/tree/master/lbrynet/dht)).
+ * Blob exchange protocol for downloading content and negotiating payments ([lbrynet.blob_exchange](https://github.com/lbryio/lbry/tree/master/lbrynet/blob_exchange)).
+ * Protobuf schema for encoding and decoding metadata stored on the blockchain ([lbrynet.schema](https://github.com/lbryio/lbry/tree/master/lbrynet/schema)).
+ * Wallet implementation for the LBRY blockchain ([lbrynet.extras.wallet](https://github.com/lbryio/lbry/tree/master/lbrynet/extras/wallet)).
+ * Daemon with a JSON-RPC API to ease building end user applications in any language and for automating various tasks ([lbrynet.extras.daemon](https://github.com/lbryio/lbry/tree/master/lbrynet/extras/daemon)). 
 
 ## Installation
 
@@ -38,7 +45,7 @@ We take security seriously. Please contact security@lbry.io regarding any securi
 
 ## Contact
 
-The primary contact for this project is [@jackrobison](mailto:jack@lbry.io).
+The primary contact for this project is [@eukreign](mailto:lex@lbry.io).
 
 ## Additional information and links
 
