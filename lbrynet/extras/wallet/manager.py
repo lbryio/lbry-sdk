@@ -171,12 +171,12 @@ class LbryWalletManager(BaseWalletManager):
         ledger_config = {
             'auto_connect': True,
             'default_servers': settings['lbryum_servers'],
-            'data_path': settings['lbryum_wallet_dir'],
+            'data_path': settings.wallet_dir,
             'use_keyring': settings['use_keyring'],
             #'db': db
         }
 
-        wallets_directory = os.path.join(settings['lbryum_wallet_dir'], 'wallets')
+        wallets_directory = os.path.join(settings.wallet_dir, 'wallets')
         if not os.path.exists(wallets_directory):
             os.mkdir(wallets_directory)
 

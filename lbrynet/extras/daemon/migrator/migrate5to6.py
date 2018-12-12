@@ -7,8 +7,6 @@ from lbrynet.schema.decode import smart_decode
 
 log = logging.getLogger(__name__)
 
-download_directory = conf.settings['download_directory']
-
 CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;
             pragma journal_mode=WAL;
@@ -190,7 +188,7 @@ def do_migration(db_dir):
         # insert the file
         transaction.execute(
             "insert or ignore into file values (?, ?, ?, ?, ?)",
-            (stream_hash, stream_name, download_directory.encode('hex'),
+            (stream_hash, stream_name, conf.settings.download_dir.encode('hex'),
              data_rate, status)
         )
 

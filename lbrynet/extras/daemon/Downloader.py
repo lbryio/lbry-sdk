@@ -41,7 +41,7 @@ class GetStream:
         self.data_rate = data_rate or conf.settings['data_rate']
         self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
         self.disable_max_key_fee = disable_max_key_fee or conf.settings['disable_max_key_fee']
-        self.download_directory = conf.settings['download_directory']
+        self.download_directory = conf.settings.download_dir
         self.timeout_counter = 0
         self.code = None
         self.sd_hash = None

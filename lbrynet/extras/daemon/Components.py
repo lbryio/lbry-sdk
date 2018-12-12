@@ -59,62 +59,18 @@ def from_future(coroutine: asyncio.coroutine) -> defer.Deferred:
     return defer.Deferred.fromFuture(asyncio.ensure_future(coroutine))
 
 
-def get_wallet_config():
-    wallet_type = GCS('wallet')
-    if wallet_type == conf.LBRYCRD_WALLET:
-        raise ValueError('LBRYcrd Wallet is no longer supported')
-    elif wallet_type != conf.LBRYUM_WALLET:
-        raise ValueError(f'Wallet Type {wallet_type} is not valid')
-    lbryum_servers = {address: {'t': str(port)}
-                          for address, port in GCS('lbryum_servers')}
-    config = {
-        'auto_connect': True,
-        'chain': GCS('blockchain_name'),
-        'default_servers': lbryum_servers
-    }
-    if 'use_keyring' in conf.settings:
-        config['use_keyring'] = GCS('use_keyring')
-    if conf.settings['lbryum_wallet_dir']:
-        config['lbryum_path'] = GCS('lbryum_wallet_dir')
-    return config
-
-
-class ConfigSettings:
-    @staticmethod
-    def get_conf_setting(setting_name):
-        return conf.settings[setting_name]
-
-    @staticmethod
-    def get_blobfiles_dir():
-        if conf.settings['BLOBFILES_DIR'] == "blobfiles":
-            return os.path.join(GCS("data_dir"), "blobfiles")
-        else:
-            log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
-            return conf.settings['BLOBFILES_DIR']
-
-    @staticmethod
-    def get_node_id():
-        return conf.settings.node_id
-
-    @staticmethod
-    @defer.inlineCallbacks
-    def get_external_ip():  # used if upnp is disabled or non-functioning
-        try:
-            buf = []
-            response = yield treq.get("https://api.lbry.io/ip")
-            yield treq.collect(response, buf.append)
-            parsed = json.loads(b"".join(buf).decode())
-            if parsed['success']:
-                return parsed['data']['ip']
-            return
-        except Exception as err:
-            return
-
-
-
-# Shorthand for common ConfigSettings methods
-CS = ConfigSettings
-GCS = ConfigSettings.get_conf_setting
+@defer.inlineCallbacks
+def get_external_ip():  # used if upnp is disabled or non-functioning
+    try:
+        buf = []
+        response = yield treq.get("https://api.lbry.io/ip")
+        yield treq.collect(response, buf.append)
+        parsed = json.loads(b"".join(buf).decode())
+        if parsed['success']:
+            return parsed['data']['ip']
+        return
+    except Exception as err:
+        return
 
 
 class DatabaseComponent(Component):
@@ -146,18 +102,6 @@ class DatabaseComponent(Component):
         # check directories exist, create them if they don't
         log.info("Loading databases")
 
-        if not os.path.exists(GCS('download_directory')):
-            os.mkdir(GCS('download_directory'))
-
-        if not os.path.exists(GCS('data_dir')):
-            os.mkdir(GCS('data_dir'))
-            self._write_db_revision_file(self.get_current_db_revision())
-            log.debug("Created the db revision file: %s", self.get_revision_filename())
-
-        if not os.path.exists(CS.get_blobfiles_dir()):
-            os.mkdir(CS.get_blobfiles_dir())
-            log.debug("Created the blobfile directory: %s", str(CS.get_blobfiles_dir()))
-
         if not os.path.exists(self.get_revision_filename()):
             log.warning("db_revision file not found. Creating it")
             self._write_db_revision_file(self.get_current_db_revision())
@@ -174,13 +118,13 @@ class DatabaseComponent(Component):
             from lbrynet.extras.daemon.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
             yield threads.deferToThread(
-                dbmigrator.migrate_db, GCS('data_dir'), old_revision, self.get_current_db_revision()
+                dbmigrator.migrate_db, conf.settings.data_dir, old_revision, self.get_current_db_revision()
             )
             self._write_db_revision_file(self.get_current_db_revision())
             log.info("Finished upgrading the databases.")
 
         # start SQLiteStorage
-        self.storage = SQLiteStorage(GCS('data_dir'))
+        self.storage = SQLiteStorage(conf.settings.data_dir)
         yield self.storage.setup()
 
     @defer.inlineCallbacks
@@ -198,9 +142,9 @@ class HeadersComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.headers_dir = os.path.join(conf.settings['lbryum_wallet_dir'], 'lbc_mainnet')
+        self.headers_dir = os.path.join(conf.settings.wallet_dir, 'lbc_mainnet')
         self.headers_file = os.path.join(self.headers_dir, 'headers')
-        self.old_file = os.path.join(conf.settings['lbryum_wallet_dir'], 'blockchain_headers')
+        self.old_file = os.path.join(conf.settings.wallet_dir, 'blockchain_headers')
         self._downloading_headers = None
         self._headers_progress_percent = 0
 
@@ -260,7 +204,7 @@ class HeadersComponent(Component):
         ledger = SimpleNamespace()
         ledger.config = {
             'default_servers': conf.settings['lbryum_servers'],
-            'data_path': conf.settings['lbryum_wallet_dir']
+            'data_path': conf.settings.wallet_dir
         }
         net = Network(ledger)
         first_connection = net.on_connected.first
@@ -395,7 +339,7 @@ class BlobComponent(Component):
             dht_node = self.component_manager.get_component(DHT_COMPONENT)
             if dht_node:
                 datastore = dht_node._dataStore
-        self.blob_manager = DiskBlobManager(CS.get_blobfiles_dir(), storage, datastore)
+        self.blob_manager = DiskBlobManager(os.path.join(conf.settings.data_dir, "blobfiles"), storage, datastore)
         return self.blob_manager.setup()
 
     def stop(self):
@@ -428,34 +372,34 @@ class DHTComponent(Component):
 
     def get_status(self):
         return {
-            'node_id': binascii.hexlify(CS.get_node_id()),
+            'node_id': binascii.hexlify(conf.settings.get_node_id()),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.contacts)
         }
 
     @defer.inlineCallbacks
     def start(self):
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
-        self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", GCS("peer_port"))
-        self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", GCS("dht_node_port"))
-        node_id = CS.get_node_id()
+        self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", conf.settings["peer_port"])
+        self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", conf.settings["dht_node_port"])
+        node_id = conf.settings.get_node_id()
         if node_id is None:
             node_id = generate_id()
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
-            external_ip = yield CS.get_external_ip()
+            external_ip = yield get_external_ip()
             if not external_ip:
                 log.warning("failed to get external ip")
 
         self.dht_node = Node(
             node_id=node_id,
-            udpPort=GCS('dht_node_port'),
+            udpPort=conf.settings['dht_node_port'],
             externalUDPPort=self.external_udp_port,
             externalIP=external_ip,
             peerPort=self.external_peer_port
         )
 
-        yield self.dht_node.start(GCS('known_dht_nodes'), block_on_join=False)
+        yield self.dht_node.start(conf.settings['known_dht_nodes'], block_on_join=False)
         log.info("Started the dht")
 
     @defer.inlineCallbacks
@@ -565,7 +509,7 @@ class FileManagerComponent(Component):
             blob_manager,
             storage,
             wallet,
-            GCS('download_directory')
+            conf.settings.download_dir
         )
         yield sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
 
@@ -598,7 +542,7 @@ class PeerProtocolServerComponent(Component):
     def start(self):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
-        peer_port = GCS('peer_port')
+        peer_port = conf.settings['peer_port']
         query_handlers = {
             handler.get_primary_query_identifier(): handler for handler in [
                 BlobRequestHandlerFactory(
@@ -640,7 +584,7 @@ class ReflectorComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.reflector_server_port = GCS('reflector_port')
+        self.reflector_server_port = conf.settings['reflector_port']
         self.reflector_server = None
 
     @property
@@ -673,9 +617,9 @@ class UPnPComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self._int_peer_port = GCS('peer_port')
-        self._int_dht_node_port = GCS('dht_node_port')
-        self.use_upnp = GCS('use_upnp')
+        self._int_peer_port = conf.settings['peer_port']
+        self._int_dht_node_port = conf.settings['dht_node_port']
+        self.use_upnp = conf.settings['use_upnp']
         self.upnp = None
         self.upnp_redirects = {}
         self.external_ip = None
@@ -719,7 +663,7 @@ class UPnPComponent(Component):
 
         if external_ip == "0.0.0.0" or not external_ip:
             log.warning("unable to get external ip from UPnP, checking lbry.io fallback")
-            external_ip = yield CS.get_external_ip()
+            external_ip = yield get_external_ip()
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         self.external_ip = external_ip
@@ -775,7 +719,7 @@ class UPnPComponent(Component):
     def start(self):
         log.info("detecting external ip")
         if not self.use_upnp:
-            self.external_ip = yield CS.get_external_ip()
+            self.external_ip = yield get_external_ip()
             return
         success = False
         yield self._maintain_redirects()

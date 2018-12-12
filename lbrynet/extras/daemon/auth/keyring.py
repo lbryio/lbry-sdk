@@ -73,8 +73,8 @@ class Keyring:
 
     @classmethod
     def load_from_disk(cls):
-        api_key_path = os.path.join(conf.settings['data_dir'], 'auth_token')
-        api_ssl_cert_path = os.path.join(conf.settings['data_dir'], 'api_ssl_cert.pem')
+        api_key_path = os.path.join(conf.settings.data_dir, 'auth_token')
+        api_ssl_cert_path = os.path.join(conf.settings.data_dir, 'api_ssl_cert.pem')
         if not os.path.isfile(api_key_path) or not os.path.isfile(api_ssl_cert_path):
             return
         with open(api_key_path, 'rb') as f:
@@ -122,10 +122,10 @@ class Keyring:
 
         auth_token = APIKey.create(seed=None, name="api")
 
-        with open(os.path.join(conf.settings['data_dir'], 'auth_token'), 'wb') as f:
+        with open(os.path.join(conf.settings.data_dir, 'auth_token'), 'wb') as f:
             f.write(auth_token.secret.encode())
 
-        with open(os.path.join(conf.settings['data_dir'], 'api_ssl_cert.pem'), 'wb') as f:
+        with open(os.path.join(conf.settings.data_dir, 'api_ssl_cert.pem'), 'wb') as f:
             f.write(public_certificate.encode())
 
         return cls(auth_token, public_certificate, private_certificate)

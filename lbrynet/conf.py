@@ -1,24 +1,15 @@
-import base58
-import json
-import logging
 import os
 import re
 import sys
-import yaml
+import typing
+import json
+import logging
 import envparse
+import base58
+import yaml
 from appdirs import user_data_dir, user_config_dir
 from lbrynet import utils
 from lbrynet.p2p.Error import InvalidCurrencyError, NoSuchDirectoryError
-from lbrynet.androidhelpers.paths import (
-    android_internal_storage_dir,
-    android_app_internal_storage_dir
-)
-
-try:
-    from lbrynet.winpaths import get_path, FOLDERID, UserHandle
-except (ImportError, ValueError, NameError):
-    # Android platform: NameError: name 'c_wchar' is not defined
-    pass
 
 log = logging.getLogger(__name__)
 
@@ -59,87 +50,66 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
-# set by CLI when the user specifies an alternate config file path
-conf_file = None
-
-
-def _get_old_directories(platform_type):
-    directories = {}
-    if platform_type == WINDOWS:
-        appdata = get_path(FOLDERID.RoamingAppData, UserHandle.current)
-        directories['data'] = os.path.join(appdata, 'lbrynet')
-        directories['lbryum'] = os.path.join(appdata, 'lbryum')
-        directories['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
-    elif platform_type == DARWIN:
-        directories['data'] = user_data_dir('LBRY')
-        directories['lbryum'] = os.path.expanduser('~/.lbryum')
-        directories['download'] = os.path.expanduser('~/Downloads')
-    elif platform_type == LINUX:
-        directories['data'] = os.path.expanduser('~/.lbrynet')
-        directories['lbryum'] = os.path.expanduser('~/.lbryum')
-        directories['download'] = os.path.expanduser('~/Downloads')
-    else:
-        raise ValueError('unknown platform value')
-    return directories
-
-
-def _get_new_directories(platform_type):
-    directories = {}
-    if platform_type == ANDROID:
-        directories['data'] = '%s/lbrynet' % android_app_internal_storage_dir()
-        directories['lbryum'] = '%s/lbryum' % android_app_internal_storage_dir()
-        directories['download'] = '%s/Download' % android_internal_storage_dir()
-    elif platform_type == WINDOWS:
-        directories['data'] = user_data_dir('lbrynet', 'lbry')
-        directories['lbryum'] = user_data_dir('lbryum', 'lbry')
-        directories['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
-    elif platform_type == DARWIN:
-        directories = _get_old_directories(platform_type)
-    elif platform_type == LINUX:
-        directories['data'] = user_data_dir('lbry/lbrynet')
-        directories['lbryum'] = user_data_dir('lbry/lbryum')
-        try:
-            with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
-                down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-                down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
-                directories['download'] = re.sub('\"', '', down_dir)
-        except EnvironmentError:
-            directories['download'] = os.getenv('XDG_DOWNLOAD_DIR')
-
-        if not directories['download']:
-            directories['download'] = os.path.expanduser('~/Downloads')
-    else:
-        raise ValueError('unknown platform value')
-    return directories
-
-
 if 'ANDROID_ARGUMENT' in os.environ:
     # https://github.com/kivy/kivy/blob/master/kivy/utils.py#L417-L421
     platform = ANDROID
-    dirs = _get_new_directories(ANDROID)
 elif 'darwin' in sys.platform:
     platform = DARWIN
-    dirs = _get_old_directories(DARWIN)
 elif 'win' in sys.platform:
     platform = WINDOWS
-    if os.path.isdir(_get_old_directories(WINDOWS)['data']) or \
-       os.path.isdir(_get_old_directories(WINDOWS)['lbryum']):
-        dirs = _get_old_directories(WINDOWS)
-    else:
-        dirs = _get_new_directories(WINDOWS)
 else:
     platform = LINUX
-    if os.path.isdir(_get_old_directories(LINUX)['data']) or \
-       os.path.isdir(_get_old_directories(LINUX)['lbryum']):
-        dirs = _get_old_directories(LINUX)
-    else:
-        dirs = _get_new_directories(LINUX)
-
-default_data_dir = dirs['data']
-default_lbryum_dir = dirs['lbryum']
-default_download_dir = dirs['download']
 
 ICON_PATH = 'icons' if platform is WINDOWS else 'app.icns'
+
+
+def get_windows_directories() -> typing.Tuple[str, str, str]:
+    from lbrynet.winpaths import get_path, FOLDERID, UserHandle
+
+    download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
+
+    # old
+    appdata = get_path(FOLDERID.RoamingAppData, UserHandle.current)
+    data_dir = os.path.join(appdata, 'lbrynet')
+    lbryum_dir = os.path.join(appdata, 'lbryum')
+    if os.path.isdir(data_dir) or os.path.isdir(lbryum_dir):
+        return data_dir, lbryum_dir, download_dir
+
+    # new
+    data_dir = user_data_dir('lbrynet', 'lbry')
+    lbryum_dir = user_data_dir('lbryum', 'lbry')
+    download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
+    return data_dir, lbryum_dir, download_dir
+
+
+def get_darwin_directories() -> typing.Tuple[str, str, str]:
+    data_dir = user_data_dir('LBRY')
+    lbryum_dir = os.path.expanduser('~/.lbryum')
+    download_dir = os.path.expanduser('~/Downloads')
+    return data_dir, lbryum_dir, download_dir
+
+
+def get_linux_directories() -> typing.Tuple[str, str, str]:
+    download_dir = None
+    try:
+        with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
+            down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
+            down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
+            download_dir = re.sub('\"', '', down_dir)
+    except EnvironmentError:
+        download_dir = os.getenv('XDG_DOWNLOAD_DIR')
+
+    if not download_dir:
+        download_dir = os.path.expanduser('~/Downloads')
+
+    # old
+    data_dir = os.path.expanduser('~/.lbrynet')
+    lbryum_dir = os.path.expanduser('~/.lbryum')
+    if os.path.isdir(data_dir) or os.path.isdir(lbryum_dir):
+        return data_dir, lbryum_dir, download_dir
+
+    # new
+    return user_data_dir('lbry/lbrynet'), user_data_dir('lbry/lbryum'), download_dir
 
 
 def server_port(server_and_port):
@@ -244,18 +214,15 @@ ADJUSTABLE_SETTINGS = {
     # will not be made automatically)
     'auto_renew_claim_height_delta': (int, 0),
     'cache_time': (int, 150),
-    'data_dir': (str, default_data_dir),
     'data_rate': (float, .0001),  # points/megabyte
     'delete_blobs_on_remove': (bool, True),
     'dht_node_port': (int, 4444),
-    'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'download_mirrors': (list, ['blobs.lbry.io']),
     'is_generous_host': (bool, True),
     'announce_head_blobs_only': (bool, True),
     'concurrent_announcers': (int, DEFAULT_CONCURRENT_ANNOUNCERS),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_list, server_list_reverse),
-    'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),
     'seek_head_blob_first': (bool, True),
     # TODO: writing json on the cmd line is a pain, come up with a nicer
@@ -290,16 +257,36 @@ ADJUSTABLE_SETTINGS = {
 }
 
 
-class Config:
-    def __init__(self, fixed_defaults, adjustable_defaults, persisted_settings=None,
-                 environment=None, cli_settings=None):
+optional_str = typing.Optional[str]
 
+class Config:
+    def __init__(self, fixed_defaults, adjustable_defaults: typing.Dict, persisted_settings=None, environment=None,
+                 cli_settings=None, data_dir: optional_str = None, wallet_dir: optional_str = None,
+                 download_dir: optional_str = None, file_name: optional_str = None):
         self._installation_id = None
         self._session_id = base58.b58encode(utils.generate_id()).decode()
         self._node_id = None
 
         self._fixed_defaults = fixed_defaults
-        self._adjustable_defaults = adjustable_defaults
+
+        # copy the default adjustable settings
+        self._adjustable_defaults = {k: v for k, v in adjustable_defaults.items()}
+
+        default_data_dir, default_wallet_dir, default_download_dir = None, None, None
+        # set the os specific default directories
+        if platform is WINDOWS:
+            default_data_dir, default_wallet_dir, default_download_dir = get_windows_directories()
+        elif platform is DARWIN:
+            default_data_dir, default_wallet_dir, default_download_dir = get_darwin_directories()
+        elif platform is LINUX:
+            default_data_dir, default_wallet_dir, default_download_dir = get_linux_directories()
+        else:
+            assert None not in [data_dir, wallet_dir, download_dir]
+
+        self.data_dir = data_dir or default_data_dir
+        self.download_dir = download_dir or default_download_dir
+        self.wallet_dir = wallet_dir or default_wallet_dir
+        self.file_name = file_name or self.get_valid_settings_filename()
 
         self._data = {
             TYPE_DEFAULT: {},  # defaults
@@ -483,16 +470,15 @@ class Config:
             }
 
     def save_conf_file_settings(self):
-        path = conf_file or self.get_valid_settings_filename()
         # reverse the conversions done after loading the settings from the conf
         # file
         rev = self._convert_conf_file_lists_reverse(self._data[TYPE_PERSISTED])
-        ext = os.path.splitext(path)[1]
+        ext = os.path.splitext(self.file_name)[1]
         encoder = settings_encoders.get(ext, False)
         if not encoder:
             raise ValueError('Unknown settings format: {}. Available formats: {}'
                              .format(ext, list(settings_encoders.keys())))
-        with open(path, 'w') as settings_file:
+        with open(os.path.join(self.data_dir, self.file_name), 'w') as settings_file:
             settings_file.write(encoder(rev))
 
     @staticmethod
@@ -520,14 +506,13 @@ class Config:
         settings.node_id = settings.get_node_id()
 
     def load_conf_file_settings(self):
-        path = conf_file or self.get_valid_settings_filename()
-        self._read_conf_file(path)
+        self._read_conf_file(os.path.join(self.data_dir, self.file_name))
         # initialize members depending on config file
         self.initialize_post_conf_load()
 
     def _read_conf_file(self, path):
         if not path or not os.path.exists(path):
-            return
+            raise FileNotFoundError(path)
         ext = os.path.splitext(path)[1]
         decoder = settings_decoders.get(ext, False)
         if not decoder:
@@ -562,13 +547,15 @@ class Config:
         # although there is a risk of a race condition here we don't
         # expect there to be multiple processes accessing this
         # directory so the risk can be ignored
-        if not os.path.isdir(self['data_dir']):
-            os.makedirs(self['data_dir'])
-        return self['data_dir']
+        if not os.path.isdir(self.data_dir):
+            os.makedirs(self.data_dir)
+        if not os.path.isdir(os.path.join(self.data_dir, "blobfiles")):
+            os.makedirs(os.path.join(self.data_dir, "blobfiles"))
+        return self.data_dir
 
     def ensure_wallet_dir(self):
-        if not os.path.isdir(self['lbryum_wallet_dir']):
-            os.makedirs(self['lbryum_wallet_dir'])
+        if not os.path.isdir(self.wallet_dir):
+            os.makedirs(self.wallet_dir)
 
     def get_log_filename(self):
         """
@@ -624,7 +611,7 @@ class Config:
         return self._session_id
 
 
-settings = None  # type: Config
+settings: Config = None
 
 
 def get_default_env():
@@ -639,10 +626,15 @@ def get_default_env():
     return Env(**env_defaults)
 
 
-def initialize_settings(load_conf_file=True):
+def initialize_settings(load_conf_file: typing.Optional[bool] = True,
+                        data_dir: optional_str = None, wallet_dir: optional_str = None,
+                        download_dir: optional_str = None):
     global settings
     if settings is None:
         settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS,
-                          environment=get_default_env())
+                          environment=get_default_env(), data_dir=data_dir, wallet_dir=wallet_dir,
+                          download_dir=download_dir)
         if load_conf_file:
             settings.load_conf_file_settings()
+        settings.ensure_data_dir()
+        settings.ensure_wallet_dir()

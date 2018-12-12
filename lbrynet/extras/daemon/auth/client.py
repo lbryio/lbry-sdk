@@ -125,9 +125,6 @@ class AuthAPIClient:
 
 class LBRYAPIClient:
     @staticmethod
-    def get_client(conf_path=None):
-        conf.conf_file = conf_path
-        if not conf.settings:
-            conf.initialize_settings()
+    def get_client():
         return AuthAPIClient.get_client() if conf.settings['use_auth_http'] else \
             UnAuthAPIClient.from_url(conf.settings.get_api_connection_string())

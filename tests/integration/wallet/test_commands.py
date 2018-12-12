@@ -126,10 +126,10 @@ class CommandTestCase(IntegrationTestCase):
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
         lbry_conf.settings = None
-        lbry_conf.initialize_settings(load_conf_file=False)
-        lbry_conf.settings['data_dir'] = self.wallet_node.data_path
-        lbry_conf.settings['lbryum_wallet_dir'] = self.wallet_node.data_path
-        lbry_conf.settings['download_directory'] = self.wallet_node.data_path
+        lbry_conf.initialize_settings(
+            load_conf_file=False, data_dir=self.wallet_node.data_path, wallet_dir=self.wallet_node.data_path,
+            download_dir=self.wallet_node.data_path
+        )
         lbry_conf.settings['use_upnp'] = False
         lbry_conf.settings['reflect_uploads'] = False
         lbry_conf.settings['blockchain_name'] = 'lbrycrd_regtest'

@@ -1,4 +1,16 @@
 import sys
+import os
+import json
+import asyncio
+import argparse
+import typing
+
+# Set SSL_CERT_FILE env variable for Twisted SSL verification on Windows
+# This needs to happen before anything else
+if 'win' in sys.platform:
+    import certifi
+    os.environ['SSL_CERT_FILE'] = certifi.where()
+
 from twisted.internet import asyncioreactor
 if 'twisted.internet.reactor' not in sys.modules:
     asyncioreactor.install()
@@ -10,28 +22,93 @@ else:
         #    https://github.com/kivy/kivy/issues/4182
         del sys.modules['twisted.internet.reactor']
         asyncioreactor.install()
-        from twisted.internet import reactor
-
-import json
-import asyncio
+from twisted.internet import reactor
+import logging
 from aiohttp.client_exceptions import ClientConnectorError
 from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
-from lbrynet import __name__ as lbrynet_name
+from lbrynet import conf, log_support, __name__ as lbrynet_name
+from lbrynet.utils import check_connection, json_dumps_pretty
 from lbrynet.extras.daemon.Daemon import Daemon
-from lbrynet.extras.daemon.DaemonControl import start as daemon_main
 from lbrynet.extras.daemon.DaemonConsole import main as daemon_console
 from lbrynet.extras.daemon.auth.client import LBRYAPIClient
 from lbrynet.extras.system_info import get_platform
 
+log = logging.getLogger(lbrynet_name)
 
-async def execute_command(method, params, conf_path=None):
+optional_path_getter_type = typing.Optional[typing.Callable[[], str]]
+
+
+def start_daemon(settings: typing.Optional[typing.Dict] = None,
+                 console_output: typing.Optional[bool] = True, verbose: typing.Optional[typing.List[str]] = None,
+                 data_dir: typing.Optional[str] = None, wallet_dir: typing.Optional[str] = None,
+                 download_dir: typing.Optional[str] = None):
+
+    settings = settings or {}
+    conf.initialize_settings(data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
+    for k, v in settings.items():
+        conf.settings.update({k, v}, data_types=(conf.TYPE_CLI,))
+
+    log_support.configure_logging(conf.settings.get_log_filename(), console_output, verbose)
+    log_support.configure_loggly_handler()
+    log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
+    log.info("Starting lbrynet-daemon from command line")
+
+    if check_connection():
+        daemon = Daemon()
+        daemon.start_listening()
+        reactor.run()
+    else:
+        log.info("Not connected to internet, unable to start")
+
+
+def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] = None,
+                               wallet_dir: typing.Optional[str] = None, download_dir: typing.Optional[str] = None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--http-auth", dest="useauth", action="store_true", default=False
+    )
+    parser.add_argument(
+        '--quiet', dest='quiet', action="store_true",
+        help='Disable all console output.'
+    )
+    parser.add_argument(
+        '--verbose', nargs="*",
+        help=('Enable debug output. Optionally specify loggers for which debug output '
+              'should selectively be applied.')
+    )
+    parser.add_argument(
+        '--version', action="store_true",
+        help='Show daemon version and quit'
+    )
+
+    args = parser.parse_args(argv)
+    settings = {}
+    if args.useauth:
+        settings['use_auth_http'] = True
+
+    verbose = None
+    if args.verbose:
+        verbose = args.verbose
+
+    console_output = not args.quiet
+
+    if args.version:
+        print(json_dumps_pretty(get_platform()))
+        return
+
+    return start_daemon(settings, console_output, verbose, data_dir, wallet_dir, download_dir)
+
+
+async def execute_command(method, params, data_dir: typing.Optional[str] = None,
+                          wallet_dir: typing.Optional[str] = None, download_dir: typing.Optional[str] = None):
     # this check if the daemon is running or not
+    conf.initialize_settings(data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
     api = None
     try:
-        api = await LBRYAPIClient.get_client(conf_path)
+        api = await LBRYAPIClient.get_client()
         await api.status()
     except (ClientConnectorError, ConnectionError):
         if api:
@@ -119,14 +196,31 @@ def main(argv=None):
         print_help()
         return 1
 
-    conf_path = None
-    if len(argv) and argv[0] == "--conf":
+    data_dir = None
+    if len(argv) and argv[0] == "--data_dir":
         if len(argv) < 2:
-            print("No config file specified for --conf option")
+            print("No directory specified for --data_dir option")
             print_help()
             return 1
+        data_dir = argv[1]
+        argv = argv[2:]
 
-        conf_path = argv[1]
+    wallet_dir = None
+    if len(argv) and argv[0] == "--wallet_dir":
+        if len(argv) < 2:
+            print("No directory specified for --wallet_dir option")
+            print_help()
+            return 1
+        wallet_dir = argv[1]
+        argv = argv[2:]
+
+    download_dir = None
+    if len(argv) and argv[0] == "--download_dir":
+        if len(argv) < 2:
+            print("No directory specified for --data_dir option")
+            print_help()
+            return 1
+        download_dir = argv[1]
         argv = argv[2:]
 
     method, args = argv[0], argv[1:]
@@ -145,7 +239,7 @@ def main(argv=None):
         return 0
 
     elif method == 'start':
-        sys.exit(daemon_main(args, conf_path))
+        sys.exit(start_daemon_with_cli_args(args, data_dir, wallet_dir, download_dir))
 
     elif method == 'console':
         sys.exit(daemon_console())
@@ -167,7 +261,7 @@ def main(argv=None):
     parsed = docopt(fn.__doc__, args)
     params = set_kwargs(parsed)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(execute_command(method, params, conf_path))
+    loop.run_until_complete(execute_command(method, params, data_dir, wallet_dir, download_dir))
 
     return 0
 
