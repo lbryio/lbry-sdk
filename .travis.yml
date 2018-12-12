@@ -60,9 +60,6 @@ jobs:
         skip_cleanup: true
         overwrite: true
         draft: true
-        #on.tags: true
-        on:
-          branch: release_tool
       addons:
         artifacts:
           working_dir: dist
@@ -84,8 +81,6 @@ jobs:
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
-      before_deploy:
-        - export TRAVIS_TAG=test-release-build
       deploy:
         provider: releases
         api_key: $GITHUB_OAUTH_TOKEN
@@ -93,9 +88,6 @@ jobs:
         skip_cleanup: true
         overwrite: true
         draft: true
-        #on.tags: true
-        on:
-          branch: release_tool
       addons:
         artifacts:
           working_dir: dist
