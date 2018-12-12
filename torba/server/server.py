@@ -111,6 +111,7 @@ class Server:
     def stop(self):
         for task in reversed(self.cancellable_tasks):
             task.cancel()
+        self.shutdown_event.set()
 
     def run(self):
         loop = asyncio.get_event_loop()
@@ -118,6 +119,6 @@ class Server:
             loop.add_signal_handler(signal.SIGINT, self.stop)
             loop.add_signal_handler(signal.SIGTERM, self.stop)
             loop.run_until_complete(self.start())
-            loop.run_forever()
+            loop.run_until_complete(self.shutdown_event.wait())
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
