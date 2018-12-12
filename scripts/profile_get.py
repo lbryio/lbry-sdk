@@ -5,6 +5,7 @@ import asyncio
 from twisted.internet import asyncioreactor
 asyncioreactor.install()
 
+import argparse
 import keyring
 import logging
 import tempfile
@@ -104,7 +105,7 @@ async def get_sd_hash_from_uri(uri: typing.Text):
 
 
 @defer.inlineCallbacks
-def benchmark_performance(uris: list) -> dict:
+def benchmark_performance(uris: list, output_path: str) -> dict:
     results = dict()
     for uri in uris:
         sd_hash = yield f2d(get_sd_hash_from_uri(uri))
@@ -118,7 +119,7 @@ def benchmark_performance(uris: list) -> dict:
         else:
             results[uri] = "Could not download"
 
-        print(results[uri], uri, file=open({YOUR OUTPUT FILENAME HERE}, "a"))
+        print(results[uri], uri, file=open(output_path, "a"))
 
     return results
 
@@ -152,7 +153,7 @@ def get_frontpage_uris():
 
 
 @defer.inlineCallbacks
-def main():
+def main(output_path):
     global component_manager
     yield component_manager.setup()
     yield component_manager.get_component('dht')._join_deferred
@@ -184,14 +185,23 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--wallet_path", help="Enter None to use a temporary directory")
+    parser.add_argument("--output_path")
+    args = parser.parse_args()
+    wallet_path = args.wallet_path
+    output_path = args.output_path
+
+    tempfile.tempdir = tempfile.mkdtemp()
+    if wallet_path == "None":
+        wallet_path = tempfile.tempdir
+
     log_support.configure_console(level='INFO')
     log_support.configure_twisted()
 
-    tempfile.tempdir = tempfile.mkdtemp()
-
     conf.initialize_settings()
     conf.settings.set('download_directory', tempfile.tempdir)
-    conf.settings.set('lbryum_wallet_dir', {YOUR WALLET DIRECTORY HERE})
+    conf.settings.set('lbryum_wallet_dir', wallet_path)
     conf.settings.set('data_dir', tempfile.tempdir)
     conf.settings.set('use_upnp', False)
 
@@ -203,5 +213,5 @@ if __name__ == "__main__":
         database=TempDatabaseComponent
     )
 
-    main()
+    main(output_path)
     reactor.run()
