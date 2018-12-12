@@ -58,7 +58,7 @@ class Version:
         self.major = int(major)
         self.minor = int(minor)
         self.micro = int(micro)
-        self.rc = rc
+        self.rc = rc if rc is None else int(rc)
 
     @classmethod
     def from_string(cls, version_string):
