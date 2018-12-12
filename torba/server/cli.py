@@ -24,6 +24,7 @@ def main():
     parser = get_argument_parser()
     args = parser.parse_args()
     coin_class = get_coin_class(args.spvserver)
+    logging.basicConfig(level=logging.INFO)
     logging.info('torba.server starting')
     try:
         server = Server(Env(coin_class))
