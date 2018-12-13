@@ -32,8 +32,7 @@ from textwrap import dedent
 from lbrynet import conf, log_support, __name__ as lbrynet_name
 from lbrynet.utils import check_connection, json_dumps_pretty
 from lbrynet.extras.daemon.Daemon import Daemon
-from lbrynet.extras.daemon.DaemonConsole import main as daemon_console
-from lbrynet.extras.daemon.auth.client import LBRYAPIClient
+from lbrynet.extras.daemon.DaemonConsole import main as daemon_console, LBRYAPIClient
 from lbrynet.extras.system_info import get_platform
 
 log = logging.getLogger(lbrynet_name)
