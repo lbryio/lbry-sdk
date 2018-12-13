@@ -57,7 +57,7 @@ def start_daemon(settings: typing.Optional[typing.Dict] = None,
 
     if check_connection():
         daemon = Daemon()
-        daemon.start_listening()
+        asyncio.get_event_loop().run_until_complete(daemon.start_listening())
         reactor.run()
     else:
         log.info("Not connected to internet, unable to start")
