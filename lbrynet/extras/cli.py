@@ -135,16 +135,26 @@ def print_help():
        lbrynet - LBRY command line client.
     
     USAGE
-       lbrynet [--conf <config file>] <command> [<args>]
-    
+       lbrynet [--data_dir=<blob and database directory>] [--wallet_dir=<wallet directory>]
+               [--download_dir=<downloads directory>] <command> [<args>]
+
     EXAMPLES
-        lbrynet start                  # starts the daemon. The daemon needs to be running for commands to work
-        lbrynet help                   # display this message
-        lbrynet help <command_name>    # get help for a command(doesn't need the daemon to be running)
-        lbrynet commands               # list available commands
-        lbrynet status                 # get the running status of the daemon
-        lbrynet --conf ~/l1.conf       # use ~/l1.conf as config file
-        lbrynet resolve what           # resolve a name
+        lbrynet start                                # starts the daemon and listens for jsonrpc commands
+        lbrynet help                                 # display this message
+        lbrynet help <command_name>                  # get help for a command(doesn't need the daemon to be running)
+        lbrynet commands                             # list available commands
+        lbrynet status                               # get the running status of the daemon
+        lbrynet resolve what                         # resolve a name
+
+        lbrynet --wallet_dir=~/wallet2 start         # start the daemon using an alternative wallet directory
+        lbrynet --data_dir=~/lbry start              # start the daemon using an alternative data directory
+
+        lbrynet --data_dir=~/lbry <command_name>     # run a command on a daemon using an alternative data directory,
+                                                     # which can contain a full daemon_settings.yml config file.
+                                                     # Note: since the daemon is what runs the wallet and
+                                                     # downloads files, only the --data_dir setting is needed when
+                                                     # running commands. The wallet_dir and download_dir would only
+                                                     # by used when starting the daemon.
     """))
 
 
@@ -196,32 +206,36 @@ def main(argv=None):
         print_help()
         return 1
 
-    data_dir = None
-    if len(argv) and argv[0] == "--data_dir":
-        if len(argv) < 2:
-            print("No directory specified for --data_dir option")
-            print_help()
-            return 1
-        data_dir = argv[1]
-        argv = argv[2:]
+    dir_args = {}
+    if len(argv) > 2:
+        dir_arg_keys = [
+            'data_dir',
+            'wallet_dir',
+            'download_directory'
+        ]
 
-    wallet_dir = None
-    if len(argv) and argv[0] == "--wallet_dir":
-        if len(argv) < 2:
-            print("No directory specified for --wallet_dir option")
-            print_help()
-            return 1
-        wallet_dir = argv[1]
-        argv = argv[2:]
+        for arg in argv:
+            found_dir_arg = False
+            for key in dir_arg_keys:
+                if arg.startswith(f'--{key}='):
+                    if key in dir_args:
+                        print(f"Multiple values provided for '{key}' argument")
+                        print_help()
+                        return 1
+                    dir_args[key] = os.path.expanduser(os.path.expandvars(arg.lstrip(f'--{key}=')))
+                    found_dir_arg = True
+            if not found_dir_arg:
+                break
+        argv = argv[len(dir_args):]
 
-    download_dir = None
-    if len(argv) and argv[0] == "--download_dir":
-        if len(argv) < 2:
-            print("No directory specified for --data_dir option")
-            print_help()
+    data_dir = dir_args.get('data_dir')
+    wallet_dir = dir_args.get('wallet_dir')
+    download_dir = dir_args.get('download_directory')
+
+    for k, v in dir_args.items():
+        if not os.path.isdir(v):
+            print(f"'{data_dir}' is not a directory, cannot use it for {k}")
             return 1
-        download_dir = argv[1]
-        argv = argv[2:]
 
     method, args = argv[0], argv[1:]
 
