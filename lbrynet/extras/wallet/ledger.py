@@ -65,8 +65,9 @@ class MainNetLedger(BaseLedger):
             except Exception as e:
                 return {'error': str(e)}
         try:
+            resolver = self.resolver
             resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
-            return await self.resolver._handle_resolutions(resolutions, uris, page, page_size)
+            return await resolver._handle_resolutions(resolutions, uris, page, page_size)
         except Exception as e:
             return {'error': str(e)}
 
