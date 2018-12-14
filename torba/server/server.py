@@ -108,9 +108,10 @@ class Server:
         await _start_cancellable(self.mempool.keep_synchronized)
         await _start_cancellable(self.session_mgr.serve, self.notifications)
 
-    def stop(self):
+    async def stop(self):
         for task in reversed(self.cancellable_tasks):
             task.cancel()
+        await asyncio.wait(self.cancellable_tasks)
         self.shutdown_event.set()
 
     def run(self):

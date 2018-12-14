@@ -96,36 +96,35 @@ class AsyncioTestCase(unittest.TestCase):
                                           "__unittest_expecting_failure__", False)
         expecting_failure = expecting_failure_class or expecting_failure_method
         outcome = _Outcome(result)
+        loop = asyncio.new_event_loop()
         try:
             self._outcome = outcome
 
-            loop = asyncio.new_event_loop()
-            try:
-                asyncio.set_event_loop(loop)
-                loop.set_debug(True)
+            asyncio.set_event_loop(loop)
+            loop.set_debug(True)
 
+            with outcome.testPartExecutor(self):
+                self.setUp()
+                loop.run_until_complete(self.asyncSetUp())
+            if outcome.success:
+                outcome.expecting_failure = expecting_failure
+                with outcome.testPartExecutor(self, isTest=True):
+                    maybe_coroutine = testMethod()
+                    if asyncio.iscoroutine(maybe_coroutine):
+                        loop.run_until_complete(maybe_coroutine)
+                outcome.expecting_failure = False
                 with outcome.testPartExecutor(self):
-                    self.setUp()
-                    loop.run_until_complete(self.asyncSetUp())
-                if outcome.success:
-                    outcome.expecting_failure = expecting_failure
-                    with outcome.testPartExecutor(self, isTest=True):
-                        possible_coroutine = testMethod()
-                        if asyncio.iscoroutine(possible_coroutine):
-                            loop.run_until_complete(possible_coroutine)
-                    outcome.expecting_failure = False
-                    with outcome.testPartExecutor(self):
-                        loop.run_until_complete(self.asyncTearDown())
-                        self.tearDown()
-            finally:
-                try:
-                    _cancel_all_tasks(loop)
-                    loop.run_until_complete(loop.shutdown_asyncgens())
-                finally:
-                    asyncio.set_event_loop(None)
-                    loop.close()
+                    loop.run_until_complete(self.asyncTearDown())
+                    self.tearDown()
 
-            self.doCleanups()
+            self.doAsyncCleanups(loop)
+
+            try:
+                _cancel_all_tasks(loop)
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
 
             for test, reason in outcome.skipped:
                 self._addSkip(result, test, reason)
@@ -155,6 +154,15 @@ class AsyncioTestCase(unittest.TestCase):
             # clear the outcome, no more needed
             self._outcome = None
 
+    def doAsyncCleanups(self, loop):
+        outcome = self._outcome or _Outcome()
+        while self._cleanups:
+            function, args, kwargs = self._cleanups.pop()
+            with outcome.testPartExecutor(self):
+                maybe_coroutine = function(*args, **kwargs)
+                if asyncio.iscoroutine(maybe_coroutine):
+                    loop.run_until_complete(maybe_coroutine)
+
 
 class IntegrationTestCase(AsyncioTestCase):
 
@@ -176,16 +184,18 @@ class IntegrationTestCase(AsyncioTestCase):
         self.conductor = Conductor(
             ledger_module=self.LEDGER, manager_module=self.MANAGER, verbosity=self.VERBOSITY
         )
-        await self.conductor.start()
+        await self.conductor.start_blockchain()
+        self.addCleanup(self.conductor.stop_blockchain)
+        await self.conductor.start_spv()
+        self.addCleanup(self.conductor.stop_spv)
+        await self.conductor.start_wallet()
+        self.addCleanup(self.conductor.stop_wallet)
         self.blockchain = self.conductor.blockchain_node
         self.wallet_node = self.conductor.wallet_node
         self.manager = self.wallet_node.manager
         self.ledger = self.wallet_node.ledger
         self.wallet = self.wallet_node.wallet
         self.account = self.wallet_node.wallet.default_account
-
-    async def asyncTearDown(self):
-        await self.conductor.stop()
 
     async def assertBalance(self, account, expected_balance: str):  # pylint: disable=C0103
         balance = await account.get_balance()

@@ -657,6 +657,7 @@ class BlockProcessor:
             # Shut down block processing
             self.logger.info('flushing to DB for a clean shutdown...')
             await self.flush(True)
+            self.db.close()
 
     def force_chain_reorg(self, count):
         '''Force a reorg of the given number of blocks.

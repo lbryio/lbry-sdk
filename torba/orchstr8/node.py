@@ -19,6 +19,9 @@ from torba.client.basemanager import BaseWalletManager
 from torba.client.baseaccount import BaseAccount
 
 
+log = logging.getLogger(__name__)
+
+
 def get_manager_from_environment(default_manager=BaseWalletManager):
     if 'TORBA_MANAGER' not in os.environ:
         return default_manager
@@ -73,40 +76,55 @@ class Conductor:
         self.spv_started = False
         self.wallet_started = False
 
+        self.log = log.getChild('conductor')
+
     async def start_blockchain(self):
-        await self.blockchain_node.start()
-        await self.blockchain_node.generate(200)
-        self.blockchain_started = True
+        if not self.blockchain_started:
+            await self.blockchain_node.start()
+            await self.blockchain_node.generate(200)
+            self.blockchain_started = True
+
+    async def stop_blockchain(self):
+        if self.blockchain_started:
+            await self.blockchain_node.stop(cleanup=True)
+            self.blockchain_started = False
 
     async def start_spv(self):
-        await self.spv_node.start()
-        self.spv_started = True
+        if not self.spv_started:
+            await self.spv_node.start()
+            self.spv_started = True
+
+    async def stop_spv(self):
+        if self.spv_started:
+            await self.spv_node.stop(cleanup=True)
+            self.spv_started = False
 
     async def start_wallet(self):
-        await self.wallet_node.start()
-        self.wallet_started = True
+        if not self.wallet_started:
+            await self.wallet_node.start()
+            self.wallet_started = True
+
+    async def stop_wallet(self):
+        if self.wallet_started:
+            await self.wallet_node.stop(cleanup=True)
+            self.wallet_started = False
 
     async def start(self):
-        self.blockchain_started or await self.start_blockchain()
-        self.spv_started or await self.start_spv()
-        self.wallet_started or await self.start_wallet()
+        await self.start_blockchain()
+        await self.start_spv()
+        await self.start_wallet()
 
     async def stop(self):
-        if self.wallet_started:
+        all_the_stops = [
+            self.wallet_node.stop,
+            self.spv_node.stop,
+            self.blockchain_node.stop
+        ]
+        for stop in all_the_stops:
             try:
-                await self.wallet_node.stop(cleanup=True)
+                await stop()
             except Exception as e:
-                print(e)
-        if self.spv_started:
-            try:
-                await self.spv_node.stop(cleanup=True)
-            except Exception as e:
-                print(e)
-        if self.blockchain_started:
-            try:
-                await self.blockchain_node.stop(cleanup=True)
-            except Exception as e:
-                print(e)
+                log.exception('Exception raised while stopping services:', exc_info=e)
 
 
 class WalletNode:
@@ -182,7 +200,7 @@ class SPVNode:
 
     async def stop(self, cleanup=True):
         try:
-            self.server.db.shutdown()
+            self.server.stop()
         finally:
             cleanup and self.cleanup()
 
@@ -198,10 +216,10 @@ class BlockchainProcess(asyncio.SubprocessProtocol):
         b'keypool return',
     ]
 
-    def __init__(self, log):
+    def __init__(self):
         self.ready = asyncio.Event()
         self.stopped = asyncio.Event()
-        self.log = log
+        self.log = log.getChild('blockchain')
 
     def pipe_data_received(self, fd, data):
         if self.log and not any(ignore in data for ignore in self.IGNORE_OUTPUT):
@@ -227,7 +245,7 @@ class BlockchainNode:
         self.bin_dir = os.path.join(self.project_dir, 'bin')
         self.daemon_bin = os.path.join(self.bin_dir, daemon)
         self.cli_bin = os.path.join(self.bin_dir, cli)
-        self.log = logging.getLogger('blockchain')
+        self.log = log.getChild('blockchain')
         self.data_path = None
         self.protocol = None
         self.transport = None
@@ -289,7 +307,7 @@ class BlockchainNode:
         )
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
-            lambda: BlockchainProcess(self.log), *command
+            lambda: BlockchainProcess(), *command
         )
         await self.protocol.ready.wait()
 

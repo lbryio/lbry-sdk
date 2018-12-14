@@ -134,7 +134,7 @@ class DB:
         # Read TX counts (requires meta directory)
         await self._read_tx_counts()
 
-    def shutdown(self):
+    def close(self):
         self.utxo_db.close()
         self.history.close_db()
 
