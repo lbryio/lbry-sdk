@@ -25,7 +25,7 @@ jobs:
         - pip install -e .[test]
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -v tests.unit.wallet
-        - HOME=/tmp coverage run -p --source=lbrynet -m twisted.trial --reactor=asyncio tests.unit.analytics tests.unit.components tests.unit.core tests.unit.cryptstream tests.unit.database tests.unit.dht tests.unit.lbryfilemanager tests.unit.lbrynet_daemon tests.unit.test_cli tests.unit.test_customLogger
+        - HOME=/tmp coverage run -p --source=lbrynet -m twisted.trial --reactor=asyncio tests.unit.analytics tests.unit.components tests.unit.core tests.unit.cryptstream tests.unit.database tests.unit.dht tests.unit.lbryfilemanager tests.unit.lbrynet_daemon tests.unit.test_cli tests.unit.test_customLogger tests.unit.schema
       after_success:
         - coverage combine
         - bash <(curl -s https://codecov.io/bash)
