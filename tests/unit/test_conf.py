@@ -112,11 +112,6 @@ class SettingsTest(unittest.TestCase):
     def test_load_file(self):
         settings = self.get_mock_config_instance()
 
-        # nonexistent file
-        settings.file_name = 'monkey.yml'
-        with self.assertRaises(FileNotFoundError):
-            settings.load_conf_file_settings()
-
         # invalid extensions
         for filename in ('monkey.yymmll', 'monkey'):
             settings.file_name = filename

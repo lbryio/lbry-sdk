@@ -9,7 +9,7 @@ import base58
 import yaml
 from appdirs import user_data_dir, user_config_dir
 from lbrynet import utils
-from lbrynet.p2p.Error import InvalidCurrencyError, NoSuchDirectoryError
+from lbrynet.p2p.Error import InvalidCurrencyError
 
 log = logging.getLogger(__name__)
 
@@ -196,6 +196,11 @@ FIXED_SETTINGS = {
 }
 
 ADJUSTABLE_SETTINGS = {
+    'data_dir': (str, ''),    # these blank defaults will be updated to OS specific defaults
+    'wallet_dir': (str, ''),
+    'lbryum_wallet_dir': (str, ''),  # to be deprecated
+    'download_directory': (str, ''),
+
     # By default, daemon will block all cross origin requests
     # but if this is set, this value will be used for the
     # Access-Control-Allow-Origin. For example
@@ -259,6 +264,7 @@ ADJUSTABLE_SETTINGS = {
 
 optional_str = typing.Optional[str]
 
+
 class Config:
     def __init__(self, fixed_defaults, adjustable_defaults: typing.Dict, persisted_settings=None, environment=None,
                  cli_settings=None, data_dir: optional_str = None, wallet_dir: optional_str = None,
@@ -272,21 +278,18 @@ class Config:
         # copy the default adjustable settings
         self._adjustable_defaults = {k: v for k, v in adjustable_defaults.items()}
 
-        default_data_dir, default_wallet_dir, default_download_dir = None, None, None
         # set the os specific default directories
         if platform is WINDOWS:
-            default_data_dir, default_wallet_dir, default_download_dir = get_windows_directories()
+            self.default_data_dir, self.default_wallet_dir, self.default_download_dir = get_windows_directories()
         elif platform is DARWIN:
-            default_data_dir, default_wallet_dir, default_download_dir = get_darwin_directories()
+            self.default_data_dir, self.default_wallet_dir, self.default_download_dir = get_darwin_directories()
         elif platform is LINUX:
-            default_data_dir, default_wallet_dir, default_download_dir = get_linux_directories()
+            self.default_data_dir, self.default_wallet_dir, self.default_download_dir = get_linux_directories()
         else:
             assert None not in [data_dir, wallet_dir, download_dir]
-
-        self.data_dir = data_dir or default_data_dir
-        self.download_dir = download_dir or default_download_dir
-        self.wallet_dir = wallet_dir or default_wallet_dir
-        self.file_name = file_name or self.get_valid_settings_filename()
+            self.default_data_dir = data_dir
+            self.default_wallet_dir = wallet_dir
+            self.default_download_dir = download_dir
 
         self._data = {
             TYPE_DEFAULT: {},  # defaults
@@ -323,6 +326,31 @@ class Config:
             cli_settings = {}
         self._validate_settings(cli_settings)
         self._data[TYPE_CLI].update(cli_settings)
+        self.file_name = file_name or 'daemon_settings.yml'
+
+    @property
+    def data_dir(self) -> optional_str:
+        data_dir = self.get('data_dir')
+        if not data_dir:
+            return
+        return os.path.expanduser(os.path.expandvars(data_dir))
+
+    @property
+    def download_dir(self) -> optional_str:
+        download_dir = self.get('download_directory')
+        if not download_dir:
+            return
+        return os.path.expanduser(os.path.expandvars(download_dir))
+
+    @property
+    def wallet_dir(self) -> optional_str:
+        if self.get('lbryum_wallet_dir') and not self.get('wallet_dir'):
+            log.warning("'lbryum_wallet_dir' setting will be deprecated, please update to 'wallet_dir'")
+            self['wallet_dir'] = self['lbryum_wallet_dir']
+        wallet_dir = self.get('wallet_dir')
+        if not wallet_dir:
+            return
+        return os.path.expanduser(os.path.expandvars(wallet_dir))
 
     def __repr__(self):
         return self.get_current_settings_dict().__repr__()
@@ -382,7 +410,7 @@ class Config:
         elif name == "download_directory":
             directory = str(value)
             if not os.path.exists(directory):
-                raise NoSuchDirectoryError(directory)
+                log.warning("download directory '%s' does not exist", directory)
 
     def is_default(self, name):
         """Check if a config value is wasn't specified by the user
@@ -506,7 +534,12 @@ class Config:
         settings.node_id = settings.get_node_id()
 
     def load_conf_file_settings(self):
-        self._read_conf_file(os.path.join(self.data_dir, self.file_name))
+        path = os.path.join(self.data_dir or self.default_data_dir, self.file_name)
+        if os.path.isfile(path):
+            self._read_conf_file(path)
+        self['data_dir'] = self.data_dir or self.default_data_dir
+        self['download_directory'] = self.download_dir or self.default_download_dir
+        self['wallet_dir'] = self.wallet_dir or self.default_wallet_dir
         # initialize members depending on config file
         self.initialize_post_conf_load()
 
@@ -576,13 +609,6 @@ class Config:
     def get_db_revision_filename(self):
         return os.path.join(self.ensure_data_dir(), self['DB_REVISION_FILE_NAME'])
 
-    def get_valid_settings_filename(self):
-        data_dir = self.ensure_data_dir()
-        json_path = os.path.join(data_dir, 'daemon_settings.json')
-        if os.path.isfile(json_path):
-            return json_path
-        return os.path.join(data_dir, 'daemon_settings.yml')
-
     def get_installation_id(self):
         install_id_filename = os.path.join(self.ensure_data_dir(), "install_id")
         if not self._installation_id:
@@ -636,5 +662,8 @@ def initialize_settings(load_conf_file: typing.Optional[bool] = True,
                           download_dir=download_dir)
         if load_conf_file:
             settings.load_conf_file_settings()
+        settings['data_dir'] = settings.data_dir or settings.default_data_dir
+        settings['download_directory'] = settings.download_dir or settings.default_download_dir
+        settings['wallet_dir'] = settings.wallet_dir or settings.default_wallet_dir
         settings.ensure_data_dir()
         settings.ensure_wallet_dir()

@@ -502,6 +502,12 @@ def mock_conf_settings(obj, settings={}):
     conf.initialize_settings(False)
     original_settings = conf.settings
     conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS)
+    conf.settings['data_dir'] = settings.get('data_dir') or conf.settings.data_dir \
+                                or conf.settings.default_data_dir
+    conf.settings['download_directory'] = settings.get('download_directory') or conf.settings.download_dir \
+                                    or conf.settings.default_download_dir
+    conf.settings['wallet_dir'] = settings.get('wallet_dir') or conf.settings.wallet_dir or \
+                                  conf.settings.default_wallet_dir
     conf.settings.installation_id = conf.settings.get_installation_id()
     conf.settings.node_id = conf.settings.get_node_id()
     conf.settings.update(settings)
