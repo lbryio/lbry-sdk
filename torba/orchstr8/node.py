@@ -307,7 +307,7 @@ class BlockchainNode:
         )
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
-            lambda: BlockchainProcess(), *command
+            BlockchainProcess, *command
         )
         await self.protocol.ready.wait()
 

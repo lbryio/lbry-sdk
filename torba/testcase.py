@@ -66,9 +66,6 @@ class AsyncioTestCase(unittest.TestCase):
     async def asyncTearDown(self):  # pylint: disable=C0103
         pass
 
-    async def doAsyncCleanups(self):  # pylint: disable=C0103
-        pass
-
     def run(self, result=None):  # pylint: disable=R0915
         orig_result = result
         if result is None:
@@ -154,7 +151,7 @@ class AsyncioTestCase(unittest.TestCase):
             # clear the outcome, no more needed
             self._outcome = None
 
-    def doAsyncCleanups(self, loop):
+    def doAsyncCleanups(self, loop):  # pylint: disable=C0103
         outcome = self._outcome or _Outcome()
         while self._cleanups:
             function, args, kwargs = self._cleanups.pop()
