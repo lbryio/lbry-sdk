@@ -329,6 +329,65 @@ class TestSECP256k1Signatures(UnitTest):
                           claim_address_1, cert)
 
 
+class TestDetachedNamedSECP256k1Signatures(UnitTest):
+    def test_validate_detached_named_ecdsa_signature(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        self.assertDictEqual(cert.claim_dict, secp256k1_cert)
+        signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2,
+                                                       claim_id_1, curve=SECP256k1, name='example')
+        #self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
+        signed_copy = ClaimDict.deserialize(signed.serialized)
+        self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
+
+    def test_fail_to_sign_with_no_claim_address(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        self.assertDictEqual(cert.claim_dict, secp256k1_cert)
+        self.assertRaises(Exception, ClaimDict.load_dict(example_010).sign, secp256k1_private_key,
+                          None, claim_id_1, curve=SECP256k1, name='example')
+
+    def test_fail_to_validate_with_no_claim_address(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        self.assertDictEqual(cert.claim_dict, secp256k1_cert)
+        signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2,
+                                                       claim_id_1, curve=SECP256k1, name='example')
+        #self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
+        signed_copy = ClaimDict.load_protobuf(signed.protobuf)
+        self.assertRaises(Exception, signed_copy.validate_signature, None, cert, name='example')
+
+    def test_fail_to_validate_with_no_name(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        self.assertDictEqual(cert.claim_dict, secp256k1_cert)
+        signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2,
+                                                       claim_id_1, curve=SECP256k1, name='example')
+        #self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
+        signed_copy = ClaimDict.load_protobuf(signed.protobuf)
+        self.assertRaises(Exception, signed_copy.validate_signature, None, cert, name=None)
+
+    def test_remove_signature_equals_unsigned(self):
+        unsigned = ClaimDict.load_dict(example_010)
+        signed = unsigned.sign(secp256k1_private_key, claim_address_1, claim_id_1, curve=SECP256k1, name='example')
+        self.assertEqual(unsigned.serialized, signed.serialized_no_signature)
+
+    def test_fail_to_validate_fake_ecdsa_signature(self):
+        signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_1,
+                                                       claim_id_1, curve=SECP256k1, name='example')
+        signed_copy = ClaimDict.deserialize(signed.serialized)
+        fake_key = get_signer(SECP256k1).generate().private_key.to_pem()
+        fake_cert = ClaimDict.generate_certificate(fake_key, curve=SECP256k1)
+        self.assertRaises(ecdsa.keys.BadSignatureError, signed_copy.validate_signature,
+                          claim_address_2, fake_cert, 'example')
+
+    def test_fail_to_validate_ecdsa_sig_for_altered_claim(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        altered = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_1,
+                                                        claim_id_1, curve=SECP256k1, name='example')
+        sd_hash = altered['stream']['source']['source']
+        altered['stream']['source']['source'] = sd_hash[::-1]
+        altered_copy = ClaimDict.deserialize(altered.serialized)
+        self.assertRaises(ecdsa.keys.BadSignatureError, altered_copy.validate_signature,
+                          claim_address_1, cert, 'example')
+
+
 class TestMetadata(UnitTest):
     def test_fail_with_fake_sd_hash(self):
         claim = deepcopy(example_010)
