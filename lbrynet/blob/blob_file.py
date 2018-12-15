@@ -1,6 +1,6 @@
 import os
 import logging
-from twisted.internet import defer, threads
+from twisted.internet import defer
 from twisted.web.client import FileBodyProducer
 from twisted.python.failure import Failure
 from lbrynet.cryptoutils import get_lbry_hash_obj
@@ -112,19 +112,19 @@ class BlobFile:
             self._verified = False
             self.saved_verified_blob = False
 
-            def delete_from_file_system():
-                if os.path.isfile(self.file_path):
-                    os.remove(self.file_path)
+            #def delete_from_file_system():
+            if os.path.isfile(self.file_path):
+                os.remove(self.file_path)
 
-            d = threads.deferToThread(delete_from_file_system)
+            #d = threads.deferToThread(delete_from_file_system)
 
             def log_error(err):
                 log.warning("An error occurred deleting %s: %s",
                             str(self.file_path), err.getErrorMessage())
                 return err
 
-            d.addErrback(log_error)
-            return d
+            #d.addErrback(log_error)
+            return #d
         else:
             return defer.fail(Failure(
                 ValueError("File is currently being read or written and cannot be deleted")))

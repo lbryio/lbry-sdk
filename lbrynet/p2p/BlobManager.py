@@ -3,6 +3,7 @@ import os
 from binascii import unhexlify
 from sqlite3 import IntegrityError
 from twisted.internet import threads, defer
+from lbrynet.extras.compat import f2d
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.blob.creator import BlobFileCreator
 
@@ -26,15 +27,13 @@ class DiskBlobManager:
         self.blobs = {}
         self.blob_hashes_to_delete = {}  # {blob_hash: being_deleted (True/False)}
 
-    @defer.inlineCallbacks
-    def setup(self):
+    async def setup(self):
         if self._node_datastore is not None:
-            raw_blob_hashes = yield self.storage.get_all_finished_blobs()
+            raw_blob_hashes = await self.storage.get_all_finished_blobs()
             self._node_datastore.completed_blobs.update(raw_blob_hashes)
-        defer.returnValue(True)
 
-    def stop(self):
-        return defer.succeed(True)
+    async def stop(self):
+        pass
 
     def get_blob(self, blob_hash, length=None):
         """Return a blob identified by blob_hash, which may be a new blob or a
@@ -112,7 +111,7 @@ class DiskBlobManager:
             except Exception as e:
                 log.warning("Failed to delete blob file. Reason: %s", e)
         try:
-            yield self.storage.delete_blobs_from_db(bh_to_delete_from_db)
+            yield f2d(self.storage.delete_blobs_from_db(bh_to_delete_from_db))
         except IntegrityError as err:
             if str(err) != "FOREIGN KEY constraint failed":
                 raise err

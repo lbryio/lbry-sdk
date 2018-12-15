@@ -4,6 +4,7 @@ import traceback
 from binascii import hexlify, unhexlify
 from twisted.internet import defer, threads
 
+from lbrynet.extras.compat import f2d
 from lbrynet.p2p.StreamDescriptor import save_sd_info
 from lbrynet.blob.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
@@ -28,16 +29,15 @@ class EncryptedFileDownloader(CryptStreamDownloader):
 
     @defer.inlineCallbacks
     def delete_data(self):
-        crypt_infos = yield self.storage.get_blobs_for_stream(self.stream_hash)
+        crypt_infos = yield f2d(self.storage.get_blobs_for_stream(self.stream_hash))
         blob_hashes = [b.blob_hash for b in crypt_infos if b.blob_hash]
-        sd_hash = yield self.storage.get_sd_blob_hash_for_stream(self.stream_hash)
+        sd_hash = yield f2d(self.storage.get_sd_blob_hash_for_stream(self.stream_hash))
         blob_hashes.append(sd_hash)
         yield self.blob_manager.delete_blobs(blob_hashes)
 
     def stop(self, err=None):
-        d = self._close_output()
-        d.addCallback(lambda _: CryptStreamDownloader.stop(self, err=err))
-        return d
+        self._close_output()
+        return CryptStreamDownloader.stop(self, err=err)
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading,
@@ -174,14 +174,14 @@ class EncryptedFileSaver(EncryptedFileDownloader):
     def _close_output(self):
         self.file_handle, file_handle = None, self.file_handle
 
-        def close_file():
-            if file_handle is not None:
-                name = file_handle.name
-                file_handle.close()
-                if self.completed is False:
-                    os.remove(name)
+        #def close_file():
+        if file_handle is not None:
+            name = file_handle.name
+            file_handle.close()
+            if self.completed is False:
+                os.remove(name)
 
-        return threads.deferToThread(close_file)
+        #return threads.deferToThread(close_file)
 
     def _get_write_func(self):
         def write_func(data):
