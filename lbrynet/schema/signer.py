@@ -5,6 +5,7 @@ from lbrynet.schema.address import decode_address
 from lbrynet.schema.encoding import decode_b64_fields
 from lbrynet.schema.schema.certificate import Certificate
 from lbrynet.schema.schema.claim import Claim
+from lbrynet.schema.signature import Signature
 from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.schema import V_0_0_1, CLAIM_TYPE, CLAIM_TYPES, CERTIFICATE_TYPE, VERSION
 from lbrynet.schema.schema import NIST256p, NIST384p, SECP256k1, SHA256, SHA384
@@ -72,6 +73,24 @@ class NIST_ECDSASigner(object):
         }
 
         return Claim.load(msg)
+
+    def detached_sign_stream_claim(self, claim, claim_address, cert_claim_id, name: str):
+        assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
+        validate_claim_id(cert_claim_id)
+        if not isinstance(self.private_key, ecdsa.SigningKey):
+            raise Exception("Not given a signing key")
+        decoded_addr = decode_address(claim_address)
+        name = name.lower().encode()
+        raw_cert_id = binascii.unhexlify(cert_claim_id)
+
+        to_sign = bytearray()
+        to_sign.extend(name)
+        to_sign.extend(decoded_addr)
+        to_sign.extend(claim.serialized_no_signature)
+        to_sign.extend(raw_cert_id)
+
+        digest = self.HASHFUNC(to_sign).digest()
+        return Signature(self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC), raw_cert_id)
 
 
 class NIST256pSigner(NIST_ECDSASigner):
