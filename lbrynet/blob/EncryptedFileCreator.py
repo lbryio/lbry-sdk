@@ -9,6 +9,7 @@ from binascii import hexlify
 from twisted.internet import defer
 from twisted.protocols.basic import FileSender
 
+from lbrynet.extras.compat import f2d
 from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorWriter, EncryptedFileStreamType
 from lbrynet.p2p.StreamDescriptor import format_sd_info, get_stream_hash, validate_descriptor
 from lbrynet.blob.CryptStreamCreator import CryptStreamCreator
@@ -119,13 +120,13 @@ def create_lbry_file(blob_manager, storage, payment_rate_manager, lbry_file_mana
     sd_hash = yield descriptor_writer.create_descriptor(sd_info)
 
     log.debug("saving the stream")
-    yield storage.store_stream(
+    yield f2d(storage.store_stream(
         sd_info['stream_hash'], sd_hash, sd_info['stream_name'], sd_info['key'],
         sd_info['suggested_file_name'], sd_info['blobs']
-    )
+    ))
     log.debug("adding to the file manager")
-    lbry_file = yield lbry_file_manager.add_published_file(
+    lbry_file = yield f2d(lbry_file_manager.add_published_file(
         sd_info['stream_hash'], sd_hash, hexlify(file_directory.encode()), payment_rate_manager,
         payment_rate_manager.min_blob_data_payment_rate
-    )
+    ))
     defer.returnValue(lbry_file)
