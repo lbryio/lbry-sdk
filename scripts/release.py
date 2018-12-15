@@ -4,6 +4,7 @@ import io
 import sys
 import json
 import argparse
+import unittest
 from datetime import date
 from getpass import getpass
 
@@ -52,6 +53,14 @@ def get_label(pr, prefix):
         return label
 
 
+def get_previous_final(repo, current_release):
+    assert current_release.rc is not None, "Need an rc to find the previous final release."
+    previous = None
+    for release in repo.releases(current_release.rc + 1):
+        previous = release
+    return previous
+
+
 class Version:
 
     def __init__(self, major=0, minor=0, micro=0, rc=None):
@@ -73,21 +82,25 @@ class Version:
         version = re.search('__version__ = "(.*?)"', src).group(1)
         return cls.from_string(version)
 
-    def increment(self, part):
+    def increment(self, action):
         cls = self.__class__
-        if part == 'major':
-            return cls(self.major+1)
-        elif part == 'minor':
-            return cls(self.major, self.minor+1)
-        elif part == 'micro':
-            return cls(self.major, self.minor, self.micro+1)
-        elif part == 'rc':
-            if self.rc is None:
-                return cls(self.major, self.minor, self.micro+1, 1)
-            else:
-                return cls(self.major, self.minor, self.micro, self.rc+1)
-        else:
-            raise ValueError(f'unknown version part: {part}')
+
+        if action == '*-rc':
+            assert self.rc is not None, f"Can't drop rc designation because {self} is already not an rc."
+            return cls(self.major, self.minor, self.micro)
+        elif action == '*+rc':
+            assert self.rc is not None, "Must already be an rc to increment."
+            return cls(self.major, self.minor, self.micro, self.rc+1)
+
+        assert self.rc is None, f"Can't start a new rc because {self} is already an rc."
+        if action == 'major+rc':
+            return cls(self.major+1, rc=1)
+        elif action == 'minor+rc':
+            return cls(self.major, self.minor+1, rc=1)
+        elif action == 'micro+rc':
+            return cls(self.major, self.minor, self.micro+1, 1)
+
+        raise ValueError(f'unknown action: {action}')
 
     @property
     def tag(self):
@@ -107,16 +120,22 @@ def release(args):
 
     current_version = Version.from_content(version_file)
     print(f'Current Version: {current_version}')
-    new_version = current_version.increment(args.increment)
+    new_version = current_version.increment(args.action)
     print(f'    New Version: {new_version}')
+    print()
 
-    current_release = repo.release_from_tag(current_version.tag)
+    if args.action == '*-rc':
+        previous_release = get_previous_final(repo, current_version)
+    else:
+        previous_release = repo.release_from_tag(current_version.tag)
 
     areas = {}
-    for pr in gh.search_issues(f"merged:>={current_release._json_data['created_at']} repo:lbryio/lbry"):
+    for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry"):
         for area_name in get_labels(pr, 'area'):
             area = areas.setdefault(area_name, [])
-            area.append(f'  * [{get_label(pr, "type")}] {pr.title} ({pr.html_url})')
+            type_label = get_label(pr, "type")
+            if not (args.action == '*-rc' and type_label == 'fixup'):
+                area.append(f'  * [{type_label}] {pr.title} ({pr.html_url})')
 
     area_names = list(areas.keys())
     area_names.sort()
@@ -133,32 +152,76 @@ def release(args):
         for pr in prs:
             w(pr)
 
-    commit = version_file.update(
-      new_version.tag,
-      version_file.decoded.decode('utf-8').replace(str(current_version), str(new_version)).encode()
-    )['commit']
+    print(body.getvalue())
 
-    repo.create_tag(
-        tag=new_version.tag,
-        message=new_version.tag,
-        sha=commit.sha,
-        obj_type='commit',
-        tagger=commit.committer
-    )
+    if not args.dry_run:
 
-    repo.create_release(
-        new_version.tag,
-        name=new_version.tag,
-        body=body.getvalue(),
-        draft=True,
-        prerelease=True
-    )
+        commit = version_file.update(
+          new_version.tag,
+          version_file.decoded.decode('utf-8').replace(str(current_version), str(new_version)).encode()
+        )['commit']
+
+        repo.create_tag(
+            tag=new_version.tag,
+            message=new_version.tag,
+            sha=commit.sha,
+            obj_type='commit',
+            tagger=commit.committer
+        )
+
+        repo.create_release(
+            new_version.tag,
+            name=new_version.tag,
+            body=body.getvalue(),
+            draft=True,
+            prerelease=True
+        )
+
+
+class TestReleaseTool(unittest.TestCase):
+
+    def test_version_parsing(self):
+        self.assertTrue(str(Version.from_string('1.2.3')), '1.2.3')
+        self.assertTrue(str(Version.from_string('1.2.3rc4')), '1.2.3rc4')
+
+    def test_version_increment(self):
+        v = Version.from_string('1.2.3')
+        self.assertTrue(str(v.increment('major+rc')), '2.0.0rc1')
+        self.assertTrue(str(v.increment('minor+rc')), '1.3.0rc1')
+        self.assertTrue(str(v.increment('micro+rc')), '1.2.4rc1')
+        with self.assertRaisesRegex(AssertionError, "Must already be an rc to increment."):
+            v.increment('*+rc')
+        with self.assertRaisesRegex(AssertionError, "Can't drop rc designation"):
+            v.increment('*-rc')
+
+        v = Version.from_string('1.2.3rc3')
+        self.assertTrue(str(v.increment('*+rc')), '1.2.3rc4')
+        self.assertTrue(str(v.increment('*-rc')), '1.2.3')
+        with self.assertRaisesRegex(AssertionError, "already an rc"):
+            v.increment('major+rc')
+        with self.assertRaisesRegex(AssertionError, "already an rc"):
+            v.increment('minor+rc')
+        with self.assertRaisesRegex(AssertionError, "already an rc"):
+            v.increment('micro+rc')
+
+
+def test():
+    runner = unittest.TextTestRunner(verbosity=2)
+    loader = unittest.TestLoader()
+    suite = loader.loadTestsFromTestCase(TestReleaseTool)
+    runner.run(suite)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("increment", choices=['major', 'minor', 'micro', 'rc'])
-    release(parser.parse_args())
+    parser.add_argument("--test", default=False, action="store_true", help="run unit tests")
+    parser.add_argument("--dry-run", default=False, action="store_true", help="show what will be done")
+    parser.add_argument("action", nargs="?", choices=['major+rc', 'minor+rc', 'micro+rc', '*+rc', '*-rc'])
+    args = parser.parse_args()
+    if args.test:
+        test()
+    else:
+        release(args)
 
 
 if __name__ == "__main__":
