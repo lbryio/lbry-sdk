@@ -277,7 +277,7 @@ class LbryWalletManager(BaseWalletManager):
         if 'error' not in results:
             await self.old_db.save_claims_for_resolve([
                 value for value in results.values() if 'error' not in value
-            ]).asFuture(asyncio.get_event_loop())
+            ])
         return results
 
     async def get_claims_for_name(self, name: str):
@@ -432,7 +432,7 @@ class LbryWalletManager(BaseWalletManager):
         await account.ledger.broadcast(tx)
         await self.old_db.save_claims([self._old_get_temp_claim_info(
             tx, tx.outputs[0], claim_address, claim_dict, name, dewies_to_lbc(amount)
-        )]).asFuture(asyncio.get_event_loop())
+        )])
         # TODO: release reserved tx outputs in case anything fails by this point
         return tx
 
@@ -446,7 +446,7 @@ class LbryWalletManager(BaseWalletManager):
                 'address': holding_address,
                 'claim_id': claim_id,
                 'amount': dewies_to_lbc(amount)
-        }]).asFuture(asyncio.get_event_loop())
+        }])
         return tx
 
     async def tip_claim(self, amount, claim_id, account):
@@ -461,7 +461,7 @@ class LbryWalletManager(BaseWalletManager):
                 'address': claim_to_tip['address'],
                 'claim_id': claim_id,
                 'amount': dewies_to_lbc(amount)
-        }]).asFuture(asyncio.get_event_loop())
+        }])
         return tx
 
     async def abandon_claim(self, claim_id, txid, nout, account):
@@ -484,7 +484,7 @@ class LbryWalletManager(BaseWalletManager):
 
         await self.old_db.save_claims([self._old_get_temp_claim_info(
             tx, tx.outputs[0], address, cert, channel_name, dewies_to_lbc(amount)
-        )]).asFuture(asyncio.get_event_loop())
+        )])
         return tx
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):

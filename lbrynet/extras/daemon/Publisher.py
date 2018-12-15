@@ -50,18 +50,18 @@ class Publisher:
         )
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
-        old_stream_hashes = await d2f(self.storage.get_old_stream_hashes_for_claim_id(
+        old_stream_hashes = await self.storage.get_old_stream_hashes_for_claim_id(
             tx.outputs[0].claim_id, self.lbry_file.stream_hash
-        ))
+        )
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
                                     list(self.lbry_file_manager.lbry_files)):
                 await d2f(self.lbry_file_manager.delete_lbry_file(lbry_file, delete_file=False))
                 log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
 
-        await d2f(self.storage.save_content_claim(
+        await self.storage.save_content_claim(
             self.lbry_file.stream_hash, tx.outputs[0].id
-        ))
+        )
         return tx
 
     async def publish_stream(self, name, bid, claim_dict, stream_hash, holding_address=None):

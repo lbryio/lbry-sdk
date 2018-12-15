@@ -1,13 +1,13 @@
 import os
 import asyncio
+import aiohttp
 import logging
 import treq
-import json
 import math
 import binascii
 from hashlib import sha256
 from types import SimpleNamespace
-from twisted.internet import defer, threads, reactor, error, task
+from twisted.internet import defer, reactor, error, task
 
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
@@ -16,6 +16,7 @@ from aioupnp.fault import UPnPError
 import lbrynet.schema
 from lbrynet import conf
 
+from lbrynet.extras.compat import d2f
 from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
 from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -27,7 +28,7 @@ from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
-from lbrynet.utils import DeferredDict, generate_id
+from lbrynet.utils import generate_id
 from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.BlobManager import DiskBlobManager
@@ -55,22 +56,23 @@ RATE_LIMITER_COMPONENT = "rate_limiter"
 PAYMENT_RATE_COMPONENT = "payment_rate_manager"
 
 
-def from_future(coroutine: asyncio.coroutine) -> defer.Deferred:
-    return defer.Deferred.fromFuture(asyncio.ensure_future(coroutine))
+async def gather_dict(tasks: dict):
+    async def wait_value(key, value):
+        return key, await value
+    return dict(await asyncio.gather(*(
+        wait_value(*kv) for kv in tasks.items()
+    )))
 
 
-@defer.inlineCallbacks
-def get_external_ip():  # used if upnp is disabled or non-functioning
+async def get_external_ip():  # used if upnp is disabled or non-functioning
     try:
-        buf = []
-        response = yield treq.get("https://api.lbry.io/ip")
-        yield treq.collect(response, buf.append)
-        parsed = json.loads(b"".join(buf).decode())
-        if parsed['success']:
-            return parsed['data']['ip']
-        return
-    except Exception as err:
-        return
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.lbry.io/ip") as resp:
+                response = await resp.json()
+                if response['success']:
+                    return response['data']['ip']
+    except Exception as e:
+        pass
 
 
 class DatabaseComponent(Component):
@@ -97,8 +99,7 @@ class DatabaseComponent(Component):
         with open(conf.settings.get_db_revision_filename(), mode='w') as db_revision:
             db_revision.write(str(version_num))
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         # check directories exist, create them if they don't
         log.info("Loading databases")
 
@@ -117,19 +118,19 @@ class DatabaseComponent(Component):
         if old_revision < self.get_current_db_revision():
             from lbrynet.extras.daemon.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
-            yield threads.deferToThread(
-                dbmigrator.migrate_db, conf.settings.data_dir, old_revision, self.get_current_db_revision()
+            await asyncio.get_event_loop().run_in_executor(
+                None, dbmigrator.migrate_db, conf.settings.data_dir, old_revision, self.get_current_db_revision()
             )
             self._write_db_revision_file(self.get_current_db_revision())
             log.info("Finished upgrading the databases.")
 
-        # start SQLiteStorage
-        self.storage = SQLiteStorage(conf.settings.data_dir)
-        yield self.storage.setup()
+        self.storage = SQLiteStorage(
+            os.path.join(conf.settings.data_dir, "lbrynet.sqlite")
+        )
+        await self.storage.open()
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield self.storage.stop()
+    async def stop(self):
+        await self.storage.close()
         self.storage = None
 
 
@@ -250,33 +251,24 @@ class HeadersComponent(Component):
             with open(self.headers_file, "rb+") as headers_file:
                 headers_file.truncate(checksum_length_in_bytes)
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         conf.settings.ensure_wallet_dir()
         if not os.path.exists(self.headers_dir):
             os.mkdir(self.headers_dir)
         if os.path.exists(self.old_file):
             log.warning("Moving old headers from %s to %s.", self.old_file, self.headers_file)
             os.rename(self.old_file, self.headers_file)
-        self._downloading_headers = yield f2d(self.should_download_headers_from_s3())
+        self._downloading_headers = await self.should_download_headers_from_s3()
         if self._downloading_headers:
             try:
-                yield self.fetch_headers_from_s3()
+                await d2f(self.fetch_headers_from_s3())
             except Exception as err:
                 log.error("failed to fetch headers from s3: %s", err)
             finally:
                 self._downloading_headers = False
 
-    def stop(self):
-        return defer.succeed(None)
-
-
-def d2f(deferred):
-    return deferred.asFuture(asyncio.get_event_loop())
-
-
-def f2d(future):
-    return defer.Deferred.fromFuture(asyncio.ensure_future(future))
+    async def stop(self):
+        pass
 
 
 class WalletComponent(Component):
@@ -304,19 +296,17 @@ class WalletComponent(Component):
                 'is_locked': not self.wallet_manager.is_wallet_unlocked,
             }
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         conf.settings.ensure_wallet_dir()
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbrynet.schema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet_manager = yield f2d(LbryWalletManager.from_lbrynet_config(conf.settings, storage))
+        self.wallet_manager = await LbryWalletManager.from_lbrynet_config(conf.settings, storage)
         self.wallet_manager.old_db = storage
-        yield f2d(self.wallet_manager.start())
+        await self.wallet_manager.start()
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield f2d(self.wallet_manager.stop())
+    async def stop(self):
+        await self.wallet_manager.stop()
         self.wallet_manager = None
 
 
@@ -345,14 +335,11 @@ class BlobComponent(Component):
     def stop(self):
         return self.blob_manager.stop()
 
-    @defer.inlineCallbacks
-    def get_status(self):
+    async def get_status(self):
         count = 0
         if self.blob_manager:
-            count = yield self.blob_manager.storage.count_finished_blobs()
-        defer.returnValue({
-            'finished_blobs': count
-        })
+            count = await self.blob_manager.storage.count_finished_blobs()
+        return {'finished_blobs': count}
 
 
 class DHTComponent(Component):
@@ -376,8 +363,7 @@ class DHTComponent(Component):
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.contacts)
         }
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
         self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", conf.settings["peer_port"])
         self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", conf.settings["dht_node_port"])
@@ -387,7 +373,7 @@ class DHTComponent(Component):
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
-            external_ip = yield get_external_ip()
+            external_ip = await get_external_ip()
             if not external_ip:
                 log.warning("failed to get external ip")
 
@@ -399,12 +385,11 @@ class DHTComponent(Component):
             peerPort=self.external_peer_port
         )
 
-        yield self.dht_node.start(conf.settings['known_dht_nodes'], block_on_join=False)
+        await d2f(self.dht_node.start(conf.settings['known_dht_nodes'], block_on_join=False))
         log.info("Started the dht")
 
-    @defer.inlineCallbacks
     def stop(self):
-        yield self.dht_node.stop()
+        return d2f(self.dht_node.stop())
 
 
 class HashAnnouncerComponent(Component):
@@ -419,16 +404,14 @@ class HashAnnouncerComponent(Component):
     def component(self):
         return self.hash_announcer
 
-    @defer.inlineCallbacks
     def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = DHTHashAnnouncer(dht_node, storage)
-        yield self.hash_announcer.start()
+        self.hash_announcer.start()
 
-    @defer.inlineCallbacks
     def stop(self):
-        yield self.hash_announcer.stop()
+        self.hash_announcer.stop()
 
     def get_status(self):
         return {
@@ -447,13 +430,11 @@ class RateLimiterComponent(Component):
     def component(self):
         return self.rate_limiter
 
-    def start(self):
+    async def start(self):
         self.rate_limiter.start()
-        return defer.succeed(None)
 
-    def stop(self):
+    async def stop(self):
         self.rate_limiter.stop()
-        return defer.succeed(None)
 
 
 class PaymentRateComponent(Component):
@@ -467,11 +448,11 @@ class PaymentRateComponent(Component):
     def component(self):
         return self.payment_rate_manager
 
-    def start(self):
-        return defer.succeed(None)
+    async def start(self):
+        pass
 
-    def stop(self):
-        return defer.succeed(None)
+    async def stop(self):
+        pass
 
 
 class FileManagerComponent(Component):
@@ -494,7 +475,6 @@ class FileManagerComponent(Component):
             'managed_files': len(self.file_manager.lbry_files)
         }
 
-    @defer.inlineCallbacks
     def start(self):
         rate_limiter = self.component_manager.get_component(RATE_LIMITER_COMPONENT)
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
@@ -511,18 +491,16 @@ class FileManagerComponent(Component):
             wallet,
             conf.settings.download_dir
         )
-        yield sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
+        sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
 
         payment_rate_manager = self.component_manager.get_component(PAYMENT_RATE_COMPONENT)
         log.info('Starting the file manager')
         self.file_manager = EncryptedFileManager(self.component_manager.peer_finder, rate_limiter, blob_manager, wallet,
                                                  payment_rate_manager, storage, sd_identifier)
-        yield self.file_manager.setup()
-        log.info('Done setting up file manager')
+        return self.file_manager.setup()
 
-    @defer.inlineCallbacks
     def stop(self):
-        yield self.file_manager.stop()
+        return d2f(self.file_manager.stop())
 
 
 class PeerProtocolServerComponent(Component):
@@ -538,8 +516,7 @@ class PeerProtocolServerComponent(Component):
     def component(self):
         return self.lbry_server_port
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         peer_port = conf.settings['peer_port']
@@ -562,7 +539,7 @@ class PeerProtocolServerComponent(Component):
         try:
             log.info("Peer protocol listening on TCP %i (ext port %i)", peer_port,
                      upnp.upnp_redirects.get("TCP", peer_port))
-            self.lbry_server_port = yield reactor.listenTCP(peer_port, server_factory)
+            self.lbry_server_port = await d2f(reactor.listenTCP(peer_port, server_factory))
         except error.CannotListenError as e:
             import traceback
             log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
@@ -570,12 +547,11 @@ class PeerProtocolServerComponent(Component):
             log.error("%s", traceback.format_exc())
             raise ValueError("%s lbrynet may already be running on your computer." % str(e))
 
-    @defer.inlineCallbacks
-    def stop(self):
+    async def stop(self):
         if self.lbry_server_port is not None:
             self.lbry_server_port, old_port = None, self.lbry_server_port
             log.info('Stop listening on port %s', old_port.port)
-            yield old_port.stopListening()
+            await d2f(old_port.stopListening())
 
 
 class ReflectorComponent(Component):
@@ -591,25 +567,23 @@ class ReflectorComponent(Component):
     def component(self):
         return self.reflector_server
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         log.info("Starting reflector server")
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
         reflector_factory = ReflectorServerFactory(self.component_manager.peer_manager, blob_manager, file_manager)
         try:
-            self.reflector_server = yield reactor.listenTCP(self.reflector_server_port, reflector_factory)
+            self.reflector_server = await d2f(reactor.listenTCP(self.reflector_server_port, reflector_factory))
             log.info('Started reflector on port %s', self.reflector_server_port)
         except error.CannotListenError as e:
             log.exception("Couldn't bind reflector to port %d", self.reflector_server_port)
             raise ValueError(f"{e} lbrynet may already be running on your computer.")
 
-    @defer.inlineCallbacks
-    def stop(self):
+    async def stop(self):
         if self.reflector_server is not None:
             log.info("Stopping reflector server")
             self.reflector_server, p = None, self.reflector_server
-            yield p.stopListening
+            await d2f(p.stopListening())
 
 
 class UPnPComponent(Component):
@@ -630,22 +604,11 @@ class UPnPComponent(Component):
     def component(self):
         return self
 
-    @defer.inlineCallbacks
-    def _setup_redirects(self):
-        d = {}
-        if PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
-            d["TCP"] = from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
-        if DHT_COMPONENT not in self.component_manager.skip_components:
-            d["UDP"] = from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"))
-        upnp_redirects = yield DeferredDict(d)
-        self.upnp_redirects.update(upnp_redirects)
-
-    @defer.inlineCallbacks
-    def _maintain_redirects(self):
+    async def _maintain_redirects(self):
         # setup the gateway if necessary
         if not self.upnp:
             try:
-                self.upnp = yield from_future(UPnP.discover())
+                self.upnp = await UPnP.discover()
                 log.info("found upnp gateway: %s", self.upnp.gateway.manufacturer_string)
             except Exception as err:
                 log.warning("upnp discovery failed: %s", err)
@@ -655,7 +618,7 @@ class UPnPComponent(Component):
         external_ip = None
         if self.upnp:
             try:
-                external_ip = yield from_future(self.upnp.get_external_ip())
+                external_ip = await self.upnp.get_external_ip()
                 if external_ip != "0.0.0.0" and not self.external_ip:
                     log.info("got external ip from UPnP: %s", external_ip)
             except (asyncio.TimeoutError, UPnPError):
@@ -663,7 +626,7 @@ class UPnPComponent(Component):
 
         if external_ip == "0.0.0.0" or not external_ip:
             log.warning("unable to get external ip from UPnP, checking lbry.io fallback")
-            external_ip = yield get_external_ip()
+            external_ip = await get_external_ip()
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         self.external_ip = external_ip
@@ -674,10 +637,10 @@ class UPnPComponent(Component):
                 log.info("add UPnP port mappings")
                 d = {}
                 if PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
-                    d["TCP"] = from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
+                    d["TCP"] = self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
                 if DHT_COMPONENT not in self.component_manager.skip_components:
-                    d["UDP"] = from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"))
-                upnp_redirects = yield DeferredDict(d)
+                    d["UDP"] = self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
+                upnp_redirects = await gather_dict(d)
                 log.info("set up redirects: %s", upnp_redirects)
                 self.upnp_redirects.update(upnp_redirects)
             except (asyncio.TimeoutError, UPnPError):
@@ -685,7 +648,7 @@ class UPnPComponent(Component):
                 return self._maintain_redirects()
         elif self.upnp:  # check existing redirects are still active
             found = set()
-            mappings = yield from_future(self.upnp.get_redirects())
+            mappings = await self.upnp.get_redirects()
             for mapping in mappings:
                 proto = mapping['NewProtocol']
                 if proto in self.upnp_redirects and mapping['NewExternalPort'] == self.upnp_redirects[proto]:
@@ -693,18 +656,14 @@ class UPnPComponent(Component):
                         found.add(proto)
             if 'UDP' not in found and DHT_COMPONENT not in self.component_manager.skip_components:
                 try:
-                    udp_port = yield from_future(
-                        self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
-                    )
+                    udp_port = await self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
                     self.upnp_redirects['UDP'] = udp_port
                     log.info("refreshed upnp redirect for dht port: %i", udp_port)
                 except (asyncio.TimeoutError, UPnPError):
                     del self.upnp_redirects['UDP']
             if 'TCP' not in found and PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
                 try:
-                    tcp_port = yield from_future(
-                        self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
-                    )
+                    tcp_port = await self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
                     self.upnp_redirects['TCP'] = tcp_port
                     log.info("refreshed upnp redirect for peer port: %i", tcp_port)
                 except (asyncio.TimeoutError, UPnPError):
@@ -715,14 +674,13 @@ class UPnPComponent(Component):
                 if self.upnp_redirects:
                     log.debug("upnp redirects are still active")
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         log.info("detecting external ip")
         if not self.use_upnp:
-            self.external_ip = yield get_external_ip()
+            self.external_ip = await get_external_ip()
             return
         success = False
-        yield self._maintain_redirects()
+        await self._maintain_redirects()
         if self.upnp:
             if not self.upnp_redirects and not all([x in self.component_manager.skip_components for x in
                                                     (DHT_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT)]):
@@ -736,13 +694,11 @@ class UPnPComponent(Component):
         self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())
         self._maintain_redirects_lc.start(360, now=False)
 
-    def stop(self):
-        if self._maintain_redirects_lc.running:
-            self._maintain_redirects_lc.stop()
-        return defer.DeferredList(
-            [from_future(self.upnp.delete_port_mapping(port, protocol))
-             for protocol, port in self.upnp_redirects.items()]
-        )
+    async def stop(self):
+        if self.upnp_redirects:
+            await asyncio.wait([
+                self.upnp.delete_port_mapping(port, protocol) for protocol, port in self.upnp_redirects.items()
+            ])
 
     def get_status(self):
         return {
@@ -766,10 +722,8 @@ class ExchangeRateManagerComponent(Component):
     def component(self):
         return self.exchange_rate_manager
 
-    @defer.inlineCallbacks
-    def start(self):
-        yield self.exchange_rate_manager.start()
+    async def start(self):
+        self.exchange_rate_manager.start()
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield self.exchange_rate_manager.stop()
+    async def stop(self):
+        self.exchange_rate_manager.stop()

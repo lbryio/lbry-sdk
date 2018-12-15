@@ -1,5 +1,5 @@
+import asyncio
 import logging
-from twisted.internet import defer
 from lbrynet.p2p.Error import ComponentStartConditionNotMet
 from lbrynet.extras.daemon.PeerManager import PeerManager
 from lbrynet.extras.daemon.PeerFinder import DHTPeerFinder
@@ -110,13 +110,8 @@ class ComponentManager:
             steps.reverse()
         return steps
 
-    @defer.inlineCallbacks
-    def setup(self, **callbacks):
-        """
-        Start Components in sequence sorted by requirements
-
-        :return: (defer.Deferred)
-        """
+    async def setup(self, **callbacks):
+        """ Start Components in sequence sorted by requirements """
         for component_name, cb in callbacks.items():
             if component_name not in self.component_classes:
                 if component_name not in self.skip_components:
@@ -124,19 +119,22 @@ class ComponentManager:
             if not callable(cb):
                 raise ValueError("%s is not callable" % cb)
 
-        def _setup(component):
+        async def _setup(component):
+            await component._setup()
             if component.component_name in callbacks:
-                d = component._setup()
-                d.addCallback(callbacks[component.component_name], component)
-                return d
-            return component._setup()
+                maybe_coro = callbacks[component.component_name](component)
+                if asyncio.iscoroutine(maybe_coro):
+                    asyncio.create_task(maybe_coro)
 
         stages = self.sort_components()
         for stage in stages:
-            yield defer.DeferredList([_setup(component) for component in stage if not component.running])
+            needing_start = [
+                _setup(component) for component in stage if not component.running
+            ]
+            if needing_start:
+                await asyncio.wait(needing_start)
 
-    @defer.inlineCallbacks
-    def stop(self):
+    async def stop(self):
         """
         Stop Components in reversed startup order
 
@@ -144,7 +142,11 @@ class ComponentManager:
         """
         stages = self.sort_components(reverse=True)
         for stage in stages:
-            yield defer.DeferredList([component._stop() for component in stage if component.running])
+            needing_stop = [
+                component._stop() for component in stage if component.running
+            ]
+            if needing_stop:
+                await asyncio.wait(needing_stop)
 
     def all_components_running(self, *component_names):
         """

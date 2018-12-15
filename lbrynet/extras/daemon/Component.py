@@ -36,37 +36,35 @@ class Component(metaclass=ComponentType):
     def running(self):
         return self._running
 
-    def get_status(self):
+    async def get_status(self):
         return
 
-    def start(self):
+    async def start(self):
         raise NotImplementedError()
 
-    def stop(self):
+    async def stop(self):
         raise NotImplementedError()
 
     @property
     def component(self):
         raise NotImplementedError()
 
-    @defer.inlineCallbacks
-    def _setup(self):
+    async def _setup(self):
         try:
-            result = yield defer.maybeDeferred(self.start)
+            result = await self.start()
             self._running = True
-            defer.returnValue(result)
+            return result
         except (defer.CancelledError, AlreadyQuit):
             pass
         except Exception as err:
             log.exception("Error setting up %s", self.component_name or self.__class__.__name__)
             raise err
 
-    @defer.inlineCallbacks
-    def _stop(self):
+    async def _stop(self):
         try:
-            result = yield defer.maybeDeferred(self.stop)
+            result = await self.stop()
             self._running = False
-            defer.returnValue(result)
+            return result
         except (defer.CancelledError, AlreadyQuit):
             pass
         except Exception as err:
