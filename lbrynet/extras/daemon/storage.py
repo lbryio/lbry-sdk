@@ -1,17 +1,16 @@
+import asyncio
 import logging
 import os
-import sqlite3
 import traceback
 import typing
 from binascii import hexlify, unhexlify
-from twisted.internet import defer, task, threads
-from twisted.enterprise import adbapi
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet import conf
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
 from lbrynet.blob.CryptBlob import CryptBlobInfo
 from lbrynet.dht.constants import dataExpireTimeout
+from torba.client.basedatabase import SQLiteMixin
 
 log = logging.getLogger(__name__)
 
@@ -44,63 +43,23 @@ def _open_file_for_writing(download_directory, suggested_file_name):
     return os.path.basename(file_path)
 
 
-def open_file_for_writing(download_directory, suggested_file_name):
-    """
-    Used to touch the path of a file to be downloaded
-
-    :param download_directory: (str)
-    :param suggested_file_name: (str)
-    :return: (str) basename
-    """
-    return threads.deferToThread(_open_file_for_writing, download_directory, suggested_file_name)
+async def open_file_for_writing(download_directory: str, suggested_file_name: str) -> str:
+    """ Used to touch the path of a file to be downloaded. """
+    return await asyncio.get_event_loop().run_in_executor(
+        None, _open_file_for_writing, download_directory, suggested_file_name
+    )
 
 
-def rerun_if_locked(f):
-    max_attempts = 5
-
-    def rerun(err, rerun_count, *args, **kwargs):
-        connection = args[0]
-        reactor = connection.reactor
-        log.debug("Failed to execute (%s): %s", err, args)
-        if err.check(sqlite3.OperationalError) and "database is locked" in str(err.value):
-            log.warning("database was locked. rerunning %s with args %s, kwargs %s",
-                        str(f), str(args), str(kwargs))
-            if rerun_count < max_attempts:
-                delay = 2**rerun_count
-                return task.deferLater(reactor, delay, inner_wrapper, rerun_count + 1, *args, **kwargs)
-        raise err
-
-    def check_needed_rerun(result, rerun_count):
-        if rerun_count:
-            log.info("successfully reran database query")
-        return result
-
-    def inner_wrapper(rerun_count, *args, **kwargs):
-        d = f(*args, **kwargs)
-        d.addCallback(check_needed_rerun, rerun_count)
-        d.addErrback(rerun, rerun_count, *args, **kwargs)
-        return d
-
-    def wrapper(*args, **kwargs):
-        return inner_wrapper(0, *args, **kwargs)
-
-    return wrapper
+async def looping_call(interval, fun):
+    while True:
+        try:
+            await fun()
+        except Exception as e:
+            log.exception('Looping call experienced exception:', exc_info=e)
+        await asyncio.sleep(interval)
 
 
-class SqliteConnection(adbapi.ConnectionPool):
-    def __init__(self, db_path):
-        super().__init__('sqlite3', db_path, check_same_thread=False)
-
-    @rerun_if_locked
-    def runInteraction(self, interaction, *args, **kw):
-        return super().runInteraction(interaction, *args, **kw)
-
-    @classmethod
-    def set_reactor(cls, reactor):
-        cls.reactor = reactor
-
-
-class SQLiteStorage:
+class SQLiteStorage(SQLiteMixin):
 
     CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;
@@ -173,70 +132,45 @@ class SQLiteStorage:
             );
     """
 
-    def __init__(self, db_dir, reactor=None):
-        if not reactor:
-            from twisted.internet import reactor
-        self.db_dir = db_dir
-        self._db_path = os.path.join(db_dir, "lbrynet.sqlite")
-        log.info("connecting to database: %s", self._db_path)
-        self.db = SqliteConnection(self._db_path)
-        self.db.set_reactor(reactor)
+    def __init__(self, path):
+        super().__init__(path)
+        from twisted.internet import reactor
         self.clock = reactor
-
-        # used to refresh the claim attributes on a ManagedEncryptedFileDownloader when a
-        # change to the associated content claim occurs. these are added by the file manager
-        # when it loads each file
-        self.content_claim_callbacks = {}  # {<stream_hash>: <callable returning a deferred>}
+        self.content_claim_callbacks = {}
         self.check_should_announce_lc = None
+
+    async def open(self):
+        await super().open()
         if 'reflector' not in conf.settings['components_to_skip']:
-            self.check_should_announce_lc = task.LoopingCall(self.verify_will_announce_all_head_and_sd_blobs)
+            self.check_should_announce_lc = looping_call(
+                600, self.verify_will_announce_all_head_and_sd_blobs
+            )
 
-    @defer.inlineCallbacks
-    def setup(self):
-        def _create_tables(transaction):
-            transaction.executescript(self.CREATE_TABLES_QUERY)
-        yield self.db.runInteraction(_create_tables)
-        if self.check_should_announce_lc and not self.check_should_announce_lc.running:
-            self.check_should_announce_lc.start(600)
-        defer.returnValue(None)
+    async def close(self):
+        if self.check_should_announce_lc is not None:
+            self.check_should_announce_lc.close()
+        await super().close()
 
-    @defer.inlineCallbacks
-    def run_and_return_one_or_none(self, query, *args):
-        result = yield self.db.runQuery(query, args)
-        if result:
-            defer.returnValue(result[0][0])
-        else:
-            defer.returnValue(None)
+    async def run_and_return_one_or_none(self, query, *args):
+        for row in await self.db.execute_fetchall(query, args):
+            return row
 
-    @defer.inlineCallbacks
-    def run_and_return_list(self, query, *args):
-        result = yield self.db.runQuery(query, args)
-        if result:
-            defer.returnValue([i[0] for i in result])
-        else:
-            defer.returnValue([])
+    async def run_and_return_list(self, query, *args):
+        rows = list(await self.db.execute_fetchall(query, args))
+        return [col[0] for col in rows] if rows else []
 
-    def run_and_return_id(self, query, *args):
-        def do_save(t):
-            t.execute(query, args)
-            return t.lastrowid
-        return self.db.runInteraction(do_save)
-
-    def stop(self):
-        if self.check_should_announce_lc and self.check_should_announce_lc.running:
-            self.check_should_announce_lc.stop()
-        self.db.close()
-        return defer.succeed(True)
+    async def run_and_return_id(self, query, *args):
+        return (await self.db.execute(query, args)).lastrowid
 
     # # # # # # # # # blob functions # # # # # # # # #
 
     def add_completed_blob(self, blob_hash, length, next_announce_time, should_announce, status="finished"):
         log.debug("Adding a completed blob. blob_hash=%s, length=%i", blob_hash, length)
         values = (blob_hash, length, next_announce_time or 0, int(bool(should_announce)), status, 0, 0)
-        return self.db.runOperation("insert or replace into blob values (?, ?, ?, ?, ?, ?, ?)", values)
+        return self.db.execute("insert or replace into blob values (?, ?, ?, ?, ?, ?, ?)", values)
 
     def set_should_announce(self, blob_hash, next_announce_time, should_announce):
-        return self.db.runOperation(
+        return self.db.execute(
             "update blob set next_announce_time=?, should_announce=? where blob_hash=?",
             (next_announce_time or 0, int(bool(should_announce)), blob_hash)
         )
@@ -246,9 +180,8 @@ class SQLiteStorage:
             "select status from blob where blob_hash=?", blob_hash
         )
 
-    @defer.inlineCallbacks
     def add_known_blob(self, blob_hash, length):
-        yield self.db.runOperation(
+        return self.db.execute(
             "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)", (blob_hash, length, 0, 0, "pending", 0, 0)
         )
 
@@ -267,12 +200,11 @@ class SQLiteStorage:
             "select blob_hash from blob where should_announce=1 and status='finished'"
         )
 
-    @defer.inlineCallbacks
-    def get_all_finished_blobs(self):
-        blob_hashes = yield self.run_and_return_list(
+    async def get_all_finished_blobs(self):
+        blob_hashes = await self.run_and_return_list(
             "select blob_hash from blob where status='finished'"
         )
-        defer.returnValue([unhexlify(blob_hash) for blob_hash in blob_hashes])
+        return [unhexlify(blob_hash) for blob_hash in blob_hashes]
 
     def count_finished_blobs(self):
         return self.run_and_return_one_or_none(
@@ -280,10 +212,10 @@ class SQLiteStorage:
         )
 
     def update_last_announced_blob(self, blob_hash, last_announced):
-        return self.db.runOperation(
-                    "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 where blob_hash=?",
-                    (int(last_announced + (dataExpireTimeout / 2)), int(last_announced), blob_hash)
-                )
+        return self.db.execute(
+            "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 where blob_hash=?",
+            (int(last_announced + (dataExpireTimeout / 2)), int(last_announced), blob_hash)
+        )
 
     def should_single_announce_blobs(self, blob_hashes, immediate=False):
         def set_single_announce(transaction):
@@ -298,7 +230,7 @@ class SQLiteStorage:
                     transaction.execute(
                         "update blob set single_announce=1 where blob_hash=? and status='finished'", (blob_hash, )
                     )
-        return self.db.runInteraction(set_single_announce)
+        return self.db.run(set_single_announce)
 
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
@@ -317,13 +249,13 @@ class SQLiteStorage:
                 )
             blobs = [b[0] for b in r.fetchall()]
             return blobs
-        return self.db.runInteraction(get_and_update)
+        return self.db.run(get_and_update)
 
     def delete_blobs_from_db(self, blob_hashes):
         def delete_blobs(transaction):
             for blob_hash in blob_hashes:
                 transaction.execute("delete from blob where blob_hash=?;", (blob_hash,))
-        return self.db.runInteraction(delete_blobs)
+        return self.db.run(delete_blobs)
 
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
@@ -336,17 +268,16 @@ class SQLiteStorage:
                 transaction.execute("insert into stream_blob values (?, ?, ?, ?)",
                                     (stream_hash, blob_info.get('blob_hash', None),
                                      blob_info['blob_num'], blob_info['iv']))
-        return self.db.runInteraction(_add_stream_blobs)
+        return self.db.run(_add_stream_blobs)
 
-    @defer.inlineCallbacks
-    def add_known_blobs(self, blob_infos):
+    async def add_known_blobs(self, blob_infos):
         for blob_info in blob_infos:
             if blob_info.get('blob_hash') and blob_info['length']:
-                yield self.add_known_blob(blob_info['blob_hash'], blob_info['length'])
+                await self.add_known_blob(blob_info['blob_hash'], blob_info['length'])
 
     def verify_will_announce_head_and_sd_blobs(self, stream_hash):
         # fix should_announce for imported head and sd blobs
-        return self.db.runOperation(
+        return self.db.execute(
             "update blob set should_announce=1 "
             "where should_announce=0 and "
             "blob.blob_hash in "
@@ -358,7 +289,7 @@ class SQLiteStorage:
         )
 
     def verify_will_announce_all_head_and_sd_blobs(self):
-        return self.db.runOperation(
+        return self.db.execute(
             "update blob set should_announce=1 "
             "where should_announce=0 and "
             "blob.blob_hash in "
@@ -383,23 +314,24 @@ class SQLiteStorage:
         :param stream_blob_infos: (list) of blob info dictionaries
         :return: (defer.Deferred)
         """
-
         def _store_stream(transaction):
-            transaction.execute("insert into stream values (?, ?, ?, ?, ?);",
-                                 (stream_hash, sd_hash, stream_key, stream_name,
-                                  suggested_file_name))
-
+            transaction.execute(
+                "insert into stream values (?, ?, ?, ?, ?);", (
+                    stream_hash, sd_hash, stream_key, stream_name, suggested_file_name
+                )
+            )
             for blob_info in stream_blob_infos:
-                transaction.execute("insert into stream_blob values (?, ?, ?, ?)",
-                                    (stream_hash, blob_info.get('blob_hash', None),
-                                     blob_info['blob_num'], blob_info['iv']))
+                transaction.execute(
+                    "insert into stream_blob values (?, ?, ?, ?)", (
+                        stream_hash, blob_info.get('blob_hash', None),
+                        blob_info['blob_num'], blob_info['iv']
+                    )
+                )
+        return self.db.run(_store_stream)
 
-        return self.db.runInteraction(_store_stream)
-
-    @defer.inlineCallbacks
-    def delete_stream(self, stream_hash):
-        sd_hash = yield self.get_sd_blob_hash_for_stream(stream_hash)
-        stream_blobs = yield self.get_blobs_for_stream(stream_hash)
+    async def delete_stream(self, stream_hash):
+        sd_hash = await self.get_sd_blob_hash_for_stream(stream_hash)
+        stream_blobs = await self.get_blobs_for_stream(stream_hash)
         blob_hashes = [b.blob_hash for b in stream_blobs if b.blob_hash is not None]
 
         def _delete_stream(transaction):
@@ -407,24 +339,28 @@ class SQLiteStorage:
             transaction.execute("delete from file where stream_hash=? ", (stream_hash, ))
             transaction.execute("delete from stream_blob where stream_hash=?", (stream_hash, ))
             transaction.execute("delete from stream where stream_hash=? ", (stream_hash, ))
-            transaction.execute("delete from blob where blob_hash=?", (sd_hash, ))
+            transaction.execute("delete from blob where blob_hash=?", sd_hash)
             for blob_hash in blob_hashes:
                 transaction.execute("delete from blob where blob_hash=?;", (blob_hash, ))
-        yield self.db.runInteraction(_delete_stream)
+
+        await self.db.run(_delete_stream)
 
     def get_all_streams(self):
         return self.run_and_return_list("select stream_hash from stream")
 
     def get_stream_info(self, stream_hash):
-        d = self.db.runQuery("select stream_name, stream_key, suggested_filename, sd_hash from stream "
-                             "where stream_hash=?", (stream_hash, ))
-        d.addCallback(lambda r: None if not r else r[0])
-        return d
+        return self.run_and_return_one_or_none(
+            "select stream_name, stream_key, suggested_filename, sd_hash from stream "
+            "where stream_hash=?", stream_hash
+        )
 
-    def check_if_stream_exists(self, stream_hash):
-        d = self.db.runQuery("select stream_hash from stream where stream_hash=?", (stream_hash, ))
-        d.addCallback(lambda r: bool(len(r)))
-        return d
+    async def check_if_stream_exists(self, stream_hash):
+        row = await self.run_and_return_one_or_none(
+            "select stream_hash from stream where stream_hash=?", stream_hash
+        )
+        if row is not None:
+            return bool(len(row))
+        return False
 
     def get_blob_num_by_hash(self, stream_hash, blob_hash):
         return self.run_and_return_one_or_none(
@@ -466,7 +402,7 @@ class SQLiteStorage:
                 crypt_blob_infos.append(CryptBlobInfo(blob_hash, position, blob_length, iv))
             crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
             return crypt_blob_infos
-        return self.db.runInteraction(_get_blobs_for_stream)
+        return self.db.run(_get_blobs_for_stream)
 
     def get_pending_blobs_for_stream(self, stream_hash):
         return self.run_and_return_list(
@@ -493,14 +429,12 @@ class SQLiteStorage:
 
     # # # # # # # # # file stuff # # # # # # # # #
 
-    @defer.inlineCallbacks
-    def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
+    async def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         # touch the closest available file to the file name
-        file_name = yield open_file_for_writing(unhexlify(download_directory).decode(), unhexlify(file_name).decode())
-        result = yield self.save_published_file(
+        file_name = await open_file_for_writing(unhexlify(download_directory).decode(), unhexlify(file_name).decode())
+        return await self.save_published_file(
             stream_hash, hexlify(file_name.encode()), download_directory, data_payment_rate
         )
-        defer.returnValue(result)
 
     def save_published_file(self, stream_hash, file_name, download_directory, data_payment_rate, status="stopped"):
         return self.run_and_return_id(
@@ -509,7 +443,9 @@ class SQLiteStorage:
         )
 
     def get_filename_for_rowid(self, rowid):
-        return self.run_and_return_one_or_none("select file_name from file where rowid=?", rowid)
+        return self.run_and_return_one_or_none(
+            "select file_name from file where rowid=?", rowid
+        )
 
     def get_all_lbry_files(self):
         def _lbry_file_dict(rowid, stream_hash, file_name, download_dir, data_rate, status, _, sd_hash, stream_key,
@@ -535,13 +471,11 @@ class SQLiteStorage:
                 ).fetchall()
             ]
 
-        d = self.db.runInteraction(_get_all_files)
-        return d
+        return self.db.run(_get_all_files)
 
-    def change_file_status(self, rowid, new_status):
-        d = self.db.runQuery("update file set status=? where rowid=?", (new_status, rowid))
-        d.addCallback(lambda _: new_status)
-        return d
+    async def change_file_status(self, rowid, new_status):
+        await self.db.execute("update file set status=? where rowid=?", (new_status, rowid))
+        return new_status
 
     def get_lbry_file_status(self, rowid):
         return self.run_and_return_one_or_none(
@@ -565,7 +499,7 @@ class SQLiteStorage:
                     ("%s:%i" % (support['txid'], support['nout']), claim_id, lbc_to_dewies(support['amount']),
                      support.get('address', ""))
                 )
-        return self.db.runInteraction(_save_support)
+        return self.db.run(_save_support)
 
     def get_supports(self, *claim_ids):
         def _format_support(outpoint, supported_id, amount, address):
@@ -587,15 +521,16 @@ class SQLiteStorage:
                 )
             ]
 
-        return self.db.runInteraction(_get_supports)
+        return self.db.run(_get_supports)
 
     # # # # # # # # # claim functions # # # # # # # # #
 
-    @defer.inlineCallbacks
-    def save_claims(self, claim_infos):
+    async def save_claims(self, claim_infos):
+        support_callbacks = []
+        update_file_callbacks = []
+
         def _save_claims(transaction):
             content_claims_to_update = []
-            support_callbacks = []
             for claim_info in claim_infos:
                 outpoint = "%s:%i" % (claim_info['txid'], claim_info['nout'])
                 claim_id = claim_info['claim_id']
@@ -622,7 +557,7 @@ class SQLiteStorage:
                 )
                 if 'supports' in claim_info:  # if this response doesn't have support info don't overwrite the existing
                                               # support info
-                    support_callbacks.append(self.save_supports(claim_id, claim_info['supports']))
+                    support_callbacks.append((claim_id, claim_info['supports']))
                 if not source_hash:
                     continue
                 stream_hash = transaction.execute(
@@ -644,18 +579,18 @@ class SQLiteStorage:
                     content_claims_to_update.append((stream_hash, outpoint))
                 elif known_outpoint != outpoint:
                     content_claims_to_update.append((stream_hash, outpoint))
-            update_file_callbacks = []
             for stream_hash, outpoint in content_claims_to_update:
                 self._save_content_claim(transaction, outpoint, stream_hash)
                 if stream_hash in self.content_claim_callbacks:
                     update_file_callbacks.append(self.content_claim_callbacks[stream_hash]())
-            return update_file_callbacks, support_callbacks
 
-        content_dl, support_dl = yield self.db.runInteraction(_save_claims)
-        if content_dl:
-            yield defer.DeferredList(content_dl)
-        if support_dl:
-            yield defer.DeferredList(support_dl)
+        await self.db.run(_save_claims)
+        if update_file_callbacks:
+            await asyncio.wait(update_file_callbacks)
+        if support_callbacks:
+            await asyncio.wait([
+                self.save_supports(*args) for args in support_callbacks
+            ])
 
     def save_claims_for_resolve(self, claim_infos):
         to_save = []
@@ -718,16 +653,13 @@ class SQLiteStorage:
         # update the claim associated to the file
         transaction.execute("insert or replace into content_claim values (?, ?)", (stream_hash, claim_outpoint))
 
-    @defer.inlineCallbacks
-    def save_content_claim(self, stream_hash, claim_outpoint):
-        yield self.db.runInteraction(self._save_content_claim, claim_outpoint, stream_hash)
+    async def save_content_claim(self, stream_hash, claim_outpoint):
+        await self.db.run(self._save_content_claim, claim_outpoint, stream_hash)
         # update corresponding ManagedEncryptedFileDownloader object
         if stream_hash in self.content_claim_callbacks:
-            file_callback = self.content_claim_callbacks[stream_hash]
-            yield file_callback()
+            await self.content_claim_callbacks[stream_hash]()
 
-    @defer.inlineCallbacks
-    def get_content_claim(self, stream_hash, include_supports=True):
+    async def get_content_claim(self, stream_hash, include_supports=True):
         def _get_claim_from_stream_hash(transaction):
             claim_info = transaction.execute(
                 "select c.*, "
@@ -745,15 +677,13 @@ class SQLiteStorage:
                 result['channel_name'] = channel_name
             return result
 
-        result = yield self.db.runInteraction(_get_claim_from_stream_hash)
+        result = await self.db.run(_get_claim_from_stream_hash)
         if result and include_supports:
-            supports = yield self.get_supports(result['claim_id'])
-            result['supports'] = supports
-            result['effective_amount'] = calculate_effective_amount(result['amount'], supports)
-        defer.returnValue(result)
+            result['supports'] = await self.get_supports(result['claim_id'])
+            result['effective_amount'] = calculate_effective_amount(result['amount'], result['supports'])
+        return result
 
-    @defer.inlineCallbacks
-    def get_claims_from_stream_hashes(self, stream_hashes, include_supports=True):
+    async def get_claims_from_stream_hashes(self, stream_hashes, include_supports=True):
         def _batch_get_claim(transaction):
             results = {}
             claim_infos = _batched_select(
@@ -781,10 +711,10 @@ class SQLiteStorage:
                     results[stream_hash]['channel_name'] = channel_name
             return results
 
-        claims = yield self.db.runInteraction(_batch_get_claim)
+        claims = await self.db.run(_batch_get_claim)
         if include_supports:
             all_supports = {}
-            for support in (yield self.get_supports(*[claim['claim_id'] for claim in claims.values()])):
+            for support in await self.get_supports(*[claim['claim_id'] for claim in claims.values()]):
                 all_supports.setdefault(support['claim_id'], []).append(support)
             for stream_hash in claims.keys():
                 claim = claims[stream_hash]
@@ -792,28 +722,28 @@ class SQLiteStorage:
                 claim['supports'] = supports
                 claim['effective_amount'] = calculate_effective_amount(claim['amount'], supports)
                 claims[stream_hash] = claim
-        defer.returnValue(claims)
+        return claims
 
-    @defer.inlineCallbacks
-    def get_claim(self, claim_outpoint, include_supports=True):
+    async def get_claim(self, claim_outpoint, include_supports=True):
         def _get_claim(transaction):
-            claim_info = transaction.execute("select c.*, "
-                                             "case when c.channel_claim_id is not null then "
-                                             "(select claim_name from claim where claim_id==c.channel_claim_id) "
-                                             "else null end as channel_name from claim c where claim_outpoint = ?",
-                                             (claim_outpoint,)).fetchone()
+            claim_info = transaction.execute(
+                "select c.*, "
+                "case when c.channel_claim_id is not null then "
+                "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                "else null end as channel_name from claim c where claim_outpoint = ?",
+                (claim_outpoint,)
+            ).fetchone()
             channel_name = claim_info[-1]
             result = _format_claim_response(*claim_info[:-1])
             if channel_name:
                 result['channel_name'] = channel_name
             return result
 
-        result = yield self.db.runInteraction(_get_claim)
+        result = await self.db.run(_get_claim)
         if include_supports:
-            supports = yield self.get_supports(result['claim_id'])
-            result['supports'] = supports
-            result['effective_amount'] = calculate_effective_amount(result['amount'], supports)
-        defer.returnValue(result)
+            result['supports'] = await self.get_supports(result['claim_id'])
+            result['effective_amount'] = calculate_effective_amount(result['amount'], result['supports'])
+        return result
 
     def get_unknown_certificate_ids(self):
         def _get_unknown_certificate_claim_ids(transaction):
@@ -825,11 +755,10 @@ class SQLiteStorage:
                     "(select c2.claim_id from claim as c2)"
                 ).fetchall()
             ]
-        return self.db.runInteraction(_get_unknown_certificate_claim_ids)
+        return self.db.run(_get_unknown_certificate_claim_ids)
 
-    @defer.inlineCallbacks
-    def get_pending_claim_outpoints(self):
-        claim_outpoints = yield self.run_and_return_list("select claim_outpoint from claim where height=-1")
+    async def get_pending_claim_outpoints(self):
+        claim_outpoints = await self.run_and_return_list("select claim_outpoint from claim where height=-1")
         results = {}  # {txid: [nout, ...]}
         for outpoint_str in claim_outpoints:
             txid, nout = outpoint_str.split(":")
@@ -838,7 +767,7 @@ class SQLiteStorage:
             results[txid] = outputs
         if results:
             log.debug("missing transaction heights for %i claims", len(results))
-        defer.returnValue(results)
+        return results
 
     def save_claim_tx_heights(self, claim_tx_heights):
         def _save_claim_heights(transaction):
@@ -847,17 +776,17 @@ class SQLiteStorage:
                     "update claim set height=? where claim_outpoint=? and height=-1",
                     (height, outpoint)
                 )
-        return self.db.runInteraction(_save_claim_heights)
+        return self.db.run(_save_claim_heights)
 
     # # # # # # # # # reflector functions # # # # # # # # #
 
     def update_reflected_stream(self, sd_hash, reflector_address, success=True):
         if success:
-            return self.db.runOperation(
+            return self.db.execute(
                 "insert or replace into reflected_stream values (?, ?, ?)",
                 (sd_hash, reflector_address, self.clock.seconds())
             )
-        return self.db.runOperation(
+        return self.db.execute(
             "delete from reflected_stream where sd_hash=? and reflector_address=?",
             (sd_hash, reflector_address)
         )
