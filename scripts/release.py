@@ -174,7 +174,7 @@ def release(args):
             name=new_version.tag,
             body=body.getvalue(),
             draft=True,
-            prerelease=True
+            prerelease=new_version.rc is not None
         )
 
 
