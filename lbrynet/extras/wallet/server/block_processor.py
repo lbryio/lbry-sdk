@@ -131,9 +131,6 @@ class LBRYBlockProcessor(BlockProcessor):
         super().backup_blocks(raw_blocks=raw_blocks)
         self.db.batched_flush_claims()
 
-    def shutdown(self):
-        self.db.shutdown()
-
     async def flush(self, flush_utxos):
         self.db.batched_flush_claims()
         return await super().flush(flush_utxos)

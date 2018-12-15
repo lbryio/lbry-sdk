@@ -14,7 +14,6 @@ import aiohttp
 import logging
 from urllib.parse import urlparse
 
-from lbrynet import conf
 
 log = logging.getLogger(__name__)
 USER_AGENT = "AuthServiceProxy/0.1"
@@ -110,7 +109,7 @@ class AuthAPIClient:
     @classmethod
     async def get_client(cls, key_name=None):
         api_key_name = key_name or "api"
-        keyring = Keyring.load_from_disk()
+        keyring = Keyring.load_from_disk()  # pylint: disable=E0602
 
         api_key = keyring.api_key
         login_url = conf.settings.get_api_connection_string(api_key_name, api_key.secret)
@@ -127,7 +126,7 @@ class AuthAPIClient:
         async with session.post(login_url, headers=headers) as r:
             cookies = r.cookies
         uid = cookies.get(TWISTED_SECURE_SESSION if conf.settings['use_https'] else TWISTED_SESSION).value
-        api_key = APIKey.create(seed=uid.encode())
+        api_key = APIKey.create(seed=uid.encode())  # pylint: disable=E0602
         return cls(api_key, session, cookies, url, login_url)
 
 

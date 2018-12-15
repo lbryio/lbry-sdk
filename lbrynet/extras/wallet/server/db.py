@@ -21,7 +21,7 @@ class LBRYDB(DB):
         self.pending_abandons = {}
         super().__init__(*args, **kwargs)
 
-    def shutdown(self):
+    def close(self):
         self.batched_flush_claims()
         self.claims_db.close()
         self.names_db.close()
@@ -29,9 +29,7 @@ class LBRYDB(DB):
         self.outpoint_to_claim_id_db.close()
         self.claim_undo_db.close()
         self.utxo_db.close()
-        # electrumx ones
-        self.utxo_db.close()
-        self.history.close_db()
+        super().close()
 
     async def _open_dbs(self, for_sync, compacting):
         await super()._open_dbs(for_sync=for_sync, compacting=compacting)
