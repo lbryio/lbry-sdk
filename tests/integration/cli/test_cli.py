@@ -1,7 +1,6 @@
 import contextlib
-from twisted.trial import unittest
 from io import StringIO
-from twisted.internet import defer
+from unittest import skip
 from torba.testcase import AsyncioTestCase
 
 from lbrynet import conf
@@ -52,6 +51,7 @@ class CLIIntegrationTest(AsyncioTestCase):
         await self.daemon.shutdown()
 
 
+@skip
 class AuthenticatedCLITest(CLIIntegrationTest):
     USE_AUTH = True
 
