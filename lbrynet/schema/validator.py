@@ -76,6 +76,25 @@ class Validator:
             from ecdsa import BadSignatureError
             raise BadSignatureError
 
+    def validate_detached_claim_signature(self, claim, claim_address, name):
+        decoded_address = decode_address(claim_address)
+
+        # extract and serialize the stream from the claim, then check the signature
+        signature = claim.detached_signature.raw_signature
+
+        if signature is None:
+            raise Exception("No signature to validate")
+
+        name = name.lower().encode()
+
+        to_sign = bytearray()
+        to_sign.extend(name)
+        to_sign.extend(decoded_address)
+        to_sign.extend(claim.serialized_no_signature)
+        to_sign.extend(binascii.unhexlify(self.certificate_claim_id))
+
+        return self.validate_signature(self.HASHFUNC(to_sign).digest(), signature)
+
     def validate_claim_signature(self, claim, claim_address):
         decoded_address = decode_address(claim_address)
 
