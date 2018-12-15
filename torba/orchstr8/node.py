@@ -200,7 +200,7 @@ class SPVNode:
 
     async def stop(self, cleanup=True):
         try:
-            self.server.stop()
+            await self.server.stop()
         finally:
             cleanup and self.cleanup()
 
