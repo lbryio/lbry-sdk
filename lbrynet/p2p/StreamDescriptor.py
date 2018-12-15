@@ -299,8 +299,7 @@ def format_sd_info(stream_type, stream_name, key, suggested_file_name, stream_ha
     }
 
 
-@defer.inlineCallbacks
-def get_sd_info(storage, stream_hash, include_blobs):
+async def get_sd_info(storage, stream_hash, include_blobs):
     """
     Get an sd info dictionary from storage
 
@@ -329,16 +328,13 @@ def get_sd_info(storage, stream_hash, include_blobs):
         ]
     }
     """
-
-    stream_info = yield storage.get_stream_info(stream_hash)
+    stream_info = await storage.get_stream_info(stream_hash)
     blobs = []
     if include_blobs:
-        blobs = yield storage.get_blobs_for_stream(stream_hash)
-    defer.returnValue(
-        format_sd_info(
-            EncryptedFileStreamType, stream_info[0], stream_info[1],
-            stream_info[2], stream_hash, format_blobs(blobs)
-        )
+        blobs = await storage.get_blobs_for_stream(stream_hash)
+    return format_sd_info(
+        EncryptedFileStreamType, stream_info[0], stream_info[1],
+        stream_info[2], stream_hash, format_blobs(blobs)
     )
 
 

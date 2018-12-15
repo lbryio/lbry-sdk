@@ -6,6 +6,7 @@ from binascii import hexlify, unhexlify
 
 from twisted.internet import defer
 from lbrynet import conf
+from lbrynet.extras.compat import f2d
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
 from lbrynet.utils import short_hash
@@ -70,13 +71,11 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.channel_name = claim_info['channel_name']
         self.metadata = claim_info['value']['stream']['metadata']
 
-    @defer.inlineCallbacks
-    def get_claim_info(self, include_supports=True):
-        claim_info = yield self.storage.get_content_claim(self.stream_hash, include_supports)
+    async def get_claim_info(self, include_supports=True):
+        claim_info = await self.storage.get_content_claim(self.stream_hash, include_supports)
         if claim_info:
             self.set_claim_info(claim_info)
-
-        defer.returnValue(claim_info)
+        return claim_info
 
     @property
     def saving_status(self):
@@ -180,10 +179,10 @@ class ManagedEncryptedFileDownloaderFactory:
         if file_name:
             file_name = hexlify(file_name.encode())
         hex_download_directory = hexlify(download_directory.encode())
-        lbry_file = yield self.lbry_file_manager.add_downloaded_file(
+        lbry_file = yield f2d(self.lbry_file_manager.add_downloaded_file(
             stream_hash, metadata.source_blob_hash, hex_download_directory, payment_rate_manager,
             data_rate, file_name=file_name, download_mirrors=download_mirrors
-        )
+        ))
         defer.returnValue(lbry_file)
 
     @staticmethod
