@@ -1,98 +1,59 @@
+import os
+import json
 import asyncio
 import logging
 import typing
-from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest, blob_response_types
-from lbrynet.blob_exchange.serialization import BlobAvailabilityResponse, BlobPriceResponse, BlobDownloadResponse, \
-    BlobPaymentAddressResponse
-
-if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_manager import BlobFileManager
+from asyncio import StreamReader, StreamWriter, StreamReaderProtocol
+from asyncio.base_events import Server
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob_exchange.serialization import decode_request, blob_response_types, BlobDownloadResponse
+from lbrynet.blob_exchange.serialization import BlobPriceResponse, BlobAvailabilityResponse
+from lbrynet.blob_exchange.serialization import BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest
 
 log = logging.getLogger(__name__)
 
 
-class BlobServer(asyncio.Protocol):
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', lbrycrd_address: str):
-        self.loop = loop
-        self.blob_manager = blob_manager
-        self.server_task: asyncio.Task = None
-        self.started_listening = asyncio.Event(loop=self.loop)
-        self.buf = b''
-        self.transport = None
-        self.lbrycrd_address = lbrycrd_address
+async def create_server(loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager, host: typing.Optional[str] = None,
+                        port: typing.Optional[int] = 3333, peer_timeout: typing.Optional[int] = 3) -> Server:
 
-    def connection_made(self, transport):
-        self.transport = transport
+    async def client_connected(reader: StreamReader, writer: StreamWriter):
+        async def get_request():
+            data = b''
+            while True:
+                new_bytes = await reader.read()
+                if not new_bytes:
+                    writer.close()
+                    await writer.wait_closed()
+                data += new_bytes
+                try:
+                    return decode_request(data)
+                except:
+                    continue
 
-    def send_response(self, responses: typing.List[blob_response_types]):
-        to_send = []
-        while responses:
-            to_send.append(responses.pop())
-        self.transport.write(BlobResponse(to_send).serialize())
+        async def send_response(response: blob_response_types):
+            writer.write(json.dumps(response.to_dict()).encode())
+            await writer.drain()
 
-    async def handle_request(self, request: BlobRequest):
-        addr = self.transport.get_extra_info('peername')
-        peer_address, peer_port = addr
+        availability_request = await get_request()
+        assert isinstance(availability_request, BlobAvailabilityRequest)
+        available = [blob_hash for blob_hash in availability_request.requested_blobs
+                     if blob_hash in blob_manager.completed_blob_hashes]
+        await send_response(BlobAvailabilityResponse(available_blobs=available))
+        price_request = await get_request()
+        assert isinstance(price_request, BlobPriceRequest)
+        await send_response(BlobPriceResponse(blob_data_payment_rate='RATE_ACCEPTED'))
 
-        responses = []
-        address_request = request.get_address_request()
-        if address_request:
-            responses.append(BlobPaymentAddressResponse(lbrycrd_address=self.lbrycrd_address))
-        availability_request = request.get_availability_request()
-        if availability_request:
-            responses.append(BlobAvailabilityResponse(available_blobs=list(set((
-                filter(lambda blob_hash: blob_hash in self.blob_manager.completed_blob_hashes,
-                       availability_request.requested_blobs)
-            )))))
-        price_request = request.get_price_request()
-        if price_request:
-            responses.append(BlobPriceResponse(blob_data_payment_rate='RATE_ACCEPTED'))
-        download_request = request.get_blob_request()
+        while True:
+            download_request = await get_request()
+            assert isinstance(download_request, BlobDownloadRequest)
+            if download_request.requested_blob not in available:
+                break
+            blob = blob_manager.get_blob(download_request.requested_blob)
+            incoming_blob = {'blob_hash': blob.blob_hash, 'length': blob.length}
+            await send_response(BlobDownloadResponse(incoming_blob=incoming_blob))
+            with open(os.path.join(blob_manager.blob_dir, blob.blob_hash), "rb") as f:
+                await loop.sendfile(writer.transport, f)
 
-        if download_request:
-            blob = self.blob_manager.get_blob(download_request.requested_blob)
-            if blob.get_is_verified():
-                incoming_blob = {'blob_hash': blob.blob_hash, 'length': blob.length}
-                responses.append(BlobDownloadResponse(incoming_blob=incoming_blob))
-                self.send_response(responses)
-                log.info("send %s to %s:%i", blob.blob_hash[:8], peer_address, peer_port)
-                sent = await blob.sendfile(self)
-                log.info("sent %s (%i bytes) to %s:%i", blob.blob_hash[:8], sent, peer_address, peer_port)
-        if responses:
-            self.send_response(responses)
-        # self.transport.close()
-
-    def data_received(self, data):
-        message, separator, remainder = data.rpartition(b'}')
-        if not separator:
-            self.buf += data
-            return
-        else:
-            request = BlobRequest.deserialize(data)
-            self.buf = remainder
-        if not request:
-            addr = self.transport.get_extra_info('peername')
-            peer_address, peer_port = addr
-            log.warning("failed to decode blob request from %s:%i", peer_address, peer_port)
-            self.transport.close()
-            return
-        self.loop.create_task(self.handle_request(request))
-
-    def start_server(self, port: int, interface: typing.Optional[str] = '0.0.0.0'):
-        if self.server_task is not None:
-            raise Exception("already running")
-
-        async def _start_server():
-            server = await self.loop.create_server(lambda: self, interface, port)
-            self.started_listening.set()
-            log.info("Blob server listening on TCP %s:%i", interface, port)
-            async with server:
-                await server.serve_forever()
-
-        self.server_task = self.loop.create_task(_start_server())
-
-    def stop_server(self):
-        if self.server_task:
-            self.server_task.cancel()
-            self.server_task = None
-            log.info("Stopped blob server")
+    return await loop.create_server(
+        lambda: StreamReaderProtocol(StreamReader(limit=2**16, loop=loop), client_connected, loop=loop), host, port
+    )
