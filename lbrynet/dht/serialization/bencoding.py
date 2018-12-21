@@ -2,10 +2,10 @@ import typing
 from lbrynet.dht.error import DecodeError
 
 
-def _bencode(data: typing.Union[int, bytes, str, list, tuple, dict]) -> bytes:
+def _bencode(data: typing.Union[int, bytes, bytearray, str, list, tuple, dict]) -> bytes:
     if isinstance(data, int):
         return b'i%de' % data
-    elif isinstance(data, bytes):
+    elif isinstance(data, (bytes, bytearray)):
         return b'%d:%s' % (len(data), data)
     elif isinstance(data, str):
         return b'%d:%s' % (len(data), data.encode())
@@ -62,14 +62,14 @@ def bencode(data: dict) -> bytes:
     return _bencode(data)
 
 
-def bdecode(data: bytes) -> dict:
+def bdecode(data: bytes, allow_non_dict_return: typing.Optional[bool] = False) -> dict:
     """ Decoder implementation of the Bencode algorithm. """
     assert type(data) == bytes  # fixme: _maybe_ remove this after porting
     if len(data) == 0:
         raise DecodeError('Cannot decode empty string')
     try:
         result = _bdecode(data)[0]
-        if not isinstance(result, dict):
+        if not allow_non_dict_return and not isinstance(result, dict):
             raise ValueError(f'expected dict, got {type(result)}')
         return result
     except ValueError as e:

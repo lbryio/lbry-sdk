@@ -4,17 +4,18 @@ from binascii import hexlify
 
 from twisted.internet import defer, error
 from twisted.trial import unittest
-from lbrynet.blob.stream_descriptor import get_sd_info
+from lbrynet.stream.descriptor import get_sd_info
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
 from lbrynet.peer import PeerManager
-from lbrynet.extras.daemon import blob_manager
-from lbrynet.blob import EncryptedFileCreator, stream_descriptor
-from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.blob_exchange.rate_limiter import RateLimiter
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
+from lbrynet.staging import EncryptedFileCreator
+from lbrynet.blob import blob_manager
+from lbrynet.stream import descriptor
+from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
+from lbrynet.staging.rate_limiter import RateLimiter
+from lbrynet.storage import SQLiteStorage
+from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
 from tests import mocks
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 
@@ -31,16 +32,16 @@ class TestReflector(unittest.TestCase):
         peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
         self.server_storage = SQLiteStorage(self.server_db_dir)
-        self.server_blob_manager = blob_manager.DiskBlobManager(self.server_blob_dir, self.server_storage)
+        self.server_blob_manager = blob_manager.BlobFileManager(self.server_blob_dir, self.server_storage)
         self.client_storage = SQLiteStorage(self.client_db_dir)
-        self.client_blob_manager = blob_manager.DiskBlobManager(self.client_blob_dir, self.client_storage)
+        self.client_blob_manager = blob_manager.BlobFileManager(self.client_blob_dir, self.client_storage)
         self.server_lbry_file_manager = EncryptedFileManager(
             peer_finder, RateLimiter(), self.server_blob_manager, wallet, prm, self.server_storage,
-            stream_descriptor.StreamDescriptorIdentifier()
+            descriptor.StreamDescriptorIdentifier()
         )
         self.client_lbry_file_manager = EncryptedFileManager(
             peer_finder, RateLimiter(), self.client_blob_manager, wallet, prm, self.client_storage,
-            stream_descriptor.StreamDescriptorIdentifier()
+            descriptor.StreamDescriptorIdentifier()
         )
 
         self.expected_blobs = [

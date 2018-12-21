@@ -6,11 +6,12 @@ import typing
 from binascii import hexlify, unhexlify
 from twisted.internet import defer, task, threads
 from twisted.enterprise import adbapi
+
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet import conf
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
-from lbrynet.blob.CryptBlob import CryptBlobInfo
+from lbrynet.blob.blob_info import BlobInfo
 from lbrynet.dht.constants import data_expiration
 
 log = logging.getLogger(__name__)
@@ -188,7 +189,7 @@ class SQLiteStorage:
         # when it loads each file
         self.content_claim_callbacks = {}  # {<stream_hash>: <callable returning a deferred>}
         self.check_should_announce_lc = None
-        if 'reflector' not in conf.settings['components_to_skip']:
+        if conf.settings and 'reflector' not in conf.settings['components_to_skip']:
             self.check_should_announce_lc = task.LoopingCall(self.verify_will_announce_all_head_and_sd_blobs)
 
     @defer.inlineCallbacks
@@ -303,7 +304,7 @@ class SQLiteStorage:
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
             timestamp = self.clock.seconds()
-            if conf.settings['announce_head_blobs_only']:
+            if conf.settings and conf.settings['announce_head_blobs_only']:
                 r = transaction.execute(
                     "select blob_hash from blob "
                     "where blob_hash is not null and "
@@ -463,7 +464,7 @@ class SQLiteStorage:
 
             for blob_hash, position, iv in stream_blobs:
                 blob_length = blob_length_dict.get(blob_hash, 0)
-                crypt_blob_infos.append(CryptBlobInfo(blob_hash, position, blob_length, iv))
+                crypt_blob_infos.append(BlobInfo(position, blob_length, iv, blob_hash))
             crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
             return crypt_blob_infos
         return self.db.runInteraction(_get_blobs_for_stream)

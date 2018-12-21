@@ -39,8 +39,7 @@ class TestRefreshPingQueue(AsyncioTestCase):
             for i in range(1, len(peer_addresses)):
                 node = nodes[i]
                 assert node.node_id != node_1.node_id
-                peer = node_1.peer_manager.make_peer(node.external_ip, dht_protocol=node_1, node_id=node.node_id,
-                                                     udp_port=node.udp_port)
+                peer = node_1.peer_manager.make_peer(node.external_ip, node_id=node.node_id, udp_port=node.udp_port)
                 futs.append(peer.ping())
             await advance(3)
             await asyncio.gather(*tuple(futs))
@@ -57,8 +56,8 @@ class TestRefreshPingQueue(AsyncioTestCase):
                 self.assertEqual((contacts[0].node_id, contacts[0].address, contacts[0].udp_port),
                                  (node_1.node_id, node_1.external_ip, node_1.udp_port))
 
-            # run long enough for the refresh loop to run twice
-            await advance(7200)
+            # run long enough for the refresh loop to run
+            await advance(3600)
 
             # verify all the nodes know about each other
             for p in nodes.values():

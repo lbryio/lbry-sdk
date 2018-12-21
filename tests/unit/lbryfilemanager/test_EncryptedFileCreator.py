@@ -5,15 +5,15 @@ from twisted.internet import defer
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbrynet.peer import PeerManager
-from lbrynet.blob.stream_descriptor import get_sd_info, BlobStreamDescriptorReader
-from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
-from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.blob_exchange.rate_limiter import RateLimiter
-from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob import EncryptedFileCreator
-from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.blob.stream_descriptor import JSONBytesEncoder
+from lbrynet.stream.descriptor import get_sd_info, BlobStreamDescriptorReader
+from lbrynet.stream.descriptor import StreamDescriptorIdentifier
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.staging.rate_limiter import RateLimiter
+from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
+from lbrynet.storage import SQLiteStorage
+from lbrynet.staging import EncryptedFileCreator
+from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
+from lbrynet.stream.descriptor import JSONBytesEncoder
 from tests import mocks
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 
@@ -45,7 +45,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
         self.rate_limiter = RateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
         self.storage = SQLiteStorage(self.tmp_db_dir)
-        self.blob_manager = DiskBlobManager(self.tmp_blob_dir, self.storage)
+        self.blob_manager = BlobFileManager(self.tmp_blob_dir, self.storage)
         self.prm = OnlyFreePaymentsManager()
         self.lbry_file_manager = EncryptedFileManager(self.peer_finder, self.rate_limiter, self.blob_manager,
                                                       self.wallet, self.prm, self.storage, self.sd_identifier)

@@ -5,11 +5,11 @@ from twisted.internet.task import deferLater
 from twisted.internet.protocol import ServerFactory
 
 from lbrynet import conf, utils
-from lbrynet.blob_exchange.client.ClientRequest import ClientRequest
-from lbrynet.blob_exchange.server.ServerProtocol import ServerProtocol
-from lbrynet.blob_exchange.client.ClientProtocol import ClientProtocol
-from lbrynet.blob_exchange.rate_limiter import RateLimiter
-from lbrynet.blob_exchange.Peer import Peer
+from lbrynet.staging.old_blob_client import ClientRequest
+from lbrynet.staging.old_blob_server.ServerProtocol import ServerProtocol
+from lbrynet.staging.old_blob_client import ClientProtocol
+from lbrynet.staging.rate_limiter import RateLimiter
+from lbrynet.peer import Peer
 from lbrynet.error import NoResponseError
 from lbrynet.peer import PeerManager
 
@@ -120,8 +120,9 @@ class TestIntegrationConnectionManager(TestCase):
     def setUp(self):
 
         conf.initialize_settings(False)
-
-        self.TEST_PEER = Peer(LOCAL_HOST, PEER_PORT)
+        self.loop = asyncio.get_event_loop()
+        self.peer_manager = PeerManager(self.loop)
+        self.TEST_PEER = Peer(asyncio.get_event_loop(), self.peer_manager, address=LOCAL_HOST, tcp_port=PEER_PORT)
         self.downloader = MocDownloader()
         self.rate_limiter = RateLimiter()
         self.primary_request_creator = MocRequestCreator([self.TEST_PEER])
@@ -131,7 +132,7 @@ class TestIntegrationConnectionManager(TestCase):
 
     def _init_connection_manager(self, seek_head_blob_first=False):
         # this import is required here so utils.call_later is replaced by self.clock.callLater
-        from lbrynet.blob_exchange.client.ConnectionManager import ConnectionManager
+        from lbrynet.staging.old_blob_client import ConnectionManager
         self.connection_manager = ConnectionManager(self.downloader, self.rate_limiter,
                                                     [self.primary_request_creator], [])
         self.connection_manager.seek_head_blob_first = seek_head_blob_first

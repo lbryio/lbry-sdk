@@ -3,7 +3,7 @@ import asyncio
 from twisted.internet import defer
 from lbrynet.error import ComponentStartConditionNotMet
 from lbrynet.peer import PeerManager
-from lbrynet.extras.daemon.PeerFinder import DHTPeerFinder
+from lbrynet.staging.PeerFinder import DHTPeerFinder
 
 log = logging.getLogger(__name__)
 

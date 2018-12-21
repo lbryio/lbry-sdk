@@ -1,26 +1,27 @@
 import os
+import asyncio
 import logging
-from twisted.internet import defer, threads
-from twisted.web.client import FileBodyProducer
-from twisted.python.failure import Failure
-from lbrynet.cryptoutils import get_lbry_hash_obj
-from lbrynet.error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
+import typing
+from cryptography.hazmat.primitives.ciphers import Cipher, modes
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from cryptography.hazmat.primitives.padding import PKCS7
+
+from lbrynet.cryptoutils import backend, get_lbry_hash_obj
+from lbrynet.error import DownloadCancelledError, InvalidBlobHashError
+from lbrynet.blob import MAX_BLOB_SIZE, blobhash_length
 from lbrynet.blob.writer import HashBlobWriter
-from lbrynet.blob.reader import HashBlobReader
+
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer
 
 log = logging.getLogger(__name__)
 
-MAX_BLOB_SIZE = 2 * 2 ** 20
 
-# digest_size is in bytes, and blob hashes are hex encoded
-blobhash_length = get_lbry_hash_obj().digest_size * 2
-
-
-def is_valid_hashcharacter(char):
+def is_valid_hashcharacter(char: str) -> bool:
     return char in "0123456789abcdef"
 
 
-def is_valid_blobhash(blobhash):
+def is_valid_blobhash(blobhash: str) -> bool:
     """Checks whether the blobhash is the correct length and contains only
     valid characters (0-9, a-f)
 
@@ -29,6 +30,16 @@ def is_valid_blobhash(blobhash):
     @return: True/False
     """
     return len(blobhash) == blobhash_length and all(is_valid_hashcharacter(l) for l in blobhash)
+
+
+def encrypt_blob_bytes(key: bytes, iv: bytes, unencrypted: bytes) -> typing.Tuple[bytes, str]:
+    cipher = Cipher(AES(key), modes.CBC(iv), backend=backend)
+    padder = PKCS7(AES.block_size).padder()
+    encryptor = cipher.encryptor()
+    encrypted = encryptor.update(padder.update(unencrypted) + padder.finalize()) + encryptor.finalize()
+    digest = get_lbry_hash_obj()
+    digest.update(encrypted)
+    return encrypted, digest.hexdigest()
 
 
 class BlobFile:
@@ -40,104 +51,125 @@ class BlobFile:
     Also can be used for reading from blobs on the local filesystem
     """
 
-    def __str__(self):
-        return self.blob_hash[:16]
-
-    def __repr__(self):
-        return '<{}({})>'.format(self.__class__.__name__, str(self))
-
-    def __init__(self, blob_dir, blob_hash, length=None):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, blob_hash: str,
+                 length: typing.Optional[int] = None):
         if not is_valid_blobhash(blob_hash):
             raise InvalidBlobHashError(blob_hash)
+        self.loop = loop
         self.blob_hash = blob_hash
         self.length = length
-        self.writers = {}  # {Peer: writer, finished_deferred}
-        self._verified = False
-        self.readers = 0
         self.blob_dir = blob_dir
         self.file_path = os.path.join(blob_dir, self.blob_hash)
-        self.blob_write_lock = defer.DeferredLock()
-        self.saved_verified_blob = False
-        if os.path.isfile(self.file_path):
-            self.set_length(os.path.getsize(self.file_path))
-            # This assumes that the hash of the blob has already been
-            # checked as part of the blob creation process. It might
-            # be worth having a function that checks the actual hash;
-            # its probably too expensive to have that check be part of
-            # this call.
-            self._verified = True
+        self.writers: typing.List[HashBlobWriter] = []
 
-    def open_for_writing(self, peer):
+        self.finished_writing = asyncio.Future(loop=loop)
+        self.blob_write_lock = asyncio.Lock(loop=loop)
+        self._verified = False
+        if os.path.isfile(os.path.join(blob_dir, blob_hash)):
+            length = length or int(os.stat(os.path.join(blob_dir, blob_hash)).st_size)
+            self.length = length
+            self._verified = True
+        self.saved_verified_blob = False
+
+    def writer_finished(self, writer: HashBlobWriter):
+        def callback(finished: asyncio.Future):
+            try:
+                error = finished.result()
+            except Exception as err:
+                error = err
+            if writer in self.writers:  # remove this download attempt
+                self.writers.remove(writer)
+            if not error:  # the blob downloaded, cancel all the other download attempts and set the result
+                while self.writers:
+                    self.writers.pop().finished.cancel()
+                t = self.loop.create_task(self.save_verified_blob(writer))
+                t.add_done_callback(lambda *_: self.finished_writing.set_result(None))
+            elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
+                log.warning(f"failed to download {self.blob_hash[:8]} from {writer.peer.address}: {str(error)}")
+        return callback
+
+    async def save_verified_blob(self, writer):
+
+        def _save_verified():
+            log.info(f"write blob file {self.blob_hash[:8]} from {writer.peer.address}")
+            if not self.saved_verified_blob and not os.path.isfile(self.file_path):
+                if self.get_length() == len(writer.verified_bytes):
+                    with open(self.file_path, 'wb') as write_handle:
+                        write_handle.write(writer.verified_bytes)
+                    self.saved_verified_blob = True
+                    self._verified = True
+        await self.blob_write_lock.acquire()
+        try:
+            await self.loop.run_in_executor(None, _save_verified)
+        finally:
+            self.blob_write_lock.release()
+
+    def open_for_writing(self, peer: 'Peer') -> HashBlobWriter:
         """
         open a blob file to be written by peer, supports concurrent
         writers, as long as they are from different peers.
-
-        returns tuple of (writer, finished_deferred)
-
-        writer - a file like object with a write() function, close() when finished
-        finished_deferred - deferred that is fired when write is finished and returns
-            a instance of itself as HashBlob
         """
-        if peer not in self.writers:
-            log.debug("Opening %s to be written by %s", str(self), str(peer))
-            finished_deferred = defer.Deferred()
-            writer = HashBlobWriter(self.get_length, self.writer_finished)
-            self.writers[peer] = (writer, finished_deferred)
-            return writer, finished_deferred
-        log.warning("Tried to download the same file twice simultaneously from the same peer")
-        return None, None
 
-    def open_for_reading(self):
-        """
-        open blob for reading
+        if os.path.exists(self.file_path):
+            raise Exception("File already exists")
 
-        returns a file like object that can be read() from, and closed() when
-        finished
-        """
-        if self._verified is True:
-            f = open(self.file_path, 'rb')
-            reader = HashBlobReader(f, self.reader_finished)
-            self.readers += 1
-            return reader
-        return None
+        for writer in self.writers:
+            if writer.peer is peer:
+                raise Exception("Tried to download the same file twice simultaneously from the same peer")
 
-    def delete(self):
-        """
-        delete blob file from file system, prevent deletion
-        if a blob is being read from or written to
+        log.info(f"Opening {self.blob_hash[:8]} to be written by {peer.address}")
+        fut = asyncio.Future(loop=self.loop)
+        writer = HashBlobWriter(peer, self.blob_hash, self.get_length, fut)
+        self.writers.append(writer)
+        fut.add_done_callback(self.writer_finished(writer))
+        return writer
 
-        returns a deferred that firesback when delete is completed
-        """
-        if not self.writers and not self.readers:
+    async def close(self):
+        while self.writers:
+            self.writers.pop().finished.cancel()
+
+    async def delete(self):
+        await self.close()
+        await self.blob_write_lock.acquire()
+        try:
             self._verified = False
             self.saved_verified_blob = False
+            if os.path.isfile(self.file_path):
+                os.remove(self.file_path)
+        finally:
+            self.blob_write_lock.release()
 
-            def delete_from_file_system():
-                if os.path.isfile(self.file_path):
-                    os.remove(self.file_path)
-
-            d = threads.deferToThread(delete_from_file_system)
-
-            def log_error(err):
-                log.warning("An error occurred deleting %s: %s",
-                            str(self.file_path), err.getErrorMessage())
-                return err
-
-            d.addErrback(log_error)
-            return d
-        else:
-            return defer.fail(Failure(
-                ValueError("File is currently being read or written and cannot be deleted")))
-
-    @property
-    def verified(self):
+    def decrypt(self, key: bytes, iv: bytes) -> bytes:
         """
-        Protect verified from being modified by other classes.
-        verified is True if a write to a blob has completed successfully,
-        or a blob has been read to have the same length as specified
-        in init
+        Decrypt a BlobFile to plaintext bytes
         """
-        return self._verified
+
+        with open(self.file_path, "rb") as f:
+            buff = f.read()
+        if len(buff) != self.length:
+            raise ValueError("unexpected length")
+        cipher = Cipher(AES(key), modes.CBC(iv), backend=backend)
+        unpadder = PKCS7(AES.block_size).unpadder()
+        decryptor = cipher.decryptor()
+        return unpadder.update(decryptor.update(buff) + decryptor.finalize()) + unpadder.finalize()
+
+    @classmethod
+    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_dir: str, key: bytes, iv: bytes,
+                                      unencrypted: bytes, callback: typing.Callable[[str, bytes, int, int], None],
+                                      blob_num: int):
+        """
+        Create an encrypted BlobFile from plaintext bytes
+        """
+
+        def _create_blob():
+            blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
+            length = len(blob_bytes)
+            with open(os.path.join(blob_dir, blob_hash), 'wb') as blob_file:
+                blob_file.write(blob_bytes)
+            callback(blob_hash, iv, length, blob_num)
+            return cls(loop, blob_dir, blob_hash, length)
+
+        return await loop.run_in_executor(None, _create_blob)
 
     def set_length(self, length):
         if self.length is not None and length == self.length:
@@ -153,75 +185,7 @@ class BlobFile:
         return self.length
 
     def get_is_verified(self):
-        return self.verified
+        return self._verified
 
     def is_downloading(self):
-        if self.writers:
-            return True
-        return False
-
-    def reader_finished(self, reader):
-        self.readers -= 1
-        return defer.succeed(True)
-
-    def writer_finished(self, writer, err=None):
-        def fire_finished_deferred():
-            self._verified = True
-            for p, (w, finished_deferred) in list(self.writers.items()):
-                if w == writer:
-                    del self.writers[p]
-                    finished_deferred.callback(self)
-                    return True
-            log.warning(
-                "Somehow, the writer that was accepted as being valid was already removed: %s",
-                writer)
-            return False
-
-        def errback_finished_deferred(err):
-            for p, (w, finished_deferred) in list(self.writers.items()):
-                if w == writer:
-                    del self.writers[p]
-                    finished_deferred.errback(err)
-
-        def cancel_other_downloads():
-            for p, (w, finished_deferred) in self.writers.items():
-                w.close()
-
-        if err is None:
-            if writer.len_so_far == self.length and writer.blob_hash == self.blob_hash:
-                if self._verified is False:
-                    d = self.save_verified_blob(writer)
-                    d.addCallbacks(lambda _: fire_finished_deferred(), errback_finished_deferred)
-                    d.addCallback(lambda _: cancel_other_downloads())
-                else:
-                    d = defer.succeed(None)
-                    fire_finished_deferred()
-            else:
-                if writer.len_so_far != self.length:
-                    err_string = "blob length is %i vs expected %i" % (writer.len_so_far, self.length)
-                else:
-                    err_string = f"blob hash is {writer.blob_hash} vs expected {self.blob_hash}"
-                errback_finished_deferred(Failure(InvalidDataError(err_string)))
-                d = defer.succeed(None)
-        else:
-            errback_finished_deferred(err)
-            d = defer.succeed(None)
-        d.addBoth(lambda _: writer.close_handle())
-        return d
-
-    def save_verified_blob(self, writer):
-        # we cannot have multiple _save_verified_blob interrupting
-        # each other, can happen since startProducing is a deferred
-        return self.blob_write_lock.run(self._save_verified_blob, writer)
-
-    @defer.inlineCallbacks
-    def _save_verified_blob(self, writer):
-        if self.saved_verified_blob is False:
-            writer.write_handle.seek(0)
-            out_path = os.path.join(self.blob_dir, self.blob_hash)
-            producer = FileBodyProducer(writer.write_handle)
-            yield producer.startProducing(open(out_path, 'wb'))
-            self.saved_verified_blob = True
-            defer.returnValue(True)
-        else:
-            raise DownloadCanceledError()
+        return len(self.writers) > 0

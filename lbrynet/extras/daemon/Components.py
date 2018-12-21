@@ -16,24 +16,24 @@ from aioupnp.fault import UPnPError
 import lbrynet.schema
 from lbrynet import conf
 
-from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactory
-from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
+from lbrynet.staging.old_stream_client.EncryptedFileDownloader import EncryptedFileSaverFactory
+from lbrynet.staging.old_stream_client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.dht.node import Node
 from lbrynet.extras.daemon.Component import Component
 from lbrynet.extras.daemon.ExchangeRateManager import ExchangeRateManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
+from lbrynet.storage import SQLiteStorage
+from lbrynet.staging.HashAnnouncer import DHTHashAnnouncer
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
 from lbrynet.utils import DeferredDict, generate_id
-from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
-from lbrynet.blob_exchange.rate_limiter import RateLimiter
-from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
-from lbrynet.blob_exchange.server.BlobRequestHandler import BlobRequestHandlerFactory
-from lbrynet.blob_exchange.server.ServerProtocol import ServerProtocolFactory
+# from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
+# from lbrynet.staging.rate_limiter import RateLimiter
+# from lbrynet.blob.blob_manager import BlobFileManager
+# from lbrynet.blob.stream import StreamDescriptorIdentifier, EncryptedFileStreamType
+from lbrynet.staging.old_blob_server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.staging.old_blob_server.ServerProtocol import ServerProtocolFactory
 
 
 log = logging.getLogger(__name__)
@@ -339,7 +339,7 @@ class BlobComponent(Component):
             dht_node = self.component_manager.get_component(DHT_COMPONENT)
             if dht_node:
                 datastore = dht_node._dataStore
-        self.blob_manager = DiskBlobManager(os.path.join(conf.settings.data_dir, "blobfiles"), storage, datastore)
+        self.blob_manager = BlobFileManager(CS.get_blobfiles_dir(), storage, datastore)
         return self.blob_manager.setup()
 
     def stop(self):

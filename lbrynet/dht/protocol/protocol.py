@@ -9,7 +9,7 @@ from asyncio.transports import DatagramTransport
 from lbrynet.peer import Peer, PeerManager
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
-from lbrynet.dht.error import DecodeError, UnknownRemoteException, TransportNotConnected
+from lbrynet.dht.error import UnknownRemoteException, TransportNotConnected
 from lbrynet.dht.protocol.ping_queue import PingQueue
 from lbrynet.dht.protocol.rpc import KademliaRPC
 from lbrynet.dht.routing.routing_table import TreeRoutingTable
@@ -42,6 +42,7 @@ class KademliaProtocol(DatagramProtocol):
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)
         self.refresh_task: asyncio.Task = None
         self._lock = asyncio.Lock()
+        self.peer_manager.register_dht_protocol(self)
 
     def connection_made(self, transport: DatagramTransport):
         log.info("create refresh task")
@@ -121,7 +122,7 @@ class KademliaProtocol(DatagramProtocol):
 
         if isinstance(message, RequestDatagram):
             # This is an RPC method request
-            remote_contact = self.peer_manager.make_peer(address[0], message.node_id, self, address[1])
+            remote_contact = self.peer_manager.make_peer(address[0], message.node_id, udp_port=address[1])
             remote_contact.update_last_requested()
 
             # only add a requesting contact to the routing table if it has replied to one of our requests
@@ -188,7 +189,10 @@ class KademliaProtocol(DatagramProtocol):
                     assert message.node_id != self.node_id
                     if remote_contact.node_id is None:
                         remote_contact.set_id(message.node_id)
-                    assert (remote_contact.address, remote_contact.udp_port) == address
+                    err_str = f"response from {address[0]}:{address[1]}, " \
+                              f"expected {remote_contact.address}:{remote_contact.udp_port}"
+                    assert (remote_contact.address, remote_contact.udp_port) == address, AssertionError(err_str)
+
                 except AssertionError as err:
                     df.set_exception(err)
                     return
@@ -278,7 +282,7 @@ class KademliaProtocol(DatagramProtocol):
                 seq_number += 1
         else:
             self._schedule_send_next(data, address)
-        fut = asyncio.Future()
+        fut = asyncio.Future(loop=self.loop)
 
         def timeout(_):
             if message.rpc_id in self.sent_messages:
@@ -290,7 +294,7 @@ class KademliaProtocol(DatagramProtocol):
             assert self.node_id != peer.node_id
             assert self.node_id == message.node_id
             self.sent_messages[message.rpc_id] = (
-                self.peer_manager.make_peer(address[0], peer.node_id, self, address[1]), fut,
+                self.peer_manager.make_peer(address[0], peer.node_id, udp_port=address[1]), fut,
                 message.method
             )
         else:
@@ -325,7 +329,7 @@ class KademliaProtocol(DatagramProtocol):
             await self.ping_queue.enqueue_maybe_ping(*self.routing_table.get_contacts(), delay=0)
             await self.ping_queue.enqueue_maybe_ping(*self.data_store.get_storing_contacts(), delay=0)
             await self.refresh_routing_table()
-            fut = asyncio.Future()
+            fut = asyncio.Future(loop=self.loop)
             self.loop.call_later(constants.refresh_interval, fut.set_result, None)
             await fut
 

@@ -1,20 +1,20 @@
 import types
 from unittest import mock
 from twisted.trial import unittest
-from twisted.internet import defer, task
+from twisted.internet import defer
 
-from lbrynet.blob_exchange.price_negotiation import payment_rate_manager
+from lbrynet.staging.price_negotiation import payment_rate_manager
 from lbrynet.error import DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
-from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.blob_exchange.client.DownloadManager import DownloadManager
-from lbrynet.blob_exchange.rate_limiter import RateLimiter
-from lbrynet.extras.daemon import Downloader
+from lbrynet.stream.descriptor import StreamDescriptorIdentifier
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.staging.old_blob_client import DownloadManager
+from lbrynet.staging.rate_limiter import RateLimiter
+from lbrynet.staging import Downloader
 from lbrynet.extras.daemon import ExchangeRateManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
-from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.storage import SQLiteStorage
+from lbrynet.staging.PeerFinder import DummyPeerFinder
+from lbrynet.staging.EncryptedFileStatusReport import EncryptedFileStatusReport
+from lbrynet.staging.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 
 from tests.mocks import mock_conf_settings
@@ -77,7 +77,7 @@ class GetStreamTests(unittest.TestCase):
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
         storage = mock.Mock(spec=SQLiteStorage)
         peer_finder = DummyPeerFinder()
-        blob_manager = mock.Mock(spec=DiskBlobManager)
+        blob_manager = mock.Mock(spec=BlobFileManager)
         max_key_fee = {'currency': "LBC", 'amount': 10, 'address': ''}
         disable_max_key_fee = False
         data_rate = {'currency': "LBC", 'amount': 0, 'address': ''}

@@ -2,11 +2,19 @@ import ipaddress
 import typing
 import binascii
 import asyncio
+import logging
 from binascii import hexlify
-from collections import defaultdict
 from functools import reduce
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import RequestDatagram, REQUEST_TYPE
+from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from lbrynet.dht.protocol.protocol import KademliaProtocol
+    from lbrynet.blob.blob_file import BlobFile
+
+
+log = logging.getLogger(__name__)
 
 
 def is_valid_ipv4(address):
@@ -18,8 +26,8 @@ def is_valid_ipv4(address):
 
 
 class Peer:
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager, address: str, node_id: typing.Optional[bytes],
-                 udp_port: typing.Optional[int] = None, dht_protocol=None, first_contacted: typing.Optional[int] = None,
+    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager, address: str, node_id: typing.Optional[bytes] = None,
+                 udp_port: typing.Optional[int] = None, first_contacted: typing.Optional[int] = None,
                  tcp_port: typing.Optional[int] = None):
         if node_id is not None:
             if not len(node_id) == constants.hash_length:
@@ -36,18 +44,15 @@ class Peer:
         self.address = address
         self.udp_port = udp_port
         self.tcp_port = tcp_port
-        self.dht_protocol = dht_protocol
         self.first_contacted = first_contacted
         self.last_replied = None
         self.last_requested = None
         self.protocol_version = 0
         self._token = (None, 0)  # token, timestamp
 
-        self.down_count = 0
-        # Number of successful connections (with full protocol completion) to this peer
-        self.success_count = 0
-        self.score = 0
-        self.stats = defaultdict(float)  # {string stat_type, float count}
+        self.tcp_last_down = None
+        self.blob_score = 0
+        self.blob_exchange_protocol: BlobExchangeClientProtocol = None
 
     def update_tcp_port(self, tcp_port: int):
         self.tcp_port = tcp_port
@@ -150,83 +155,129 @@ class Peer:
 
     # DHT RPC functions
 
+    async def _send_kademlia_rpc(self, datagram: RequestDatagram):
+        try:
+            result = await asyncio.wait_for(
+                asyncio.ensure_future(
+                    self.peer_manager.dht_protocol.send(self, datagram, (self.address, self.udp_port)), loop=self.loop),
+                constants.rpc_timeout, loop=self.loop
+            )
+            self.update_last_replied()
+            return result
+        except asyncio.CancelledError as err:
+            log.info("dht cancelled")
+            raise err
+        except asyncio.TimeoutError as err:
+            self.update_last_failed()
+            log.info("dht timeout")
+            raise err
+        except Exception as err:
+            log.error("error sending %s to %s", datagram.method, self)
+            raise asyncio.TimeoutError()
+            # raise err
+
     async def ping(self) -> bytes:
-        assert self.dht_protocol is not None
-        packet = RequestDatagram(
-            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.dht_protocol.node_id, 'ping', []
-        )
-        return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
-            constants.rpc_timeout
-        )
+        assert self.peer_manager.dht_protocol is not None
+        return await self._send_kademlia_rpc(RequestDatagram(
+            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.peer_manager.dht_protocol.node_id,
+            'ping', []
+        ))
 
     async def store(self, blob_hash: bytes, token: bytes, port: int, original_publisher_id: bytes, age: int) -> bytes:
-        assert self.dht_protocol is not None
-        packet = RequestDatagram(
-            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.dht_protocol.node_id, 'store',
-            [blob_hash, token, port, original_publisher_id, age]
-        )
-        return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
-            constants.rpc_timeout
-        )
+        assert self.peer_manager.dht_protocol is not None
+        return await self._send_kademlia_rpc(RequestDatagram(
+            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.peer_manager.dht_protocol.node_id,
+            'store', [blob_hash, token, port, original_publisher_id, age]
+        ))
 
     async def find_node(self, key: bytes) -> typing.List[typing.Tuple[bytes, str, int]]:
-        assert self.dht_protocol is not None
-        packet = RequestDatagram(
-            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.dht_protocol.node_id, 'findNode',
-            [key]
-        )
-        return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
-            constants.rpc_timeout
-        )
+        assert self.peer_manager.dht_protocol is not None
+        return await self._send_kademlia_rpc(RequestDatagram(
+            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.peer_manager.dht_protocol.node_id,
+            'findNode', [key]
+        ))
 
     async def find_value(self, key: bytes) -> typing.Union[typing.List[typing.Tuple[bytes, str, int]], typing.Dict]:
-        assert self.dht_protocol is not None
-        packet = RequestDatagram(
-            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.dht_protocol.node_id, 'findValue',
-            [key]
-        )
-        return await asyncio.wait_for(
-            asyncio.ensure_future(self.dht_protocol.send(self, packet, (self.address, self.udp_port))),
-            constants.rpc_timeout
-        )
+        assert self.peer_manager.dht_protocol is not None
+        result = await self._send_kademlia_rpc(RequestDatagram(
+            REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.peer_manager.dht_protocol.node_id,
+            'findValue', [key]
+        ))
+        if b'token' in result:
+            self.update_token(result[b'token'])
+        else:
+            log.warning("failed to update token for %s", self)
+        return result
+
+    # Blob exchange functions
+
+    async def connect_tcp(self, peer_timeout: int, peer_connect_timeout: int) -> bool:
+        if self.blob_exchange_protocol:
+            return True
+        protocol = BlobExchangeClientProtocol(self, self.loop, peer_timeout)
+        try:
+            await asyncio.wait_for(
+                asyncio.ensure_future(self.loop.create_connection(lambda: protocol, self.address, self.tcp_port),
+                                      loop=self.loop),
+                peer_connect_timeout, loop=self.loop
+            )
+            self.blob_exchange_protocol = protocol
+            self.report_tcp_up()
+            return True
+        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError):
+            self.report_tcp_down()
+            return False
+
+    def disconnect_tcp(self, reason: typing.Optional[Exception] = None):
+        if not self.blob_exchange_protocol:
+            return
+        self.blob_exchange_protocol.transport.close()
+        self.blob_exchange_protocol = None
+
+    async def request_blobs(self, blobs: typing.List['BlobFile']) -> typing.List['BlobFile']:
+        log.info("request availability")
+        available = await self.blob_exchange_protocol.request_availability([b.blob_hash for b in blobs])
+        log.info("requested availability: %s", available)
+        to_request = [blob for blob in blobs if blob.blob_hash in available]
+        if not to_request:
+            return []
+        accepted = await self.blob_exchange_protocol.request_price(0.0)
+        if not accepted:
+            return []
+        downloaded = []
+        for blob in to_request:
+            log.info("download blob from %s", self.address)
+            downloaded_blob = await self.blob_exchange_protocol.request_blob(blob)
+            if downloaded_blob:
+                downloaded.append(blob)
+        return downloaded
 
     # Blob functions, clean up
 
-    @staticmethod
-    def is_available():
-        # if self.attempt_connection_at is None or utils.today() > self.attempt_connection_at:
-        #     return True
-        return False
+    def report_tcp_down(self):
+        self.tcp_last_down = self.loop.time()
 
-    def report_up(self):
-        self.down_count = 0
-        # self.attempt_connection_at = None
-
-    def report_success(self):
-        self.success_count += 1
-
-    def report_down(self):
-        self.down_count += 1
-        # timeout_time = datetime.timedelta(seconds=60 * self.down_count)
-        # self.attempt_connection_at = utils.today() + timeout_time
+    def report_tcp_up(self):
+        self.tcp_last_down = None
 
     def update_score(self, score_change):
-        self.score += score_change
-
-    def update_stats(self, stat_type, count):
-        self.stats[stat_type] += count
+        self.blob_score += score_change
 
 
 class PeerManager:
     def __init__(self, loop: asyncio.BaseEventLoop):
-
         self._loop = loop
         self._contacts: typing.Dict[typing.Tuple[bytes, str, int], Peer] = {}
         self._rpc_failures = {}
         self._blob_peers = {}
+        self._dht_protocol: 'KademliaProtocol' = None
+
+    def register_dht_protocol(self, protocol: 'KademliaProtocol'):
+        self._dht_protocol = protocol
+
+    @property
+    def dht_protocol(self) -> typing.Optional['KademliaProtocol']:
+        return self._dht_protocol
 
     def get_peer(self, address: str, node_id: typing.Optional[bytes] = None, udp_port: typing.Optional[int] = None,
                  tcp_port: typing.Optional[int] = None) -> Peer:
@@ -244,16 +295,15 @@ class PeerManager:
                 contact.update_tcp_port(tcp_port)
             return contact
 
-    def make_peer(self, address: str, node_id: typing.Optional[bytes] = None, dht_protocol=None,
-                  udp_port: typing.Optional[int] = None, first_contacted: typing.Optional[int] = None,
-                  tcp_port: typing.Optional[int] = None) -> Peer:
+    def make_peer(self, address: str, node_id: typing.Optional[bytes] = None, udp_port: typing.Optional[int] = None,
+                  first_contacted: typing.Optional[int] = None, tcp_port: typing.Optional[int] = None) -> Peer:
         contact = self.get_peer(address, node_id, udp_port, tcp_port)
         if contact:
             if tcp_port:
                 contact.update_tcp_port(tcp_port)
             return contact
         contact = Peer(
-            self._loop, self, address, node_id, udp_port, dht_protocol, first_contacted, tcp_port
+            self._loop, self, address, node_id, udp_port, first_contacted, tcp_port
         )
         self._contacts[(node_id, address, udp_port)] = contact
         return contact

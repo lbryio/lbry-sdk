@@ -5,15 +5,15 @@ import tempfile
 from hashlib import md5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
-from lbrynet.blob.stream_descriptor import StreamDescriptorIdentifier
-from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.blob.stream_descriptor import get_sd_info
-from lbrynet.blob_exchange.rate_limiter import RateLimiter
+from lbrynet.stream.descriptor import StreamDescriptorIdentifier
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.stream.descriptor import get_sd_info
+from lbrynet.staging.rate_limiter import RateLimiter
 from lbrynet.peer import PeerManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
-from lbrynet.blob.EncryptedFileCreator import create_lbry_file
-from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
+from lbrynet.storage import SQLiteStorage
+from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
+from lbrynet.staging.EncryptedFileCreator import create_lbry_file
+from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
 from tests import mocks
 
 
@@ -43,7 +43,7 @@ class TestStreamify(TestCase):
         self.rate_limiter = RateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
         self.storage = SQLiteStorage(self.db_dir)
-        self.blob_manager = DiskBlobManager(self.blob_dir, self.storage, self.dht_node._dataStore)
+        self.blob_manager = BlobFileManager(self.blob_dir, self.storage, self.dht_node._dataStore)
         self.prm = OnlyFreePaymentsManager()
         self.lbry_file_manager = EncryptedFileManager(
             self.peer_finder, self.rate_limiter, self.blob_manager, self.wallet, self.prm, self.storage,

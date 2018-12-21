@@ -6,8 +6,8 @@ from twisted.test import proto_helpers
 from twisted.trial import unittest
 
 from lbrynet.blob_exchange import Peer
-from lbrynet.blob_exchange.server import BlobRequestHandler
-from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import NegotiatedPaymentRateManager, BasePaymentRateManager
+from lbrynet.staging.old_blob_server import BlobRequestHandler
+from lbrynet.staging.price_negotiation import NegotiatedPaymentRateManager, BasePaymentRateManager
 from tests.mocks import mock_conf_settings
 
 

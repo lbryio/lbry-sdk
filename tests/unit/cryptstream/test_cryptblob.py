@@ -1,6 +1,6 @@
 from twisted.trial import unittest
 from twisted.internet import defer
-from lbrynet.blob import CryptBlob
+from lbrynet.stream import crypt_blob
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 from tests.mocks import mock_conf_settings
@@ -50,7 +50,7 @@ class TestCryptBlob(unittest.TestCase):
         blob_num = 0
         key = os.urandom(AES_BLOCK_SIZE_BYTES)
         iv = os.urandom(AES_BLOCK_SIZE_BYTES)
-        maker = CryptBlob.CryptStreamBlobMaker(key, iv, blob_num, blob)
+        maker = crypt_blob.CryptStreamBlobMaker(key, iv, blob_num, blob)
         write_size = size_of_data
         string_to_encrypt = random_string(size_of_data).encode()
 
@@ -71,7 +71,7 @@ class TestCryptBlob(unittest.TestCase):
             self.data_buf += data
 
         # decrypt string
-        decryptor = CryptBlob.StreamBlobDecryptor(blob, key, iv, size_of_data)
+        decryptor = crypt_blob.StreamBlobDecryptor(blob, key, iv, size_of_data)
         yield decryptor.decrypt(write_func)
         self.assertEqual(self.data_buf, string_to_encrypt)
 

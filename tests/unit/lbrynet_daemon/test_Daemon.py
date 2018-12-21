@@ -6,7 +6,7 @@ from twisted.trial import unittest
 
 from lbrynet import conf
 from lbrynet.schema.decode import smart_decode
-from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.storage import SQLiteStorage
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
 from lbrynet.extras.daemon.Components import f2d
@@ -15,11 +15,11 @@ from lbrynet.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.staging.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
-from lbrynet.blob_exchange.price_negotiation.payment_rate_manager import OnlyFreePaymentsManager
+from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
 from tests import test_utils
 from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager

@@ -20,7 +20,7 @@ class TestProtocol(AsyncioTestCase):
             await loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
             await loop.create_datagram_endpoint(lambda: peer2, ('1.2.3.5', 4444))
 
-            peer = peer2.peer_manager.make_peer('1.2.3.4', dht_protocol=peer2, node_id=node_id1, udp_port=4444)
+            peer = peer2.peer_manager.make_peer('1.2.3.4', node_id=node_id1, udp_port=4444)
             result = await peer.ping()
             peer1.transport.close()
             peer2.transport.close()

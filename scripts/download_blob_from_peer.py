@@ -2,102 +2,37 @@
 import argparse
 import logging
 import sys
-import tempfile
-import time
-import shutil
-from pprint import pprint
-
+import os
+import binascii
+import asyncio
 from twisted.internet import asyncioreactor
 asyncioreactor.install()
-from twisted.internet import defer, threads, reactor
-
-from lbrynet import conf, log_support
-from lbrynet.blob_exchange import Peer
-from lbrynet.extras.daemon.single_peer_downloader import SinglePeerDownloader
-from lbrynet.blob.stream_descriptor import BlobStreamDescriptorReader
-from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.extras.daemon.Components import f2d
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.extras.wallet import LbryWalletManager
+from twisted.internet import reactor
+from lbrynet.peer import PeerManager
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.storage import SQLiteStorage
 
 log = logging.getLogger()
 
 
 def main(args=None):
-    conf.initialize_settings()
-    parser = argparse.ArgumentParser()
-    parser.add_argument('peer')
-    parser.add_argument('blob_hash')
-    parser.add_argument('--timeout', type=int, default=30)
-    args = parser.parse_args(args)
-
-    log_support.configure_console(level='DEBUG')
-    log_support.configure_twisted()
-
-    if ":" in str(args.peer):
-        host, port = str(args.peer).strip().split(":")
-    else:
-        host = args.peer
-        port = 3333
-
-    d = download_it(Peer.Peer(host, int(port)), args.timeout, args.blob_hash)
-    d.addErrback(log.exception)
-    d.addBoth(lambda _: reactor.callLater(0, reactor.stop))
+    loop = asyncio.get_event_loop()
+    reactor.callLater(0, loop.create_task, download_it('d5169241150022f996fa7cd6a9a1c421937276a3275eb912790bd07ba7aec1fac5fd45431d226b8fb402691e79aeb24b'))
     reactor.run()
 
 
-@defer.inlineCallbacks
-def download_it(peer, timeout, blob_hash):
-    tmp_dir = yield threads.deferToThread(tempfile.mkdtemp)
-    storage = SQLiteStorage(tmp_dir, reactor)
-    yield storage.setup()
-    tmp_blob_manager = DiskBlobManager(tmp_dir, storage)
-
-    config = {'auto_connect': True}
-    config['lbryum_wallet_dir'] = tempfile.mkdtemp()
-    config['use_keyring'] = False
-    config['blockchain_name'] = conf.settings['blockchain_name']
-    config['lbryum_servers'] = []
-    wallet = yield f2d(LbryWalletManager.from_lbrynet_config(config, storage))
-
-    downloader = SinglePeerDownloader()
-    downloader.setup(wallet)
-
-    try:
-        blob_downloaded = yield downloader.download_blob_from_peer(peer, timeout, blob_hash,
-                                                                   tmp_blob_manager)
-        if blob_downloaded:
-            log.info("SUCCESS!")
-            blob = yield tmp_blob_manager.get_blob(blob_hash)
-            pprint(blob)
-            if not blob.verified:
-                log.error("except that its not verified....")
-            else:
-                reader = BlobStreamDescriptorReader(blob)
-                info = None
-                for x in range(0, 3):
-                    try:
-                        info = yield reader.get_info()
-                    except ValueError:
-                        pass
-                    if info:
-                        break
-
-                    # there's some kind of race condition where it sometimes doesn't write the blob to disk in time
-                    time.sleep(0.1)
-
-                if info is not None:
-                    pprint(info)
-                    for content_blob in info['blobs']:
-                        if 'blob_hash' in content_blob:
-                            yield download_it(peer, timeout, content_blob['blob_hash'])
-        else:
-            log.error("Download failed")
-    finally:
-        yield tmp_blob_manager.stop()
-        yield threads.deferToThread(shutil.rmtree, tmp_dir)
-
-    defer.returnValue(True)
+async def download_it(blob_hash):
+    loop = asyncio.get_event_loop()
+    storage = SQLiteStorage(os.path.expanduser("~/Desktop/tmpblobs"))
+    await storage.setup().asFuture(loop)
+    blob_manager = BlobFileManager(loop, os.path.expanduser("~/Desktop/tmpblobs"), storage)
+    peer_manager = PeerManager(loop)
+    node_id = binascii.unhexlify(b'8fd0519d58ba24c995274c547a183e05cc169734810f26c8f308f0c6cd0d9e1bcb5c21bf3f2ff2a9cef382d801cbb1c4')
+    peer = peer_manager.make_peer('85.17.24.157', node_id, udp_port=4444, tcp_port=4444)
+    blob = blob_manager.get_blob(blob_hash)
+    downloaded = await peer.request_blobs(30, 30, [blob])
+    print(downloaded)
+    reactor.stop()
 
 
 if __name__ == '__main__':

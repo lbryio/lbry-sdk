@@ -24,18 +24,17 @@ from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONEN
 from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
 from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
-from lbrynet.extras.daemon.Downloader import GetStream
-from lbrynet.extras.daemon.Publisher import Publisher
+from lbrynet.staging.Downloader import GetStream
+from lbrynet.staging.Publisher import Publisher
 from lbrynet.extras.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.extras.daemon.mime_types import guess_mime_type
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.blob.stream_descriptor import download_sd_blob
+# from lbrynet.blob.stream import download_sd_blob
 from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError
-from lbrynet.extras.daemon.single_peer_downloader import SinglePeerDownloader
-from lbrynet.blob_exchange.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.staging.old_blob_client import StandaloneBlobDownloader
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError

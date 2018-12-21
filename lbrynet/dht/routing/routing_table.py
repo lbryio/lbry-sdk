@@ -205,7 +205,7 @@ class TreeRoutingTable:
         bucket_index_to_pop = to_pop[0]
         assert len(self._buckets[bucket_index_to_pop]) == 0
         can_go_lower = bucket_index_to_pop - 1 >= 0
-        can_go_higher = bucket_index_to_pop + 1 >= len(self._buckets)
+        can_go_higher = bucket_index_to_pop + 1 < len(self._buckets)
         assert can_go_higher or can_go_lower
         bucket = self._buckets[bucket_index_to_pop]
         if can_go_lower and can_go_higher:

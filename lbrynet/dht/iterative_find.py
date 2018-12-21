@@ -8,6 +8,9 @@ from lbrynet.dht import constants
 from lbrynet.dht.error import UnknownRemoteException
 from lbrynet.dht.routing.distance import Distance
 from lbrynet.dht.routing.routing_table import TreeRoutingTable
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from lbrynet.dht.protocol.protocol import KademliaProtocol
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ def get_shortlist(routing_table: TreeRoutingTable, key: bytes, shortlist: typing
 
 class IterativeFinder:
     def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: PeerManager,
-                 routing_table: TreeRoutingTable, protocol, shortlist: typing.List,
+                 routing_table: TreeRoutingTable, protocol: 'KademliaProtocol', shortlist: typing.List,
                  key: bytes, rpc: str, exclude: typing.Optional[typing.List] = None, bottom_out_limit: int = 2):
         self.iteration = 0
         self.loop = loop
@@ -77,14 +80,15 @@ class IterativeFinder:
         self.active_contacts = []
 
         # Ensure only one searchIteration call is running at a time
-        self.lock = asyncio.Lock()
+        self.lock = asyncio.Lock(loop=self.loop)
         self.iteration_count = 0
 
         self.find_value_result: typing.List[Peer] = []
-        self.pending_iteration_calls = []
+        self.pending_iteration_calls: typing.List[asyncio.TimerHandle] = []
+        self.pending_iteration_tasks: typing.List[asyncio.Task] = []
 
         self.is_find_value_request = rpc == "findValue"
-        self.iteration_fut: asyncio.Future = asyncio.Future()
+        self.iteration_fut: asyncio.Future = asyncio.Future(loop=self.loop)
         self.iteration_futures: typing.List[asyncio.Future] = [self.iteration_fut]
 
     def is_closer(self, contact):
@@ -147,8 +151,7 @@ class IterativeFinder:
                 node_id, host, port = expand_peer(peer)
                 if (host, port) not in self.exclude:
                     self.exclude.add((host, port))
-                    self.find_value_result.append(self.peer_manager.make_peer(host, node_id, self.protocol,
-                                                                              tcp_port=port))
+                    self.find_value_result.append(self.peer_manager.make_peer(host, node_id, tcp_port=port))
                     log.info("found new peer: %s", self.find_value_result[-1])
             if self.find_value_result:
                 async with self.lock:
@@ -162,7 +165,7 @@ class IterativeFinder:
                     continue
                 else:
                     found_contact = self.peer_manager.make_peer(contact_triple[1], contact_triple[0],
-                                                                self.protocol, udp_port=contact_triple[2])
+                                                                udp_port=contact_triple[2])
                     if found_contact not in self.shortlist:
                         self.shortlist.append(found_contact)
 
@@ -205,6 +208,9 @@ class IterativeFinder:
             if self.peer_manager.is_ignored((contact.address, contact.udp_port)):
                 to_remove.append(contact)  # a contact became bad during iteration
                 continue
+            if (contact.address == self.protocol.external_ip) and (contact.udp_port == self.protocol.udp_port):
+                to_remove.append(contact)
+                continue
             if (contact.address, contact.udp_port) not in already_contacted_addresses:
                 self.already_contacted.append(contact)
                 to_remove.append(contact)
@@ -234,9 +240,8 @@ class IterativeFinder:
             self.search_iteration()
 
     def search_iteration(self, delay=constants.iterative_lookup_delay):
-        self.pending_iteration_calls.append(
-            self.loop.call_later(delay, lambda: self.loop.create_task(self._search_iteration()))
-        )
+        l = lambda: self.pending_iteration_tasks.append(self.loop.create_task(self._search_iteration()))
+        self.pending_iteration_calls.append(self.loop.call_later(delay, l))
 
     def __aiter__(self):
         return self
@@ -247,19 +252,26 @@ class IterativeFinder:
             log.info("had cached peers")
             return self.protocol.data_store.get_peers_for_blob(self.key)
         self.search_iteration()
-        result = await self.next()
-        return result
+        try:
+            return await self.next()
+        except asyncio.CancelledError:
+            self.stop()
+            raise StopAsyncIteration
 
     async def next(self) -> typing.List[Peer]:
         try:
             return await self.iteration_fut
         finally:
             async with self.lock:
-                self.iteration_fut = asyncio.Future()
+                self.iteration_fut = asyncio.Future(loop=self.loop)
                 self.iteration_futures.append(self.iteration_fut)
 
     def stop(self):
-        log.info("stop %i iteration calls", len(self.pending_iteration_calls))
+        while self.pending_iteration_tasks:
+            task = self.pending_iteration_tasks.pop()
+            if task and not (task.done() or task.cancelled()):
+                task.cancel()
+        log.debug("stop %i iteration calls", len(self.pending_iteration_calls))
         while self.pending_iteration_calls:
             timer = self.pending_iteration_calls.pop()
             if timer and not timer.cancelled():
@@ -283,12 +295,16 @@ class IterativeFinder:
                     bottomed_out += 1
                 else:
                     bottomed_out = 0
-                    if self.rpc == 'findValue':
-                        log.info("new peers: %i", len(new_peers))
+                    # if self.rpc == 'findValue':
+                    #     log.info("new peers: %i", len(new_peers))
                     yield new_peers
-                if (bottomed_out >= self.bottom_out_limit) or (len(accumulated) >= max_results):
+                if (bottomed_out >= self.bottom_out_limit) or ((max_results > 0) and (len(accumulated) >= max_results)):
                     log.info("%s(%s...) has %i results, bottom out counter: %i", self.rpc, binascii.hexlify(self.key).decode()[:8],
                              len(accumulated), bottomed_out)
+                    log.info("%i contacts known", len(self.routing_table.get_contacts()))
                     break
+        except Exception as err:
+            log.error("iterative find error: %s", err)
+            raise err
         finally:
             self.stop()

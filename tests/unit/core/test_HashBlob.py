@@ -1,5 +1,5 @@
 from lbrynet.blob.blob_file import BlobFile
-from lbrynet.error import DownloadCanceledError, InvalidDataError
+from lbrynet.error import DownloadCancelledError, InvalidDataError
 
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir, random_lbry_hash
 from twisted.trial import unittest
@@ -21,14 +21,14 @@ class BlobFileTest(unittest.TestCase):
     def test_good_write_and_read(self):
         # test a write that should succeed
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
-        self.assertFalse(blob_file.verified)
+        self.assertFalse(blob_file.get_is_verified())
 
         writer, finished_d = blob_file.open_for_writing(peer=1)
         writer.write(self.fake_content)
         writer.close()
         out = yield finished_d
         self.assertIsInstance(out, BlobFile)
-        self.assertTrue(out.verified)
+        self.assertTrue(out.get_is_verified())
         self.assertEqual(self.fake_content_len, out.get_length())
 
         # read from the instance used to write to, and verify content
@@ -40,7 +40,7 @@ class BlobFileTest(unittest.TestCase):
         # read from newly declared instance, and verify content
         del blob_file
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
-        self.assertTrue(blob_file.verified)
+        self.assertTrue(blob_file.get_is_verified())
         f = blob_file.open_for_reading()
         self.assertEqual(1, blob_file.readers)
         c = f.read()
@@ -60,7 +60,7 @@ class BlobFileTest(unittest.TestCase):
         out = yield blob_file.delete()
 
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash)
-        self.assertFalse(blob_file.verified)
+        self.assertFalse(blob_file.get_is_verified())
 
     @defer.inlineCallbacks
     def test_delete_fail(self):
@@ -73,7 +73,7 @@ class BlobFileTest(unittest.TestCase):
 
         # deletes should fail if being read and not closed
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
-        self.assertTrue(blob_file.verified)
+        self.assertTrue(blob_file.get_is_verified())
         f = blob_file.open_for_reading()
         yield self.assertFailure(blob_file.delete(), ValueError)
 
@@ -107,7 +107,7 @@ class BlobFileTest(unittest.TestCase):
         writer, finished_d = blob_file.open_for_writing(peer=1)
         writer.write(self.fake_content[:self.fake_content_len-1])
         writer.close()
-        yield self.assertFailure(finished_d, DownloadCanceledError)
+        yield self.assertFailure(finished_d, DownloadCancelledError)
 
         # writes after close will throw a IOError exception
         with self.assertRaises(IOError):
@@ -132,10 +132,10 @@ class BlobFileTest(unittest.TestCase):
         writer_2, finished_d_2 = blob_file.open_for_writing(peer=2)
         writer_2.write(self.fake_content)
         out_2 = yield finished_d_2
-        out_1 = yield self.assertFailure(finished_d_1, DownloadCanceledError)
+        out_1 = yield self.assertFailure(finished_d_1, DownloadCancelledError)
 
         self.assertIsInstance(out_2, BlobFile)
-        self.assertTrue(out_2.verified)
+        self.assertTrue(out_2.get_is_verified())
         self.assertEqual(self.fake_content_len, out_2.get_length())
 
         f = blob_file.open_for_reading()
@@ -152,7 +152,7 @@ class BlobFileTest(unittest.TestCase):
 
         blob_file.save_verified_blob(writer_1)
         # second write should fail to save
-        yield self.assertFailure(blob_file.save_verified_blob(writer_2), DownloadCanceledError)
+        yield self.assertFailure(blob_file.save_verified_blob(writer_2), DownloadCancelledError)
 
         # schedule a close, just to leave the reactor clean
         finished_d_1.addBoth(lambda x:None)

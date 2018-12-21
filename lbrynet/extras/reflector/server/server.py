@@ -4,9 +4,9 @@ from twisted.python import failure
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
 from lbrynet.blob.blob_file import is_valid_blobhash
-from lbrynet.error import DownloadCanceledError, InvalidBlobHashError
-from lbrynet.blob.stream_descriptor import BlobStreamDescriptorReader
-from lbrynet.blob.stream_descriptor import save_sd_info
+# from lbrynet.error import DownloadCancelledError, InvalidBlobHashError
+# from lbrynet.blob.stream import BlobStreamDescriptorReader
+# from lbrynet.blob.stream import save_sd_info
 from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 from lbrynet.extras.reflector.common import ReflectorRequestError, ReflectorClientVersionError
 
@@ -60,7 +60,7 @@ class ReflectorServer(Protocol):
 
     def clean_up_failed_upload(self, err, blob):
         log.warning("Failed to receive %s", blob)
-        if err.check(DownloadCanceledError):
+        if err.check(DownloadCancelledError):
             self.blob_manager.delete_blobs([blob.blob_hash])
         else:
             log.exception(err)

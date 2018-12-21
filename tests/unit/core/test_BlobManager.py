@@ -7,8 +7,8 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from tests.test_utils import random_lbry_hash
-from lbrynet.extras.daemon.blob_manager import DiskBlobManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.storage import SQLiteStorage
 from lbrynet.peer import Peer
 from lbrynet import conf
 from lbrynet.cryptoutils import get_lbry_hash_obj
@@ -21,7 +21,7 @@ class BlobManagerTest(unittest.TestCase):
         conf.initialize_settings(False)
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
-        self.bm = DiskBlobManager(self.blob_dir, SQLiteStorage(self.db_dir))
+        self.bm = BlobFileManager(self.blob_dir, SQLiteStorage(self.db_dir))
         self.peer = Peer('somehost', 22)
         yield self.bm.storage.setup()
 
