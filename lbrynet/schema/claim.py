@@ -55,7 +55,7 @@ class ClaimDict(OrderedDict):
         claim = self.protobuf
         if claim.HasField("publisherSignature"):
             return True
-        return False
+        return self.detached_signature and self.detached_signature.certificate_id
 
     @property
     def is_certificate(self):
