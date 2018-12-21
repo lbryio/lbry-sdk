@@ -207,7 +207,7 @@ def main(argv=None):
         return 1
 
     dir_args = {}
-    if len(argv) > 2:
+    if len(argv) >= 2:
         dir_arg_keys = [
             'data_dir',
             'wallet_dir',
