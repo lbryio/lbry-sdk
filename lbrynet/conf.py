@@ -287,8 +287,11 @@ class Config:
             self.default_data_dir, self.default_wallet_dir, self.default_download_dir = get_linux_directories()
         else:
             assert None not in [data_dir, wallet_dir, download_dir]
+        if data_dir:
             self.default_data_dir = data_dir
+        if wallet_dir:
             self.default_wallet_dir = wallet_dir
+        if download_dir:
             self.default_download_dir = download_dir
 
         self._data = {
