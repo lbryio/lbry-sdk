@@ -3,7 +3,7 @@ from unittest import mock
 from twisted.trial import unittest
 from twisted.internet import defer
 
-from lbrynet.staging.price_negotiation import payment_rate_manager
+from lbrynet.blob_exchange.price_negotiation import payment_rate_manager
 from lbrynet.error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.stream.descriptor import StreamDescriptorIdentifier
 from lbrynet.blob.blob_manager import BlobFileManager

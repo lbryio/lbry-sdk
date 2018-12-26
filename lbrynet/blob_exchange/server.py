@@ -13,10 +13,13 @@ from lbrynet.blob_exchange.serialization import BlobPriceRequest, BlobAvailabili
 log = logging.getLogger(__name__)
 
 
-async def create_server(loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager, host: typing.Optional[str] = None,
-                        port: typing.Optional[int] = 3333, peer_timeout: typing.Optional[int] = 3) -> Server:
+class BlobServer:
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager):
+        self.loop = loop
+        self.blob_manager = blob_manager
+        self.server_task: asyncio.Task = None
 
-    async def client_connected(reader: StreamReader, writer: StreamWriter):
+    async def handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         async def get_request():
             data = b''
             while True:
@@ -37,7 +40,7 @@ async def create_server(loop: asyncio.BaseEventLoop, blob_manager: BlobFileManag
         availability_request = await get_request()
         assert isinstance(availability_request, BlobAvailabilityRequest)
         available = [blob_hash for blob_hash in availability_request.requested_blobs
-                     if blob_hash in blob_manager.completed_blob_hashes]
+                     if blob_hash in self.blob_manager.completed_blob_hashes]
         await send_response(BlobAvailabilityResponse(available_blobs=available))
         price_request = await get_request()
         assert isinstance(price_request, BlobPriceRequest)
@@ -48,12 +51,22 @@ async def create_server(loop: asyncio.BaseEventLoop, blob_manager: BlobFileManag
             assert isinstance(download_request, BlobDownloadRequest)
             if download_request.requested_blob not in available:
                 break
-            blob = blob_manager.get_blob(download_request.requested_blob)
+            blob = self.blob_manager.get_blob(download_request.requested_blob)
             incoming_blob = {'blob_hash': blob.blob_hash, 'length': blob.length}
             await send_response(BlobDownloadResponse(incoming_blob=incoming_blob))
-            with open(os.path.join(blob_manager.blob_dir, blob.blob_hash), "rb") as f:
-                await loop.sendfile(writer.transport, f)
+            with open(blob.file_path, "rb") as f:
+                await self.loop.sendfile(writer.transport, f)
 
-    return await loop.create_server(
-        lambda: StreamReaderProtocol(StreamReader(limit=2**16, loop=loop), client_connected, loop=loop), host, port
-    )
+    def start_server(self, port: int, interface: typing.Optional[str] = '0.0.0.0'):
+        if self.server_task is not None:
+            raise Exception("already running")
+
+        async def _start_server():
+            server = await asyncio.start_server(self.handle_request, interface, port)
+            try:
+                await server.wait_closed()
+            finally:
+                server.close()
+            self.server_task = None
+
+        self.server_task = self.loop.create_task(_start_server())
