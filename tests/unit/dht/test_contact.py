@@ -6,7 +6,6 @@ from torba.testcase import AsyncioTestCase
 
 
 class PeerTest(AsyncioTestCase):
-    """ Basic tests case for boolean operators on the Contact class """
     def setUp(self):
         self.loop = asyncio.get_event_loop()
         self.peer_manager = PeerManager(self.loop)
@@ -26,7 +25,6 @@ class PeerTest(AsyncioTestCase):
         self.assertIsNot(self.first_contact, self.peer_manager.make_peer('192.168.1.20', self.node_ids[1], 1000))
 
     def test_boolean(self):
-        """ Test "equals" and "not equals" comparisons """
         self.assertNotEqual(self.first_contact, self.second_contact)
         self.assertEquals(
             self.second_contact, self.peer_manager.make_peer('192.168.0.1', self.node_ids[0], udp_port=1000)

@@ -15,25 +15,16 @@ from aioupnp.fault import UPnPError
 
 import lbrynet.schema
 from lbrynet import conf
-
-from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
-from lbrynet.staging.old_stream_client.EncryptedFileDownloader import EncryptedFileSaverFactory
-from lbrynet.staging.old_stream_client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.dht.node import Node
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.extras.daemon.Component import Component
 from lbrynet.extras.daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.storage import SQLiteStorage
-from lbrynet.staging.HashAnnouncer import DHTHashAnnouncer
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
 from lbrynet.utils import DeferredDict, generate_id
-# from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
-# from lbrynet.staging.rate_limiter import RateLimiter
-# from lbrynet.blob.blob_manager import BlobFileManager
-# from lbrynet.blob.stream import StreamDescriptorIdentifier, EncryptedFileStreamType
-from lbrynet.staging.old_blob_server.BlobRequestHandler import BlobRequestHandlerFactory
-from lbrynet.staging.old_blob_server.ServerProtocol import ServerProtocolFactory
 
 
 log = logging.getLogger(__name__)
@@ -326,7 +317,7 @@ class BlobComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.blob_manager = None
+        self.blob_manager: BlobFileManager = None
 
     @property
     def component(self):
@@ -336,14 +327,16 @@ class BlobComponent(Component):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         datastore = None
         if DHT_COMPONENT not in self.component_manager.skip_components:
-            dht_node = self.component_manager.get_component(DHT_COMPONENT)
+            dht_node: Node = self.component_manager.get_component(DHT_COMPONENT)
             if dht_node:
-                datastore = dht_node._dataStore
-        self.blob_manager = BlobFileManager(CS.get_blobfiles_dir(), storage, datastore)
-        return self.blob_manager.setup()
+                datastore = dht_node.protocol.data_store
+        self.blob_manager = BlobFileManager(self.loop, os.path.join(conf.settings.data_dir, "blobfiles"),
+                                            storage, datastore)
+        return defer.Deferred.fromFuture(asyncio.ensure_future(self.blob_manager.setup(), loop=self.loop))
 
+    @defer.inlineCallbacks
     def stop(self):
-        return self.blob_manager.stop()
+        yield defer.Deferred.fromFuture(asyncio.ensure_future(self.blob_manager.stop(), loop=self.loop))
 
     @defer.inlineCallbacks
     def get_status(self):
@@ -361,10 +354,11 @@ class DHTComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.dht_node = None
+        self.dht_node: Node = None
         self.upnp_component = None
         self.external_udp_port = None
         self.external_peer_port = None
+        self._join_task: asyncio.Task = None
 
     @property
     def component(self):
@@ -373,7 +367,7 @@ class DHTComponent(Component):
     def get_status(self):
         return {
             'node_id': binascii.hexlify(conf.settings.get_node_id()),
-            'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.contacts)
+            'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.protocol.routing_table.get_peers())
         }
 
     @defer.inlineCallbacks
@@ -392,190 +386,162 @@ class DHTComponent(Component):
                 log.warning("failed to get external ip")
 
         self.dht_node = Node(
+            self.component_manager.peer_manager,
+            self.loop,
             node_id=node_id,
-            udpPort=conf.settings['dht_node_port'],
-            externalUDPPort=self.external_udp_port,
-            externalIP=external_ip,
-            peerPort=self.external_peer_port
+            internal_udp_port=conf.settings['dht_node_port'],
+            udp_port=self.external_udp_port,
+            external_ip=external_ip,
+            peer_port=self.external_peer_port
         )
-
-        yield self.dht_node.start(conf.settings['known_dht_nodes'], block_on_join=False)
+        yield defer.Deferred.fromFuture(
+            asyncio.ensure_future(self.dht_node.join_network(
+                interface='0.0.0.0', known_node_urls=conf.settings['known_dht_nodes']
+            ), loop=self.loop)
+        )
         log.info("Started the dht")
 
-    @defer.inlineCallbacks
     def stop(self):
-        yield self.dht_node.stop()
-
-
-class HashAnnouncerComponent(Component):
-    component_name = HASH_ANNOUNCER_COMPONENT
-    depends_on = [DHT_COMPONENT, DATABASE_COMPONENT]
-
-    def __init__(self, component_manager):
-        super().__init__(component_manager)
-        self.hash_announcer = None
-
-    @property
-    def component(self):
-        return self.hash_announcer
-
-    @defer.inlineCallbacks
-    def start(self):
-        storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        dht_node = self.component_manager.get_component(DHT_COMPONENT)
-        self.hash_announcer = DHTHashAnnouncer(dht_node, storage)
-        yield self.hash_announcer.start()
-
-    @defer.inlineCallbacks
-    def stop(self):
-        yield self.hash_announcer.stop()
-
-    def get_status(self):
-        return {
-            'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.hash_queue)
-        }
-
-
-class RateLimiterComponent(Component):
-    component_name = RATE_LIMITER_COMPONENT
-
-    def __init__(self, component_manager):
-        super().__init__(component_manager)
-        self.rate_limiter = RateLimiter()
-
-    @property
-    def component(self):
-        return self.rate_limiter
-
-    def start(self):
-        self.rate_limiter.start()
-        return defer.succeed(None)
-
-    def stop(self):
-        self.rate_limiter.stop()
+        self.dht_node.stop()
         return defer.succeed(None)
 
 
-class PaymentRateComponent(Component):
-    component_name = PAYMENT_RATE_COMPONENT
+# class HashAnnouncerComponent(Component):
+#     component_name = HASH_ANNOUNCER_COMPONENT
+#     depends_on = [DHT_COMPONENT, DATABASE_COMPONENT]
+#
+#     def __init__(self, component_manager):
+#         super().__init__(component_manager)
+#         self.hash_announcer = None
+#
+#     @property
+#     def component(self):
+#         return self.hash_announcer
+#
+#     @defer.inlineCallbacks
+#     def start(self):
+#         storage = self.component_manager.get_component(DATABASE_COMPONENT)
+#         dht_node = self.component_manager.get_component(DHT_COMPONENT)
+#         self.hash_announcer = DHTHashAnnouncer(dht_node, storage)
+#         yield self.hash_announcer.start()
+#
+#     @defer.inlineCallbacks
+#     def stop(self):
+#         yield self.hash_announcer.stop()
+#
+#     def get_status(self):
+#         return {
+#             'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.hash_queue)
+#         }
 
-    def __init__(self, component_manager):
-        super().__init__(component_manager)
-        self.payment_rate_manager = OnlyFreePaymentsManager()
 
-    @property
-    def component(self):
-        return self.payment_rate_manager
-
-    def start(self):
-        return defer.succeed(None)
-
-    def stop(self):
-        return defer.succeed(None)
+# class PaymentRateComponent(Component):
+#     component_name = PAYMENT_RATE_COMPONENT
+#
+#     def __init__(self, component_manager):
+#         super().__init__(component_manager)
+#         self.payment_rate_manager = OnlyFreePaymentsManager()
+#
+#     @property
+#     def component(self):
+#         return self.payment_rate_manager
+#
+#     def start(self):
+#         return defer.succeed(None)
+#
+#     def stop(self):
+#         return defer.succeed(None)
 
 
 class FileManagerComponent(Component):
     component_name = FILE_MANAGER_COMPONENT
-    depends_on = [RATE_LIMITER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT,
-                  PAYMENT_RATE_COMPONENT]
+    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.file_manager = None
+        self.stream_manager: StreamManager = None
 
     @property
     def component(self):
-        return self.file_manager
+        return self.stream_manager
 
     def get_status(self):
-        if not self.file_manager:
+        if not self.stream_manager:
             return
         return {
-            'managed_files': len(self.file_manager.lbry_files)
+            'managed_files': len(self.stream_manager.streams)
         }
 
     @defer.inlineCallbacks
     def start(self):
-        rate_limiter = self.component_manager.get_component(RATE_LIMITER_COMPONENT)
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
+        node = self.component_manager.get_component(DHT_COMPONENT)
 
-        sd_identifier = StreamDescriptorIdentifier()
-        add_lbry_file_to_sd_identifier(sd_identifier)
-        file_saver_factory = EncryptedFileSaverFactory(
-            self.component_manager.peer_finder,
-            rate_limiter,
-            blob_manager,
-            storage,
-            wallet,
-            conf.settings.download_dir
-        )
-        yield sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
-
-        payment_rate_manager = self.component_manager.get_component(PAYMENT_RATE_COMPONENT)
         log.info('Starting the file manager')
-        self.file_manager = EncryptedFileManager(self.component_manager.peer_finder, rate_limiter, blob_manager, wallet,
-                                                 payment_rate_manager, storage, sd_identifier)
-        yield self.file_manager.setup()
+        self.stream_manager = StreamManager(
+            self.loop, node, blob_manager, wallet, storage, 30, 3
+        )
+        yield defer.Deferred.fromFuture(asyncio.ensure_future(self.stream_manager.start(), loop=self.loop))
         log.info('Done setting up file manager')
 
-    @defer.inlineCallbacks
     def stop(self):
-        yield self.file_manager.stop()
+        self.stream_manager.stop()
+        return defer.succeed(None)
 
 
-class PeerProtocolServerComponent(Component):
-    component_name = PEER_PROTOCOL_SERVER_COMPONENT
-    depends_on = [UPNP_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, WALLET_COMPONENT,
-                  PAYMENT_RATE_COMPONENT]
-
-    def __init__(self, component_manager):
-        super().__init__(component_manager)
-        self.lbry_server_port = None
-
-    @property
-    def component(self):
-        return self.lbry_server_port
-
-    @defer.inlineCallbacks
-    def start(self):
-        wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        upnp = self.component_manager.get_component(UPNP_COMPONENT)
-        peer_port = conf.settings['peer_port']
-        query_handlers = {
-            handler.get_primary_query_identifier(): handler for handler in [
-                BlobRequestHandlerFactory(
-                    self.component_manager.get_component(BLOB_COMPONENT),
-                    wallet,
-                    self.component_manager.get_component(PAYMENT_RATE_COMPONENT),
-                    self.component_manager.analytics_manager
-                ),
-                wallet.get_wallet_info_query_handler_factory(),
-            ]
-        }
-        server_factory = ServerProtocolFactory(
-            self.component_manager.get_component(RATE_LIMITER_COMPONENT), query_handlers,
-            self.component_manager.peer_manager
-        )
-
-        try:
-            log.info("Peer protocol listening on TCP %i (ext port %i)", peer_port,
-                     upnp.upnp_redirects.get("TCP", peer_port))
-            self.lbry_server_port = yield reactor.listenTCP(peer_port, server_factory)
-        except error.CannotListenError as e:
-            import traceback
-            log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
-                      " more details.", peer_port)
-            log.error("%s", traceback.format_exc())
-            raise ValueError("%s lbrynet may already be running on your computer." % str(e))
-
-    @defer.inlineCallbacks
-    def stop(self):
-        if self.lbry_server_port is not None:
-            self.lbry_server_port, old_port = None, self.lbry_server_port
-            log.info('Stop listening on port %s', old_port.port)
-            yield old_port.stopListening()
+# class PeerProtocolServerComponent(Component):
+#     component_name = PEER_PROTOCOL_SERVER_COMPONENT
+#     depends_on = [UPNP_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, WALLET_COMPONENT,
+#                   PAYMENT_RATE_COMPONENT]
+#
+#     def __init__(self, component_manager):
+#         super().__init__(component_manager)
+#         self.lbry_server_port = None
+#
+#     @property
+#     def component(self):
+#         return self.lbry_server_port
+#
+#     @defer.inlineCallbacks
+#     def start(self):
+#         wallet = self.component_manager.get_component(WALLET_COMPONENT)
+#         upnp = self.component_manager.get_component(UPNP_COMPONENT)
+#         peer_port = conf.settings['peer_port']
+#         query_handlers = {
+#             handler.get_primary_query_identifier(): handler for handler in [
+#                 BlobRequestHandlerFactory(
+#                     self.component_manager.get_component(BLOB_COMPONENT),
+#                     wallet,
+#                     self.component_manager.get_component(PAYMENT_RATE_COMPONENT),
+#                     self.component_manager.analytics_manager
+#                 ),
+#                 wallet.get_wallet_info_query_handler_factory(),
+#             ]
+#         }
+#         server_factory = ServerProtocolFactory(
+#             self.component_manager.get_component(RATE_LIMITER_COMPONENT), query_handlers,
+#             self.component_manager.peer_manager
+#         )
+#
+#         try:
+#             log.info("Peer protocol listening on TCP %i (ext port %i)", peer_port,
+#                      upnp.upnp_redirects.get("TCP", peer_port))
+#             self.lbry_server_port = yield reactor.listenTCP(peer_port, server_factory)
+#         except error.CannotListenError as e:
+#             import traceback
+#             log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
+#                       " more details.", peer_port)
+#             log.error("%s", traceback.format_exc())
+#             raise ValueError("%s lbrynet may already be running on your computer." % str(e))
+#
+#     @defer.inlineCallbacks
+#     def stop(self):
+#         if self.lbry_server_port is not None:
+#             self.lbry_server_port, old_port = None, self.lbry_server_port
+#             log.info('Stop listening on port %s', old_port.port)
+#             yield old_port.stopListening()
 
 
 class ReflectorComponent(Component):

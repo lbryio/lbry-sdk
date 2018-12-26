@@ -42,7 +42,7 @@ def get_shortlist(routing_table: TreeRoutingTable, key: bytes, shortlist: typing
     if len(key) != constants.hash_length:
         raise ValueError("invalid key length: %i" % len(key))
     if not shortlist:
-        return routing_table.find_close_nodes(key)
+        return routing_table.find_close_peers(key)
     return shortlist
 
 
@@ -152,10 +152,13 @@ class IterativeFinder:
                 if (host, port) not in self.exclude:
                     self.exclude.add((host, port))
                     self.find_value_result.append(self.peer_manager.make_peer(host, node_id, tcp_port=port))
-                    log.info("found new peer: %s", self.find_value_result[-1])
+                    log.debug("found new peer: %s", self.find_value_result[-1])
             if self.find_value_result:
-                async with self.lock:
+                await self.lock.acquire()
+                try:
                     self.iteration_fut.set_result(self.find_value_result)
+                finally:
+                    self.lock.release()
         else:
             contact_triples = self.get_contact_triples(result)
             for contact_triple in contact_triples:
@@ -171,8 +174,11 @@ class IterativeFinder:
 
             if not self.iteration_fut.done() and self.should_stop():
                 self.active_contacts.sort(key=lambda c: self.distance(c.node_id))
-                async with self.lock:
+                await self.lock.acquire()
+                try:
                     self.iteration_fut.set_result(self.active_contacts[:min(constants.k, len(self.active_contacts))])
+                finally:
+                    self.lock.release()
 
         return contact.node_id
 
@@ -230,6 +236,7 @@ class IterativeFinder:
                 self.active_probes.remove(probe)
         elif not self.active_probes and not self.iteration_fut.done() and not self.iteration_fut.cancelled():
             # If no probes were sent, there will not be any improvement, so we're done
+            log.debug("no improvement")
             if self.is_find_value_request:
                 self.iteration_fut.set_result(self.find_value_result)
             else:
@@ -262,9 +269,12 @@ class IterativeFinder:
         try:
             return await self.iteration_fut
         finally:
-            async with self.lock:
+            try:
+                await self.lock.acquire()
                 self.iteration_fut = asyncio.Future(loop=self.loop)
                 self.iteration_futures.append(self.iteration_fut)
+            finally:
+                self.lock.release()
 
     def stop(self):
         while self.pending_iteration_tasks:
@@ -295,13 +305,13 @@ class IterativeFinder:
                     bottomed_out += 1
                 else:
                     bottomed_out = 0
-                    # if self.rpc == 'findValue':
-                    #     log.info("new peers: %i", len(new_peers))
+                    if self.rpc == 'findValue':
+                        log.info("new peers: %i", len(new_peers))
                     yield new_peers
                 if (bottomed_out >= self.bottom_out_limit) or ((max_results > 0) and (len(accumulated) >= max_results)):
                     log.info("%s(%s...) has %i results, bottom out counter: %i", self.rpc, binascii.hexlify(self.key).decode()[:8],
                              len(accumulated), bottomed_out)
-                    log.info("%i contacts known", len(self.routing_table.get_contacts()))
+                    log.info("%i contacts known", len(self.routing_table.get_peers()))
                     break
         except Exception as err:
             log.error("iterative find error: %s", err)

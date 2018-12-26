@@ -11,7 +11,7 @@ from lbrynet.stream.descriptor import get_sd_info
 from lbrynet.staging.rate_limiter import RateLimiter
 from lbrynet.peer import PeerManager
 from lbrynet.storage import SQLiteStorage
-from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.price_negotiation import OnlyFreePaymentsManager
 from lbrynet.staging.EncryptedFileCreator import create_lbry_file
 from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
 from tests import mocks

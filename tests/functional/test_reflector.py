@@ -15,7 +15,7 @@ from lbrynet.stream import descriptor
 from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
 from lbrynet.staging.rate_limiter import RateLimiter
 from lbrynet.storage import SQLiteStorage
-from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.price_negotiation import OnlyFreePaymentsManager
 from tests import mocks
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 

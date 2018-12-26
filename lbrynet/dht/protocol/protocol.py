@@ -48,12 +48,19 @@ class KademliaProtocol(DatagramProtocol):
         log.info("create refresh task")
         self.transport = transport
         self.ping_queue.start()
-        self.refresh_task = asyncio.create_task(self.refresh_node())
+        self.refresh_task = self.loop.create_task(self.refresh_node())
+
+    def stop(self):
+        if self.refresh_task and not (self.refresh_task.done() or self.refresh_task.cancelled()):
+            self.refresh_task.cancel()
+        if self.ping_queue.running:
+            self.ping_queue.stop()
+
+    def disconnect(self):
+        self.transport.close()
 
     def connection_lost(self, exc):
-        log.info("stop refresh task")
-        self.refresh_task.cancel()
-        self.ping_queue.stop()
+        self.stop()
 
     def _migrate_incoming_rpc_args(self, contact: Peer, method: bytes, *args) -> typing.Tuple[
         typing.Tuple, typing.Dict
@@ -127,14 +134,14 @@ class KademliaProtocol(DatagramProtocol):
 
             # only add a requesting contact to the routing table if it has replied to one of our requests
             if remote_contact.contact_is_good is not False and not self.peer_manager.is_ignored(address):
-                asyncio.create_task(self.routing_table.add_contact(remote_contact))
+                self.loop.create_task(self.routing_table.add_peer(remote_contact))
 
             self.handle_rpc(remote_contact, message)
 
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
             # will be added to our routing table if successful
             if remote_contact.contact_is_good is None and remote_contact.last_replied is None:
-                asyncio.create_task(self.ping_queue.enqueue_maybe_ping(remote_contact))
+                self.loop.create_task(self.ping_queue.enqueue_maybe_ping(remote_contact))
             return
         elif isinstance(message, ErrorDatagram):
             # The RPC request raised a remote exception; raise it locally
@@ -146,9 +153,9 @@ class KademliaProtocol(DatagramProtocol):
 
                 # reject replies coming from a different address than what we sent our request to
                 if (remote_contact.address, remote_contact.udp_port) != address:
-                    print("Sent request to node %s at %s:%i, got reply from %s:%i" % (
-                        remote_contact.log_id(), remote_contact.address,
-                        remote_contact.udp_port, address[0], address[1]))
+                    log.error("Sent request to node %s at %s:%i, got reply from %s:%i",
+                              remote_contact.log_id(), remote_contact.address,
+                              remote_contact.udp_port, address[0], address[1])
                     df.set_exception(TimeoutError(remote_contact.node_id))
                     return
 
@@ -198,7 +205,7 @@ class KademliaProtocol(DatagramProtocol):
                     return
                 # else:
                 #     assert message.node_id == self.node_id
-                asyncio.create_task(self.routing_table.add_contact(remote_contact))
+                self.loop.create_task(self.routing_table.add_peer(remote_contact))
                 df.set_result(message.response)
             else:
                 # If the original message isn't found, it must have timed out
@@ -233,7 +240,7 @@ class KademliaProtocol(DatagramProtocol):
             result = self.node_rpc.find_value(sender_contact, key)
         log.debug("%s:%i RECV CALL %s %s:%i", self.external_ip, self.udp_port, message.method.decode(),
                   sender_contact.address, sender_contact.udp_port)
-        asyncio.create_task(self.send(
+        self.loop.create_task(self.send(
             sender_contact,
             ResponseDatagram(1, message.rpc_id, self.node_id, result),
             (sender_contact.address, sender_contact.udp_port)
@@ -326,7 +333,7 @@ class KademliaProtocol(DatagramProtocol):
         replication/republishing as necessary """
         while True:
             self.data_store.removed_expired_peers()
-            await self.ping_queue.enqueue_maybe_ping(*self.routing_table.get_contacts(), delay=0)
+            await self.ping_queue.enqueue_maybe_ping(*self.routing_table.get_peers(), delay=0)
             await self.ping_queue.enqueue_maybe_ping(*self.data_store.get_storing_contacts(), delay=0)
             await self.refresh_routing_table()
             fut = asyncio.Future(loop=self.loop)
@@ -375,7 +382,7 @@ class KademliaProtocol(DatagramProtocol):
                                     max_results: int = constants.k) -> typing.List[Peer]:
         return await self.cumulative_find('findValue', key, shortlist, bottom_out_limit, max_results)
 
-    async def store_to_contact(self, hash_value: bytes, contact: Peer) -> typing.Tuple[bytes, bool]:
+    async def store_to_peer(self, hash_value: bytes, contact: Peer) -> typing.Tuple[bytes, bool]:
         try:
             if not contact.token:
                 await contact.find_value(hash_value)
@@ -430,73 +437,6 @@ class KademliaProtocol(DatagramProtocol):
                 else:
                     log.error("DHT socket error sending %i bytes to %s:%i - %s (code %i)",
                               len(txData), address[0], address[1], str(err), err.errno)
-                    print("write error")
                     raise err
         else:
             raise TransportNotConnected()
-
-
-    #
-    # def startProtocol(self):
-    #     log.info("DHT listening on UDP %i (ext port %i)", self._node.port, self._node.externalUDPPort)
-    #     if self._listening.called:
-    #         self._listening = defer.Deferred()
-    #     self._listening.callback(True)
-    #     self.started_listening_time = self._node.clock.seconds()
-    #     return self._ping_queue.start()
-
-
-    # def _msgTimeout(self, messageID):
-    #     """ Called when an RPC request message times out """
-    #     # Find the message that timed out
-    #     if messageID not in self._sentMessages:
-    #         # This should never be reached
-    #         log.error("deferred timed out, but is not present in sent messages list!")
-    #         return
-    #     remoteContact, df, timeout_call, timeout_canceller, method, args = self._sentMessages[messageID]
-    #     if messageID in self._partialMessages:
-    #         # We are still receiving this message
-    #         self._msgTimeoutInProgress(messageID, timeout_canceller, remoteContact, df, method, args)
-    #         return
-    #     del self._sentMessages[messageID]
-    #     # The message's destination node is now considered to be dead;
-    #     # raise an (asynchronous) TimeoutError exception and update the host node
-    #     df.errback(TimeoutError(remoteContact.node_id))
-    #
-    # def _msgTimeoutInProgress(self, messageID, timeoutCanceller, remoteContact, df, method, args):
-    #     # See if any progress has been made; if not, kill the message
-    #     if self._hasProgressBeenMade(messageID):
-    #         # Reset the RPC timeout timer
-    #         timeoutCanceller()
-    #         timeoutCall, cancelTimeout = self._node.reactor_callLater(
-    #             constants.rpcTimeout, self._msgTimeout, messageID
-    #         )
-    #         self._sentMessages[messageID] = (
-    #             remoteContact, df, timeoutCall, cancelTimeout, method, args
-    #         )
-    #     else:
-    #         # No progress has been made
-    #         if messageID in self._partialMessagesProgress:
-    #             del self._partialMessagesProgress[messageID]
-    #         if messageID in self._partialMessages:
-    #             del self._partialMessages[messageID]
-    #         df.errback(TimeoutError(remoteContact.node_id))
-    #
-    # def _hasProgressBeenMade(self, messageID):
-    #     return (
-    #         messageID in self._partialMessagesProgress and
-    #         (
-    #             len(self._partialMessagesProgress[messageID]) !=
-    #             len(self._partialMessages[messageID])
-    #         )
-    #     )
-    #
-    # def stopProtocol(self):
-    #     """ Called when the transport is disconnected.
-    #
-    #     Will only be called once, after all ports are disconnected.
-    #     """
-    #     log.info('Stopping DHT')
-    #     self._ping_queue.stop()
-    #     self._node.call_later_manager.stop()
-    #     log.info('DHT stopped')

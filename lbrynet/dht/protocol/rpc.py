@@ -2,6 +2,7 @@ import functools
 import hashlib
 import asyncio
 import typing
+import binascii
 
 from lbrynet.peer import Peer
 from lbrynet.dht import constants
@@ -15,6 +16,12 @@ class KademliaRPC:
         self.old_token_secret: bytes = None
         self.token_secret = constants.generate_id()
 
+    def compact_address(self):
+        compact_ip = functools.reduce(lambda buff, x: buff + bytearray([int(x)]),
+                                      self.protocol.external_ip.split('.'), bytearray())
+        compact_port = self.peer_port.to_bytes(2, 'big')
+        return compact_ip + compact_port + self.protocol.node_id
+
     @staticmethod
     def ping():
         return b'pong'
@@ -23,20 +30,15 @@ class KademliaRPC:
               original_publisher_id: bytes, age: int) -> bytes:
         if original_publisher_id is None:
             original_publisher_id = rpc_contact.node_id
-        compact_ip = rpc_contact.compact_ip()
+        rpc_contact.update_tcp_port(port)
         if self.loop.time() - self.protocol.started_listening_time < constants.token_secret_refresh_interval:
             pass
-        elif not self.verify_token(token, compact_ip):
+        elif not self.verify_token(token, rpc_contact.compact_ip()):
             raise ValueError("Invalid token")
-        if 0 <= port <= 65536:
-            compact_port = port.to_bytes(2, 'big')
-        else:
-            raise TypeError(f'Invalid port: {port}')
-        compact_address = compact_ip + compact_port + rpc_contact.node_id
         now = int(self.loop.time())
         originally_published = now - age
         self.protocol.data_store.add_peer_to_blob(
-            rpc_contact, blob_hash, compact_address, now, originally_published, original_publisher_id
+            rpc_contact, blob_hash, rpc_contact.compact_address_tcp(), now, originally_published, original_publisher_id
         )
         return b'OK'
 
@@ -44,7 +46,7 @@ class KademliaRPC:
         if len(key) != constants.hash_length:
             raise ValueError("invalid contact node_id length: %i" % len(key))
 
-        contacts = self.protocol.routing_table.find_close_nodes(key, sender_node_id=rpc_contact.node_id)
+        contacts = self.protocol.routing_table.find_close_peers(key, sender_node_id=rpc_contact.node_id)
         contact_triples = []
         for contact in contacts:
             contact_triples.append((contact.node_id, contact.address, contact.udp_port))
@@ -68,19 +70,15 @@ class KademliaRPC:
             peers.extend(self.protocol.data_store.get_peers_for_blob(key))
 
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
-        if len(peers) < constants.k and key in self.protocol.data_store.completed_blobs:
-            compact_ip = functools.reduce(lambda buff, x: buff + bytearray([int(x)]),
-                                          self.protocol.external_ip.split('.'), bytearray())
-            compact_port = self.peer_port.to_bytes(2, 'big')
-            compact_address = compact_ip + compact_port + self.protocol.node_id
-            peers.append(compact_address)
+        if len(peers) < constants.k and binascii.hexlify(key).decode() in self.protocol.data_store.completed_blobs:
+            peers.append(self.compact_address())
         if peers:
             response[key] = peers
         else:
             response[b'contacts'] = self.find_node(rpc_contact, key)
         return response
 
-    def refresh_token(self):
+    def refresh_token(self):  # TODO: this needs to be called periodically
         self.old_token_secret = self.token_secret
         self.token_secret = constants.generate_id()
 

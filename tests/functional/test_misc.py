@@ -7,7 +7,7 @@ from lbrynet import conf
 from lbrynet.staging.old_blob_server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.stream.descriptor import StreamDescriptorIdentifier
 from lbrynet.stream.descriptor import download_sd_blob
-from lbrynet.staging.price_negotiation import OnlyFreePaymentsManager
+from lbrynet.blob_exchange.price_negotiation import OnlyFreePaymentsManager
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.peer import PeerManager
 from lbrynet.staging.rate_limiter import RateLimiter

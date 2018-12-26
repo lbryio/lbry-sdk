@@ -64,7 +64,7 @@ class Peer:
         self._token = token, self.loop.time() if token else 0
 
     @property
-    def token(self):
+    def token(self) -> typing.Optional[bytes]:
         # expire the token 1 minute early to be safe
         if self._token[1] + constants.token_secret_refresh_interval - 60 > self.loop.time():
             return self._token[0]
@@ -126,10 +126,18 @@ class Peer:
     def __hash__(self):
         return hash((self.node_id, self.address, self.udp_port))
 
-    def compact_ip(self):
-        compact_ip = reduce(
-            lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())
-        return compact_ip
+    def compact_ip(self) -> bytearray:
+        return reduce(lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())
+
+    def compact_address_tcp(self) -> bytearray:
+        if not (0 <= self.tcp_port <= 65536):
+            raise TypeError(f'Invalid port: {self.tcp_port}')
+        return self.compact_ip() + self.tcp_port.to_bytes(2, 'big') + self.node_id
+
+    def compact_address_udp(self) -> bytearray:
+        if not (0 <= self.udp_port <= 65536):
+            raise TypeError(f'Invalid port: {self.udp_port}')
+        return self.compact_ip() + self.udp_port.to_bytes(2, 'big') + self.node_id
 
     def set_id(self, node_id):
         if not self._node_id:
@@ -162,17 +170,18 @@ class Peer:
                     self.peer_manager.dht_protocol.send(self, datagram, (self.address, self.udp_port)), loop=self.loop),
                 constants.rpc_timeout, loop=self.loop
             )
+            log.debug('%s:%i replied to %s', self.address, self.udp_port, datagram.method)
             self.update_last_replied()
             return result
         except asyncio.CancelledError as err:
-            log.info("dht cancelled")
+            log.debug("dht cancelled")
             raise err
         except asyncio.TimeoutError as err:
             self.update_last_failed()
-            log.info("dht timeout")
+            log.debug("dht timeout")
             raise err
         except Exception as err:
-            log.error("error sending %s to %s", datagram.method, self)
+            log.error("error sending %s to %s:%i - %s", datagram.method, self.address, self.udp_port, err)
             raise asyncio.TimeoutError()
             # raise err
 
@@ -198,6 +207,7 @@ class Peer:
         ))
 
     async def find_value(self, key: bytes) -> typing.Union[typing.List[typing.Tuple[bytes, str, int]], typing.Dict]:
+        assert len(key) == 48
         assert self.peer_manager.dht_protocol is not None
         result = await self._send_kademlia_rpc(RequestDatagram(
             REQUEST_TYPE, constants.generate_id()[:constants.rpc_id_length], self.peer_manager.dht_protocol.node_id,
@@ -211,7 +221,7 @@ class Peer:
 
     # Blob exchange functions
 
-    async def connect_tcp(self, peer_timeout: int, peer_connect_timeout: int) -> bool:
+    async def connect_tcp(self, peer_timeout: float, peer_connect_timeout: float) -> bool:
         if self.blob_exchange_protocol:
             return True
         protocol = BlobExchangeClientProtocol(self, self.loop, peer_timeout)
@@ -225,6 +235,7 @@ class Peer:
             self.report_tcp_up()
             return True
         except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError):
+            log.info("%s:%i is down", self.address, self.tcp_port)
             self.report_tcp_down()
             return False
 
@@ -234,21 +245,20 @@ class Peer:
         self.blob_exchange_protocol.transport.close()
         self.blob_exchange_protocol = None
 
-    async def request_blobs(self, blobs: typing.List['BlobFile']) -> typing.List['BlobFile']:
-        log.info("request availability")
-        available = await self.blob_exchange_protocol.request_availability([b.blob_hash for b in blobs])
-        log.info("requested availability: %s", available)
-        to_request = [blob for blob in blobs if blob.blob_hash in available]
-        if not to_request:
-            return []
-        accepted = await self.blob_exchange_protocol.request_price(0.0)
-        if not accepted:
-            return []
+    async def request_blobs(self, blobs: typing.List['BlobFile'],
+                            peer_timeout: int, peer_connect_timeout: int) -> typing.List['BlobFile']:
+        if not self.blob_exchange_protocol:
+            connected = await self.connect_tcp(peer_timeout, peer_connect_timeout)
+            if not connected:
+                self.report_tcp_down()
+                log.info("%s:%i not connected", self.address, self.tcp_port)
+                return []
+        self.report_tcp_up()
+
         downloaded = []
-        for blob in to_request:
-            log.info("download blob from %s", self.address)
-            downloaded_blob = await self.blob_exchange_protocol.request_blob(blob)
-            if downloaded_blob:
+        for blob in blobs:
+            success = await self.blob_exchange_protocol.download_blob(blob)
+            if success:
                 downloaded.append(blob)
         return downloaded
 

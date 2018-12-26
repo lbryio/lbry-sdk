@@ -5,7 +5,9 @@ import typing
 import functools
 import asyncio
 from asyncio.base_events import Server
-from lbrynet.dht.protocol.protocol import KademliaProtocol
+if typing.TYPE_CHECKING:
+    from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
+    from lbrynet.dht.protocol.protocol import KademliaProtocol
 
 
 def get_time_accelerator(loop: asyncio.BaseEventLoop, now: typing.Optional[float] = None) -> typing.Callable[[float], typing.Awaitable[None]]:
@@ -48,14 +50,13 @@ def get_time_accelerator(loop: asyncio.BaseEventLoop, now: typing.Optional[float
 
 @contextlib.contextmanager
 def mock_network_loop(loop: asyncio.BaseEventLoop):
-    sent_udp_packets: typing.List[typing.Tuple[bytes, typing.Tuple[str, int], typing.Tuple[str, int]]] = []
-    dht_network: typing.Dict[typing.Tuple[str, int], KademliaProtocol] = {}
-    peer_network: typing.Dict[typing.Tuple[str, int], Server] = {}
+    dht_network: typing.Dict[typing.Tuple[str, int], 'KademliaProtocol'] = {}
+    blob_servers: typing.Dict[typing.Tuple[str, int], Server] = {}
+    blob_connections: typing.Dict[typing.Tuple[str, int], 'BlobExchangeClientProtocol'] = {}
 
-    async def create_datagram_endpoint(proto_lam: typing.Callable[[], KademliaProtocol],
+    async def create_datagram_endpoint(proto_lam: typing.Callable[[], 'KademliaProtocol'],
                                        from_addr: typing.Tuple[str, int]):
         def sendto(data, to_addr):
-            sent_udp_packets.append((data, from_addr, to_addr))
             rx = dht_network.get(to_addr)
             if rx and rx.external_ip:
                 return rx.datagram_received(data, from_addr)
@@ -69,21 +70,28 @@ def mock_network_loop(loop: asyncio.BaseEventLoop):
         dht_network[from_addr] = protocol
         return transport, protocol
 
-    # async def create_connection(proto_lam, from_addr: typing.Tuple[str, int]):
-    #     def write(data, to_addr):
-    #         sent_udp_packets.append((data, from_addr, to_addr))
-    #         rx = dht_network.get(to_addr)
-    #         if rx and rx.external_ip:
-    #             return rx.datagram_received(data, from_addr)
-    #
-    #     protocol = proto_lam()
-    #     transport = asyncio.Transport(extra={'socket': mock_sock})
-    #     transport.close = lambda: mock_sock.close()
-    #     mock_sock.sendto = sendto
-    #     transport.sendto = mock_sock.sendto
-    #     protocol.connection_made(transport)
-    #     dht_network[from_addr] = protocol
-    #     return transport, protocol
+    async def create_server(protocol_factory: typing.Callable[[], asyncio.StreamReaderProtocol],
+                            host: str, port: int) -> Server:
+        mock_server = mock.Mock(spec=Server)
+        blob_servers[(host, port)] = mock_server
+        return mock_server
+
+    async def create_connection(proto_lam, host: str, port: int):
+
+        def write(data):
+            rx = peer_network.get((host, port))
+            if rx:
+                return rx.data_received(data)
+
+        protocol = proto_lam()
+        transport = asyncio.Transport(extra={'socket': mock_sock})
+        transport.close = lambda: mock_sock.close()
+        mock_sock.write = write
+        transport.write = mock_sock.write
+        protocol.connection_made(transport)
+        peer_network[(host, port)] = protocol
+        return transport, protocol
+
 
     with mock.patch('socket.socket') as mock_socket:
         mock_sock = mock.Mock(spec=socket.socket)

@@ -25,7 +25,7 @@ class KBucket:
         self._contacts: typing.List[Peer] = []
         self._node_id = node_id
 
-    def add_contact(self, contact: Peer) -> bool:
+    def add_peer(self, contact: Peer) -> bool:
         """ Add contact to _contact list in the right order. This will move the
         contact to the end of the k-bucket if it is already present.
 
@@ -50,7 +50,7 @@ class KBucket:
             return False
             # raise BucketFull("No space in bucket to insert contact")
 
-    def get_contact(self, contact_id: bytes) -> Peer:
+    def get_peer(self, contact_id: bytes) -> Peer:
         """Get the contact specified node ID
 
         @raise IndexError: raised if the contact is not in the bucket
@@ -65,7 +65,7 @@ class KBucket:
                 return contact
         raise IndexError(contact_id)
 
-    def get_contacts(self, count=-1, exclude_contact=None, sort_distance_to=None) -> typing.List[Peer]:
+    def get_peers(self, count=-1, exclude_contact=None, sort_distance_to=None) -> typing.List[Peer]:
         """ Returns a list containing up to the first count number of contacts
 
         @param count: The amount of contacts to return (if 0 or less, return
@@ -111,21 +111,14 @@ class KBucket:
 
         return contacts[:min(current_len, count)]
 
-    def get_bad_or_unknown_contacts(self) -> typing.List[Peer]:
-        contacts = self.get_contacts(sort_distance_to=False)
+    def get_bad_or_unknown_peers(self) -> typing.List[Peer]:
+        contacts = self.get_peers(sort_distance_to=False)
         results = [contact for contact in contacts if contact.contact_is_good is False]
         results.extend(contact for contact in contacts if contact.contact_is_good is None)
         return results
 
-    def remove_contact(self, contact) -> None:
-        """ Remove the contact from the bucket
-
-        @param contact: The contact to remove
-        @type contact: dht.contact._Contact
-
-        @raise ValueError: The specified contact is not in this bucket
-        """
-        self._contacts.remove(contact)
+    def remove_peer(self, peer: Peer) -> None:
+        self._contacts.remove(peer)
 
     def key_in_range(self, key: bytes) -> bool:
         """ Tests whether the specified key (i.e. node ID) is in the range

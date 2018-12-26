@@ -7,10 +7,11 @@ import asyncio
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbrynet.blob import MAX_BLOB_SIZE
 from lbrynet.blob.blob_info import BlobInfo
-from lbrynet.blob.blob_file import BlobFile
 from lbrynet.cryptoutils import get_lbry_hash_obj
 from lbrynet.error import InvalidStreamDescriptorError
-from lbrynet.storage import SQLiteStorage
+from lbrynet.blob.blob_file import BlobFile
+if typing.TYPE_CHECKING:
+    from lbrynet.blob.blob_manager import BlobFileManager
 
 
 log = logging.getLogger(__name__)
@@ -48,8 +49,10 @@ async def file_reader(file_path: str):
 
 
 class StreamDescriptor:
-    def __init__(self, stream_name: str, key: str, suggested_file_name: str, blobs: typing.List[BlobInfo],
-                 stream_hash: typing.Optional[str] = None, sd_hash: typing.Optional[str] = None):
+    def __init__(self, blob_manager: 'BlobFileManager', stream_name: str, key: str, suggested_file_name: str,
+                 blobs: typing.List[BlobInfo], stream_hash: typing.Optional[str] = None,
+                 sd_hash: typing.Optional[str] = None):
+        self.blob_manager = blob_manager
         self.stream_name = stream_name
         self.key = key
         self.suggested_file_name = suggested_file_name
@@ -77,18 +80,18 @@ class StreamDescriptor:
                            [blob_info.as_dict() for blob_info in self.blobs]), sort_keys=True
         ).encode()
 
-    async def write_sd_blob_file(self, loop: asyncio.BaseEventLoop, blob_dir: str):
-        def _write_sd_blob_file():
-            self.sd_hash = self.calculate_sd_hash()
-            path = os.path.join(blob_dir, self.sd_hash)
-            if os.path.exists(path):
-                raise IOError("sd blob exists")
-            with open(path, 'wb') as sd_file:
-                sd_file.write(self.as_json())
-        return await loop.run_in_executor(None, _write_sd_blob_file)
+    async def make_sd_blob(self):
+        sd_hash = self.calculate_sd_hash()
+        sd_data = self.as_json()
+        sd_blob = self.blob_manager.get_blob(sd_hash, len(sd_data))
+        if not sd_blob.get_is_verified():
+            writer = sd_blob.open_for_writing()
+            writer.write(sd_data)
+        await sd_blob.verified.wait()
+        return sd_blob
 
     @classmethod
-    def _from_stream_descriptor_blob(cls, blob: BlobFile):
+    def _from_stream_descriptor_blob(cls, blob_manager: 'BlobFileManager', blob: BlobFile) -> 'StreamDescriptor':
         assert os.path.isfile(blob.file_path)
         with open(blob.file_path, 'rb') as f:
             json_bytes = f.read()
@@ -100,20 +103,23 @@ class StreamDescriptor:
         if 'blob_hash' in decoded['blobs'][-1]:
             raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
         descriptor = cls(
+            blob_manager,
             binascii.unhexlify(decoded['stream_name']).decode(),
             decoded['key'],
             binascii.unhexlify(decoded['suggested_file_name']).decode(),
             [BlobInfo(info['blob_num'], info['length'], info['iv'], info.get('blob_hash'))
              for info in decoded['blobs']],
-            decoded['stream_hash']
+            decoded['stream_hash'],
+            blob.blob_hash
         )
         if descriptor.get_stream_hash() != decoded['stream_hash']:
             raise InvalidStreamDescriptorError("Stream hash does not match stream metadata")
         return descriptor
 
     @classmethod
-    async def from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob):
-        return await loop.run_in_executor(None, lambda: cls._from_stream_descriptor_blob(blob))
+    async def from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager',
+                                          blob: BlobFile) -> 'StreamDescriptor':
+        return await loop.run_in_executor(None, lambda: cls._from_stream_descriptor_blob(blob_manager, blob))
 
     @staticmethod
     def get_blob_hashsum(b: typing.Dict):
@@ -134,7 +140,7 @@ class StreamDescriptor:
 
     @staticmethod
     def calculate_stream_hash(hex_stream_name: bytes, key: bytes, hex_suggested_file_name: bytes,
-                        blob_infos: typing.List[typing.Dict]) -> str:
+                              blob_infos: typing.List[typing.Dict]) -> str:
         h = get_lbry_hash_obj()
         h.update(hex_stream_name)
         h.update(key)
@@ -145,20 +151,11 @@ class StreamDescriptor:
         h.update(blobs_hashsum.digest())
         return h.hexdigest()
 
-    async def save_to_database(self, loop: asyncio.BaseEventLoop, storage: SQLiteStorage):
-        sd_hash = self.sd_hash or self.calculate_sd_hash()
-        blob_dicts = [b.as_dict() for b in self.blobs]
-        await storage.add_known_blobs(blob_dicts).asFuture(loop)
-        await storage.store_stream(
-            self.stream_hash, sd_hash, binascii.hexlify(self.stream_name.encode()).decode(),
-            self.key, binascii.hexlify(self.suggested_file_name.encode()).decode(), blob_dicts
-        ).asFuture(loop)
-
     @classmethod
-    async def create_stream(cls, loop: asyncio.BaseEventLoop, storage: SQLiteStorage, blob_dir: str, file_path: str,
-                            key: typing.Optional[bytes] = None,
+    async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', blob_dir: str,
+                            file_path: str, key: typing.Optional[bytes] = None,
                             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
-                            create_limit: typing.Optional[int] = 20):
+                            create_limit: typing.Optional[int] = 20) -> 'StreamDescriptor':
 
         blobs: typing.List[BlobInfo] = []
 
@@ -174,7 +171,7 @@ class StreamDescriptor:
         async for blob_bytes in file_reader(file_path):
             batch.append(
                 BlobFile.create_from_unencrypted(
-                    loop, blob_dir, key, next(iv_generator), blob_bytes, wrote_blob_callback, blob_num
+                    loop, blob_manager, key, next(iv_generator), blob_bytes, blob_num, wrote_blob_callback
                 )
             )
             blob_num += 1
@@ -190,8 +187,10 @@ class StreamDescriptor:
         blobs.append(
             BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode()))  # add the stream terminator
         descriptor = cls(
-            os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path), blobs
+            blob_manager, os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path),
+            blobs
         )
-        await descriptor.write_sd_blob_file(loop, blob_dir)
-        await descriptor.save_to_database(loop, storage)
+        sd_blob = await descriptor.make_sd_blob()
+        await blob_manager.blob_completed(sd_blob)
+        await blob_manager.storage.store_stream(sd_blob, descriptor).asFuture(loop)
         return descriptor

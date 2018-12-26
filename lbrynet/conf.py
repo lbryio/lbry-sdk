@@ -311,8 +311,8 @@ class Config:
 
         self._data[TYPE_DEFAULT].update(self._fixed_defaults)
         self._data[TYPE_DEFAULT].update(
-            {k: v[1] for (k, v) in self._adjustable_defaults.items()})
-
+            {k: v[1] for (k, v) in self._adjustable_defaults.items()}
+        )
         if persisted_settings is None:
             persisted_settings = {}
         self._validate_settings(persisted_settings)
@@ -327,6 +327,16 @@ class Config:
         self._validate_settings(cli_settings)
         self._data[TYPE_CLI].update(cli_settings)
         self.file_name = file_name or 'daemon_settings.yml'
+        if data_dir:
+            self['data_dir'] = data_dir
+        if wallet_dir:
+            self['wallet_dir'] = wallet_dir
+        if download_dir:
+            self['download_directory'] = download_dir
+
+    @property
+    def installation_id(self):
+        return self._installation_id
 
     @property
     def data_dir(self) -> optional_str:
@@ -369,7 +379,7 @@ class Config:
         return name in self._data[TYPE_DEFAULT]
 
     @staticmethod
-    def _parse_environment(environment):
+    def _parse_environment(environment: typing.Optional[Env]):
         env_settings = {}
         if environment is not None:
             assert isinstance(environment, Env)
@@ -411,6 +421,13 @@ class Config:
             directory = str(value)
             if not os.path.exists(directory):
                 log.warning("download directory '%s' does not exist", directory)
+        else:
+            setting_type = self._adjustable_defaults[name][0]
+            if not isinstance(value, setting_type):
+                try:
+                    return setting_type(value)
+                except (ValueError, TypeError):
+                    raise TypeError(f"expected type {setting_type} for setting {name}, got {type(value)}")
 
     def is_default(self, name):
         """Check if a config value is wasn't specified by the user
@@ -530,8 +547,8 @@ class Config:
         return converted
 
     def initialize_post_conf_load(self):
-        settings.installation_id = settings.get_installation_id()
-        settings.node_id = settings.get_node_id()
+        self._installation_id = self.get_installation_id()
+        self._node_id = self.get_node_id()
 
     def load_conf_file_settings(self):
         path = os.path.join(self.data_dir or self.default_data_dir, self.file_name)
@@ -640,7 +657,7 @@ class Config:
 settings: Config = None
 
 
-def get_default_env():
+def get_default_env() -> Env:
     env_defaults = {}
     for k, v in ADJUSTABLE_SETTINGS.items():
         if len(v) == 3:
@@ -652,14 +669,17 @@ def get_default_env():
     return Env(**env_defaults)
 
 
+def get_config(data_dir: optional_str = None, wallet_dir: optional_str = None, download_dir: optional_str = None):
+    return Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS, environment=get_default_env(),
+                  data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
+
+
 def initialize_settings(load_conf_file: typing.Optional[bool] = True,
                         data_dir: optional_str = None, wallet_dir: optional_str = None,
                         download_dir: optional_str = None):
     global settings
     if settings is None:
-        settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS,
-                          environment=get_default_env(), data_dir=data_dir, wallet_dir=wallet_dir,
-                          download_dir=download_dir)
+        settings = get_config(data_dir, wallet_dir, download_dir)
         if load_conf_file:
             settings.load_conf_file_settings()
         settings['data_dir'] = settings.data_dir or settings.default_data_dir

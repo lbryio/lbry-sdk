@@ -12,7 +12,7 @@ class DictDataStore(UserDict):
         # { <key>: (<contact>, <value>, <lastPublished>, <originallyPublished> <original_publisher_id>) }
         super().__init__()
         self._get_time = loop.time
-        self.completed_blobs = set()
+        self.completed_blobs: typing.Set[str] = set()
 
     def filter_bad_and_expired_peers(self, key: bytes) -> typing.Iterator[Peer]:
         """

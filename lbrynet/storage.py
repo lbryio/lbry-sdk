@@ -14,6 +14,10 @@ from lbrynet.schema.decode import smart_decode
 from lbrynet.blob.blob_info import BlobInfo
 from lbrynet.dht.constants import data_expiration
 
+if typing.TYPE_CHECKING:
+    from lbrynet.blob.blob_file import BlobFile
+    from lbrynet.stream.descriptor import StreamDescriptor
+
 log = logging.getLogger(__name__)
 
 
@@ -21,39 +25,6 @@ def calculate_effective_amount(amount: str, supports: typing.Optional[typing.Lis
     return dewies_to_lbc(
         lbc_to_dewies(amount) + sum([lbc_to_dewies(support['amount']) for support in supports])
     )
-
-
-def _get_next_available_file_name(download_directory, file_name):
-    base_name, ext = os.path.splitext(file_name)
-    i = 0
-    while os.path.isfile(os.path.join(download_directory, file_name)):
-        i += 1
-        file_name = "%s_%i%s" % (base_name, i, ext)
-    return os.path.join(download_directory, file_name)
-
-
-def _open_file_for_writing(download_directory, suggested_file_name):
-    file_path = _get_next_available_file_name(download_directory, suggested_file_name)
-    try:
-        file_handle = open(file_path, 'wb')
-        file_handle.close()
-    except IOError:
-        log.error(traceback.format_exc())
-        raise ValueError(
-            "Failed to open %s. Make sure you have permission to save files to that location." % file_path
-        )
-    return os.path.basename(file_path)
-
-
-def open_file_for_writing(download_directory, suggested_file_name):
-    """
-    Used to touch the path of a file to be downloaded
-
-    :param download_directory: (str)
-    :param suggested_file_name: (str)
-    :return: (str) basename
-    """
-    return threads.deferToThread(_open_file_for_writing, download_directory, suggested_file_name)
 
 
 def rerun_if_locked(f):
@@ -197,8 +168,8 @@ class SQLiteStorage:
         def _create_tables(transaction):
             transaction.executescript(self.CREATE_TABLES_QUERY)
         yield self.db.runInteraction(_create_tables)
-        if self.check_should_announce_lc and not self.check_should_announce_lc.running:
-            self.check_should_announce_lc.start(600)
+        # if self.check_should_announce_lc and not self.check_should_announce_lc.running:
+        #     self.check_should_announce_lc.start(600)
         defer.returnValue(None)
 
     @defer.inlineCallbacks
@@ -231,10 +202,8 @@ class SQLiteStorage:
 
     # # # # # # # # # blob functions # # # # # # # # #
 
-    def add_completed_blob(self, blob_hash, length, next_announce_time, should_announce, status="finished"):
-        log.debug("Adding a completed blob. blob_hash=%s, length=%i", blob_hash, length)
-        values = (blob_hash, length, next_announce_time or 0, int(bool(should_announce)), status, 0, 0)
-        return self.db.runOperation("insert or replace into blob values (?, ?, ?, ?, ?, ?, ?)", values)
+    def add_completed_blob(self, blob_hash):
+        return self.db.runOperation("update blob set status='finished' where blob.blob_hash=?", (blob_hash, ))
 
     def set_should_announce(self, blob_hash, next_announce_time, should_announce):
         return self.db.runOperation(
@@ -245,12 +214,6 @@ class SQLiteStorage:
     def get_blob_status(self, blob_hash):
         return self.run_and_return_one_or_none(
             "select status from blob where blob_hash=?", blob_hash
-        )
-
-    @defer.inlineCallbacks
-    def add_known_blob(self, blob_hash, length):
-        yield self.db.runOperation(
-            "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)", (blob_hash, length, 0, 0, "pending", 0, 0)
         )
 
     def should_announce(self, blob_hash):
@@ -331,20 +294,6 @@ class SQLiteStorage:
 
     # # # # # # # # # stream blob functions # # # # # # # # #
 
-    def add_blobs_to_stream(self, stream_hash, blob_infos):
-        def _add_stream_blobs(transaction):
-            for blob_info in blob_infos:
-                transaction.execute("insert into stream_blob values (?, ?, ?, ?)",
-                                    (stream_hash, blob_info.get('blob_hash', None),
-                                     blob_info['blob_num'], blob_info['iv']))
-        return self.db.runInteraction(_add_stream_blobs)
-
-    @defer.inlineCallbacks
-    def add_known_blobs(self, blob_infos):
-        for blob_info in blob_infos:
-            if blob_info.get('blob_hash') and blob_info['length']:
-                yield self.add_known_blob(blob_info['blob_hash'], blob_info['length'])
-
     def verify_will_announce_head_and_sd_blobs(self, stream_hash):
         # fix should_announce for imported head and sd blobs
         return self.db.runOperation(
@@ -371,45 +320,34 @@ class SQLiteStorage:
 
     # # # # # # # # # stream functions # # # # # # # # #
 
-    def store_stream(self, stream_hash, sd_hash, stream_name, stream_key, suggested_file_name,
-                     stream_blob_infos):
-        """
-        Add a stream to the stream table
-
-        :param stream_hash: hash of the assembled stream
-        :param sd_hash: hash of the sd blob
-        :param stream_key: blob decryption key
-        :param stream_name: the name of the file the stream was generated from
-        :param suggested_file_name: (str) suggested file name for stream
-        :param stream_blob_infos: (list) of blob info dictionaries
-        :return: (defer.Deferred)
-        """
-
+    def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
         def _store_stream(transaction):
-            transaction.execute("insert into stream values (?, ?, ?, ?, ?);",
-                                 (stream_hash, sd_hash, stream_key, stream_name,
-                                  suggested_file_name))
-
-            for blob_info in stream_blob_infos:
-                transaction.execute("insert into stream_blob values (?, ?, ?, ?)",
-                                    (stream_hash, blob_info.get('blob_hash', None),
-                                     blob_info['blob_num'], blob_info['iv']))
-
+            transaction.execute("insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+                                (sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0))
+            transaction.execute("insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+                                (descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0))
+            for blob in descriptor.blobs[1:-1]:
+                transaction.execute("insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+                                    (blob.blob_hash, blob.length, 0, 0, "pending", 0, 0))
+            transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?);",
+                                 (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
+                                  hexlify(descriptor.stream_name.encode()).decode(),
+                                  hexlify(descriptor.suggested_file_name.encode()).decode()))
+            for blob_info in descriptor.blobs:
+                transaction.execute("insert or ignore into stream_blob values (?, ?, ?, ?)",
+                                    (descriptor.stream_hash, blob_info.blob_hash,
+                                     blob_info.blob_num, blob_info.iv))
         return self.db.runInteraction(_store_stream)
 
     @defer.inlineCallbacks
-    def delete_stream(self, stream_hash):
-        sd_hash = yield self.get_sd_blob_hash_for_stream(stream_hash)
-        stream_blobs = yield self.get_blobs_for_stream(stream_hash)
-        blob_hashes = [b.blob_hash for b in stream_blobs if b.blob_hash is not None]
-
+    def delete_stream(self, descriptor: 'StreamDescriptor'):
         def _delete_stream(transaction):
-            transaction.execute("delete from content_claim where stream_hash=? ", (stream_hash,))
-            transaction.execute("delete from file where stream_hash=? ", (stream_hash, ))
-            transaction.execute("delete from stream_blob where stream_hash=?", (stream_hash, ))
-            transaction.execute("delete from stream where stream_hash=? ", (stream_hash, ))
-            transaction.execute("delete from blob where blob_hash=?", (sd_hash, ))
-            for blob_hash in blob_hashes:
+            transaction.execute("delete from content_claim where stream_hash=? ", (descriptor.stream_hash,))
+            transaction.execute("delete from file where stream_hash=? ", (descriptor.stream_hash, ))
+            transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash, ))
+            transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash, ))
+            transaction.execute("delete from blob where blob_hash=?", ( descriptor.sd_hash, ))
+            for blob_hash in [b.blob_hash for b in descriptor.blobs[:-1]]:
                 transaction.execute("delete from blob where blob_hash=?;", (blob_hash, ))
         yield self.db.runInteraction(_delete_stream)
 
@@ -497,9 +435,9 @@ class SQLiteStorage:
     @defer.inlineCallbacks
     def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         # touch the closest available file to the file name
-        file_name = yield open_file_for_writing(unhexlify(download_directory).decode(), unhexlify(file_name).decode())
         result = yield self.save_published_file(
-            stream_hash, hexlify(file_name.encode()), download_directory, data_payment_rate
+            stream_hash, hexlify(file_name.encode()), hexlify(download_directory.encode()).decode(), data_payment_rate,
+            status="running"
         )
         defer.returnValue(result)
 
@@ -508,9 +446,6 @@ class SQLiteStorage:
             "insert into file values (?, ?, ?, ?, ?)",
             stream_hash, file_name, download_directory, data_payment_rate, status
         )
-
-    def get_filename_for_rowid(self, rowid):
-        return self.run_and_return_one_or_none("select file_name from file where rowid=?", rowid)
 
     def get_all_lbry_files(self):
         def _lbry_file_dict(rowid, stream_hash, file_name, download_dir, data_rate, status, _, sd_hash, stream_key,
@@ -539,20 +474,11 @@ class SQLiteStorage:
         d = self.db.runInteraction(_get_all_files)
         return d
 
-    def change_file_status(self, rowid, new_status):
-        d = self.db.runQuery("update file set status=? where rowid=?", (new_status, rowid))
+    def change_file_status(self, stream_hash: str, new_status: str):
+        log.info("update file status %s -> %s", stream_hash, new_status)
+        d = self.db.runQuery("update file set status=? where stream_hash=?", (new_status, stream_hash))
         d.addCallback(lambda _: new_status)
         return d
-
-    def get_lbry_file_status(self, rowid):
-        return self.run_and_return_one_or_none(
-            "select status from file where rowid = ?", rowid
-        )
-
-    def get_rowid_for_stream_hash(self, stream_hash):
-        return self.run_and_return_one_or_none(
-            "select rowid from file where stream_hash=?", stream_hash
-        )
 
     # # # # # # # # # support functions # # # # # # # # #
 

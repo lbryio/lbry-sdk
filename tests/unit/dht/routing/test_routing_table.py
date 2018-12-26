@@ -28,19 +28,20 @@ class TestRouting(AsyncioTestCase):
             node_1 = nodes[0]
             contact_cnt = 0
             for i in range(1, len(peer_addresses)):
-                self.assertEqual(len(node_1.protocol.routing_table.get_contacts()), contact_cnt)
+                self.assertEqual(len(node_1.protocol.routing_table.get_peers()), contact_cnt)
                 node = nodes[i]
                 peer = node_1.protocol.peer_manager.make_peer(
                     node.protocol.external_ip, node_id=node.protocol.node_id,
                     udp_port=node.protocol.udp_port
                 )
-                added = await node_1.protocol.routing_table.add_contact(peer)
+                added = await node_1.protocol.routing_table.add_peer(peer)
                 self.assertEqual(True, added)
                 contact_cnt += 1
 
-            self.assertEqual(len(node_1.protocol.routing_table.get_contacts()), 8)
+            self.assertEqual(len(node_1.protocol.routing_table.get_peers()), 8)
             self.assertEqual(node_1.protocol.routing_table.buckets_with_contacts(), 1)
-
+            for node in nodes.values():
+                node.protocol.stop()
 
 
 # from binascii import hexlify, unhexlify

@@ -50,7 +50,7 @@ class Node:
         for address, port in known_node_addresses:
             peer = self.protocol.peer_manager.make_peer(address, udp_port=port)
             futs.append(peer.ping())
-        await asyncio.gather(*futs)
+        await asyncio.gather(*futs, loop=self.loop)
         await self.protocol.cumulative_find_node(self.protocol.node_id)
 
     def get_iterative_value_finder(self, key: bytes, bottom_out_limit: int = constants.bottom_out_limit,

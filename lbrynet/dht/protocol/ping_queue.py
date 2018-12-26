@@ -20,6 +20,10 @@ class PingQueue:
         self._lock = asyncio.Lock()
         self._running = False
 
+    @property
+    def running(self):
+        return self._running
+
     async def enqueue_maybe_ping(self, *peers: Peer, delay: typing.Optional[float] = None):
         delay = constants.check_refresh_interval if delay is None else delay
         async with self._lock:
@@ -51,19 +55,19 @@ class PingQueue:
             while self._enqueued_contacts:
                 peer = self._enqueued_contacts.pop()
                 delay = 1.0 / float(len(self._enqueued_contacts))
-                asyncio.create_task(self._loop.call_later(delay, _ping, peer))
+                self._loop.create_task(self._loop.call_later(delay, _ping, peer))
 
         if not self._next_timer and not self._next_task and self._running:
             self._next_timer = self._loop.call_later(300, self._schedule_next)
 
     def _schedule_next(self):
-        self._next_task = asyncio.create_task(self._process())
+        self._next_task = self._loop.create_task(self._process())
 
     def start(self):
         assert not self._running
         self._running = True
         if not self._process_task:
-            self._process_task = asyncio.create_task(self._process())
+            self._process_task = self._loop.create_task(self._process())
 
     def stop(self):
         assert self._running

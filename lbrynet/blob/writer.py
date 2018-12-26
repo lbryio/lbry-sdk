@@ -11,8 +11,8 @@ log = logging.getLogger(__name__)
 
 
 class HashBlobWriter:
-    def __init__(self, peer: 'Peer', expected_blob_hash: str, get_length: typing.Callable[[], int],
-                 finished: asyncio.Future):
+    def __init__(self, expected_blob_hash: str, get_length: typing.Callable[[], int],
+                 finished: asyncio.Future, peer: typing.Optional['Peer']):
         self.peer = peer
         self.expected_blob_hash = expected_blob_hash
         self.get_length = get_length

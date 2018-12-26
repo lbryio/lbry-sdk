@@ -36,8 +36,9 @@ class TreeRoutingTable:
             )
         ]
         self._ongoing_replacements = set()
+        self._lock = asyncio.Lock(loop=self._loop)
 
-    def get_contacts(self) -> typing.List[Peer]:
+    def get_peers(self) -> typing.List[Peer]:
         contacts = []
         for i in range(len(self._buckets)):
             for contact in self._buckets[i]._contacts:
@@ -48,25 +49,22 @@ class TreeRoutingTable:
         #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
         if self._buckets[bucket_index].key_in_range(self._parent_node_id):
             return True
-        contacts = self.get_contacts()
+        contacts = self.get_peers()
         distance = Distance(self._parent_node_id)
         contacts.sort(key=lambda c: distance(c.node_id))
         kth_contact = contacts[-1] if len(contacts) < constants.k else contacts[constants.k - 1]
         return distance(to_add) < distance(kth_contact.node_id)
 
-    async def add_contact(self, contact: Peer) -> bool:
-        if contact.node_id == self._parent_node_id:
-            return False
-        bucket_index = self._kbucket_index(contact.node_id)
-
-        if self._buckets[bucket_index].add_contact(contact):
+    async def _add_peer(self, peer: Peer):
+        bucket_index = self._kbucket_index(peer.node_id)
+        if self._buckets[bucket_index].add_peer(peer):
             return True
         # The bucket is full; see if it can be split (by checking if its range includes the host node's node_id)
-        if self._should_split(bucket_index, contact.node_id):
+        if self._should_split(bucket_index, peer.node_id):
             self._split_bucket(bucket_index)
             # Retry the insertion attempt
-            result = await self.add_contact(contact)
-            self.join_buckets()
+            result = await self._add_peer(peer)
+            self._join_buckets()
             return result
         else:
             # We can't split the k-bucket
@@ -92,7 +90,7 @@ class TreeRoutingTable:
             # contact is selected as described in section 2.2 of the kademlia paper. In both cases the new contact
             # is ignored if the pinged node replies.
 
-            not_good_contacts = self._buckets[bucket_index].get_bad_or_unknown_contacts()
+            not_good_contacts = self._buckets[bucket_index].get_bad_or_unknown_peers()
 
             if not_good_contacts:
                 to_replace = not_good_contacts[0]
@@ -104,13 +102,22 @@ class TreeRoutingTable:
                 return False
             except asyncio.TimeoutError:
                 log.debug("Replacing dead contact in bucket %i: %s:%i (%s) with %s:%i (%s)", bucket_index,
-                          to_replace.address, to_replace.udp_port, to_replace.log_id(), contact.address,
-                          contact.udp_port, contact.log_id())
+                          to_replace.address, to_replace.udp_port, to_replace.log_id(), peer.address,
+                          peer.udp_port, peer.log_id())
                 if to_replace in self._buckets[bucket_index]:
-                    self._buckets[bucket_index].remove_contact(to_replace)
-                return await self.add_contact(contact)
+                    self._buckets[bucket_index].remove_peer(to_replace)
+                return await self._add_peer(peer)
 
-    def find_close_nodes(self, key: bytes, count: typing.Optional[int] = None,
+    async def add_peer(self, peer: Peer) -> bool:
+        if peer.node_id == self._parent_node_id:
+            return False
+        await self._lock.acquire()
+        try:
+            return await self._add_peer(peer)
+        finally:
+            self._lock.release()
+
+    def find_close_peers(self, key: bytes, count: typing.Optional[int] = None,
                          sender_node_id: typing.Optional[bytes] = None) -> typing.List[Peer]:
         exclude = [self._parent_node_id]
         if sender_node_id:
@@ -119,19 +126,19 @@ class TreeRoutingTable:
             exclude.remove(key)
         count = count or constants.k
         distance = Distance(key)
-        contacts = self.get_contacts()
+        contacts = self.get_peers()
         contacts = [c for c in contacts if c.node_id not in exclude]
         if contacts:
             contacts.sort(key=lambda c: distance(c.node_id))
             return contacts[:min(count, len(contacts))]
         return []
 
-    def get_contact(self, contact_id: bytes) -> Peer:
+    def get_peer(self, contact_id: bytes) -> Peer:
         """
         @raise IndexError: No contact with the specified contact ID is known
                            by this node
         """
-        return self._buckets[self._kbucket_index(contact_id)].get_contact(contact_id)
+        return self._buckets[self._kbucket_index(contact_id)].get_peer(contact_id)
 
     def get_refresh_list(self, start_index: int = 0, force: bool = False) -> typing.List[bytes]:
         bucket_index = start_index
@@ -144,10 +151,10 @@ class TreeRoutingTable:
             bucket_index += 1
         return refresh_ids
 
-    def remove_contact(self, contact: Peer) -> None:
-        bucket_index = self._kbucket_index(contact.node_id)
+    def remove_peer(self, peer: Peer) -> None:
+        bucket_index = self._kbucket_index(peer.node_id)
         try:
-            self._buckets[bucket_index].remove_contact(contact)
+            self._buckets[bucket_index].remove_peer(peer)
         except ValueError:
             return
 
@@ -193,15 +200,16 @@ class TreeRoutingTable:
         # Finally, copy all nodes that belong to the new k-bucket into it...
         for contact in old_bucket._contacts:
             if new_bucket.key_in_range(contact.node_id):
-                new_bucket.add_contact(contact)
+                new_bucket.add_peer(contact)
         # ...and remove them from the old bucket
         for contact in new_bucket._contacts:
-            old_bucket.remove_contact(contact)
+            old_bucket.remove_peer(contact)
 
-    def join_buckets(self):
+    def _join_buckets(self):
         to_pop = [i for i, bucket in enumerate(self._buckets) if not len(bucket)]
         if not to_pop:
             return
+        log.info("join buckets %i", len(to_pop))
         bucket_index_to_pop = to_pop[0]
         assert len(self._buckets[bucket_index_to_pop]) == 0
         can_go_lower = bucket_index_to_pop - 1 >= 0
@@ -217,11 +225,11 @@ class TreeRoutingTable:
         elif can_go_higher:
             self._buckets[bucket_index_to_pop + 1].range_min = bucket.range_min
         self._buckets.remove(bucket)
-        return self.join_buckets()
+        return self._join_buckets()
 
     def contact_in_routing_table(self, address_tuple: typing.Tuple[str, int]) -> bool:
         for bucket in self._buckets:
-            for contact in bucket.get_contacts(sort_distance_to=False):
+            for contact in bucket.get_peers(sort_distance_to=False):
                 if address_tuple[0] == contact.address and address_tuple[1] == contact.udp_port:
                     return True
         return False
