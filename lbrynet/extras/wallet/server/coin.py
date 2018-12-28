@@ -137,3 +137,8 @@ class LBCRegTest(LBC):
     XPRV_VERBYTES = bytes.fromhex('04358394')
     P2PKH_VERBYTE = bytes.fromhex("6f")
     P2SH_VERBYTES = bytes.fromhex("c4")
+
+
+class LBCTestNet(LBCRegTest):
+    NET = "testnet"
+    GENESIS_HASH = '9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
