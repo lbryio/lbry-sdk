@@ -12,7 +12,6 @@ from binascii import hexlify, unhexlify
 from copy import deepcopy
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
-from twisted.python.failure import Failure
 
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
@@ -527,7 +526,7 @@ class Daemon(AuthJSONRPCServer):
         lbry_files = tuple(self.file_manager.streams)
         if kwargs:
             for search_type, value in iter_lbry_file_search_values(kwargs):
-                lbry_files = [l_f for l_f in lbry_files if l_f.__dict__[search_type] == value]
+                lbry_files = [l_f for l_f in lbry_files if getattr(l_f, search_type) == value]
         if return_json:
             file_dicts = []
             for lbry_file in lbry_files:

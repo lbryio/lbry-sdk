@@ -33,8 +33,8 @@ class TestStreamDescriptor(unittest.TestCase):
         with open(file_path, 'wb') as f:
             f.write(self.cleartext)
         sd = yield defer.Deferred.fromFuture(
-            asyncio.ensure_future(StreamDescriptor.create_stream(self.loop, self.blob_manager, tmp_dir, file_path,
-                                                  key=self.key), loop=self.loop)
+            asyncio.ensure_future(StreamDescriptor.create_stream(self.loop, self.blob_manager, file_path,
+                                                                 key=self.key), loop=self.loop)
         )
         # copy blob files
         sd_hash = sd.calculate_sd_hash()

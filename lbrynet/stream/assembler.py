@@ -42,6 +42,7 @@ class StreamAssembler:
         self.output_path = ''
         self.stream_handle = None
         self.finished_callback: typing.Callable[[], None] = None
+        self.written_bytes: int = 0
 
     async def _decrypt_blob(self, blob: 'BlobFile', blob_info: 'BlobInfo', key: str):
         offset = blob_info.blob_num * (MAX_BLOB_SIZE - 1)
@@ -53,6 +54,7 @@ class StreamAssembler:
             )
             self.stream_handle.write(decrypted)
             self.stream_handle.flush()
+            self.written_bytes += len(decrypted)
             log.info("wrote decrypted %i bytes (offset %i)", len(decrypted), offset)
 
         await self.lock.acquire()
@@ -66,6 +68,8 @@ class StreamAssembler:
         return
 
     async def assemble_decrypted_stream(self, output_dir: str, output_file_name: typing.Optional[str] = None):
+        if not os.path.isdir(output_dir):
+            raise OSError(f"output directory does not exist: '{output_dir}' '{output_file_name}'")
         self.sd_blob = await self.get_blob(self.sd_hash)
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_manager, self.sd_blob)
         if not self.got_descriptor.is_set():
@@ -80,14 +84,13 @@ class StreamAssembler:
         ).asFuture(self.loop)
         try:
             for blob_info in self.descriptor.blobs[:-1]:
-                log.info("get blob %s (%i)", blob_info.blob_hash, blob_info.blob_num)
+                log.debug("get blob %s (%i)", blob_info.blob_hash, blob_info.blob_num)
                 blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
                 await self._decrypt_blob(blob, blob_info, self.descriptor.key)
         finally:
             self.stream_handle.close()
-        log.info("done!")
-    # override
 
+    # override
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         f = asyncio.Future(loop=self.loop)
         f.set_result(self.blob_manager.get_blob(blob_hash, length))

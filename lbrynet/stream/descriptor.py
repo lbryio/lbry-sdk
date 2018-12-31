@@ -152,7 +152,7 @@ class StreamDescriptor:
         return h.hexdigest()
 
     @classmethod
-    async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', blob_dir: str,
+    async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager',
                             file_path: str, key: typing.Optional[bytes] = None,
                             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
                             create_limit: typing.Optional[int] = 20) -> 'StreamDescriptor':
@@ -194,3 +194,10 @@ class StreamDescriptor:
         await blob_manager.blob_completed(sd_blob)
         await blob_manager.storage.store_stream(sd_blob, descriptor).asFuture(loop)
         return descriptor
+
+    def lower_bound_decrypted_length(self) -> int:
+        length = sum((blob.length - 1 for blob in self.blobs[:-2]))
+        return length + self.blobs[-2].length - (AES.block_size // 8)
+
+    def upper_bound_decrypted_length(self) -> int:
+        return self.lower_bound_decrypted_length() + (AES.block_size // 8)

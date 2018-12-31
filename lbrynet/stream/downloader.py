@@ -55,7 +55,7 @@ class AsyncGeneratorJunction:
 
 
 class BaseStreamDownloader(StreamAssembler):
-    async def download(self, finished_callback) -> None:
+    def download(self, finished_callback: typing.Callable[[], None]):
         raise NotImplementedError()
 
     def stop(self):
@@ -80,7 +80,7 @@ class SinglePeerStreamDownloader(BaseStreamDownloader):
             await self.peer.request_blobs([blob], self.peer_timeout, self.peer_connect_timeout)
         return blob
 
-    async def download(self, finished_callback):
+    async def _download(self, finished_callback: typing.Callable[[], None]):
         try:
             await self.assemble_decrypted_stream(self.output_dir, self.output_file_name)
             log.info(
@@ -91,11 +91,14 @@ class SinglePeerStreamDownloader(BaseStreamDownloader):
             self.peer.disconnect_tcp()
             self.stop()
 
+    def download(self, finished_callback: typing.Callable[[], None]):
+        self.download_task = self.loop.create_task(self._download(finished_callback))
+
 
 class StreamDownloader(BaseStreamDownloader):
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager, node: Node, sd_hash: str,
                  peer_timeout: int, peer_connect_timeout: int, output_dir: typing.Optional[str] = None,
-                        output_file_name: typing.Optional[str] = None):
+                 output_file_name: typing.Optional[str] = None):
         super().__init__(loop, blob_manager, sd_hash)
         self.node = node
         self.peer_timeout = peer_timeout
@@ -118,7 +121,7 @@ class StreamDownloader(BaseStreamDownloader):
         self.output_file_name = output_file_name
 
     async def _request_blob(self, peer: 'Peer'):
-        log.info("request from %s:%i", peer.address, peer.tcp_port)
+        log.debug("request from %s:%i", peer.address, peer.tcp_port)
         try:
             await peer.request_blobs([self.current_blob], self.peer_timeout, self.peer_connect_timeout)
         except asyncio.TimeoutError:
@@ -197,21 +200,19 @@ class StreamDownloader(BaseStreamDownloader):
         while self.connections:
             self.connections.pop().disconnect_tcp()
 
-    async def _download(self):
+    async def _download(self, finished_callback: typing.Callable[[], None]):
         self.accumulator_task = self.loop.create_task(self._accumulate_connections())
         try:
             await self.assemble_decrypted_stream(self.output_dir, self.output_file_name)
             log.info(
                 "downloaded stream %s -> %s", self.sd_hash, self.output_path
             )
-            log.info("stream finished")
             await self.blob_manager.storage.change_file_status(
                 self.descriptor.stream_hash, 'finished'
             ).asFuture(self.loop)
-            self.finished_callback()
+            finished_callback()
         finally:
             self.stop()
 
-    def download(self, finished_callback):
-        self.finished_callback = finished_callback
-        self.download_task = self.loop.create_task(self._download())
+    def download(self, finished_callback: typing.Callable[[], None]):
+        self.download_task = self.loop.create_task(self._download(finished_callback))
