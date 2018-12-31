@@ -71,10 +71,6 @@ CONNECTION_MESSAGES = {
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 
-DIRECTION_ASCENDING = 'asc'
-DIRECTION_DESCENDING = 'desc'
-DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
-
 
 async def maybe_paginate(get_records: Callable, get_record_count: Callable,
                    page: Optional[int], page_size: Optional[int], **constraints):
@@ -91,41 +87,13 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
     return await get_records(**constraints)
 
 
-class IterableContainer:
-    def __iter__(self):
-        for attr in dir(self):
-            if not attr.startswith("_"):
-                yield getattr(self, attr)
-
-    def __contains__(self, item):
-        for attr in self:
-            if item == attr:
-                return True
-        return False
-
-
 class Checker:
     """The looping calls the daemon runs"""
     INTERNET_CONNECTION = 'internet_connection_checker', 300
     # CONNECTION_STATUS = 'connection_status_checker'
 
 
-class _FileID(IterableContainer):
-    """The different ways a file can be identified"""
-    SD_HASH = 'sd_hash'
-    FILE_NAME = 'file_name'
-    STREAM_HASH = 'stream_hash'
-    ROWID = "rowid"
-    CLAIM_ID = "claim_id"
-    OUTPOINT = "outpoint"
-    TXID = "txid"
-    NOUT = "nout"
-    CHANNEL_CLAIM_ID = "channel_claim_id"
-    CLAIM_NAME = "claim_name"
-    CHANNEL_NAME = "channel_name"
 
-
-FileID = _FileID()
 
 
 # TODO add login credentials in a conf file
@@ -508,54 +476,6 @@ class Daemon(AuthJSONRPCServer):
     #         return self.get_est_cost_using_known_size(uri, size)
     #     return self.get_est_cost_from_uri(uri)
 
-    def _get_lbry_file(self, search_by, val, return_json=False):
-        lbry_file = None
-        if search_by in FileID:
-            for l_f in tuple(self.file_manager.streams):
-                if l_f.__dict__.get(search_by) == val:
-                    lbry_file = l_f
-                    break
-        else:
-            raise NoValidSearch(f'{search_by} is not a valid search operation')
-        if return_json and lbry_file:
-            return lbry_file.as_dict()
-        return lbry_file
-
-    def _get_lbry_files(self, return_json=False, **kwargs) -> typing.Union[typing.List['ManagedStream'],
-                                                                           typing.List[typing.Dict]]:
-        lbry_files = tuple(self.file_manager.streams)
-        if kwargs:
-            for search_type, value in iter_lbry_file_search_values(kwargs):
-                lbry_files = [l_f for l_f in lbry_files if getattr(l_f, search_type) == value]
-        if return_json:
-            file_dicts = []
-            for lbry_file in lbry_files:
-                lbry_file_dict = lbry_file.as_dict()
-                file_dicts.append(lbry_file_dict)
-            lbry_files = file_dicts
-        log.debug("Collected %i lbry files", len(lbry_files))
-        return lbry_files
-
-    def _sort_lbry_files(self, lbry_files, sort_by):
-        for field, direction in sort_by:
-            is_reverse = direction == DIRECTION_DESCENDING
-            key_getter = create_key_getter(field) if field else None
-            lbry_files = sorted(lbry_files, key=key_getter, reverse=is_reverse)
-        return lbry_files
-
-    def _parse_lbry_files_sort(self, sort):
-        """
-        Given a sort string like 'file_name, desc' or 'points_paid',
-        parse the string into a tuple of (field, direction).
-        Direction defaults to ascending.
-        """
-
-        pieces = [p.strip() for p in sort.split(',')]
-        field = pieces.pop(0)
-        direction = DIRECTION_ASCENDING
-        if pieces and pieces[0] in DIRECTIONS:
-            direction = pieces[0]
-        return field, direction
 
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
@@ -1498,8 +1418,7 @@ class Daemon(AuthJSONRPCServer):
         return self.get_account_or_default(account_id).receiving.get_or_create_usable_address()
 
     @requires(FILE_MANAGER_COMPONENT)
-    @defer.inlineCallbacks
-    def jsonrpc_file_list(self, sort=None, **kwargs):
+    def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1507,7 +1426,7 @@ class Daemon(AuthJSONRPCServer):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--sort=<sort_method>...]
+                      [--claim_name=<claim_name>] [--sort=<sort_by>] [--reverse] [--comparison=<comparison>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1559,13 +1478,13 @@ class Daemon(AuthJSONRPCServer):
                 },
             ]
         """
-
-        result = self._get_lbry_files(return_json=True, **kwargs)
-        if sort:
-            sort_by = [self._parse_lbry_files_sort(s) for s in sort]
-            result = self._sort_lbry_files(result, sort_by)
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        sort = sort or 'status'
+        comparison = comparison or 'eq'
+        return [
+            stream.as_dict() for stream in self.file_manager.get_filtered_streams(
+                sort, reverse, comparison, **kwargs
+            )
+        ]
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_resolve_name(self, name, force=False):
@@ -3264,31 +3183,3 @@ def report_bug_to_slack(message, installation_id, platform_name, app_version):
         "text": payload_template % payload_params
     }
     requests.post(webhook, json.dumps(payload))
-
-
-def get_lbry_file_search_value(search_fields):
-    for searchtype in FileID:
-        value = search_fields.get(searchtype, None)
-        if value is not None:
-            return searchtype, value
-    raise NoValidSearch(f'{search_fields} is missing a valid search type')
-
-
-def iter_lbry_file_search_values(search_fields):
-    for searchtype in FileID:
-        value = search_fields.get(searchtype, None)
-        if value is not None:
-            yield searchtype, value
-
-
-def create_key_getter(field):
-    search_path = field.split('.')
-    def key_getter(value):
-        for key in search_path:
-            try:
-                value = value[key]
-            except KeyError as e:
-                errmsg = "Failed to get '{}', key {} was not found."
-                raise Exception(errmsg.format(field, str(e)))
-        return value
-    return key_getter

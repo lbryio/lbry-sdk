@@ -181,9 +181,9 @@ class Peer:
             log.debug("dht timeout")
             raise err
         except Exception as err:
+            self.update_last_failed()
             log.error("error sending %s to %s:%i - %s", datagram.method, self.address, self.udp_port, err)
-            raise asyncio.TimeoutError()
-            # raise err
+            raise err
 
     async def ping(self) -> bytes:
         assert self.peer_manager.dht_protocol is not None
