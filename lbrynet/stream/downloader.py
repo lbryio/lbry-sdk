@@ -2,15 +2,13 @@ import os
 import asyncio
 import typing
 import logging
-import binascii
-from lbrynet.blob.blob_file import BlobFile, MAX_BLOB_SIZE
-from lbrynet.blob.blob_manager import BlobFileManager
-from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.assembler import StreamAssembler
 from lbrynet.stream.peer_finder import StreamPeerFinder
-from lbrynet.dht.node import Node
 if typing.TYPE_CHECKING:
     from lbrynet.peer import Peer
+    from lbrynet.dht.node import Node
+    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_file import BlobFile
 
 log = logging.getLogger(__name__)
 
@@ -54,16 +52,8 @@ class AsyncGeneratorJunction:
             raise StopAsyncIteration()
 
 
-class BaseStreamDownloader(StreamAssembler):
-    def download(self, finished_callback: typing.Callable[[], None]):
-        raise NotImplementedError()
-
-    def stop(self):
-        raise NotImplementedError()
-
-
-class SinglePeerStreamDownloader(BaseStreamDownloader):
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager, peer: 'Peer', sd_hash: str,
+class SinglePeerStreamDownloader(StreamAssembler):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', peer: 'Peer', sd_hash: str,
                  peer_timeout: int, peer_connect_timeout: int, output_dir: typing.Optional[str] = None,
                  output_file_name: typing.Optional[str] = None):
         super().__init__(loop, blob_manager, sd_hash)
@@ -95,19 +85,16 @@ class SinglePeerStreamDownloader(BaseStreamDownloader):
         self.download_task = self.loop.create_task(self._download(finished_callback))
 
 
-class StreamDownloader(BaseStreamDownloader):
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager, node: Node, sd_hash: str,
+class StreamDownloader(StreamAssembler):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str,
                  peer_timeout: int, peer_connect_timeout: int, output_dir: typing.Optional[str] = None,
                  output_file_name: typing.Optional[str] = None):
         super().__init__(loop, blob_manager, sd_hash)
-        self.node = node
         self.peer_timeout = peer_timeout
         self.peer_connect_timeout = peer_connect_timeout
         self.download_task: asyncio.Task = None
         self.accumulator_task: asyncio.Task = None
-        self.peer_finder = StreamPeerFinder(
-            self.loop, self.blob_manager, self.node, self.sd_hash, self.peer_timeout, self.peer_connect_timeout
-        )
+        self.peer_finder: StreamPeerFinder = None
         self.blobs: typing.Dict[str, 'BlobFile'] = {}
         self.lock = asyncio.Lock(loop=self.loop)
         self.current_blob: 'BlobFile' = None
@@ -214,5 +201,8 @@ class StreamDownloader(BaseStreamDownloader):
         finally:
             self.stop()
 
-    def download(self, finished_callback: typing.Callable[[], None]):
+    def download(self, node: 'Node', finished_callback: typing.Callable[[], None]):
+        self.peer_finder = StreamPeerFinder(
+            self.loop, self.blob_manager, node, self.sd_hash, self.peer_timeout, self.peer_connect_timeout
+        )
         self.download_task = self.loop.create_task(self._download(finished_callback))

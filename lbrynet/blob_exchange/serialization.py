@@ -112,7 +112,7 @@ blob_request_types = typing.Union[BlobPriceRequest, BlobAvailabilityRequest, Blo
 blob_response_types = typing.Union[BlobPriceResponse, BlobAvailabilityResponse, BlobDownloadResponse, BlobErrorResponse]
 
 
-def _parse_blob_datagram(response_msg: bytes) -> typing.Tuple[typing.Optional[typing.Dict], bytes]:
+def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[typing.Dict], bytes]:
     # scenarios:
     #   <json>
     #   <blob bytes>
@@ -223,12 +223,12 @@ class BlobResponse:
         if response:
             return response
 
-    def serialize(self):
-        return json.dumps(self.to_dict())
+    def serialize(self) -> bytes:
+        return json.dumps(self.to_dict()).encode()
 
     @classmethod
     def deserialize(cls, data: bytes) -> 'BlobResponse':
-        response, extra = _parse_blob_datagram(data)
+        response, extra = _parse_blob_response(data)
         requests = []
         if response:
             requests.extend([

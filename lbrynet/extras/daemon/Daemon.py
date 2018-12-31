@@ -21,8 +21,8 @@ from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload
 from lbrynet.extras.daemon.Components import f2d
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
-from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
 from lbrynet.extras.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.extras.wallet import LbryWalletManager
@@ -214,8 +214,8 @@ class Daemon(AuthJSONRPCServer):
 
     def __init__(self, analytics_manager=None, component_manager=None):
         to_skip = conf.settings['components_to_skip']
-        if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
-            to_skip.append('reflector')
+        # if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
+        #     to_skip.append('reflector')
         looping_calls = {
             Checker.INTERNET_CONNECTION[0]: (LoopingCall(CheckInternetConnection(self)),
                                              Checker.INTERNET_CONNECTION[1])
@@ -1787,7 +1787,7 @@ class Daemon(AuthJSONRPCServer):
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
         stream = await self.file_manager.download_stream_from_claim(
-            conf.settings.download_dir, resolved, file_name
+            self.dht_node, conf.settings.download_dir, resolved, file_name
         )
         return stream.as_dict()
 
@@ -1886,7 +1886,7 @@ class Daemon(AuthJSONRPCServer):
         return result
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
-              DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+              DHT_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_stream_cost_estimate(self, uri, size=None):
         """
@@ -2023,7 +2023,7 @@ class Daemon(AuthJSONRPCServer):
         result = yield self.wallet_manager.import_certificate_info(serialized_certificate_info)
         defer.returnValue(result)
 
-    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_publish(
             self, name, bid, metadata=None, file_path=None, fee=None, title=None,
@@ -2687,7 +2687,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.wallet_manager.get_block(blockhash, height)
 
-    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT,
+    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_blob_get(self, blob_hash, timeout=None, encoding=None, payment_rate_manager=None):

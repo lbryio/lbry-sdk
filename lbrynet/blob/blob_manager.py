@@ -32,11 +32,6 @@ class BlobFileManager:
         self.completed_blob_hashes.update(raw_blob_hashes)
         return True
 
-    async def stop(self) -> bool:
-        f = asyncio.Future(loop=self.loop)
-        f.set_result(True)
-        return await f
-
     def get_blob(self, blob_hash, length: typing.Optional[int] = None):
         return BlobFile(self.loop, self.blob_dir, blob_hash, length, self.blob_completed)
 

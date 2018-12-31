@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import typing
+from io import BytesIO
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -134,6 +135,15 @@ class BlobFile:
         self.writers.append(writer)
         fut.add_done_callback(self.writer_finished(writer))
         return writer
+
+    async def read(self) -> BytesIO:
+        def _read() -> BytesIO:
+            b = BytesIO()
+            with open(self.file_path, "rb") as f:
+                b.write(f.read())
+            return b
+
+        return await self.loop.run_in_executor(None, _read)
 
     async def close(self):
         while self.writers:
