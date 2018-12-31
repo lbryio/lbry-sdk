@@ -38,7 +38,7 @@ class AsyncGeneratorJunction:
             self.running_iterators[iterator] = False
 
         self.running_iterators[async_gen] = True
-        self.handles.append(self.loop.call_soon(lambda : self.loop.create_task(iterate(async_gen))))
+        self.handles.append(self.loop.call_soon(lambda: self.loop.create_task(iterate(async_gen))))
 
     def __aiter__(self):
         return self
