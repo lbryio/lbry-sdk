@@ -166,21 +166,15 @@ class ClaimDict(OrderedDict):
 
     def sign(self, private_key, claim_address, cert_claim_id, curve=NIST256p, name=None):
         signer = get_signer(curve).load_pem(private_key)
-        if name:
-            signature = signer.detached_sign_stream_claim(self, claim_address, cert_claim_id, name)
-            return ClaimDict(self, detached_signature=signature)
-        signed = signer.sign_stream_claim(self, claim_address, cert_claim_id)
-        return ClaimDict.load_protobuf(signed)
+        signed, signature = signer.sign_stream_claim(self, claim_address, cert_claim_id, name)
+        return ClaimDict.load_protobuf(signed, signature)
 
     def validate_signature(self, claim_address, certificate, name=None):
         if isinstance(certificate, ClaimDict):
             certificate = certificate.protobuf
         curve = CURVE_NAMES[certificate.certificate.keyType]
         validator = get_validator(curve).load_from_certificate(certificate, self.certificate_id)
-        if self.detached_signature:
-            assert name is not None, "Name is required for verifying detached signatures."
-            return validator.validate_detached_claim_signature(self, claim_address, name)
-        return validator.validate_claim_signature(self, claim_address)
+        return validator.validate_claim_signature(self, claim_address, name)
 
     def validate_private_key(self, private_key, certificate_id):
         certificate = self.protobuf

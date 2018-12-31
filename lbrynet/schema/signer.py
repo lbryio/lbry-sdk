@@ -16,6 +16,7 @@ class NIST_ECDSASigner(object):
     CURVE_NAME = None
     HASHFUNC = hashlib.sha256
     HASHFUNC_NAME = SHA256
+    DETACHED = False
 
     def __init__(self, private_key):
         self._private_key = private_key
@@ -46,16 +47,26 @@ class NIST_ECDSASigner(object):
     def generate(cls):
         return cls(ecdsa.SigningKey.generate(curve=cls.CURVE, hashfunc=cls.HASHFUNC_NAME))
 
-    def sign_stream_claim(self, claim, claim_address, cert_claim_id):
+    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name):
+        to_sign = bytearray()
+        if self.DETACHED:
+            assert name, "Name is required for detached signatures"
+            assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
+            to_sign.extend(name.lower().encode())
+
         validate_claim_id(cert_claim_id)
+        raw_cert_id = binascii.unhexlify(cert_claim_id)
         decoded_addr = decode_address(claim_address)
 
-        to_sign = bytearray()
         to_sign.extend(decoded_addr)
         to_sign.extend(claim.serialized_no_signature)
-        to_sign.extend(binascii.unhexlify(cert_claim_id))
+        to_sign.extend(raw_cert_id)
 
         digest = self.HASHFUNC(to_sign).digest()
+        if self.DETACHED:
+            return claim.protobuf_dict, Signature(
+                self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC), raw_cert_id
+            )
 
         if not isinstance(self.private_key, ecdsa.SigningKey):
             raise Exception("Not given a signing key")
@@ -63,7 +74,7 @@ class NIST_ECDSASigner(object):
             "version": V_0_0_1,
             "signatureType": self.CURVE_NAME,
             "signature": self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC),
-            "certificateId": binascii.unhexlify(cert_claim_id)
+            "certificateId": raw_cert_id
         }
 
         msg = {
@@ -72,25 +83,7 @@ class NIST_ECDSASigner(object):
             "publisherSignature": sig_dict
         }
 
-        return Claim.load(msg)
-
-    def detached_sign_stream_claim(self, claim, claim_address, cert_claim_id, name: str):
-        assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
-        validate_claim_id(cert_claim_id)
-        if not isinstance(self.private_key, ecdsa.SigningKey):
-            raise Exception("Not given a signing key")
-        decoded_addr = decode_address(claim_address)
-        name = name.lower().encode()
-        raw_cert_id = binascii.unhexlify(cert_claim_id)
-
-        to_sign = bytearray()
-        to_sign.extend(name)
-        to_sign.extend(decoded_addr)
-        to_sign.extend(claim.serialized_no_signature)
-        to_sign.extend(raw_cert_id)
-
-        digest = self.HASHFUNC(to_sign).digest()
-        return Signature(self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC), raw_cert_id)
+        return Claim.load(msg), None
 
 
 class NIST256pSigner(NIST_ECDSASigner):
