@@ -160,11 +160,11 @@ class ClaimDict(OrderedDict):
         return cls.load_protobuf(temp_claim, detached_signature=detached_signature)
 
     @classmethod
-    def generate_certificate(cls, private_key, curve=NIST256p):
+    def generate_certificate(cls, private_key, curve=SECP256k1):
         signer = get_signer(curve).load_pem(private_key)
         return cls.load_protobuf(signer.certificate)
 
-    def sign(self, private_key, claim_address, cert_claim_id, curve=NIST256p, name=None):
+    def sign(self, private_key, claim_address, cert_claim_id, curve=SECP256k1, name=None):
         signer = get_signer(curve).load_pem(private_key)
         signed, signature = signer.sign_stream_claim(self, claim_address, cert_claim_id, name)
         return ClaimDict.load_protobuf(signed, signature)

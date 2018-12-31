@@ -64,7 +64,7 @@ class NIST_ECDSASigner(object):
 
         digest = self.HASHFUNC(to_sign).digest()
         if self.DETACHED:
-            return claim.protobuf_dict, Signature(
+            return Claim.load(decode_b64_fields(claim.protobuf_dict)), Signature(
                 self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC), raw_cert_id
             )
 
