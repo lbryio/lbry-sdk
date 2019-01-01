@@ -169,9 +169,7 @@ class BlobReflectorClient(Protocol):
             d.addCallback(self.open_blob_for_reading)
             # send the server the next blob hash + length
             d.addCallbacks(
-                lambda _: self.send_blob_info(),
-                errback=log.fail(self.disconnect),
-                errbackArgs=("Error reflecting blob %s", blob_hash)
+                lambda _: self.send_blob_info(), self.disconnect,
             )
             return d
         else:
