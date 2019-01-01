@@ -41,6 +41,12 @@ class BlobServer:
             await writer.drain()
 
         request = await read_blob_request(reader)
+        if not request:
+            log.warning("failed to decode blob request from %s", writer.get_extra_info('peername'))
+            writer.close()
+            await writer.wait_closed()
+            return
+
         availability_request = request.get_availability_request()
         if availability_request:
             responses.append(BlobAvailabilityResponse(available_blobs=list(set((
