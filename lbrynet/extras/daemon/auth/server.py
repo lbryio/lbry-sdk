@@ -275,9 +275,13 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._component_setup_deferred.cancel()
         except (AttributeError, defer.CancelledError):
             pass
+
+        def log_shutdown_error(err):
+            log.exception("failure while shutting down")
+
         if self.component_manager is not None:
             d = self.component_manager.stop()
-            d.addErrback(log.fail(), 'Failure while shutting down')
+            d.addErrback(log_shutdown_error)
         else:
             d = defer.succeed(None)
         return d
@@ -376,6 +380,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         content = request.content.read().decode()
         try:
             parsed = jsonrpclib.loads(content)
+            print(parsed)
         except json.JSONDecodeError:
             log.warning("Unable to decode request json")
             self._render_error(JSONRPCError(None, code=JSONRPCError.CODE_PARSE_ERROR), request, None)
