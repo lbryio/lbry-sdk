@@ -380,7 +380,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         content = request.content.read().decode()
         try:
             parsed = jsonrpclib.loads(content)
-            print(parsed)
         except json.JSONDecodeError:
             log.warning("Unable to decode request json")
             self._render_error(JSONRPCError(None, code=JSONRPCError.CODE_PARSE_ERROR), request, None)
