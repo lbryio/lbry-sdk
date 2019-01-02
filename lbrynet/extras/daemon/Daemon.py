@@ -505,7 +505,7 @@ class Daemon(metaclass=JSONRPCServerType):
         result = fn(self, *_args, **_kwargs)
         if asyncio.iscoroutine(result):
             result = await result
-        
+
         for key, value in result.items():
             if repr(type(value)) == "<class 'coroutine'>":
                 result[key] = await value
