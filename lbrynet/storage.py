@@ -20,6 +20,87 @@ if typing.TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+opt_str = typing.Optional[str]
+opt_int = typing.Optional[int]
+
+
+class StoredStreamClaim:
+    def __init__(self, stream_hash: str, outpoint: opt_str = None, claim_id: opt_str = None, name: opt_str = None,
+                 amount: opt_int = None, height: opt_int = None, serialized: opt_str = None,
+                 channel_claim_id: opt_str = None, address: opt_str = None, claim_sequence: opt_int = None,
+                 channel_name: opt_str = None):
+        self.stream_hash = stream_hash
+        self.claim_id = claim_id
+        self.outpoint = outpoint
+        self.claim_name = name
+        self.amount = amount
+        self.height = height
+        self.claim: typing.Optional[ClaimDict] = None if not serialized else smart_decode(serialized)
+        self.claim_address = address
+        self.claim_sequence = claim_sequence
+        self.channel_claim_id = channel_claim_id
+        self.channel_name = channel_name
+
+    @property
+    def txid(self) -> typing.Optional[str]:
+        return None if not self.outpoint else self.outpoint.split(":")[0]
+
+    @property
+    def nout(self) -> typing.Optional[int]:
+        return None if not self.outpoint else int(self.outpoint.split(":")[1])
+
+    @property
+    def metadata(self) -> typing.Optional[typing.Dict]:
+        return None if not self.claim else self.claim.claim_dict['stream']['metadata']
+
+    def as_dict(self) -> typing.Dict:
+        return {
+            "name": self.claim_name,
+            "claim_id": self.claim_id,
+            "address": self.claim_address,
+            "claim_sequence": self.claim_sequence,
+            "value": self.claim,
+            "height": self.height,
+            "amount": dewies_to_lbc(self.amount),
+            "nout": self.nout,
+            "txid": self.txid,
+            "channel_claim_id": self.channel_claim_id,
+            "channel_name": self.channel_name
+        }
+
+
+def get_claims_from_stream_hashes(transaction: adbapi.Transaction,
+                                  stream_hashes: typing.List[str]) -> typing.Dict[str, StoredStreamClaim]:
+    query = (
+        "select content_claim.stream_hash, c.*, case when c.channel_claim_id is not null then "
+        "   (select claim_name from claim where claim_id==c.channel_claim_id) "
+        "   else null end as channel_name "
+        " from content_claim "
+        " inner join claim c on c.claim_outpoint=content_claim.claim_outpoint and content_claim.stream_hash in {}"
+        " order by c.rowid desc"
+    )
+    return {
+        claim_info.stream_hash: claim_info
+        for claim_info in [
+            None if not claim_info else StoredStreamClaim(*claim_info)
+            for claim_info in _batched_select(transaction, query, stream_hashes)
+        ]
+    }
+
+
+def get_content_claim_from_outpoint(transaction: adbapi.Transaction,
+                                    outpoint: str) -> typing.Optional[StoredStreamClaim]:
+    query = (
+        "select content_claim.stream_hash, c.*, case when c.channel_claim_id is not null then "
+        "   (select claim_name from claim where claim_id==c.channel_claim_id) "
+        "   else null end as channel_name "
+        " from content_claim "
+        " inner join claim c on c.claim_outpoint=content_claim.claim_outpoint and content_claim.claim_outpoint=?"
+    )
+    claim_fields = transaction.execute(query, (outpoint, )).fetchone()
+    if claim_fields:
+        return StoredStreamClaim(*claim_fields)
+
 
 def calculate_effective_amount(amount: str, supports: typing.Optional[typing.List[typing.Dict]] = None) -> str:
     return dewies_to_lbc(
@@ -464,12 +545,17 @@ class SQLiteStorage:
             }
 
         def _get_all_files(transaction):
-            return [
+            file_infos = [
                 _lbry_file_dict(*file_info) for file_info in transaction.execute(
                     "select file.rowid, file.*, stream.* "
                     "from file inner join stream on file.stream_hash=stream.stream_hash"
                 ).fetchall()
             ]
+            stream_hashes = [file_info['stream_hash'] for file_info in file_infos]
+            claim_infos = get_claims_from_stream_hashes(transaction, stream_hashes)
+            for file_info in file_infos:
+                file_info['claim'] = claim_infos[file_info['stream_hash']]
+            return file_infos
 
         d = self.db.runInteraction(_get_all_files)
         return d
@@ -654,93 +740,34 @@ class SQLiteStorage:
             yield file_callback()
 
     @defer.inlineCallbacks
-    def get_content_claim(self, stream_hash, include_supports=True):
-        def _get_claim_from_stream_hash(transaction):
-            claim_info = transaction.execute(
-                "select c.*, "
-                "case when c.channel_claim_id is not null then "
-                "(select claim_name from claim where claim_id==c.channel_claim_id) "
-                "else null end as channel_name from content_claim "
-                "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
-                "and content_claim.stream_hash=? order by c.rowid desc", (stream_hash,)
-            ).fetchone()
-            if not claim_info:
-                return None
-            channel_name = claim_info[-1]
-            result = _format_claim_response(*claim_info[:-1])
-            if channel_name:
-                result['channel_name'] = channel_name
-            return result
-
-        result = yield self.db.runInteraction(_get_claim_from_stream_hash)
-        if result and include_supports:
-            supports = yield self.get_supports(result['claim_id'])
-            result['supports'] = supports
-            result['effective_amount'] = calculate_effective_amount(result['amount'], supports)
-        defer.returnValue(result)
-
-    @defer.inlineCallbacks
-    def get_claims_from_stream_hashes(self, stream_hashes, include_supports=True):
-        def _batch_get_claim(transaction):
-            results = {}
-            claim_infos = _batched_select(
-                transaction,
-                "select content_claim.stream_hash, c.* from content_claim "
-                "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
-                "and content_claim.stream_hash in {} order by c.rowid desc",
-                stream_hashes)
-            channel_id_infos = {}
-            for claim_info in claim_infos:
-                if claim_info[7]:
-                    streams = channel_id_infos.get(claim_info[7], [])
-                    streams.append(claim_info[0])
-                    channel_id_infos[claim_info[7]] = streams
-                stream_hash = claim_info[0]
-                result = _format_claim_response(*claim_info[1:])
-                results[stream_hash] = result
-            channel_names = _batched_select(
-                transaction,
-                "select claim_id, claim_name from claim where claim_id in {}",
-                tuple(channel_id_infos.keys())
-            )
-            for claim_id, channel_name in channel_names:
-                for stream_hash in channel_id_infos[claim_id]:
-                    results[stream_hash]['channel_name'] = channel_name
-            return results
-
-        claims = yield self.db.runInteraction(_batch_get_claim)
-        if include_supports:
-            all_supports = {}
-            for support in (yield self.get_supports(*[claim['claim_id'] for claim in claims.values()])):
-                all_supports.setdefault(support['claim_id'], []).append(support)
-            for stream_hash in claims.keys():
-                claim = claims[stream_hash]
-                supports = all_supports.get(claim['claim_id'], [])
+    def get_content_claim(self, stream_hash: str, include_supports: typing.Optional[bool] = True) -> typing.Dict:
+        claims = yield self.db.runInteraction(get_claims_from_stream_hashes, [stream_hash])
+        claim = None
+        if claims:
+            claim = claims[stream_hash].as_dict()
+            if include_supports:
+                supports = yield self.get_supports(claim['claim_id'])
                 claim['supports'] = supports
                 claim['effective_amount'] = calculate_effective_amount(claim['amount'], supports)
-                claims[stream_hash] = claim
-        defer.returnValue(claims)
+        defer.returnValue(claim)
+
+    @defer.inlineCallbacks
+    def get_claims_from_stream_hashes(self, stream_hashes: typing.List[str],
+                                      include_supports: typing.Optional[bool] = True):
+        claims = yield self.db.runInteraction(get_claims_from_stream_hashes, stream_hashes)
+        return {stream_hash: claim_info.as_dict() for stream_hash, claim_info in claims.items()}
 
     @defer.inlineCallbacks
     def get_claim(self, claim_outpoint, include_supports=True):
-        def _get_claim(transaction):
-            claim_info = transaction.execute("select c.*, "
-                                             "case when c.channel_claim_id is not null then "
-                                             "(select claim_name from claim where claim_id==c.channel_claim_id) "
-                                             "else null end as channel_name from claim c where claim_outpoint = ?",
-                                             (claim_outpoint,)).fetchone()
-            channel_name = claim_info[-1]
-            result = _format_claim_response(*claim_info[:-1])
-            if channel_name:
-                result['channel_name'] = channel_name
-            return result
-
-        result = yield self.db.runInteraction(_get_claim)
+        claim_info = yield self.db.runInteraction(get_content_claim_from_outpoint, claim_outpoint)
+        if not claim_info:
+            return
+        result = claim_info.as_dict()
         if include_supports:
             supports = yield self.get_supports(result['claim_id'])
             result['supports'] = supports
             result['effective_amount'] = calculate_effective_amount(result['amount'], supports)
-        defer.returnValue(result)
+        return result
 
     def get_unknown_certificate_ids(self):
         def _get_unknown_certificate_claim_ids(transaction):
@@ -796,24 +823,6 @@ class SQLiteStorage:
             "where r.timestamp is null or r.timestamp < ?",
             self.clock.seconds() - conf.settings['auto_re_reflect_interval']
         )
-
-
-# Helper functions
-def _format_claim_response(outpoint, claim_id, name, amount, height, serialized, channel_id, address, claim_sequence):
-    r = {
-        "name": name,
-        "claim_id": claim_id,
-        "address": address,
-        "claim_sequence": claim_sequence,
-        "value": ClaimDict.deserialize(unhexlify(serialized)).claim_dict,
-        "height": height,
-        "amount": dewies_to_lbc(amount),
-        "nout": int(outpoint.split(":")[1]),
-        "txid": outpoint.split(":")[0],
-        "channel_claim_id": channel_id,
-        "channel_name": None
-    }
-    return r
 
 
 def _batched_select(transaction, query, parameters):

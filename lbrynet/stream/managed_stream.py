@@ -5,23 +5,12 @@ import logging
 from lbrynet.mime_types import guess_mime_type
 from lbrynet.stream.downloader import StreamDownloader
 if typing.TYPE_CHECKING:
+    from lbrynet.storage import StoredStreamClaim
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.storage import SQLiteStorage
     from lbrynet.stream.descriptor import StreamDescriptor
 
 log = logging.getLogger(__name__)
-
-
-class StreamClaimInfo:
-    def __init__(self, claim_info: typing.Dict):
-        self.claim_id = claim_info['claim_id']
-        self.txid = claim_info['txid']
-        self.nout = claim_info['nout']
-        self.channel_claim_id = claim_info.get('channel_claim_id')
-        self.outpoint = "%s:%i" % (self.txid, self.nout)
-        self.claim_name = claim_info['name']
-        self.channel_name = claim_info.get('channel_name')
-        self.metadata = claim_info['value']['stream']['metadata']
 
 
 class ManagedStream:
@@ -31,7 +20,8 @@ class ManagedStream:
 
     def __init__(self,  loop: asyncio.BaseEventLoop, storage: 'SQLiteStorage', blob_manager: 'BlobFileManager',
                  descriptor: 'StreamDescriptor', download_directory: str, file_name: str,
-                 downloader: typing.Optional[StreamDownloader] = None, status: typing.Optional[str] = STATUS_STOPPED):
+                 downloader: typing.Optional[StreamDownloader] = None, status: typing.Optional[str] = STATUS_STOPPED,
+                 claim: typing.Optional['StoredStreamClaim'] = None):
         self.loop = loop
         self.storage = storage
         self.blob_manager = blob_manager
@@ -40,7 +30,7 @@ class ManagedStream:
         self.descriptor = descriptor
         self.downloader = downloader
         self.stream_hash = descriptor.stream_hash
-        self._claim_info: StreamClaimInfo = None
+        self.stream_claim_info = claim
         self._status = status
         self._store_after_finished: asyncio.Task = None
 
@@ -53,10 +43,6 @@ class ManagedStream:
         self._status = status
 
     @property
-    def claim(self) -> typing.Optional[StreamClaimInfo]:
-        return self._claim_info
-
-    @property
     def finished(self) -> bool:
         return self.status == self.STATUS_FINISHED
 
@@ -66,31 +52,39 @@ class ManagedStream:
 
     @property
     def claim_id(self) -> typing.Optional[str]:
-        return None if not self.claim else self.claim.claim_id
+        return None if not self.stream_claim_info else self.stream_claim_info.claim_id
 
     @property
     def txid(self) -> typing.Optional[str]:
-        return None if not self.claim else self.claim.txid
+        return None if not self.stream_claim_info else self.stream_claim_info.txid
 
     @property
     def nout(self) -> typing.Optional[int]:
-        return None if not self.claim else self.claim.nout
+        return None if not self.stream_claim_info else self.stream_claim_info.nout
 
     @property
     def outpoint(self) -> typing.Optional[str]:
-        return None if not self.claim else self.claim.outpoint
+        return None if not self.stream_claim_info else self.stream_claim_info.outpoint
+
+    @property
+    def claim_height(self) -> typing.Optional[int]:
+        return None if not self.stream_claim_info else self.stream_claim_info.height
 
     @property
     def channel_claim_id(self) -> typing.Optional[str]:
-        return None if not self.claim else self.claim.channel_claim_id
+        return None if not self.stream_claim_info else self.stream_claim_info.channel_claim_id
 
     @property
     def channel_name(self) -> typing.Optional[str]:
-        return None if not self.claim else self.claim.channel_name
+        return None if not self.stream_claim_info else self.stream_claim_info.channel_name
 
     @property
     def claim_name(self) -> typing.Optional[str]:
-        return None if not self.claim else self.claim.claim_name
+        return None if not self.stream_claim_info else self.stream_claim_info.claim_name
+
+    @property
+    def metadata(self) ->typing.Optional[typing.Dict]:
+        return None if not self.stream_claim_info else self.stream_claim_info.claim['stream']['metadata']
 
     @property
     def blobs_completed(self) -> int:
@@ -107,6 +101,8 @@ class ManagedStream:
 
     def as_dict(self) -> typing.Dict:
         full_path = os.path.join(self.download_directory, self.file_name)
+        if not os.path.exists(full_path):
+            full_path = None
         mime_type = guess_mime_type(os.path.basename(self.file_name))
         return {
             'completed': self.finished,
@@ -123,7 +119,7 @@ class ManagedStream:
             'key': self.descriptor.key,
             'total_bytes_lower_bound': self.descriptor.lower_bound_decrypted_length(),
             'total_bytes_upper_bound': self.descriptor.upper_bound_decrypted_length(),
-            'written_bytes': self.downloader.written_bytes or os.stat(full_path).st_size,
+            'written_bytes': None if not full_path else self.downloader.written_bytes or os.stat(full_path).st_size,
             'blobs_completed': self.blobs_completed,
             'blobs_in_stream': self.blobs_in_stream,
             'status': self.status,
@@ -131,7 +127,7 @@ class ManagedStream:
             'txid': self.txid,
             'nout': self.nout,
             'outpoint': self.outpoint,
-            'metadata': None if not self.claim else self.claim.metadata,
+            'metadata': self.metadata,
             'channel_claim_id': self.channel_claim_id,
             'channel_name': self.channel_name,
             'claim_name': self.claim_name
@@ -145,15 +141,6 @@ class ManagedStream:
         )
         return cls(loop, storage, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
-
-    def set_content_claim(self, claim_info: typing.Dict):
-        self._claim_info = StreamClaimInfo(claim_info)
-
-    async def get_claim_info(self) -> typing.Dict:
-        claim_info = await self.storage.get_content_claim(self.downloader.descriptor.stream_hash).asFuture(self.loop)
-        if claim_info:
-            self.set_content_claim(claim_info)
-        return claim_info
 
     def stop_download(self):
         if self.downloader:

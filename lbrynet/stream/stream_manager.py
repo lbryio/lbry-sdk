@@ -4,9 +4,9 @@ import typing
 import binascii
 import logging
 from lbrynet.stream.downloader import StreamDownloader
-from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
+from lbrynet.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.node import Node
@@ -17,17 +17,18 @@ log = logging.getLogger(__name__)
 
 
 filter_fields = [
-    'sd_hash',
+    'status',
     'file_name',
+    'sd_hash',
     'stream_hash',
+    'claim_name',
+    'claim_height'
     'claim_id',
     'outpoint',
     'txid',
     'nout',
     'channel_claim_id',
-    'claim_name',
     'channel_name',
-    'status'
 ]
 
 comparison_operators = {
@@ -54,6 +55,25 @@ class StreamManager:
         self.starting_streams: typing.Dict[str, asyncio.Future] = {}
         self.resume_downloading_task: asyncio.Task = None
 
+    async def load_streams_from_database(self):
+        infos = await self.storage.get_all_lbry_files().asFuture(self.loop)
+        for file_info in infos:
+            sd_blob = self.blob_manager.get_blob(file_info['sd_hash'])
+            if sd_blob.get_is_verified():
+                descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
+                downloader = StreamDownloader(
+                    self.loop, self.blob_manager, descriptor.sd_hash, self.peer_timeout,
+                    self.peer_connect_timeout, binascii.unhexlify(file_info['download_directory']).decode(),
+                    binascii.unhexlify(file_info['file_name']).decode()
+                )
+                stream = ManagedStream(
+                    self.loop, self.storage, self.blob_manager, descriptor,
+                    binascii.unhexlify(file_info['download_directory']).decode(),
+                    binascii.unhexlify(file_info['file_name']).decode(),
+                    downloader, file_info['status'], file_info['claim']
+                )
+                self.streams.add(stream)
+
     async def resume(self):
         await self.node.joined.wait()
         resumed = 0
@@ -62,30 +82,34 @@ class StreamManager:
                 resumed += 1
                 stream.downloader.download(self.node, lambda: stream.update_status(ManagedStream.STATUS_FINISHED))
         if resumed:
-            log.debug("resumed %i downloads", resumed)
+            log.info("resuming %i downloads", resumed)
 
     async def start(self):
-        infos = await self.storage.get_all_lbry_files().asFuture(self.loop)
-        for file_dict in infos:
-            claim_info = await self.storage.get_content_claim(file_dict['stream_hash'], False).asFuture(self.loop)
-            sd_blob = self.blob_manager.get_blob(file_dict['sd_hash'])
-            if sd_blob.get_is_verified():
-                descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
-                stream = self.get_stream_from_database(descriptor, file_dict)
-                stream.set_content_claim(claim_info)
+        await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
 
     def stop(self):
+        if self.resume_downloading_task and not self.resume_downloading_task.done():
+            self.resume_downloading_task.cancel()
         while self.streams:
             stream = self.streams.pop()
             stream.stop_download()
-        if self.resume_downloading_task and not self.resume_downloading_task.done():
-            self.resume_downloading_task.cancel()
 
     async def create_stream(self, file_path: str) -> ManagedStream:
         stream = await ManagedStream.create(self.loop, self.storage, self.blob_manager, file_path)
         self.streams.add(stream)
         return stream
+
+    async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
+        self.streams.remove(stream)
+        blob_hashes = [stream.descriptor.sd_hash]
+        blob_hashes.extend([blob.blob_hash for blob in stream.descriptor.blobs[:-1]])
+        await self.storage.delete_stream(stream.descriptor).asFuture(self.loop)
+        await self.blob_manager.delete_blobs(blob_hashes)
+        if delete_file:
+            path = os.path.join(stream.download_directory, stream.file_name)
+            if os.path.isfile(path):
+                os.remove(path)
 
     async def _download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
                                           file_name: typing.Optional[str] = None,
@@ -107,9 +131,15 @@ class StreamManager:
             downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}"
         ).asFuture(self.loop)
 
+        stored_claim = StoredStreamClaim(
+            downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
+            claim_info['name'], claim_info['amount'], claim_info['height'], claim_info['hex'],
+            claim.certificate_id, claim_info['address'], claim_info['claim_sequence'],
+            claim_info.get('channel_name')
+        )
         stream = ManagedStream(self.loop, self.storage, self.blob_manager, downloader.descriptor, download_directory,
-                               os.path.basename(downloader.output_path), downloader, ManagedStream.STATUS_RUNNING)
-        stream.set_content_claim(claim_info)
+                               os.path.basename(downloader.output_path), downloader, ManagedStream.STATUS_RUNNING,
+                               stored_claim)
         self.streams.add(stream)
         await stream.downloader.wrote_bytes_event.wait()
         return stream
@@ -129,32 +159,6 @@ class StreamManager:
         self.starting_streams[sd_hash].set_result(stream)
         if sd_hash in self.starting_streams:
             del self.starting_streams[sd_hash]
-        return stream
-
-    async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
-        self.streams.remove(stream)
-        blob_hashes = [stream.descriptor.sd_hash]
-        blob_hashes.extend([blob.blob_hash for blob in stream.descriptor.blobs[:-1]])
-        await self.storage.delete_stream(stream.descriptor).asFuture(self.loop)
-        await self.blob_manager.delete_blobs(blob_hashes)
-        if delete_file:
-            path = os.path.join(stream.download_directory, stream.file_name)
-            if os.path.isfile(path):
-                os.remove(path)
-
-    def get_stream_from_database(self, descriptor: StreamDescriptor, file_info: typing.Dict) -> ManagedStream:
-        downloader = StreamDownloader(
-            self.loop, self.blob_manager, descriptor.sd_hash, self.peer_timeout,
-            self.peer_connect_timeout, binascii.unhexlify(file_info['download_directory']).decode(),
-            binascii.unhexlify(file_info['file_name']).decode()
-        )
-        stream = ManagedStream(
-            self.loop, self.storage, self.blob_manager, descriptor,
-            binascii.unhexlify(file_info['download_directory']).decode(),
-            binascii.unhexlify(file_info['file_name']).decode(),
-            downloader, file_info['status']
-        )
-        self.streams.add(stream)
         return stream
 
     def get_filtered_streams(self, sort_by: typing.Optional[str] = None, reverse: typing.Optional[bool] = False,

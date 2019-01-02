@@ -1783,22 +1783,22 @@ class Daemon(AuthJSONRPCServer):
             (bool) true if deletion was successful
         """
 
-        lbry_files = self._get_lbry_files(return_json=False, **kwargs)
+        streams = self.file_manager.get_filtered_streams(**kwargs)
 
-        if len(lbry_files) > 1:
+        if len(streams) > 1:
             if not delete_all:
                 log.warning("There are %i files to delete, use narrower filters to select one",
-                            len(lbry_files))
+                            len(streams))
                 return False
             else:
                 log.warning("Deleting %i files",
-                            len(lbry_files))
+                            len(streams))
 
-        if not lbry_files:
+        if not streams:
             log.warning("There is no file to delete")
             result = False
         else:
-            for stream in lbry_files:
+            for stream in streams:
                 await self.file_manager.delete_stream(stream, delete_file=delete_from_download_dir)
                 log.info("Deleted file: %s", stream.file_name)
             result = True
