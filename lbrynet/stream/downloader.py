@@ -183,7 +183,8 @@ class StreamDownloader(StreamAssembler):
             self.accumulator_task.cancel()
         if self.download_task and not (self.download_task.done() or self.download_task.cancelled()):
             self.download_task.cancel()
-        self.peer_finder.stop()
+        if self.peer_finder:
+            self.peer_finder.stop()
         while self.connections:
             self.connections.pop().disconnect_tcp()
 

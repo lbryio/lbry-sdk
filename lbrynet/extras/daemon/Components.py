@@ -479,8 +479,8 @@ class FileManagerComponent(Component):
         log.info('Done setting up file manager')
 
     def stop(self):
-        self.stream_manager.stop()
-        return defer.succeed(None)
+        if self.stream_manager:
+            self.stream_manager.stop()
 
 
 class PeerProtocolServerComponent(Component):

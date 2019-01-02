@@ -156,6 +156,7 @@ class ManagedStream:
         return claim_info
 
     def stop_download(self):
-        self.downloader.stop()
+        if self.downloader:
+            self.downloader.stop()
         if not self.finished:
             self.update_status(self.STATUS_STOPPED)
