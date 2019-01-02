@@ -12,15 +12,13 @@ log = logging.getLogger(__name__)
 
 
 async def read_blob_request(reader: StreamReader) -> typing.Optional[BlobRequest]:
-    data = b''
+    buf = b''
     while True:
-        new_bytes = await reader.read()
-        if not new_bytes:
-            return
-        data += new_bytes
         try:
-            return BlobRequest.deserialize(data)
-        except:
+            return BlobRequest.deserialize(buf + (await reader.readuntil(b'}')))
+        except asyncio.streams.IncompleteReadError as e:
+            await asyncio.sleep(0.02)
+            buf += e.partial
             continue
 
 
@@ -32,6 +30,8 @@ class BlobServer:
 
     async def handle_request(self, reader: StreamReader, writer: StreamWriter):
         responses: typing.List[blob_response_types] = []
+        peer_info = writer.get_extra_info('peername')
+        peer_address, peer_port = peer_info[0], peer_info[1]
 
         async def send_responses():
             to_send = []
@@ -42,7 +42,7 @@ class BlobServer:
 
         request = await read_blob_request(reader)
         if not request:
-            log.warning("failed to decode blob request from %s", writer.get_extra_info('peername'))
+            log.warning("failed to decode blob request from %s:%i", peer_address, peer_port)
             writer.close()
             await writer.wait_closed()
             return
@@ -63,10 +63,10 @@ class BlobServer:
                 incoming_blob = {'blob_hash': blob.blob_hash, 'length': blob.length}
                 responses.append(BlobDownloadResponse(incoming_blob=incoming_blob))
                 await send_responses()
-                log.info("send %s to %s", blob.blob_hash[:8], writer.get_extra_info('peername'))
+                log.info("send %s to %s:%i", blob.blob_hash[:8], peer_address, peer_port)
                 blob_buffer = await blob.read()
                 await self.loop.sendfile(writer.transport, blob_buffer)
-                log.info("sent %s to %s", blob.blob_hash[:8], writer.get_extra_info('peername'))
+                log.info("sent %s to %s:%i", blob.blob_hash[:8], peer_address, peer_port)
         if responses:
             await send_responses()
         writer.close()
