@@ -83,6 +83,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             elif blob.length is not None and blob.length != blob_response.length:
                 raise Exception("unexpected")
             await asyncio.wait_for(writer.finished, self.peer_timeout, loop=self.loop)
+            await blob.finished_writing.wait()
             downloaded_blob = True
             log.info(f"downloaded {blob.blob_hash[:8]} from {self.peer.address}")
             return True
