@@ -234,8 +234,8 @@ class Peer:
             self.blob_exchange_protocol = protocol
             self.report_tcp_up()
             return True
-        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError):
-            log.info("%s:%i is down", self.address, self.tcp_port)
+        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
+            log.debug("%s:%i is down", self.address, self.tcp_port)
             self.report_tcp_down()
             return False
 

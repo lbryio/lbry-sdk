@@ -306,13 +306,13 @@ class IterativeFinder:
                 else:
                     bottomed_out = 0
                     if self.rpc == 'findValue':
-                        log.info("new peers: %i", len(new_peers))
+                        log.debug("new peers: %i", len(new_peers))
                     yield new_peers
                 if (bottomed_out >= self.bottom_out_limit) or ((max_results > 0) and (len(accumulated) >= max_results)):
                     log.info("%s(%s...) has %i results, bottom out counter: %i", self.rpc, binascii.hexlify(self.key).decode()[:8],
                              len(accumulated), bottomed_out)
                     log.info("%i contacts known", len(self.routing_table.get_peers()))
-                    break
+                    return
         except Exception as err:
             log.error("iterative find error: %s", err)
             raise err

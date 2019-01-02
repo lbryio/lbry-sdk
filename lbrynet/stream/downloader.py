@@ -62,7 +62,7 @@ class StreamDownloader(StreamAssembler):
         self.connections: typing.Set['Peer'] = set()
         self.pending_requests: typing.Dict['Peer', asyncio.Future] = {}
         self.has_peers = asyncio.Event(loop=self.loop)
-        self.tasks: typing.List[typing.Coroutine] = []
+        self.tasks: typing.List[asyncio.Task] = []
         self.requests: typing.Dict[str, typing.List['Peer']] = {}
 
         self.output_dir = output_dir or os.getcwd()
@@ -73,13 +73,9 @@ class StreamDownloader(StreamAssembler):
         try:
             await peer.request_blobs([self.current_blob], self.peer_timeout, self.peer_connect_timeout)
         except asyncio.TimeoutError:
-            await self.lock.acquire()
-            try:
-                self.connections.remove(peer)
-                if not self.connections:
-                    self.has_peers.clear()
-            finally:
-                self.lock.release()
+            self.connections.remove(peer)
+            if not self.connections:
+                self.has_peers.clear()
 
     def _update_requests(self):
         if self.current_blob.blob_hash not in self.requests:
@@ -87,57 +83,60 @@ class StreamDownloader(StreamAssembler):
         for peer in self.connections:
             if peer not in self.requests[self.current_blob.blob_hash]:
                 self.requests[self.current_blob.blob_hash].append(peer)
-                self.tasks.append(self._request_blob(peer))
+                self.tasks.append(self.loop.create_task(self._request_blob(peer)))
+        self.has_peers.clear()
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
-        await self.lock.acquire()
-        try:
+        async with self.lock:
             self.current_blob = self.blob_manager.get_blob(blob_hash, length)
-        finally:
-            self.lock.release()
-
-        if self.current_blob.get_is_verified():
-            return self.current_blob
-
-        self._update_requests()
-
-        while not self.current_blob.get_is_verified():
-            if not self.has_peers.is_set() and self.connections:
-                self._update_requests()
-            elif self.has_peers.is_set():
-                self.has_peers.clear()
-                self._update_requests()
-                await self.lock.acquire()
-                try:
-                    self.has_peers.clear()
-                finally:
-                    self.lock.release()
-                self._update_requests()
-            elif self.current_blob.get_is_verified():
-                return self.current_blob
-
-            if self.tasks:
-                tasks = []
-                while self.tasks:
-                    tasks.append(self.tasks.pop())
-                await asyncio.wait(tasks, return_when='FIRST_COMPLETED', loop=self.loop)
-            await asyncio.wait([self.has_peers.wait(), self.current_blob.finished_writing.wait()],
-                               return_when='FIRST_COMPLETED', loop=self.loop)
             if self.current_blob.get_is_verified():
                 return self.current_blob
+
+        while not self.current_blob.get_is_verified():
+            if self.current_blob.get_is_verified():
+                return self.current_blob
+            async with self.lock:
+                self._update_requests()
+            if not self.tasks:
+                await self.has_peers.wait()
+            async with self.lock:
+                self._update_requests()
+                tasks = []
+                if self.tasks:
+                    while self.tasks:
+                        tasks.append(self.tasks.pop())
+            f1 = asyncio.ensure_future(self.has_peers.wait(), loop=self.loop)
+            f2 = asyncio.shield(asyncio.ensure_future(asyncio.wait(tasks, loop=self.loop), loop=self.loop))
+            log.info("%i blob download requests pending", len(tasks))
+            await asyncio.wait([f1, f2], return_when='FIRST_COMPLETED', loop=self.loop)
+            if f1 and not f1.done():
+                f1.cancel()
+            if self.current_blob.get_is_verified():
+                log.info('downloaded blob')
+                return self.current_blob
+            async with self.lock:
+                for task in tasks:
+                    if task and not (task.done() or task.cancelled()):
+                        self.tasks.append(task)
+            log.info("still downloading, %i pending requests", len(self.tasks))
+        log.info('downloaded blob')
         return self.current_blob
 
     async def _accumulate_connections(self):
-        async for peer in self.peer_finder:
+        async def connect(peer: 'Peer'):
+            # log.info("connect to %s:%i", peer.address, peer.tcp_port)
             connected = await peer.connect_tcp(self.peer_timeout, self.peer_connect_timeout)
             if connected:
-                await self.lock.acquire()
-                try:
+                async with self.lock:
                     self.connections.add(peer)
+                    log.info("download stream from %s:%i", peer.address, peer.tcp_port)
                     if not self.has_peers.is_set():
                         self.has_peers.set()
-                finally:
-                    self.lock.release()
+            else:
+                log.info("failed to connect to %s:%i", peer.address, peer.tcp_port)
+
+        async for _peer in self.peer_finder:
+            self.loop.create_task(connect(_peer))
 
     def stop(self):
         if self.accumulator_task and not (self.accumulator_task.done() or self.accumulator_task.cancelled()):

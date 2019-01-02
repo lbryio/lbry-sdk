@@ -85,7 +85,9 @@ class BlobFile:
                 self.writers.remove(writer)
             if not error:  # the blob downloaded, cancel all the other download attempts and set the result
                 while self.writers:
-                    self.writers.pop().finished.cancel()
+                    other = self.writers.pop()
+                    other.finished.cancel()
+                    other.peer.disconnect_tcp()
                 t = self.loop.create_task(self.save_verified_blob(writer))
                 t.add_done_callback(lambda *_: self.finished_writing.set())
             elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):

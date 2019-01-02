@@ -103,7 +103,6 @@ class StreamPeerFinder:
             for peer in peers:
                 if peer not in self.attempted:
                     if not peer.tcp_last_down or (peer.tcp_last_down + 300) < self.loop.time():
-                        log.info("download stream from %s:%i", peer.address, peer.tcp_port)
                         self.attempted.add(peer)
                         self.peers.put_nowait(peer)
         self.finished.set()
