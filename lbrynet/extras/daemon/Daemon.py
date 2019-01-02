@@ -506,11 +506,10 @@ class Daemon(metaclass=JSONRPCServerType):
         if asyncio.iscoroutine(result):
             result = await result
         
-        # await all the coroutine objects within the result before processing as json
         for key, value in result.items():
             if repr(type(value)) == "<class 'coroutine'>":
                 result[key] = await value
-                
+
         return web.Response(
             text=jsonrpc_dumps_pretty(result, ledger=self.ledger),
             content_type='application/json'
