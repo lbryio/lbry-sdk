@@ -13,45 +13,6 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class AsyncGeneratorJunction:
-    """
-    A helper to interleave the results from multiple async generators into one
-    async generator.
-    """
-
-    def __init__(self, loop: asyncio.BaseEventLoop, queue: typing.Optional[asyncio.Queue] = None):
-        self.loop = loop
-        self.queue = queue or asyncio.Queue(loop=loop)
-        self.handles: typing.List[asyncio.TimerHandle] = []
-        self.running_iterators: typing.Dict[typing.AsyncGenerator, bool] = {}
-
-    @property
-    def running(self):
-        return any(self.running_iterators.values())
-
-    def add_generator(self, async_gen: typing.AsyncGenerator):
-        """
-        Add an async generator. This can be called during an iteration of the generator junction.
-        """
-
-        async def iterate(iterator: typing.AsyncGenerator):
-            async for item in iterator:
-                self.queue.put_nowait(item)
-            self.running_iterators[iterator] = False
-
-        self.running_iterators[async_gen] = True
-        self.handles.append(self.loop.call_soon(lambda : self.loop.create_task(iterate(async_gen))))
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        if self.running:
-            return await self.queue.get()
-        else:
-            raise StopAsyncIteration()
-
-
 class SinglePeerStreamDownloader(StreamAssembler):
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', peer: 'Peer', sd_hash: str,
                  peer_timeout: int, peer_connect_timeout: int, output_dir: typing.Optional[str] = None,
