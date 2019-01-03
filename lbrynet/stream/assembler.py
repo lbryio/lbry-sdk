@@ -41,7 +41,6 @@ class StreamAssembler:
         self.stream_finished_event = asyncio.Event(loop=self.loop)
         self.output_path = ''
         self.stream_handle = None
-        self.finished_callback: typing.Callable[[], None] = None
         self.written_bytes: int = 0
 
     async def _decrypt_blob(self, blob: 'BlobFile', blob_info: 'BlobInfo', key: str):
@@ -55,7 +54,7 @@ class StreamAssembler:
             self.stream_handle.write(decrypted)
             self.stream_handle.flush()
             self.written_bytes += len(decrypted)
-            log.info("wrote decrypted %i bytes (offset %i)", len(decrypted), offset)
+            log.info("wrote %i decrypted bytes (offset %i)", len(decrypted), offset)
 
         await self.lock.acquire()
         try:
@@ -87,6 +86,7 @@ class StreamAssembler:
                 log.debug("get blob %s (%i)", blob_info.blob_hash, blob_info.blob_num)
                 blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
                 await self._decrypt_blob(blob, blob_info, self.descriptor.key)
+            self.stream_finished_event.set()
         finally:
             self.stream_handle.close()
 

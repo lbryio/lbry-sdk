@@ -113,10 +113,10 @@ class BlobFile:
         try:
             await self.loop.run_in_executor(None, _save_verified)
         finally:
+            self.verified.set()
             self.blob_write_lock.release()
         if self.blob_completed_callback:
             await self.blob_completed_callback(self)
-        self.verified.set()
 
     def open_for_writing(self, peer: typing.Optional['Peer'] = None) -> HashBlobWriter:
         """

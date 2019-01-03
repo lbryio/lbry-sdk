@@ -54,6 +54,7 @@ class StreamManager:
         self.streams: typing.Set[ManagedStream] = set()
         self.starting_streams: typing.Dict[str, asyncio.Future] = {}
         self.resume_downloading_task: asyncio.Task = None
+        self.update_stream_finished_futs: typing.List[asyncio.Future] = []
 
     async def load_streams_from_database(self):
         infos = await self.storage.get_all_lbry_files().asFuture(self.loop)
@@ -80,7 +81,8 @@ class StreamManager:
         for stream in self.streams:
             if stream.status == ManagedStream.STATUS_RUNNING:
                 resumed += 1
-                stream.downloader.download(self.node, lambda: stream.update_status(ManagedStream.STATUS_FINISHED))
+                stream.downloader.download(self.node)
+                self.wait_for_stream_finished(stream)
         if resumed:
             log.info("resuming %i downloads", resumed)
 
@@ -94,6 +96,8 @@ class StreamManager:
         while self.streams:
             stream = self.streams.pop()
             stream.stop_download()
+        while self.update_stream_finished_futs:
+            self.update_stream_finished_futs.pop().cancel()
 
     async def create_stream(self, file_path: str) -> ManagedStream:
         stream = await ManagedStream.create(self.loop, self.storage, self.blob_manager, file_path)
@@ -113,16 +117,33 @@ class StreamManager:
             if os.path.isfile(path):
                 os.remove(path)
 
+    def wait_for_stream_finished(self, stream: ManagedStream):
+        async def _wait_for_stream_finished():
+            if stream.downloader and stream.running:
+                try:
+                    await stream.downloader.stream_finished_event.wait()
+                    stream.update_status(ManagedStream.STATUS_FINISHED)
+                except asyncio.CancelledError:
+                    pass
+        fut = asyncio.ensure_future(_wait_for_stream_finished(), loop=self.loop)
+        self.update_stream_finished_futs.append(fut)
+        fut.add_done_callback(lambda _: None if fut not in self.update_stream_finished_futs else self.update_stream_finished_futs.remove(fut))
+
     async def _download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
-                                          file_name: typing.Optional[str] = None,
-                                          data_rate: typing.Optional[int] = 0) -> ManagedStream:
+                                          file_name: typing.Optional[str] = None, data_rate: typing.Optional[int] = 0,
+                                          sd_blob_timeout: typing.Optional[float] = 60
+                                          ) -> typing.Optional[ManagedStream]:
+
         claim = ClaimDict.load_dict(claim_info['value'])
-        finished = asyncio.Event(loop=self.loop)
         downloader = StreamDownloader(self.loop, self.blob_manager, claim.source_hash.decode(), self.peer_timeout,
                                       self.peer_connect_timeout, download_directory, file_name)
-        downloader.download(node, finished.set)
-
-        await downloader.got_descriptor.wait()
+        downloader.download(node)
+        try:
+            await asyncio.wait_for(asyncio.ensure_future(downloader.got_descriptor.wait(), loop=self.loop),
+                                   sd_blob_timeout)
+        except asyncio.TimeoutError as err:
+            downloader.stop()
+            return
 
         # TODO: do this in one db call instead of three
         await self.blob_manager.storage.store_stream(downloader.sd_blob, downloader.descriptor).asFuture(self.loop)
@@ -144,10 +165,13 @@ class StreamManager:
                                stored_claim)
         self.streams.add(stream)
         await stream.downloader.wrote_bytes_event.wait()
+        self.wait_for_stream_finished(stream)
         return stream
 
     async def download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
-                                         file_name: typing.Optional[str] = None) -> ManagedStream:
+                                         file_name: typing.Optional[str] = None,
+                                         sd_blob_timeout: typing.Optional[float] = 60
+                                         ) -> typing.Optional[ManagedStream]:
         claim = ClaimDict.load_dict(claim_info['value'])
         sd_hash = claim.source_hash.decode()
         if sd_hash in self.starting_streams:
@@ -157,7 +181,8 @@ class StreamManager:
             return already_started[0]
 
         self.starting_streams[sd_hash] = asyncio.Future(loop=self.loop)
-        stream = await self._download_stream_from_claim(node, download_directory, claim_info, file_name)
+        stream = await self._download_stream_from_claim(node, download_directory, claim_info, file_name,
+                                                        sd_blob_timeout)
         self.starting_streams[sd_hash].set_result(stream)
         if sd_hash in self.starting_streams:
             del self.starting_streams[sd_hash]

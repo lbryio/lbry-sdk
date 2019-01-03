@@ -11,6 +11,16 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def cancel_task(task: typing.Optional[asyncio.Task]):
+    if task and not (task.done() or task.cancelled()):
+        task.cancel()
+
+
+def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
+    for task in tasks:
+        cancel_task(task)
+
+
 class AsyncGeneratorJunction:
     """
     A helper to interleave the results from multiple async generators into one
@@ -22,6 +32,7 @@ class AsyncGeneratorJunction:
         self.queue = queue or asyncio.Queue(loop=loop)
         self.handles: typing.List[asyncio.TimerHandle] = []
         self.running_iterators: typing.Dict[typing.AsyncGenerator, bool] = {}
+        self.awaiting: asyncio.Future = None
 
     @property
     def running(self):
@@ -35,6 +46,7 @@ class AsyncGeneratorJunction:
         async def iterate(iterator: typing.AsyncGenerator):
             async for item in iterator:
                 self.queue.put_nowait(item)
+
             self.running_iterators[iterator] = False
 
         self.running_iterators[async_gen] = True
@@ -44,10 +56,21 @@ class AsyncGeneratorJunction:
         return self
 
     async def __anext__(self):
-        if self.running:
-            return await self.queue.get()
-        else:
+        if not self.running:
             raise StopAsyncIteration()
+        self.awaiting = asyncio.ensure_future(self.queue.get(), loop=self.loop)
+        try:
+            return await self.awaiting
+        finally:
+            self.awaiting = None
+
+    def aclose(self):
+        for iterator in list(self.running_iterators.keys()):
+            iterator.aclose()
+            self.running_iterators[iterator] = False
+        if self.awaiting and not self.awaiting.done():
+            self.awaiting.cancel()
+        self.awaiting = None
 
 
 class StreamPeerFinder:
@@ -63,12 +86,14 @@ class StreamPeerFinder:
         self.peers: asyncio.Queue['Peer'] = asyncio.Queue(loop=self.loop)
         self.attempted: typing.Set['Peer'] = set()
         self.find_task: asyncio.Task = None
+        self.wait_head_blob_task: asyncio.Task = None
         self.finished = asyncio.Event(loop=self.loop)
+        self.peer_generator: AsyncGeneratorJunction = None
 
     async def _find_peers(self):
-        peer_generator = AsyncGeneratorJunction(self.loop)
+        self.peer_generator = AsyncGeneratorJunction(self.loop)
         # find peers for the sd blob
-        peer_generator.add_generator(
+        self.peer_generator.add_generator(
             self.node.get_iterative_value_finder(binascii.unhexlify(self.sd_hash.encode()), bottom_out_limit=5,
                                                  max_results=-1)
         )
@@ -80,7 +105,7 @@ class StreamPeerFinder:
             sd = await StreamDescriptor.from_stream_descriptor_blob(
                 self.loop, self.blob_manager, self.sd_blob
             )
-            peer_generator.add_generator(
+            self.peer_generator.add_generator(
                 self.node.get_iterative_value_finder(binascii.unhexlify(sd.blobs[0].blob_hash.encode()),
                                                      bottom_out_limit=5, max_results=-1)
             )
@@ -91,20 +116,23 @@ class StreamPeerFinder:
                 self.loop, self.blob_manager, self.sd_blob
             )
             log.info("had sd blob, add head blob finder")
-            peer_generator.add_generator(
+            self.peer_generator.add_generator(
                 self.node.get_iterative_value_finder(binascii.unhexlify(descriptor.blobs[0].blob_hash.encode()),
                                                      bottom_out_limit=5, max_results=-1)
             )
         else:
-            self.loop.create_task(got_head_blob_info())
+            self.wait_head_blob_task = self.loop.create_task(got_head_blob_info())
 
-        async for peers in peer_generator:
-            assert isinstance(peers, list)
+        async for peers in self.peer_generator:
+            if not peers or not isinstance(peers, list):
+                break
             for peer in peers:
                 if peer not in self.attempted:
                     if not peer.tcp_last_down or (peer.tcp_last_down + 300) < self.loop.time():
                         self.attempted.add(peer)
                         self.peers.put_nowait(peer)
+        log.info("peer finder exhausted")
+
         self.finished.set()
 
     def __aiter__(self):
@@ -112,12 +140,15 @@ class StreamPeerFinder:
         return self
 
     async def __anext__(self):
-        if self.finished.is_set():
+        finished = asyncio.ensure_future(self.finished.wait(), loop=self.loop)
+        peer = asyncio.ensure_future(self.peers.get(), loop=self.loop)
+        await asyncio.wait([finished, peer], return_when='FIRST_COMPLETED')
+        if finished.done():
             self.stop()
             raise StopAsyncIteration()
-        return await self.peers.get()
+        return peer.result()
 
     def stop(self):
-        if self.find_task and not (self.find_task.done() or self.find_task.cancelled()):
-            self.find_task.cancel()
-
+        if self.peer_generator:
+            self.peer_generator.aclose()
+        cancel_tasks([self.find_task, self.wait_head_blob_task])

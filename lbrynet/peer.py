@@ -259,9 +259,10 @@ class Peer:
 
         downloaded = []
         for blob in blobs:
-            success = await self.blob_exchange_protocol.download_blob(blob)
-            if success:
-                downloaded.append(blob)
+            if not blob.get_is_verified():
+                success = await self.blob_exchange_protocol.download_blob(blob)
+                if success:
+                    downloaded.append(blob)
         return downloaded
 
     # Blob functions, clean up

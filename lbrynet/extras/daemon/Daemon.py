@@ -1705,10 +1705,13 @@ class Daemon(AuthJSONRPCServer):
             )
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
+
         stream = await self.file_manager.download_stream_from_claim(
-            self.dht_node, conf.settings.download_dir, resolved, file_name
+            self.dht_node, conf.settings.download_dir, resolved, file_name, timeout
         )
-        return stream.as_dict()
+        if stream:
+            return stream.as_dict()
+        raise DownloadSDTimeout(resolved['value']['stream']['source']['source'])
 
     @requires(FILE_MANAGER_COMPONENT)
     @defer.inlineCallbacks

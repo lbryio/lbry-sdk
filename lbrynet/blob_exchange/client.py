@@ -112,11 +112,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         return False
 
     async def download_blob(self, blob: 'BlobFile') -> bool:
-        await self._request_lock.acquire()
-        try:
+        async with self._request_lock:
             return await self._download_blob(blob)
-        finally:
-            self._request_lock.release()
 
     def connection_made(self, transport: asyncio.Transport):
         log.info("connection made to %s: %s", self.peer, transport)
@@ -125,4 +122,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
     def connection_lost(self, reason):
         log.info("connection lost to %s" % self.peer)
+        if self._response_fut and not self._response_fut.done():
+            self._response_fut.cancel()
         self.transport = None

@@ -198,15 +198,18 @@ class KademliaProtocol(DatagramProtocol):
                         remote_contact.set_id(message.node_id)
                     err_str = f"response from {address[0]}:{address[1]}, " \
                               f"expected {remote_contact.address}:{remote_contact.udp_port}"
-                    assert (remote_contact.address, remote_contact.udp_port) == address, AssertionError(err_str)
+                    assert remote_contact.address == address[0], AssertionError(err_str)
 
                 except AssertionError as err:
-                    df.set_exception(err)
+                    df.set_exception(UnknownRemoteException(str(err)))
                     return
-                # else:
-                #     assert message.node_id == self.node_id
-                self.loop.create_task(self.routing_table.add_peer(remote_contact))
-                df.set_result(message.response)
+
+                if not df.cancelled():
+                    self.loop.create_task(self.routing_table.add_peer(remote_contact))
+                    df.set_result(message.response)
+                else:
+                    log.warning("%s:%i replied, but after we cancelled the request attempt",
+                                remote_contact.address, remote_contact.udp_port)
             else:
                 # If the original message isn't found, it must have timed out
                 # TODO: we should probably do something with this...
@@ -353,12 +356,8 @@ class KademliaProtocol(DatagramProtocol):
     def get_find_iterator(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
                           bottom_out_limit: int = constants.bottom_out_limit,
                           max_results: int = constants.k):
-        return self._get_find_iterator(rpc, key, shortlist, bottom_out_limit).iterative_find(max_results)
-
-    def _get_find_iterator(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
-                          bottom_out_limit: int = constants.bottom_out_limit) -> IterativeFinder:
         return IterativeFinder(self.loop, self.peer_manager, self.routing_table, self, shortlist, key, rpc,
-                               bottom_out_limit=bottom_out_limit)
+                        bottom_out_limit=bottom_out_limit).iterative_find(max_results)
 
     async def cumulative_find(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
                               bottom_out_limit: int = constants.bottom_out_limit,

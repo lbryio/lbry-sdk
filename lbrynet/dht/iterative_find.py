@@ -118,11 +118,12 @@ class IterativeFinder:
             response = await fn(self.key)
             # assert contact in self.node.contacts
             return await self.extend_shortlist(contact, response)
-        except (TimeoutError, ValueError, IndexError, asyncio.TimeoutError) as err:
+        except (TimeoutError, ValueError, IndexError, asyncio.TimeoutError, asyncio.CancelledError) as err:
             return contact.node_id
         except UnknownRemoteException as err:
-            log.exception("%s %s %s:%i %s - %s", self.rpc, binascii.hexlify(self.key).decode(),
-                          contact.address, contact.udp_port, binascii.hexlify(contact.node_id).decode(), err)
+            log.warning(err)
+            # log.exception("%s %s %s:%i %s - %s", self.rpc, binascii.hexlify(self.key).decode(),
+            #               contact.address, contact.udp_port, binascii.hexlify(contact.node_id).decode(), err)
             return contact.node_id
 
     async def extend_shortlist(self, contact, result):
@@ -263,7 +264,7 @@ class IterativeFinder:
             return await self.next()
         except asyncio.CancelledError:
             self.stop()
-            raise StopAsyncIteration
+            raise StopAsyncIteration()
 
     async def next(self) -> typing.List[Peer]:
         try:
@@ -312,9 +313,11 @@ class IterativeFinder:
                     log.info("%s(%s...) has %i results, bottom out counter: %i", self.rpc, binascii.hexlify(self.key).decode()[:8],
                              len(accumulated), bottomed_out)
                     log.info("%i contacts known", len(self.routing_table.get_peers()))
+                    self.stop()
                     return
         except Exception as err:
             log.error("iterative find error: %s", err)
             raise err
         finally:
             self.stop()
+            log.info("stopped iterative finder %s %s", self.rpc, binascii.hexlify(self.key).decode()[:8])
