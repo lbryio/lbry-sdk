@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import typing
+from lbrynet.error import BlobDownloadError
 from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest
 if typing.TYPE_CHECKING:
     from lbrynet.peer import Peer
@@ -51,7 +52,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if self.get_expected_length and self.get_expected_length() is not None and total > self.get_expected_length():
             self.handle_data_received(data[:len(data) + self._blob_bytes_received - self.get_expected_length()])
             return self.data_received(data[len(data) + self._blob_bytes_received - self.get_expected_length():])
-        return self.handle_data_received(data)
+        try:
+            return self.handle_data_received(data)
+        except BlobDownloadError as err:
+            if self._response_fut and not self._response_fut.done():
+                self._response_fut.set_exception(err)
 
     async def _download_blob(self, blob: 'BlobFile') -> bool:
         self._response_fut = asyncio.Future(loop=self.loop)
@@ -63,10 +68,13 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.write_blob = writer.write
         request = BlobRequest.make_request_for_blob_hash(blob.blob_hash)
         downloaded_blob = False
-        log.info("send download request")
+        log.debug("send download request")
         try:
             self.transport.write(request.serialize())
-            response = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
+            try:
+                response = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
+            except BlobDownloadError:
+                return False
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
             blob_response = response.get_blob_response()
