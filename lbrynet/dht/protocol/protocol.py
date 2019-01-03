@@ -399,8 +399,9 @@ class KademliaProtocol(DatagramProtocol):
         except Exception as err:
             if 'Invalid token' in str(err):
                 contact.update_token(None)
-            log.error("Unexpected error while storing blob_hash %s at %s: %s",
-                      binascii.hexlify(hash_value), contact, err)
+            else:
+                log.error("Unexpected error while storing blob_hash %s at %s: %s",
+                          binascii.hexlify(hash_value), contact, err)
         return contact.node_id, False
 
     # async def iterative_announce_hash(self, hash_value: bytes) -> typing.List[bytes]:

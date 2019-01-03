@@ -195,3 +195,7 @@ class ComponentStartConditionNotMet(Exception):
 
 class ComponentsNotStarted(Exception):
     pass
+
+
+class BlobDownloadError(Exception):
+    pass

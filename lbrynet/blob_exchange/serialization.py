@@ -1,8 +1,9 @@
 import typing
 import json
 import logging
-
+from lbrynet.error import BlobDownloadError
 log = logging.getLogger()
+
 
 
 class BlobMessage:
@@ -56,7 +57,6 @@ class BlobAvailabilityResponse(BlobMessage):
     key = 'available_blobs'
 
     def __init__(self, available_blobs: typing.List[str], lbrycrd_address: typing.Optional[str] = True, **kwargs):
-        assert len(available_blobs)
         self.available_blobs = available_blobs
         self.lbrycrd_address = lbrycrd_address
 
@@ -86,6 +86,8 @@ class BlobDownloadResponse(BlobMessage):
 
     def __init__(self, **response: typing.Dict):
         incoming_blob = response[self.key]
+        if 'error' in incoming_blob:
+            raise BlobDownloadError(incoming_blob['error'])
         self.incoming_blob = {'blob_hash': incoming_blob['blob_hash'], 'length': incoming_blob['length']}
         self.length = self.incoming_blob['length']
         self.blob_hash = self.incoming_blob['blob_hash']
@@ -227,7 +229,7 @@ class BlobResponse:
         return json.dumps(self.to_dict()).encode()
 
     @classmethod
-    def deserialize(cls, data: bytes) -> 'BlobResponse':
+    def _deserialize(cls, data: bytes) -> 'BlobResponse':
         response, extra = _parse_blob_response(data)
         requests = []
         if response:
@@ -238,3 +240,11 @@ class BlobResponse:
                 if response_type.key in response
             ])
         return cls(requests, extra)
+
+    @classmethod
+    def deserialize(cls, data: bytes) -> 'BlobResponse':
+        try:
+            return cls._deserialize(data)
+        except:
+            log.error(data.decode())
+            raise

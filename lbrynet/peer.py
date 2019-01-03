@@ -6,6 +6,7 @@ import logging
 from binascii import hexlify
 from functools import reduce
 from lbrynet.dht import constants
+from lbrynet.dht.error import UnknownRemoteException
 from lbrynet.dht.serialization.datagram import RequestDatagram, REQUEST_TYPE
 from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
 from typing import TYPE_CHECKING
@@ -183,7 +184,7 @@ class Peer:
         except Exception as err:
             self.update_last_failed()
             log.error("error sending %s to %s:%i - %s", datagram.method, self.address, self.udp_port, err)
-            raise err
+            raise UnknownRemoteException(err)
 
     async def ping(self) -> bytes:
         assert self.peer_manager.dht_protocol is not None
@@ -242,7 +243,8 @@ class Peer:
     def disconnect_tcp(self, reason: typing.Optional[Exception] = None):
         if not self.blob_exchange_protocol:
             return
-        self.blob_exchange_protocol.transport.close()
+        if self.blob_exchange_protocol.transport:
+            self.blob_exchange_protocol.transport.close()
         self.blob_exchange_protocol = None
 
     async def request_blobs(self, blobs: typing.List['BlobFile'],
