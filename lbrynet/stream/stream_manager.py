@@ -101,6 +101,8 @@ class StreamManager:
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
+        if stream.running:
+            stream.stop_download()
         self.streams.remove(stream)
         blob_hashes = [stream.descriptor.sd_hash]
         blob_hashes.extend([blob.blob_hash for blob in stream.descriptor.blobs[:-1]])
