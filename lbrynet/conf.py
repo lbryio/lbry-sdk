@@ -35,8 +35,8 @@ MB = 2 ** 20
 DEFAULT_CONCURRENT_ANNOUNCERS = 10
 
 DEFAULT_DHT_NODES = [
-    ('lbrynet1.lbry.io', 4444),  # USEAST
-    ('lbrynet2.lbry.io', 4444),  # USWEST
+    ('lbrynet1.lbry.io', 4444),  # US EAST
+    ('lbrynet2.lbry.io', 4444),  # US WEST
     ('lbrynet3.lbry.io', 4444),  # EU
     ('lbrynet4.lbry.io', 4444)  # ASIA
 ]
