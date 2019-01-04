@@ -117,3 +117,11 @@ class WalletDatabase(BaseDatabase):
                     channel.private_key = private_key
                 certificates.append(channel)
         return certificates
+
+    async def release_all_outputs(self, account):
+        await self.db.execute(
+            "UPDATE txo SET is_reserved = 0 WHERE"
+            "  is_reserved = 1 AND txo.address IN ("
+            "    SELECT address from pubkey_address WHERE account = ?"
+            "  )", [account.public_key.address]
+        )

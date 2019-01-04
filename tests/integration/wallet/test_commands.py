@@ -846,3 +846,14 @@ class TransactionCommandsTestCase(CommandTestCase):
         # inexistent
         result = await self.daemon.jsonrpc_transaction_show('0'*64)
         self.assertFalse(result['success'])
+
+    async def test_utxo_release(self):
+        sendtxid = await self.blockchain.send_to_address(
+            await self.account.receiving.get_or_create_usable_address(), 1
+        )
+        await self.confirm_tx(sendtxid)
+        await self.assertBalance(self.account, '11.0')
+        await self.ledger.reserve_outputs(await self.account.get_utxos())
+        await self.assertBalance(self.account, '0.0')
+        await self.daemon.jsonrpc_utxo_release()
+        await self.assertBalance(self.account, '11.0')
