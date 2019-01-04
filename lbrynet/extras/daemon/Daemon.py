@@ -2769,6 +2769,26 @@ class Daemon(AuthJSONRPCServer):
         )
 
     @requires(WALLET_COMPONENT)
+    def jsonrpc_utxo_release(self, account_id=None):
+        """
+        When spending a UTXO it is locally locked to prevent double spends;
+        occasionally this can result in a UTXO being locked which ultimately
+        did not get spent (failed to broadcast, spend transaction was not
+        accepted by blockchain node, etc). This command releases the lock
+        on all UTXOs in your account.
+
+        Usage:
+            utxo_release [<account_id> | --account_id=<account_id>]
+
+        Options:
+            --account_id=<account_id> : (str) id of the account to query
+
+        Returns:
+            None
+        """
+        return self.get_account_or_default(account_id).release_all_outputs()
+
+    @requires(WALLET_COMPONENT)
     def jsonrpc_block_show(self, blockhash=None, height=None):
         """
         Get contents of a block
