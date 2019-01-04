@@ -16,7 +16,6 @@ class NIST_ECDSASigner(object):
     CURVE_NAME = None
     HASHFUNC = hashlib.sha256
     HASHFUNC_NAME = SHA256
-    DETACHED = False
 
     def __init__(self, private_key):
         self._private_key = private_key
@@ -47,9 +46,9 @@ class NIST_ECDSASigner(object):
     def generate(cls):
         return cls(ecdsa.SigningKey.generate(curve=cls.CURVE, hashfunc=cls.HASHFUNC_NAME))
 
-    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name):
+    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name, detached=False):
         to_sign = bytearray()
-        if self.DETACHED:
+        if detached:
             assert name, "Name is required for detached signatures"
             assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
             to_sign.extend(name.lower().encode())
@@ -63,10 +62,11 @@ class NIST_ECDSASigner(object):
         to_sign.extend(raw_cert_id)
 
         digest = self.HASHFUNC(to_sign).digest()
-        if self.DETACHED:
+        if detached:
             return Claim.load(decode_b64_fields(claim.protobuf_dict)), Signature(
                 self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC), raw_cert_id
             )
+        # -- Legacy signer (signature inside protobuf) --
 
         if not isinstance(self.private_key, ecdsa.SigningKey):
             raise Exception("Not given a signing key")

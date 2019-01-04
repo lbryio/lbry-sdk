@@ -164,9 +164,9 @@ class ClaimDict(OrderedDict):
         signer = get_signer(curve).load_pem(private_key)
         return cls.load_protobuf(signer.certificate)
 
-    def sign(self, private_key, claim_address, cert_claim_id, curve=SECP256k1, name=None):
+    def sign(self, private_key, claim_address, cert_claim_id, curve=SECP256k1, name=None, force_detached=False):
         signer = get_signer(curve).load_pem(private_key)
-        signed, signature = signer.sign_stream_claim(self, claim_address, cert_claim_id, name)
+        signed, signature = signer.sign_stream_claim(self, claim_address, cert_claim_id, name, force_detached)
         return ClaimDict.load_protobuf(signed, signature)
 
     def validate_signature(self, claim_address, certificate, name=None):
