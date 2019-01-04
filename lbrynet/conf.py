@@ -35,9 +35,10 @@ MB = 2 ** 20
 DEFAULT_CONCURRENT_ANNOUNCERS = 10
 
 DEFAULT_DHT_NODES = [
-    ('lbrynet1.lbry.io', 4444),
-    ('lbrynet2.lbry.io', 4444),
-    ('lbrynet3.lbry.io', 4444)
+    ('lbrynet1.lbry.io', 4444),  # US EAST
+    ('lbrynet2.lbry.io', 4444),  # US WEST
+    ('lbrynet3.lbry.io', 4444),  # EU
+    ('lbrynet4.lbry.io', 4444)  # ASIA
 ]
 
 settings_decoders = {
