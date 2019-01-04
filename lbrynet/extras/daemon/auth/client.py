@@ -46,7 +46,10 @@ class UnAuthAPIClient:
     async def call(self, method, params=None):
         message = {'method': method, 'params': params}
         async with self.session.get(conf.settings.get_api_connection_string(), json=message) as resp:
-            return await resp.json()
+            response = await resp.json()
+        if 'error' in response:
+            raise JSONRPCException(response['error'])
+        return response['result']
 
 
 class AuthAPIClient:
@@ -97,7 +100,10 @@ class AuthAPIClient:
             if next_secret:
                 self.__api_key.secret = next_secret
 
-            return await resp.json()
+            response = await resp.json()
+        if 'error' in response:
+            raise JSONRPCException(response['error'])
+        return response['result']
 
     @classmethod
     async def get_client(cls, key_name=None):

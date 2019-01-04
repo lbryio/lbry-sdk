@@ -33,7 +33,7 @@ from lbrynet import conf, log_support, __name__ as lbrynet_name
 from lbrynet.utils import check_connection, json_dumps_pretty
 from lbrynet.extras.daemon.Daemon import Daemon
 from lbrynet.extras.daemon.DaemonConsole import main as daemon_console
-from lbrynet.extras.daemon.auth.client import LBRYAPIClient
+from lbrynet.extras.daemon.auth.client import LBRYAPIClient, JSONRPCException
 from lbrynet.extras.system_info import get_platform
 
 log = logging.getLogger(lbrynet_name)
@@ -117,16 +117,13 @@ async def execute_command(method, params, data_dir: typing.Optional[str] = None,
         return 1
 
     # this actually executes the method
-    resp = await api.call(method, params)
-
     try:
+        resp = await api.call(method, params)
+        print(json.dumps(resp, indent=2))
+    except JSONRPCException as err:
+        print(json.dumps(err, indent=2))
+    finally:
         await api.session.close()
-        print(json.dumps(resp["result"], indent=2))
-    except KeyError:
-        if resp["error"]["code"] == -32500:
-            print(json.dumps(resp["error"], indent=2))
-        else:
-            print(json.dumps(resp["error"]["message"], indent=2))
 
 
 def print_help():
