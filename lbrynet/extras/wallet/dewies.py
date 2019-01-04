@@ -30,4 +30,4 @@ def lbc_to_dewies(lbc: str) -> int:
 
 
 def dewies_to_lbc(dewies) -> str:
-    return satoshis_to_coins(dewies)
+    return dewies if isinstance(dewies, str) else satoshis_to_coins(dewies)

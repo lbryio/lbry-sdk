@@ -12,6 +12,7 @@ from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
 from lbrynet.blob.CryptBlob import CryptBlobInfo
 from lbrynet.dht.constants import dataExpireTimeout
+from lbrynet.schema.uri import parse_lbry_uri
 
 log = logging.getLogger(__name__)
 
@@ -386,8 +387,8 @@ class SQLiteStorage:
 
         def _store_stream(transaction):
             transaction.execute("insert into stream values (?, ?, ?, ?, ?);",
-                                 (stream_hash, sd_hash, stream_key, stream_name,
-                                  suggested_file_name))
+                                (stream_hash, sd_hash, stream_key, stream_name,
+                                 suggested_file_name))
 
             for blob_info in stream_blob_infos:
                 transaction.execute("insert into stream_blob values (?, ?, ?, ?)",
@@ -568,13 +569,11 @@ class SQLiteStorage:
         return self.db.runInteraction(_save_support)
 
     def get_supports(self, *claim_ids):
-        def _format_support(outpoint, supported_id, amount, address):
+        def _format_support(outpoint, amount):
             return {
                 "txid": outpoint.split(":")[0],
                 "nout": int(outpoint.split(":")[1]),
-                "claim_id": supported_id,
                 "amount": dewies_to_lbc(amount),
-                "address": address,
             }
 
         def _get_supports(transaction):
@@ -582,7 +581,7 @@ class SQLiteStorage:
                 _format_support(*support_info)
                 for support_info in _batched_select(
                     transaction,
-                    "select * from support where claim_id in {}",
+                    "select support_outpoint, amount from support where claim_id in {}",
                     tuple(claim_ids)
                 )
             ]
@@ -604,6 +603,7 @@ class SQLiteStorage:
                 height = claim_info['height']
                 address = claim_info['address']
                 sequence = claim_info['claim_sequence']
+                resolved_at = claim_info['height'] + claim_info['depth']
                 try:
                     certificate_id = claim_info['value'].get('publisherSignature', {}).get('certificateId')
                 except AttributeError:
@@ -617,8 +617,9 @@ class SQLiteStorage:
                     source_hash = None
                 serialized = claim_info.get('hex') or hexlify(smart_decode(claim_info['value']).serialized)
                 transaction.execute(
-                    "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (outpoint, claim_id, name, amount, height, serialized, certificate_id, address, sequence)
+                    "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (outpoint, claim_id, name, amount, height, serialized, certificate_id, address, sequence,
+                     resolved_at)
                 )
                 if 'supports' in claim_info:  # if this response doesn't have support info don't overwrite the existing
                                               # support info
@@ -794,6 +795,24 @@ class SQLiteStorage:
                 claims[stream_hash] = claim
         defer.returnValue(claims)
 
+    def get_resolved_at_for_outpoint(self, outpoint):
+        return self.run_and_return_one_or_none(
+            "select resolved_at from claim "
+            "where claim_outpoint = ?",
+            outpoint
+        )
+
+    def get_outpoint_for_uri(self, uri):
+        uri = parse_lbry_uri(uri)
+        claim_id_param = "%" if not uri.claim_id else uri.claim_id
+        return self.run_and_return_one_or_none(
+            "select claim_outpoint from claim "
+            "where claim_name=? and claim_id like ?"
+            "order by height desc, amount desc "
+            "limit 1",
+            uri.name, claim_id_param
+        )
+
     @defer.inlineCallbacks
     def get_claim(self, claim_outpoint, include_supports=True):
         def _get_claim(transaction):
@@ -872,19 +891,19 @@ class SQLiteStorage:
 
 
 # Helper functions
-def _format_claim_response(outpoint, claim_id, name, amount, height, serialized, channel_id, address, claim_sequence):
+def _format_claim_response(outpoint, claim_id, name, amount, height, serialized, _channel_id, address, claim_sequence,
+                           _resolved_at):
     r = {
         "name": name,
         "claim_id": claim_id,
         "address": address,
         "claim_sequence": claim_sequence,
+        "hex": serialized,
         "value": ClaimDict.deserialize(unhexlify(serialized)).claim_dict,
         "height": height,
         "amount": dewies_to_lbc(amount),
         "nout": int(outpoint.split(":")[1]),
         "txid": outpoint.split(":")[0],
-        "channel_claim_id": channel_id,
-        "channel_name": None
     }
     return r
 

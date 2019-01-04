@@ -10,6 +10,7 @@ from typing import Optional
 from twisted.internet import defer
 
 from lbrynet.schema.schema import SECP256k1
+from lbrynet.schema.uri import parse_lbry_uri
 from torba.client.basemanager import BaseWalletManager
 from torba.rpc.jsonrpc import CodeMessageError
 
@@ -23,6 +24,10 @@ from lbrynet.extras.wallet.dewies import dewies_to_lbc
 
 
 log = logging.getLogger(__name__)
+
+
+def d2f(deferred):
+    return deferred.asFuture(asyncio.get_event_loop())
 
 
 class ReservedPoints:
@@ -268,16 +273,55 @@ class LbryWalletManager(BaseWalletManager):
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
 
+    async def fetch_from_cache(self, uri):
+        resolver = self.ledger.resolver
+        is_channel = parse_lbry_uri(uri).is_channel
+
+        claim_outpoint = await d2f(self.old_db.get_outpoint_for_uri(uri))
+        last_resolved_at = await d2f(self.old_db.get_resolved_at_for_outpoint(claim_outpoint))
+
+        if not last_resolved_at or resolver.height - last_resolved_at > 1:
+            return False
+
+        log.info("trying to fetch %s from cache", uri)
+        claim = await d2f(self.old_db.get_claim(claim_outpoint))
+        claim['depth'] = resolver.height - claim['height']
+        result = {"claim": claim}
+
+        if claim.get("channel_name", False):
+            certificate_uri = "{}#{}".format(claim.get("channel_name", ""),
+                                             claim['value'].get('publisherSignature', {}).get('certificateId'))
+            certificate_outpoint = await d2f(self.old_db.get_outpoint_for_uri(certificate_uri))
+            certificate = await d2f(self.old_db.get_claim(certificate_outpoint))
+            certificate['depth'] = resolver.height - certificate['height']
+            result["certificate"] = await resolver.parse_and_validate_claim_result(certificate)
+
+        result["claim"] = await resolver.parse_and_validate_claim_result(result["claim"],
+                                                                         certificate=result.get(
+                                                                             "certificate", None))
+        if is_channel:
+            result = {"certificate": result["claim"]}
+        return result
+
     async def resolve(self, *uris, **kwargs):
         page = kwargs.get('page', 0)
         page_size = kwargs.get('page_size', 10)
         check_cache = kwargs.get('check_cache', False)  # TODO: put caching back (was force_refresh parameter)
+
+        cached_results = dict()
+        needed = list()
+        if check_cache:
+            for uri in uris:
+                cached_results[uri] = await self.fetch_from_cache(uri)
+            needed = [key for key in cached_results if not cached_results[key]]
+
         ledger: MainNetLedger = self.default_account.ledger
-        results = await ledger.resolve(page, page_size, *uris)
+        results = await ledger.resolve(page, page_size, *needed)
         if 'error' not in results:
             await self.old_db.save_claims_for_resolve([
                 value for value in results.values() if 'error' not in value
             ]).asFuture(asyncio.get_event_loop())
+        results = {**cached_results, **results}
         return results
 
     async def get_claims_for_name(self, name: str):

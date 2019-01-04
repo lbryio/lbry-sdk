@@ -180,7 +180,8 @@ class Resolver:
             if decoded.has_signature:
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
-                    certificate = await self.network.get_claims_by_ids(decoded.certificate_id.decode())
+                    certificate_id = decoded.certificate_id.decode()
+                    certificate = (await self.network.get_claims_by_ids(certificate_id)).get(certificate_id, {})
                     if not certificate:
                         log.warning('Certificate %s not found', decoded.certificate_id)
                 claim_result['has_signature'] = True
@@ -298,6 +299,11 @@ def format_amount_value(obj):
                 if not isinstance(obj[k], float):
                     obj[k] = dewies_to_lbc(obj[k])
             elif k == 'supports' and isinstance(v, list):
+                # supports are already in the desired format
+                # the following 2 lines are bad as supports should be passed in a consistent manner
+                # but it is unavoidable at the moment because of so much other code linked to this :-(
+                if v and isinstance(v[0], dict):
+                    continue
                 obj[k] = [{'txid': txid, 'nout': nout, 'amount': dewies_to_lbc(amount)}
                           for (txid, nout, amount) in v]
             elif isinstance(v, (list, dict)):

@@ -86,7 +86,7 @@ class DatabaseComponent(Component):
 
     @staticmethod
     def get_current_db_revision():
-        return 9
+        return 10
 
     @staticmethod
     def get_revision_filename():
