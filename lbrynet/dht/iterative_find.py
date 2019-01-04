@@ -155,11 +155,8 @@ class IterativeFinder:
                     self.find_value_result.append(self.peer_manager.make_peer(host, node_id, tcp_port=port))
                     log.debug("found new peer: %s", self.find_value_result[-1])
             if self.find_value_result:
-                await self.lock.acquire()
-                try:
+                async with self.lock:
                     self.iteration_fut.set_result(self.find_value_result)
-                finally:
-                    self.lock.release()
         else:
             contact_triples = self.get_contact_triples(result)
             for contact_triple in contact_triples:
@@ -175,11 +172,8 @@ class IterativeFinder:
 
             if not self.iteration_fut.done() and self.should_stop():
                 self.active_contacts.sort(key=lambda c: self.distance(c.node_id))
-                await self.lock.acquire()
-                try:
+                async with self.lock:
                     self.iteration_fut.set_result(self.active_contacts[:min(constants.k, len(self.active_contacts))])
-                finally:
-                    self.lock.release()
 
         return contact.node_id
 
@@ -263,7 +257,7 @@ class IterativeFinder:
         try:
             return await self.next()
         except asyncio.CancelledError:
-            self.stop()
+            self.astop()
             raise StopAsyncIteration()
 
     async def next(self) -> typing.List[Peer]:
@@ -277,7 +271,7 @@ class IterativeFinder:
             finally:
                 self.lock.release()
 
-    def stop(self):
+    def astop(self):
         while self.pending_iteration_tasks:
             task = self.pending_iteration_tasks.pop()
             if task and not (task.done() or task.cancelled()):
@@ -297,6 +291,9 @@ class IterativeFinder:
             bottomed_out = 0
             async for iteration_result in self:
                 new_peers: typing.List[Peer] = []
+                if not isinstance(iteration_result, list):
+                    log.error("unexpected iteration result: \"%s\"", iteration_result)
+                    iteration_result = []
                 for peer in iteration_result:
                     if peer not in accumulated:
                         accumulated.add(peer)
@@ -313,11 +310,10 @@ class IterativeFinder:
                     log.info("%s(%s...) has %i results, bottom out counter: %i", self.rpc, binascii.hexlify(self.key).decode()[:8],
                              len(accumulated), bottomed_out)
                     log.info("%i contacts known", len(self.routing_table.get_peers()))
-                    self.stop()
-                    return
+                    break
         except Exception as err:
             log.error("iterative find error: %s", err)
             raise err
         finally:
-            self.stop()
+            self.astop()
             log.info("stopped iterative finder %s %s", self.rpc, binascii.hexlify(self.key).decode()[:8])

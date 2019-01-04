@@ -6,7 +6,7 @@ import time
 from aiohttp import ClientConnectorError
 from lbrynet import conf
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.extras.daemon.auth.client import LBRYAPIClient
+from lbrynet.extras.daemon.auth.client import LBRYAPIClient, JSONRPCException
 
 
 def extract_uris(response):
@@ -56,13 +56,13 @@ async def main():
             }
         )
         start = time.time()
-        resp = await api.call("get", {"uri": uri})
-        if resp.get("result"):
+        try:
+            await api.call("get", {"uri": uri})
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{first_byte - start} {uri}")
-        else:
-            print(f"timeout {uri}")
+        except JSONRPCException as err:
+            print(f"{str(err)} {uri}")
         await api.call(
             "file_delete", {
                 "delete_from_download_dir": True,
