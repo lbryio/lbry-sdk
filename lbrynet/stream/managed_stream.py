@@ -84,7 +84,7 @@ class ManagedStream:
 
     @property
     def metadata(self) ->typing.Optional[typing.Dict]:
-        return None if not self.stream_claim_info else self.stream_claim_info.claim['stream']['metadata']
+        return None if not self.stream_claim_info else self.stream_claim_info.claim.claim_dict['stream']['metadata']
 
     @property
     def blobs_completed(self) -> int:
