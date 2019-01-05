@@ -112,7 +112,7 @@ class BasicTransactionTest(IntegrationTestCase):
         cert, key = generate_certificate()
         cert_tx = await Transaction.claim('@bar', cert, l2d('1.0'), address1, [self.account], self.account)
         claim = ClaimDict.load_dict(example_claim_dict)
-        claim = claim.sign(key, address1, cert_tx.outputs[0].claim_id, name='foo', curve=SECP256k1)
+        claim = claim.sign(key, address1, cert_tx.outputs[0].claim_id, name='foo', curve=SECP256k1, force_detached=True)
         claim_tx = await Transaction.claim('foo', claim, l2d('1.0'), address1, [self.account], self.account)
 
         await self.broadcast(cert_tx)

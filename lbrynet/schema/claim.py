@@ -39,8 +39,9 @@ class ClaimDict(OrderedDict):
     @property
     def serialized(self):
         """Serialized Claim protobuf"""
-        if self.detached_signature:
-            return self.detached_signature.serialized + self.protobuf.SerializeToString()
+        current_serialization = self.protobuf.SerializeToString()
+        if self.detached_signature and current_serialization == self.detached_signature.payload:
+            return self.detached_signature.serialized
         return self.protobuf.SerializeToString()
 
     @property
@@ -94,7 +95,7 @@ class ClaimDict(OrderedDict):
 
     @property
     def certificate_id(self):
-        if self.detached_signature:
+        if self.detached_signature and self.detached_signature.certificate_id:
             return binascii.hexlify(self.detached_signature.certificate_id)
         if not self.has_signature:
             return None
@@ -150,11 +151,11 @@ class ClaimDict(OrderedDict):
     @classmethod
     def deserialize(cls, serialized):
         """Load a ClaimDict from a serialized protobuf string"""
-        serialized, detached_signature = Signature.flagged_parse(serialized)
+        detached_signature = Signature.flagged_parse(serialized)
 
         temp_claim = claim_pb2.Claim()
         try:
-            temp_claim.ParseFromString(serialized)
+            temp_claim.ParseFromString(detached_signature.payload)
         except DecodeError_pb:
             raise DecodeError(DecodeError_pb)
         return cls.load_protobuf(temp_claim, detached_signature=detached_signature)

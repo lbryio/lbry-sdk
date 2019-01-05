@@ -382,9 +382,13 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         altered = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_1, claim_id_1,
                                                         curve=SECP256k1, name='example', force_detached=True)
+        original_serialization = altered.serialized
         sd_hash = altered['stream']['source']['source']
         altered['stream']['source']['source'] = sd_hash[::-1]
-        altered_copy = ClaimDict.deserialize(altered.serialized)
+        altered_serialization = altered.serialized
+
+        # keep signature, but replace serialization with the altered claim (check signature.py for slice sizes)
+        altered_copy = ClaimDict.deserialize(original_serialization[:85] + altered_serialization)
         self.assertRaises(ecdsa.keys.BadSignatureError, altered_copy.validate_signature,
                           claim_address_1, cert, 'example')
 
