@@ -5,7 +5,7 @@ from lbrynet.schema.address import decode_address
 from lbrynet.schema.encoding import decode_b64_fields
 from lbrynet.schema.schema.certificate import Certificate
 from lbrynet.schema.schema.claim import Claim
-from lbrynet.schema.signature import Signature
+from lbrynet.schema.signature import Signature, NAMED_SECP256K1
 from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.schema import V_0_0_1, CLAIM_TYPE, CLAIM_TYPES, CERTIFICATE_TYPE, VERSION
 from lbrynet.schema.schema import NIST256p, NIST384p, SECP256k1, SHA256, SHA384
@@ -63,9 +63,11 @@ class NIST_ECDSASigner(object):
 
         digest = self.HASHFUNC(to_sign).digest()
         if detached:
-            return Claim.load(decode_b64_fields(claim.protobuf_dict)), Signature(
-                self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC), raw_cert_id
-            )
+            return Claim.load(decode_b64_fields(claim.protobuf_dict)), Signature(NAMED_SECP256K1(
+                self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC),
+                raw_cert_id,
+                claim.serialized_no_signature
+            ))
         # -- Legacy signer (signature inside protobuf) --
 
         if not isinstance(self.private_key, ecdsa.SigningKey):
@@ -83,7 +85,8 @@ class NIST_ECDSASigner(object):
             "publisherSignature": sig_dict
         }
 
-        return Claim.load(msg), None
+        proto = Claim.load(msg)
+        return proto, Signature.flagged_parse(proto.SerializeToString())
 
 
 class NIST256pSigner(NIST_ECDSASigner):

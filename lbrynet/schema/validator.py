@@ -78,7 +78,7 @@ class Validator:
 
     def validate_claim_signature(self, claim, claim_address, name):
         to_sign = bytearray()
-        if claim.detached_signature:
+        if claim.detached_signature and claim.detached_signature.raw_signature:
             assert name is not None, "Name is required for verifying detached signatures."
             to_sign.extend(name.lower().encode())
             signature = claim.detached_signature.raw_signature

@@ -1,24 +1,43 @@
-# Flags
-LEGACY = 0x80  # Everything is contained in the protobuf.
-NAMED_SECP256K1 = 0x01  # ECDSA SECP256k1 64 bytes. Claim name is also signed.
+from collections import namedtuple
 
+LEGACY = namedtuple('Legacy', 'payload')
+NAMED_SECP256K1 = namedtuple('NamedSECP256k1', 'raw_signature certificate_id payload')
+FLAGS = {
+    LEGACY: 0x80,
+    NAMED_SECP256K1: 0x01
+}
 
 class Signature:
 
-    def __init__(self, raw_signature: bytes, certificate_id: bytes, flag: int=NAMED_SECP256K1):
-        self.flag = flag
-        assert len(raw_signature) == 64, f"signature must be 64 bytes, not: {len(raw_signature)}"
-        self.raw_signature = raw_signature
-        assert len(certificate_id) == 20, f"certificate_id must be 20 bytes, not: {len(certificate_id)}"
-        self.certificate_id = certificate_id
+    def __init__(self, data: namedtuple):
+        assert isinstance(data, (LEGACY, NAMED_SECP256K1))
+        self.data = data
+
+    @property
+    def payload(self):
+        return self.data.payload
+
+    @property
+    def certificate_id(self):
+        if type(self.data) == NAMED_SECP256K1:
+            return self.data.certificate_id
+
+    @property
+    def raw_signature(self):
+        if type(self.data) == NAMED_SECP256K1:
+            return self.data.raw_signature
 
     @classmethod
     def flagged_parse(cls, binary: bytes):
-        if binary[0] == NAMED_SECP256K1:
-            return binary[85:], cls(binary[1:65], binary[65:85], NAMED_SECP256K1)
+        flag = binary[0]
+        if flag == FLAGS[NAMED_SECP256K1]:
+            return cls(NAMED_SECP256K1(binary[1:65], binary[65:85], binary[85:]))
         else:
-            return binary, None
+            return cls(LEGACY(binary))
 
     @property
     def serialized(self):
-        return (bytes([self.flag]) + self.raw_signature + self.certificate_id) if self.flag != LEGACY else b''
+        if isinstance(self.data, NAMED_SECP256K1):
+            return (bytes([FLAGS[type(self.data)]]) + self.data.raw_signature + self.data.certificate_id + self.payload)
+        elif isinstance(self.data, LEGACY):
+            return self.payload
