@@ -135,6 +135,21 @@ def get_sd_hash(stream_info):
     return result
 
 
+async def await_all_coroutines_in_dict(data: dict) -> None:
+    """
+    Iteratively cleans the dict before JSON processing by awaiting
+    all the coroutine objects before they get passed to prettify methods
+    """
+    dict_stack = [data]
+    while len(dict_stack) > 0:
+        dict_to_clean = dict_stack.pop()
+        for key, value in dict_to_clean.items():
+            if repr(type(value)) == "<class 'coroutine'>":
+                dict_to_clean[key] = await value
+            elif type(value) == dict:
+                dict_stack.append(value)
+
+
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
 
