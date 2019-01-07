@@ -111,23 +111,13 @@ class BlobFile:
         if not self.writers and not self.readers:
             self._verified = False
             self.saved_verified_blob = False
-
-            #def delete_from_file_system():
-            if os.path.isfile(self.file_path):
-                os.remove(self.file_path)
-
-            #d = threads.deferToThread(delete_from_file_system)
-
-            def log_error(err):
-                log.warning("An error occurred deleting %s: %s",
-                            str(self.file_path), err.getErrorMessage())
-                return err
-
-            #d.addErrback(log_error)
-            return #d
+            try:
+                if os.path.isfile(self.file_path):
+                    os.remove(self.file_path)
+            except Exception as e:
+                log.exception("An error occurred deleting %s:", str(self.file_path), exc_info=e)
         else:
-            return defer.fail(Failure(
-                ValueError("File is currently being read or written and cannot be deleted")))
+            raise ValueError("File is currently being read or written and cannot be deleted")
 
     @property
     def verified(self):
