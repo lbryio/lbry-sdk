@@ -116,7 +116,7 @@ class EncryptedFileReflectorClient(Protocol):
             for crypt_blob in blobs:
                 if crypt_blob.blob_hash and crypt_blob.length:
                     yield self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
-        return [blob for r, blob in get_blobs(blobs_in_stream) if r and blob.get_is_verified()]
+        return [blob for blob in get_blobs(blobs_in_stream) if blob.get_is_verified()]
 
     def set_blobs_to_send(self, blobs_to_send):
         for blob in blobs_to_send:
