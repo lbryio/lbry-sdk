@@ -1,8 +1,8 @@
 import collections
 import logging
 
-import treq
-from twisted.internet import defer, task
+import aiohttp
+import asyncio
 
 from lbrynet import conf, utils
 from lbrynet.extras import looping_call_manager, system_info
@@ -55,8 +55,8 @@ class Manager:
             'message': str(e),
         })
 
-    def _send_new_download_stats(self, action, download_id, name, claim_dict, e=None):
-        self.analytics_api.track({
+    async def _send_new_download_stats(self, action, download_id, name, claim_dict, e=None):
+        await self.analytics_api.track({
             'userId': 'lbry',  # required, see https://segment.com/docs/sources/server/http/#track
             'event': NEW_DOWNLOAD_STAT,
             'properties': self._event_properties({
@@ -70,53 +70,53 @@ class Manager:
             'timestamp': utils.isonow(),
         })
 
-    def send_upnp_setup_success_fail(self, success, status):
-        self.analytics_api.track(
+    async def send_upnp_setup_success_fail(self, success, status):
+        await self.analytics_api.track(
             self._event(UPNP_SETUP, {
                 'success': success,
                 'status': status,
             })
         )
 
-    def send_server_startup(self):
-        self.analytics_api.track(self._event(SERVER_STARTUP))
+    async def send_server_startup(self):
+        await self.analytics_api.track(self._event(SERVER_STARTUP))
 
-    def send_server_startup_success(self):
-        self.analytics_api.track(self._event(SERVER_STARTUP_SUCCESS))
+    async def send_server_startup_success(self):
+        await self.analytics_api.track(self._event(SERVER_STARTUP_SUCCESS))
 
-    def send_server_startup_error(self, message):
-        self.analytics_api.track(self._event(SERVER_STARTUP_ERROR, {'message': message}))
+    async def send_server_startup_error(self, message):
+        await self.analytics_api.track(self._event(SERVER_STARTUP_ERROR, {'message': message}))
 
-    def send_download_started(self, id_, name, claim_dict=None):
-        self.analytics_api.track(
+    async def send_download_started(self, id_, name, claim_dict=None):
+        await self.analytics_api.track(
             self._event(DOWNLOAD_STARTED, self._download_properties(id_, name, claim_dict))
         )
 
-    def send_download_errored(self, err, id_, name, claim_dict, report):
+    async def send_download_errored(self, err, id_, name, claim_dict, report):
         download_error_properties = self._download_error_properties(err, id_, name, claim_dict,
                                                                     report)
-        self.analytics_api.track(self._event(DOWNLOAD_ERRORED, download_error_properties))
+        await self.analytics_api.track(self._event(DOWNLOAD_ERRORED, download_error_properties))
 
-    def send_download_finished(self, id_, name, report, claim_dict=None):
+    async def send_download_finished(self, id_, name, report, claim_dict=None):
         download_properties = self._download_properties(id_, name, claim_dict, report)
-        self.analytics_api.track(self._event(DOWNLOAD_FINISHED, download_properties))
+        await self.analytics_api.track(self._event(DOWNLOAD_FINISHED, download_properties))
 
-    def send_claim_action(self, action):
-        self.analytics_api.track(self._event(CLAIM_ACTION, {'action': action}))
+    async def send_claim_action(self, action):
+        await self.analytics_api.track(self._event(CLAIM_ACTION, {'action': action}))
 
-    def send_new_channel(self):
-        self.analytics_api.track(self._event(NEW_CHANNEL))
+    async def send_new_channel(self):
+        await self.analytics_api.track(self._event(NEW_CHANNEL))
 
-    def send_credits_sent(self):
-        self.analytics_api.track(self._event(CREDITS_SENT))
+    async def send_credits_sent(self):
+        await self.analytics_api.track(self._event(CREDITS_SENT))
 
-    def _send_heartbeat(self):
-        self.analytics_api.track(self._event(HEARTBEAT))
+    async def _send_heartbeat(self):
+        await self.analytics_api.track(self._event(HEARTBEAT))
 
-    def _update_tracked_metrics(self):
+    async def _update_tracked_metrics(self):
         should_send, value = self.summarize_and_reset(BLOB_BYTES_UPLOADED)
         if should_send:
-            self.analytics_api.track(self._metric_event(BLOB_BYTES_UPLOADED, value))
+            await self.analytics_api.track(self._metric_event(BLOB_BYTES_UPLOADED, value))
 
     # Setup / Shutdown
 
@@ -146,14 +146,14 @@ class Manager:
             call_manager.register_looping_call(name, task.LoopingCall(fn))
         return call_manager
 
-    def _send_repeating_metric(self, event_name, value_generator):
+    async def _send_repeating_metric(self, event_name, value_generator):
         result = value_generator()
-        self._if_deferred(result, self._send_repeating_metric_value, event_name)
+        await self._send_repeating_metric_value(result, event_name)
 
-    def _send_repeating_metric_value(self, result, event_name):
+    async def _send_repeating_metric_value(self, result, event_name):
         should_send, value = result
         if should_send:
-            self.analytics_api.track(self._metric_event(event_name, value))
+            await self.analytics_api.track(self._metric_event(event_name, value))
 
     def add_observation(self, metric, value):
         self._tracked_data[metric].append(value)
@@ -254,7 +254,7 @@ class Api:
         self._write_key = write_key
         self._enabled = enabled
 
-    def _post(self, endpoint, data):
+    async def _post(self, endpoint, data):
         # there is an issue with a timing condition with keep-alive
         # that is best explained here: https://github.com/mikem23/keepalive-race
         #
@@ -270,24 +270,26 @@ class Api:
             return response
 
         assert endpoint[0] == '/'
-        headers = {b"Connection": b"close"}
-        d = treq.post(self.url + endpoint, auth=(self._write_key, ''), json=data,
-                      headers=headers, cookies=self.cookies)
-        d.addCallback(update_cookies)
-        return d
-
-    def track(self, event):
+        headers = {"Connection": "close"}
+        
+        log.info("data passed in to analytics.Api._post: %s", data)
+        async with aiohttp.request(
+            'POST', self.url + endpoint, cookies=self.cookies, json=data,
+            headers=headers, auth=aiohttp.BasicAuth(self._write_key, '')
+        ) as response:
+            try:
+                log.info("text received from response: %s", await response.text())
+                self.cookies.update(response.cookies)
+            except aiohttp.ClientConnectionError as e:
+                log.error("Got error in the client connection: %s", e)
+        
+    async def track(self, event):
         """Send a single tracking event"""
         if not self._enabled:
-            return defer.succeed('Analytics disabled')
-
-        def _log_error(failure, event):
-            log.warning('Failed to send track event. %s (%s)', failure.getTraceback(), str(event))
+            return 'Analytics disabled'
 
         log.debug('Sending track event: %s', event)
-        d = self._post('/track', event)
-        d.addErrback(_log_error, event)
-        return d
+        await self._post('/track', event)
 
     @classmethod
     def new_instance(cls, enabled=None):

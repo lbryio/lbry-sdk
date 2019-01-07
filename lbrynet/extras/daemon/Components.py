@@ -691,7 +691,7 @@ class UPnPComponent(Component):
                     log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
-        self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())
+        await self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())
         self._maintain_redirects_lc.start(360, now=False)
 
     async def stop(self):
