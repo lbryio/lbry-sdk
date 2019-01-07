@@ -238,10 +238,11 @@ class StreamStorageTests(StorageTest):
 
 class FileStorageTests(StorageTest):
 
-    async def test_setup_output(self):
+    @defer.inlineCallbacks
+    def test_setup_output(self):
         file_name = 'encrypted_file_saver_test.tmp'
         self.assertFalse(os.path.isfile(file_name))
-        written_to = await open_file_for_writing(self.db_dir, file_name)
+        written_to = yield f2d(open_file_for_writing(self.db_dir, file_name))
         self.assertEqual(written_to, file_name)
         self.assertTrue(os.path.isfile(os.path.join(self.db_dir, file_name)))
 
@@ -285,6 +286,7 @@ class FileStorageTests(StorageTest):
 
 
 class ContentClaimStorageTests(StorageTest):
+
     @defer.inlineCallbacks
     def test_store_content_claim(self):
         download_directory = self.db_dir
