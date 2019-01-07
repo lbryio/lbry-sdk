@@ -137,6 +137,7 @@ types_map = {
     '.zip': 'application/zip',
 
     # These are non-standard types, commonly found in the wild.
+    '.lbry': 'application/x-lbry',
     '.mid': 'audio/midi',
     '.midi': 'audio/midi',
     '.pct': 'image/pict',
