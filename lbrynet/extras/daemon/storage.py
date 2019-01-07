@@ -219,7 +219,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def should_single_announce_blobs(self, blob_hashes, immediate=False):
         def set_single_announce(transaction):
-            now = asyncio.get_running_loop().time()
+            now = asyncio.get_event_loop().time()
             for blob_hash in blob_hashes:
                 if immediate:
                     transaction.execute(
@@ -234,7 +234,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
-            timestamp = asyncio.get_running_loop().time()
+            timestamp = asyncio.get_event_loop().time()
             if conf.settings['announce_head_blobs_only']:
                 r = transaction.execute(
                     "select blob_hash from blob "
@@ -784,7 +784,7 @@ class SQLiteStorage(SQLiteMixin):
         if success:
             return self.db.execute(
                 "insert or replace into reflected_stream values (?, ?, ?)",
-                (sd_hash, reflector_address, asyncio.get_running_loop().time())
+                (sd_hash, reflector_address, asyncio.get_event_loop().time())
             )
         return self.db.execute(
             "delete from reflected_stream where sd_hash=? and reflector_address=?",
@@ -796,7 +796,7 @@ class SQLiteStorage(SQLiteMixin):
             "select s.sd_hash from stream s "
             "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
             "where r.timestamp is null or r.timestamp < ?",
-            asyncio.get_running_loop().time() - conf.settings['auto_re_reflect_interval']
+            asyncio.get_event_loop().time() - conf.settings['auto_re_reflect_interval']
         )
 
 
