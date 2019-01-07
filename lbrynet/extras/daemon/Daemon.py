@@ -505,6 +505,9 @@ class Daemon(metaclass=JSONRPCServerType):
         result = fn(self, *_args, **_kwargs)
         if asyncio.iscoroutine(result):
             result = await result
+        
+        if type(result) == dict:
+            await utils.await_all_coroutines_in_dict(result)
 
         return web.Response(
             text=jsonrpc_dumps_pretty(result, ledger=self.ledger),
