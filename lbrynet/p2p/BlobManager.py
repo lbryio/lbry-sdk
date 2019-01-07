@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from binascii import unhexlify
@@ -69,8 +70,9 @@ class DiskBlobManager:
         return f2d(self.storage.count_should_announce_blobs())
 
     def set_should_announce(self, blob_hash, should_announce):
-        now = self.storage.clock.seconds()
-        return f2d(self.storage.set_should_announce(blob_hash, now, should_announce))
+        return f2d(self.storage.set_should_announce(
+            blob_hash, asyncio.get_running_loop().time(), should_announce
+        ))
 
     def get_should_announce(self, blob_hash):
         return f2d(self.storage.should_announce(blob_hash))
