@@ -239,13 +239,6 @@ class Manager:
             context['os']['distro'] = platform['distro']
         return context
 
-    @staticmethod
-    def _if_deferred(maybe_deferred, callback, *args, **kwargs):
-        if isinstance(maybe_deferred, defer.Deferred):
-            maybe_deferred.addCallback(callback, *args, **kwargs)
-        else:
-            callback(maybe_deferred, *args, **kwargs)
-
 
 class Api:
     def __init__(self, cookies, url, write_key, enabled):
@@ -264,10 +257,6 @@ class Api:
         #   timeout will have expired.
         #
         # by forcing the connection to close, we will disable the keep-alive.
-
-        def update_cookies(response):
-            self.cookies.update(response.cookies())
-            return response
 
         assert endpoint[0] == '/'
         headers = {"Connection": "close"}
