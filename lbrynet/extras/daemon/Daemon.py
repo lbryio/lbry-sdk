@@ -670,8 +670,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     claim_dict, name, txid, nout, file_name
                 ))
                 finished_deferred.addCallbacks(
-                    lambda _: _download_finished(download_id, name, claim_dict),
-                    lambda e: _download_failed(e, download_id, name, claim_dict)
+                    lambda _: asyncio.create_task(_download_finished(download_id, name, claim_dict)),
+                    lambda e: asyncio.create_task(_download_failed(e, download_id, name, claim_dict))
                 )
                 result = await self._get_lbry_file_dict(lbry_file)
             except Exception as err:
