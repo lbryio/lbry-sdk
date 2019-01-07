@@ -39,32 +39,19 @@ class DownloadManager:
         defer.returnValue(True)
 
     def add_blobs_to_download(self, blob_infos):
-
         log.debug("Adding %s blobs to blobs", len(blob_infos))
-
         def add_blob_to_list(blob, blob_num):
             self.blobs[blob_num] = blob
             log.debug(
                 "Added blob (hash: %s, number %s) to the list", blob.blob_hash, blob_num)
 
-        def error_during_add(err):
-            log.warning(
-                "An error occurred adding the blob to blobs. Error:%s", err.getErrorMessage())
-            return err
-
-        ds = []
         for blob_info in blob_infos:
             if not blob_info.blob_num in self.blobs:
                 self.blob_infos[blob_info.blob_num] = blob_info
                 log.debug(
                     "Trying to get the blob associated with blob hash %s", blob_info.blob_hash)
-                d = self.blob_manager.get_blob(blob_info.blob_hash, blob_info.length)
-                d.addCallback(add_blob_to_list, blob_info.blob_num)
-                d.addErrback(error_during_add)
-                ds.append(d)
-
-        dl = defer.DeferredList(ds)
-        return dl
+                blob = self.blob_manager.get_blob(blob_info.blob_hash, blob_info.length)
+                add_blob_to_list(blob, blob_info.blob_num)
 
     def stream_position(self):
         return self.progress_manager.stream_position()

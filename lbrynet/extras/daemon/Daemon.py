@@ -836,8 +836,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             written_bytes = 0
 
-        size = await d2f(lbry_file.get_total_bytes())
-        file_status = await d2f(lbry_file.status())
+        size = await lbry_file.get_total_bytes()
+        file_status = await lbry_file.status()
         num_completed = file_status.num_completed
         num_known = file_status.num_known
         status = file_status.running_status
@@ -1071,7 +1071,7 @@ class Daemon(metaclass=JSONRPCServerType):
             },
         }
         for component in self.component_manager.components:
-            status = await d2f(defer.maybeDeferred(component.get_status))
+            status = await component.get_status()
             if status:
                 response[component.component_name] = status
         return response

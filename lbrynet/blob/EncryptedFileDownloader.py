@@ -105,11 +105,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             status = yield self._save_status()
             defer.returnValue(status)
 
-    @defer.inlineCallbacks
-    def status(self):
-        blobs = yield self.storage.get_blobs_for_stream(self.stream_hash)
+    async def status(self):
+        blobs = await self.storage.get_blobs_for_stream(self.stream_hash)
         blob_hashes = [b.blob_hash for b in blobs if b.blob_hash is not None]
-        completed_blobs = yield self.blob_manager.completed_blobs(blob_hashes)
+        completed_blobs = self.blob_manager.completed_blobs(blob_hashes)
         num_blobs_completed = len(completed_blobs)
         num_blobs_known = len(blob_hashes)
 
@@ -119,9 +118,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             status = "stopped"
         else:
             status = "running"
-        defer.returnValue(EncryptedFileStatusReport(
+
+        return EncryptedFileStatusReport(
             self.file_name, num_blobs_completed, num_blobs_known, status
-        ))
+        )
 
     @defer.inlineCallbacks
     def _start(self):

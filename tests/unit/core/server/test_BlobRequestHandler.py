@@ -6,7 +6,6 @@ from twisted.test import proto_helpers
 from twisted.trial import unittest
 
 from lbrynet.p2p import Peer
-from lbrynet.p2p.server import BlobRequestHandler
 from lbrynet.p2p.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
 from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
 
@@ -17,39 +16,37 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
         self.blob_manager = mock.Mock()
         self.payment_rate_manager = NegotiatedPaymentRateManager(
             BasePaymentRateManager(0.001), DummyBlobAvailabilityTracker())
+        from lbrynet.p2p.server import BlobRequestHandler
         self.handler = BlobRequestHandler.BlobRequestHandler(
             self.blob_manager, None, self.payment_rate_manager, None)
 
     def test_empty_response_when_empty_query(self):
-        self.assertEqual({}, self.successResultOf(self.handler.handle_queries({})))
+        self.assertEqual({}, self.handler.handle_queries({}))
 
     def test_error_set_when_rate_is_missing(self):
         query = {'requested_blob': 'blob'}
-        deferred = self.handler.handle_queries(query)
         response = {'incoming_blob': {'error': 'RATE_UNSET'}}
-        self.assertEqual(response, self.successResultOf(deferred))
+        self.assertEqual(response, self.handler.handle_queries(query))
 
     def test_error_set_when_rate_too_low(self):
         query = {
             'blob_data_payment_rate': -1.0,
             'requested_blob': 'blob'
         }
-        deferred = self.handler.handle_queries(query)
         response = {
             'blob_data_payment_rate': 'RATE_TOO_LOW',
             'incoming_blob': {'error': 'RATE_UNSET'}
         }
-        self.assertEqual(response, self.successResultOf(deferred))
+        self.assertEqual(response, self.handler.handle_queries(query))
 
     def test_response_when_rate_too_low(self):
         query = {
             'blob_data_payment_rate': -1.0,
         }
-        deferred = self.handler.handle_queries(query)
         response = {
             'blob_data_payment_rate': 'RATE_TOO_LOW',
         }
-        self.assertEqual(response, self.successResultOf(deferred))
+        self.assertEqual(response, self.handler.handle_queries(query))
 
     def test_blob_unavailable_when_blob_not_validated(self):
         blob = mock.Mock()
@@ -59,12 +56,11 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
             'blob_data_payment_rate': 1.0,
             'requested_blob': 'blob'
         }
-        deferred = self.handler.handle_queries(query)
         response = {
             'blob_data_payment_rate': 'RATE_ACCEPTED',
             'incoming_blob': {'error': 'BLOB_UNAVAILABLE'}
         }
-        self.assertEqual(response, self.successResultOf(deferred))
+        self.assertEqual(response, self.handler.handle_queries(query))
 
     def test_blob_unavailable_when_blob_cannot_be_opened(self):
         blob = mock.Mock()
@@ -75,12 +71,11 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
             'blob_data_payment_rate': 0.0,
             'requested_blob': 'blob'
         }
-        deferred = self.handler.handle_queries(query)
         response = {
             'blob_data_payment_rate': 'RATE_ACCEPTED',
             'incoming_blob': {'error': 'BLOB_UNAVAILABLE'}
         }
-        self.assertEqual(response, self.successResultOf(deferred))
+        self.assertEqual(response, self.handler.handle_queries(query))
 
     def test_blob_details_are_set_when_all_conditions_are_met(self):
         blob = mock.Mock()
@@ -96,7 +91,6 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
             'blob_data_payment_rate': 1.0,
             'requested_blob': 'blob'
         }
-        deferred = self.handler.handle_queries(query)
         response = {
             'blob_data_payment_rate': 'RATE_ACCEPTED',
             'incoming_blob': {
@@ -104,12 +98,12 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
                 'length': 42
             }
         }
-        result = self.successResultOf(deferred)
-        self.assertEqual(response, result)
+        self.assertEqual(response, self.handler.handle_queries(query))
 
 
 class TestBlobRequestHandlerSender(unittest.TestCase):
     def test_nothing_happens_if_not_currently_uploading(self):
+        from lbrynet.p2p.server import BlobRequestHandler
         handler = BlobRequestHandler.BlobRequestHandler(None, None, None, None)
         handler.currently_uploading = None
         deferred = handler.send_blob_if_requested(None)
@@ -119,6 +113,7 @@ class TestBlobRequestHandlerSender(unittest.TestCase):
         # TODO: also check that the expected payment values are set
         consumer = proto_helpers.StringTransport()
         test_file = BytesIO(b'test')
+        from lbrynet.p2p.server import BlobRequestHandler
         handler = BlobRequestHandler.BlobRequestHandler(None, None, None, None)
         handler.peer = mock.create_autospec(Peer.Peer)
         handler.currently_uploading = mock.Mock()

@@ -5,17 +5,18 @@ from twisted.internet import defer
 from twisted.trial import unittest
 
 from lbrynet import conf
+from lbrynet.extras.compat import f2d
 from lbrynet.schema.decode import smart_decode
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
-from lbrynet.extras.daemon.Components import f2d
 from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT
 from lbrynet.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.extras.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
@@ -130,14 +131,14 @@ class TestJsonRpc(unittest.TestCase):
         self.test_daemon.wallet_manager.is_first_run = False
         self.test_daemon.wallet_manager.get_best_blockhash = noop
 
+    @defer.inlineCallbacks
     def test_status(self):
-        d = defer.maybeDeferred(self.test_daemon.jsonrpc_status)
-        d.addCallback(lambda status: self.assertDictContainsSubset({'is_running': False}, status))
+        status = yield f2d(self.test_daemon.jsonrpc_status())
+        self.assertDictContainsSubset({'is_running': False}, status)
 
     def test_help(self):
-        d = defer.maybeDeferred(self.test_daemon.jsonrpc_help, command='status')
-        d.addCallback(lambda result: self.assertSubstring('daemon status', result['help']))
-        # self.assertSubstring('daemon status', d.result)
+        result = self.test_daemon.jsonrpc_help(command='status')
+        self.assertSubstring('daemon status', result['help'])
 
     if is_android():
         test_help.skip = "Test cannot pass on Android because PYTHONOPTIMIZE removes the docstrings."
@@ -162,42 +163,42 @@ class TestFileListSorting(unittest.TestCase):
             'ashlee27', 'bfrederick', 'brittanyhicks', 'davidsonjeffrey', 'heidiherring',
             'jlewis', 'kswanson', 'michelle50', 'richard64', 'xsteele'
         ]
-        return self.test_daemon.component_manager.setup()
+        return f2d(self.test_daemon.component_manager.setup())
 
     @defer.inlineCallbacks
     def test_sort_by_points_paid_no_direction_specified(self):
         sort_options = ['points_paid']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(self.test_points_paid, [f['points_paid'] for f in file_list])
 
     @defer.inlineCallbacks
     def test_sort_by_points_paid_ascending(self):
         sort_options = ['points_paid,asc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(self.test_points_paid, [f['points_paid'] for f in file_list])
 
     @defer.inlineCallbacks
     def test_sort_by_points_paid_descending(self):
         sort_options = ['points_paid, desc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(list(reversed(self.test_points_paid)), [f['points_paid'] for f in file_list])
 
     @defer.inlineCallbacks
     def test_sort_by_file_name_no_direction_specified(self):
         sort_options = ['file_name']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(self.test_file_names, [f['file_name'] for f in file_list])
 
     @defer.inlineCallbacks
     def test_sort_by_file_name_ascending(self):
         sort_options = ['file_name,\nasc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(self.test_file_names, [f['file_name'] for f in file_list])
 
     @defer.inlineCallbacks
     def test_sort_by_file_name_descending(self):
         sort_options = ['\tfile_name,\n\tdesc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(list(reversed(self.test_file_names)), [f['file_name'] for f in file_list])
 
     @defer.inlineCallbacks
@@ -217,21 +218,21 @@ class TestFileListSorting(unittest.TestCase):
         format_result = lambda f: 'file_name={}, points_paid={}'.format(f['file_name'], f['points_paid'])
 
         sort_options = ['file_name,asc', 'points_paid,desc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when sorted only by file_name.
         sort_options = ['file_name,asc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when sorted only by points_paid.
         sort_options = ['points_paid,desc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when not sorted at all.
-        file_list = yield self.test_daemon.jsonrpc_file_list()
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list())
         self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
     @defer.inlineCallbacks
@@ -239,16 +240,16 @@ class TestFileListSorting(unittest.TestCase):
         extract_authors = lambda file_list: [f['metadata']['author'] for f in file_list]
 
         sort_options = ['metadata.author']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(self.test_authors, extract_authors(file_list))
 
         # Check that the list matches the expected in reverse when sorting in descending order.
         sort_options = ['metadata.author,desc']
-        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         self.assertEqual(list(reversed(self.test_authors)), extract_authors(file_list))
 
         # Check that the list is not sorted as expected when not sorted at all.
-        file_list = yield self.test_daemon.jsonrpc_file_list()
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list())
         self.assertNotEqual(self.test_authors, extract_authors(file_list))
 
     @defer.inlineCallbacks
@@ -256,11 +257,11 @@ class TestFileListSorting(unittest.TestCase):
         sort_options = ['meta.author']
         expected_message = "Failed to get 'meta.author', key 'meta' was not found."
         with self.assertRaisesRegex(Exception, expected_message):
-            yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+            yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
         sort_options = ['metadata.foo.bar']
         expected_message = "Failed to get 'metadata.foo.bar', key 'foo' was not found."
         with self.assertRaisesRegex(Exception, expected_message):
-            yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+            yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
 
     @staticmethod
     def _get_fake_lbry_files():
@@ -269,6 +270,14 @@ class TestFileListSorting(unittest.TestCase):
             lbry_file = mock.Mock(spec=ManagedEncryptedFileDownloader)
             for attribute in metadata:
                 setattr(lbry_file, attribute, metadata[attribute])
+            async def get_total_bytes():
+                return 0
+            lbry_file.get_total_bytes = get_total_bytes
+            async def status():
+                return EncryptedFileStatusReport(
+                    'file_name', 1, 1, 'completed'
+                )
+            lbry_file.status = status
             faked_lbry_files.append(lbry_file)
         return faked_lbry_files
 
