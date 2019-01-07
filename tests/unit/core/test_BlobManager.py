@@ -97,6 +97,7 @@ class BlobManagerTest(unittest.TestCase):
         # Test that a blob that is opened for writing will not be deleted
 
         # create blobs
+        blob_hash = None
         blob_hashes = []
         for i in range(0, 10):
             blob_hash = yield self._create_and_add_blob()
@@ -105,11 +106,11 @@ class BlobManagerTest(unittest.TestCase):
         self.assertEqual(len(blobs), 10)
 
         # open the last blob
-        blob = yield self.bm.get_blob(blob_hashes[-1])
-        w, finished_d = yield blob.open_for_writing(self.peer)
+        blob = self.bm.get_blob(blob_hashes[-1])
+        w, finished_d = blob.open_for_writing(self.peer)
 
         # schedule a close, just to leave the reactor clean
-        finished_d.addBoth(lambda x:None)
+        finished_d.addBoth(lambda x: None)
         self.addCleanup(w.close)
 
         # delete the last blob and check if it still exists
