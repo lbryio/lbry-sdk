@@ -716,22 +716,22 @@ class Daemon(metaclass=JSONRPCServerType):
             "output": tx.outputs[nout]
         }
 
-    def _get_or_download_sd_blob(self, blob, sd_hash):
+    async def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
             return self.blob_manager.get_blob(blob[0])
-        return download_sd_blob(
+        return await d2f(download_sd_blob(
             sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
             self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
             download_mirrors=conf.settings['download_mirrors']
-        )
+        ))
 
     def get_or_download_sd_blob(self, sd_hash):
         """Return previously downloaded sd blob if already in the blob
         manager, otherwise download and return it
         """
-        d = self.blob_manager.completed_blobs([sd_hash.decode()])
-        d.addCallback(self._get_or_download_sd_blob, sd_hash)
-        return d
+        return self._get_or_download_sd_blob(
+            self.blob_manager.completed_blobs([sd_hash.decode()]), sd_hash
+        )
 
     def get_size_from_sd_blob(self, sd_blob):
         """
@@ -764,30 +764,22 @@ class Daemon(metaclass=JSONRPCServerType):
             final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
             return final_fee
 
-    def get_est_cost_from_sd_hash(self, sd_hash):
+    async def get_est_cost_from_sd_hash(self, sd_hash):
         """
         Get estimated cost from a sd hash
         """
+        sd_blob = await self.get_or_download_sd_blob(sd_hash)
+        stream_size = await d2f(self.get_size_from_sd_blob(sd_blob))
+        return self._get_est_cost_from_stream_size(stream_size)
 
-        d = self.get_or_download_sd_blob(sd_hash)
-        d.addCallback(self.get_size_from_sd_blob)
-        d.addCallback(self._get_est_cost_from_stream_size)
-        return d
-
-    def _get_est_cost_from_metadata(self, metadata, name):
-        d = self.get_est_cost_from_sd_hash(metadata.source_hash)
-
-        def _handle_err(err):
-            if isinstance(err, Failure):
-                log.warning(
-                    "Timeout getting blob for cost est for lbry://%s, using only key fee", name)
-                return 0.0
-            raise err
-
-        d.addErrback(_handle_err)
-        d.addCallback(lambda data_cost: self._add_key_fee_to_est_data_cost(metadata.source_fee,
-                                                                           data_cost))
-        return d
+    async def _get_est_cost_from_metadata(self, metadata, name):
+        try:
+            return self._add_key_fee_to_est_data_cost(
+                metadata.source_fee, await self.get_est_cost_from_sd_hash(metadata.source_hash)
+            )
+        except:
+            log.warning("Timeout getting blob for cost est for lbry://%s, using only key fee", name)
+            return 0.0
 
     def _add_key_fee_to_est_data_cost(self, fee, data_cost):
         fee_amount = 0.0 if not fee else self.exchange_rate_manager.convert_currency(fee.currency,
@@ -806,15 +798,13 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim_response = None
 
-        result = None
         if claim_response and 'claim' in claim_response:
             if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
                 claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
-                cost = await d2f(self._get_est_cost_from_metadata(claim_value, uri))
-                result = round(cost, 5)
+                cost = await self._get_est_cost_from_metadata(claim_value, uri)
+                return round(cost, 5)
             else:
                 log.warning("Failed to estimate cost for %s", uri)
-        return result
 
     def get_est_cost(self, uri, size=None):
         """Get a cost estimate for a lbry stream, if size is not provided the
