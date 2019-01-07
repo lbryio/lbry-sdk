@@ -52,7 +52,6 @@ import inspect
 import signal
 from functools import wraps
 from twisted.internet import defer
-from twisted.python.failure import Failure
 
 from lbrynet import utils
 from lbrynet.extras.daemon.undecorated import undecorated
