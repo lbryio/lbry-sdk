@@ -168,15 +168,11 @@ class EncryptedFileSaver(EncryptedFileDownloader):
 
     def _close_output(self):
         self.file_handle, file_handle = None, self.file_handle
-
-        #def close_file():
         if file_handle is not None:
             name = file_handle.name
             file_handle.close()
             if self.completed is False:
                 os.remove(name)
-
-        #return threads.deferToThread(close_file)
 
     def _get_write_func(self):
         def write_func(data):

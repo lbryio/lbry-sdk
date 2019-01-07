@@ -30,7 +30,7 @@ class DownloadManager:
     def resume_downloading(self):
         yield self.connection_manager.start()
         yield self.progress_manager.start()
-        defer.returnValue(True)
+        return True
 
     @defer.inlineCallbacks
     def stop_downloading(self):
@@ -40,18 +40,13 @@ class DownloadManager:
 
     def add_blobs_to_download(self, blob_infos):
         log.debug("Adding %s blobs to blobs", len(blob_infos))
-        def add_blob_to_list(blob, blob_num):
-            self.blobs[blob_num] = blob
-            log.debug(
-                "Added blob (hash: %s, number %s) to the list", blob.blob_hash, blob_num)
-
         for blob_info in blob_infos:
             if not blob_info.blob_num in self.blobs:
                 self.blob_infos[blob_info.blob_num] = blob_info
-                log.debug(
-                    "Trying to get the blob associated with blob hash %s", blob_info.blob_hash)
+                log.debug("Trying to get the blob associated with blob hash %s", blob_info.blob_hash)
                 blob = self.blob_manager.get_blob(blob_info.blob_hash, blob_info.length)
-                add_blob_to_list(blob, blob_info.blob_num)
+                self.blobs[blob_info.blob_num] = blob
+                log.debug("Added blob (hash: %s, number %s) to the list", blob.blob_hash, blob_info.blob_num)
 
     def stream_position(self):
         return self.progress_manager.stream_position()

@@ -105,7 +105,7 @@ class LbryUploader:
         for lbry_file in lbry_files:
             yield self.lbry_file_manager.delete_lbry_file(lbry_file)
         yield self.lbry_file_manager.stop()
-        yield self.blob_manager.stop()
+        yield f2d(self.blob_manager.stop())
         yield f2d(self.storage.close())
         self.server_port.stopListening()
         rm_db_and_blob_dir(self.db_dir, self.blob_dir)
@@ -115,6 +115,7 @@ class LbryUploader:
 
 @skip
 class TestTransfer(unittest.TestCase):
+
     @defer.inlineCallbacks
     def setUp(self):
         mocks.mock_conf_settings(self)
