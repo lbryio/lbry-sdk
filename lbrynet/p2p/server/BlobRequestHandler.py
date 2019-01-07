@@ -61,21 +61,21 @@ class BlobRequestHandler:
         request_handler.register_blob_sender(self)
 
     def handle_queries(self, queries):
-        response = defer.succeed({})
+        response = {}
         log.debug("Handle query: %s", str(queries))
 
         if self.AVAILABILITY_QUERY in queries:
             self._blobs_requested = queries[self.AVAILABILITY_QUERY]
-            response.addCallback(lambda r: self._reply_to_availability(r, self._blobs_requested))
+            self._reply_to_availability(response, self._blobs_requested)
         if self.PAYMENT_RATE_QUERY in queries:
             offered_rate = queries[self.PAYMENT_RATE_QUERY]
             offer = Offer(offered_rate)
             if offer.rate is None:
                 log.warning("Empty rate offer")
-            response.addCallback(lambda r: self._handle_payment_rate_query(offer, r))
+            self._handle_payment_rate_query(offer, response)
         if self.BLOB_QUERY in queries:
             incoming = queries[self.BLOB_QUERY]
-            response.addCallback(lambda r: self._reply_to_send_request(r, incoming))
+            self._reply_to_send_request(response, incoming)
         return response
 
     ######### IBlobSender #########
@@ -95,15 +95,10 @@ class BlobRequestHandler:
     ######### internal #########
 
     def _reply_to_availability(self, request, blobs):
-        d = self._get_available_blobs(blobs)
-
-        def set_available(available_blobs):
-            log.debug("available blobs: %s", str(available_blobs))
-            request.update({'available_blobs': available_blobs})
-            return request
-
-        d.addCallback(set_available)
-        return d
+        available_blobs = self._get_available_blobs(blobs)
+        log.debug("available blobs: %s", str(available_blobs))
+        request.update({'available_blobs': available_blobs})
+        return request
 
     def _handle_payment_rate_query(self, offer, request):
         blobs = self._blobs_requested
@@ -172,8 +167,7 @@ class BlobRequestHandler:
             return d
 
     def _get_available_blobs(self, requested_blobs):
-        d = self.blob_manager.completed_blobs(requested_blobs)
-        return d
+        return self.blob_manager.completed_blobs(requested_blobs)
 
     def send_file(self, consumer):
 

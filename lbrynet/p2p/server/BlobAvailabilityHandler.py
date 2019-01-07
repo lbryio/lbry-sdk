@@ -1,5 +1,4 @@
 import logging
-from twisted.internet import defer
 
 
 log = logging.getLogger(__name__)
@@ -39,19 +38,12 @@ class BlobAvailabilityHandler:
     def handle_queries(self, queries):
         if self.query_identifiers[0] in queries:
             log.info("Received the client's list of requested blobs")
-            d = self._get_available_blobs(queries[self.query_identifiers[0]])
-
-            def set_field(available_blobs):
-                log.debug("available blobs: %s", str(available_blobs))
-                return {'available_blobs': available_blobs}
-
-            d.addCallback(set_field)
-            return d
-        return defer.succeed({})
+            available_blobs = self._get_available_blobs(queries[self.query_identifiers[0]])
+            log.debug("available blobs: %s", str(available_blobs))
+            return {'available_blobs': available_blobs}
+        return {}
 
     ######### internal #########
 
     def _get_available_blobs(self, requested_blobs):
-        d = self.blob_manager.completed_blobs(requested_blobs)
-
-        return d
+        return self.blob_manager.completed_blobs(requested_blobs)

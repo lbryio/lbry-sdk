@@ -153,7 +153,7 @@ class HeadersComponent(Component):
     def component(self):
         return self
 
-    def get_status(self):
+    async def get_status(self):
         return {} if not self._downloading_headers else {
             'downloading_headers': self._downloading_headers,
             'download_progress': self._headers_progress_percent
@@ -283,7 +283,7 @@ class WalletComponent(Component):
     def component(self):
         return self.wallet_manager
 
-    def get_status(self):
+    async def get_status(self):
         if self.wallet_manager and self.running:
             local_height = self.wallet_manager.network.get_local_height()
             remote_height = self.wallet_manager.network.get_server_height()
@@ -357,7 +357,7 @@ class DHTComponent(Component):
     def component(self):
         return self.dht_node
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'node_id': binascii.hexlify(conf.settings.get_node_id()),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.contacts)
@@ -413,7 +413,7 @@ class HashAnnouncerComponent(Component):
     def stop(self):
         self.hash_announcer.stop()
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.hash_queue)
         }
@@ -468,7 +468,7 @@ class FileManagerComponent(Component):
     def component(self):
         return self.file_manager
 
-    def get_status(self):
+    async def get_status(self):
         if not self.file_manager:
             return
         return {
@@ -691,7 +691,7 @@ class UPnPComponent(Component):
                     log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
-        self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())
+        self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, await self.get_status())
         self._maintain_redirects_lc.start(360, now=False)
 
     async def stop(self):
@@ -700,7 +700,7 @@ class UPnPComponent(Component):
                 self.upnp.delete_port_mapping(port, protocol) for protocol, port in self.upnp_redirects.items()
             ])
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'aioupnp_version': aioupnp_version,
             'redirects': self.upnp_redirects,

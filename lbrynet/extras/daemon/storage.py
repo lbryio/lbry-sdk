@@ -153,6 +153,8 @@ class SQLiteStorage(SQLiteMixin):
 
     async def run_and_return_one_or_none(self, query, *args):
         for row in await self.db.execute_fetchall(query, args):
+            if len(row) == 1:
+                return row[0]
             return row
 
     async def run_and_return_list(self, query, *args):
@@ -339,7 +341,7 @@ class SQLiteStorage(SQLiteMixin):
             transaction.execute("delete from file where stream_hash=? ", (stream_hash, ))
             transaction.execute("delete from stream_blob where stream_hash=?", (stream_hash, ))
             transaction.execute("delete from stream where stream_hash=? ", (stream_hash, ))
-            transaction.execute("delete from blob where blob_hash=?", sd_hash)
+            transaction.execute("delete from blob where blob_hash=?", (sd_hash, ))
             for blob_hash in blob_hashes:
                 transaction.execute("delete from blob where blob_hash=?;", (blob_hash, ))
 

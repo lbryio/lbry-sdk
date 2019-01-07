@@ -3,6 +3,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from lbrynet.extras.compat import f2d
 from lbrynet.extras.daemon.PeerManager import PeerManager
 from lbrynet.p2p.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
@@ -44,20 +45,20 @@ class CreateEncryptedFileTest(unittest.TestCase):
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
         self.rate_limiter = DummyRateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.storage = SQLiteStorage(self.tmp_db_dir)
+        self.storage = SQLiteStorage(':memory:')
         self.blob_manager = DiskBlobManager(self.tmp_blob_dir, self.storage)
         self.prm = OnlyFreePaymentsManager()
         self.lbry_file_manager = EncryptedFileManager(self.peer_finder, self.rate_limiter, self.blob_manager,
                                                       self.wallet, self.prm, self.storage, self.sd_identifier)
-        d = self.storage.setup()
-        d.addCallback(lambda _: self.lbry_file_manager.setup())
+        d = f2d(self.storage.open())
+        d.addCallback(lambda _: f2d(self.lbry_file_manager.setup()))
         return d
 
     @defer.inlineCallbacks
     def tearDown(self):
         yield self.lbry_file_manager.stop()
-        yield self.blob_manager.stop()
-        yield self.storage.stop()
+        yield f2d(self.blob_manager.stop())
+        yield f2d(self.storage.close())
         rm_db_and_blob_dir(self.tmp_db_dir, self.tmp_blob_dir)
 
     @defer.inlineCallbacks
@@ -77,7 +78,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
                            "3e62e81a2e8945b0db7c94f1852e70e371d917b994352c"
         filename = 'test.file'
         lbry_file = yield self.create_file(filename)
-        sd_hash = yield self.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash)
+        sd_hash = yield f2d(self.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash))
 
         # read the sd blob file
         sd_blob = self.blob_manager.blobs[sd_hash]
@@ -85,7 +86,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
         sd_file_info = yield sd_reader.get_info()
 
         # this comes from the database, the blobs returned are sorted
-        sd_info = yield get_sd_info(self.storage, lbry_file.stream_hash, include_blobs=True)
+        sd_info = yield f2d(get_sd_info(self.storage, lbry_file.stream_hash, include_blobs=True))
         self.maxDiff = None
         unicode_sd_info = json.loads(json.dumps(sd_info, sort_keys=True, cls=JSONBytesEncoder))
         self.assertDictEqual(unicode_sd_info, sd_file_info)

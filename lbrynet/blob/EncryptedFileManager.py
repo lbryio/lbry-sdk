@@ -54,7 +54,7 @@ class EncryptedFileManager:
 
     def change_lbry_file_status(self, lbry_file, status):
         log.debug("Changing status of %s to %s", lbry_file.stream_hash, status)
-        return self.storage.change_file_status(lbry_file.rowid, status)
+        return f2d(self.storage.change_file_status(lbry_file.rowid, status))
 
     def get_lbry_file_status_reports(self):
         ds = []
