@@ -303,7 +303,7 @@ class EncryptedFileReflectorClient(Protocol):
             # open the next blob to send
             blob_hash = self.blob_hashes_to_send[0]
             self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
-            d = self.blob_manager.get_blob(blob_hash)
+            d = defer.succeed(self.blob_manager.get_blob(blob_hash))
             d.addCallback(self.open_blob_for_reading)
             d.addCallbacks(lambda _: self.send_blob_info(),
                            lambda err: self.skip_missing_blob(err, blob.blob_hash))
