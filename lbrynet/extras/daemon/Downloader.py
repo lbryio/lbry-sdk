@@ -162,7 +162,7 @@ class GetStream:
     def _download(self, sd_blob, name, key_fee, txid, nout, file_name=None):
         self.downloader = yield self._create_downloader(sd_blob, file_name=file_name)
         yield self.pay_key_fee(key_fee, name)
-        yield self.storage.save_content_claim(self.downloader.stream_hash, "%s:%i" % (txid, nout))
+        yield f2d(self.storage.save_content_claim(self.downloader.stream_hash, "%s:%i" % (txid, nout)))
         self.finished_deferred = self.downloader.start()
         self.downloader.download_manager.progress_manager.wrote_first_data.addCallback(
             self.data_downloading_deferred.callback

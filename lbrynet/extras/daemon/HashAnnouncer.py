@@ -2,6 +2,7 @@ import binascii
 import logging
 
 from twisted.internet import defer, task
+from lbrynet.extras.compat import f2d
 from lbrynet import utils, conf
 
 log = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ class DHTHashAnnouncer:
         now = self.clock.seconds()
         if storing_node_ids:
             result = (now, storing_node_ids)
-            yield self.storage.update_last_announced_blob(blob_hash, now)
+            yield f2d(self.storage.update_last_announced_blob(blob_hash, now))
             log.debug("Stored %s to %i peers", blob_hash[:16], len(storing_node_ids))
         else:
             result = (None, [])
@@ -82,7 +83,7 @@ class DHTHashAnnouncer:
         if not self.dht_node.contacts:
             log.info("Not ready to start announcing hashes")
             return
-        need_reannouncement = yield self.storage.get_blobs_to_announce()
+        need_reannouncement = yield f2d(self.storage.get_blobs_to_announce())
         if need_reannouncement:
             yield self.immediate_announce(need_reannouncement)
         else:
