@@ -410,7 +410,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self.server = await asyncio.get_event_loop().create_server(
                 self.handler, conf.settings['api_host'], conf.settings['api_port']
             )
-            log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname())
+            log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname()[:2])
             await self.setup()
             self.analytics_manager.send_server_startup_success()
         except OSError:
