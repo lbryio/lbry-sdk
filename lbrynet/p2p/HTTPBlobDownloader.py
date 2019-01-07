@@ -5,7 +5,7 @@ from twisted.internet import defer, task
 from twisted.internet.error import ConnectingCancelledError
 from twisted.web._newclient import ResponseNeverReceived
 
-from lbrynet.utils import DeferredDict
+from lbrynet.extras.compat import f2d
 from lbrynet.p2p.Error import DownloadCanceledError
 
 log = logging.getLogger(__name__)
@@ -104,9 +104,7 @@ class HTTPBlobDownloader:
                 log.debug("trying to download stream from mirror (sd %s)", self.sd_hashes[0][:8])
             else:
                 log.debug("trying to download %i blobs from mirror", len(self.blob_hashes))
-            blobs = yield DeferredDict(
-                {blob_hash: self.blob_manager.get_blob(blob_hash) for blob_hash in self.blob_hashes}
-            )
+            blobs = {blob_hash: self.blob_manager.get_blob(blob_hash) for blob_hash in self.blob_hashes}
             self.deferreds = [self.download_blob(blobs[blob_hash]) for blob_hash in self.blob_hashes]
             yield defer.DeferredList(self.deferreds)
             if self.retry and self.missing_blob_hashes:
@@ -175,7 +173,7 @@ class HTTPBlobDownloader:
 
     @defer.inlineCallbacks
     def download_stream(self, stream_hash, sd_hash):
-        stream_crypt_blobs = yield self.blob_manager.storage.get_blobs_for_stream(stream_hash)
+        stream_crypt_blobs = yield f2d(self.blob_manager.storage.get_blobs_for_stream(stream_hash))
         self.blob_hashes.extend([
             b.blob_hash for b in stream_crypt_blobs
             if b.blob_hash and b.blob_hash not in self.blob_hashes

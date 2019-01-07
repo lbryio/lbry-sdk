@@ -149,7 +149,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             status = ManagedEncryptedFileDownloader.STATUS_RUNNING
         status = yield self.lbry_file_manager.change_lbry_file_status(self, status)
         self._saving_status = False
-        defer.returnValue(status)
+        return status
 
     def save_status(self):
         return self._save_status()
