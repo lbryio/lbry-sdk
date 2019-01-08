@@ -1,61 +1,40 @@
-#!/usr/bin/env python
-#
-# This library is free software, distributed under the terms of
-# the GNU Lesser General Public License Version 3, or any later version.
-# See the COPYING file included in this archive
-#
-# The docstrings in this module contain epytext markup; API documentation
-# may be created by processing this file with epydoc: http://epydoc.sf.net
+import hashlib
+import os
 
-""" This module defines the charaterizing constants of the Kademlia network
-
-C{checkRefreshInterval} and C{udpDatagramMaxSize} are implementation-specific
-constants, and do not affect general Kademlia operation.
-"""
-
-######### KADEMLIA CONSTANTS ###########
-
-#: Small number Representing the degree of parallelism in network calls
-alpha = 3
-
-#: Maximum number of contacts stored in a bucket; this should be an even number
+hash_class = hashlib.sha384
+hash_length = hash_class().digest_size
+hash_bits = hash_length * 8
+alpha = 5
 k = 8
-
-#: Maximum number of contacts stored in the replacement cache
-replacementCacheSize = 8
-
-#: Timeout for network operations (in seconds)
-rpcTimeout = 5
-
-# number of rpc attempts to make before a timeout results in the node being removed as a contact
-rpcAttempts = 5
-# time window to count failures (in seconds)
-rpcAttemptsPruningTimeWindow = 600
-
-# Delay between iterations of iterative node lookups (for loose parallelism)  (in seconds)
-iterativeLookupDelay = rpcTimeout / 2
-
-#: If a k-bucket has not been used for this amount of time, refresh it (in seconds)
-refreshTimeout = 3600  # 1 hour
-#: The interval at which nodes replicate (republish/refresh) data they are holding
-replicateInterval = refreshTimeout
-# The time it takes for data to expire in the network; the original publisher of the data
-# will also republish the data at this time if it is still valid
-dataExpireTimeout = 86400  # 24 hours
-
-tokenSecretChangeInterval = 300  # 5 minutes
-
-######## IMPLEMENTATION-SPECIFIC CONSTANTS ###########
-
-#: The interval for the node to check whether any buckets need refreshing
-checkRefreshInterval = refreshTimeout / 5
-
-#: Max size of a single UDP datagram, in bytes. If a message is larger than this, it will
-#: be spread across several UDP packets.
-udpDatagramMaxSize = 8192  # 8 KB
-
-key_bits = 384
-
+replacement_cache_size = 8
+rpc_timeout = 5
+rpc_attempts = 5
+rpc_attempts_pruning_window = 600
+iterative_lookup_delay = rpc_timeout / 2
+refresh_interval = 3600  # 1 hour
+replicate_interval = refresh_interval
+data_expiration = 86400  # 24 hours
+token_secret_refresh_interval = 300  # 5 minutes
+check_refresh_interval = refresh_interval / 5
+max_datagram_size = 8192  # 8 KB
 rpc_id_length = 20
+protocol_version = 1
+bottom_out_limit = 3
+msg_size_limit = max_datagram_size - 26
 
-protocolVersion = 1
+
+def digest(data: bytes) -> bytes:
+    h = hash_class()
+    h.update(data)
+    return h.digest()
+
+
+def generate_id(num=None) -> bytes:
+    if num is not None:
+        return digest(str(num).encode())
+    else:
+        return digest(os.urandom(32))
+
+
+def generate_rpc_id(num=None) -> bytes:
+    return generate_id(num)[:rpc_id_length]
