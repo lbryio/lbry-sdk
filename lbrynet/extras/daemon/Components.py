@@ -25,7 +25,6 @@ from lbrynet.extras.daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.storage import SQLiteStorage
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
-from lbrynet.utils import DeferredDict, generate_id
 
 
 log = logging.getLogger(__name__)
@@ -311,7 +310,7 @@ class BlobComponent(Component):
     def component(self) -> typing.Optional[BlobFileManager]:
         return self.blob_manager
 
-    def start(self):
+    async def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         data_store = None
         if DHT_COMPONENT not in self.component_manager.skip_components:
@@ -320,15 +319,15 @@ class BlobComponent(Component):
                 data_store = dht_node.protocol.data_store
         self.blob_manager = BlobFileManager(self.loop, os.path.join(conf.settings.data_dir, "blobfiles"),
                                             storage, data_store)
-        return defer.Deferred.fromFuture(asyncio.ensure_future(self.blob_manager.setup(), loop=self.loop))
+        return await self.blob_manager.setup()
 
     def stop(self):
-        return defer.succeed(None)
+        pass
 
     async def get_status(self):
         count = 0
         if self.blob_manager:
-            count = await self.blob_manager.storage.count_finished_blobs()
+            count = len(self.blob_manager.completed_blob_hashes)
         return {'finished_blobs': count}
 
 
@@ -359,8 +358,6 @@ class DHTComponent(Component):
         self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", conf.settings["peer_port"])
         self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", conf.settings["dht_node_port"])
         node_id = conf.settings.get_node_id()
-        if node_id is None:
-            node_id = generate_id()
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
@@ -398,7 +395,7 @@ class HashAnnouncerComponent(Component):
     def component(self) -> typing.Optional[BlobAnnouncer]:
         return self.hash_announcer
 
-    def start(self):
+    async def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = BlobAnnouncer(self.loop, dht_node, storage)
@@ -409,7 +406,7 @@ class HashAnnouncerComponent(Component):
         # self.hash_announcer.stop()
         log.info("Stopped blob announcer")
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.announce_queue)
         }
@@ -481,7 +478,7 @@ class PeerProtocolServerComponent(Component):
     def component(self) -> typing.Optional[BlobServer]:
         return self.blob_server
 
-    def start(self):
+    async def start(self):
         log.info("start blob server")
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
@@ -604,7 +601,8 @@ class UPnPComponent(Component):
                     log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
-        await self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, await self.get_status())
+        if self.component_manager.analytics_manager:
+            self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, await self.get_status())
         self._maintain_redirects_task = asyncio.create_task(self._repeatedly_maintain_redirects(now=False))
 
     async def stop(self):

@@ -1,3 +1,4 @@
+import asyncio
 import collections
 import logging
 
@@ -6,7 +7,6 @@ import aiohttp
 
 from lbrynet import conf, utils
 from lbrynet.extras import system_info
-from lbrynet.extras.daemon.storage import looping_call
 
 # Things We Track
 SERVER_STARTUP = 'Server Startup'

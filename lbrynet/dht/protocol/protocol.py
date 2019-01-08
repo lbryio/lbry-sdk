@@ -225,11 +225,6 @@ class KademliaProtocol(DatagramProtocol):
                         f"but it isn't in response to a pending request: {str(remote_exception)}")
 
     def datagram_received(self, datagram: bytes, address: typing.Tuple[str, int]) -> None:
-        """ Handles and parses incoming RPC messages (and responses)
-
-        @note: This is automatically called by Twisted when the protocol
-               receives a UDP datagram
-        """
         # print(f"{self.external_ip}:{self.udp_port} rx {len(datagram)} bytes from {address[0]}:{address[1]}")
 
         if chr(datagram[0]) == '\x00' and chr(datagram[25]) == '\x00':
