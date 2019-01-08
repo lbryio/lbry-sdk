@@ -6,7 +6,7 @@ import time
 from aiohttp import ClientConnectorError
 from lbrynet import conf
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.extras.daemon.DaemonConsole import LBRYAPIClient
+from lbrynet.extras.daemon.auth.client import LBRYAPIClient, JSONRPCException
 
 
 def extract_uris(response):
@@ -63,14 +63,15 @@ async def main():
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(uris)} - {first_byte - start} {uri}")
-        except:
-            print(f"{i + 1}/{len(uris)} -  timed out in {time.time() - start} {uri}")
+        except JSONRPCException as err:
+            print(f"{i + 1}/{len(uris)} -  timeout in {time.time() - start} {uri}")
         await api.call(
             "file_delete", {
                 "delete_from_download_dir": True,
                 "claim_name": parse_lbry_uri(uri).name
             }
         )
+        await asyncio.sleep(0.1)
 
     avg = sum(first_byte_times) / len(first_byte_times)
     print()
@@ -82,11 +83,11 @@ async def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", default=None)
-    parser.add_argument("--wallet_dir", default=None)
-    parser.add_argument("--download_directory", default=None)
+    parser.add_argument("--data_dir")
+    parser.add_argument("--wallet_dir")
+    parser.add_argument("--download_directory")
     args = parser.parse_args()
-    conf.initialize_settings(
-        data_dir=args.data_dir, wallet_dir=args.wallet_dir, download_dir=args.download_directory
-    )
-    asyncio.run(main())
+
+    conf.initialize_settings()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
