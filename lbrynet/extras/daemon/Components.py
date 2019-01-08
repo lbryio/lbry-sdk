@@ -147,8 +147,7 @@ class HeadersComponent(Component):
             'download_progress': self._headers_progress_percent
         }
 
-    @defer.inlineCallbacks
-    def fetch_headers_from_s3(self):
+    async def fetch_headers_from_s3(self):
         def collector(data, h_file):
             h_file.write(data)
             local_size = float(h_file.tell())
@@ -157,29 +156,31 @@ class HeadersComponent(Component):
 
         local_header_size = self.local_header_file_size()
         resume_header = {"Range": f"bytes={local_header_size}-"}
-        response = yield treq.get(HEADERS_URL, headers=resume_header)
-        got_406 = response.code == 406  # our file is bigger
-        final_size_after_download = response.length + local_header_size
-        if got_406:
-            log.warning("s3 is more out of date than we are")
-        # should have something to download and a final length divisible by the header size
-        elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
-            s3_height = (final_size_after_download / HEADER_SIZE) - 1
-            local_height = self.local_header_file_height()
-            if s3_height > local_height:
-                if local_header_size:
-                    log.info("Resuming download of %i bytes from s3", response.length)
-                    with open(self.headers_file, "a+b") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
-                else:
-                    with open(self.headers_file, "wb") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
-                log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
-                self._check_header_file_integrity()
-            else:
+        async with aiohttp.request('get', HEADERS_URL, headers=resume_header) as response:
+            got_406 = response.status == 406  # our file is bigger
+            final_size_after_download = response.content_length + local_header_size
+            if got_406:
                 log.warning("s3 is more out of date than we are")
-        else:
-            log.error("invalid size for headers from s3")
+            # should have something to download and a final length divisible by the header size
+            elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
+                s3_height = (final_size_after_download / HEADER_SIZE) - 1
+                local_height = self.local_header_file_height()
+                if s3_height > local_height:
+                    data = await response.read()
+
+                    if local_header_size:
+                        log.info("Resuming download of %i bytes from s3", response.content_length)
+                        with open(self.headers_file, "a+b") as headers_file:
+                            collector(data, headers_file)
+                    else:
+                        with open(self.headers_file, "wb") as headers_file:
+                            collector(data, headers_file)
+                    log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
+                    self._check_header_file_integrity()
+                else:
+                    log.warning("s3 is more out of date than we are")
+            else:
+                log.error("invalid size for headers from s3")
 
     def local_header_file_height(self):
         return max((self.local_header_file_size() / HEADER_SIZE) - 1, 0)
@@ -249,7 +250,7 @@ class HeadersComponent(Component):
         self._downloading_headers = await self.should_download_headers_from_s3()
         if self._downloading_headers:
             try:
-                await d2f(self.fetch_headers_from_s3())
+                await self.fetch_headers_from_s3()
             except Exception as err:
                 log.error("failed to fetch headers from s3: %s", err)
             finally:
