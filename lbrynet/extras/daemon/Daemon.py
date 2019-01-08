@@ -2133,7 +2133,7 @@ class Daemon(metaclass=JSONRPCServerType):
         timeout = timeout if timeout is not None else conf.settings['download_timeout']
 
         parsed_uri = parse_lbry_uri(uri)
-        if parsed_uri.is_channel and not parsed_uri.path:
+        if parsed_uri.is_channel:
             raise Exception("cannot download a channel claim, specify a /path")
 
         resolved = (await self.wallet_manager.resolve(uri)).get(uri, {})
@@ -2310,7 +2310,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         try:
             parsed = parse_lbry_uri(channel_name)
-            if not parsed.is_channel:
+            if not parsed.contains_channel:
                 raise Exception("Cannot make a new channel for a non channel name")
             if parsed.path:
                 raise Exception("Invalid channel uri")
@@ -2898,7 +2898,7 @@ class Daemon(metaclass=JSONRPCServerType):
         for chan_uri in uris:
             try:
                 parsed = parse_lbry_uri(chan_uri)
-                if not parsed.is_channel:
+                if not parsed.contains_channel:
                     results[chan_uri] = {"error": "%s is not a channel uri" % parsed.name}
                 elif parsed.path:
                     results[chan_uri] = {"error": "%s is a claim in a channel" % parsed.path}

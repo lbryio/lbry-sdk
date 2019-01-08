@@ -28,7 +28,7 @@ class URI(object):
         self.claim_id = claim_id
         self.path = path
 
-        if self.path is not None and not self.is_channel:
+        if self.path is not None and not self.contains_channel:
             raise ValueError("Content claims cannot have paths")
 
     def __str__(self):
@@ -39,10 +39,21 @@ class URI(object):
             if not hasattr(other, prop) or getattr(self, prop) != getattr(other, prop):
                 return False
         return self.__class__ == other.__class__
+    @property
+    def channel_name(self):
+        return self.name if self.contains_channel else None
+
+    @property
+    def claim_name(self):
+        return self.name if not self.contains_channel else self.path
+
+    @property
+    def contains_channel(self):
+        return self.name.startswith(CHANNEL_CHAR)
 
     @property
     def is_channel(self):
-        return self.name.startswith(CHANNEL_CHAR)
+        return self.contains_channel and not self.path
 
     def to_uri_string(self):
         uri_string = PROTOCOL + "%s" % self.name

@@ -307,7 +307,7 @@ class LBRYElectrumX(ElectrumX):
             return {'error': err.message}
         result = {}
 
-        if parsed_uri.is_channel:
+        if parsed_uri.contains_channel:
             certificate = None
 
             # TODO: this is also done on the else, refactor
