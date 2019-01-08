@@ -1,6 +1,6 @@
 from decimal import Decimal
 from lbrynet import conf
-from lbrynet.p2p.Strategy import get_default_strategy, OnlyFreeStrategy
+from lbrynet.blob_exchange.price_negotiation import get_default_strategy, OnlyFreeStrategy
 
 
 class BasePaymentRateManager:
