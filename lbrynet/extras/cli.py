@@ -12,7 +12,7 @@ from textwrap import dedent
 from lbrynet import conf
 from lbrynet.utils import check_connection, json_dumps_pretty
 from lbrynet.extras.daemon.Daemon import Daemon, JSONRPCError
-from lbrynet.extras.daemon.DaemonConsole import LBRYAPIClient
+from lbrynet.extras.daemon.client import LBRYAPIClient
 from lbrynet.extras.system_info import get_platform
 from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
 
