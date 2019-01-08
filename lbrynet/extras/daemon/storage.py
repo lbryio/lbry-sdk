@@ -541,7 +541,7 @@ class SQLiteStorage(SQLiteMixin):
                 address = claim_info['address']
                 sequence = claim_info['claim_sequence']
                 try:
-                    certificate_id = claim_info['value'].get('content_claims_to_update', {}).get('certificateId')
+                    certificate_id = claim_info['value'].get('publisherSignature', {}).get('certificateId')
                 except AttributeError:
                     certificate_id = None
                 try:
