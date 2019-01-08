@@ -4,66 +4,71 @@ import json
 import asyncio
 import argparse
 import typing
-
-# Set SSL_CERT_FILE env variable for Twisted SSL verification on Windows
-# This needs to happen before anything else
-if 'win' in sys.platform:
-    import certifi
-    os.environ['SSL_CERT_FILE'] = certifi.where()
-
-from twisted.internet import asyncioreactor
-if 'twisted.internet.reactor' not in sys.modules:
-    asyncioreactor.install()
-else:
-    from twisted.internet import reactor
-    if not isinstance(reactor, asyncioreactor.AsyncioSelectorReactor) and getattr(sys, 'frozen', False):
-        # pyinstaller hooks install the default reactor before
-        # any of our code runs, see kivy for similar problem:
-        #    https://github.com/kivy/kivy/issues/4182
-        del sys.modules['twisted.internet.reactor']
-        asyncioreactor.install()
-from twisted.internet import reactor
-import logging
+import logging.handlers
 from aiohttp.client_exceptions import ClientConnectorError
-from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
-from lbrynet import conf, log_support, __name__ as lbrynet_name
+from lbrynet import conf
 from lbrynet.utils import check_connection, json_dumps_pretty
-from lbrynet.extras.daemon.Daemon import Daemon
-from lbrynet.extras.daemon.DaemonConsole import main as daemon_console, LBRYAPIClient
+from lbrynet.extras.daemon.Daemon import Daemon, JSONRPCError
+from lbrynet.extras.daemon.DaemonConsole import LBRYAPIClient
 from lbrynet.extras.system_info import get_platform
+from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
 
-log = logging.getLogger(lbrynet_name)
+log = logging.getLogger("lbrynet")
+default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
 
 optional_path_getter_type = typing.Optional[typing.Callable[[], str]]
 
 
-def start_daemon(settings: typing.Optional[typing.Dict] = None,
+async def start_daemon(settings: typing.Optional[typing.Dict] = None,
                  console_output: typing.Optional[bool] = True, verbose: typing.Optional[typing.List[str]] = None,
                  data_dir: typing.Optional[str] = None, wallet_dir: typing.Optional[str] = None,
                  download_dir: typing.Optional[str] = None):
+
+    loop = asyncio.get_event_loop()
 
     settings = settings or {}
     conf.initialize_settings(data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
     for k, v in settings.items():
         conf.settings.update({k, v}, data_types=(conf.TYPE_CLI,))
 
-    log_support.configure_logging(conf.settings.get_log_filename(), console_output, verbose)
-    log_support.configure_loggly_handler()
+    file_handler = logging.handlers.RotatingFileHandler(conf.settings.get_log_filename(),
+                                                        maxBytes=2097152, backupCount=5)
+    file_handler.setFormatter(default_formatter)
+    file_handler.name = 'file'
+    log.addHandler(file_handler)
+
+    if console_output:
+        handler = logging.StreamHandler()
+        handler.setFormatter(default_formatter)
+        log.addHandler(handler)
+
+    if conf.settings['share_usage_data']:
+        log.addHandler(get_loggly_handler(conf.settings['LOGGLY_TOKEN']))
+
+    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+    logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
+    logging.getLogger('aioupnp').setLevel(logging.WARNING)
+
+    if verbose:
+        log.setLevel(logging.DEBUG)
+    else:
+        log.setLevel(logging.INFO)
+
     log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
     log.info("Starting lbrynet-daemon from command line")
 
     if check_connection():
         daemon = Daemon()
-        daemon.start_listening()
-        reactor.run()
+        await daemon.start_listening()
+        await daemon.server.serve_forever()
     else:
         log.info("Not connected to internet, unable to start")
 
 
-def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] = None,
+async def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] = None,
                                wallet_dir: typing.Optional[str] = None, download_dir: typing.Optional[str] = None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -98,7 +103,7 @@ def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] = None,
         print(json_dumps_pretty(get_platform()))
         return
 
-    return start_daemon(settings, console_output, verbose, data_dir, wallet_dir, download_dir)
+    return await start_daemon(settings, console_output, verbose, data_dir, wallet_dir, download_dir)
 
 
 async def execute_command(method, params, data_dir: typing.Optional[str] = None,
@@ -119,7 +124,7 @@ async def execute_command(method, params, data_dir: typing.Optional[str] = None,
     try:
         resp = await api.call(method, params)
         print(json.dumps(resp, indent=2))
-    except JSONRPCException as err:
+    except JSONRPCError as err:
         print(json.dumps(err, indent=2))
     finally:
         await api.session.close()
@@ -243,16 +248,11 @@ def main(argv=None):
         return 0
 
     elif method in ['version', '--version', '-v']:
-        print("{lbrynet_name} {lbrynet_version}".format(
-            lbrynet_name=lbrynet_name, **get_platform()
-        ))
+        print("lbrynet {lbrynet_version}".format(**get_platform()))
         return 0
 
     elif method == 'start':
-        sys.exit(start_daemon_with_cli_args(args, data_dir, wallet_dir, download_dir))
-
-    elif method == 'console':
-        sys.exit(daemon_console())
+        sys.exit(asyncio.run(start_daemon_with_cli_args(args, data_dir, wallet_dir, download_dir)))
 
     elif method not in Daemon.callable_methods:
         if method not in Daemon.deprecated_methods:
