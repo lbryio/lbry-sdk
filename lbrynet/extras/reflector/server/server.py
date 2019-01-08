@@ -30,7 +30,7 @@ class ReflectorServer(Protocol):
     def connectionMade(self):
         peer_info = self.transport.getPeer()
         log.debug('Connection made to %s', peer_info)
-        self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
+        self.peer = self.factory.peer_manager.get_peer(peer_info.host, tcp_port=peer_info.port)
         self.blob_manager = self.factory.blob_manager
         self.storage = self.factory.blob_manager.storage
         self.lbry_file_manager = self.factory.lbry_file_manager
@@ -60,7 +60,7 @@ class ReflectorServer(Protocol):
 
     def clean_up_failed_upload(self, err, blob):
         log.warning("Failed to receive %s", blob)
-        if err.check(DownloadCanceledError):
+        if err.check(DownloadCancelledError):
             self.blob_manager.delete_blobs([blob.blob_hash])
         else:
             log.exception(err)
