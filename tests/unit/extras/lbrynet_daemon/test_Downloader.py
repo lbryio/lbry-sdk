@@ -1,21 +1,20 @@
 import types
 from unittest import mock
 from twisted.trial import unittest
-from twisted.internet import defer, task
+from twisted.internet import defer
 
-
-from lbrynet.p2p import PaymentRateManager
-from lbrynet.p2p.Error import DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.p2p.BlobManager import DiskBlobManager
-from lbrynet.p2p.RateLimiter import DummyRateLimiter
-from lbrynet.p2p.client.DownloadManager import DownloadManager
-from lbrynet.extras.daemon import Downloader
+from lbrynet.blob_exchange.price_negotiation import payment_rate_manager
+from lbrynet.error import DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.stream.descriptor import StreamDescriptorIdentifier
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.staging.old_blob_client import DownloadManager
+from lbrynet.staging.rate_limiter import RateLimiter
+from lbrynet.staging import Downloader
 from lbrynet.extras.daemon import ExchangeRateManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
-from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.storage import SQLiteStorage
+from lbrynet.staging.PeerFinder import DummyPeerFinder
+from lbrynet.staging.EncryptedFileStatusReport import EncryptedFileStatusReport
+from lbrynet.staging.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
 
 from tests.mocks import mock_conf_settings
@@ -74,16 +73,16 @@ class GetStreamTests(unittest.TestCase):
 
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
         wallet = mock.Mock(spec=LbryWalletManager)
-        prm = mock.Mock(spec=PaymentRateManager.NegotiatedPaymentRateManager)
+        prm = mock.Mock(spec=payment_rate_manager.NegotiatedPaymentRateManager)
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
         storage = mock.Mock(spec=SQLiteStorage)
         peer_finder = DummyPeerFinder()
-        blob_manager = mock.Mock(spec=DiskBlobManager)
+        blob_manager = mock.Mock(spec=BlobFileManager)
         max_key_fee = {'currency': "LBC", 'amount': 10, 'address': ''}
         disable_max_key_fee = False
         data_rate = {'currency': "LBC", 'amount': 0, 'address': ''}
         getstream = Downloader.GetStream(
-            sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, DummyRateLimiter(), prm,
+            sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, RateLimiter(), prm,
             storage, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate
         )
         getstream.download_manager = mock.Mock(spec=DownloadManager)

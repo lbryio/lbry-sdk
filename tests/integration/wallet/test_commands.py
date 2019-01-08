@@ -60,7 +60,7 @@ class CommandTestCase(IntegrationTestCase):
 
         twisted.internet.reactor = sys.modules['twisted.internet.reactor'] = AsyncioSelectorReactor()
 
-        logging.getLogger('lbrynet.p2p').setLevel(self.VERBOSITY)
+        logging.getLogger('lbrynet.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
         lbry_conf.settings = None

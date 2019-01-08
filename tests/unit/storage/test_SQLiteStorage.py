@@ -6,9 +6,7 @@ from copy import deepcopy
 from twisted.internet import defer
 from twisted.trial import unittest
 from lbrynet import conf
-from lbrynet.extras.compat import f2d
-from lbrynet.extras.daemon.storage import SQLiteStorage, open_file_for_writing
-from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.storage import SQLiteStorage, open_file_for_writing
 from tests.test_utils import random_lbry_hash
 
 log = logging.getLogger()
@@ -95,9 +93,10 @@ class StorageTest(unittest.TestCase):
         shutil.rmtree(self.db_dir)
 
     @defer.inlineCallbacks
-    def store_fake_blob(self, blob_hash, blob_length=100, next_announce=0, should_announce=0):
-        yield f2d(self.storage.add_completed_blob(blob_hash, blob_length, next_announce,
-                                              should_announce, "finished"))
+    def store_fake_blob(self, blob_hash):
+        yield f2d(self.storage.add_completed_blob(blob_hash))
+    def store_fake_blob(self, blob_hash):
+        yield self.storage.add_completed_blob(blob_hash)
 
     @defer.inlineCallbacks
     def store_fake_stream_blob(self, stream_hash, blob_hash, blob_num, length=100, iv="DEADBEEF"):
@@ -267,22 +266,12 @@ class FileStorageTests(StorageTest):
 
         blob_data_rate = 0
         file_name = "test file"
-        out = yield f2d(self.storage.save_published_file(
+        yield self.storage.save_published_file(
             stream_hash, file_name, download_directory, blob_data_rate
-        ))
-        rowid = yield f2d(self.storage.get_rowid_for_stream_hash(stream_hash))
-        self.assertEqual(out, rowid)
+        )
 
         files = yield f2d(self.storage.get_all_lbry_files())
         self.assertEqual(1, len(files))
-
-        status = yield f2d(self.storage.get_lbry_file_status(rowid))
-        self.assertEqual(status, ManagedEncryptedFileDownloader.STATUS_STOPPED)
-
-        running = ManagedEncryptedFileDownloader.STATUS_RUNNING
-        yield f2d(self.storage.change_file_status(rowid, running))
-        status = yield f2d(self.storage.get_lbry_file_status(rowid))
-        self.assertEqual(status, ManagedEncryptedFileDownloader.STATUS_RUNNING)
 
 
 class ContentClaimStorageTests(StorageTest):

@@ -4,7 +4,7 @@ import tempfile
 from decimal import Decimal
 from twisted.trial import unittest
 from twisted.internet import defer
-from lbrynet.p2p.Error import InsufficientFundsError
+from lbrynet.error import InsufficientFundsError
 from lbrynet.schema.claim import ClaimDict
 
 test_metadata = {
