@@ -23,7 +23,7 @@ from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PA
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
 from lbrynet.extras.daemon.Downloader import GetStream
 from lbrynet.extras.daemon.Publisher import Publisher
-from lbrynet.extras.daemon.mime_types import guess_mime_type
+from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
@@ -817,7 +817,7 @@ class Daemon(metaclass=JSONRPCServerType):
     async def _get_lbry_file_dict(self, lbry_file):
         key = hexlify(lbry_file.key) if lbry_file.key else None
         full_path = os.path.join(lbry_file.download_directory, lbry_file.file_name)
-        mime_type = guess_mime_type(lbry_file.file_name)
+        mime_type = guess_media_type(lbry_file.file_name)
         if os.path.isfile(full_path):
             with open(full_path) as written_file:
                 written_file.seek(0, os.SEEK_END)
