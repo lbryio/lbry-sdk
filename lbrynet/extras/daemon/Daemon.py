@@ -2,7 +2,9 @@ import os
 import requests
 import urllib
 import textwrap
-
+import typing
+import asyncio
+import logging.handlers
 from typing import Callable, Optional, List
 from operator import itemgetter
 from binascii import hexlify, unhexlify
@@ -17,23 +19,17 @@ from lbrynet.dht.error import TimeoutError
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload
-from lbrynet.extras.daemon.Components import d2f
+from lbrynet.extras.daemon.Components import d2f, f2d
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
-from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
-from lbrynet.extras.daemon.Downloader import GetStream
-from lbrynet.extras.daemon.Publisher import Publisher
-from lbrynet.extras.daemon.mime_types import guess_media_type
+from lbrynet.mime_types import guess_mime_type
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.p2p.StreamDescriptor import download_sd_blob
-from lbrynet.p2p.Error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.p2p.Error import NullFundsError, NegativeFundsError, ResolveError
-from lbrynet.p2p.Peer import Peer
-from lbrynet.p2p.SinglePeerDownloader import SinglePeerDownloader
-from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError
@@ -60,6 +56,12 @@ from lbrynet import conf
 
 from aiohttp import web
 
+
+if typing.TYPE_CHECKING:
+    from lbrynet.stream.stream_manager import StreamManager, ManagedStream
+    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.storage import SQLiteStorage
+    from lbrynet.dht.node import Node
 
 log = logging.getLogger(__name__)
 
@@ -118,13 +120,6 @@ CONNECTION_MESSAGES = {
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 
-DIRECTION_ASCENDING = 'asc'
-DIRECTION_DESCENDING = 'desc'
-DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
-
-EMPTY_PARAMS = [{}]
-LBRY_SECRET = "LBRY_SECRET"
-
 
 async def maybe_paginate(get_records: Callable, get_record_count: Callable,
                    page: Optional[int], page_size: Optional[int], **constraints):
@@ -141,41 +136,13 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
     return await get_records(**constraints)
 
 
-class IterableContainer:
-    def __iter__(self):
-        for attr in dir(self):
-            if not attr.startswith("_"):
-                yield getattr(self, attr)
-
-    def __contains__(self, item):
-        for attr in self:
-            if item == attr:
-                return True
-        return False
-
-
 class Checker:
     """The looping calls the daemon runs"""
     INTERNET_CONNECTION = 'internet_connection_checker', 300
     # CONNECTION_STATUS = 'connection_status_checker'
 
 
-class _FileID(IterableContainer):
-    """The different ways a file can be identified"""
-    SD_HASH = 'sd_hash'
-    FILE_NAME = 'file_name'
-    STREAM_HASH = 'stream_hash'
-    ROWID = "rowid"
-    CLAIM_ID = "claim_id"
-    OUTPOINT = "outpoint"
-    TXID = "txid"
-    NOUT = "nout"
-    CHANNEL_CLAIM_ID = "channel_claim_id"
-    CLAIM_NAME = "claim_name"
-    CHANNEL_NAME = "channel_name"
 
-
-FileID = _FileID()
 
 
 # TODO add login credentials in a conf file
@@ -346,8 +313,8 @@ class Daemon(metaclass=JSONRPCServerType):
         WALLET_COMPONENT: "wallet_manager",
         FILE_MANAGER_COMPONENT: "file_manager",
         EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
-        PAYMENT_RATE_COMPONENT: "payment_rate_manager",
-        RATE_LIMITER_COMPONENT: "rate_limiter",
+        # PAYMENT_RATE_COMPONENT: "payment_rate_manager",
+        # RATE_LIMITER_COMPONENT: "rate_limiter",
         BLOB_COMPONENT: "blob_manager",
         UPNP_COMPONENT: "upnp"
     }
@@ -356,8 +323,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
     def __init__(self, analytics_manager=None, component_manager=None):
         to_skip = conf.settings['components_to_skip']
-        if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
-            to_skip.append('reflector')
+        # if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
+        #     to_skip.append('reflector')
         looping_calls = {
             Checker.INTERNET_CONNECTION[0]: (LoopingCall(CheckInternetConnection(self)),
                                              Checker.INTERNET_CONNECTION[1])
@@ -385,14 +352,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         # components
         # TODO: delete these, get the components where needed
-        self.storage = None
-        self.dht_node = None
+        self.storage: 'SQLiteStorage' = None
+        self.dht_node: 'Node' = None
         self.wallet_manager: LbryWalletManager = None
-        self.file_manager = None
+        self.file_manager: 'StreamManager' = None
         self.exchange_rate_manager = None
         self.payment_rate_manager = None
         self.rate_limiter = None
-        self.blob_manager = None
+        self.blob_manager: 'BlobFileManager' = None
         self.upnp = None
 
         # TODO: delete this
@@ -594,339 +561,238 @@ class Daemon(metaclass=JSONRPCServerType):
         except AttributeError:
             return None
 
-    def _stop_streams(self):
-        """stop pending GetStream downloads"""
-        for sd_hash, stream in self.streams.items():
-            stream.cancel(reason="daemon shutdown")
+    # async def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
+    #     """
+    #     Download a blob
+    #
+    #     :param blob_hash (str): blob hash
+    #     :param rate_manager (PaymentRateManager), optional: the payment rate manager to use,
+    #                                                      defaults to session.payment_rate_manager
+    #     :param timeout (int): blob timeout
+    #     :return: BlobFile
+    #     """
+    #     if not blob_hash:
+    #         raise Exception("Nothing to download")
+    #
+    #     rate_manager = rate_manager or self.payment_rate_manager
+    #     timeout = timeout or 30
+    #     downloader = StandaloneBlobDownloader(
+    #         blob_hash, self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
+    #         rate_manager, self.wallet_manager, timeout
+    #     )
+    #     return await d2f(downloader.download())
+    #
+    # async def _get_stream_analytics_report(self, claim_dict):
+    #     sd_hash = claim_dict.source_hash.decode()
+    #     try:
+    #         stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
+    #     except Exception:
+    #         stream_hash = None
+    #     report = {
+    #         "sd_hash": sd_hash,
+    #         "stream_hash": stream_hash,
+    #     }
+    #     blobs = {}
+    #     try:
+    #         sd_host = await d2f(self.blob_manager.get_host_downloaded_from(sd_hash))
+    #     except Exception:
+    #         sd_host = None
+    #     report["sd_blob"] = sd_host
+    #     if stream_hash:
+    #         blob_infos = await self.storage.get_blobs_for_stream(stream_hash)
+    #         report["known_blobs"] = len(blob_infos)
+    #     else:
+    #         blob_infos = []
+    #         report["known_blobs"] = 0
+    #     # for blob_hash, blob_num, iv, length in blob_infos:
+    #     #     try:
+    #     #         host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
+    #     #     except Exception:
+    #     #         host = None
+    #     #     if host:
+    #     #         blobs[blob_num] = host
+    #     # report["blobs"] = json.dumps(blobs)
+    #     return report
+    #
+    # async def _download_name(self, name, claim_dict, sd_hash, txid, nout, timeout=None, file_name=None):
+    #     """
+    #     Add a lbry file to the file manager, start the download, and return the new lbry file.
+    #     If it already exists in the file manager, return the existing lbry file
+    #     """
+    #
+    #     async def _download_finished(download_id, name, claim_dict):
+    #         report = await self._get_stream_analytics_report(claim_dict)
+    #         self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
+    #         self.analytics_manager.send_new_download_success(download_id, name, claim_dict)
+    #
+    #     async def _download_failed(error, download_id, name, claim_dict):
+    #         report = await self._get_stream_analytics_report(claim_dict)
+    #         self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
+    #                                                      report)
+    #         self.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
+    #
+    #     if sd_hash in self.streams:
+    #         downloader = self.streams[sd_hash]
+    #         return await d2f(downloader.finished_deferred)
+    #     else:
+    #         download_id = utils.random_string()
+    #         self.analytics_manager.send_download_started(download_id, name, claim_dict)
+    #         self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
+    #         self.streams[sd_hash] = GetStream(
+    #             self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
+    #             self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
+    #             conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
+    #             timeout
+    #         )
+    #         try:
+    #             lbry_file, finished_deferred = await d2f(self.streams[sd_hash].start(
+    #                 claim_dict, name, txid, nout, file_name
+    #             ))
+    #             finished_deferred.addCallbacks(
+    #                 lambda _: asyncio.create_task(_download_finished(download_id, name, claim_dict)),
+    #                 lambda e: asyncio.create_task(_download_failed(e, download_id, name, claim_dict))
+    #             )
+    #             result = await self._get_lbry_file_dict(lbry_file)
+    #         except Exception as err:
+    #             await _download_failed(err, download_id, name, claim_dict)
+    #             if isinstance(err, (DownloadDataTimeout, DownloadSDTimeout)):
+    #                 log.warning('Failed to get %s (%s)', name, err)
+    #             else:
+    #                 log.error('Failed to get %s (%s)', name, err)
+    #             if self.streams[sd_hash].downloader and self.streams[sd_hash].code != 'running':
+    #                 await d2f(self.streams[sd_hash].downloader.stop(err))
+    #             result = {'error': str(err)}
+    #         finally:
+    #             del self.streams[sd_hash]
+    #         return result
+    #
+    # async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
+    #                     claim_address=None, change_address=None):
+    #     publisher = Publisher(
+    #         account, self.blob_manager, self.payment_rate_manager, self.storage,
+    #         self.file_manager, self.wallet_manager, certificate
+    #     )
+    #     parse_lbry_uri(name)
+    #     if not file_path:
+    #         stream_hash = await self.storage.get_stream_hash_for_sd_hash(
+    #             claim_dict['stream']['source']['source'])
+    #         tx = await publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
+    #     else:
+    #         tx = await publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
+    #         if conf.settings['reflect_uploads']:
+    #             d = reupload.reflect_file(publisher.lbry_file)
+    #             d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
+    #                            log.exception)
+    #     self.analytics_manager.send_claim_action('publish')
+    #     nout = 0
+    #     txo = tx.outputs[nout]
+    #     log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
+    #     return {
+    #         "success": True,
+    #         "tx": tx,
+    #         "claim_id": txo.claim_id,
+    #         "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+    #         "output": tx.outputs[nout]
+    #     }
+    #
+    # async def _get_or_download_sd_blob(self, blob, sd_hash):
+    #     if blob:
+    #         return self.blob_manager.get_blob(blob[0])
+    #     return await d2f(download_sd_blob(
+    #         sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
+    #         self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
+    #         download_mirrors=conf.settings['download_mirrors']
+    #     ))
+    #
+    # def get_or_download_sd_blob(self, sd_hash):
+    #     """Return previously downloaded sd blob if already in the blob
+    #     manager, otherwise download and return it
+    #     """
+    #     return self._get_or_download_sd_blob(
+    #         self.blob_manager.completed_blobs([sd_hash.decode()]), sd_hash
+    #     )
+    #
+    # def get_size_from_sd_blob(self, sd_blob):
+    #     """
+    #     Get total stream size in bytes from a sd blob
+    #     """
+    #
+    #     d = self.file_manager.sd_identifier.get_metadata_for_sd_blob(sd_blob)
+    #     d.addCallback(lambda metadata: metadata.validator.info_to_show())
+    #     d.addCallback(lambda info: int(dict(info)['stream_size']))
+    #     return d
+    #
+    # def _get_est_cost_from_stream_size(self, size):
+    #     """
+    #     Calculate estimated LBC cost for a stream given its size in bytes
+    #     """
+    #     if self.payment_rate_manager.generous:
+    #         return 0.0
+    #     return size / (10 ** 6) * conf.settings['data_rate']
+    #
+    # async def get_est_cost_using_known_size(self, uri, size):
+    #     """
+    #     Calculate estimated LBC cost for a stream given its size in bytes
+    #     """
+    #     cost = self._get_est_cost_from_stream_size(size)
+    #     resolved = await self.wallet_manager.resolve(uri)
+    #
+    #     if uri in resolved and 'claim' in resolved[uri]:
+    #         claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
+    #         final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
+    #         return final_fee
+    #
+    # async def get_est_cost_from_sd_hash(self, sd_hash):
+    #     """
+    #     Get estimated cost from a sd hash
+    #     """
+    #     sd_blob = await self.get_or_download_sd_blob(sd_hash)
+    #     stream_size = await d2f(self.get_size_from_sd_blob(sd_blob))
+    #     return self._get_est_cost_from_stream_size(stream_size)
+    #
+    # async def _get_est_cost_from_metadata(self, metadata, name):
+    #     try:
+    #         return self._add_key_fee_to_est_data_cost(
+    #             metadata.source_fee, await self.get_est_cost_from_sd_hash(metadata.source_hash)
+    #         )
+    #     except:
+    #         log.warning("Timeout getting blob for cost est for lbry://%s, using only key fee", name)
+    #         return 0.0
+    #
+    # def _add_key_fee_to_est_data_cost(self, fee, data_cost):
+    #     fee_amount = 0.0 if not fee else self.exchange_rate_manager.convert_currency(fee.currency,
+    #                                                                                  "LBC",
+    #                                                                                  fee.amount)
+    #     return data_cost + fee_amount
+    #
+    # async def get_est_cost_from_uri(self, uri):
+    #     """
+    #     Resolve a name and return the estimated stream cost
+    #     """
+    #
+    #     resolved = await self.wallet_manager.resolve(uri)
+    #     if resolved:
+    #         claim_response = resolved[uri]
+    #     else:
+    #         claim_response = None
+    #
+    #     if claim_response and 'claim' in claim_response:
+    #         if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
+    #             claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
+    #             cost = await self._get_est_cost_from_metadata(claim_value, uri)
+    #             return round(cost, 5)
+    #         else:
+    #             log.warning("Failed to estimate cost for %s", uri)
+    #
+    # def get_est_cost(self, uri, size=None):
+    #     """Get a cost estimate for a lbry stream, if size is not provided the
+    #     sd blob will be downloaded to determine the stream size
+    #
+    #     """
+    #     if size is not None:
+    #         return self.get_est_cost_using_known_size(uri, size)
+    #     return self.get_est_cost_from_uri(uri)
 
-    async def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
-        """
-        Download a blob
-
-        :param blob_hash (str): blob hash
-        :param rate_manager (PaymentRateManager), optional: the payment rate manager to use,
-                                                         defaults to session.payment_rate_manager
-        :param timeout (int): blob timeout
-        :return: BlobFile
-        """
-        if not blob_hash:
-            raise Exception("Nothing to download")
-
-        rate_manager = rate_manager or self.payment_rate_manager
-        timeout = timeout or 30
-        downloader = StandaloneBlobDownloader(
-            blob_hash, self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
-            rate_manager, self.wallet_manager, timeout
-        )
-        return await d2f(downloader.download())
-
-    async def _get_stream_analytics_report(self, claim_dict):
-        sd_hash = claim_dict.source_hash.decode()
-        try:
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
-        except Exception:
-            stream_hash = None
-        report = {
-            "sd_hash": sd_hash,
-            "stream_hash": stream_hash,
-        }
-        blobs = {}
-        try:
-            sd_host = await d2f(self.blob_manager.get_host_downloaded_from(sd_hash))
-        except Exception:
-            sd_host = None
-        report["sd_blob"] = sd_host
-        if stream_hash:
-            blob_infos = await self.storage.get_blobs_for_stream(stream_hash)
-            report["known_blobs"] = len(blob_infos)
-        else:
-            blob_infos = []
-            report["known_blobs"] = 0
-        # for blob_hash, blob_num, iv, length in blob_infos:
-        #     try:
-        #         host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
-        #     except Exception:
-        #         host = None
-        #     if host:
-        #         blobs[blob_num] = host
-        # report["blobs"] = json.dumps(blobs)
-        return report
-
-    async def _download_name(self, name, claim_dict, sd_hash, txid, nout, timeout=None, file_name=None):
-        """
-        Add a lbry file to the file manager, start the download, and return the new lbry file.
-        If it already exists in the file manager, return the existing lbry file
-        """
-
-        async def _download_finished(download_id, name, claim_dict):
-            report = await self._get_stream_analytics_report(claim_dict)
-            await self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
-            await self.analytics_manager.send_new_download_success(download_id, name, claim_dict)
-
-        async def _download_failed(error, download_id, name, claim_dict):
-            report = await self._get_stream_analytics_report(claim_dict)
-            await self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
-                                                         report)
-            await self.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
-
-        if sd_hash in self.streams:
-            downloader = self.streams[sd_hash]
-            return await d2f(downloader.finished_deferred)
-        else:
-            download_id = utils.random_string()
-            await self.analytics_manager.send_download_started(download_id, name, claim_dict)
-            await self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
-            self.streams[sd_hash] = GetStream(
-                self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
-                self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
-                conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
-                timeout
-            )
-            try:
-                lbry_file, finished_deferred = await d2f(self.streams[sd_hash].start(
-                    claim_dict, name, txid, nout, file_name
-                ))
-                finished_deferred.addCallbacks(
-                    lambda _: asyncio.create_task(_download_finished(download_id, name, claim_dict)),
-                    lambda e: asyncio.create_task(_download_failed(e, download_id, name, claim_dict))
-                )
-                result = await self._get_lbry_file_dict(lbry_file)
-            except Exception as err:
-                await _download_failed(err, download_id, name, claim_dict)
-                if isinstance(err, (DownloadDataTimeout, DownloadSDTimeout)):
-                    log.warning('Failed to get %s (%s)', name, err)
-                else:
-                    log.error('Failed to get %s (%s)', name, err)
-                if self.streams[sd_hash].downloader and self.streams[sd_hash].code != 'running':
-                    await d2f(self.streams[sd_hash].downloader.stop(err))
-                result = {'error': str(err)}
-            finally:
-                del self.streams[sd_hash]
-            return result
-
-    async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
-                        claim_address=None, change_address=None):
-        publisher = Publisher(
-            account, self.blob_manager, self.payment_rate_manager, self.storage,
-            self.file_manager, self.wallet_manager, certificate
-        )
-        parse_lbry_uri(name)
-        if not file_path:
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(
-                claim_dict['stream']['source']['source'])
-            tx = await publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
-        else:
-            tx = await publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
-            if conf.settings['reflect_uploads']:
-                d = reupload.reflect_file(publisher.lbry_file)
-                d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
-                               log.exception)
-        await self.analytics_manager.send_claim_action('publish')
-        nout = 0
-        txo = tx.outputs[nout]
-        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-        return {
-            "success": True,
-            "tx": tx,
-            "claim_id": txo.claim_id,
-            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
-            "output": tx.outputs[nout]
-        }
-
-    async def _get_or_download_sd_blob(self, blob, sd_hash):
-        if blob:
-            return self.blob_manager.get_blob(blob[0])
-        return await d2f(download_sd_blob(
-            sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
-            self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
-            download_mirrors=conf.settings['download_mirrors']
-        ))
-
-    def get_or_download_sd_blob(self, sd_hash):
-        """Return previously downloaded sd blob if already in the blob
-        manager, otherwise download and return it
-        """
-        return self._get_or_download_sd_blob(
-            self.blob_manager.completed_blobs([sd_hash.decode()]), sd_hash
-        )
-
-    def get_size_from_sd_blob(self, sd_blob):
-        """
-        Get total stream size in bytes from a sd blob
-        """
-
-        d = self.file_manager.sd_identifier.get_metadata_for_sd_blob(sd_blob)
-        d.addCallback(lambda metadata: metadata.validator.info_to_show())
-        d.addCallback(lambda info: int(dict(info)['stream_size']))
-        return d
-
-    def _get_est_cost_from_stream_size(self, size):
-        """
-        Calculate estimated LBC cost for a stream given its size in bytes
-        """
-
-        if self.payment_rate_manager.generous:
-            return 0.0
-        return size / (10 ** 6) * conf.settings['data_rate']
-
-    async def get_est_cost_using_known_size(self, uri, size):
-        """
-        Calculate estimated LBC cost for a stream given its size in bytes
-        """
-        cost = self._get_est_cost_from_stream_size(size)
-        resolved = await self.wallet_manager.resolve(uri)
-
-        if uri in resolved and 'claim' in resolved[uri]:
-            claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
-            final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
-            return final_fee
-
-    async def get_est_cost_from_sd_hash(self, sd_hash):
-        """
-        Get estimated cost from a sd hash
-        """
-        sd_blob = await self.get_or_download_sd_blob(sd_hash)
-        stream_size = await d2f(self.get_size_from_sd_blob(sd_blob))
-        return self._get_est_cost_from_stream_size(stream_size)
-
-    async def _get_est_cost_from_metadata(self, metadata, name):
-        try:
-            return self._add_key_fee_to_est_data_cost(
-                metadata.source_fee, await self.get_est_cost_from_sd_hash(metadata.source_hash)
-            )
-        except:
-            log.warning("Timeout getting blob for cost est for lbry://%s, using only key fee", name)
-            return 0.0
-
-    def _add_key_fee_to_est_data_cost(self, fee, data_cost):
-        fee_amount = 0.0 if not fee else self.exchange_rate_manager.convert_currency(fee.currency,
-                                                                                     "LBC",
-                                                                                     fee.amount)
-        return data_cost + fee_amount
-
-    async def get_est_cost_from_uri(self, uri):
-        """
-        Resolve a name and return the estimated stream cost
-        """
-
-        resolved = await self.wallet_manager.resolve(uri)
-        if resolved:
-            claim_response = resolved[uri]
-        else:
-            claim_response = None
-
-        if claim_response and 'claim' in claim_response:
-            if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
-                claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
-                cost = await self._get_est_cost_from_metadata(claim_value, uri)
-                return round(cost, 5)
-            else:
-                log.warning("Failed to estimate cost for %s", uri)
-
-    def get_est_cost(self, uri, size=None):
-        """Get a cost estimate for a lbry stream, if size is not provided the
-        sd blob will be downloaded to determine the stream size
-
-        """
-        if size is not None:
-            return self.get_est_cost_using_known_size(uri, size)
-        return self.get_est_cost_from_uri(uri)
-
-    async def _get_lbry_file_dict(self, lbry_file):
-        key = hexlify(lbry_file.key) if lbry_file.key else None
-        download_directory = lbry_file.download_directory
-        if not os.path.exists(download_directory):
-            download_directory = conf.settings.download_dir
-        full_path = os.path.join(download_directory, lbry_file.file_name)
-        mime_type = guess_media_type(lbry_file.file_name)
-        if os.path.isfile(full_path):
-            with open(full_path) as written_file:
-                written_file.seek(0, os.SEEK_END)
-                written_bytes = written_file.tell()
-        else:
-            written_bytes = 0
-
-        size = await lbry_file.get_total_bytes()
-        file_status = await lbry_file.status()
-        num_completed = file_status.num_completed
-        num_known = file_status.num_known
-        status = file_status.running_status
-
-        return {
-            'completed': lbry_file.completed,
-            'file_name': lbry_file.file_name,
-            'download_directory': download_directory,
-            'points_paid': lbry_file.points_paid,
-            'stopped': lbry_file.stopped,
-            'stream_hash': lbry_file.stream_hash,
-            'stream_name': lbry_file.stream_name,
-            'suggested_file_name': lbry_file.suggested_file_name,
-            'sd_hash': lbry_file.sd_hash,
-            'download_path': full_path,
-            'mime_type': mime_type,
-            'key': key,
-            'total_bytes': size,
-            'written_bytes': written_bytes,
-            'blobs_completed': num_completed,
-            'blobs_in_stream': num_known,
-            'status': status,
-            'claim_id': lbry_file.claim_id,
-            'txid': lbry_file.txid,
-            'nout': lbry_file.nout,
-            'outpoint': lbry_file.outpoint,
-            'metadata': lbry_file.metadata,
-            'channel_claim_id': lbry_file.channel_claim_id,
-            'channel_name': lbry_file.channel_name,
-            'claim_name': lbry_file.claim_name
-        }
-
-    async def _get_lbry_file(self, search_by, val, return_json=False):
-        lbry_file = None
-        if search_by in FileID:
-            for l_f in self.file_manager.lbry_files:
-                if l_f.__dict__.get(search_by) == val:
-                    lbry_file = l_f
-                    break
-        else:
-            raise NoValidSearch(f'{search_by} is not a valid search operation')
-        if return_json and lbry_file:
-            lbry_file = await self._get_lbry_file_dict(lbry_file)
-        return lbry_file
-
-    async def _get_lbry_files(self, return_json=False, **kwargs):
-        lbry_files = list(self.file_manager.lbry_files)
-        if kwargs:
-            for search_type, value in iter_lbry_file_search_values(kwargs):
-                lbry_files = [l_f for l_f in lbry_files if l_f.__dict__[search_type] == value]
-        if return_json:
-            file_dicts = []
-            for lbry_file in lbry_files:
-                lbry_file_dict = await self._get_lbry_file_dict(lbry_file)
-                file_dicts.append(lbry_file_dict)
-            lbry_files = file_dicts
-        log.debug("Collected %i lbry files", len(lbry_files))
-        return lbry_files
-
-    def _sort_lbry_files(self, lbry_files, sort_by):
-        for field, direction in sort_by:
-            is_reverse = direction == DIRECTION_DESCENDING
-            key_getter = create_key_getter(field) if field else None
-            lbry_files = sorted(lbry_files, key=key_getter, reverse=is_reverse)
-        return lbry_files
-
-    def _parse_lbry_files_sort(self, sort):
-        """
-        Given a sort string like 'file_name, desc' or 'points_paid',
-        parse the string into a tuple of (field, direction).
-        Direction defaults to ascending.
-        """
-
-        pieces = [p.strip() for p in sort.split(',')]
-        field = pieces.pop(0)
-        direction = DIRECTION_ASCENDING
-        if pieces and pieces[0] in DIRECTIONS:
-            direction = pieces[0]
-        return field, direction
 
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
@@ -1859,7 +1725,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.get_account_or_default(account_id).receiving.get_or_create_usable_address()
 
     @requires(FILE_MANAGER_COMPONENT)
-    async def jsonrpc_file_list(self, sort=None, **kwargs):
+    def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1867,7 +1733,7 @@ class Daemon(metaclass=JSONRPCServerType):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--sort=<sort_method>...]
+                      [--claim_name=<claim_name>] [--sort=<sort_by>] [--reverse] [--comparison=<comparison>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1919,11 +1785,13 @@ class Daemon(metaclass=JSONRPCServerType):
                 },
             ]
         """
-        result = await self._get_lbry_files(return_json=True, **kwargs)
-        if sort:
-            sort_by = [self._parse_lbry_files_sort(s) for s in sort]
-            result = self._sort_lbry_files(result, sort_by)
-        return result
+        sort = sort or 'status'
+        comparison = comparison or 'eq'
+        return [
+            stream.as_dict() for stream in self.file_manager.get_filtered_streams(
+                sort, reverse, comparison, **kwargs
+            )
+        ]
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_resolve_name(self, name, force=False):
@@ -2083,8 +1951,7 @@ class Daemon(metaclass=JSONRPCServerType):
             results[resolved_uri] = resolved[resolved_uri]
         return results
 
-    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
-              RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_get(self, uri, file_name=None, timeout=None):
         """
@@ -2145,28 +2012,13 @@ class Daemon(metaclass=JSONRPCServerType):
             )
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
-        txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
-        claim_dict = ClaimDict.load_dict(resolved['value'])
-        sd_hash = claim_dict.source_hash.decode()
 
-        if sd_hash in self.streams:
-            log.info("Already waiting on lbry://%s to start downloading", name)
-            await d2f(self.streams[sd_hash].data_downloading_deferred)
-
-        lbry_file = await self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
-
-        if lbry_file:
-            if not os.path.isfile(os.path.join(lbry_file.download_directory, lbry_file.file_name)):
-                log.info("Already have lbry file but missing file in %s, rebuilding it",
-                         lbry_file.download_directory)
-                await d2f(lbry_file.start())
-            else:
-                log.info('Already have a file for %s', name)
-            result = await self._get_lbry_file_dict(lbry_file)
-        else:
-            result = await self._download_name(name, claim_dict, sd_hash, txid, nout,
-                                                   timeout=timeout, file_name=file_name)
-        return result
+        stream = await self.file_manager.download_stream_from_claim(
+            self.dht_node, conf.settings.download_dir, resolved, file_name, timeout
+        )
+        if stream:
+            return stream.as_dict()
+        raise DownloadSDTimeout(resolved['value']['stream']['source']['source'])
 
     @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
@@ -2193,7 +2045,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception('Status must be "start" or "stop".')
 
         search_type, value = get_lbry_file_search_value(kwargs)
-        lbry_file = await self._get_lbry_file(search_type, value, return_json=False)
+        lbry_file = self._get_lbry_file(search_type, value, return_json=False)
         if not lbry_file:
             raise Exception(f'Unable to find a file for {search_type}:{value}')
 
@@ -2239,31 +2091,29 @@ class Daemon(metaclass=JSONRPCServerType):
             (bool) true if deletion was successful
         """
 
-        lbry_files = await self._get_lbry_files(return_json=False, **kwargs)
+        streams = self.file_manager.get_filtered_streams(**kwargs)
 
-        if len(lbry_files) > 1:
+        if len(streams) > 1:
             if not delete_all:
                 log.warning("There are %i files to delete, use narrower filters to select one",
-                            len(lbry_files))
+                            len(streams))
                 return False
             else:
                 log.warning("Deleting %i files",
-                            len(lbry_files))
+                            len(streams))
 
-        if not lbry_files:
+        if not streams:
             log.warning("There is no file to delete")
             return False
         else:
-            for lbry_file in lbry_files:
-                file_name, stream_hash = lbry_file.file_name, lbry_file.stream_hash
-                if lbry_file.sd_hash in self.streams:
-                    del self.streams[lbry_file.sd_hash]
-                await d2f(self.file_manager.delete_lbry_file(lbry_file, delete_file=delete_from_download_dir))
-                log.info("Deleted file: %s", file_name)
-            return True
+            for stream in streams:
+                await self.file_manager.delete_stream(stream, delete_file=delete_from_download_dir)
+                log.info("Deleted file: %s", stream.file_name)
+            result = True
+        return result
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
-              DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+              DHT_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_stream_cost_estimate(self, uri, size=None):
         """
@@ -2396,7 +2246,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return await self.wallet_manager.import_certificate_info(serialized_certificate_info)
 
-    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_publish(
             self, name, bid, metadata=None, file_path=None, fee=None, title=None,
@@ -3080,7 +2930,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_block(blockhash, height)
 
-    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT,
+    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_blob_get(self, blob_hash, timeout=None, encoding=None, payment_rate_manager=None):
         """
@@ -3242,7 +3092,10 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) list of blobs reflected
         """
-        lbry_files = await self._get_lbry_files(**kwargs)
+
+        reflector_server = kwargs.get('reflector', None)
+        lbry_files = self._get_lbry_files(**kwargs)
+
         if len(lbry_files) > 1:
             raise Exception('Too many (%i) files found, need one' % len(lbry_files))
         elif not lbry_files:
@@ -3365,7 +3218,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         contact = None
         if node_id and address and port:
-            contact = self.dht_node.contact_manager.get_contact(unhexlify(node_id), address, int(port))
+            contact = self.dht_node.contact_manager.get_peer(unhexlify(node_id), address, int(port))
             if not contact:
                 contact = self.dht_node.contact_manager.make_contact(
                     unhexlify(node_id), address, int(port), self.dht_node._protocol
@@ -3412,34 +3265,24 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         result = {}
-        data_store = self.dht_node._dataStore
-        hosts = {}
-
-        for k, v in data_store.items():
-            for contact in map(itemgetter(0), v):
-                hosts.setdefault(contact, []).append(hexlify(k).decode())
-
-        contact_set = set()
-        blob_hashes = set()
         result['buckets'] = {}
 
-        for i in range(len(self.dht_node._routingTable._buckets)):
+        for i in range(len(self.dht_node.protocol.routing_table._buckets)):
             result['buckets'][i] = []
-            for contact in self.dht_node._routingTable._buckets[i]._contacts:
-                blobs = list(hosts.pop(contact)) if contact in hosts else []
-                blob_hashes.update(blobs)
+            for contact in self.dht_node.protocol.routing_table._buckets[i]._contacts:
                 host = {
                     "address": contact.address,
-                    "port": contact.port,
-                    "node_id": hexlify(contact.id).decode(),
-                    "blobs": blobs,
+                    "udp_port": contact.udp_port,
+                    "tcp_port": contact.tcp_port,
+                    "node_id": hexlify(contact.node_id).decode(),
+                    # "blobs": blobs,
                 }
                 result['buckets'][i].append(host)
-                contact_set.add(hexlify(contact.id).decode())
+                # contact_set.add(hexlify(contact.id).decode())
 
-        result['contacts'] = list(contact_set)
-        result['blob_hashes'] = list(blob_hashes)
-        result['node_id'] = hexlify(self.dht_node.node_id).decode()
+        # result['contacts'] = list(contact_set)
+        # result['blob_hashes'] = list(blob_hashes)
+        result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
 
     # the single peer downloader needs wallet access
@@ -3643,31 +3486,3 @@ def report_bug_to_slack(message, installation_id, platform_name, app_version):
         "text": payload_template % payload_params
     }
     requests.post(webhook, json.dumps(payload))
-
-
-def get_lbry_file_search_value(search_fields):
-    for searchtype in FileID:
-        value = search_fields.get(searchtype, None)
-        if value is not None:
-            return searchtype, value
-    raise NoValidSearch(f'{search_fields} is missing a valid search type')
-
-
-def iter_lbry_file_search_values(search_fields):
-    for searchtype in FileID:
-        value = search_fields.get(searchtype, None)
-        if value is not None:
-            yield searchtype, value
-
-
-def create_key_getter(field):
-    search_path = field.split('.')
-    def key_getter(value):
-        for key in search_path:
-            try:
-                value = value[key]
-            except KeyError as e:
-                errmsg = "Failed to get '{}', key {} was not found."
-                raise Exception(errmsg.format(field, str(e)))
-        return value
-    return key_getter
