@@ -54,7 +54,7 @@ class EncryptedFileManager:
 
     def change_lbry_file_status(self, lbry_file, status):
         log.debug("Changing status of %s to %s", lbry_file.stream_hash, status)
-        return self.storage.change_file_status(lbry_file.rowid, status)
+        return f2d(self.storage.change_file_status(lbry_file.rowid, status))
 
     def get_lbry_file_status_reports(self):
         ds = []
@@ -236,7 +236,7 @@ class EncryptedFileManager:
     def reflect_lbry_files(self):
         sem = defer.DeferredSemaphore(self.CONCURRENT_REFLECTS)
         ds = []
-        sd_hashes_to_reflect = yield self.storage.get_streams_to_re_reflect()
+        sd_hashes_to_reflect = yield f2d(self.storage.get_streams_to_re_reflect())
         for lbry_file in self.lbry_files:
             if lbry_file.sd_hash in sd_hashes_to_reflect:
                 ds.append(sem.run(reflect_file, lbry_file))

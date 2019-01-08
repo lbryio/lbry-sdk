@@ -65,14 +65,9 @@ class EncryptedFileDownloader(CryptStreamDownloader):
     def _close_output(self):
         pass
 
-    def get_total_bytes(self):
-        d = self.storage.get_blobs_for_stream(self.stream_hash)
-
-        def calculate_size(blobs):
-            return sum([b.length for b in blobs])
-
-        d.addCallback(calculate_size)
-        return d
+    async def get_total_bytes(self):
+        blobs = await self.storage.get_blobs_for_stream(self.stream_hash)
+        return sum([b.length for b in blobs])
 
     def get_total_bytes_cached(self):
         if self._calculated_total_bytes is None or self._calculated_total_bytes == 0:
@@ -173,15 +168,11 @@ class EncryptedFileSaver(EncryptedFileDownloader):
 
     def _close_output(self):
         self.file_handle, file_handle = None, self.file_handle
-
-        #def close_file():
         if file_handle is not None:
             name = file_handle.name
             file_handle.close()
             if self.completed is False:
                 os.remove(name)
-
-        #return threads.deferToThread(close_file)
 
     def _get_write_func(self):
         def write_func(data):

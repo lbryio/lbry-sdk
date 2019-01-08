@@ -6,6 +6,7 @@ from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
 
+from lbrynet.extras.compat import f2d
 from lbrynet.extras.reflector.common import IncompleteResponse, ReflectorRequestError
 from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 
@@ -61,7 +62,9 @@ class EncryptedFileReflectorClient(Protocol):
         else:
             reflected = False
 
-        d = self.blob_manager.storage.update_reflected_stream(self.sd_hash, self.transport.getPeer().host, reflected)
+        d = f2d(self.blob_manager.storage.update_reflected_stream(
+            self.sd_hash, self.transport.getPeer().host, reflected
+        ))
         d.addCallback(lambda _: result)
         return d
 
@@ -113,10 +116,7 @@ class EncryptedFileReflectorClient(Protocol):
             for crypt_blob in blobs:
                 if crypt_blob.blob_hash and crypt_blob.length:
                     yield self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
-
-        dl = defer.DeferredList(list(get_blobs(blobs_in_stream)), consumeErrors=True)
-        dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.get_is_verified()])
-        return dl
+        return [blob for blob in get_blobs(blobs_in_stream) if blob.get_is_verified()]
 
     def set_blobs_to_send(self, blobs_to_send):
         for blob in blobs_to_send:
@@ -132,7 +132,7 @@ class EncryptedFileReflectorClient(Protocol):
                          len(filtered))
             return filtered
 
-        d = self.factory.blob_manager.storage.get_blobs_for_stream(self.stream_hash)
+        d = f2d(self.factory.blob_manager.storage.get_blobs_for_stream(self.stream_hash))
         d.addCallback(self.get_validated_blobs)
         if not self.descriptor_needed:
             d.addCallback(lambda filtered:
@@ -303,7 +303,7 @@ class EncryptedFileReflectorClient(Protocol):
             # open the next blob to send
             blob_hash = self.blob_hashes_to_send[0]
             self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
-            d = self.blob_manager.get_blob(blob_hash)
+            d = defer.succeed(self.blob_manager.get_blob(blob_hash))
             d.addCallback(self.open_blob_for_reading)
             d.addCallbacks(lambda _: self.send_blob_info(),
                            lambda err: self.skip_missing_blob(err, blob.blob_hash))

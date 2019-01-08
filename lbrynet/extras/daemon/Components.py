@@ -7,7 +7,7 @@ import math
 import binascii
 from hashlib import sha256
 from types import SimpleNamespace
-from twisted.internet import defer, reactor, error, task
+from twisted.internet import defer, reactor, error
 
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
@@ -153,7 +153,7 @@ class HeadersComponent(Component):
     def component(self):
         return self
 
-    def get_status(self):
+    async def get_status(self):
         return {} if not self._downloading_headers else {
             'downloading_headers': self._downloading_headers,
             'download_progress': self._headers_progress_percent
@@ -283,7 +283,7 @@ class WalletComponent(Component):
     def component(self):
         return self.wallet_manager
 
-    def get_status(self):
+    async def get_status(self):
         if self.wallet_manager and self.running:
             local_height = self.wallet_manager.network.get_local_height()
             remote_height = self.wallet_manager.network.get_server_height()
@@ -357,7 +357,7 @@ class DHTComponent(Component):
     def component(self):
         return self.dht_node
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'node_id': binascii.hexlify(conf.settings.get_node_id()),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.contacts)
@@ -404,7 +404,7 @@ class HashAnnouncerComponent(Component):
     def component(self):
         return self.hash_announcer
 
-    def start(self):
+    async def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = DHTHashAnnouncer(dht_node, storage)
@@ -413,7 +413,7 @@ class HashAnnouncerComponent(Component):
     def stop(self):
         self.hash_announcer.stop()
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.hash_queue)
         }
@@ -468,7 +468,7 @@ class FileManagerComponent(Component):
     def component(self):
         return self.file_manager
 
-    def get_status(self):
+    async def get_status(self):
         if not self.file_manager:
             return
         return {
@@ -539,7 +539,7 @@ class PeerProtocolServerComponent(Component):
         try:
             log.info("Peer protocol listening on TCP %i (ext port %i)", peer_port,
                      upnp.upnp_redirects.get("TCP", peer_port))
-            self.lbry_server_port = await d2f(reactor.listenTCP(peer_port, server_factory))
+            self.lbry_server_port = reactor.listenTCP(peer_port, server_factory)
         except error.CannotListenError as e:
             import traceback
             log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
@@ -597,12 +597,17 @@ class UPnPComponent(Component):
         self.upnp = None
         self.upnp_redirects = {}
         self.external_ip = None
-        self._maintain_redirects_lc = task.LoopingCall(self._maintain_redirects)
-        self._maintain_redirects_lc.clock = self.component_manager.reactor
+        self._maintain_redirects_task = None
 
     @property
     def component(self):
         return self
+
+    async def _repeatedly_maintain_redirects(self, now=True):
+        while True:
+            if now:
+                await self._maintain_redirects()
+            await asyncio.sleep(360)
 
     async def _maintain_redirects(self):
         # setup the gateway if necessary
@@ -691,16 +696,18 @@ class UPnPComponent(Component):
                     log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
-        await self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())
-        self._maintain_redirects_lc.start(360, now=False)
+        await self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, await self.get_status())
+        self._maintain_redirects_task = asyncio.create_task(self._repeatedly_maintain_redirects(now=False))
 
     async def stop(self):
         if self.upnp_redirects:
             await asyncio.wait([
                 self.upnp.delete_port_mapping(port, protocol) for protocol, port in self.upnp_redirects.items()
             ])
+        if self._maintain_redirects_task is not None and not self._maintain_redirects_task.done():
+            self._maintain_redirects_task.cancel()
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'aioupnp_version': aioupnp_version,
             'redirects': self.upnp_redirects,

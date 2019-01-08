@@ -9,8 +9,8 @@ jobs:
     - stage: code quality
       name: "pylint lbrynet"
       install:
-        - pip install astroid==2.0.4
-        # newer astroid fails in pylint so we pre-install older version
+        - pip install astroid==2.0.4 aiohttp==3.4.4
+        # newer astroid and aiohttp fails in pylint so we pre-install older version
         - pip install pylint
         - pip install git+https://github.com/lbryio/torba.git#egg=torba
         - pip install -e .
@@ -24,8 +24,8 @@ jobs:
         - pip install git+https://github.com/lbryio/torba.git#egg=torba
         - pip install -e .[test]
       script:
-        - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -v tests.unit.wallet
-        - HOME=/tmp coverage run -p --source=lbrynet -m twisted.trial --reactor=asyncio tests.unit.analytics tests.unit.components tests.unit.core tests.unit.cryptstream tests.unit.database tests.unit.dht tests.unit.lbryfilemanager tests.unit.lbrynet_daemon tests.unit.test_cli tests.unit.test_customLogger tests.unit.schema
+        - HOME=/tmp coverage run -p --source=lbrynet -m twisted.trial --reactor=asyncio tests.unit.analytics tests.unit.core tests.unit.cryptstream tests.unit.database tests.unit.dht tests.unit.lbryfilemanager tests.unit.lbrynet_daemon tests.unit.schema tests.unit.wallet tests.unit.test_customLogger tests.unit.components
+        - HOME=/tmp coverage run -p --source=lbrynet -m twisted.trial --reactor=asyncio tests.unit.test_cli
       after_success:
         - coverage combine
         - bash <(curl -s https://codecov.io/bash)

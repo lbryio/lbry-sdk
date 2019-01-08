@@ -1,5 +1,6 @@
-from twisted.internet.task import Clock
-from twisted.trial import unittest
+import asyncio
+from unittest import TestCase
+from torba.testcase import AdvanceTimeTestCase
 
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
@@ -10,7 +11,7 @@ from lbrynet.extras.daemon import Components
 from tests import mocks
 
 
-class TestComponentManager(unittest.TestCase):
+class TestComponentManager(TestCase):
     def setUp(self):
         mocks.mock_conf_settings(self)
 
@@ -60,7 +61,7 @@ class TestComponentManager(unittest.TestCase):
             self.component_manager.get_component("random_component")
 
 
-class TestComponentManagerOverrides(unittest.TestCase):
+class TestComponentManagerOverrides(TestCase):
     def setUp(self):
         mocks.mock_conf_settings(self)
 
@@ -91,55 +92,57 @@ class TestComponentManagerOverrides(unittest.TestCase):
             ComponentManager(randomComponent=FakeRandomComponent)
 
 
-class TestComponentManagerProperStart(unittest.TestCase):
+class TestComponentManagerProperStart(AdvanceTimeTestCase):
+
     def setUp(self):
-        self.reactor = Clock()
         mocks.mock_conf_settings(self)
         self.component_manager = ComponentManager(
             skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT,
                              PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT,
                              HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT, RATE_LIMITER_COMPONENT,
                              EXCHANGE_RATE_MANAGER_COMPONENT],
-            reactor=self.reactor,
             wallet=mocks.FakeDelayedWallet,
             file_manager=mocks.FakeDelayedFileManager,
             blob_manager=mocks.FakeDelayedBlobManager
         )
 
-    def tearDown(self):
-        pass
+    async def test_proper_starting_of_components(self):
+        asyncio.create_task(self.component_manager.setup())
 
-    def test_proper_starting_of_components(self):
-        self.component_manager.setup()
+        await self.advance(0)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
 
-        self.reactor.advance(1)
+        await self.advance(1)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
 
-        self.reactor.advance(1)
+        await self.advance(1)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('file_manager').running)
 
-    def test_proper_stopping_of_components(self):
-        self.component_manager.setup()
-        self.reactor.advance(1)
-        self.reactor.advance(1)
-        self.component_manager.stop()
+    async def test_proper_stopping_of_components(self):
+        asyncio.create_task(self.component_manager.setup())
+        await self.advance(0)
+        await self.advance(1)
+        await self.advance(1)
+        self.assertTrue(self.component_manager.get_component('wallet').running)
+        self.assertTrue(self.component_manager.get_component('blob_manager').running)
+        self.assertTrue(self.component_manager.get_component('file_manager').running)
+
+        asyncio.create_task(self.component_manager.stop())
+        await self.advance(0)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('wallet').running)
-
-        self.reactor.advance(1)
+        await self.advance(1)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
         self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('wallet').running)
-
-        self.reactor.advance(1)
+        await self.advance(1)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
         self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertFalse(self.component_manager.get_component('wallet').running)

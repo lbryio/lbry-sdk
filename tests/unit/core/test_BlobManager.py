@@ -8,6 +8,7 @@ from twisted.internet import defer
 
 from tests.test_utils import random_lbry_hash
 from lbrynet.p2p.BlobManager import DiskBlobManager
+from lbrynet.extras.compat import f2d
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.p2p.Peer import Peer
 from lbrynet import conf
@@ -21,14 +22,13 @@ class BlobManagerTest(unittest.TestCase):
         conf.initialize_settings(False)
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
-        self.bm = DiskBlobManager(self.blob_dir, SQLiteStorage(self.db_dir))
+        self.bm = DiskBlobManager(self.blob_dir, SQLiteStorage(':memory:'))
         self.peer = Peer('somehost', 22)
-        yield self.bm.storage.setup()
+        yield f2d(self.bm.storage.open())
 
     @defer.inlineCallbacks
     def tearDown(self):
-        yield self.bm.stop()
-        yield self.bm.storage.stop()
+        yield f2d(self.bm.storage.close())
         shutil.rmtree(self.blob_dir)
         shutil.rmtree(self.db_dir)
 
@@ -44,10 +44,10 @@ class BlobManagerTest(unittest.TestCase):
         blob_hash = out
 
         # create new blob
-        yield self.bm.setup()
-        blob = yield self.bm.get_blob(blob_hash, len(data))
+        yield f2d(self.bm.setup())
+        blob = self.bm.get_blob(blob_hash, len(data))
 
-        writer, finished_d = yield blob.open_for_writing(self.peer)
+        writer, finished_d = blob.open_for_writing(self.peer)
         yield writer.write(data)
         yield self.bm.blob_completed(blob, should_announce)
 
@@ -80,7 +80,7 @@ class BlobManagerTest(unittest.TestCase):
         self.assertFalse(os.path.isfile(os.path.join(self.blob_dir, blob_hash)))
         blobs = yield self.bm.get_all_verified_blobs()
         self.assertEqual(len(blobs), 0)
-        blobs = yield self.bm.storage.get_all_blob_hashes()
+        blobs = yield f2d(self.bm.storage.get_all_blob_hashes())
         self.assertEqual(len(blobs), 0)
         self.assertNotIn(blob_hash, self.bm.blobs)
 
@@ -97,6 +97,7 @@ class BlobManagerTest(unittest.TestCase):
         # Test that a blob that is opened for writing will not be deleted
 
         # create blobs
+        blob_hash = None
         blob_hashes = []
         for i in range(0, 10):
             blob_hash = yield self._create_and_add_blob()
@@ -105,11 +106,11 @@ class BlobManagerTest(unittest.TestCase):
         self.assertEqual(len(blobs), 10)
 
         # open the last blob
-        blob = yield self.bm.get_blob(blob_hashes[-1])
-        w, finished_d = yield blob.open_for_writing(self.peer)
+        blob = self.bm.get_blob(blob_hashes[-1])
+        w, finished_d = blob.open_for_writing(self.peer)
 
         # schedule a close, just to leave the reactor clean
-        finished_d.addBoth(lambda x:None)
+        finished_d.addBoth(lambda x: None)
         self.addCleanup(w.close)
 
         # delete the last blob and check if it still exists

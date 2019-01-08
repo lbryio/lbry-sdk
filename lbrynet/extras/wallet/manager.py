@@ -1,6 +1,5 @@
 import os
 import json
-import asyncio
 import logging
 from binascii import unhexlify
 
@@ -15,6 +14,7 @@ from torba.rpc.jsonrpc import CodeMessageError
 
 from lbrynet.schema.claim import ClaimDict
 
+from lbrynet.extras.compat import f2d
 from lbrynet.extras.wallet.ledger import MainNetLedger
 from lbrynet.extras.wallet.account import BaseAccount, generate_certificate
 from lbrynet.extras.wallet.transaction import Transaction
@@ -611,8 +611,7 @@ class LBRYcrdAddressQueryHandler:
     @defer.inlineCallbacks
     def handle_queries(self, queries):
         if self.query_identifiers[0] in queries:
-            future = self.wallet.get_unused_address_for_peer(self.peer)
-            address = yield defer.Deferred.fromFuture(asyncio.ensure_future(future))
+            address = yield f2d(self.wallet.get_unused_address_for_peer(self.peer))
             self.address = address
             fields = {'lbrycrd_address': address}
             return fields

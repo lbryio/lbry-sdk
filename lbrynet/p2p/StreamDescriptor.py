@@ -5,6 +5,7 @@ from collections import defaultdict
 from binascii import unhexlify
 from twisted.internet import threads, defer
 
+from lbrynet.extras.compat import f2d
 from lbrynet.cryptoutils import get_lbry_hash_obj
 from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.p2p.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
@@ -260,7 +261,7 @@ def save_sd_info(blob_manager, sd_hash, sd_info):
         if calculated_sd_hash != sd_hash:
             raise InvalidStreamDescriptorError("%s does not match calculated %s" %
                                                (sd_hash, calculated_sd_hash))
-    stream_hash = yield blob_manager.storage.get_stream_hash_for_sd_hash(sd_hash)
+    stream_hash = yield f2d(blob_manager.storage.get_stream_hash_for_sd_hash(sd_hash))
     if not stream_hash:
         log.debug("Saving info for %s", unhexlify(sd_info['stream_name']))
         stream_name = sd_info['stream_name']
@@ -268,10 +269,10 @@ def save_sd_info(blob_manager, sd_hash, sd_info):
         stream_hash = sd_info['stream_hash']
         stream_blobs = sd_info['blobs']
         suggested_file_name = sd_info['suggested_file_name']
-        yield blob_manager.storage.add_known_blobs(stream_blobs)
-        yield blob_manager.storage.store_stream(
+        yield f2d(blob_manager.storage.add_known_blobs(stream_blobs))
+        yield f2d(blob_manager.storage.store_stream(
             stream_hash, sd_hash, stream_name, key, suggested_file_name, stream_blobs
-        )
+        ))
     defer.returnValue(stream_hash)
 
 
@@ -461,6 +462,6 @@ def download_sd_blob(blob_hash, blob_manager, peer_finder, rate_limiter, payment
         yield blob_manager.delete_blobs([blob_hash])
         raise err
     raw_sd = yield sd_reader._get_raw_data()
-    yield blob_manager.storage.add_known_blob(blob_hash, len(raw_sd))
+    yield f2d(blob_manager.storage.add_known_blob(blob_hash, len(raw_sd)))
     yield save_sd_info(blob_manager, sd_blob.blob_hash, sd_info)
     defer.returnValue(sd_blob)

@@ -16,7 +16,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.blob_hash = ('d17272b17a1ad61c4316ac13a651c2b0952063214a81333e'
                           '838364b01b2f07edbd165bb7ec60d2fb2f337a2c02923852')
         self.blob = BlobFile(self.blob_dir, self.blob_hash)
-        self.blob_manager.get_blob.side_effect = lambda _: defer.succeed(self.blob)
+        self.blob_manager.get_blob.side_effect = lambda _: self.blob
         self.response = MagicMock(code=200, length=400)
         self.client.get.side_effect = lambda uri: defer.succeed(self.response)
         self.downloader = HTTPBlobDownloader(self.blob_manager, [self.blob_hash], ['server1'], self.client, retry=False)

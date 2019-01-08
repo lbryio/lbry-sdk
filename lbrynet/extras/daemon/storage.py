@@ -51,16 +51,12 @@ async def open_file_for_writing(download_directory: str, suggested_file_name: st
 
 
 async def looping_call(interval, fun):
-    try:
-        while True:
-            try:
-                await fun()
-            except Exception as e:
-                log.exception('Looping call experienced exception:', exc_info=e)
-            await asyncio.sleep(interval)
-    except asyncio.CancelledError:
-        pass
-
+    while True:
+        try:
+            await fun()
+        except Exception as e:
+            log.exception('Looping call experienced exception:', exc_info=e)
+        await asyncio.sleep(interval)
 
 
 class SQLiteStorage(SQLiteMixin):
@@ -136,12 +132,11 @@ class SQLiteStorage(SQLiteMixin):
             );
     """
 
-    def __init__(self, path):
+    def __init__(self, path, loop=None):
         super().__init__(path)
-        from twisted.internet import reactor
-        self.clock = reactor
         self.content_claim_callbacks = {}
         self.check_should_announce_lc = None
+        self.loop = loop or asyncio.get_event_loop()
 
     async def open(self):
         await super().open()
@@ -157,6 +152,8 @@ class SQLiteStorage(SQLiteMixin):
 
     async def run_and_return_one_or_none(self, query, *args):
         for row in await self.db.execute_fetchall(query, args):
+            if len(row) == 1:
+                return row[0]
             return row
 
     async def run_and_return_list(self, query, *args):
@@ -223,7 +220,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def should_single_announce_blobs(self, blob_hashes, immediate=False):
         def set_single_announce(transaction):
-            now = self.clock.seconds()
+            now = self.loop.time()
             for blob_hash in blob_hashes:
                 if immediate:
                     transaction.execute(
@@ -238,7 +235,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
-            timestamp = self.clock.seconds()
+            timestamp = self.loop.time()
             if conf.settings['announce_head_blobs_only']:
                 r = transaction.execute(
                     "select blob_hash from blob "
@@ -788,7 +785,7 @@ class SQLiteStorage(SQLiteMixin):
         if success:
             return self.db.execute(
                 "insert or replace into reflected_stream values (?, ?, ?)",
-                (sd_hash, reflector_address, self.clock.seconds())
+                (sd_hash, reflector_address, self.loop.time())
             )
         return self.db.execute(
             "delete from reflected_stream where sd_hash=? and reflector_address=?",
@@ -800,7 +797,7 @@ class SQLiteStorage(SQLiteMixin):
             "select s.sd_hash from stream s "
             "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
             "where r.timestamp is null or r.timestamp < ?",
-            self.clock.seconds() - conf.settings['auto_re_reflect_interval']
+            self.loop.time() - conf.settings['auto_re_reflect_interval']
         )
 
 

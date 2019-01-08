@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 from unittest import mock
@@ -151,16 +152,15 @@ class PointTraderKeyQueryHandler:
             try:
                 decode_rsa_key(new_encoded_pub_key)
             except (ValueError, TypeError, IndexError):
-                value_error = ValueError(f"Client sent an invalid public key: {new_encoded_pub_key}")
-                return defer.fail(Failure(value_error))
+                raise ValueError(f"Client sent an invalid public key: {new_encoded_pub_key}")
             self.public_key = new_encoded_pub_key
             self.wallet.set_public_key_for_peer(self.peer, self.public_key)
             fields = {'public_key': self.wallet.encoded_public_key.decode()}
-            return defer.succeed(fields)
+            return fields
         if self.public_key is None:
-            return defer.fail(Failure(ValueError("Expected but did not receive a public key")))
+            raise ValueError("Expected but did not receive a public key")
         else:
-            return defer.succeed({})
+            return {}
 
 
 class Wallet:
@@ -377,27 +377,28 @@ class FakeComponent:
     def running(self):
         return self._running
 
-    def start(self):
-        raise NotImplementedError  # Override
+    async def start(self):
+        pass
 
-    def stop(self):
-        return defer.succeed(None)
+    async def stop(self):
+        pass
 
     @property
     def component(self):
         return self
 
-    @defer.inlineCallbacks
-    def _setup(self):
-        result = yield defer.maybeDeferred(self.start)
+    async def _setup(self):
+        result = await self.start()
         self._running = True
-        defer.returnValue(result)
+        return result
 
-    @defer.inlineCallbacks
-    def _stop(self):
-        result = yield defer.maybeDeferred(self.stop)
+    async def _stop(self):
+        result = await self.stop()
         self._running = False
-        defer.returnValue(result)
+        return result
+
+    async def get_status(self):
+        return {}
 
     def __lt__(self, other):
         return self.component_name < other.component_name
@@ -407,41 +408,27 @@ class FakeDelayedWallet(FakeComponent):
     component_name = "wallet"
     depends_on = []
 
-    def start(self):
-        return defer.succeed(True)
-
-    def stop(self):
-        d = defer.Deferred()
-        self.component_manager.reactor.callLater(1, d.callback, True)
-        return d
+    async def stop(self):
+        await asyncio.sleep(1)
 
 
 class FakeDelayedBlobManager(FakeComponent):
     component_name = "blob_manager"
     depends_on = [FakeDelayedWallet.component_name]
 
-    def start(self):
-        d = defer.Deferred()
-        self.component_manager.reactor.callLater(1, d.callback, True)
-        return d
+    async def start(self):
+        await asyncio.sleep(1)
 
-    def stop(self):
-        d = defer.Deferred()
-        self.component_manager.reactor.callLater(1, d.callback, True)
-        return d
+    async def stop(self):
+        await asyncio.sleep(1)
 
 
 class FakeDelayedFileManager(FakeComponent):
     component_name = "file_manager"
     depends_on = [FakeDelayedBlobManager.component_name]
 
-    def start(self):
-        d = defer.Deferred()
-        self.component_manager.reactor.callLater(1, d.callback, True)
-        return d
-
-    def stop(self):
-        return defer.succeed(True)
+    async def start(self):
+        await asyncio.sleep(1)
 
 
 class FakeFileManager(FakeComponent):
@@ -451,15 +438,6 @@ class FakeFileManager(FakeComponent):
     @property
     def component(self):
         return mock.Mock(spec=EncryptedFileManager)
-
-    def start(self):
-        return defer.succeed(True)
-
-    def stop(self):
-        pass
-
-    def get_status(self):
-        return {}
 
 
 create_stream_sd_file = {

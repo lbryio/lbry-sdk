@@ -1,5 +1,6 @@
 import logging
 from twisted.internet import defer
+from lbrynet.extras.compat import f2d
 
 
 log = logging.getLogger(__name__)
@@ -17,9 +18,8 @@ class EncryptedFileMetadataHandler:
 
     @defer.inlineCallbacks
     def get_initial_blobs(self):
-        blob_infos = yield self.storage.get_blobs_for_stream(self.stream_hash)
-        formatted_infos = self._format_initial_blobs_for_download_manager(blob_infos)
-        defer.returnValue(formatted_infos)
+        blob_infos = yield f2d(self.storage.get_blobs_for_stream(self.stream_hash))
+        return self._format_initial_blobs_for_download_manager(blob_infos)
 
     def final_blob_num(self):
         return self._final_blob_num

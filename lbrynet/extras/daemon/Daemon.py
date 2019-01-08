@@ -52,7 +52,6 @@ import inspect
 import signal
 from functools import wraps
 from twisted.internet import defer
-from twisted.python.failure import Failure
 
 from lbrynet import utils
 from lbrynet.extras.daemon.undecorated import undecorated
@@ -410,16 +409,16 @@ class Daemon(metaclass=JSONRPCServerType):
             self.server = await asyncio.get_event_loop().create_server(
                 self.handler, conf.settings['api_host'], conf.settings['api_port']
             )
-            log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname())
+            log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname()[:2])
             await self.setup()
-            await self.analytics_manager.send_server_startup_success()
+            self.analytics_manager.send_server_startup_success()
         except OSError:
             log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
                       'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
         except defer.CancelledError:
             log.info("shutting down before finished starting")
         except Exception as err:
-            await self.analytics_manager.send_server_startup_error(str(err))
+            self.analytics_manager.send_server_startup_error(str(err))
             log.exception('Failed to start lbrynet-daemon')
 
     async def setup(self):
@@ -428,7 +427,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
-        await self.analytics_manager.send_server_startup()
+        self.analytics_manager.send_server_startup()
         for lc_name, lc_time in self._looping_call_times.items():
             self.looping_call_manager.start(lc_name, lc_time)
 
@@ -505,9 +504,6 @@ class Daemon(metaclass=JSONRPCServerType):
         result = fn(self, *_args, **_kwargs)
         if asyncio.iscoroutine(result):
             result = await result
-        
-        if type(result) == dict:
-            await utils.await_all_coroutines_in_dict(result)
 
         return web.Response(
             text=jsonrpc_dumps_pretty(result, ledger=self.ledger),
@@ -673,8 +669,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     claim_dict, name, txid, nout, file_name
                 ))
                 finished_deferred.addCallbacks(
-                    lambda _: _download_finished(download_id, name, claim_dict),
-                    lambda e: _download_failed(e, download_id, name, claim_dict)
+                    lambda _: asyncio.create_task(_download_finished(download_id, name, claim_dict)),
+                    lambda e: asyncio.create_task(_download_failed(e, download_id, name, claim_dict))
                 )
                 result = await self._get_lbry_file_dict(lbry_file)
             except Exception as err:
@@ -719,22 +715,22 @@ class Daemon(metaclass=JSONRPCServerType):
             "output": tx.outputs[nout]
         }
 
-    def _get_or_download_sd_blob(self, blob, sd_hash):
+    async def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
             return self.blob_manager.get_blob(blob[0])
-        return download_sd_blob(
+        return await d2f(download_sd_blob(
             sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
             self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
             download_mirrors=conf.settings['download_mirrors']
-        )
+        ))
 
     def get_or_download_sd_blob(self, sd_hash):
         """Return previously downloaded sd blob if already in the blob
         manager, otherwise download and return it
         """
-        d = self.blob_manager.completed_blobs([sd_hash.decode()])
-        d.addCallback(self._get_or_download_sd_blob, sd_hash)
-        return d
+        return self._get_or_download_sd_blob(
+            self.blob_manager.completed_blobs([sd_hash.decode()]), sd_hash
+        )
 
     def get_size_from_sd_blob(self, sd_blob):
         """
@@ -767,30 +763,22 @@ class Daemon(metaclass=JSONRPCServerType):
             final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
             return final_fee
 
-    def get_est_cost_from_sd_hash(self, sd_hash):
+    async def get_est_cost_from_sd_hash(self, sd_hash):
         """
         Get estimated cost from a sd hash
         """
+        sd_blob = await self.get_or_download_sd_blob(sd_hash)
+        stream_size = await d2f(self.get_size_from_sd_blob(sd_blob))
+        return self._get_est_cost_from_stream_size(stream_size)
 
-        d = self.get_or_download_sd_blob(sd_hash)
-        d.addCallback(self.get_size_from_sd_blob)
-        d.addCallback(self._get_est_cost_from_stream_size)
-        return d
-
-    def _get_est_cost_from_metadata(self, metadata, name):
-        d = self.get_est_cost_from_sd_hash(metadata.source_hash)
-
-        def _handle_err(err):
-            if isinstance(err, Failure):
-                log.warning(
-                    "Timeout getting blob for cost est for lbry://%s, using only key fee", name)
-                return 0.0
-            raise err
-
-        d.addErrback(_handle_err)
-        d.addCallback(lambda data_cost: self._add_key_fee_to_est_data_cost(metadata.source_fee,
-                                                                           data_cost))
-        return d
+    async def _get_est_cost_from_metadata(self, metadata, name):
+        try:
+            return self._add_key_fee_to_est_data_cost(
+                metadata.source_fee, await self.get_est_cost_from_sd_hash(metadata.source_hash)
+            )
+        except:
+            log.warning("Timeout getting blob for cost est for lbry://%s, using only key fee", name)
+            return 0.0
 
     def _add_key_fee_to_est_data_cost(self, fee, data_cost):
         fee_amount = 0.0 if not fee else self.exchange_rate_manager.convert_currency(fee.currency,
@@ -809,15 +797,13 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim_response = None
 
-        result = None
         if claim_response and 'claim' in claim_response:
             if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
                 claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
-                cost = await d2f(self._get_est_cost_from_metadata(claim_value, uri))
-                result = round(cost, 5)
+                cost = await self._get_est_cost_from_metadata(claim_value, uri)
+                return round(cost, 5)
             else:
                 log.warning("Failed to estimate cost for %s", uri)
-        return result
 
     def get_est_cost(self, uri, size=None):
         """Get a cost estimate for a lbry stream, if size is not provided the
@@ -839,8 +825,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             written_bytes = 0
 
-        size = await d2f(lbry_file.get_total_bytes())
-        file_status = await d2f(lbry_file.status())
+        size = await lbry_file.get_total_bytes()
+        file_status = await lbry_file.status()
         num_completed = file_status.num_completed
         num_known = file_status.num_known
         status = file_status.running_status
@@ -1074,7 +1060,7 @@ class Daemon(metaclass=JSONRPCServerType):
             },
         }
         for component in self.component_manager.components:
-            status = await d2f(defer.maybeDeferred(component.get_status))
+            status = await component.get_status()
             if status:
                 response[component.component_name] = status
         return response

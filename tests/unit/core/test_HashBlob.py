@@ -62,20 +62,21 @@ class BlobFileTest(unittest.TestCase):
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash)
         self.assertFalse(blob_file.verified)
 
-    @defer.inlineCallbacks
     def test_delete_fail(self):
         # deletes should fail if being written to
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
         writer, finished_d = blob_file.open_for_writing(peer=1)
-        yield self.assertFailure(blob_file.delete(), ValueError)
+        with self.assertRaises(ValueError):
+            blob_file.delete()
         writer.write(self.fake_content)
         writer.close()
 
         # deletes should fail if being read and not closed
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
         self.assertTrue(blob_file.verified)
-        f = blob_file.open_for_reading()
-        yield self.assertFailure(blob_file.delete(), ValueError)
+        r = blob_file.open_for_reading()  # must be set to variable otherwise it gets garbage collected
+        with self.assertRaises(ValueError):
+            blob_file.delete()
 
     @defer.inlineCallbacks
     def test_too_much_write(self):
