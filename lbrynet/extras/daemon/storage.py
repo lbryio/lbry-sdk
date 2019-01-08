@@ -59,6 +59,7 @@ async def looping_call(interval, fun):
         await asyncio.sleep(interval)
 
 
+
 class SQLiteStorage(SQLiteMixin):
 
     CREATE_TABLES_QUERY = """

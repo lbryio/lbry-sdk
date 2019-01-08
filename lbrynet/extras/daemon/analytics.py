@@ -1,11 +1,12 @@
 import collections
 import logging
 
-import aiohttp
 import asyncio
+import aiohttp
 
 from lbrynet import conf, utils
-from lbrynet.extras import looping_call_manager, system_info
+from lbrynet.extras import system_info
+from lbrynet.extras.daemon.storage import looping_call
 
 # Things We Track
 SERVER_STARTUP = 'Server Startup'
@@ -30,7 +31,7 @@ class Manager:
     def __init__(self, analytics_api, context=None, installation_id=None, session_id=None):
         self.analytics_api = analytics_api
         self._tracked_data = collections.defaultdict(list)
-        self.looping_call_manager = self._setup_looping_calls()
+        self.looping_tasks = {}
         self.context = context or self._make_context(
             system_info.get_platform(), conf.settings['wallet'])
         self.installation_id = installation_id or conf.settings.installation_id
@@ -43,14 +44,14 @@ class Manager:
         return cls(api)
 
     # Things We Track
-    def send_new_download_start(self, download_id, name, claim_dict):
-        self._send_new_download_stats("start", download_id, name, claim_dict)
+    async def send_new_download_start(self, download_id, name, claim_dict):
+        await self._send_new_download_stats("start", download_id, name, claim_dict)
 
-    def send_new_download_success(self, download_id, name, claim_dict):
-        self._send_new_download_stats("success", download_id, name, claim_dict)
+    async def send_new_download_success(self, download_id, name, claim_dict):
+        await self._send_new_download_stats("success", download_id, name, claim_dict)
 
-    def send_new_download_fail(self, download_id, name, claim_dict, e):
-        self._send_new_download_stats("failure", download_id, name, claim_dict, {
+    async def send_new_download_fail(self, download_id, name, claim_dict, e):
+        await self._send_new_download_stats("failure", download_id, name, claim_dict, {
             'name': type(e).__name__ if hasattr(type(e), "__name__") else str(type(e)),
             'message': str(e),
         })
@@ -122,29 +123,28 @@ class Manager:
 
     def start(self):
         if not self.is_started:
-            for name, _, interval in self._get_looping_calls():
-                self.looping_call_manager.start(name, interval)
+            for name, fn, secs in self._get_looping_calls():
+                self.looping_tasks[name] = asyncio.create_task(looping_call(secs, fn))
             self.is_started = True
+            log.info("Start")
 
     def shutdown(self):
-        self.looping_call_manager.shutdown()
+        if self.is_started:
+            try:
+                for name, task in self.looping_tasks.items():
+                    if task:
+                        task.cancel()
+                        self.looping_tasks[name] = None
+                log.info("Stopped analytics looping calls")
+                self.is_started = False
+            except Exception as e:
+                log.exception('Got exception when trying to cancel tasks in analytics: ', exc_info=e)
 
-    def register_repeating_metric(self, event_name, value_generator, frequency=300):
-        lcall = task.LoopingCall(self._send_repeating_metric, event_name, value_generator)
-        self.looping_call_manager.register_looping_call(event_name, lcall)
-        lcall.start(frequency)
-
-    def _get_looping_calls(self):
+    def _get_looping_calls(self) -> list:
         return [
             ('send_heartbeat', self._send_heartbeat, 300),
             ('update_tracked_metrics', self._update_tracked_metrics, 600),
         ]
-
-    def _setup_looping_calls(self):
-        call_manager = looping_call_manager.LoopingCallManager()
-        for name, fn, _ in self._get_looping_calls():
-            call_manager.register_looping_call(name, task.LoopingCall(fn))
-        return call_manager
 
     async def _send_repeating_metric(self, event_name, value_generator):
         result = value_generator()
@@ -259,19 +259,20 @@ class Api:
         # by forcing the connection to close, we will disable the keep-alive.
 
         assert endpoint[0] == '/'
-        headers = {"Connection": "close"}
-        
-        log.info("data passed in to analytics.Api._post: %s", data)
-        async with aiohttp.request(
-            'POST', self.url + endpoint, cookies=self.cookies, json=data,
-            headers=headers, auth=aiohttp.BasicAuth(self._write_key, '')
-        ) as response:
-            try:
-                log.info("text received from response: %s", await response.text())
+        request_kwargs = {
+            'method': 'POST',
+            'url': self.url + endpoint,
+            'headers': {'Connection': 'Close'},
+            'auth': aiohttp.BasicAuth(self._write_key, ''),
+            'json': data,
+            'cookies': self.cookies
+        }
+        try:
+            async with aiohttp.request(**request_kwargs) as response:
                 self.cookies.update(response.cookies)
-            except aiohttp.ClientConnectionError as e:
-                log.error("Got error in the client connection: %s", e)
-        
+        except Exception as e:
+            log.exception('Encountered an exception while POSTing to %s: ', self.url + endpoint, exc_info=e)
+
     async def track(self, event):
         """Send a single tracking event"""
         if not self._enabled:
