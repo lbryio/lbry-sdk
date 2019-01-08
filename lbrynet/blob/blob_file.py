@@ -138,14 +138,13 @@ class BlobFile:
         fut.add_done_callback(self.writer_finished(writer))
         return writer
 
-    async def read(self) -> BytesIO:
-        def _read() -> BytesIO:
-            b = BytesIO()
-            with open(self.file_path, "rb") as f:
-                b.write(f.read())
-            return b
+    async def sendfile(self, writer: asyncio.StreamWriter) -> int:
+        """
+        Read and send the file to the writer and return the number of bytes sent
+        """
 
-        return await self.loop.run_in_executor(None, _read)
+        with open(self.file_path, 'rb') as handle:
+            return await self.loop.sendfile(writer.transport, handle)
 
     async def close(self):
         while self.writers:
