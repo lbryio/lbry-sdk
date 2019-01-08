@@ -1,10 +1,8 @@
+import asyncio
+import aiohttp
 import time
 import logging
 import json
-
-import treq
-from twisted.internet import defer
-from twisted.internet.task import LoopingCall
 
 from lbrynet.error import InvalidExchangeRateResponse, CurrencyConversionError
 
@@ -38,14 +36,14 @@ class MarketFeed:
     REQUESTS_TIMEOUT = 20
     EXCHANGE_RATE_UPDATE_RATE_SEC = 300
 
-    def __init__(self, market, name, url, params, fee):
+    def __init__(self, market: str, name: str, url: str, params, fee):
         self.market = market
         self.name = name
         self.url = url
         self.params = params
         self.fee = fee
         self.rate = None
-        self._updater = LoopingCall(self._update_price)
+        self._task: asyncio.Task = None
         self._online = True
 
     def rate_is_initialized(self):
@@ -54,17 +52,16 @@ class MarketFeed:
     def is_online(self):
         return self._online
 
-    @defer.inlineCallbacks
-    def _make_request(self):
-        response = yield treq.get(self.url, params=self.params, timeout=self.REQUESTS_TIMEOUT)
-        defer.returnValue((yield response.content()))
+    async def _make_request(self):
+        async with aiohttp.request('get', self.url, params=self.params) as response:
+            return await response.json()
 
     def _handle_response(self, response):
         return NotImplementedError
 
     def _subtract_fee(self, from_amount):
         # increase amount to account for market fees
-        return defer.succeed(from_amount / (1.0 - self.fee))
+        return from_amount / (1.0 - self.fee)
 
     def _save_price(self, price):
         log.debug("Saving price update %f for %s from %s" % (price, self.market, self.name))
@@ -77,21 +74,23 @@ class MarketFeed:
         log.debug("Exchange rate error (%s from %s): %s", self.market, self.name, err)
         self._online = False
 
-    def _update_price(self):
-        d = self._make_request()
-        d.addCallback(self._handle_response)
-        d.addCallback(self._subtract_fee)
-        d.addCallback(self._save_price)
-        d.addErrback(self._on_error)
-        return d
+    async def _update_price(self):
+        while True:
+            try:
+                response = await asyncio.wait_for(self._make_request(), self.REQUESTS_TIMEOUT)
+                self._save_price(self._subtract_fee(self._handle_response(response)))
+            except (asyncio.CancelledError, asyncio.TimeoutError, InvalidExchangeRateResponse) as err:
+                self._on_error(err)
+            await asyncio.sleep(self.EXCHANGE_RATE_UPDATE_RATE_SEC)
 
     def start(self):
-        if not self._updater.running:
-            self._updater.start(self.EXCHANGE_RATE_UPDATE_RATE_SEC)
+        if not self._task:
+            self._task = asyncio.create_task(self._update_price())
 
     def stop(self):
-        if self._updater.running:
-            self._updater.stop()
+        if self._task and not (self._task.done() or self._task.cancelled()):
+            self._task.cancel()
+            self._task = None
 
 
 class BittrexFeed(MarketFeed):
@@ -116,7 +115,7 @@ class BittrexFeed(MarketFeed):
         if totals <= 0 or qtys <= 0:
             raise InvalidExchangeRateResponse(self.market, 'quantities were not positive')
         vwap = totals / qtys
-        return defer.succeed(float(1.0 / vwap))
+        return float(1.0 / vwap)
 
 
 class LBRYioFeed(MarketFeed):
@@ -133,7 +132,7 @@ class LBRYioFeed(MarketFeed):
         json_response = json.loads(response)
         if 'data' not in json_response:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
-        return defer.succeed(1.0 / json_response['data']['lbc_btc'])
+        return 1.0 / json_response['data']['lbc_btc']
 
 
 class LBRYioBTCFeed(MarketFeed):
@@ -153,7 +152,7 @@ class LBRYioBTCFeed(MarketFeed):
             raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
         if 'data' not in json_response:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
-        return defer.succeed(1.0 / json_response['data']['btc_usd'])
+        return 1.0 / json_response['data']['btc_usd']
 
 
 class CryptonatorBTCFeed(MarketFeed):
@@ -174,7 +173,7 @@ class CryptonatorBTCFeed(MarketFeed):
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
-        return defer.succeed(float(json_response['ticker']['price']))
+        return float(json_response['ticker']['price'])
 
 
 class CryptonatorFeed(MarketFeed):
@@ -195,7 +194,7 @@ class CryptonatorFeed(MarketFeed):
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
-        return defer.succeed(float(json_response['ticker']['price']))
+        return float(json_response['ticker']['price'])
 
 
 class ExchangeRateManager:
