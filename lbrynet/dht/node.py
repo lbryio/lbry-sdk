@@ -155,6 +155,8 @@ class Node:
         try:
             accumulated = []
             async for peers in finder:
+                if not peers:
+                    break
                 log.info("got %i peers", len(peers))
                 for peer in peers:
                     if peer not in accumulated:

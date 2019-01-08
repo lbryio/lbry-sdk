@@ -9,8 +9,6 @@ import traceback
 import functools
 import logging
 import pkg_resources
-from twisted.python.failure import Failure
-from twisted.internet import defer
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
@@ -42,21 +40,6 @@ def timedelta(**kwargs):
 def datetime_obj(*args, **kwargs):
     return datetime.datetime(*args, **kwargs)
 
-
-def call_later(delay, func, *args, **kwargs):
-    # Import here to ensure that it gets called after installing a reactor
-    # see: http://twistedmatrix.com/documents/current/core/howto/choosing-reactor.html
-    from twisted.internet import reactor
-    return reactor.callLater(delay, func, *args, **kwargs)
-
-
-def safe_start_looping_call(looping_call, interval_sec):
-    if not looping_call.running:
-        looping_call.start(interval_sec)
-
-def safe_stop_looping_call(looping_call):
-    if looping_call.running:
-        looping_call.stop()
 
 def generate_id(num=None):
     h = get_lbry_hash_obj()
@@ -137,93 +120,3 @@ def get_sd_hash(stream_info):
 
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
-
-
-class DeferredLockContextManager:
-    def __init__(self, lock):
-        self._lock = lock
-
-    def __enter__(self):
-        yield self._lock.acquire()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        yield self._lock.release()
-
-
-@defer.inlineCallbacks
-def DeferredDict(d, consumeErrors=False):
-    keys = []
-    dl = []
-    response = {}
-    for k, v in d.items():
-        keys.append(k)
-        dl.append(v)
-    results = yield defer.DeferredList(dl, consumeErrors=consumeErrors)
-    for k, (success, result) in zip(keys, results):
-        if success:
-            response[k] = result
-    defer.returnValue(response)
-
-
-class DeferredProfiler:
-    def __init__(self):
-        self.profile_results = {}
-
-    def add_result(self, fn, start_time, finished_time, stack, success):
-        self.profile_results[fn].append((start_time, finished_time, stack, success))
-
-    def show_profile_results(self, fn):
-        profile_results = list(self.profile_results[fn])
-        call_counts = {
-            caller: [(start, finished, finished - start, success)
-                     for (start, finished, _caller, success) in profile_results
-                     if _caller == caller]
-            for caller in {result[2] for result in profile_results}
-        }
-
-        log.info("called %s %i times from %i sources\n", fn.__name__, len(profile_results), len(call_counts))
-        for caller in sorted(list(call_counts.keys()), key=lambda c: len(call_counts[c]), reverse=True):
-            call_info = call_counts[caller]
-            times = [r[2] for r in call_info]
-            own_time = sum(times)
-            times.sort()
-            longest = 0 if not times else times[-1]
-            shortest = 0 if not times else times[0]
-            log.info(
-                "%i successes and %i failures\nlongest %f, shortest %f, avg %f\ncaller:\n%s",
-                len([r for r in call_info if r[3]]),
-                len([r for r in call_info if not r[3]]),
-                longest, shortest, own_time / float(len(call_info)), caller
-            )
-
-    def profiled_deferred(self, reactor=None):
-        if not reactor:
-            from twisted.internet import reactor
-
-        def _cb(result, fn, start, caller_info):
-            got_error = isinstance(result, (Failure, Exception))
-            self.add_result(fn, start, reactor.seconds(), caller_info, not got_error)
-            if got_error:
-                raise result
-            else:
-                return result
-
-        def _profiled_deferred(fn):
-            reactor.addSystemEventTrigger("after", "shutdown", self.show_profile_results, fn)
-            self.profile_results[fn] = []
-
-            @functools.wraps(fn)
-            def _wrapper(*args, **kwargs):
-                caller_info = "".join(traceback.format_list(traceback.extract_stack()[-3:-1]))
-                start = reactor.seconds()
-                d = defer.maybeDeferred(fn, *args, **kwargs)
-                d.addBoth(_cb, fn, start, caller_info)
-                return d
-
-            return _wrapper
-
-        return _profiled_deferred
-
-
-_profiler = DeferredProfiler()
-profile_deferred = _profiler.profiled_deferred

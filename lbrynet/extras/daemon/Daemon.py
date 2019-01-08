@@ -3,32 +3,22 @@ import requests
 import urllib
 import textwrap
 import typing
-import asyncio
-import logging.handlers
 from typing import Callable, Optional, List
-from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
-from twisted.internet.task import LoopingCall
-from traceback import format_exc
-
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
-
 from lbrynet import __version__
-from lbrynet.dht.error import TimeoutError
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload
-from lbrynet.extras.daemon.Components import d2f, f2d
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
-from lbrynet.mime_types import guess_mime_type
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
@@ -38,8 +28,6 @@ from lbrynet.schema.address import decode_address
 from lbrynet.schema.decode import smart_decode
 from lbrynet.extras.daemon import analytics
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
-from lbrynet.extras.looping_call_manager import LoopingCallManager
-from lbrynet.p2p.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
 
 import asyncio
@@ -48,7 +36,6 @@ import json
 import inspect
 import signal
 from functools import wraps
-from twisted.internet import defer
 
 from lbrynet import utils
 from lbrynet.extras.daemon.undecorated import undecorated
@@ -325,19 +312,13 @@ class Daemon(metaclass=JSONRPCServerType):
         to_skip = conf.settings['components_to_skip']
         # if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
         #     to_skip.append('reflector')
-        looping_calls = {
-            Checker.INTERNET_CONNECTION[0]: (LoopingCall(CheckInternetConnection(self)),
-                                             Checker.INTERNET_CONNECTION[1])
-        }
         use_authentication = conf.settings['use_auth_http']
         use_https = conf.settings['use_https']
-        self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
+        self.analytics_manager = None #analytics_manager or analytics.Manager.new_instance()
         self.component_manager = component_manager or ComponentManager(
             analytics_manager=self.analytics_manager,
             skip_components=to_skip or [],
         )
-        self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).items()})
-        self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).items()}
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
         self._use_https = use_https or conf.settings['use_https']
         self.listening_port = None
@@ -371,7 +352,7 @@ class Daemon(metaclass=JSONRPCServerType):
         self.app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
         self.app.router.add_post('/', self.handle_old_jsonrpc)
         self.handler = self.app.make_handler()
-        self.server = None
+        self.server: asyncio.AbstractServer = None
 
     async def start_listening(self):
         try:
@@ -380,25 +361,26 @@ class Daemon(metaclass=JSONRPCServerType):
             )
             log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname()[:2])
             await self.setup()
-            await self.analytics_manager.send_server_startup_success()
+            if self.analytics_manager:
+                self.analytics_manager.send_server_startup_success()
         except OSError:
             log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
                       'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
-        except defer.CancelledError:
+        except asyncio.CancelledError:
             log.info("shutting down before finished starting")
         except Exception as err:
-            await self.analytics_manager.send_server_startup_error(str(err))
+            if self.analytics_manager:
+                self.analytics_manager.send_server_startup_error(str(err))
             log.exception('Failed to start lbrynet-daemon')
 
     async def setup(self):
         log.info("Starting lbrynet-daemon")
         log.info("Platform: %s", json.dumps(system_info.get_platform()))
 
-        if not self.analytics_manager.is_started:
-            self.analytics_manager.start()
-        await self.analytics_manager.send_server_startup()
-        for lc_name, lc_time in self._looping_call_times.items():
-            self.looping_call_manager.start(lc_name, lc_time)
+        if self.analytics_manager:
+            if not self.analytics_manager.is_started:
+                self.analytics_manager.start()
+            self.analytics_manager.send_server_startup()
 
         def update_attribute(component):
             setattr(self, self.component_attributes[component.component_name], component.component)
@@ -414,7 +396,6 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("Already shutting down")
 
     async def shutdown(self):
-        self._stop_streams()
         # ignore INT/TERM signals once shutdown has started
         signal.signal(signal.SIGINT, self._already_shutting_down)
         signal.signal(signal.SIGTERM, self._already_shutting_down)
@@ -460,7 +441,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"Invalid method requested: {function_name}.", JSONRPCError.CODE_METHOD_NOT_FOUND
             )
 
-        if args in (EMPTY_PARAMS, []):
+        if args in ([{}], []):
             _args, _kwargs = (), {}
         elif isinstance(args, dict):
             _args, _kwargs = (), args
@@ -1249,7 +1230,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise InsufficientFundsError()
             account = self.get_account_or_default(account_id)
             result = await self.wallet_manager.send_points_to_address(reserved_points, amount, account)
-            await self.analytics_manager.send_credits_sent()
+            self.analytics_manager.send_credits_sent()
         else:
             log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
             result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
@@ -1660,7 +1641,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         account = self.get_account_or_default(account_id)
         result = await account.send_to_addresses(amount, addresses, broadcast)
-        await self.analytics_manager.send_credits_sent()
+        self.analytics_manager.send_credits_sent()
         return result
 
     @requires(WALLET_COMPONENT)
@@ -2175,7 +2156,7 @@ class Daemon(metaclass=JSONRPCServerType):
             channel_name, amount, self.get_account_or_default(account_id)
         )
         self.default_wallet.save()
-        await self.analytics_manager.send_new_channel()
+        self.analytics_manager.send_new_channel()
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
@@ -2495,7 +2476,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception('Must specify nout')
 
         tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
-        await self.analytics_manager.send_claim_action('abandon')
+        self.analytics_manager.send_claim_action('abandon')
         if blocking:
             await self.ledger.wait(tx)
         return {"success": True, "tx": tx}
@@ -2530,7 +2511,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
         result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
-        await self.analytics_manager.send_claim_action('new_support')
+        self.analytics_manager.send_claim_action('new_support')
         return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -2563,7 +2544,7 @@ class Daemon(metaclass=JSONRPCServerType):
         amount = self.get_dewies_or_error("amount", amount)
         validate_claim_id(claim_id)
         result = await self.wallet_manager.tip_claim(amount, claim_id, account)
-        await self.analytics_manager.send_claim_action('new_support')
+        self.analytics_manager.send_claim_action('new_support')
         return result
 
     @deprecated()
