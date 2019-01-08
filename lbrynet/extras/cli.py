@@ -57,7 +57,7 @@ def start_daemon(settings: typing.Optional[typing.Dict] = None,
 
     if check_connection():
         daemon = Daemon()
-        reactor._asyncioEventloop.create_task(daemon.start_listening())
+        daemon.start_listening()
         reactor.run()
     else:
         log.info("Not connected to internet, unable to start")
@@ -116,16 +116,13 @@ async def execute_command(method, params, data_dir: typing.Optional[str] = None,
         return 1
 
     # this actually executes the method
-    resp = await api.call(method, params)
-
     try:
+        resp = await api.call(method, params)
+        print(json.dumps(resp, indent=2))
+    except JSONRPCException as err:
+        print(json.dumps(err, indent=2))
+    finally:
         await api.session.close()
-        print(json.dumps(resp["result"], indent=2))
-    except KeyError:
-        if resp["error"]["code"] == -32500:
-            print(json.dumps(resp["error"], indent=2))
-        else:
-            print(json.dumps(resp["error"]["message"], indent=2))
 
 
 def print_help():

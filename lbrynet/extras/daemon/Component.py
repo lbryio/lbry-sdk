@@ -25,9 +25,10 @@ class Component(metaclass=ComponentType):
     depends_on = []
     component_name = None
 
-    def __init__(self, component_manager):
+    def __init__(self, component_manager: ComponentManager):
         self.component_manager = component_manager
         self._running = False
+        self.loop = self.component_manager.loop
 
     def __lt__(self, other):
         return self.component_name < other.component_name

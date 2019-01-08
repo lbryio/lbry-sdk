@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from lbrynet.p2p.Error import ComponentStartConditionNotMet
-from lbrynet.extras.daemon.PeerManager import PeerManager
-from lbrynet.extras.daemon.PeerFinder import DHTPeerFinder
+import typing
+import asyncio
+from lbrynet.error import ComponentStartConditionNotMet
+from lbrynet.peer import PeerManager
 
 log = logging.getLogger(__name__)
 
@@ -34,15 +35,15 @@ class RequiredCondition(metaclass=RequiredConditionType):
 class ComponentManager:
     default_component_classes = {}
 
-    def __init__(self, reactor=None, analytics_manager=None, skip_components=None,
-                 peer_manager=None, peer_finder=None, **override_components):
+    def __init__(self, reactor=None, loop: typing.Optional[asyncio.BaseEventLoop] = None,
+                 analytics_manager=None, skip_components=None, peer_manager=None, **override_components):
         self.skip_components = skip_components or []
         self.reactor = reactor
+        self.loop = loop or asyncio.get_event_loop()
         self.component_classes = {}
         self.components = set()
         self.analytics_manager = analytics_manager
-        self.peer_manager = peer_manager or PeerManager()
-        self.peer_finder = peer_finder or DHTPeerFinder(self)
+        self.peer_manager = peer_manager or PeerManager(asyncio.get_event_loop_policy().get_event_loop())
 
         for component_name, component_class in self.default_component_classes.items():
             if component_name in override_components:
