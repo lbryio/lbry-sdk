@@ -1,15 +1,15 @@
 import curses
 import time
 import logging
-from lbrynet.daemon import get_client
+import asyncio
+from lbrynet import conf
+from lbrynet.extras.daemon.auth.client import LBRYAPIClient
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.FileHandler("dht contacts.log"))
 # log.addHandler(logging.StreamHandler())
 log.setLevel(logging.INFO)
 stdscr = curses.initscr()
-
-api = get_client()
 
 
 def init_curses():
@@ -26,79 +26,47 @@ def teardown_curses():
     curses.endwin()
 
 
-def refresh(last_contacts, last_blobs):
+def refresh(routing_table_info):
     height, width = stdscr.getmaxyx()
 
-    try:
-        routing_table_info = api.routing_table_get()
-        node_id = routing_table_info['node_id']
-    except:
-        node_id = "UNKNOWN"
-        routing_table_info = {
-            'buckets': {},
-            'contacts': [],
-            'blob_hashes': []
-        }
+    node_id = routing_table_info['node_id']
+
     for y in range(height):
         stdscr.addstr(y, 0, " " * (width - 1))
 
     buckets = routing_table_info['buckets']
-    stdscr.addstr(0, 0, "node id: %s" % node_id)
-    stdscr.addstr(1, 0, "%i buckets, %i contacts, %i blobs" %
-                  (len(buckets), len(routing_table_info['contacts']),
-                   len(routing_table_info['blob_hashes'])))
+    stdscr.addstr(0, 0, f"node id: {node_id}")
+    stdscr.addstr(1, 0, f"{len(buckets)} buckets")
 
     y = 3
-    for i in sorted(buckets.keys()):
+    for i in range(len(buckets)):
         stdscr.addstr(y, 0, "bucket %s" % i)
         y += 1
-        for h in sorted(buckets[i], key=lambda x: x['node_id'].decode('hex')):
-            stdscr.addstr(y, 0, '%s (%s:%i) - %i blobs' % (h['node_id'], h['address'], h['port'],
-                                                        len(h['blobs'])))
+        for peer in buckets[str(i)]:
+            stdscr.addstr(y, 0, f"{peer['node_id'][:8]} ({peer['address']}:{peer['udp_port']})")
             y += 1
         y += 1
 
-    new_contacts = set(routing_table_info['contacts']) - last_contacts
-    lost_contacts = last_contacts - set(routing_table_info['contacts'])
-
-    if new_contacts:
-        for c in new_contacts:
-            log.debug("added contact %s", c)
-    if lost_contacts:
-        for c in lost_contacts:
-            log.info("lost contact %s", c)
-
-    new_blobs = set(routing_table_info['blob_hashes']) - last_blobs
-    lost_blobs = last_blobs - set(routing_table_info['blob_hashes'])
-
-    if new_blobs:
-        for c in new_blobs:
-            log.debug("added blob %s", c)
-    if lost_blobs:
-        for c in lost_blobs:
-            log.info("lost blob %s", c)
-
     stdscr.addstr(y + 1, 0, str(time.time()))
     stdscr.refresh()
-    return set(routing_table_info['contacts']), set(routing_table_info['blob_hashes'])
 
 
-def do_main():
-    c = None
-    last_contacts, last_blobs = set(), set()
-    while c not in [ord('q'), ord('Q')]:
-        last_contacts, last_blobs = refresh(last_contacts, last_blobs)
-        c = stdscr.getch()
-        time.sleep(0.1)
+async def main():
+    conf.initialize_settings()
+    api = await LBRYAPIClient.get_client()
 
-
-def main():
     try:
         init_curses()
-        do_main()
+        c = None
+        while c not in [ord('q'), ord('Q')]:
+            routing_info = await api.routing_table_get()
+            refresh(routing_info)
+            c = stdscr.getch()
+            time.sleep(0.1)
     finally:
+        await api.session.close()
         teardown_curses()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
