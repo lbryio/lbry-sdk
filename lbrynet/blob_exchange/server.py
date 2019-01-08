@@ -13,13 +13,7 @@ log = logging.getLogger(__name__)
 
 async def read_blob_request(reader: StreamReader) -> typing.Optional[BlobRequest]:
     buf = b''
-    while True:
-        try:
-            return BlobRequest.deserialize(buf + (await reader.readuntil(b'}')))
-        except asyncio.streams.IncompleteReadError as e:
-            await asyncio.sleep(0.02)
-            buf += e.partial
-            continue
+    return BlobRequest.deserialize(buf + (await reader.readuntil(b'}')))
 
 
 class BlobServer:
@@ -40,7 +34,8 @@ class BlobServer:
             writer.write(BlobResponse(to_send).serialize())
             await writer.drain()
 
-        request = await read_blob_request(reader)
+        data = await reader.readuntil(b'}')
+        request = BlobRequest.deserialize(data)
         if not request:
             log.warning("failed to decode blob request from %s:%i", peer_address, peer_port)
             writer.close()
