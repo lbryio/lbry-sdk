@@ -6,15 +6,12 @@ from binascii import unhexlify
 from datetime import datetime
 from typing import Optional
 
-from twisted.internet import defer
-
 from lbrynet.schema.schema import SECP256k1
 from torba.client.basemanager import BaseWalletManager
 from torba.rpc.jsonrpc import CodeMessageError
 
 from lbrynet.schema.claim import ClaimDict
 
-from lbrynet.extras.compat import f2d
 from lbrynet.extras.wallet.ledger import MainNetLedger
 from lbrynet.extras.wallet.account import BaseAccount, generate_certificate
 from lbrynet.extras.wallet.transaction import Transaction
@@ -261,12 +258,6 @@ class LbryWalletManager(BaseWalletManager):
     def send_points_to_address(self, reserved: ReservedPoints, amount: int, account=None):
         destination_address: bytes = reserved.identifier.encode('latin1')
         return self.send_amount_to_address(amount, destination_address, account)
-
-    def get_wallet_info_query_handler_factory(self):
-        return LBRYcrdAddressQueryHandlerFactory(self)
-
-    def get_info_exchanger(self):
-        return LBRYcrdAddressRequester(self)
 
     async def resolve(self, *uris, **kwargs):
         page = kwargs.get('page', 0)
@@ -518,10 +509,10 @@ class LbryWalletManager(BaseWalletManager):
         pass  # TODO: Data payments is disabled
 
     def send_points(self, reserved_points, amount):
-        defer.succeed(True)  # TODO: Data payments is disabled
+        pass  # TODO: Data payments is disabled
 
     def cancel_point_reservation(self, reserved_points):
-        pass # fixme: disabled for now.
+        pass  # fixme: disabled for now.
 
     def save(self):
         for wallet in self.wallets:
@@ -539,83 +530,3 @@ class LbryWalletManager(BaseWalletManager):
 
     def get_claim_by_outpoint(self, txid, nout):
         return self.ledger.get_claim_by_outpoint(txid, nout)
-
-
-class ClientRequest:
-    def __init__(self, request_dict, response_identifier=None):
-        self.request_dict = request_dict
-        self.response_identifier = response_identifier
-
-
-class LBRYcrdAddressRequester:
-
-    def __init__(self, wallet):
-        self.wallet = wallet
-        self._protocols = []
-
-    def send_next_request(self, peer, protocol):
-        if not protocol in self._protocols:
-            r = ClientRequest({'lbrycrd_address': True}, 'lbrycrd_address')
-            d = protocol.add_request(r)
-            d.addCallback(self._handle_address_response, peer, r, protocol)
-            d.addErrback(self._request_failed, peer)
-            self._protocols.append(protocol)
-            return defer.succeed(True)
-        else:
-            return defer.succeed(False)
-
-    def _handle_address_response(self, response_dict, peer, request, protocol):
-        if request.response_identifier not in response_dict:
-            raise ValueError(
-                f"Expected {request.response_identifier} in response but did not get it")
-        assert protocol in self._protocols, "Responding protocol is not in our list of protocols"
-        address = response_dict[request.response_identifier]
-        self.wallet.update_peer_address(peer, address)
-
-    def _request_failed(self, error, peer):
-        raise Exception(
-            "A peer failed to send a valid public key response. Error: {}, peer: {}".format(
-                error.getErrorMessage(), str(peer)
-            )
-        )
-
-
-class LBRYcrdAddressQueryHandlerFactory:
-
-    def __init__(self, wallet):
-        self.wallet = wallet
-
-    def build_query_handler(self):
-        q_h = LBRYcrdAddressQueryHandler(self.wallet)
-        return q_h
-
-    def get_primary_query_identifier(self):
-        return 'lbrycrd_address'
-
-    def get_description(self):
-        return "LBRYcrd Address - an address for receiving payments via LBRYcrd"
-
-
-class LBRYcrdAddressQueryHandler:
-
-    def __init__(self, wallet):
-        self.wallet = wallet
-        self.query_identifiers = ['lbrycrd_address']
-        self.address = None
-        self.peer = None
-
-    def register_with_request_handler(self, request_handler, peer):
-        self.peer = peer
-        request_handler.register_query_handler(self, self.query_identifiers)
-
-    @defer.inlineCallbacks
-    def handle_queries(self, queries):
-        if self.query_identifiers[0] in queries:
-            address = yield f2d(self.wallet.get_unused_address_for_peer(self.peer))
-            self.address = address
-            fields = {'lbrycrd_address': address}
-            return fields
-        if self.address is None:
-            raise Exception("Expected a request for an address, but did not receive one")
-        else:
-            return {}
