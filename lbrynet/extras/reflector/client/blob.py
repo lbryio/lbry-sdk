@@ -165,10 +165,13 @@ class BlobReflectorClient(Protocol):
             blob_hash = self.blob_hashes_to_send[0]
             log.debug('No current blob, sending the next one: %s', blob_hash)
             self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
-            blob = self.blob_manager.get_blob(blob_hash)
-            self.open_blob_for_reading(blob)
+            d = self.blob_manager.get_blob(blob_hash)
+            d.addCallback(self.open_blob_for_reading)
             # send the server the next blob hash + length
-            return self.send_blob_info()
+            d.addCallbacks(
+                lambda _: self.send_blob_info(), self.disconnect,
+            )
+            return d
         else:
             # close connection
             log.debug('No more blob hashes, closing connection')
