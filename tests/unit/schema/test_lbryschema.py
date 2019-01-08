@@ -25,24 +25,25 @@ from lbrynet.schema.address import decode_address, encode_address
 
 
 parsed_uri_matches = [
-    ("test", URI("test"), False),
-    ("test#%s" % claim_id_1, URI("test", claim_id=claim_id_1), False),
-    ("test:1", URI("test", claim_sequence=1), False),
-    ("test$1", URI("test", bid_position=1), False),
-    ("lbry://test", URI("test"), False),
-    ("lbry://test#%s" % claim_id_1, URI("test", claim_id=claim_id_1), False),
-    ("lbry://test:1", URI("test", claim_sequence=1), False),
-    ("lbry://test$1", URI("test", bid_position=1), False),
-    ("@test", URI("@test"), True),
-    ("@test#%s" % claim_id_1, URI("@test", claim_id=claim_id_1), True),
-    ("@test:1", URI("@test", claim_sequence=1), True),
-    ("@test$1", URI("@test", bid_position=1), True),
-    ("lbry://@test1:1/fakepath", URI("@test1", claim_sequence=1, path="fakepath"), True),
-    ("lbry://@test1$1/fakepath", URI("@test1", bid_position=1, path="fakepath"), True),
-    ("lbry://@test1#abcdef/fakepath", URI("@test1", claim_id="abcdef", path="fakepath"), True),
-    ("@z", URI("@z"), True),
-    ("@yx", URI("@yx"), True),
-    ("@abc", URI("@abc"), True)
+    ("test", URI("test"), False, False, "test", None),
+    ("test#%s" % claim_id_1, URI("test", claim_id=claim_id_1), False, False, "test", None),
+    ("test:1", URI("test", claim_sequence=1), False, False, "test", None),
+    ("test$1", URI("test", bid_position=1), False, False, "test", None),
+    ("lbry://test", URI("test"), False, False, "test", None),
+    ("lbry://test#%s" % claim_id_1, URI("test", claim_id=claim_id_1), False, False, "test", None),
+    ("lbry://test:1", URI("test", claim_sequence=1), False, False, "test", None),
+    ("lbry://test$1", URI("test", bid_position=1), False, False, "test", None),
+    ("@test", URI("@test"), True, True, None, "@test"),
+    ("@test#%s" % claim_id_1, URI("@test", claim_id=claim_id_1), True, True, None, "@test"),
+    ("@test:1", URI("@test", claim_sequence=1), True, True, None, "@test"),
+    ("@test$1", URI("@test", bid_position=1), True, True, None, "@test"),
+    ("lbry://@test1:1/fakepath", URI("@test1", claim_sequence=1, path="fakepath"), True, False, "fakepath", "@test1"),
+    ("lbry://@test1$1/fakepath", URI("@test1", bid_position=1, path="fakepath"), True, False, "fakepath", "@test1"),
+    ("lbry://@test1#abcdef/fakepath", URI("@test1", claim_id="abcdef", path="fakepath"), True, False, "fakepath",
+     "@test1"),
+    ("@z", URI("@z"), True, True, None, "@z"),
+    ("@yx", URI("@yx"), True, True, None, "@yx"),
+    ("@abc", URI("@abc"), True, True, None, "@abc")
 ]
 
 parsed_uri_raises = [
@@ -89,15 +90,24 @@ class TestURIParser(UnitTest):
         self.longMessage = True
 
     def test_uri_parse(self):
-        for test_string, expected_uri_obj, is_channel in parsed_uri_matches:
+        for test_string, expected_uri_obj, contains_channel, is_channel, claim_name, channel_name in parsed_uri_matches:
             try:
                 # string -> URI
                 self.assertEqual(URI.from_uri_string(test_string), expected_uri_obj, test_string)
                 # URI -> dict -> URI
                 self.assertEqual(URI.from_dict(expected_uri_obj.to_dict()), expected_uri_obj,
                                   test_string)
+                # contains_channel
+                self.assertEqual(URI.from_uri_string(test_string).contains_channel, contains_channel,
+                                  test_string)
                 # is_channel
                 self.assertEqual(URI.from_uri_string(test_string).is_channel, is_channel,
+                                  test_string)
+                # claim_name
+                self.assertEqual(URI.from_uri_string(test_string).claim_name, claim_name,
+                                  test_string)
+                # channel_name
+                self.assertEqual(URI.from_uri_string(test_string).channel_name, channel_name,
                                   test_string)
 
                 # convert-to-string test only works if protocol is present in test_string
