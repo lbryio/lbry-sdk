@@ -146,15 +146,6 @@ class Manager:
             ('update_tracked_metrics', self._update_tracked_metrics, 600),
         ]
 
-    async def _send_repeating_metric(self, event_name, value_generator):
-        result = value_generator()
-        await self._send_repeating_metric_value(result, event_name)
-
-    async def _send_repeating_metric_value(self, result, event_name):
-        should_send, value = result
-        if should_send:
-            await self.analytics_api.track(self._metric_event(event_name, value))
-
     def add_observation(self, metric, value):
         self._tracked_data[metric].append(value)
 
