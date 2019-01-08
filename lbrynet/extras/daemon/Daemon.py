@@ -418,7 +418,7 @@ class Daemon(metaclass=JSONRPCServerType):
         except defer.CancelledError:
             log.info("shutting down before finished starting")
         except Exception as err:
-            self.analytics_manager.send_server_startup_error(str(err))
+            await self.analytics_manager.send_server_startup_error(str(err))
             log.exception('Failed to start lbrynet-daemon')
 
     async def setup(self):
@@ -427,7 +427,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
-        self.analytics_manager.send_server_startup()
+        await self.analytics_manager.send_server_startup()
         for lc_name, lc_time in self._looping_call_times.items():
             self.looping_call_manager.start(lc_name, lc_time)
 
@@ -458,7 +458,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.handler.shutdown(60.0)
             await self.app.cleanup()
         if self.analytics_manager:
-            self.analytics_manager.shutdown()
+            await self.analytics_manager.shutdown()
         try:
             self._component_setup_task.cancel()
         except (AttributeError, asyncio.CancelledError):
