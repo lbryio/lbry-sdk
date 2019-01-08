@@ -4,20 +4,19 @@ from hashlib import md5
 from twisted.internet import defer, reactor
 from twisted.trial import unittest
 from lbrynet import conf
-from lbrynet.p2p.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
-from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.p2p.StreamDescriptor import download_sd_blob
-from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.p2p.BlobManager import DiskBlobManager
-from lbrynet.extras.daemon.PeerManager import PeerManager
-from lbrynet.p2p.RateLimiter import RateLimiter
-from lbrynet.p2p.server.BlobRequestHandler import BlobRequestHandlerFactory
-from lbrynet.p2p.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.EncryptedFileCreator import create_lbry_file
-from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
-from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.extras.compat import f2d
+from lbrynet.staging.old_blob_server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
+from lbrynet.stream.descriptor import StreamDescriptorIdentifier
+from lbrynet.stream.descriptor import download_sd_blob
+from lbrynet.blob_exchange.price_negotiation import OnlyFreePaymentsManager
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.peer import PeerManager
+from lbrynet.staging.rate_limiter import RateLimiter
+from lbrynet.staging.old_blob_server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.staging.old_blob_server.ServerProtocol import ServerProtocolFactory
+from lbrynet.storage import SQLiteStorage
+from lbrynet.staging.EncryptedFileCreator import create_lbry_file
+from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
+from lbrynet.staging.old_stream_client import add_lbry_file_to_sd_identifier
 
 from tests import mocks
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
@@ -28,7 +27,6 @@ FakePeerFinder = mocks.PeerFinder
 FakeAnnouncer = mocks.Announcer
 GenFile = mocks.GenFile
 test_create_stream_sd_file = mocks.create_stream_sd_file
-DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 
 def init_conf_windows(settings={}):
@@ -73,7 +71,7 @@ class LbryUploader:
             self.rate_limiter.set_ul_limit(self.ul_rate_limit)
         self.prm = OnlyFreePaymentsManager()
         self.storage = SQLiteStorage(':memory:')
-        self.blob_manager = DiskBlobManager(self.blob_dir, self.storage)
+        self.blob_manager = BlobFileManager(self.blob_dir, self.storage)
         self.lbry_file_manager = EncryptedFileManager(FakePeerFinder(5553, self.peer_manager, 1), self.rate_limiter,
                                                       self.blob_manager, self.wallet, self.prm, self.storage,
                                                       StreamDescriptorIdentifier())
@@ -126,7 +124,7 @@ class TestTransfer(unittest.TestCase):
         self.rate_limiter = RateLimiter()
         self.prm = OnlyFreePaymentsManager()
         self.storage = SQLiteStorage(':memory:')
-        self.blob_manager = DiskBlobManager(self.blob_dir, self.storage)
+        self.blob_manager = BlobFileManager(self.blob_dir, self.storage)
         self.sd_identifier = StreamDescriptorIdentifier()
         self.lbry_file_manager = EncryptedFileManager(self.peer_finder, self.rate_limiter,
                                                       self.blob_manager, self.wallet, self.prm, self.storage,

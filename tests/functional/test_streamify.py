@@ -4,16 +4,15 @@ import tempfile
 from hashlib import md5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
-from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.p2p.BlobManager import DiskBlobManager
-from lbrynet.p2p.StreamDescriptor import get_sd_info
-from lbrynet.p2p.RateLimiter import DummyRateLimiter
-from lbrynet.extras.compat import f2d
-from lbrynet.extras.daemon.PeerManager import PeerManager
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.p2p.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.blob.EncryptedFileCreator import create_lbry_file
-from lbrynet.blob.EncryptedFileManager import EncryptedFileManager
+from lbrynet.stream.descriptor import StreamDescriptorIdentifier
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.stream.descriptor import get_sd_info
+from lbrynet.staging.rate_limiter import RateLimiter
+from lbrynet.peer import PeerManager
+from lbrynet.storage import SQLiteStorage
+from lbrynet.blob_exchange.price_negotiation import OnlyFreePaymentsManager
+from lbrynet.staging.EncryptedFileCreator import create_lbry_file
+from lbrynet.staging.EncryptedFileManager import EncryptedFileManager
 from tests import mocks
 
 
@@ -23,7 +22,6 @@ FakePeerFinder = mocks.PeerFinder
 FakeAnnouncer = mocks.Announcer
 GenFile = mocks.GenFile
 test_create_stream_sd_file = mocks.create_stream_sd_file
-DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 
 class TestStreamify(TestCase):
@@ -45,7 +43,7 @@ class TestStreamify(TestCase):
         self.rate_limiter = DummyRateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
         self.storage = SQLiteStorage(':memory:')
-        self.blob_manager = DiskBlobManager(self.blob_dir, self.storage, self.dht_node._dataStore)
+        self.blob_manager = BlobFileManager(self.blob_dir, self.storage, self.dht_node._dataStore)
         self.prm = OnlyFreePaymentsManager()
         self.lbry_file_manager = EncryptedFileManager(
             self.peer_finder, self.rate_limiter, self.blob_manager, self.wallet, self.prm, self.storage,
