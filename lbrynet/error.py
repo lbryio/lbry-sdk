@@ -10,7 +10,7 @@ class DuplicateStreamHashError(Exception):
     pass
 
 
-class DownloadCanceledError(Exception):
+class DownloadCancelledError(Exception):
     pass
 
 
@@ -194,4 +194,8 @@ class ComponentStartConditionNotMet(Exception):
 
 
 class ComponentsNotStarted(Exception):
+    pass
+
+
+class BlobDownloadError(Exception):
     pass
