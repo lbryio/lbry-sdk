@@ -397,6 +397,7 @@ class Daemon(metaclass=JSONRPCServerType):
         # TODO: delete this
         self.streams = {}
 
+        logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         self.app = web.Application()
         self.app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
         self.app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
