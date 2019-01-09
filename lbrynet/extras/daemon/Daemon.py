@@ -460,7 +460,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.handler.shutdown(60.0)
             await self.app.cleanup()
         if self.analytics_manager:
-            await self.analytics_manager.shutdown()
+            self.analytics_manager.shutdown()
         try:
             self._component_setup_task.cancel()
         except (AttributeError, asyncio.CancelledError):
