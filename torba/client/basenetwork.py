@@ -88,7 +88,9 @@ class BaseNetwork:
                 self._on_connected_controller.add(True)
                 delay = 0.0
                 await self.client.on_disconnected.first
-            except (Exception, CancelledError):  # pylint: disable=broad-except
+            except CancelledError:
+                self.running = False
+            except Exception:  # pylint: disable=broad-except
                 log.exception("Connecting to %s raised an exception:", connection_string)
             if not self.running:
                 return
