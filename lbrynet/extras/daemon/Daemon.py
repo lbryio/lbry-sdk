@@ -413,14 +413,14 @@ class Daemon(metaclass=JSONRPCServerType):
             )
             log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname()[:2])
             await self.setup()
-            self.analytics_manager.send_server_startup_success()
+            await self.analytics_manager.send_server_startup_success()
         except OSError:
             log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
                       'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
         except defer.CancelledError:
             log.info("shutting down before finished starting")
         except Exception as err:
-            self.analytics_manager.send_server_startup_error(str(err))
+            await self.analytics_manager.send_server_startup_error(str(err))
             log.exception('Failed to start lbrynet-daemon')
 
     async def setup(self):
@@ -429,7 +429,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
-        self.analytics_manager.send_server_startup()
+        await self.analytics_manager.send_server_startup()
         for lc_name, lc_time in self._looping_call_times.items():
             self.looping_call_manager.start(lc_name, lc_time)
 
@@ -460,7 +460,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.handler.shutdown(60.0)
             await self.app.cleanup()
         if self.analytics_manager:
-            self.analytics_manager.shutdown()
+            await self.analytics_manager.shutdown()
         try:
             self._component_setup_task.cancel()
         except (AttributeError, asyncio.CancelledError):
@@ -660,22 +660,22 @@ class Daemon(metaclass=JSONRPCServerType):
 
         async def _download_finished(download_id, name, claim_dict):
             report = await self._get_stream_analytics_report(claim_dict)
-            self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
-            self.analytics_manager.send_new_download_success(download_id, name, claim_dict)
+            await self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
+            await self.analytics_manager.send_new_download_success(download_id, name, claim_dict)
 
         async def _download_failed(error, download_id, name, claim_dict):
             report = await self._get_stream_analytics_report(claim_dict)
-            self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
+            await self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
                                                          report)
-            self.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
+            await self.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
 
         if sd_hash in self.streams:
             downloader = self.streams[sd_hash]
             return await d2f(downloader.finished_deferred)
         else:
             download_id = utils.random_string()
-            self.analytics_manager.send_download_started(download_id, name, claim_dict)
-            self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
+            await self.analytics_manager.send_download_started(download_id, name, claim_dict)
+            await self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
             self.streams[sd_hash] = GetStream(
                 self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
                 self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
@@ -721,7 +721,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
-        self.analytics_manager.send_claim_action('publish')
+        await self.analytics_manager.send_claim_action('publish')
         nout = 0
         txo = tx.outputs[nout]
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
@@ -1383,7 +1383,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise InsufficientFundsError()
             account = self.get_account_or_default(account_id)
             result = await self.wallet_manager.send_points_to_address(reserved_points, amount, account)
-            self.analytics_manager.send_credits_sent()
+            await self.analytics_manager.send_credits_sent()
         else:
             log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
             result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
@@ -1794,7 +1794,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         account = self.get_account_or_default(account_id)
         result = await account.send_to_addresses(amount, addresses, broadcast)
-        self.analytics_manager.send_credits_sent()
+        await self.analytics_manager.send_credits_sent()
         return result
 
     @requires(WALLET_COMPONENT)
@@ -2325,7 +2325,7 @@ class Daemon(metaclass=JSONRPCServerType):
             channel_name, amount, self.get_account_or_default(account_id)
         )
         self.default_wallet.save()
-        self.analytics_manager.send_new_channel()
+        await self.analytics_manager.send_new_channel()
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
@@ -2645,7 +2645,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception('Must specify nout')
 
         tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
-        self.analytics_manager.send_claim_action('abandon')
+        await self.analytics_manager.send_claim_action('abandon')
         if blocking:
             await self.ledger.wait(tx)
         return {"success": True, "tx": tx}
@@ -2680,7 +2680,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
         result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
-        self.analytics_manager.send_claim_action('new_support')
+        await self.analytics_manager.send_claim_action('new_support')
         return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -2713,7 +2713,7 @@ class Daemon(metaclass=JSONRPCServerType):
         amount = self.get_dewies_or_error("amount", amount)
         validate_claim_id(claim_id)
         result = await self.wallet_manager.tip_claim(amount, claim_id, account)
-        self.analytics_manager.send_claim_action('new_support')
+        await self.analytics_manager.send_claim_action('new_support')
         return result
 
     @deprecated()

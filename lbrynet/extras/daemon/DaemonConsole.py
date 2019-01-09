@@ -295,7 +295,8 @@ def start_server_and_listen(use_auth, analytics_manager, quiet):
     logging.getLogger("lbryum").setLevel(logging.CRITICAL)
     logging.getLogger("requests").setLevel(logging.CRITICAL)
 
-    analytics_manager.send_server_startup()
+    # TODO: turn this all into async. Until then this routine can't be called
+    # analytics_manager.send_server_startup()
     yield Daemon().start_listening()
 
 
