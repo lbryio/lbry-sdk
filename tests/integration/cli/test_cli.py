@@ -18,10 +18,10 @@ class FakeAnalytics:
     def is_started(self):
         return True
 
-    def send_server_startup_success(self):
+    async def send_server_startup_success(self):
         pass
 
-    def send_server_startup(self):
+    async def send_server_startup(self):
         pass
 
     def shutdown(self):
