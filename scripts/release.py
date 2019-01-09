@@ -135,7 +135,7 @@ def release(args):
             area = areas.setdefault(area_name, [])
             type_label = get_label(pr, "type")
             if not (args.action == '*-rc' and type_label == 'fixup'):
-                area.append(f'  * [{type_label}] {pr.title} ({pr.html_url})')
+                area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
 
     area_names = list(areas.keys())
     area_names.sort()
