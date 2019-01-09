@@ -33,19 +33,19 @@ class FakeAnalytics:
     def is_started(self):
         return True
 
-    def send_new_channel(self):
+    async def send_new_channel(self):
         pass
 
     def shutdown(self):
         pass
 
-    def send_claim_action(self, action):
+    async def send_claim_action(self, action):
         pass
 
-    def send_credits_sent(self):
+    async def send_credits_sent(self):
         pass
 
-    def send_server_startup(self):
+    async def send_server_startup(self):
         pass
 
 
