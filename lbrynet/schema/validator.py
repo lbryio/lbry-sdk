@@ -82,9 +82,11 @@ class Validator:
             assert name is not None, "Name is required for verifying detached signatures."
             to_sign.extend(name.lower().encode())
             signature = claim.detached_signature.raw_signature
+            payload = claim.detached_signature.payload
         else:
             # extract and serialize the stream from the claim, then check the signature
             signature = binascii.unhexlify(claim.signature)
+            payload = claim.serialized_no_signature
         decoded_address = decode_address(claim_address)
 
 
@@ -92,7 +94,7 @@ class Validator:
             raise Exception("No signature to validate")
 
         to_sign.extend(decoded_address)
-        to_sign.extend(claim.serialized_no_signature)
+        to_sign.extend(payload)
         to_sign.extend(binascii.unhexlify(self.certificate_claim_id))
 
         return self.validate_signature(self.HASHFUNC(to_sign).digest(), signature)

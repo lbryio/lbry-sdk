@@ -46,25 +46,29 @@ class NIST_ECDSASigner(object):
     def generate(cls):
         return cls(ecdsa.SigningKey.generate(curve=cls.CURVE, hashfunc=cls.HASHFUNC_NAME))
 
-    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name, detached=False):
-        to_sign = bytearray()
-        if detached:
-            assert name, "Name is required for detached signatures"
-            assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
-            to_sign.extend(name.lower().encode())
+    def sign(self, *fields):
+        digest = self.HASHFUNC(bytearray(b''.join(fields))).digest()
+        return self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC)
 
+    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name, detached=False):
         validate_claim_id(cert_claim_id)
         raw_cert_id = binascii.unhexlify(cert_claim_id)
         decoded_addr = decode_address(claim_address)
+        if detached:
+            assert name, "Name is required for detached signatures"
+            assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
+            signature = self.sign(
+                name.lower().encode(),
+                decoded_addr,
+                claim.serialized_no_signature,
+                raw_cert_id,
+            )
+        else:
+            signature = self.sign(decoded_addr, claim.serialized_no_signature, raw_cert_id)
 
-        to_sign.extend(decoded_addr)
-        to_sign.extend(claim.serialized_no_signature)
-        to_sign.extend(raw_cert_id)
-
-        digest = self.HASHFUNC(to_sign).digest()
         if detached:
             return Claim.load(decode_b64_fields(claim.protobuf_dict)), Signature(NAMED_SECP256K1(
-                self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC),
+                signature,
                 raw_cert_id,
                 claim.serialized_no_signature
             ))
@@ -75,7 +79,7 @@ class NIST_ECDSASigner(object):
         sig_dict = {
             "version": V_0_0_1,
             "signatureType": self.CURVE_NAME,
-            "signature": self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC),
+            "signature": signature,
             "certificateId": raw_cert_id
         }
 

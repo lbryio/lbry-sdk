@@ -6,6 +6,7 @@ import binascii
 from copy import deepcopy
 import unittest
 
+from lbrynet.schema.signature import Signature, NAMED_SECP256K1
 from .test_data import example_003, example_010, example_010_serialized
 from .test_data import claim_id_1, claim_address_1, claim_address_2
 from .test_data import binary_claim, expected_binary_claim_decoded
@@ -339,6 +340,32 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         signed_copy = ClaimDict.deserialize(signed.serialized)
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
 
+    def test_validate_what_cant_be_serialized_back(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        self.assertDictEqual(cert.claim_dict, secp256k1_cert)
+        original = ClaimDict.load_dict(example_010).serialized
+        altered = original + b'\x00\x01\x02\x30\x50\x80\x99'  # pretend this extra trash is from some unknown protobuf
+
+        # manually sign
+        signer = get_signer(SECP256k1).load_pem(secp256k1_private_key)
+        signature = signer.sign(
+            b'example',
+            decode_address(claim_address_2),
+            altered,
+            binascii.unhexlify(claim_id_1),
+        )
+        detached_sig = Signature(NAMED_SECP256K1(
+            signature,
+            binascii.unhexlify(claim_id_1),
+            altered
+        ))
+
+        signed = detached_sig.serialized
+        self.assertEqual(signed[85:], altered)
+        signed_copy = ClaimDict.deserialize(signed)
+        self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
+        self.assertEqual(signed, signed_copy.serialized)
+
     def test_fail_to_sign_with_no_claim_address(self):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
@@ -385,7 +412,7 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         original_serialization = altered.serialized
         sd_hash = altered['stream']['source']['source']
         altered['stream']['source']['source'] = sd_hash[::-1]
-        altered_serialization = altered.serialized
+        altered_serialization = altered.protobuf.SerializeToString()
 
         # keep signature, but replace serialization with the altered claim (check signature.py for slice sizes)
         altered_copy = ClaimDict.deserialize(original_serialization[:85] + altered_serialization)

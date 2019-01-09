@@ -39,8 +39,7 @@ class ClaimDict(OrderedDict):
     @property
     def serialized(self):
         """Serialized Claim protobuf"""
-        current_serialization = self.protobuf.SerializeToString()
-        if self.detached_signature and current_serialization == self.detached_signature.payload:
+        if self.detached_signature and self.detached_signature.payload:
             return self.detached_signature.serialized
         return self.protobuf.SerializeToString()
 
