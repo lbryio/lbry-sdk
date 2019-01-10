@@ -58,7 +58,7 @@ class AIOSQLite:
             self.connection.commit()
             return result
         except (Exception, OSError) as e:
-            log.exception('Error running transaction:', exc_info=e)
+            #log.exception('Error running transaction:', exc_info=e)
             self.connection.rollback()
             raise
 
