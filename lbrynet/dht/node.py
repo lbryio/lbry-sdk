@@ -6,6 +6,7 @@ import binascii
 
 from lbrynet.dht.protocol.protocol import KademliaProtocol
 from lbrynet.dht.iterative_find import IterativeNodeFinder, IterativeValueFinder
+from lbrynet.dht.peer_finder import AsyncGeneratorJunction
 from lbrynet.dht import constants
 if typing.TYPE_CHECKING:
     from lbrynet.peer import PeerManager
@@ -111,7 +112,7 @@ class Node:
         for address, port in known_node_addresses:
             peer = self.protocol.peer_manager.make_peer(address, udp_port=port)
             futs.append(peer.ping())
-        await asyncio.gather(*futs, loop=self.loop)
+        await asyncio.wait(futs, loop=self.loop)
         closest = await self.cumulative_find_node(self.protocol.node_id, max_results=16)
         log.info("ping %i closest", len(closest))
         futs = []
@@ -119,7 +120,7 @@ class Node:
         async def ping(p: 'Peer'):
             try:
                 await p.ping()
-            except:
+            except asyncio.TimeoutError:
                 pass
 
         for peer in closest:
@@ -165,3 +166,21 @@ class Node:
         finally:
             if finder.running:
                 await finder.aclose()
+
+    def peer_search_junction(self, hash_queue: asyncio.Queue, bottom_out_limit=20) -> AsyncGeneratorJunction:
+        peer_generator = AsyncGeneratorJunction(self.loop)
+
+        async def _add_hashes_from_queue():
+            while True:
+                blob_hash = await hash_queue.get()
+                peer_generator.add_generator(
+                    self.get_iterative_value_finder(
+                        binascii.unhexlify(blob_hash.encode()), bottom_out_limit=bottom_out_limit, max_results=-1
+                    )
+                )
+        add_blobs_task = self.loop.create_task(_add_hashes_from_queue())
+        peer_generator.add_cleanup(
+            lambda: None if not add_blobs_task or not (add_blobs_task.done() or add_blobs_task.cancelled()) else
+            add_blobs_task.cancel()
+        )
+        return peer_generator

@@ -3,7 +3,6 @@ import asyncio
 import typing
 import logging
 from lbrynet.stream.assembler import StreamAssembler
-from lbrynet.dht.peer_finder import StreamPeerFinder
 if typing.TYPE_CHECKING:
     from lbrynet.peer import Peer
     from lbrynet.dht.node import Node
@@ -68,7 +67,6 @@ class StreamDownloader(StreamAssembler):
         super().__init__(loop, blob_manager, sd_hash)
         self.peer_timeout = peer_timeout
         self.peer_connect_timeout = peer_connect_timeout
-        self.peer_finder: StreamPeerFinder = None
         self.lock = asyncio.Lock(loop=self.loop)
         self.current_blob: 'BlobFile' = None
 
@@ -105,7 +103,6 @@ class StreamDownloader(StreamAssembler):
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         async with self.lock:
-            log.info("drain requests")
             drain_tasks(self.running_download_requests)
             self.current_blob = self.blob_manager.get_blob(blob_hash, length)
             if self.current_blob.get_is_verified():  # the blob is already completed
@@ -131,7 +128,6 @@ class StreamDownloader(StreamAssembler):
                         if await_new_connection and not await_new_connection.done():
                             await_new_connection.cancel()
                         if self.current_blob.get_is_verified():
-                            log.info("drain requests")
                             drain_tasks(tasks)
                             return self.current_blob
                         else:
@@ -146,43 +142,43 @@ class StreamDownloader(StreamAssembler):
             if err:
                 raise err
             log.info("still downloading %s, %i pending requests", self.current_blob.blob_hash[:8], len(self.running_download_requests))
-        log.info("drain requests")
         drain_tasks(self.running_download_requests)
         return self.current_blob
 
-    async def _accumulate_connections(self):
-        async def connect(peer: 'Peer'):
-            # log.info("connect to %s:%i", peer.address, peer.tcp_port)
-            connected = await peer.connect_tcp(self.peer_timeout, self.peer_connect_timeout)
-            if connected:
-                self.active_connections.add(peer)
-                log.info("download stream from %s:%i", peer.address, peer.tcp_port)
-                if not self.new_connection_event.is_set():
-                    self.new_connection_event.set()
-            else:
-                log.info("failed to connect to %s:%i", peer.address, peer.tcp_port)
+    async def _connect_to_peer(self, peer: 'Peer'):
+        # log.info("connect to %s:%i", peer.address, peer.tcp_port)
+        connected = await peer.connect_tcp(self.peer_timeout, self.peer_connect_timeout)
+        if connected:
+            self.active_connections.add(peer)
+            log.info("download stream from %s:%i", peer.address, peer.tcp_port)
+            if not self.new_connection_event.is_set():
+                self.new_connection_event.set()
+        else:
+            log.info("failed to connect to %s:%i", peer.address, peer.tcp_port)
 
-        try:
-            async for _peer in self.peer_finder:
-                self.pending_connections.append(self.loop.create_task(connect(_peer)))
-        finally:
-            await self.peer_finder.aclose()
+    async def _accumulate_connections(self, node: 'Node'):
+        blob_queue = asyncio.Queue(loop=self.loop)
+        blob_queue.put_nowait(self.sd_hash)
+        fut = asyncio.create_task(self.got_descriptor.wait())
+        fut.add_done_callback(lambda _: blob_queue.put_nowait(self.descriptor.blobs[0].blob_hash))
+
+        async with node.peer_search_junction(blob_queue) as search_junction:
+            async for peers in search_junction:
+                for peer in peers:
+                    self.pending_connections.append(self.loop.create_task(self._connect_to_peer(peer)))
 
     def stop(self):
         log.info("stop downloader")
-        # cancel_task(self.download_task)
         cancel_task(self.accumulate_connections_task)
+        cancel_task(self.download_task)
         drain_tasks(self.running_download_requests)
         drain_tasks(self.pending_connections)
-        if self.peer_finder:
-            self.peer_finder.aclose()
         while self.active_connections:
             self.active_connections.pop().disconnect_tcp()
         log.info("stopped downloader")
 
     async def _download(self):
         log.info("accumulate connections")
-        self.accumulate_connections_task = self.loop.create_task(self._accumulate_connections())
         try:
 
             log.info("download and decrypt stream")
@@ -190,19 +186,14 @@ class StreamDownloader(StreamAssembler):
             log.info(
                 "downloaded stream %s -> %s", self.sd_hash, self.output_path
             )
-        except asyncio.CancelledError:
-            log.info("cancelled")
-        else:
-            log.info("set file status to finished")
             await self.blob_manager.storage.change_file_status(
                 self.descriptor.stream_hash, 'finished'
             )
-        finally:
+        except asyncio.CancelledError:
+            log.info("cancelled")
             self.stop()
 
     def download(self, node: 'Node'):
         log.info("make download task")
-        self.peer_finder = StreamPeerFinder(
-            self.loop, self.blob_manager, node, self.sd_hash, self.peer_timeout, self.peer_connect_timeout
-        )
+        self.accumulate_connections_task = self.loop.create_task(self._accumulate_connections(node))
         self.download_task = self.loop.create_task(self._download())

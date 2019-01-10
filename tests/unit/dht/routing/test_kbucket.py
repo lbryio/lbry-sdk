@@ -34,7 +34,7 @@ class TestKBucket(AsyncioTestCase):
         for i in range(constants.k):
             peer = self.peer_manager.make_peer(next(self.address_generator), generate_id(), 4444)
             self.assertTrue(self.kbucket.add_peer(peer))
-            self.assertEquals(peer, self.kbucket._contacts[i])
+            self.assertEqual(peer, self.kbucket._contacts[i])
 
         # Test if contact is not added to full list
         peer = self.peer_manager.make_peer(next(self.address_generator), generate_id(), 4444)
@@ -43,7 +43,7 @@ class TestKBucket(AsyncioTestCase):
         # Test if an existing contact is updated correctly if added again
         existing_peer = self.kbucket._contacts[0]
         self.assertTrue(self.kbucket.add_peer(existing_peer))
-        self.assertEquals(existing_peer, self.kbucket._contacts[-1])
+        self.assertEqual(existing_peer, self.kbucket._contacts[-1])
 
     # def testGetContacts(self):
     #     # try and get 2 contacts from empty list

@@ -10,13 +10,19 @@ from lbrynet.peer import Peer, PeerManager
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
 from lbrynet.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE
-from lbrynet.dht.error import UnknownRemoteException, TransportNotConnected
+from lbrynet.dht.error import RemoteException, TransportNotConnected
 from lbrynet.dht.protocol.ping_queue import PingQueue
 from lbrynet.dht.protocol.rpc import KademliaRPC
 from lbrynet.dht.routing.routing_table import TreeRoutingTable
 from lbrynet.dht.protocol.data_store import DictDataStore
 
 log = logging.getLogger(__name__)
+
+
+old_protocol_errors = {
+    "findNode() takes exactly 2 arguments (5 given)": "0.19.1",
+    "findValue() takes exactly 2 arguments (5 given)": "0.19.1"
+}
 
 
 class KademliaProtocol(DatagramProtocol):
@@ -177,13 +183,13 @@ class KademliaProtocol(DatagramProtocol):
 
             # We got a result from the RPC
             if remote_contact.node_id == self.node_id:
-                df.set_exception(UnknownRemoteException("node has our node id"))
+                df.set_exception(RemoteException("node has our node id"))
                 return
             elif response_datagram.node_id == self.node_id:
-                df.set_exception(UnknownRemoteException("incoming message is from our node id"))
+                df.set_exception(RemoteException("incoming message is from our node id"))
                 return
             elif remote_contact.address != address[0]:
-                df.set_exception(UnknownRemoteException(
+                df.set_exception(RemoteException(
                     f"response from {address[0]}:{address[1]}, "
                     f"expected {remote_contact.address}:{remote_contact.udp_port}")
                 )
@@ -201,7 +207,7 @@ class KademliaProtocol(DatagramProtocol):
 
     def handle_error_datagram(self, address, error_datagram: ErrorDatagram):
         # The RPC request raised a remote exception; raise it locally
-        remote_exception = UnknownRemoteException(f"{error_datagram.exception_type}({error_datagram.response})")
+        remote_exception = RemoteException(f"{error_datagram.exception_type}({error_datagram.response})")
         if error_datagram.rpc_id in self.sent_messages:
             remote_contact, df, request = self.sent_messages.pop(error_datagram.rpc_id)
 
@@ -209,8 +215,12 @@ class KademliaProtocol(DatagramProtocol):
                 f"Error sending '{request.method}' to {remote_contact.address}:{remote_contact.udp_port}\n" \
                 f"Args: {request.args}\n" \
                 f"Raised: {str(remote_exception)}"
-
-            log.error(error_msg)
+            if error_datagram.response not in old_protocol_errors:
+                log.warning(error_msg)
+            else:
+                log.warning("known dht protocol backwards compatibility error with %s:%i (failures %i, lbrynet v%s)",
+                            remote_contact.address, remote_contact.udp_port, remote_contact.failed_rpcs,
+                            old_protocol_errors[error_datagram.response])
 
             # reject replies coming from a different address than what we sent our request to
             if (remote_contact.address, remote_contact.udp_port) != address:

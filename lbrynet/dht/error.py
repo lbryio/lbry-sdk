@@ -17,7 +17,7 @@ class BucketFull(BaseKademliaException):
     pass
 
 
-class UnknownRemoteException(BaseKademliaException):
+class RemoteException(BaseKademliaException):
     pass
 
 

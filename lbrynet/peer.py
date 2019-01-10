@@ -6,7 +6,7 @@ import logging
 from binascii import hexlify
 from functools import reduce
 from lbrynet.dht import constants
-from lbrynet.dht.error import UnknownRemoteException
+from lbrynet.dht.error import RemoteException
 from lbrynet.dht.serialization.datagram import RequestDatagram
 from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
 from typing import TYPE_CHECKING
@@ -154,6 +154,9 @@ class Peer:
         failures = self.peer_manager._rpc_failures.get((self.address, self.udp_port), [])
         failures.append(self.loop.time())
         self.peer_manager._rpc_failures[(self.address, self.udp_port)] = failures
+        if not self.contact_is_good:
+            log.debug("remove %s:%i from routing (%i failures)", self.address, self.udp_port, len(failures))
+            self.peer_manager.dht_protocol.routing_table.remove_peer(self)
 
     def update_protocol_version(self, version):
         self.protocol_version = version
@@ -181,10 +184,12 @@ class Peer:
             self.update_last_failed()
             log.debug("dht timeout")
             raise err
-        except Exception as err:
+        except RemoteException as err:
             self.update_last_failed()
-            log.error("error sending %s to %s:%i - %s", datagram.method, self.address, self.udp_port, err)
-            raise UnknownRemoteException(err)
+            raise RemoteException(err)
+        except Exception as err:
+            log.exception("error sending %s to %s:%i - %s", datagram.method, self.address, self.udp_port)
+            raise err
 
     async def ping(self) -> bytes:
         assert self.peer_manager.dht_protocol is not None
@@ -243,7 +248,7 @@ class Peer:
             self.blob_exchange_protocol = protocol
             self.report_tcp_up()
             return True
-        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
+        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError) as err:
             log.debug("%s:%i is down", self.address, self.tcp_port)
             self.report_tcp_down()
             return False
@@ -261,6 +266,7 @@ class Peer:
                 self.report_tcp_down()
                 log.info("%s:%i not connected", self.address, self.tcp_port)
                 return []
+            log.info("connected to %s:%i", self.address, self.tcp_port)
         self.report_tcp_up()
 
         downloaded = []
