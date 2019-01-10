@@ -110,7 +110,8 @@ jobs:
       env: OS=mac
       cache: false
       before_install:
-        - brew upgrade python
+        - brew upgrade python || true
+        - brew upgrade python || true
       install:
         - python3 --version
         - pip3 --version
