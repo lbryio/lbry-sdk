@@ -57,7 +57,7 @@ class AIOSQLite:
             result = fun(self.connection, *args, **kwargs)  # type: ignore
             self.connection.commit()
             return result
-        except (Exception, OSError) as e:
+        except (Exception, OSError): # as e:
             #log.exception('Error running transaction:', exc_info=e)
             self.connection.rollback()
             raise
