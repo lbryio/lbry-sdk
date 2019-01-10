@@ -309,23 +309,41 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # stream functions # # # # # # # # #
 
+    async def stream_exists(self, sd_hash: str) -> bool:
+        streams = await self.run_and_return_one_or_none("select stream_hash from stream where sd_hash=?", sd_hash)
+        return streams is not None
+
     def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
         def _store_stream(transaction: sqlite3.Connection):
-            transaction.execute("insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-                                (sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0))
-            transaction.execute("insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-                                (descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0))
-            for blob in descriptor.blobs[1:-1]:
-                transaction.execute("insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-                                    (blob.blob_hash, blob.length, 0, 0, "pending", 0, 0))
+            transaction.execute(
+                "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?),  (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0,
+                    descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0
+                )
+            )
+            if len(descriptor.blobs) > 2:
+                args = []
+                for blob in descriptor.blobs[1:-1]:
+                    args.extend([blob.blob_hash, blob.length, 0, 0, "pending", 0, 0])
+                transaction.execute(
+                    f"insert or ignore into blob values "
+                    f"{('(?, ?, ?, ?, ?, ?, ?), ' * len(descriptor.blobs[1:-1]))[:-2]}",
+                    tuple(args)
+                )
             transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?);",
                                  (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
                                   binascii.hexlify(descriptor.stream_name.encode()).decode(),
                                   binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
-            for blob_info in descriptor.blobs:
-                transaction.execute("insert or ignore into stream_blob values (?, ?, ?, ?)",
-                                    (descriptor.stream_hash, blob_info.blob_hash,
-                                     blob_info.blob_num, blob_info.iv))
+            args =[]
+            for blob in descriptor.blobs:
+                args.extend([descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv])
+            transaction.execute(
+                f"insert or ignore into stream_blob values "
+                f"{('(?, ?, ?, ?), ' * len(descriptor.blobs))[:-2]}",
+                tuple(args)
+            )
+
         return self.db.run(_store_stream)
 
     def delete_stream(self, descriptor: 'StreamDescriptor'):
@@ -334,9 +352,11 @@ class SQLiteStorage(SQLiteMixin):
             transaction.execute("delete from file where stream_hash=? ", (descriptor.stream_hash, ))
             transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash, ))
             transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash, ))
-            transaction.execute("delete from blob where blob_hash=?", ( descriptor.sd_hash, ))
-            for blob_hash in [b.blob_hash for b in descriptor.blobs[:-1]]:
-                transaction.execute("delete from blob where blob_hash=?;", (blob_hash, ))
+            transaction.execute("delete from blob where blob_hash=?", (descriptor.sd_hash, ))
+            for blob in descriptor.blobs[:-1]:
+                transaction.execute(
+                    "delete from blob where blob_hash=?", (blob.blob_hash, )
+                )
         return self.db.run(_delete_stream)
 
     # # # # # # # # # file stuff # # # # # # # # #
@@ -372,16 +392,14 @@ class SQLiteStorage(SQLiteMixin):
             }
 
         def _get_all_files(transaction: sqlite3.Connection) -> typing.List[typing.Dict]:
-            file_infos = [
-                _lbry_file_dict(*file_info) for file_info in transaction.execute(
-                    "select file.rowid, file.*, stream.* "
-                    "from file inner join stream on file.stream_hash=stream.stream_hash"
-                ).fetchall()
-            ]
+            file_infos = list(map(lambda a: _lbry_file_dict(*a), transaction.execute(
+                "select file.rowid, file.*, stream.* "
+                "from file inner join stream on file.stream_hash=stream.stream_hash"
+            ).fetchall()))
             stream_hashes = [file_info['stream_hash'] for file_info in file_infos]
             claim_infos = get_claims_from_stream_hashes(transaction, stream_hashes)
-            for file_info in file_infos:
-                file_info['claim'] = claim_infos.get(file_info['stream_hash'])
+            for index in range(len(file_infos)):
+                file_infos[index]['claim'] = claim_infos.get(file_infos[index]['stream_hash'])
             return file_infos
 
         results = await self.db.run(_get_all_files)

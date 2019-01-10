@@ -72,6 +72,7 @@ class BlobFile:
             length = length or int(os.stat(os.path.join(blob_dir, blob_hash)).st_size)
             self.length = length
             self.verified.set()
+            self.finished_writing.set()
         self.saved_verified_blob = False
         self.blob_completed_callback = blob_completed_callback
 
@@ -130,8 +131,10 @@ class BlobFile:
         for writer in self.writers:
             if writer.peer is peer:
                 raise Exception("Tried to download the same file twice simultaneously from the same peer")
-
-        log.debug(f"Opening {self.blob_hash[:8]} to be written")
+        if not peer:
+            log.debug(f"Opening {self.blob_hash[:8]} to be written")
+        else:
+            log.debug(f"Opening {self.blob_hash[:8]} to be written by {peer.address}:{peer.tcp_port}")
         fut = asyncio.Future(loop=self.loop)
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut, peer)
         self.writers.append(writer)
