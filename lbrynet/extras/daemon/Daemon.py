@@ -3310,7 +3310,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return blob_hashes[start_index:stop_index]
 
     @requires(BLOB_COMPONENT)
-    def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
+    async def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
         """
         Reflects specified blobs
 
@@ -3323,7 +3323,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) reflected blob hashes
         """
-        return d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager, reflector_server))
+        result = await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager, reflector_server))
+        return result
 
     @requires(BLOB_COMPONENT)
     async def jsonrpc_blob_reflect_all(self):
