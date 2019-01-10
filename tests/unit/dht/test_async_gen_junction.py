@@ -31,12 +31,13 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
         self.loop = asyncio.get_event_loop()
 
     async def _test_junction(self, expected, *generators):
-        junction = AsyncGeneratorJunction(self.loop)
-        for generator in generators:
-            junction.add_generator(generator)
         order = []
-        async for item in junction:
-            order.append(item)
+        async with AsyncGeneratorJunction(self.loop) as junction:
+            print("junction", junction)
+            for generator in generators:
+                junction.add_generator(generator)
+            async for item in junction:
+                order.append(item)
         self.assertListEqual(order, expected)
 
     async def test_yield_order(self):
@@ -68,3 +69,24 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
         slow_gen = MockAsyncGen(self.loop, 2, 0.02)
         await self._test_junction(expected_order, fast_gen(), slow_gen)
         self.assertEqual(slow_gen.called_close, True)
+
+    async def test_stop_when_encapsulating_task_cancelled(self):
+        expected_order = [1, 2, 1, 1, 2, 1]
+        order = []
+        fast_gen = MockAsyncGen(self.loop, 1, 0.01)
+        slow_gen = MockAsyncGen(self.loop, 2, 0.02)
+
+        async def _task():
+            async with AsyncGeneratorJunction(self.loop) as junction:
+                junction.add_generator(fast_gen)
+                junction.add_generator(slow_gen)
+                async for item in junction:
+                    order.append(item)
+
+        task = self.loop.create_task(_task())
+        self.loop.call_later(0.051, task.cancel)
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(fast_gen.called_close, True)
+        self.assertEqual(slow_gen.called_close, True)
+        self.assertListEqual(order, expected_order)

@@ -5,7 +5,7 @@ from types import AsyncGeneratorType
 import logging
 
 from lbrynet.dht import constants
-from lbrynet.dht.error import UnknownRemoteException
+from lbrynet.dht.error import RemoteException
 from lbrynet.dht.routing.distance import Distance
 
 from typing import TYPE_CHECKING
@@ -186,8 +186,7 @@ class IterativeFinder:
             if peer in self.active:
                 self.active.remove(peer)
             return
-        except UnknownRemoteException as err:
-            log.warning(err)
+        except RemoteException:
             return
         return await self._handle_probe_result(peer, response)
 
