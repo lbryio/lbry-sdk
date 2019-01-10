@@ -67,7 +67,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.set_length = blob.set_length
         self.write_blob = writer.write
         self._response_fut = asyncio.Future(loop=self.loop)
-        self._write_wait = asyncio.Event(loop=self.loop)
 
         request = BlobRequest.make_request_for_blob_hash(blob.blob_hash)
         downloaded_blob = False
@@ -114,7 +113,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self._response_fut = None
             self.write_blob = None
             self.set_length = None
-            self._write_wait = None
         return False
 
     async def download_blob(self, blob: 'BlobFile') -> bool:
@@ -135,4 +133,3 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self._response_fut = None
         self.write_blob = None
         self.set_length = None
-        self._write_wait = None

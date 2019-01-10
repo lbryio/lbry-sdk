@@ -2,7 +2,6 @@ import os
 import asyncio
 import logging
 import typing
-from io import BytesIO
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7

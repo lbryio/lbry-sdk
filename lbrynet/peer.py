@@ -131,12 +131,12 @@ class Peer:
         return reduce(lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())
 
     def compact_address_tcp(self) -> bytearray:
-        if not (0 <= self.tcp_port <= 65536):
+        if not 0 <= self.tcp_port <= 65536:
             raise TypeError(f'Invalid port: {self.tcp_port}')
         return self.compact_ip() + self.tcp_port.to_bytes(2, 'big') + self.node_id
 
     def compact_address_udp(self) -> bytearray:
-        if not (0 <= self.udp_port <= 65536):
+        if not 0 <= self.udp_port <= 65536:
             raise TypeError(f'Invalid port: {self.udp_port}')
         return self.compact_ip() + self.udp_port.to_bytes(2, 'big') + self.node_id
 
@@ -162,11 +162,10 @@ class Peer:
         self.protocol_version = version
 
     def __str__(self):
-        return '<%s IP address: %s, UDP port: %s TCP port: %s>' % (
-            "Peer" if not self.node_id else binascii.hexlify(self.node_id).decode(), self.address, self.udp_port, self.tcp_port)
+        return f"{'blob peer' if not self.node_id else binascii.hexlify(self.node_id).decode()[:8]} @ " \
+            f"{self.address} udp:{self.udp_port}/tcp:{self.tcp_port}"
 
     # DHT RPC functions
-
     async def _send_kademlia_rpc(self, datagram: RequestDatagram):
         try:
             result = await asyncio.wait_for(
@@ -188,7 +187,7 @@ class Peer:
             self.update_last_failed()
             raise RemoteException(err)
         except Exception as err:
-            log.exception("error sending %s to %s:%i - %s", datagram.method, self.address, self.udp_port)
+            log.exception("error sending %s to %s:%i", datagram.method, self.address, self.udp_port)
             raise err
 
     async def ping(self) -> bytes:
@@ -199,7 +198,7 @@ class Peer:
         assert len(blob_hash) == constants.hash_bits // 8
         assert self.peer_manager.dht_protocol is not None
         assert self.peer_manager.dht_protocol.peer_port is not None and \
-                (0 <  self.peer_manager.dht_protocol.peer_port < 65535)
+                (0 < self.peer_manager.dht_protocol.peer_port < 65535)
         assert self.token is not None
 
         request = RequestDatagram.make_store(self.peer_manager.dht_protocol.node_id, blob_hash, self.token,

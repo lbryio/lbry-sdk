@@ -6,8 +6,9 @@ import binascii
 
 from lbrynet.dht.protocol.protocol import KademliaProtocol
 from lbrynet.dht.iterative_find import IterativeNodeFinder, IterativeValueFinder
-from lbrynet.dht.peer_finder import AsyncGeneratorJunction
+from lbrynet.dht.async_generator_junction import AsyncGeneratorJunction
 from lbrynet.dht import constants
+
 if typing.TYPE_CHECKING:
     from lbrynet.peer import PeerManager
 
@@ -64,7 +65,7 @@ class Node:
             )
             announced_to_node_ids.extend([node_id for node_id, contacted in stored_to_tup if contacted])
             log.info("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
-                      len(announced_to_node_ids), len(peers))
+                     len(announced_to_node_ids), len(peers))
         return announced_to_node_ids
 
     def stop(self) -> None:
@@ -178,6 +179,7 @@ class Node:
                         binascii.unhexlify(blob_hash.encode()), bottom_out_limit=bottom_out_limit, max_results=-1
                     )
                 )
+
         add_blobs_task = self.loop.create_task(_add_hashes_from_queue())
         peer_generator.add_cleanup(
             lambda: None if not add_blobs_task or not (add_blobs_task.done() or add_blobs_task.cancelled()) else
