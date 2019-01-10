@@ -8,6 +8,7 @@ from operator import itemgetter
 from binascii import hexlify, unhexlify
 from copy import deepcopy
 from twisted.internet.task import LoopingCall
+from traceback import format_exc
 
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
@@ -469,17 +470,28 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
+        result = await self._process_rpc_call(data)
+        return web.Response(
+            text=jsonrpc_dumps_pretty(result, ledger=self.ledger),
+            content_type='application/json'
+        )
+
+    async def _process_rpc_call(self, data):
         args = data.get('params', {})
 
         try:
             function_name = data['method']
         except KeyError:
-            raise web.HTTPBadRequest(text="Missing 'method' value in request.")
+            return JSONRPCError(
+                "Missing 'method' value in request.", JSONRPCError.CODE_METHOD_NOT_FOUND
+            )
 
         try:
             fn = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError:
-            raise web.HTTPBadRequest(text=f"Invalid method requested: {function_name}.")
+            return JSONRPCError(
+                f"Invalid method requested: {function_name}.", JSONRPCError.CODE_METHOD_NOT_FOUND
+            )
 
         if args in (EMPTY_PARAMS, []):
             _args, _kwargs = (), {}
@@ -492,7 +504,9 @@ class Daemon(metaclass=JSONRPCServerType):
         elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], dict):
             _args, _kwargs = args
         else:
-            raise web.HTTPBadRequest(text="invalid args format")
+            return JSONRPCError(
+                f"Invalid parameters format.", JSONRPCError.CODE_INVALID_PARAMS
+            )
 
         params_error, erroneous_params = self._check_params(fn, _args, _kwargs)
         if params_error is not None:
@@ -500,16 +514,19 @@ class Daemon(metaclass=JSONRPCServerType):
                 params_error, function_name, ', '.join(erroneous_params)
             )
             log.warning(params_error_message)
-            raise web.HTTPBadRequest(text=params_error_message)
+            return JSONRPCError(
+                params_error_message, JSONRPCError.CODE_INVALID_PARAMS
+            )
 
-        result = fn(self, *_args, **_kwargs)
-        if asyncio.iscoroutine(result):
-            result = await result
-
-        return web.Response(
-            text=jsonrpc_dumps_pretty(result, ledger=self.ledger),
-            content_type='application/json'
-        )
+        try:
+            result = fn(self, *_args, **_kwargs)
+            if asyncio.iscoroutine(result):
+                result = await result
+            return result
+        except Exception as e:  # pylint: disable=broad-except
+            return JSONRPCError(
+                str(e), JSONRPCError.CODE_APPLICATION_ERROR, format_exc()
+            )
 
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
