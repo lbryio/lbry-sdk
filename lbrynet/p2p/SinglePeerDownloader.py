@@ -2,7 +2,7 @@ import logging
 import shutil
 import tempfile
 
-from twisted.internet import defer, threads, reactor
+from twisted.internet import defer, reactor
 
 from lbrynet.extras.compat import d2f
 from lbrynet.blob.blob_file import BlobFile
