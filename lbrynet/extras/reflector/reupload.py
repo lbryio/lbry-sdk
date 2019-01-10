@@ -45,7 +45,7 @@ def _reflect_blobs(blob_manager, blob_hashes, reflector_server):
     ip = yield resolve(reflector_address)
     yield reactor.connectTCP(ip, reflector_port, factory)
     result = yield factory.finished_deferred
-    defer.returnValue(result)
+    return result
 
 
 def reflect_file(lbry_file, reflector_server=None):
