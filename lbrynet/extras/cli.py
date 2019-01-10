@@ -63,7 +63,7 @@ async def start_daemon(settings: typing.Optional[typing.Dict] = None,
     if check_connection():
         daemon = Daemon()
         await daemon.start_listening()
-        await daemon.server.serve_forever()
+        await daemon.server.wait_closed()
     else:
         log.info("Not connected to internet, unable to start")
 
@@ -124,8 +124,8 @@ async def execute_command(method, params, data_dir: typing.Optional[str] = None,
     try:
         resp = await api.call(method, params)
         print(json.dumps(resp, indent=2))
-    except JSONRPCError as err:
-        print(json.dumps(err, indent=2))
+    except Exception as err:
+        print(json.dumps(JSONRPCError.create_from_exception(err), indent=2))
     finally:
         await api.session.close()
 

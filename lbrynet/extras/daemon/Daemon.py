@@ -12,14 +12,14 @@ from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
 from lbrynet.extras.reflector import reupload
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbrynet.extras.daemon.Components import FILE_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import STREAM_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout
-from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError
+from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout, ComponentsNotStarted
+from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError
@@ -298,7 +298,7 @@ class Daemon(metaclass=JSONRPCServerType):
         DATABASE_COMPONENT: "storage",
         DHT_COMPONENT: "dht_node",
         WALLET_COMPONENT: "wallet_manager",
-        FILE_MANAGER_COMPONENT: "file_manager",
+        STREAM_MANAGER_COMPONENT: "stream_manager",
         EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
         # PAYMENT_RATE_COMPONENT: "payment_rate_manager",
         # RATE_LIMITER_COMPONENT: "rate_limiter",
@@ -336,7 +336,7 @@ class Daemon(metaclass=JSONRPCServerType):
         self.storage: 'SQLiteStorage' = None
         self.dht_node: 'Node' = None
         self.wallet_manager: LbryWalletManager = None
-        self.file_manager: 'StreamManager' = None
+        self.stream_manager: 'StreamManager' = None
         self.exchange_rate_manager = None
         self.payment_rate_manager = None
         self.rate_limiter = None
@@ -1705,7 +1705,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.get_account_or_default(account_id).receiving.get_or_create_usable_address()
 
-    @requires(FILE_MANAGER_COMPONENT)
+    @requires(STREAM_MANAGER_COMPONENT)
     def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, **kwargs):
         """
         List files limited by optional filters
@@ -1769,7 +1769,7 @@ class Daemon(metaclass=JSONRPCServerType):
         sort = sort or 'status'
         comparison = comparison or 'eq'
         return [
-            stream.as_dict() for stream in self.file_manager.get_filtered_streams(
+            stream.as_dict() for stream in self.stream_manager.get_filtered_streams(
                 sort, reverse, comparison, **kwargs
             )
         ]
@@ -1933,6 +1933,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return results
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
+              STREAM_MANAGER_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_get(self, uri, file_name=None, timeout=None):
         """
@@ -1994,14 +1995,14 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
 
-        stream = await self.file_manager.download_stream_from_claim(
+        stream = await self.stream_manager.download_stream_from_claim(
             self.dht_node, conf.settings.download_dir, resolved, file_name, timeout
         )
         if stream:
             return stream.as_dict()
         raise DownloadSDTimeout(resolved['value']['stream']['source']['source'])
 
-    @requires(FILE_MANAGER_COMPONENT)
+    @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
         """
         Start or stop downloading a file
@@ -2031,7 +2032,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception(f'Unable to find a file for {search_type}:{value}')
 
         if status == 'start' and lbry_file.stopped or status == 'stop' and not lbry_file.stopped:
-            await d2f(self.file_manager.toggle_lbry_file_running(lbry_file))
+            await d2f(self.stream_manager.toggle_lbry_file_running(lbry_file))
             msg = "Started downloading file" if status == 'start' else "Stopped downloading file"
         else:
             msg = (
@@ -2040,7 +2041,7 @@ class Daemon(metaclass=JSONRPCServerType):
             )
         return msg
 
-    @requires(FILE_MANAGER_COMPONENT)
+    @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
         """
         Delete a LBRY file
@@ -2072,7 +2073,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (bool) true if deletion was successful
         """
 
-        streams = self.file_manager.get_filtered_streams(**kwargs)
+        streams = self.stream_manager.get_filtered_streams(**kwargs)
 
         if len(streams) > 1:
             if not delete_all:
@@ -2088,7 +2089,7 @@ class Daemon(metaclass=JSONRPCServerType):
             return False
         else:
             for stream in streams:
-                await self.file_manager.delete_stream(stream, delete_file=delete_from_download_dir)
+                await self.stream_manager.delete_stream(stream, delete_file=delete_from_download_dir)
                 log.info("Deleted file: %s", stream.file_name)
             result = True
         return result
@@ -2227,7 +2228,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return await self.wallet_manager.import_certificate_info(serialized_certificate_info)
 
-    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
+    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_publish(
             self, name, bid, metadata=None, file_path=None, fee=None, title=None,
@@ -3051,7 +3052,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         return True
 
-    @requires(FILE_MANAGER_COMPONENT)
+    @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_reflect(self, **kwargs):
         """
         Reflect all the blobs in a file matching the filter criteria

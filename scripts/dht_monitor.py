@@ -3,7 +3,7 @@ import time
 import logging
 import asyncio
 from lbrynet import conf
-from lbrynet.extras.daemon.auth.client import LBRYAPIClient
+from lbrynet.extras.daemon.client import LBRYAPIClient
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.FileHandler("dht contacts.log"))
