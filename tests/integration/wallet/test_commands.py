@@ -247,7 +247,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # After abandoning he just waits for his LBCs to be returned to his account
         await self.generate(5)
         result = await self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, '8.9693615')
+        self.assertEqual(result, '8.9693585')
 
         # Amidst all this Chris receives a call from his friend Ramsey
         # who says that it is of utmost urgency that Chris transfer him
@@ -264,7 +264,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.generate(5)
         result = await self.daemon.jsonrpc_account_balance()
         # Chris' balance was correct
-        self.assertEqual(result, '7.9692375')
+        self.assertEqual(result, '7.9692345')
 
         # Ramsey too assured him that he had received the 1 LBC and thanks him
         result = await self.daemon.jsonrpc_account_balance(ramsey_account_id)
@@ -468,8 +468,8 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
         self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['value'], '0.0')
-        self.assertEqual(txs[0]['fee'], '-0.0001955')
-        self.assertEqual('8.9796975', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual(txs[0]['fee'], '-0.0001985')
+        self.assertEqual('8.9796945', await self.daemon.jsonrpc_account_balance())
 
         await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
@@ -478,7 +478,7 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.000107')
-        self.assertEqual('9.9795905', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('9.9795875', await self.daemon.jsonrpc_account_balance())
 
     async def test_update_claim_holding_address(self):
         other_account_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
@@ -570,11 +570,11 @@ class ClaimManagement(CommandTestCase):
 
         # update the same claim
         await self.make_claim(amount='9.0')
-        self.assertEqual('0.9796235', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('0.9796205', await self.daemon.jsonrpc_account_balance())
 
         # update the claim a second time but use even more funds
         await self.make_claim(amount='9.97')
-        self.assertEqual('0.009354', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('0.009348', await self.daemon.jsonrpc_account_balance())
 
         # fails when specifying more than available
         with tempfile.NamedTemporaryFile() as file:
@@ -583,7 +583,7 @@ class ClaimManagement(CommandTestCase):
             with self.assertRaisesRegex(
                 InsufficientFundsError,
                 "Please lower the bid value, the maximum amount"
-                " you can specify for this claim is 9.97928."
+                " you can specify for this claim is 9.979274."
             ):
                 await self.out(self.daemon.jsonrpc_publish(
                     'hovercraft', '9.98', file_path=file.name
