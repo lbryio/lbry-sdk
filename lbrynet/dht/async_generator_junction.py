@@ -1,18 +1,6 @@
 import asyncio
 import typing
-import logging
-import binascii
 from types import AsyncGeneratorType
-from lbrynet.stream.descriptor import StreamDescriptor
-
-if typing.TYPE_CHECKING:
-    from lbrynet.peer import Peer
-    from lbrynet.blob.blob_manager import BlobFileManager
-    from lbrynet.dht.node import Node
-
-
-
-
 
 
 def cancel_task(task: typing.Optional[asyncio.Task]):
@@ -48,6 +36,7 @@ class AsyncGeneratorJunction:
     def add_cleanup(self, fn, *args):
         def _cleanup(_):
             fn(*args)
+
         self._finished.add_done_callback(_cleanup)
 
     @property
@@ -120,4 +109,3 @@ class AsyncGeneratorJunction:
         finally:
             if exc_type:
                 raise exc_type()
-

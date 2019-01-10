@@ -125,8 +125,10 @@ class BlobErrorResponse(BlobMessage):
         }
 
 
-blob_request_types = typing.Union[BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest, BlobPaymentAddressRequest]
-blob_response_types = typing.Union[BlobPriceResponse, BlobAvailabilityResponse, BlobDownloadResponse, BlobErrorResponse, BlobPaymentAddressResponse]
+blob_request_types = typing.Union[BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest,
+                                  BlobPaymentAddressRequest]
+blob_response_types = typing.Union[BlobPriceResponse, BlobAvailabilityResponse, BlobDownloadResponse,
+                                   BlobErrorResponse, BlobPaymentAddressResponse]
 
 
 def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[typing.Dict], bytes]:
@@ -207,7 +209,8 @@ class BlobRequest:
         request = json.loads(data)
         return cls([
             request_type(**request)
-            for request_type in (BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest, BlobPaymentAddressRequest)
+            for request_type in (BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest,
+                                 BlobPaymentAddressRequest)
             if request_type.key in request
         ])
 
@@ -264,7 +267,7 @@ class BlobResponse:
         return json.dumps(self.to_dict()).encode()
 
     @classmethod
-    def _deserialize(cls, data: bytes) -> 'BlobResponse':
+    def deserialize(cls, data: bytes) -> 'BlobResponse':
         response, extra = _parse_blob_response(data)
         requests = []
         if response:
@@ -276,10 +279,3 @@ class BlobResponse:
             ])
         return cls(requests, extra)
 
-    @classmethod
-    def deserialize(cls, data: bytes) -> 'BlobResponse':
-        try:
-            return cls._deserialize(data)
-        except:
-            log.error(data.decode())
-            raise
