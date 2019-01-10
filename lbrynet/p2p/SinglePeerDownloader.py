@@ -4,6 +4,7 @@ import tempfile
 
 from twisted.internet import defer, threads, reactor
 
+from lbrynet.extras.compat import d2f
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
@@ -94,16 +95,13 @@ class SinglePeerDownloader:
             yield connection_manager.stop()
         defer.returnValue(result)
 
-    @defer.inlineCallbacks
-    def download_temp_blob_from_peer(self, peer, timeout, blob_hash):
-        tmp_dir = yield threads.deferToThread(tempfile.mkdtemp)
-        tmp_storage = SQLiteStorage(tmp_dir)
-        yield tmp_storage.setup()
+    async def download_temp_blob_from_peer(self, peer, timeout, blob_hash):
+        tmp_storage = SQLiteStorage(':memory:')
+        await tmp_storage.open()
+        tmp_dir = tempfile.mkdtemp()
         tmp_blob_manager = DiskBlobManager(tmp_dir, tmp_storage)
         try:
-            result = yield self.download_blob_from_peer(peer, timeout, blob_hash, tmp_blob_manager)
+            return await d2f(self.download_blob_from_peer(peer, timeout, blob_hash, tmp_blob_manager))
         finally:
-            yield tmp_blob_manager.stop()
-            yield tmp_storage.stop()
-            yield threads.deferToThread(shutil.rmtree, tmp_dir)
-        defer.returnValue(result)
+            await tmp_storage.close()
+            shutil.rmtree(tmp_dir)

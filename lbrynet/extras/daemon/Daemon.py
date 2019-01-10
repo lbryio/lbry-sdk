@@ -938,7 +938,7 @@ class Daemon(metaclass=JSONRPCServerType):
         reachable_peers = []
         unreachable_peers = []
         try:
-            peers = await d2f(self.jsonrpc_peer_list(blob_hash, search_timeout))
+            peers = await self.jsonrpc_peer_list(blob_hash, search_timeout)
             peer_infos = [{"peer": Peer(x['host'], x['port']),
                            "blob_hash": blob_hash,
                            "timeout": blob_timeout} for x in peers]
@@ -946,16 +946,14 @@ class Daemon(metaclass=JSONRPCServerType):
             dl_peers = []
             dl_results = []
             for peer_info in peer_infos:
-                d = downloader.download_temp_blob_from_peer(**peer_info)
-                dl.append(d)
+                dl.append(downloader.download_temp_blob_from_peer(**peer_info))
                 dl_peers.append("%s:%i" % (peer_info['peer'].host, peer_info['peer'].port))
-            for dl_peer, (success, download_result) in zip(dl_peers, (await d2f(defer.DeferredList(dl)))):
-                if success:
-                    if download_result:
-                        reachable_peers.append(dl_peer)
-                    else:
-                        unreachable_peers.append(dl_peer)
-                    dl_results.append(download_result)
+            for dl_peer, download_result in zip(dl_peers, await asyncio.gather(*dl)):
+                if download_result:
+                    reachable_peers.append(dl_peer)
+                else:
+                    unreachable_peers.append(dl_peer)
+                dl_results.append(download_result)
             is_available = any(dl_results)
         except Exception as err:
             return {'error': "Failed to get peers for blob: %s" % err}
