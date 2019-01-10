@@ -70,8 +70,8 @@ class Publisher:
             self.account, name, bid, claim_dict, self.certificate, holding_address
         )
         if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
-            await d2f(self.storage.save_content_claim(
+            await self.storage.save_content_claim(
                 stream_hash, tx.outputs[0].id
-            ))
+            )
             self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         return tx
