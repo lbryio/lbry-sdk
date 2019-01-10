@@ -122,11 +122,11 @@ class StreamManager:
                     stream.update_status(ManagedStream.STATUS_FINISHED)
                 except asyncio.CancelledError:
                     pass
-        fut = asyncio.ensure_future(_wait_for_stream_finished(), loop=self.loop)
-        self.update_stream_finished_futs.append(fut)
-        fut.add_done_callback(
-            lambda _: None if fut not in self.update_stream_finished_futs else
-            self.update_stream_finished_futs.remove(fut)
+        task = self.loop.create_task(_wait_for_stream_finished())
+        self.update_stream_finished_futs.append(task)
+        task.add_done_callback(
+            lambda _: None if task not in self.update_stream_finished_futs else
+            self.update_stream_finished_futs.remove(task)
         )
 
     async def _download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
@@ -145,12 +145,11 @@ class StreamManager:
             downloader.stop()
             log.info("stopped stream")
             return
-
-        # TODO: do this in one db call instead of three
-        await self.blob_manager.storage.store_stream(downloader.sd_blob, downloader.descriptor)
-        await self.blob_manager.storage.save_downloaded_file(
-            downloader.descriptor.stream_hash, os.path.basename(downloader.output_path), download_directory, data_rate
-        )
+        if not (await self.blob_manager.storage.stream_exists(downloader.sd_hash)):
+            await self.blob_manager.storage.store_stream(downloader.sd_blob, downloader.descriptor)
+            await self.blob_manager.storage.save_downloaded_file(
+                downloader.descriptor.stream_hash, os.path.basename(downloader.output_path), download_directory, data_rate
+            )
         await self.blob_manager.storage.save_content_claim(
             downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}"
         )

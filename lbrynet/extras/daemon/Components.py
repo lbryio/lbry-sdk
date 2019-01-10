@@ -37,7 +37,7 @@ HEADERS_COMPONENT = "blockchain_headers"
 WALLET_COMPONENT = "wallet"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
-FILE_MANAGER_COMPONENT = "file_manager"
+STREAM_MANAGER_COMPONENT = "stream_manager"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
@@ -430,8 +430,8 @@ class HashAnnouncerComponent(Component):
 #         return defer.succeed(None)
 
 
-class FileManagerComponent(Component):
-    component_name = FILE_MANAGER_COMPONENT
+class StreamManagerComponent(Component):
+    component_name = STREAM_MANAGER_COMPONENT
     depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT]
 
     def __init__(self, component_manager):
@@ -482,8 +482,9 @@ class PeerProtocolServerComponent(Component):
         log.info("start blob server")
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
+        wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
         peer_port = upnp.upnp_redirects.get("TCP", conf.settings["peer_port"])
-        self.blob_server = BlobServer(self.loop, blob_manager)
+        self.blob_server = BlobServer(self.loop, blob_manager, wallet.get_unused_address())
         self.blob_server.start_server(peer_port, interface='0.0.0.0')
 
     def stop(self):

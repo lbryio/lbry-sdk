@@ -49,7 +49,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     daemon.storage = mock.Mock(spec=SQLiteStorage)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
     daemon.exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
-    daemon.file_manager = component_manager.get_component(FILE_MANAGER_COMPONENT)
+    daemon.stream_manager = component_manager.get_component(FILE_MANAGER_COMPONENT)
 
     metadata = {
         "author": "fake author",
