@@ -28,10 +28,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self._request_lock = asyncio.Lock(loop=self.loop)
 
     def handle_data_received(self, data: bytes):
-        if not self._downloading_blob:
-            response = BlobResponse.deserialize(data)
-        else:
-            response = BlobResponse([], data)
+        response = BlobResponse.deserialize(data)
         if not response.responses and response.blob_data and self.write_blob:
                 self._blob_bytes_received += len(response.blob_data)
                 self.write_blob(response.blob_data)
@@ -44,8 +41,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 self._blob_bytes_received += len(response.blob_data)
                 self.write_blob(response.blob_data)
             self._response_fut.set_result(response)
-        else:
-            pass
+        elif self._downloading_blob and response.blob_data:
+            self._blob_bytes_received += len(response.blob_data)
+            self.write_blob(response.blob_data)
 
     def data_received(self, data):
         total = len(data) + self._blob_bytes_received
@@ -73,11 +71,12 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
         request = BlobRequest.make_request_for_blob_hash(blob.blob_hash)
         downloaded_blob = False
-        log.debug("send download request")
         try:
             self.transport.write(request.serialize())
             try:
-                response = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
+                response: BlobResponse = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
+                self._downloading_blob = True
+                log.info("blob incoming: %s, %i blob data", response, len(response.blob_data))
             except BlobDownloadError:
                 return False
             availability_response = response.get_availability_response()
@@ -98,9 +97,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 raise Exception("unexpected")
             log.info("downloading %s from %s:%i", blob.blob_hash[:8], self.peer.address, self.peer.tcp_port)
             await asyncio.wait_for(writer.finished, self.peer_timeout, loop=self.loop)
-            log.info("await finished writing %s from %s:%i", blob.blob_hash[:8], self.peer.address, self.peer.tcp_port)
             await blob.finished_writing.wait()
-
             downloaded_blob = True
             log.info(f"downloaded {blob.blob_hash[:8]} from {self.peer.address}")
             return True

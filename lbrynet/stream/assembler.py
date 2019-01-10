@@ -90,7 +90,7 @@ class StreamAssembler:
             for blob_info in self.descriptor.blobs[:-1]:
                 log.info("get blob %s (%i)", blob_info.blob_hash, blob_info.blob_num)
                 blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
-                # await blob.finished_writing.wait()
+                await blob.finished_writing.wait()
                 log.info("got blob %s (%i), decrypt it", blob_info.blob_hash, blob_info.blob_num)
                 await self._decrypt_blob(blob, blob_info, self.descriptor.key)
             self.stream_finished_event.set()
