@@ -1,8 +1,13 @@
 import logging
 import json
+
+from asyncio import transports
+from typing import Optional
+
 from twisted.python import failure
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
+
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.p2p.Error import DownloadCanceledError, InvalidBlobHashError
 from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorReader
@@ -27,6 +32,21 @@ SD_BLOB_HASH = 'sd_blob_hash'
 
 
 class ReflectorServer(Protocol):
+    def __init__(self):
+        self._transport = None
+        self.peer = None
+        self.blob_manager = None
+        self.storage = None
+        self.lbry_file_manager = None
+        self.protocol_version = None
+        self.received_handshake = None
+        self.peer_version = None
+        self.receiving_blob = None
+        self.incoming_blob = None
+        self.blob_finished_d = None
+        self.request_buff = None
+        self.blob_writer = None
+    
     def connectionMade(self):
         peer_info = self.transport.getPeer()
         log.debug('Connection made to %s', peer_info)
@@ -43,17 +63,29 @@ class ReflectorServer(Protocol):
         self.request_buff = b""
 
         self.blob_writer = None
-
+    
+    def connection_made(self, transport: transports.Transport):
+        self._transport = transport
+    
     def connectionLost(self, reason=failure.Failure(error.ConnectionDone())):
         log.info("Reflector upload from %s finished" % self.peer.host)
-
+    
+    def connection_lost(self, exc: Optional[Exception]):
+        pass
+    
     def handle_error(self, err):
         log.error(err.getTraceback())
         self.transport.loseConnection()
 
     def send_response(self, response_dict):
         self.transport.write(json.dumps(response_dict).encode())
-
+    
+    def data_received(self, data: bytes):
+        pass
+    
+    def eof_received(self):
+        pass
+    
     ############################
     # Incoming blob file stuff #
     ############################
