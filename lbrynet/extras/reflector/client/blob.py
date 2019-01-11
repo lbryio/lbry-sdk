@@ -1,3 +1,4 @@
+from asyncio import transports
 import json
 import logging
 
@@ -13,7 +14,21 @@ log = logging.getLogger(__name__)
 
 class BlobReflectorClient(Protocol):
     #  Protocol stuff
-
+    def __init__(self):
+        self.blob_manager = None
+        self.response_buff = None
+        self.outgoing_buff = None
+        self.blob_hashes_to_send = None
+        self.next_blob_to_send = None
+        self.blob_read_handle = None
+        self.received_handshake_response = None
+        self.protocol_version = None
+        self.file_sender = None
+        self.producer = None
+        self.streaming = None
+        self.reflected_blobs = None
+        self._transport = None
+    
     def connectionMade(self):
         self.blob_manager = self.factory.blob_manager
         self.response_buff = b''
@@ -30,7 +45,10 @@ class BlobReflectorClient(Protocol):
         d = self.send_handshake()
         d.addErrback(
             lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
-
+    
+    def connection_made(self, transport: transports.Transport):
+        self._transport = transport
+    
     def dataReceived(self, data):
         log.debug('Received %s', data)
         self.response_buff += data
@@ -43,7 +61,12 @@ class BlobReflectorClient(Protocol):
             d = self.handle_response(msg)
             d.addCallback(lambda _: self.send_next_request())
             d.addErrback(self.response_failure_handler)
-
+    
+    def data_received(self, data: bytes):
+        # TODO: loop.create_task(self.parse_response(data.decode())
+        # TODO: loop.create_task(self.handle_response(msg)
+        pass
+    
     def connectionLost(self, reason):
         if reason.check(error.ConnectionDone):
             if self.reflected_blobs:
@@ -52,7 +75,13 @@ class BlobReflectorClient(Protocol):
         else:
             log.info('Reflector finished: %s', reason)
             self.factory.finished_deferred.callback(reason)
-
+    
+    def connection_lost(self, exc):
+        if exc is None:
+            log.info('Finished sending data via reflector')
+        else:
+            log.info('Reflector finished: %s', exc)
+    
     # IConsumer stuff
 
     def registerProducer(self, producer, streaming):
