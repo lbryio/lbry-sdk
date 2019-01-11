@@ -243,17 +243,21 @@ class IterativeFinder:
     async def next_queue_or_finished(self) -> typing.List['Peer']:
         peers = self.loop.create_task(self.iteration_queue.get())
         finished = self.loop.create_task(self.finished.wait())
+        err = None
         try:
-            await self.loop.create_task(asyncio.wait([peers, finished], loop=self.loop, return_when='FIRST_COMPLETED'))
+            await asyncio.wait([peers, finished], loop=self.loop, return_when='FIRST_COMPLETED')
             if peers.done():
                 return peers.result()
-        except asyncio.CancelledError:
             raise StopAsyncIteration()
+        except asyncio.CancelledError as error:
+            err = error
         finally:
             if not finished.done() and not finished.cancelled():
                 finished.cancel()
             if not peers.done() and not peers.cancelled():
                 peers.cancel()
+            if err:
+                raise err
 
     def __aiter__(self):
         self.search()
@@ -269,16 +273,14 @@ class IterativeFinder:
             self.iteration_count += 1
             return result
         except (asyncio.CancelledError, StopAsyncIteration):
-            log.info("stop")
             await self.aclose()
-            raise StopAsyncIteration()
+            raise
 
     def aclose(self):
         self.running = False
 
         async def _aclose():
             async with self.lock:
-                log.info("aclose")
                 self.running = False
                 if not self.finished.is_set():
                     self.finished.set()
@@ -325,8 +327,8 @@ class IterativeNodeFinder(IterativeFinder):
                 self.finished.set()
             return
         if self.prev_closest_peer and self.closest_peer and not self._is_closer(self.prev_closest_peer):
-            log.info("improving, %i %i %i %i %i", len(self.shortlist), len(self.active), len(self.contacted),
-                     self.bottom_out_count, self.iteration_count)
+            # log.info("improving, %i %i %i %i %i", len(self.shortlist), len(self.active), len(self.contacted),
+            #          self.bottom_out_count, self.iteration_count)
             self.bottom_out_count = 0
         elif self.prev_closest_peer and self.closest_peer:
             self.bottom_out_count += 1
@@ -371,7 +373,7 @@ class IterativeValueFinder(IterativeFinder):
                     self.blob_peers.add(blob_peer)
                     to_yield.append(blob_peer)
             if to_yield:
-                log.info("found %i new peers for blob", len(to_yield))
+                # log.info("found %i new peers for blob", len(to_yield))
                 self.iteration_queue.put_nowait(to_yield)
                 # if self.max_results and len(self.blob_peers) >= self.max_results:
                 #     log.info("enough blob peers found")

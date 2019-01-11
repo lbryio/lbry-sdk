@@ -92,11 +92,16 @@ class TreeRoutingTable:
             # is ignored if the pinged node replies.
 
             not_good_contacts = self._buckets[bucket_index].get_bad_or_unknown_peers()
+            not_recently_replied = [
+                p for p in not_good_contacts if not p.last_replied or not p.last_replied + 60 > self._loop.time()
+            ]
 
-            if not_good_contacts:
-                to_replace = not_good_contacts[0]
+            if not_recently_replied:
+                to_replace = not_recently_replied[0]
             else:
                 to_replace = self._buckets[bucket_index]._contacts[0]
+                if to_replace.last_replied and to_replace.last_replied + 60 > self._loop.time():
+                    return False
             log.debug("pinging %s:%s", to_replace.address, to_replace.udp_port)
             try:
                 await to_replace.ping()
