@@ -4,8 +4,9 @@ import asyncio
 import typing
 import binascii
 
-from lbrynet.peer import Peer
 from lbrynet.dht import constants
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer
 
 
 class KademliaRPC:
@@ -26,7 +27,7 @@ class KademliaRPC:
     def ping():
         return b'pong'
 
-    def store(self, rpc_contact: Peer, blob_hash: bytes, token: bytes, port: int,
+    def store(self, rpc_contact: 'Peer', blob_hash: bytes, token: bytes, port: int,
               original_publisher_id: bytes, age: int) -> bytes:
         if original_publisher_id is None:
             original_publisher_id = rpc_contact.node_id
@@ -42,7 +43,7 @@ class KademliaRPC:
         )
         return b'OK'
 
-    def find_node(self, rpc_contact: Peer, key: bytes) -> typing.List[typing.Tuple[bytes, str, int]]:
+    def find_node(self, rpc_contact: 'Peer', key: bytes) -> typing.List[typing.Tuple[bytes, str, int]]:
         if len(key) != constants.hash_length:
             raise ValueError("invalid contact node_id length: %i" % len(key))
 
@@ -52,7 +53,7 @@ class KademliaRPC:
             contact_triples.append((contact.node_id, contact.address, contact.udp_port))
         return contact_triples
 
-    def find_value(self, rpc_contact: Peer, key: bytes):
+    def find_value(self, rpc_contact: 'Peer', key: bytes):
         if len(key) != constants.hash_length:
             raise ValueError("invalid blob_exchange hash length: %i" % len(key))
 

@@ -2,7 +2,6 @@ import os
 import asyncio
 import aiohttp
 import logging
-import treq
 import math
 import binascii
 import typing
@@ -174,7 +173,8 @@ class HeadersComponent(Component):
                     else:
                         with open(self.headers_file, "wb") as headers_file:
                             collector(data, headers_file)
-                    log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
+                    log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.",
+                             s3_height)
                     self._check_header_file_integrity()
                 else:
                     log.warning("s3 is more out of date than we are")

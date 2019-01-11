@@ -2,7 +2,7 @@ import os
 import asyncio
 import typing
 import logging
-from lbrynet.mime_types import guess_mime_type
+from lbrynet.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 if typing.TYPE_CHECKING:
     from lbrynet.storage import StoredStreamClaim
@@ -17,7 +17,7 @@ class ManagedStream:
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
-    def __init__(self,  loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', descriptor: 'StreamDescriptor',
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', descriptor: 'StreamDescriptor',
                  download_directory: str, file_name: str, downloader: typing.Optional[StreamDownloader] = None,
                  status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional['StoredStreamClaim'] = None):
         self.loop = loop
@@ -100,7 +100,7 @@ class ManagedStream:
         full_path = os.path.join(self.download_directory, self.file_name)
         if not os.path.exists(full_path):
             full_path = None
-        mime_type = guess_mime_type(os.path.basename(self.file_name))
+        mime_type = guess_media_type(os.path.basename(self.file_name))
         return {
             'completed': self.finished,
             'file_name': self.file_name,

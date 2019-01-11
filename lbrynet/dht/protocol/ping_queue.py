@@ -2,14 +2,16 @@ import asyncio
 import logging
 import typing
 
-from lbrynet.peer import PeerManager, Peer
 from lbrynet.dht import constants
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import PeerManager, Peer
+
 
 log = logging.getLogger(__name__)
 
 
 class PingQueue:
-    def __init__(self, peer_manager: PeerManager, loop: asyncio.BaseEventLoop):
+    def __init__(self, peer_manager: 'PeerManager', loop: asyncio.BaseEventLoop):
         self._peer_manager = peer_manager
         self._loop = loop
         self._enqueued_contacts: typing.List[Peer] = []
@@ -24,7 +26,7 @@ class PingQueue:
     def running(self):
         return self._running
 
-    async def enqueue_maybe_ping(self, *peers: Peer, delay: typing.Optional[float] = None):
+    async def enqueue_maybe_ping(self, *peers: 'Peer', delay: typing.Optional[float] = None):
         delay = constants.check_refresh_interval if delay is None else delay
         async with self._lock:
             for peer in peers:
@@ -36,7 +38,7 @@ class PingQueue:
                         del self._pending_contacts[peer]
 
     async def _process(self):
-        async def _ping(p: Peer):
+        async def _ping(p: 'Peer'):
             try:
                 if p.contact_is_good:
                     return

@@ -42,7 +42,7 @@ class DictDataStore(UserDict):
             del self[key]
 
     def has_peers_for_blob(self, key: bytes) -> bool:
-        return True if key in self and len(tuple(self.filter_bad_and_expired_peers(key))) else False
+        return key in self and len(tuple(self.filter_bad_and_expired_peers(key))) > 0
 
     def add_peer_to_blob(self, contact: Peer, key: bytes, compact_address: bytes, last_published: int,
                          originally_published: int, original_publisher_id: bytes) -> None:

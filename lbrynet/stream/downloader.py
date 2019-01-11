@@ -89,7 +89,7 @@ class StreamDownloader(StreamAssembler):
         log.info("request %s from %s:%i", self.current_blob.blob_hash[:8], peer.address, peer.tcp_port)
         try:
             await peer.request_blobs([self.current_blob], self.peer_timeout, self.peer_connect_timeout)
-        except (asyncio.TimeoutError):
+        except asyncio.TimeoutError:
             self.active_connections.remove(peer)
 
     def _update_requests(self):
@@ -121,10 +121,10 @@ class StreamDownloader(StreamAssembler):
                     while self.running_download_requests:
                         tasks.append(self.running_download_requests.pop())
                     if tasks:
-                        await_new_connection = asyncio.ensure_future(self.new_connection_event.wait(), loop=self.loop)
+                        await_new_connection = self.loop.create_task(self.new_connection_event.wait())
                         running_blob_downloads = asyncio.shield(asyncio.wait(tasks, loop=self.loop), loop=self.loop)
-                        await asyncio.wait([await_new_connection, running_blob_downloads], return_when='FIRST_COMPLETED',
-                                           loop=self.loop)
+                        await asyncio.wait([await_new_connection, running_blob_downloads],
+                                           return_when='FIRST_COMPLETED', loop=self.loop)
                         if await_new_connection and not await_new_connection.done():
                             await_new_connection.cancel()
                         if self.current_blob.get_is_verified():
@@ -141,7 +141,8 @@ class StreamDownloader(StreamAssembler):
                     err = error
             if err:
                 raise err
-            log.info("still downloading %s, %i pending requests", self.current_blob.blob_hash[:8], len(self.running_download_requests))
+            log.info("still downloading %s, %i pending requests", self.current_blob.blob_hash[:8],
+                     len(self.running_download_requests))
         drain_tasks(self.running_download_requests)
         return self.current_blob
 

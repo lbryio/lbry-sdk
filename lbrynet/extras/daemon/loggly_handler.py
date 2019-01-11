@@ -52,7 +52,7 @@ class HTTPSLogglyHandler(logging.Handler):
             self.cookies.update(response.cookies)
 
     def emit(self, record):
-        asyncio.get_running_loop().create_task(self._emit(record))
+        asyncio.ensure_future(self._emit(record))
 
 
 def get_loggly_handler(loggly_token):

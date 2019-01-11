@@ -145,10 +145,11 @@ class StreamManager:
             downloader.stop()
             log.info("stopped stream")
             return
-        if not (await self.blob_manager.storage.stream_exists(downloader.sd_hash)):
+        if not await self.blob_manager.storage.stream_exists(downloader.sd_hash):
             await self.blob_manager.storage.store_stream(downloader.sd_blob, downloader.descriptor)
             await self.blob_manager.storage.save_downloaded_file(
-                downloader.descriptor.stream_hash, os.path.basename(downloader.output_path), download_directory, data_rate
+                downloader.descriptor.stream_hash, os.path.basename(downloader.output_path), download_directory,
+                data_rate
             )
         await self.blob_manager.storage.save_content_claim(
             downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}"

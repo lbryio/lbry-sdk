@@ -6,7 +6,6 @@ import asyncio
 from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
 
-from lbrynet.peer import Peer, PeerManager
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
 from lbrynet.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE
@@ -15,6 +14,8 @@ from lbrynet.dht.protocol.ping_queue import PingQueue
 from lbrynet.dht.protocol.rpc import KademliaRPC
 from lbrynet.dht.routing.routing_table import TreeRoutingTable
 from lbrynet.dht.protocol.data_store import DictDataStore
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer, PeerManager
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ old_protocol_errors = {
 
 
 class KademliaProtocol(DatagramProtocol):
-    def __init__(self, peer_manager: PeerManager, loop: asyncio.BaseEventLoop, node_id: bytes, external_ip: str,
+    def __init__(self, peer_manager: 'PeerManager', loop: asyncio.BaseEventLoop, node_id: bytes, external_ip: str,
                  udp_port: int, peer_port: int):
         self.peer_manager = peer_manager
         self.loop = loop
@@ -62,7 +63,7 @@ class KademliaProtocol(DatagramProtocol):
     def connection_lost(self, exc):
         self.stop()
 
-    def _migrate_incoming_rpc_args(self, contact: Peer, method: bytes, *args) -> typing.Tuple[
+    def _migrate_incoming_rpc_args(self, contact: 'Peer', method: bytes, *args) -> typing.Tuple[
         typing.Tuple, typing.Dict
     ]:
         if method == b'store' and contact.protocol_version == 0:
@@ -75,7 +76,7 @@ class KademliaProtocol(DatagramProtocol):
                 return (blob_hash, token, port, original_publisher_id, age), {}
         return args, {}
 
-    def _migrate_outgoing_rpc_args(self, peer: Peer, request: RequestDatagram):
+    def _migrate_outgoing_rpc_args(self, peer: 'Peer', request: RequestDatagram):
         """
         This will reformat protocol version 0 arguments for the store function and will add the
         protocol version keyword argument to calls to contacts who will accept it
@@ -97,7 +98,7 @@ class KademliaProtocol(DatagramProtocol):
         request.args = list((() if not request else tuple(request.args)) + (
             {b'protocolVersion': self.protocol_version},))
 
-    def handle_rpc(self, sender_contact: Peer, message: RequestDatagram):
+    def handle_rpc(self, sender_contact: 'Peer', message: RequestDatagram):
         assert sender_contact.node_id != self.node_id, (binascii.hexlify(sender_contact.node_id)[:8].decode(),
                                                         binascii.hexlify(self.node_id)[:8].decode())
         method = message.method
@@ -231,8 +232,9 @@ class KademliaProtocol(DatagramProtocol):
             df.set_exception(remote_exception)
             return
         else:
-            log.warning(f"Received error from {address[0]}:{address[1]}, "
-                        f"but it isn't in response to a pending request: {str(remote_exception)}")
+            msg = f"Received error from {address[0]}:{address[1]}, but it isn't in response to a " \
+                f"pending request: {str(remote_exception)}"
+            log.warning(msg)
 
     def datagram_received(self, datagram: bytes, address: typing.Tuple[str, int]) -> None:
         # print(f"{self.external_ip}:{self.udp_port} rx {len(datagram)} bytes from {address[0]}:{address[1]}")
@@ -268,7 +270,7 @@ class KademliaProtocol(DatagramProtocol):
             assert isinstance(message, ResponseDatagram), "sanity"
             return self.handle_response_datagram(address, message)
 
-    async def send(self, peer: Peer, message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
+    async def send(self, peer: 'Peer', message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
                    address: typing.Tuple[str, int]):
         """ Transmit the specified data over UDP, breaking it up into several
         packets if necessary
@@ -352,7 +354,7 @@ class KademliaProtocol(DatagramProtocol):
                 return False
         return True
 
-    async def store_to_peer(self, hash_value: bytes, peer: Peer) -> typing.Tuple[bytes, bool]:
+    async def store_to_peer(self, hash_value: bytes, peer: 'Peer') -> typing.Tuple[bytes, bool]:
         try:
             if not peer.token:
                 await peer.find_value(hash_value)

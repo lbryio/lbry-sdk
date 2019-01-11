@@ -1,5 +1,7 @@
-from lbrynet.peer import Peer
+import typing
 from lbrynet.dht import constants
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer
 
 
 class Distance:
@@ -23,6 +25,6 @@ class Distance:
         """Returns true is `a` is closer to `key` than `b` is"""
         return self(a) < self(b)
 
-    def to_contact(self, contact: Peer) -> int:
+    def to_contact(self, contact: 'Peer') -> int:
         """A convenience function for calculating the distance to a contact"""
         return self(contact.node_id)

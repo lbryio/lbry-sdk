@@ -30,9 +30,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
     def handle_data_received(self, data: bytes):
         response = BlobResponse.deserialize(data)
         if not response.responses and response.blob_data and self.write_blob:
-                self._blob_bytes_received += len(response.blob_data)
-                self.write_blob(response.blob_data)
-                self._downloading_blob = True
+            self._blob_bytes_received += len(response.blob_data)
+            self.write_blob(response.blob_data)
+            self._downloading_blob = True
         elif response.responses and self._response_fut:
             blob_response = response.get_blob_response()
             if blob_response:
@@ -98,14 +98,19 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             await asyncio.wait_for(writer.finished, self.peer_timeout, loop=self.loop)
             await blob.finished_writing.wait()
             downloaded_blob = True
-            log.info(f"downloaded {blob.blob_hash[:8]} from {self.peer.address}")
+            msg = f"downloaded {blob.blob_hash[:8]} from {self.peer.address}"
+            log.info(msg)
             return True
         except asyncio.CancelledError:
-            log.info(f"download {blob.blob_hash[:8]} from {self.peer.address} cancelled")
+            msg = f"download {blob.blob_hash[:8]} from {self.peer.address} cancelled"
+            log.debug(msg)
         except asyncio.TimeoutError:
-            log.info(f"download {blob.blob_hash[:8]} from {self.peer.address} timed out")
+            msg = f"download {blob.blob_hash[:8]} from {self.peer.address} timed out"
+            log.debug(msg)
         except Exception as err:
-            log.error(f"download {blob.blob_hash[:8]} from {self.peer.address} error: {str(err)}")
+            msg = f"download {blob.blob_hash[:8]} from {self.peer.address} error: {str(err)}"
+            log.error(msg)
+
         finally:
             if not downloaded_blob:
                 writer.close_handle()
