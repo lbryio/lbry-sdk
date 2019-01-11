@@ -270,9 +270,7 @@ def main(argv=None):
     fn = Daemon.callable_methods[method]
     parsed = docopt(fn.__doc__, args)
     params = set_kwargs(parsed)
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(execute_command(method, params, data_dir, wallet_dir, download_dir))
-
+    asyncio.run(execute_command(method, params, data_dir, wallet_dir, download_dir))
     return 0
 
 
