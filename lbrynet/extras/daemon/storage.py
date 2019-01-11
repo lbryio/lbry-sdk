@@ -51,16 +51,12 @@ async def open_file_for_writing(download_directory: str, suggested_file_name: st
 
 
 async def looping_call(interval, fun):
-    try:
-        while True:
-            try:
-                await fun()
-            except Exception as e:
-                log.exception('Looping call experienced exception:', exc_info=e)
-            await asyncio.sleep(interval)
-    except asyncio.CancelledError:
-        pass
-
+    while True:
+        try:
+            await fun()
+        except Exception as e:
+            log.exception('Looping call experienced exception:', exc_info=e)
+        await asyncio.sleep(interval)
 
 
 class SQLiteStorage(SQLiteMixin):
