@@ -60,7 +60,7 @@ class BlobServer(asyncio.Protocol):
                 log.info("sent %s (%i bytes) to %s:%i", blob.blob_hash[:8], sent, peer_address, peer_port)
         if responses:
             self.send_response(responses)
-        self.transport.close()
+        # self.transport.close()
 
     def data_received(self, data):
         message, separator, remainder = data.rpartition(b'}')
