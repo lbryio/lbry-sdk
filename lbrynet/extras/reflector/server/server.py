@@ -157,7 +157,7 @@ class ServerProtocol(DatagramProtocol):
         self._transport.write(payload)
         self.sent_handshake = True
     
-    def handle_handshake(self, message) -> NoReturn:
+    def handle_handshake(self, message: Any[Awaitable]) -> NoReturn:
         if 'version' in message:
             if self.protocol_version in message:
                 self.recv_handshake = True
