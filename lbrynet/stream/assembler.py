@@ -4,11 +4,11 @@ import logging
 import typing
 import asyncio
 from lbrynet.blob import MAX_BLOB_SIZE
-from lbrynet.blob.blob_info import BlobInfo
-from lbrynet.blob.blob_file import BlobFile
 from lbrynet.stream.descriptor import StreamDescriptor
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_info import BlobInfo
+    from lbrynet.blob.blob_file import BlobFile
 
 
 log = logging.getLogger(__name__)
@@ -54,16 +54,9 @@ class StreamAssembler:
             self.stream_handle.write(decrypted)
             self.stream_handle.flush()
             self.written_bytes += len(decrypted)
-            log.info("wrote %i decrypted bytes (offset %i)", len(decrypted), offset)
 
-        await self.lock.acquire()
-        try:
-            await self.loop.run_in_executor(None, _decrypt_and_write)
-            if not self.wrote_bytes_event.is_set():
-                self.wrote_bytes_event.set()
-        finally:
-            self.lock.release()
-        log.debug("decrypted %s", blob.blob_hash[:8])
+        await self.loop.run_in_executor(None, _decrypt_and_write)
+        log.info("decrypted %s", blob.blob_hash[:8])
         return
 
     async def assemble_decrypted_stream(self, output_dir: str, output_file_name: typing.Optional[str] = None):
@@ -90,9 +83,10 @@ class StreamAssembler:
             for blob_info in self.descriptor.blobs[:-1]:
                 log.info("get blob %s (%i)", blob_info.blob_hash, blob_info.blob_num)
                 blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
-                await blob.finished_writing.wait()
                 log.info("got blob %s (%i), decrypt it", blob_info.blob_hash, blob_info.blob_num)
                 await self._decrypt_blob(blob, blob_info, self.descriptor.key)
+                if not self.wrote_bytes_event.is_set():
+                    self.wrote_bytes_event.set()
             self.stream_finished_event.set()
         finally:
             self.stream_handle.close()
