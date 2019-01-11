@@ -392,7 +392,7 @@ class SQLiteStorage(SQLiteMixin):
             ).fetchall()))
             stream_hashes = [file_info['stream_hash'] for file_info in file_infos]
             claim_infos = get_claims_from_stream_hashes(transaction, stream_hashes)
-            for index in range(len(file_infos)):
+            for index in range(len(file_infos)):  # pylint: disable=consider-using-enumerate
                 file_infos[index]['claim'] = claim_infos.get(file_infos[index]['stream_hash'])
             return file_infos
 
