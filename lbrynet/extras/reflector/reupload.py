@@ -59,7 +59,6 @@ def reflect_file(lbry_file, reflector_server=None):
         reflector_server = random.choice(conf.settings['reflector_servers'])
     return _reflect_file(lbry_file, reflector_server)
 
-
 @defer.inlineCallbacks
 def reflect_stream(blob_manager, stream_hash, reflector_server=None):
     if reflector_server:
@@ -85,3 +84,60 @@ def reflect_blob_hashes(blob_hashes, blob_manager, reflector_server=None):
     else:
         reflector_server = random.choice(conf.settings['reflector_servers'])
     return _reflect_blobs(blob_manager, blob_hashes, reflector_server)
+
+
+'''
+# TODO: replace code above when functional.
+import asyncio
+from lbrynet.extras.reflector.common import reflector_factory
+
+def get_reflector_server(reflector_server):
+    server = (reflector_server, 5566)
+    if reflector_server is None:
+        server = random.choice(conf.settings['reflector_servers'])
+    elif len(reflector_server.split(":")) == 2:
+        server = tuple(reflector_server.split(":"))
+    return server
+
+
+@reflector_factory
+def reflect_file_factory(lbry_file, reflector_server=None):
+    loop = asyncio.get_running_loop()
+    server = loop.create_future()
+    server.set_result(get_reflector_server(reflector_server))
+    loop.run_until_complete(server)
+    host = server.result()
+    _host, port = host[0], host[1]
+    ip = resolve(_host)
+    # TODO: make this an actual factory.
+    factory = EncryptedFileReflectorClientFactory(lbry_file.blob_manager, lbry_file.stream_hash, lbry_file.sd_hash)
+    return await loop.create_connection(ip, port, protocol_factory=factory)
+
+
+@reflector_factory
+def reflect_stream_factory(blob_manager, stream_hash, sd_hash, reflector_server=None):
+    loop = asyncio.get_running_loop()
+    server = loop.create_future()
+    server.set_result(get_reflector_server(reflector_server))
+    loop.run_until_complete(server)
+    host = server.result()
+    _host, port = host[0], host[1]
+    ip = await resolve(_host)
+    # TODO: make this an actual factory.
+    factory = EncryptedFileReflectorClientFactory(blob_manager, stream_hash, sd_hash)
+    return await loop.create_connection(ip, port, protocol_factory=factory)
+
+
+@reflector_factory
+def reflect_blob_hashes(blob_hashes, blob_manager, reflector_server=None):
+    loop = asyncio.get_running_loop()
+    server = loop.create_future()
+    server.set_result(get_reflector_server(reflector_server))
+    loop.run_until_complete(server)
+    host = server.result()
+    _host, port = host[0], host[1]
+    ip = loop.getnameinfo(_host)
+    # TODO: make this an actual factory.
+    factory = BlobReflectorClientFactory(blob_manager, blob_hashes)
+    return await loop.create_connection(ip, port, protocol_factory=factory)
+'''
