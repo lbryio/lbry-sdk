@@ -54,7 +54,7 @@ def download_it(peer, timeout, blob_hash):
     tmp_blob_manager = DiskBlobManager(tmp_dir, storage)
 
     config = {'auto_connect': True}
-    config['lbryum_wallet_dir'] = tempfile.mkdtemp()
+    config['wallet_dir'] = tempfile.mkdtemp()
     config['use_keyring'] = False
     config['blockchain_name'] = conf.settings['blockchain_name']
     config['lbryum_servers'] = []
