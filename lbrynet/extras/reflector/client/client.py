@@ -36,12 +36,10 @@ class EncryptedFileReflectorClient(Protocol):
         self.file_sender = None
         self.producer = None
         self.streaming = None
-        
         self.blob_manager = None
         self.protocol_version = None
         self.stream_hash = None
         self.sd_hash = None
-        
         self._transport = None
 
     #  Protocol stuff

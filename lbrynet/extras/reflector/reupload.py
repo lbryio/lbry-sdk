@@ -3,7 +3,7 @@ import random
 from twisted.internet import reactor, defer
 from lbrynet import conf
 from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
-from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
+from lbrynet.extras.reflector.client import blob_factory
 
 
 def _is_ip(host):
@@ -41,7 +41,7 @@ def _reflect_file(lbry_file, reflector_server):
 @defer.inlineCallbacks
 def _reflect_blobs(blob_manager, blob_hashes, reflector_server):
     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-    factory = BlobReflectorClientFactory(blob_manager, blob_hashes)
+    factory = blob_factory(blob_manager, blob_hashes)
     ip = yield resolve(reflector_address)
     yield reactor.connectTCP(ip, reflector_port, factory)
     result = yield factory.finished_deferred
