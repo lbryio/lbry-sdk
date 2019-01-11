@@ -192,7 +192,10 @@ class StreamDownloader(StreamAssembler):
             )
         except asyncio.CancelledError:
             log.info("cancelled")
-            self.stop()
+            try:
+                self.stop()
+            except asyncio.CancelledError:
+                pass
 
     def download(self, node: 'Node'):
         log.info("make download task")

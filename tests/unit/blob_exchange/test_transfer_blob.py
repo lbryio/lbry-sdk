@@ -37,7 +37,7 @@ class TestBlobExchange(AsyncioTestCase):
         writer = server_blob.open_for_writing()
         writer.write(blob_bytes)
         await server_blob.finished_writing.wait()
-        self.assertTrue(os.path.isfile(server_blob.file_path), True)
+        self.assertTrue(os.path.isfile(server_blob.file_path))
         self.assertEqual(server_blob.get_is_verified(), True)
 
         # run the server
