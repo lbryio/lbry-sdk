@@ -594,6 +594,10 @@ class Config:
         if not os.path.isdir(self.wallet_dir):
             os.makedirs(self.wallet_dir)
 
+    def ensure_download_dir(self):
+        if not os.path.isdir(self.download_dir):
+            os.makedirs(self.download_dir)
+
     def get_log_filename(self):
         """
         Return the log file for this platform.
@@ -671,3 +675,4 @@ def initialize_settings(load_conf_file: typing.Optional[bool] = True,
         settings['wallet_dir'] = settings.wallet_dir or settings.default_wallet_dir
         settings.ensure_data_dir()
         settings.ensure_wallet_dir()
+        settings.ensure_download_dir()
