@@ -113,10 +113,8 @@ class KBucket:
         return contacts[:min(current_len, count)]
 
     def get_bad_or_unknown_peers(self) -> typing.List['Peer']:
-        contacts = self.get_peers(sort_distance_to=False)
-        results = [contact for contact in contacts if contact.contact_is_good is False]
-        results.extend(contact for contact in contacts if contact.contact_is_good is None)
-        return results
+        peer = self.get_peers(sort_distance_to=False)
+        return [peer for peer in peer if peer.contact_is_good is not True]
 
     def remove_peer(self, peer: 'Peer') -> None:
         self._contacts.remove(peer)
