@@ -834,7 +834,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def _get_lbry_file_dict(self, lbry_file):
         key = hexlify(lbry_file.key) if lbry_file.key else None
-        full_path = os.path.join(lbry_file.download_directory, lbry_file.file_name)
+        download_directory = lbry_file.download_directory
+        if not os.path.exists(download_directory):
+            download_directory = conf.settings.download_dir
+        full_path = os.path.join(download_directory, lbry_file.file_name)
         mime_type = guess_media_type(lbry_file.file_name)
         if os.path.isfile(full_path):
             with open(full_path) as written_file:
@@ -852,7 +855,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return {
             'completed': lbry_file.completed,
             'file_name': lbry_file.file_name,
-            'download_directory': lbry_file.download_directory,
+            'download_directory': download_directory,
             'points_paid': lbry_file.points_paid,
             'stopped': lbry_file.stopped,
             'stream_hash': lbry_file.stream_hash,
