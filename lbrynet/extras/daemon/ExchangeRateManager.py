@@ -54,7 +54,7 @@ class MarketFeed:
 
     async def _make_request(self):
         async with aiohttp.request('get', self.url, params=self.params) as response:
-            return await response.json()
+            return (await response.read()).decode()
 
     def _handle_response(self, response):
         return NotImplementedError

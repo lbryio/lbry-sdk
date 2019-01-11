@@ -9,44 +9,47 @@ from lbrynet.blob_exchange.server import BlobServer
 from lbrynet.peer import PeerManager
 
 
-class TestBlobExchange(AsyncioTestCase):
+class BlobExchangeTestBase(AsyncioTestCase):
+    async def asyncSetUp(self):
+        self.loop = asyncio.get_event_loop()
+
+        self.client_dir = tempfile.mkdtemp()
+        self.server_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.client_dir))
+        self.addCleanup(lambda: shutil.rmtree(self.server_dir))
+
+        self.server_storage = SQLiteStorage(os.path.join(self.server_dir, "lbrynet.sqlite"))
+        self.server_blob_manager = BlobFileManager(self.loop, self.server_dir, self.server_storage)
+        self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
+
+        self.client_storage = SQLiteStorage(os.path.join(self.client_dir, "lbrynet.sqlite"))
+        self.client_blob_manager = BlobFileManager(self.loop, self.client_dir, self.client_storage)
+        self.client_peer_manager = PeerManager(self.loop)
+        self.server_from_client = self.client_peer_manager.make_peer("127.0.0.1", b'1' * 48, tcp_port=3333)
+
+        await self.client_storage.open()
+        await self.server_storage.open()
+        await self.client_blob_manager.setup()
+        await self.server_blob_manager.setup()
+
+        self.server.start_server(3333, '127.0.0.1')
+        await self.server.started_listening.wait()
+
+
+class TestBlobExchange(BlobExchangeTestBase):
     async def _test_transfer_blob(self, blob_hash: str, blob_bytes: bytes):
-        loop = asyncio.get_event_loop()
-        client_dir = tempfile.mkdtemp()
-        server_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(client_dir))
-        self.addCleanup(lambda: shutil.rmtree(server_dir))
-
-        client_storage = SQLiteStorage(os.path.join(client_dir, "lbrynet.sqlite"))
-        server_storage = SQLiteStorage(os.path.join(server_dir, "lbrynet.sqlite"))
-        client_blob_manager = BlobFileManager(loop, client_dir, client_storage)
-        server_blob_manager = BlobFileManager(loop, server_dir, server_storage)
-        server = BlobServer(loop, server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
-        client_blob = client_blob_manager.get_blob(blob_hash, len(blob_bytes))
-        self.assertEqual(client_blob.get_is_verified(), False)
-        client_peer_manager = PeerManager(loop)
-        server_from_client = client_peer_manager.make_peer("127.0.0.1", b'1' * 48, tcp_port=3333)
-
-        await client_storage.open()
-        await server_storage.open()
-        await client_blob_manager.setup()
-        await server_blob_manager.setup()
-
         # add the blob on the server
-        server_blob = server_blob_manager.get_blob(blob_hash, len(blob_bytes))
+        server_blob = self.server_blob_manager.get_blob(blob_hash, len(blob_bytes))
         writer = server_blob.open_for_writing()
         writer.write(blob_bytes)
         await server_blob.finished_writing.wait()
         self.assertTrue(os.path.isfile(server_blob.file_path))
         self.assertEqual(server_blob.get_is_verified(), True)
 
-        # run the server
-        server.start_server(3333, '127.0.0.1')
-        await server.started_listening.wait()
-        self.addCleanup(server.stop_server)
+        client_blob = self.client_blob_manager.get_blob(blob_hash)
 
         # download the blob
-        downloaded = await server_from_client.request_blobs([client_blob], 2, 2)
+        downloaded = await self.server_from_client.request_blobs([client_blob], 2, 2)
         self.assertEqual(client_blob.get_is_verified(), True)
         self.assertListEqual(downloaded, [client_blob])
 
