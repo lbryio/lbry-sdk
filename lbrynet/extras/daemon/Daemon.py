@@ -3192,8 +3192,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Announce blobs to the DHT
 
         Usage:
-            blob_announce [<blob_hash> | --blob_hash=<blob_hash>]
-                          [<stream_hash> | --stream_hash=<stream_hash>] | [<sd_hash> | --sd_hash=<sd_hash>]
+            blob_announce (<blob_hash> | --blob_hash=<blob_hash>
+                          | --stream_hash=<stream_hash> | --sd_hash=<sd_hash>)
 
         Options:
             --blob_hash=<blob_hash>        : (str) announce a blob, specified by blob_hash
