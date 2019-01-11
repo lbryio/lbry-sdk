@@ -5,8 +5,6 @@ import random
 import socket
 import string
 import json
-import traceback
-import functools
 import logging
 import pkg_resources
 from lbrynet.schema.claim import ClaimDict

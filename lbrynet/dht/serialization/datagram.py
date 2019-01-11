@@ -70,7 +70,7 @@ class RequestDatagram(KademliaDatagramBase):
             rpc_id = constants.generate_id()[:constants.rpc_id_length]
         if len(from_node_id) != constants.hash_bits // 8:
             raise ValueError("invalid node id")
-        return cls(REQUEST_TYPE, rpc_id, from_node_id,  b'ping')
+        return cls(REQUEST_TYPE, rpc_id, from_node_id, b'ping')
 
     @classmethod
     def make_store(cls, from_node_id: bytes, blob_hash: bytes, token: bytes, port: int,
@@ -147,6 +147,8 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
     }
 
     primitive = bencoding.bdecode(datagram)
+    if not isinstance(primitive, dict):
+        raise ValueError("invalid datagram type")
     if primitive[0] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:
         datagram_type = primitive[0]
     else:

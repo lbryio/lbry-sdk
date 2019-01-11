@@ -160,7 +160,6 @@ def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[ty
             break
         except ValueError:
             response = None
-            pass
     if response is None:
         extra_data = response_msg
     return response, extra_data

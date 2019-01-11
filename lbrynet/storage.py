@@ -117,12 +117,6 @@ def _batched_select(transaction, query, parameters):
             yield result
 
 
-def calculate_effective_amount(amount: str, supports: typing.Optional[typing.List[typing.Dict]] = None) -> str:
-    return dewies_to_lbc(
-        lbc_to_dewies(amount) + sum([lbc_to_dewies(support['amount']) for support in supports])
-    )
-
-
 class SQLiteStorage(SQLiteMixin):
     CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;
@@ -335,7 +329,7 @@ class SQLiteStorage(SQLiteMixin):
                                  (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
                                   binascii.hexlify(descriptor.stream_name.encode()).decode(),
                                   binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
-            args =[]
+            args = []
             for blob in descriptor.blobs:
                 args.extend([descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv])
             transaction.execute(

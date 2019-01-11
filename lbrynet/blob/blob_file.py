@@ -92,7 +92,8 @@ class BlobFile:
                 t.add_done_callback(lambda *_: self.finished_writing.set())
             elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
                 if writer.peer:
-                    log.warning(f"failed to download {self.blob_hash[:8]} from {writer.peer.address}: {str(error)}")
+                    msg = f"failed to download {self.blob_hash[:8]} from {writer.peer.address}: {str(error)}"
+                    log.warning(msg)
                 raise error
         return callback
 
@@ -131,9 +132,10 @@ class BlobFile:
             if writer.peer is peer:
                 raise Exception("Tried to download the same file twice simultaneously from the same peer")
         if not peer:
-            log.debug(f"Opening {self.blob_hash[:8]} to be written")
+            msg = f"Opening {self.blob_hash[:8]} to be written"
         else:
-            log.debug(f"Opening {self.blob_hash[:8]} to be written by {peer.address}:{peer.tcp_port}")
+            msg = f"Opening {self.blob_hash[:8]} to be written by {peer.address}:{peer.tcp_port}"
+        log.debug(msg)
         fut = asyncio.Future(loop=self.loop)
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut, peer)
         self.writers.append(writer)

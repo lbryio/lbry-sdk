@@ -1,7 +1,5 @@
-import binascii
 import asyncio
 import typing
-from types import AsyncGeneratorType
 import logging
 
 from lbrynet.dht import constants
