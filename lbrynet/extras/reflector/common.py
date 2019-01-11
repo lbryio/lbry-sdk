@@ -50,17 +50,17 @@ def reflector_factory(task_factory):
 
 class BaseProtocol(protocols.DatagramProtocol):
     def __init__(self, protocol_version=REFLECTOR_V2, addr=None):
-        self.handshake_sent = False
-        self.handshake_recv = False
-        self.protocol_version = protocol_version
-        self.addr = addr
+        self._handshake_sent = False
+        self._handshake_recv = False
+        self.__version = protocol_version
+        self.__addr = addr
     
     def connection_made(self, transport: transports.DatagramTransport):
-        if not self.handshake_sent:
+        if not self._handshake_sent:
             log.debug('Sending handshake')
-            payload = json.dumps({'version': self.protocol_version})
-            transport.sendto(data=payload.encode(), addr=self.addr)
-            self.handshake_sent = True
+            payload = json.dumps({'version': self.__version})
+            transport.sendto(data=payload.encode(), addr=self.__addr)
+            self._handshake_sent = True
         
     def connection_lost(self, exc: Optional[Exception]):
         log.info("Closing connection, reason: %s", exc)
@@ -70,14 +70,14 @@ class BaseProtocol(protocols.DatagramProtocol):
             log.error("Error during handshake: %s", exc)
         elif exc is ReflectorRequestDecodeError:
             log.error("Error when decoding payload: %s", quote_from_bytes(
-                json.dumps({'version': self.protocol_version}).encode()))
+                json.dumps({'version': self.__version}).encode()))
         elif exc is ReflectorClientVersionError:
-            log.error("Invalid reflector protocol version: %i", self.protocol_version)
+            log.error("Invalid reflector protocol version: %i", self.__version)
         else:
             log.error("An error occurred immediately: %s", exc)
     
     def datagram_received(self, data: Union[bytes, Text], addr: Tuple[str, int]):
-        if self.handshake_sent and not self.handshake_recv:
-            self.handshake_recv = True
+        if self._handshake_sent and not self._handshake_recv:
+            self._handshake_recv = True
             log.info("Data received: %s", data.decode())
             log.info("Connection established with %s", addr)
