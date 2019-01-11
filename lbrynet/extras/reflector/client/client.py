@@ -4,13 +4,14 @@ import logging
 from asyncio import transports
 from typing import Optional
 
+import lbrynet.extras.reflector.exceptions as err
+from lbrynet.extras.reflector import REFLECTOR_V1, REFLECTOR_V2
+
 from twisted.internet.error import ConnectionRefusedError
 from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
 
-from lbrynet.extras.reflector.common import IncompleteResponse, ReflectorRequestError
-from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class EncryptedFileReflectorClient(Protocol):
         self.response_buff += data
         try:
             msg = self.parse_response(self.response_buff)
-        except IncompleteResponse:
+        except err.IncompleteResponse:
             pass
         else:
             self.response_buff = b''
@@ -201,7 +202,7 @@ class EncryptedFileReflectorClient(Protocol):
         try:
             return json.loads(buff)
         except ValueError:
-            raise IncompleteResponse()
+            raise err.IncompleteResponse()
 
     def response_failure_handler(self, err):
         log.warning("An error occurred handling the response: %s", err.getTraceback())
@@ -244,7 +245,7 @@ class EncryptedFileReflectorClient(Protocol):
     def handle_descriptor_response(self, response_dict):
         if self.file_sender is None:  # Expecting Server Info Response
             if 'send_sd_blob' not in response_dict:
-                raise ReflectorRequestError("I don't know whether to send the sd blob or not!")
+                raise err.ReflectorRequestError("I don't know whether to send the sd blob or not!")
             if response_dict['send_sd_blob'] is True:
                 self.file_sender = FileSender()
             else:
