@@ -146,12 +146,17 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
         ERROR_TYPE: ErrorDatagram
     }
 
-    primitive = bencoding.bdecode(datagram)
+    primitive: typing.Dict = bencoding.bdecode(datagram)
     if not isinstance(primitive, dict):
         raise ValueError("invalid datagram type")
-    if primitive[0] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:
-        datagram_type = primitive[0]
+    if primitive[0] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:  # pylint: disable=unsubscriptable-object
+        datagram_type = primitive[0]  # pylint: disable=unsubscriptable-object
     else:
         raise ValueError("invalid datagram type")
     datagram_class = msg_types[datagram_type]
-    return datagram_class(**{k: primitive[i] for i, k in enumerate(datagram_class.fields) if i in primitive})
+    return datagram_class(**{
+            k: primitive[i]  # pylint: disable=unsubscriptable-object
+            for i, k in enumerate(datagram_class.fields)
+            if i in primitive  # pylint: disable=unsupported-membership-test
+        }
+    )

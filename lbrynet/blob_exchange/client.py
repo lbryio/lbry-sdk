@@ -110,7 +110,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         except Exception as err:
             msg = f"download {blob.blob_hash[:8]} from {self.peer.address} error: {str(err)}"
             log.error(msg)
-
         finally:
             if not downloaded_blob:
                 writer.close_handle()
