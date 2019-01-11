@@ -1,22 +1,26 @@
 import json
 import logging
 
+from urllib.parse import quote_from_bytes
+
 from asyncio import transports
 from typing import Optional, Union, Text, Tuple
-from lbrynet.extras.reflector.common import BaseProtocol
+from lbrynet.extras.reflector.client import ClientProtocol
 
 from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
 
-from lbrynet.extras.reflector.common import REFLECTOR_V2, IncompleteResponse
+from lbrynet.extras.reflector import REFLECTOR_V2
+import lbrynet.extras.reflector.exceptions as err
 
 
 log = logging.getLogger(__name__)
 
 
-class BlobProtocol(BaseProtocol):
+class BlobProtocol(ClientProtocol):
     def __init__(self, blob_manager, blobs, protocol_version, addr):
+        log.debug('Sending handshake')
         super().__init__(protocol_version=protocol_version, addr=addr)
         self._transport = None
         self.blob_manager = blob_manager
@@ -32,6 +36,7 @@ class BlobProtocol(BaseProtocol):
         self.current_blob = None
         
     def connection_made(self, transport: transports.DatagramTransport):
+        log.info("Connection established with %s", transport.get_extra_info('peerhost'))
         self.response_buff = b''
         self.outgoing_buff = ''
         self.next_blob_to_send = None
@@ -41,6 +46,17 @@ class BlobProtocol(BaseProtocol):
         self._transport = transport
     
     def connection_lost(self, exc: Optional[Exception]):
+        if self._transport is None:
+            if exc is err.ReflectorRequestError:
+                log.error("Error during handshake: %s", exc)
+            elif exc is err.ReflectorRequestDecodeError:
+                log.error("Error when decoding payload: %s", quote_from_bytes(
+                    json.dumps({'version': self.__version}).encode()))
+            elif exc is err.ReflectorClientVersionError:
+                log.error("Invalid reflector protocol version: %i", self.__version)
+            else:
+                log.error("An error occurred immediately: %s", exc)
+            log.info("Closing connection, reason: %s", exc)
         if exc is None:
             if self.reflected_blobs:
                 log.info('Finished sending data via reflector')
@@ -53,12 +69,13 @@ class BlobProtocol(BaseProtocol):
         self.file_sender = None
     
     def datagram_received(self, data: Union[bytes, Text], addr: Tuple[str, int]):
+        log.info("Data received: %s", data.decode())
         msg = data.decode()
         log.debug('Received %s', msg)
         try:
             message = json.loads(msg)
         except ValueError:
-            return IncompleteResponse()
+            return err.IncompleteResponse()
         if self.file_sender is None:  # Expecting Server Info Response
             if 'send_blob' not in message:
                 return ValueError("I don't know whether to send the blob or not!")
@@ -154,7 +171,7 @@ class BlobReflectorClient(Protocol):
         self.response_buff += data
         try:
             msg = self.parse_response(self.response_buff)
-        except IncompleteResponse:
+        except err.IncompleteResponse:
             pass
         else:
             self.response_buff = b''
@@ -198,7 +215,7 @@ class BlobReflectorClient(Protocol):
         try:
             return json.loads(buff)
         except ValueError:
-            raise IncompleteResponse()
+            raise err.IncompleteResponse()
 
     def response_failure_handler(self, err):
         log.warning("An error occurred handling the response: %s", err.getTraceback())

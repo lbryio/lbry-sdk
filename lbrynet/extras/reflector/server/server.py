@@ -2,7 +2,9 @@ import logging
 import json
 
 from asyncio import transports
-from typing import Optional
+
+import lbrynet.extras.reflector.exceptions as err
+from lbrynet.extras.reflector import REFLECTOR_V1, REFLECTOR_V2
 
 from twisted.python import failure
 from twisted.internet import error, defer
@@ -12,9 +14,6 @@ from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.p2p.Error import DownloadCanceledError, InvalidBlobHashError
 from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.p2p.StreamDescriptor import save_sd_info
-from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2
-from lbrynet.extras.reflector.common import ReflectorRequestError, ReflectorClientVersionError
-
 
 log = logging.getLogger(__name__)
 
@@ -70,11 +69,8 @@ class ReflectorServer(Protocol):
     def connectionLost(self, reason=failure.Failure(error.ConnectionDone())):
         log.info("Reflector upload from %s finished" % self.peer.host)
     
-    def connection_lost(self, exc: Optional[Exception]):
-        pass
-    
-    def handle_error(self, err):
-        log.error(err.getTraceback())
+    def handle_error(self, exc):
+        log.error(exc.getTraceback())
         self.transport.loseConnection()
 
     def send_response(self, response_dict):
@@ -207,7 +203,7 @@ class ReflectorServer(Protocol):
             return self.handle_descriptor_request(request_dict)
         if self.is_blob_request(request_dict):
             return self.handle_blob_request(request_dict)
-        raise ReflectorRequestError("Invalid request")
+        raise err.ReflectorRequestError("Invalid request")
 
     def handle_handshake(self, request_dict):
         """
@@ -223,10 +219,10 @@ class ReflectorServer(Protocol):
         """
 
         if VERSION not in request_dict:
-            raise ReflectorRequestError("Client should send version")
+            raise err.ReflectorRequestError("Client should send version")
 
         if int(request_dict[VERSION]) not in [REFLECTOR_V1, REFLECTOR_V2]:
-            raise ReflectorClientVersionError("Unknown version: %i" % int(request_dict[VERSION]))
+            raise err.ReflectorClientVersionError("Unknown version: %i" % int(request_dict[VERSION]))
 
         self.peer_version = int(request_dict[VERSION])
         log.debug('Handling handshake for client version %i', self.peer_version)
