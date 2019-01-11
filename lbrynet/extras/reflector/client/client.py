@@ -2,7 +2,7 @@ import json
 import logging
 
 from asyncio import transports
-from typing import Optional
+from typing import Any, Optional, Text, Tuple, Union
 
 import lbrynet.extras.reflector.exceptions as err
 from lbrynet.extras.reflector import REFLECTOR_V1, REFLECTOR_V2
@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 
 
 class EncryptedFileReflectorClient(Protocol):
-    
     def __init__(self):
+        super().__init__()
         self.response_buff = None
         self.outgoing_buff = None
         self.blob_hashes_to_send = None
@@ -36,14 +36,14 @@ class EncryptedFileReflectorClient(Protocol):
         self.file_sender = None
         self.producer = None
         self.streaming = None
-    
+        
         self.blob_manager = None
         self.protocol_version = None
         self.stream_hash = None
         self.sd_hash = None
         
         self._transport = None
-    
+
     #  Protocol stuff
     def connectionMade(self):
         log.debug("Connected to reflector")

@@ -1,13 +1,13 @@
-import asyncio
 import json
 import logging
 
+from asyncio.protocols import DatagramProtocol
 from asyncio import transports
 from typing import Any, Optional, Text, Tuple, Union, NoReturn, Awaitable
 
 import lbrynet.extras.reflector.exceptions as err
 from lbrynet.extras.reflector import REFLECTOR_V1, REFLECTOR_V2
-from lbrynet.extras.reflector.server import ServerProtocol, is_blob_request, is_descriptor_request
+from lbrynet.extras.reflector.server import is_blob_request, is_descriptor_request
 
 from lbrynet.p2p.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.p2p.StreamDescriptor import save_sd_info
@@ -31,10 +31,13 @@ SD_BLOB_SIZE = 'sd_blob_size'
 SD_BLOB_HASH = 'sd_blob_hash'
 
 
-class ReflectorServer(ServerProtocol):
+class ServerProtocol(DatagramProtocol):
+    protocol_version = REFLECTOR_V2
+    
     def __init__(self):
-        super().__init__()
         self._transport = None
+        self.recv_handshake = False
+        self.sent_handshake = False
         self.blob_manager = None
         self.storage = None
         self.lbry_file_manager = None
@@ -66,14 +69,13 @@ class ReflectorServer(ServerProtocol):
         if response_key == RECEIVED_SD_BLOB:
             sd_info = BlobStreamDescriptorReader(blob).get_info()
             save_sd_info(self.blob_manager, blob.blob_hash, sd_info)
-            return await self.blob_manager.set_should_announce(blob.blob_hash, True)
+            await self.blob_manager.set_should_announce(blob.blob_hash, True)
         else:
             stream_hash = self.storage.get_stream_of_blob(blob.blob_hash)
             if stream_hash is not None:
                 blob_num = self.storage.get_blob_num_by_hash(stream_hash, blob.blob_hash)
                 if blob_num == 0:
-                    return await self.blob_manager.set_should_announce(blob.blob_hash, True)
-                return
+                    await self.blob_manager.set_should_announce(blob.blob_hash, True)
         # TODO: loop.remove_writer()
         # self.blob_writer.close()
         self.blob_writer = None
@@ -88,7 +90,7 @@ class ReflectorServer(ServerProtocol):
         # TODO: loop.add_writer()
         # is response_key just {'response_key'}?
         # self._transport.write(json.loads({response_key: False}))
-        return await self.clean_up_failed_upload(exc, self.incoming_blob)
+        await self.clean_up_failed_upload(exc, self.incoming_blob)
     
     def _get_valid_response(self, response_msg) -> Tuple[Awaitable, Awaitable]:
         extra_data = None
@@ -119,49 +121,62 @@ class ReflectorServer(ServerProtocol):
         try:
             # TODO: loop.add_writer()
             # self.blob_writer, self.blob_finished_d = blob.open_for_writing(self.peer)
-            return await self._on_completed_blob(*blob, *message)
+            await self._on_completed_blob(blob, message)
         except err.IncompleteResponse as exc:
-            return await self._on_failed_blob(exc.with_traceback(tb=blob))
+            await self._on_failed_blob(exc.with_traceback(tb=blob))
     
     async def handle_descriptor_req(self, sd_blob_hash: Any[str], sd_blob_size: Any[int]) -> NoReturn:
         if self.blob_writer is None:
-            sd_blob = self.blob_manager.get_blob(*sd_blob_hash, *sd_blob_size)
-            return await self.get_descriptor_response(*sd_blob)
+            sd_blob = self.blob_manager.get_blob(sd_blob_hash, sd_blob_size)
+            await self.get_descriptor_response(sd_blob)
         self.receiving_blob = True
-        return await self.blob_finished_d
+        await self.blob_finished_d
     
     async def handle_blob_req(self, blob_hash: Any[str], blob_size: Any[int]) -> NoReturn:
         if self.blob_writer is None:
             log.debug('Received info for blob: %s', blob_hash[:16])
             blob = self.blob_manager.get_blob(blob_hash, blob_size)
-            return await self.get_blob_response(blob)
+            await self.get_blob_response(blob)
         log.debug('blob is already open')
         self.receiving_blob = True
-        return await self.blob_finished_d
+        await self.blob_finished_d
     
     async def handle_request(self, message: Any[Awaitable]) -> NoReturn:
         if is_descriptor_request(message):
             sd_blob_hash = message[SD_BLOB_HASH]
             sd_blob_size = message[SD_BLOB_SIZE]
-            return await self.handle_descriptor_req(*sd_blob_hash, *sd_blob_size)
+            await self.handle_descriptor_req(sd_blob_hash, sd_blob_size)
         if is_blob_request(message):
             blob_hash = message[BLOB_HASH]
             blob_size = message[BLOB_SIZE]
-            return await self.handle_blob_req(*blob_hash, *blob_size)
+            await self.handle_blob_req(blob_hash, blob_size)
         raise err.ReflectorRequestError("Invalid request")
-
+    
+    def send_handshake(self) -> NoReturn:
+        payload = json.loads({'version': self.protocol_version})
+        self._transport.write(payload)
+        self.sent_handshake = True
+    
+    def handle_handshake(self, message) -> NoReturn:
+        if 'version' in message:
+            if self.protocol_version in message:
+                self.recv_handshake = True
+                await self.send_handshake()
+                
     def datagram_received(self, data: Union[bytes, Text], addr: Tuple[str, int]) -> NoReturn:
+        if not self.recv_handshake:
+            await self.handle_handshake(data.decode())
         message = json.loads(data.decode())
         # while self.receiving_blob:
         #   TODO: loop.add_writer()
         #   self.blob_writer.write(message)
-        return await self.prepare_response(message)
+        await self.prepare_response(message)
     
     async def prepare_response(self, message: Any[Awaitable]) -> NoReturn:
         log.debug('Not yet receiving blob, data needs further processing')
         msg, extra_data = self._get_valid_response(message)
         if msg is not None:
-            return await self.handle_request(msg)
+            await self.handle_request(msg)
         if self.receiving_blob and extra_data:
             # TODO: loop.add_writer()
             # self.blob_writer.write(extra_data)
@@ -175,26 +190,25 @@ class ReflectorServer(ServerProtocol):
         self.receiving_blob = True
         # TODO: loop.add_writer()
         # self._transport.write(json.loads({SEND_BLOB: True}))
-        return await self.handle_incoming_blob(RECEIVED_BLOB)
+        await self.handle_incoming_blob(RECEIVED_BLOB)
     
     async def handle_verified_blob(self, sd_blob: Any[object]) -> NoReturn:
         sd_info = BlobStreamDescriptorReader(sd_blob).get_info()
         # TODO: loop.add_writer()
         # self.descriptor_resp = {SEND_SD_BLOB: False}
-        return await asyncio.gather(
-            save_sd_info(self.blob_manager, sd_blob.blob_hash, sd_info),
-            self.storage.verify_will_announce_head_and_sd_blobs(sd_info['stream_hash']),
-            self.request_needed_blobs(sd_info['stream_hash']))
+        await save_sd_info(self.blob_manager, sd_blob.blob_hash, sd_info)
+        await self.storage.verify_will_announce_head_and_sd_blobs(sd_info['stream_hash'])
+        await self.request_needed_blobs(sd_info['stream_hash'])
     
     async def get_descriptor_response(self, sd_blob: Any[object]) -> NoReturn:
         if sd_blob.get_is_verified():
-            return await self.handle_verified_blob(sd_blob)
+            await self.handle_verified_blob(sd_blob)
         self.incoming_blob = sd_blob
         self.receiving_blob = True
         # TODO: loop.add_writer()
         # self.descriptor_resp = {SEND_SD_BLOB: True}
         # self._transport.write(json.loads(self.descriptor_resp))
-        return await self.handle_incoming_blob(RECEIVED_SD_BLOB)
+        await self.handle_incoming_blob(RECEIVED_SD_BLOB)
 
     async def request_needed_blobs(self, stream_hash: Any[str]) -> NoReturn:
         # needed_blobs = self.storage.get_pending_blobs_for_stream(stream_hash)
