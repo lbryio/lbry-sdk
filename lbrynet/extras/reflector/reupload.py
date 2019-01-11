@@ -1,46 +1,48 @@
 import json
 import logging
-import random
+
+from asyncio import transports
+from typing import Optional
+
 from twisted.internet.error import ConnectionRefusedError
 from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
-from twisted.internet import defer, error, reactor
-from lbrynet import conf
-from lbrynet.extras.compat import f2d
+from twisted.internet import defer, error
+
+from lbrynet.extras.reflector.common import IncompleteResponse, ReflectorRequestError
+from lbrynet.extras.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 
 log = logging.getLogger(__name__)
 
 
-REFLECTOR_V1 = 0
-REFLECTOR_V2 = 1
-
-
-class ReflectorClientVersionError(Exception):
-    """
-    Raised by reflector server if client sends an incompatible or unknown version
-    """
-
-
-class ReflectorRequestError(Exception):
-    """
-    Raised by reflector server if client sends a message without the required fields
-    """
-
-
-class ReflectorRequestDecodeError(Exception):
-    """
-    Raised by reflector server if client sends an invalid json request
-    """
-
-
-class IncompleteResponse(Exception):
-    """
-    Raised by reflector server when client sends a portion of a json request,
-    used buffering the incoming request
-    """
-
-
 class EncryptedFileReflectorClient(Protocol):
+    
+    def __init__(self):
+        self.response_buff = None
+        self.outgoing_buff = None
+        self.blob_hashes_to_send = None
+        self.failed_blob_hashes = None
+        self.next_blob_to_send = None
+        self.read_handle = None
+        self.sent_stream_info = None
+        self.received_descriptor_response = None
+        self.received_server_version = None
+        self.server_version = None
+        self.stream_descriptor = None
+        self.descriptor_needed = None
+        self.needed_blobs = None
+        self.reflected_blobs = None
+        self.file_sender = None
+        self.producer = None
+        self.streaming = None
+    
+        self.blob_manager = None
+        self.protocol_version = None
+        self.stream_hash = None
+        self.sd_hash = None
+        
+        self._transport = None
+    
     #  Protocol stuff
     def connectionMade(self):
         log.debug("Connected to reflector")
@@ -70,7 +72,10 @@ class EncryptedFileReflectorClient(Protocol):
         d = self.load_descriptor()
         d.addCallback(lambda _: self.send_handshake())
         d.addErrback(lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
-
+    
+    def connection_made(self, transport: transports.Transport):
+        self._transport = transport
+    
     def dataReceived(self, data):
         self.response_buff += data
         try:
@@ -82,19 +87,23 @@ class EncryptedFileReflectorClient(Protocol):
             d = self.handle_response(msg)
             d.addCallback(lambda _: self.send_next_request())
             d.addErrback(self.response_failure_handler)
-
+    
+    def data_received(self, data: bytes):
+        pass
+    
     def store_result(self, result):
         if not self.needed_blobs or len(self.reflected_blobs) == len(self.needed_blobs):
             reflected = True
         else:
             reflected = False
 
-        d = f2d(self.blob_manager.storage.update_reflected_stream(
-            self.sd_hash, self.transport.getPeer().host, reflected
-        ))
+        d = self.blob_manager.storage.update_reflected_stream(self.sd_hash, self.transport.getPeer().host, reflected)
         d.addCallback(lambda _: result)
         return d
-
+    
+    def eof_received(self):
+        pass
+    
     def connectionLost(self, reason):
         # make sure blob file readers get closed
         self.set_not_uploading()
@@ -119,7 +128,10 @@ class EncryptedFileReflectorClient(Protocol):
             result = reason
         self.factory.finished_deferred.addCallback(self.store_result)
         self.factory.finished_deferred.callback(result)
-
+    
+    def connection_lost(self, exc: Optional[Exception]):
+        pass
+    
     #  IConsumer stuff
 
     def registerProducer(self, producer, streaming):
@@ -143,7 +155,10 @@ class EncryptedFileReflectorClient(Protocol):
             for crypt_blob in blobs:
                 if crypt_blob.blob_hash and crypt_blob.length:
                     yield self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
-        return [blob for blob in get_blobs(blobs_in_stream) if blob.get_is_verified()]
+
+        dl = defer.DeferredList(list(get_blobs(blobs_in_stream)), consumeErrors=True)
+        dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.get_is_verified()])
+        return dl
 
     def set_blobs_to_send(self, blobs_to_send):
         for blob in blobs_to_send:
@@ -159,7 +174,7 @@ class EncryptedFileReflectorClient(Protocol):
                          len(filtered))
             return filtered
 
-        d = f2d(self.factory.blob_manager.storage.get_blobs_for_stream(self.stream_hash))
+        d = self.factory.blob_manager.storage.get_blobs_for_stream(self.stream_hash)
         d.addCallback(self.get_validated_blobs)
         if not self.descriptor_needed:
             d.addCallback(lambda filtered:
@@ -330,7 +345,7 @@ class EncryptedFileReflectorClient(Protocol):
             # open the next blob to send
             blob_hash = self.blob_hashes_to_send[0]
             self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
-            d = defer.succeed(self.blob_manager.get_blob(blob_hash))
+            d = self.blob_manager.get_blob(blob_hash)
             d.addCallback(self.open_blob_for_reading)
             d.addCallbacks(lambda _: self.send_blob_info(),
                            lambda err: self.skip_missing_blob(err, blob.blob_hash))
@@ -371,62 +386,3 @@ class EncryptedFileReflectorClientFactory(ClientFactory):
             log.warning("Could not connect to reflector server")
         else:
             log.error("Reflector connection failed: %s", reason)
-
-
-def _is_ip(host):
-    try:
-        if len(host.split(".")) == 4 and all([0 <= int(x) <= 255 for x in host.split(".")]):
-            return True
-        return False
-    except ValueError:
-        return False
-
-
-@defer.inlineCallbacks
-def resolve(host):
-    if _is_ip(host):
-        ip = host
-    else:
-        ip = yield reactor.resolve(host)
-    defer.returnValue(ip)
-
-
-@defer.inlineCallbacks
-def _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server):
-    reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-    factory = EncryptedFileReflectorClientFactory(blob_manager, stream_hash, sd_hash)
-    ip = yield resolve(reflector_address)
-    yield reactor.connectTCP(ip, reflector_port, factory)
-    result = yield factory.finished_deferred
-    defer.returnValue(result)
-
-
-def _reflect_file(lbry_file, reflector_server):
-    return _reflect_stream(lbry_file.blob_manager, lbry_file.stream_hash, lbry_file.sd_hash, reflector_server)
-
-
-def reflect_file(lbry_file, reflector_server=None):
-    if reflector_server:
-        if len(reflector_server.split(":")) == 2:
-            host, port = tuple(reflector_server.split(":"))
-            reflector_server = host, int(port)
-        else:
-            reflector_server = reflector_server, 5566
-    else:
-        reflector_server = random.choice(conf.settings['reflector_servers'])
-    return _reflect_file(lbry_file, reflector_server)
-
-
-@defer.inlineCallbacks
-def reflect_stream(blob_manager, stream_hash, reflector_server=None):
-    if reflector_server:
-        if len(reflector_server.split(":")) == 2:
-            host, port = tuple(reflector_server.split(":"))
-            reflector_server = host, int(port)
-        else:
-            reflector_server = reflector_server, 5566
-    else:
-        reflector_server = random.choice(conf.settings['reflector_servers'])
-    sd_hash = yield blob_manager.storage.get_sd_blob_hash_for_stream(stream_hash)
-    result = yield _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server)
-    defer.returnValue(result)
