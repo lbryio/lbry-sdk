@@ -307,6 +307,12 @@ class SQLiteStorage(SQLiteMixin):
         streams = await self.run_and_return_one_or_none("select stream_hash from stream where sd_hash=?", sd_hash)
         return streams is not None
 
+    async def file_exists(self, sd_hash: str) -> bool:
+        streams = await self.run_and_return_one_or_none("select f.stream_hash from file f "
+                                                        "inner join stream s on "
+                                                        "s.stream_hash=f.stream_hash and s.sd_hash=?", sd_hash)
+        return streams is not None
+
     def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
         def _store_stream(transaction: sqlite3.Connection):
             transaction.execute(
