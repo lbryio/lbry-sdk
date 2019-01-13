@@ -157,7 +157,8 @@ class Node:
         return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
                                     key, bottom_out_limit, max_results, None, shortlist)
 
-    def stream_peer_search_junction(self, hash_queue: asyncio.Queue, bottom_out_limit=20) -> AsyncGeneratorJunction:
+    def stream_peer_search_junction(self, hash_queue: asyncio.Queue, bottom_out_limit=20,
+                                    max_results=-1) -> AsyncGeneratorJunction:
         peer_generator = AsyncGeneratorJunction(self.loop)
 
         async def _add_hashes_from_queue():
@@ -168,7 +169,8 @@ class Node:
                     break
                 peer_generator.add_generator(
                     self.get_iterative_value_finder(
-                        binascii.unhexlify(blob_hash.encode()), bottom_out_limit=bottom_out_limit, max_results=-1
+                        binascii.unhexlify(blob_hash.encode()), bottom_out_limit=bottom_out_limit,
+                        max_results=max_results
                     )
                 )
 

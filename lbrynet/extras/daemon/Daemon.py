@@ -2982,40 +2982,45 @@ class Daemon(metaclass=JSONRPCServerType):
         return "Deleted %s" % blob_hash
 
     @requires(DHT_COMPONENT)
-    async def jsonrpc_peer_list(self, blob_hash, timeout=None):
+    async def jsonrpc_peer_list(self, blob_hash, search_bottom_out_limit=None):
         """
         Get peers for blob hash
 
         Usage:
-            peer_list (<blob_hash> | --blob_hash=<blob_hash>) [<timeout> | --timeout=<timeout>]
+            peer_list (<blob_hash> | --blob_hash=<blob_hash>)
+            [<search_bottom_out_limit> | --search_bottom_out_limit=<search_bottom_out_limit>]
 
         Options:
-            --blob_hash=<blob_hash>  : (str) find available peers for this blob hash
-            --timeout=<timeout>      : (int) peer search timeout in seconds
+            --blob_hash=<blob_hash>                                  : (str) find available peers for this blob hash
+            --search_bottom_out_limit=<search_bottom_out_limit>      : (int) the number of search probes in a row
+                                                                             that don't find any new peers
+                                                                             before giving up and returning
 
         Returns:
-            (list) List of contact dictionaries {'host': <peer ip>, 'port': <peer port>, 'node_id': <peer node id>}
+            (list) List of contact dictionaries {'address': <peer ip>, 'udp_port': <dht port>, 'tcp_port': <peer port>,
+             'node_id': <peer node id>}
         """
 
         if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
-
-        finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
-
-        def trap_timeout(err):
-            err.trap(defer.TimeoutError)
-            return []
-
-        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.dht_node.clock)
-        finished_deferred.addErrback(trap_timeout)
-        peers = await d2f(finished_deferred)
+        if search_bottom_out_limit is not None:
+            search_bottom_out_limit = int(search_bottom_out_limit)
+            if search_bottom_out_limit <= 0:
+                raise Exception("invalid bottom out limit")
+        else:
+            search_bottom_out_limit = 4
+        peers = []
+        async for new_peers in self.dht_node.get_iterative_value_finder(unhexlify(blob_hash.encode()), max_results=1,
+                                                                        bottom_out_limit=search_bottom_out_limit):
+            peers.extend(new_peers)
         results = [
             {
-                "node_id": hexlify(node_id).decode(),
-                "host": host,
-                "port": port
+                "node_id": hexlify(peer.node_id).decode(),
+                "address": peer.address,
+                "udp_port": peer.udp_port,
+                "tcp_port": peer.tcp_port,
             }
-            for node_id, host, port in peers
+            for peer in peers
         ]
         return results
 
@@ -3199,22 +3204,24 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) pong, or {'error': <error message>} if an error is encountered
         """
-        contact = None
+        peer = None
+        log.info("%s %s %s", node_id, address, port)
         if node_id and address and port:
-            contact = self.dht_node.contact_manager.get_peer(unhexlify(node_id), address, int(port))
-            if not contact:
-                contact = self.dht_node.contact_manager.make_contact(
-                    unhexlify(node_id), address, int(port), self.dht_node._protocol
+            peer = self.component_manager.peer_manager.get_peer(address, unhexlify(node_id), udp_port=int(port))
+            if not peer:
+                peer = self.component_manager.peer_manager.make_peer(
+                    address, unhexlify(node_id), udp_port=int(port)
                 )
-        if not contact:
-            try:
-                contact = await d2f(self.dht_node.findContact(unhexlify(node_id)))
-            except TimeoutError:
-                return {'error': 'timeout finding peer'}
-        if not contact:
+        # if not contact:
+        #     try:
+        #         contact = await d2f(self.dht_node.findContact(unhexlify(node_id)))
+        #     except TimeoutError:
+        #         return {'error': 'timeout finding peer'}
+        if not peer:
             return {'error': 'peer not found'}
         try:
-            return (await d2f(contact.ping())).decode()
+            result = await peer.ping()
+            return result.decode()
         except TimeoutError:
             return {'error': 'ping timeout'}
 
