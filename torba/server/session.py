@@ -16,6 +16,7 @@ import os
 import pylru
 import ssl
 import time
+import socket
 from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
@@ -147,7 +148,7 @@ class SessionManager:
             protocol_class = self.env.coin.SESSIONCLS
         protocol_factory = partial(protocol_class, self, self.db,
                                    self.mempool, self.peer_mgr, kind)
-        server = loop.create_server(protocol_factory, *args, **kw_args)
+        server = loop.create_server(protocol_factory, *args, family=socket.AF_INET, **kw_args)
 
         host, port = args[:2]
         try:
