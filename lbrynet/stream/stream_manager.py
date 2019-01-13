@@ -109,6 +109,15 @@ class StreamManager:
             stream.stop_download()
         self.streams.remove(stream)
         await self.storage.delete_stream(stream.descriptor)
+
+        blob_hashes = [stream.sd_hash]
+        for blob_info in stream.descriptor.blobs[:-1]:
+            blob_hashes.append(blob_info.blob_hash)
+        for blob_hash in blob_hashes:
+            blob = self.blob_manager.get_blob(blob_hash)
+            if blob.get_is_verified():
+                await blob.delete()
+
         if delete_file:
             path = os.path.join(stream.download_directory, stream.file_name)
             if os.path.isfile(path):
@@ -140,6 +149,7 @@ class StreamManager:
         downloader.download(node)
         try:
             await asyncio.wait_for(downloader.got_descriptor.wait(), sd_blob_timeout)
+            log.info("got descriptor %s for %s", claim.source_hash.decode(), claim_info['name'])
         except (asyncio.TimeoutError, asyncio.CancelledError) as err:
             log.info("stream timeout")
             downloader.stop()
@@ -147,6 +157,7 @@ class StreamManager:
             return
         if not await self.blob_manager.storage.stream_exists(downloader.sd_hash):
             await self.blob_manager.storage.store_stream(downloader.sd_blob, downloader.descriptor)
+        if not await self.blob_manager.storage.file_exists(downloader.sd_hash):
             await self.blob_manager.storage.save_downloaded_file(
                 downloader.descriptor.stream_hash, os.path.basename(downloader.output_path), download_directory,
                 data_rate
