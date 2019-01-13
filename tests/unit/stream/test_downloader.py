@@ -6,10 +6,10 @@ from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.dht.node import Node
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
-from lbrynet.blob_exchange.server import BlobServer
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 
-import logging; logging.getLogger("lbrynet").setLevel(logging.DEBUG)
+# import logging
+# logging.getLogger("lbrynet").setLevel(logging.DEBUG)
 
 
 class TestStreamDownloader(BlobExchangeTestBase):
@@ -38,7 +38,7 @@ class TestStreamDownloader(BlobExchangeTestBase):
 
             yield _gen()
 
-        mock_node.peer_search_junction = mock_peer_search
+        mock_node.stream_peer_search_junction = mock_peer_search
 
         self.downloader.download(mock_node)
         await self.downloader.stream_finished_event.wait()
@@ -64,7 +64,7 @@ class TestStreamDownloader(BlobExchangeTestBase):
 
             yield _gen()
 
-        mock_node.peer_search_junction = mock_peer_search
+        mock_node.stream_peer_search_junction = mock_peer_search
 
         self.downloader.download(mock_node)
         await self.downloader.stream_finished_event.wait()

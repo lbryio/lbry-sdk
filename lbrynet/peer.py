@@ -54,7 +54,8 @@ class Peer:
 
         self.tcp_last_down = None
         self.blob_score = 0
-        self.blob_exchange_protocol: BlobExchangeClientProtocol = None
+        self.blob_request_lock = asyncio.Lock(loop=self.loop)
+        self.blob_exchange_protocol_connections: typing.Dict['BlobFile', asyncio.Future] = {}
 
     def update_tcp_port(self, tcp_port: int):
         self.tcp_port = tcp_port
@@ -235,49 +236,47 @@ class Peer:
 
     # Blob exchange functions
 
-    async def connect_tcp(self, peer_timeout: float, peer_connect_timeout: float) -> bool:
-        if self.blob_exchange_protocol:
-            return True
-        protocol = BlobExchangeClientProtocol(self, self.loop, peer_timeout)
+    async def _request_blob(self, blob: 'BlobFile', protocol: 'BlobExchangeClientProtocol',
+                            peer_connect_timeout: int) -> bool:
+        fut = self.blob_exchange_protocol_connections[blob]
+        connected = protocol.transport is not None
         try:
-            await asyncio.wait_for(
-                asyncio.ensure_future(self.loop.create_connection(lambda: protocol, self.address, self.tcp_port),
-                                      loop=self.loop),
-                peer_connect_timeout, loop=self.loop
-            )
-            self.blob_exchange_protocol = protocol
-            self.report_tcp_up()
-            return True
-        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError) as err:
-            log.debug("%s:%i is down", self.address, self.tcp_port)
-            self.report_tcp_down()
-            return False
-
-    def disconnect_tcp(self, reason: typing.Optional[Exception] = None):
-        if self.blob_exchange_protocol and self.blob_exchange_protocol.transport:
-            self.blob_exchange_protocol.transport.close()
-        self.blob_exchange_protocol = None
-
-    async def request_blobs(self, blobs: typing.List['BlobFile'],
-                            peer_timeout: int, peer_connect_timeout: int) -> typing.List['BlobFile']:
-        if not self.blob_exchange_protocol:
-            connected = await self.connect_tcp(peer_timeout, peer_connect_timeout)
             if not connected:
-                self.report_tcp_down()
-                log.info("%s:%i not connected", self.address, self.tcp_port)
-                return []
-            log.info("connected to %s:%i", self.address, self.tcp_port)
-        self.report_tcp_up()
-
-        downloaded = []
-        for blob in blobs:
+                await asyncio.wait_for(self.loop.create_connection(lambda: protocol, self.address, self.tcp_port),
+                                       peer_connect_timeout, loop=self.loop)
+                self.report_tcp_up()
             if not blob.get_is_verified():
-                success = await self.blob_exchange_protocol.download_blob(blob)
-                if success:
-                    downloaded.append(blob)
-        return downloaded
+                success = await protocol.download_blob(blob)
+                fut.set_result(success)
+            else:
+                fut.set_result(False)
+            return await fut
+        # except asyncio.CancelledError:
+        #     fut.set_result(False)
+        #     return await fut
+        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
+            if not connected:
+                log.debug("%s:%i is down", self.address, self.tcp_port)
+                self.report_tcp_down()
+            fut.set_result(False)
+            return await fut
 
-    # Blob functions, clean up
+    async def request_blob(self, blob: 'BlobFile', protocol: 'BlobExchangeClientProtocol',
+                           peer_connect_timeout: int) -> bool:
+        if blob in self.blob_exchange_protocol_connections:
+            return await self.blob_exchange_protocol_connections[blob]
+        if blob.get_is_verified():
+            return False
+        async with self.blob_request_lock:
+            fut = asyncio.Future(loop=self.loop)
+            self.blob_exchange_protocol_connections[blob] = fut
+        try:
+            return await self._request_blob(blob, protocol, peer_connect_timeout)
+        finally:
+            if protocol.transport:
+                protocol.transport.close()
+            async with self.blob_request_lock:
+                del self.blob_exchange_protocol_connections[blob]
 
     def report_tcp_down(self):
         self.tcp_last_down = self.loop.time()

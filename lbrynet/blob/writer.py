@@ -38,7 +38,11 @@ class HashBlobWriter:
             raise IOError("unknown blob length")
         if self.buffer is None:
             log.warning("writer has already been closed")
+            if not (self.finished.done() or self.finished.cancelled()):
+                self.finished.cancel()
+                return
             raise IOError('I/O operation on closed file')
+
         self._hashsum.update(data)
         self.len_so_far += len(data)
         # log.info("%s %i/%i", self.expected_blob_hash, self.len_so_far, expected_length)
