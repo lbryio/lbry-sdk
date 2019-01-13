@@ -1,6 +1,6 @@
 import json
-import logging
 import socket
+
 from asyncio import BaseProtocol
 
 
@@ -38,9 +38,10 @@ def subscribe_client_handshake():
     cread, cwrite = socket.socketpair(family=socket.SOCK_NONBLOCK)
     # TODO: build out server
 
+
 class Handshake(BaseProtocol):
     """Reflector Handshake Protocol
-    
+
     STOMP(simple, text-oriented message protocol)
     specification for component to initiate conversation
     between performers.
