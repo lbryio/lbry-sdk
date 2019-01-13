@@ -35,7 +35,6 @@ class StreamAssembler:
         self.sd_hash = sd_hash
         self.sd_blob: 'BlobFile' = None
         self.descriptor: StreamDescriptor = None
-        self.lock = asyncio.Lock(loop=self.loop)
         self.got_descriptor = asyncio.Event(loop=self.loop)
         self.wrote_bytes_event = asyncio.Event(loop=self.loop)
         self.stream_finished_event = asyncio.Event(loop=self.loop)
@@ -62,15 +61,11 @@ class StreamAssembler:
     async def assemble_decrypted_stream(self, output_dir: str, output_file_name: typing.Optional[str] = None):
         if not os.path.isdir(output_dir):
             raise OSError(f"output directory does not exist: '{output_dir}' '{output_file_name}'")
-        log.info("get descriptor")
         self.sd_blob = await self.get_blob(self.sd_hash)
-        log.info("got descriptor")
         await self.blob_manager.blob_completed(self.sd_blob)
-        log.info("descriptor completed")
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_manager, self.sd_blob)
         if not self.got_descriptor.is_set():
             self.got_descriptor.set()
-        log.info("loaded descriptor")
         self.output_path = await get_next_available_file_name(self.loop, output_dir,
                                                               output_file_name or self.descriptor.suggested_file_name)
 
@@ -78,12 +73,9 @@ class StreamAssembler:
         await self.blob_manager.storage.store_stream(
             self.sd_blob, self.descriptor
         )
-        log.info("added stream to db")
         try:
             for blob_info in self.descriptor.blobs[:-1]:
-                log.info("get blob %s (%i)", blob_info.blob_hash, blob_info.blob_num)
                 blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
-                log.info("got blob %s (%i), decrypt it", blob_info.blob_hash, blob_info.blob_num)
                 await self._decrypt_blob(blob, blob_info, self.descriptor.key)
                 if not self.wrote_bytes_event.is_set():
                     self.wrote_bytes_event.set()
@@ -91,7 +83,6 @@ class StreamAssembler:
         finally:
             self.stream_handle.close()
 
-    # override
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         f = asyncio.Future(loop=self.loop)
         f.set_result(self.blob_manager.get_blob(blob_hash, length))

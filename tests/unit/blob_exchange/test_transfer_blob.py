@@ -6,7 +6,11 @@ from torba.testcase import AsyncioTestCase
 from lbrynet.storage import SQLiteStorage
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob_exchange.server import BlobServer
+from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
 from lbrynet.peer import PeerManager
+
+# import logging
+# logging.getLogger("lbrynet").setLevel(logging.DEBUG)
 
 
 class BlobExchangeTestBase(AsyncioTestCase):
@@ -25,14 +29,14 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.client_storage = SQLiteStorage(os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobFileManager(self.loop, self.client_dir, self.client_storage)
         self.client_peer_manager = PeerManager(self.loop)
-        self.server_from_client = self.client_peer_manager.make_peer("127.0.0.1", b'1' * 48, tcp_port=3333)
+        self.server_from_client = self.client_peer_manager.make_peer("127.0.0.1", b'1' * 48, tcp_port=33333)
 
         await self.client_storage.open()
         await self.server_storage.open()
         await self.client_blob_manager.setup()
         await self.server_blob_manager.setup()
 
-        self.server.start_server(3333, '127.0.0.1')
+        self.server.start_server(33333, '127.0.0.1')
         await self.server.started_listening.wait()
 
 
@@ -49,9 +53,9 @@ class TestBlobExchange(BlobExchangeTestBase):
         client_blob = self.client_blob_manager.get_blob(blob_hash)
 
         # download the blob
-        downloaded = await self.server_from_client.request_blobs([client_blob], 2, 2)
+        downloaded = await self.server_from_client.request_blob(client_blob, BlobExchangeClientProtocol(self.server_from_client, self.loop, 2), 2)
         self.assertEqual(client_blob.get_is_verified(), True)
-        self.assertListEqual(downloaded, [client_blob])
+        self.assertTrue(downloaded)
 
     async def test_transfer_sd_blob(self):
         mock_sd_hash = "3e2706157a59aaa47ef52bc264fce488078b4026c0b9bab649a8f2fe1ecc5e5cad7182a2bb7722460f856831a1ac0f02"
