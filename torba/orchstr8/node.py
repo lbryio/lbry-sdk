@@ -122,9 +122,9 @@ class Conductor:
 
     async def stop(self):
         all_the_stops = [
-            self.wallet_node.stop,
-            self.spv_node.stop,
-            self.blockchain_node.stop
+            self.stop_wallet,
+            self.stop_spv,
+            self.stop_blockchain
         ]
         for stop in all_the_stops:
             try:
