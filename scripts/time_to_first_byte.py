@@ -6,7 +6,7 @@ import time
 from aiohttp import ClientConnectorError
 from lbrynet import conf
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.extras.daemon.auth.client import LBRYAPIClient, JSONRPCException
+from lbrynet.extras.daemon.client import LBRYAPIClient
 
 
 def extract_uris(response):
@@ -33,9 +33,16 @@ async def get_frontpage_uris():
         await session.close()
 
 
+def standard_dev(times):
+    mean = sum(times) / len(times)
+    s = [(t - mean) ** 2.0 for t in times]
+    return (sum(s) / len(s)) ** 0.5
+
+
 async def main():
     uris = await get_frontpage_uris()
-    print("got %i uris" % len(uris))
+    print(f"Checking {len(uris)} uris from the front page")
+    print("**********************************************")
     api = await LBRYAPIClient.get_client()
 
     try:
@@ -63,7 +70,7 @@ async def main():
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(uris)} - {first_byte - start} {uri}")
-        except JSONRPCException as err:
+        except:
             print(f"{i + 1}/{len(uris)} -  timeout in {time.time() - start} {uri}")
         await api.call(
             "file_delete", {
@@ -71,12 +78,12 @@ async def main():
                 "claim_name": parse_lbry_uri(uri).name
             }
         )
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.5)
 
-    avg = sum(first_byte_times) / len(first_byte_times)
-    print()
-    print(f"Average time to first byte: {avg} ({len(first_byte_times)} streams)")
-    print(f"Started {len(first_byte_times)} Timed out {len(uris) - len(first_byte_times)}")
+    print("**********************************************")
+    print(f"Started {len(first_byte_times)}/{len(uris)} streams")
+    print(f"Mean time to first byte: {sum(first_byte_times) / len(first_byte_times)}")
+    print(f"Standard deviation: {standard_dev(first_byte_times)}")
 
     await api.session.close()
 
@@ -89,5 +96,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     conf.initialize_settings()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    asyncio.run(main())
