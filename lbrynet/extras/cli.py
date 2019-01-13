@@ -23,7 +23,7 @@ optional_path_getter_type = typing.Optional[typing.Callable[[], str]]
 
 
 async def start_daemon(settings: typing.Optional[typing.Dict] = None,
-                 console_output: typing.Optional[bool] = True, verbose: typing.Optional[typing.List[str]] = None,
+                 console_output: typing.Optional[bool] = True, verbose: typing.Optional[bool] = False,
                  data_dir: typing.Optional[str] = None, wallet_dir: typing.Optional[str] = None,
                  download_dir: typing.Optional[str] = None):
 
@@ -79,9 +79,8 @@ async def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] =
         help='Disable all console output.'
     )
     parser.add_argument(
-        '--verbose', nargs="*",
-        help=('Enable debug output. Optionally specify loggers for which debug output '
-              'should selectively be applied.')
+        '--verbose', dest="verbose", action="store_true", default=False
+
     )
     parser.add_argument(
         '--version', action="store_true",
@@ -93,17 +92,13 @@ async def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] =
     if args.useauth:
         settings['use_auth_http'] = True
 
-    verbose = None
-    if args.verbose:
-        verbose = args.verbose
-
     console_output = not args.quiet
 
     if args.version:
         print(json_dumps_pretty(get_platform()))
         return
 
-    return await start_daemon(settings, console_output, verbose, data_dir, wallet_dir, download_dir)
+    return await start_daemon(settings, console_output, args.verbose, data_dir, wallet_dir, download_dir)
 
 
 async def execute_command(method, params, data_dir: typing.Optional[str] = None,

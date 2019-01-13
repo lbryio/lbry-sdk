@@ -374,7 +374,7 @@ class DHTComponent(Component):
             external_ip=external_ip,
             peer_port=self.external_peer_port
         )
-        await self.dht_node.join_network(
+        self.dht_node.start(
             interface='0.0.0.0', known_node_urls=conf.settings['known_dht_nodes']
         )
         log.info("Started the dht")
@@ -484,8 +484,10 @@ class PeerProtocolServerComponent(Component):
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
         wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
         peer_port = upnp.upnp_redirects.get("TCP", conf.settings["peer_port"])
-        self.blob_server = BlobServer(self.loop, blob_manager, wallet.get_unused_address())
+        address = await wallet.get_unused_address()
+        self.blob_server = BlobServer(self.loop, blob_manager, address)
         self.blob_server.start_server(peer_port, interface='0.0.0.0')
+        await self.blob_server.started_listening.wait()
 
     def stop(self):
         if self.blob_server:

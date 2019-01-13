@@ -6,6 +6,7 @@ import typing
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
 from copy import deepcopy
+from traceback import format_exc
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 from lbrynet import __version__
 from lbrynet.blob.blob_file import is_valid_blobhash
