@@ -30,6 +30,8 @@ BLOB_HASH = 'blob_hash'
 SD_BLOB_SIZE = 'sd_blob_size'
 SD_BLOB_HASH = 'sd_blob_hash'
 
+# TODO: create read/write sock handle to listen for handshake requests
+
 
 class ServerProtocol(DatagramProtocol):
     protocol_version = REFLECTOR_V2

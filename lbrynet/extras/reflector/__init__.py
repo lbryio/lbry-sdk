@@ -1,6 +1,5 @@
-REFLECTOR_V1 = 0
-REFLECTOR_V2 = 1
-
+from lbrynet.extras.reflector.common import *  # TODO: group client and server namespace code
+exceptions = ReflectorRequestError, ReflectorRequestDecodeError, ReflectorClientVersionError, IncompleteResponse
 __doc__ = """
 Reflector is a protocol to re-host lbry blobs and streams
 Client queries and server responses follow, all dicts are encoded as json

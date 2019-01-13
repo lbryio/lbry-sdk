@@ -15,6 +15,7 @@ from twisted.internet import defer, error
 
 log = logging.getLogger(__name__)
 
+# TODO: create read/write iface dedicated to handshake
 
 class EncryptedFileReflectorClient(Protocol):
     def __init__(self):
