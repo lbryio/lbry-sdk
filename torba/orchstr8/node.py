@@ -50,13 +50,19 @@ def get_blockchain_node_from_ledger(ledger_module):
     )
 
 
-def set_logging(ledger_module, level):
-    logging.getLogger('torba').setLevel(level)
-    logging.getLogger('torba.client').setLevel(level)
-    logging.getLogger('torba.server').setLevel(level)
-    #logging.getLogger('asyncio').setLevel(level)
-    logging.getLogger('blockchain').setLevel(level)
-    logging.getLogger(ledger_module.__name__).setLevel(level)
+def set_logging(ledger_module, level, handler=None):
+    modules = [
+        'torba',
+        'torba.client',
+        'torba.server',
+        'blockchain',
+        ledger_module.__name__
+    ]
+    for module_name in modules:
+        module = logging.getLogger(module_name)
+        module.setLevel(level)
+        if handler is not None:
+            module.addHandler(handler)
 
 
 class Conductor:
@@ -184,6 +190,7 @@ class SPVNode:
         self.controller = None
         self.data_path = None
         self.server = None
+        self.port = 1984
 
     async def start(self):
         self.data_path = tempfile.mkdtemp()
@@ -191,7 +198,7 @@ class SPVNode:
             'DB_DIRECTORY': self.data_path,
             'DAEMON_URL': 'http://rpcuser:rpcpassword@localhost:50001/',
             'REORG_LIMIT': '100',
-            'TCP_PORT': '1984'
+            'TCP_PORT': str(self.port)
         }
         os.environ.update(conf)
         self.server = Server(Env(self.coin_class))
@@ -250,6 +257,7 @@ class BlockchainNode:
         self.protocol = None
         self.transport = None
         self._block_expected = 0
+        self.port = 50001
 
     def is_expected_block(self, e: BlockHeightEvent):
         return self._block_expected == e.height
@@ -303,7 +311,7 @@ class BlockchainNode:
             self.daemon_bin,
             '-datadir={}'.format(self.data_path),
             '-printtoconsole', '-regtest', '-server', '-txindex',
-            '-rpcuser=rpcuser', '-rpcpassword=rpcpassword', '-rpcport=50001'
+            '-rpcuser=rpcuser', '-rpcpassword=rpcpassword', f'-rpcport={self.port}'
         )
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(

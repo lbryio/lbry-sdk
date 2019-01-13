@@ -2,7 +2,9 @@ import asyncio
 import logging
 from aiohttp.web import Application, WebSocketResponse, json_response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
-from .node import Conductor
+
+from torba.client.util import satoshis_to_coins
+from .node import Conductor, set_logging
 
 
 PORT = 7954
@@ -56,30 +58,15 @@ class ConductorService:
         await self.app.cleanup()
 
     async def start_stack(self, _):
-        handler = WebSocketLogHandler(self.send_message)
-        logging.getLogger('blockchain').setLevel(logging.DEBUG)
-        logging.getLogger('blockchain').addHandler(handler)
-        logging.getLogger('electrumx').setLevel(logging.DEBUG)
-        logging.getLogger('electrumx').addHandler(handler)
-        logging.getLogger('Controller').setLevel(logging.DEBUG)
-        logging.getLogger('Controller').addHandler(handler)
-        logging.getLogger('LBRYBlockProcessor').setLevel(logging.DEBUG)
-        logging.getLogger('LBRYBlockProcessor').addHandler(handler)
-        logging.getLogger('LBCDaemon').setLevel(logging.DEBUG)
-        logging.getLogger('LBCDaemon').addHandler(handler)
-        logging.getLogger('torba').setLevel(logging.DEBUG)
-        logging.getLogger('torba').addHandler(handler)
-        logging.getLogger(self.stack.ledger_module.__name__).setLevel(logging.DEBUG)
-        logging.getLogger(self.stack.ledger_module.__name__).addHandler(handler)
-        logging.getLogger(self.stack.ledger_module.__electrumx__.split('.')[0]).setLevel(logging.DEBUG)
-        logging.getLogger(self.stack.ledger_module.__electrumx__.split('.')[0]).addHandler(handler)
-        #await self.stack.start()
+        set_logging(
+            self.stack.ledger_module, logging.DEBUG, WebSocketLogHandler(self.send_message)
+        )
         self.stack.blockchain_started or await self.stack.start_blockchain()
-        self.send_message({'type': 'service', 'name': 'blockchain'})
+        self.send_message({'type': 'service', 'name': 'blockchain', 'port': self.stack.blockchain_node.port})
         self.stack.spv_started or await self.stack.start_spv()
-        self.send_message({'type': 'service', 'name': 'spv'})
+        self.send_message({'type': 'service', 'name': 'spv', 'port': self.stack.spv_node.port})
         self.stack.wallet_started or await self.stack.start_wallet()
-        self.send_message({'type': 'service', 'name': 'wallet'})
+        self.send_message({'type': 'service', 'name': 'wallet', 'port': ''})
         self.stack.wallet_node.ledger.on_header.listen(self.on_status)
         self.stack.wallet_node.ledger.on_transaction.listen(self.on_status)
         return json_response({'started': True})
@@ -138,10 +125,10 @@ class ConductorService:
         self.send_message({
             'type': 'status',
             'height': self.stack.wallet_node.ledger.headers.height,
-            'balance': await self.stack.wallet_node.account.get_balance(),
+            'balance': satoshis_to_coins(await self.stack.wallet_node.account.get_balance()),
             'miner': await self.stack.blockchain_node.get_balance()
         })
 
     def send_message(self, msg):
         for web_socket in self.app['websockets']:
-            asyncio.ensure_future(web_socket.send_json(msg))
+            self.loop.create_task(web_socket.send_json(msg))

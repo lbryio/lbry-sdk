@@ -3,8 +3,8 @@ import argparse
 import asyncio
 import aiohttp
 
-from .node import Conductor, get_ledger_from_environment, get_blockchain_node_from_ledger
-from .service import ConductorService
+from torba.orchstr8.node import Conductor, get_ledger_from_environment, get_blockchain_node_from_ledger
+from torba.orchstr8.service import ConductorService
 
 
 def get_argument_parser():
@@ -46,6 +46,7 @@ def main():
         return start_app()
 
     loop = asyncio.get_event_loop()
+    asyncio.set_event_loop(loop)
     ledger = get_ledger_from_environment()
 
     if command == 'download':
