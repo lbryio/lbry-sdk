@@ -35,27 +35,20 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             return
 
         response = BlobResponse.deserialize(data)
-        if response.responses and self._response_fut and self.blob and self.writer:
+
+        if response.responses and self.blob:
             blob_response = response.get_blob_response()
             if blob_response and blob_response.blob_hash == self.blob.blob_hash:
                 self.blob.set_length(blob_response.length)
             elif self.blob.blob_hash != blob_response.blob_hash:
                 log.warning("mismatch with self.blob %s", self.blob.blob_hash)
                 return
-            if response.blob_data and not self.writer.closed():
-                self._blob_bytes_received += len(response.blob_data)
-                self.writer.write(response.blob_data)
-                self._response_fut.set_result(response)
-                return
-        if response.blob_data and self.writer and not self.writer.closed() and not (
-                self.writer.finished.done() or self.writer.finished.cancelled()):
+        if response.responses:
+            self._response_fut.set_result(response)
+        if response.blob_data and self.writer and not self.writer.closed():
+            # log.info("write blob bytes (%s) from %s:%i", self.blob.blob_hash[:8], self.peer.address, self.peer.tcp_port)
             self._blob_bytes_received += len(response.blob_data)
             self.writer.write(response.blob_data)
-        elif not self.writer or self.writer.closed() or self.writer.finished.done() or self.writer.finished.cancelled():
-            if self.writer and not (self.writer.finished.done() or self.writer.finished.cancelled()):
-                self.writer.finished.cancel()
-            if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
-                self._response_fut.cancel()
 
     def data_received(self, data):
         total = len(data) + self._blob_bytes_received
@@ -158,13 +151,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
                     self._response_fut.cancel()
                 err = error
-            finally:
-                self.download_running.clear()
-                self._response_fut = None
-                if self.blob:
-                    await self.blob.close()
-                    self.blob = None
-                self.writer = None
         raise err
 
     def connection_made(self, transport: asyncio.Transport):

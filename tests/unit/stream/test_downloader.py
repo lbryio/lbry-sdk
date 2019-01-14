@@ -8,8 +8,8 @@ from lbrynet.dht.node import Node
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 
-# import logging
-# logging.getLogger("lbrynet").setLevel(logging.DEBUG)
+import logging
+logging.getLogger("lbrynet").setLevel(logging.DEBUG)
 
 
 class TestStreamDownloader(BlobExchangeTestBase):
@@ -25,26 +25,32 @@ class TestStreamDownloader(BlobExchangeTestBase):
         self.sd_hash = descriptor.calculate_sd_hash()
         self.downloader = StreamDownloader(self.loop, self.client_blob_manager, self.sd_hash, 3, 3, self.client_dir)
 
-    async def test_transfer_stream(self):
-        await self.setup_stream()
+    async def _test_transfer_stream(self, blob_count: int, mock_peer_search=None):
+        await self.setup_stream(blob_count)
 
         mock_node = mock.Mock(spec=Node)
 
         @contextlib.asynccontextmanager
-        async def mock_peer_search(*_):
+        async def _mock_peer_search(*_):
             async def _gen():
                 yield [self.server_from_client]
                 return
 
             yield _gen()
 
-        mock_node.stream_peer_search_junction = mock_peer_search
+        mock_node.stream_peer_search_junction = mock_peer_search or _mock_peer_search
 
         self.downloader.download(mock_node)
         await self.downloader.stream_finished_event.wait()
         self.assertTrue(os.path.isfile(self.downloader.output_path))
         with open(self.downloader.output_path, 'rb') as f:
             self.assertEqual(f.read(), self.stream_bytes)
+
+    async def test_transfer_stream(self):
+        await self._test_transfer_stream(10)
+
+    async def test_transfer_hundred_blob_stream(self):
+        await self._test_transfer_stream(100)
 
     async def test_transfer_stream_bad_first_peer_good_second(self):
         await self.setup_stream(2)
