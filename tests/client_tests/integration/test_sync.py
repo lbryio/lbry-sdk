@@ -28,7 +28,7 @@ class SyncTests(IntegrationTestCase):
             self.wallet_node.ledger_class,
             port=self.api_port
         )
-        await wallet_node.start(seed)
+        await wallet_node.start(self.conductor.spv_node, seed)
         self.started_nodes.append(wallet_node)
         return wallet_node
 
