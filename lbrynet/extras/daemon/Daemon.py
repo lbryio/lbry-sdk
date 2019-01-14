@@ -1675,7 +1675,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_account_decrypt(self, account_id=None):
         """
-        Decrypt an encrypted account, this will remove the wallet password
+        Decrypt an encrypted account, this will remove the wallet password. The account must be unlocked to decrypt it
 
         Usage:
             account_decrypt [<account_id> | --account_id=<account_id>]
