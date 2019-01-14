@@ -10,9 +10,9 @@ from docopt import docopt
 from textwrap import dedent
 
 from lbrynet import conf
-from lbrynet.utils import check_connection, json_dumps_pretty
-from lbrynet.extras.daemon.Daemon import Daemon, JSONRPCError
-from lbrynet.extras.daemon.client import LBRYAPIClient
+from lbrynet.utils import json_dumps_pretty
+from lbrynet.extras.daemon.Daemon import Daemon
+from lbrynet.extras.daemon.client import LBRYAPIClient, JSONRPCException
 from lbrynet.extras.system_info import get_platform
 from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
 
@@ -26,8 +26,6 @@ async def start_daemon(settings: typing.Optional[typing.Dict] = None,
                  console_output: typing.Optional[bool] = True, verbose: typing.Optional[bool] = False,
                  data_dir: typing.Optional[str] = None, wallet_dir: typing.Optional[str] = None,
                  download_dir: typing.Optional[str] = None):
-
-    loop = asyncio.get_event_loop()
 
     settings = settings or {}
     conf.initialize_settings(data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
@@ -45,27 +43,29 @@ async def start_daemon(settings: typing.Optional[typing.Dict] = None,
         handler.setFormatter(default_formatter)
         log.addHandler(handler)
 
-    if conf.settings['share_usage_data']:
-        log.addHandler(get_loggly_handler(conf.settings['LOGGLY_TOKEN']))
-
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
     logging.getLogger('aioupnp').setLevel(logging.WARNING)
+    logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 
     if verbose:
         log.setLevel(logging.DEBUG)
     else:
         log.setLevel(logging.INFO)
 
+    if conf.settings['share_usage_data']:
+        loggly_handler = get_loggly_handler(conf.settings['LOGGLY_TOKEN'])
+        loggly_handler.setLevel(logging.ERROR)
+        log.addHandler(loggly_handler)
+    else:
+        log.info("no loggly")
+
     log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
     log.info("Starting lbrynet-daemon from command line")
 
-    if check_connection():
-        daemon = Daemon()
-        await daemon.start_listening()
-        await daemon.server.wait_closed()
-    else:
-        log.info("Not connected to internet, unable to start")
+    daemon = Daemon()
+    await daemon.start_listening()
+    return daemon
 
 
 async def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] = None,
@@ -98,7 +98,8 @@ async def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] =
         print(json_dumps_pretty(get_platform()))
         return
 
-    return await start_daemon(settings, console_output, args.verbose, data_dir, wallet_dir, download_dir)
+    daemon = await start_daemon(settings, console_output, args.verbose, data_dir, wallet_dir, download_dir)
+    await daemon.server.wait_closed()
 
 
 async def execute_command(method, params, data_dir: typing.Optional[str] = None,
@@ -119,8 +120,8 @@ async def execute_command(method, params, data_dir: typing.Optional[str] = None,
     try:
         resp = await api.call(method, params)
         print(json.dumps(resp, indent=2))
-    except Exception as err:
-        print(json.dumps(JSONRPCError.create_from_exception(err), indent=2))
+    except JSONRPCException as err:
+        print(json.dumps(err.error, indent=2))
     finally:
         await api.session.close()
 
@@ -247,7 +248,11 @@ def main(argv=None):
         return 0
 
     elif method == 'start':
-        sys.exit(asyncio.run(start_daemon_with_cli_args(args, data_dir, wallet_dir, download_dir)))
+        try:
+            asyncio.run(start_daemon_with_cli_args(args, data_dir, wallet_dir, download_dir))
+        except KeyboardInterrupt:
+            pass
+        return 0
 
     elif method not in Daemon.callable_methods:
         if method not in Daemon.deprecated_methods:

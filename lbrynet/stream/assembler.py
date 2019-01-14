@@ -46,6 +46,8 @@ class StreamAssembler:
         offset = blob_info.blob_num * (MAX_BLOB_SIZE - 1)
 
         def _decrypt_and_write():
+            if self.stream_handle.closed:
+                return False
             self.stream_handle.seek(offset)
             decrypted = blob.decrypt(
                 binascii.unhexlify(key), binascii.unhexlify(blob_info.iv.encode())
@@ -53,9 +55,11 @@ class StreamAssembler:
             self.stream_handle.write(decrypted)
             self.stream_handle.flush()
             self.written_bytes += len(decrypted)
+            return True
 
-        await self.loop.run_in_executor(None, _decrypt_and_write)
-        log.info("decrypted %s", blob.blob_hash[:8])
+        decrypted = await self.loop.run_in_executor(None, _decrypt_and_write)
+        if decrypted:
+            log.info("decrypted %s", blob.blob_hash[:8])
         return
 
     async def assemble_decrypted_stream(self, output_dir: str, output_file_name: typing.Optional[str] = None):

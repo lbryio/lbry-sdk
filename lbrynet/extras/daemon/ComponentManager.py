@@ -3,6 +3,7 @@ import typing
 import asyncio
 from lbrynet.error import ComponentStartConditionNotMet
 from lbrynet.peer import PeerManager
+from lbrynet.extras.daemon import analytics
 
 log = logging.getLogger(__name__)
 
@@ -35,13 +36,14 @@ class ComponentManager:
     default_component_classes = {}
 
     def __init__(self, reactor=None, loop: typing.Optional[asyncio.BaseEventLoop] = None,
-                 analytics_manager=None, skip_components=None, peer_manager=None, **override_components):
+                 skip_components=None, peer_manager=None, **override_components):
         self.skip_components = skip_components or []
         self.reactor = reactor
         self.loop = loop or asyncio.get_event_loop()
+        self.analytics_manager = analytics.Manager(self.loop)
         self.component_classes = {}
         self.components = set()
-        self.analytics_manager = analytics_manager
+        self.started = asyncio.Event(loop=self.loop)
         self.peer_manager = peer_manager or PeerManager(asyncio.get_event_loop_policy().get_event_loop())
 
         for component_name, component_class in self.default_component_classes.items():
@@ -133,6 +135,7 @@ class ComponentManager:
             ]
             if needing_start:
                 await asyncio.wait(needing_start)
+        self.started.set()
 
     async def stop(self):
         """

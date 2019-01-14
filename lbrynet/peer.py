@@ -5,6 +5,7 @@ import asyncio
 import logging
 from binascii import hexlify
 from functools import reduce
+from lbrynet import conf
 from lbrynet.dht import constants
 from lbrynet.dht.error import RemoteException
 from lbrynet.dht.serialization.datagram import RequestDatagram
@@ -170,11 +171,9 @@ class Peer:
     # DHT RPC functions
     async def _send_kademlia_rpc(self, datagram: RequestDatagram):
         try:
-            result = await asyncio.wait_for(
-                asyncio.ensure_future(
-                    self.peer_manager.dht_protocol.send(self, datagram, (self.address, self.udp_port)), loop=self.loop),
-                constants.rpc_timeout, loop=self.loop
-            )
+            response_fut = asyncio.Future(loop=self.loop)
+            self.peer_manager.dht_protocol.send(self, datagram, (self.address, self.udp_port), response_fut)
+            result = await asyncio.wait_for(response_fut, conf.settings['node_rpc_timeout'], loop=self.loop)
             log.debug('%s:%i replied to %s', self.address, self.udp_port, datagram.method)
             self.update_last_replied()
             return result
@@ -237,32 +236,42 @@ class Peer:
     # Blob exchange functions
 
     async def _request_blob(self, blob: 'BlobFile', protocol: 'BlobExchangeClientProtocol',
-                            peer_connect_timeout: int) -> bool:
+                            peer_connect_timeout: float) -> bool:
         fut = self.blob_exchange_protocol_connections[blob]
         connected = protocol.transport is not None
         try:
-            if not connected:
-                await asyncio.wait_for(self.loop.create_connection(lambda: protocol, self.address, self.tcp_port),
-                                       peer_connect_timeout, loop=self.loop)
-                self.report_tcp_up()
-            if not blob.get_is_verified():
-                success = await protocol.download_blob(blob)
-                fut.set_result(success)
-            else:
+
+            if blob.get_is_verified():
+                log.info("already verified")
                 fut.set_result(False)
-            return await fut
+            else:
+                if not connected:
+                    await asyncio.wait_for(self.loop.create_connection(lambda: protocol, self.address, self.tcp_port),
+                                           peer_connect_timeout, loop=self.loop)
+                    self.report_tcp_up()
+                    log.info("connected to %s:%i", self.address, self.tcp_port)
+                log.info("download blob from %s:%i", self.address, self.tcp_port)
+                success = await protocol.download_blob(blob)
+                if success:
+                    log.info("downloaded blob from %s:%i", self.address, self.tcp_port)
+                else:
+                    log.info("failed to download blob from %s:%i", self.address, self.tcp_port)
+                fut.set_result(success)
         # except asyncio.CancelledError:
         #     fut.set_result(False)
         #     return await fut
-        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
-            if not connected:
-                log.debug("%s:%i is down", self.address, self.tcp_port)
-                self.report_tcp_down()
+        except asyncio.TimeoutError:
+            log.warning("%s:%i is down", self.address, self.tcp_port)
+            self.report_tcp_down()
             fut.set_result(False)
-            return await fut
+            raise
+        except (ConnectionRefusedError, ConnectionAbortedError, OSError):
+            log.warning("%s:%i is down, other", self.address, self.tcp_port)
+            fut.set_result(False)
+        return await fut
 
     async def request_blob(self, blob: 'BlobFile', protocol: 'BlobExchangeClientProtocol',
-                           peer_connect_timeout: int) -> bool:
+                           peer_connect_timeout: float) -> bool:
         if blob in self.blob_exchange_protocol_connections:
             return await self.blob_exchange_protocol_connections[blob]
         if blob.get_is_verified():

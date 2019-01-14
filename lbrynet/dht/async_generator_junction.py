@@ -1,6 +1,9 @@
 import asyncio
 import typing
+import logging
 from types import AsyncGeneratorType
+
+log = logging.getLogger(__name__)
 
 
 def cancel_task(task: typing.Optional[asyncio.Task]):
@@ -31,13 +34,7 @@ class AsyncGeneratorJunction:
         self.running_iterators: typing.Dict[typing.AsyncGenerator, bool] = {}
         self.generator_queue: asyncio.Queue = asyncio.Queue(loop=self.loop)
         self.can_iterate = asyncio.Event(loop=self.loop)
-        self._finished = asyncio.Future(loop=self.loop)
-
-    def add_cleanup(self, fn, *args):
-        def _cleanup(_):
-            fn(*args)
-
-        self._finished.add_done_callback(_cleanup)
+        self.finished = asyncio.Event(loop=self.loop)
 
     @property
     def running(self):
@@ -91,10 +88,9 @@ class AsyncGeneratorJunction:
                     await result
                 self.running_iterators[iterator] = False
             drain_tasks(self.tasks)
-            if not self._finished.done():
-                self._finished.set_result(None)
             raise StopAsyncIteration()
-
+        if not self.finished.is_set():
+            self.finished.set()
         return asyncio.ensure_future(_aclose(), loop=self.loop)
 
     async def __aenter__(self):
@@ -108,4 +104,6 @@ class AsyncGeneratorJunction:
             pass
         finally:
             if exc_type:
+                if not isinstance(exc_type, (asyncio.CancelledError, asyncio.TimeoutError, StopAsyncIteration)):
+                    log.exception("unexpected error")
                 raise exc_type()

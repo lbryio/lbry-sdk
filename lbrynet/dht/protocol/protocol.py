@@ -131,11 +131,11 @@ class KademliaProtocol(DatagramProtocol):
             key, = a
             result = self.node_rpc.find_value(sender_contact, key)
 
-        self.loop.create_task(self.send(
+        self.send(
             sender_contact,
             ResponseDatagram(RESPONSE_TYPE, message.rpc_id, self.node_id, result),
             (sender_contact.address, sender_contact.udp_port)
-        ))
+        )
 
     def handle_request_datagram(self, address, request_datagram: RequestDatagram):
         # This is an RPC method request
@@ -156,11 +156,11 @@ class KademliaProtocol(DatagramProtocol):
             log.warning("error raised handling %s request from %s:%i - %s(%s)",
                         request_datagram.method, remote_contact.address, remote_contact.udp_port, str(type(err)),
                         str(err))
-            self.loop.create_task(self.send(
+            self.send(
                 remote_contact,
                 ErrorDatagram(ERROR_TYPE, request_datagram.rpc_id, self.node_id, str(type(err)).encode(),
                               str(err).encode()), (remote_contact.address, remote_contact.udp_port)
-            ))
+            )
 
     def handle_response_datagram(self, address, response_datagram: ResponseDatagram):
         # Find the message that triggered this response
@@ -270,8 +270,8 @@ class KademliaProtocol(DatagramProtocol):
             assert isinstance(message, ResponseDatagram), "sanity"
             return self.handle_response_datagram(address, message)
 
-    async def send(self, peer: 'Peer', message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
-                   address: typing.Tuple[str, int]):
+    def send(self, peer: 'Peer', message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
+                   address: typing.Tuple[str, int], response_fut: typing.Optional[asyncio.Future] = None):
         """ Transmit the specified data over UDP, breaking it up into several
         packets if necessary
 
@@ -315,24 +315,18 @@ class KademliaProtocol(DatagramProtocol):
                 seq_number += 1
         else:
             self.loop.call_soon(self._write, data, address)
-        fut = asyncio.Future(loop=self.loop)
+        if isinstance(message, RequestDatagram) and response_fut:
+            def timeout(_):
+                if message.rpc_id in self.sent_messages:
+                    self.sent_messages.pop(message.rpc_id)
 
-        def timeout(_):
-            if message.rpc_id in self.sent_messages:
-                self.sent_messages.pop(message.rpc_id)
-
-        fut.add_done_callback(timeout)
-
-        if isinstance(message, RequestDatagram):
+            response_fut.add_done_callback(timeout)
             assert self.node_id != peer.node_id
             assert self.node_id == message.node_id
             self.sent_messages[message.rpc_id] = (
-                self.peer_manager.make_peer(address[0], peer.node_id, udp_port=address[1]), fut,
+                self.peer_manager.make_peer(address[0], peer.node_id, udp_port=address[1]), response_fut,
                 message
             )
-        else:
-            fut.set_result(None)
-        return await fut
 
     def get_pending_message_future(self, rpc_id: bytes) -> asyncio.Future:
         return self.sent_messages[rpc_id][1]

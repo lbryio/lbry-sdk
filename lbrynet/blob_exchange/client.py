@@ -6,6 +6,7 @@ from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest
 if typing.TYPE_CHECKING:
     from lbrynet.peer import Peer
     from lbrynet.blob.blob_file import BlobFile
+    from lbrynet.blob.writer import HashBlobWriter
 
 log = logging.getLogger(__name__)
 
@@ -18,122 +19,153 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.peer = peer
         self.peer_timeout = peer_timeout
         self.transport: asyncio.Transport = None
-        self.write_blob: typing.Callable[[int], None] = None
-        self.set_length: typing.Callable[[int], None] = None
-        self.get_expected_length: typing.Callable[[], int] = None
-        self.finished_blob: asyncio.Future = None
-        self._downloading_blob = False
+
+        self.writer: 'HashBlobWriter' = None
+        self.blob: 'BlobFile' = None
+        self.download_running = asyncio.Event(loop=self.loop)
+
         self._blob_bytes_received = 0
         self._response_fut: asyncio.Future = None
         self._request_lock = asyncio.Lock(loop=self.loop)
 
     def handle_data_received(self, data: bytes):
+        if self.transport.is_closing():
+            if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
+                self._response_fut.cancel()
+            return
+
         response = BlobResponse.deserialize(data)
-        if not response.responses and response.blob_data and self.write_blob:
-            self._blob_bytes_received += len(response.blob_data)
-            self.write_blob(response.blob_data)
-            self._downloading_blob = True
-        elif response.responses and self._response_fut:
+        if response.responses and self._response_fut and self.blob and self.writer:
             blob_response = response.get_blob_response()
-            if blob_response:
-                self.set_length(blob_response.length)
-            if response.blob_data:
+            if blob_response and blob_response.blob_hash == self.blob.blob_hash:
+                self.blob.set_length(blob_response.length)
+            elif self.blob.blob_hash != blob_response.blob_hash:
+                log.warning("mismatch with self.blob %s", self.blob.blob_hash)
+                return
+            if response.blob_data and not self.writer.closed():
                 self._blob_bytes_received += len(response.blob_data)
-                self.write_blob(response.blob_data)
-            self._response_fut.set_result(response)
-        elif self._downloading_blob and response.blob_data:
+                self.writer.write(response.blob_data)
+                self._response_fut.set_result(response)
+                return
+        if response.blob_data and self.writer and not self.writer.closed() and not (
+                self.writer.finished.done() or self.writer.finished.cancelled()):
             self._blob_bytes_received += len(response.blob_data)
-            self.write_blob(response.blob_data)
+            self.writer.write(response.blob_data)
+        elif not self.writer or self.writer.closed() or self.writer.finished.done() or self.writer.finished.cancelled():
+            if self.writer and not (self.writer.finished.done() or self.writer.finished.cancelled()):
+                self.writer.finished.cancel()
+            if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
+                self._response_fut.cancel()
 
     def data_received(self, data):
         total = len(data) + self._blob_bytes_received
-        if self.get_expected_length and self.get_expected_length() is not None and total > self.get_expected_length():
-            self.handle_data_received(data[:len(data) + self._blob_bytes_received - self.get_expected_length()])
-            return self.data_received(data[len(data) + self._blob_bytes_received - self.get_expected_length():])
+        expected_length = self.blob.get_length()
+
+        if expected_length is not None and total > expected_length:
+            self.handle_data_received(data[:len(data) + self._blob_bytes_received - expected_length])
+            return self.data_received(data[len(data) + self._blob_bytes_received - expected_length:])
         try:
             return self.handle_data_received(data)
-        except BlobDownloadError as err:
-            if self._response_fut and not self._response_fut.done():
+        except (asyncio.CancelledError, asyncio.TimeoutError, BlobDownloadError) as err:
+            if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
                 self._response_fut.set_exception(err)
 
-    async def _download_blob(self, blob: 'BlobFile') -> bool:
-        try:
-            writer = blob.open_for_writing(self.peer)
-        except OSError:
-            # i'm not sure how to fix this race condition - jack
-            return False
-        self._blob_bytes_received = 0
-        self.get_expected_length = blob.get_length
-        self.set_length = blob.set_length
-        self.write_blob = writer.write
-        self._response_fut = asyncio.Future(loop=self.loop)
-
-        request = BlobRequest.make_request_for_blob_hash(blob.blob_hash)
-        downloaded_blob = False
+    async def _download_blob(self) -> bool:
+        request = BlobRequest.make_request_for_blob_hash(self.blob.blob_hash)
         try:
             self.transport.write(request.serialize())
-            try:
-                response: BlobResponse = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
-                self._downloading_blob = True
-                # log.info("blob incoming: %s, %i blob data", response, len(response.blob_data))
-            except BlobDownloadError:
-                return False
+            response: BlobResponse = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
             blob_response = response.get_blob_response()
-            self._response_fut = None
             if not availability_response or not availability_response.available_blobs:
+                log.warning("blob not in availability response")
                 return False
-            elif availability_response.available_blobs != [blob.blob_hash]:
+            elif availability_response.available_blobs != [self.blob.blob_hash]:
+                log.warning("blob availability response doesn't match our request")
                 return False
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':
+                log.warning("data rate rejected")
                 return False
             if not blob_response:
+                log.warning("blob cant be downloaded from this peer")
                 return False
-            if blob_response.blob_hash != blob.blob_hash:
+            if blob_response.blob_hash != self.blob.blob_hash:
+                log.warning("incoming blob hash mismatch")
                 return False
-            elif blob.length is not None and blob.length != blob_response.length:
+            elif self.blob.length is not None and self.blob.length != blob_response.length:
+                log.warning("incoming blob unexpected length")
                 raise Exception("unexpected")
-            msg = f"downloading {blob.blob_hash[:8]} from {self.peer.address}:{self.peer.tcp_port}, timeout in {self.peer_timeout}"
+            msg = f"downloading {self.blob.blob_hash[:8]} from {self.peer.address}:{self.peer.tcp_port}," \
+                f" timeout in {self.peer_timeout}"
             log.info(msg)
-            await asyncio.wait_for(writer.finished, self.peer_timeout, loop=self.loop)
-            log.info("writer finished %s", blob.blob_hash[:8])
-            await blob.finished_writing.wait()
-            downloaded_blob = True
-            msg = f"downloaded {blob.blob_hash[:8]} from {self.peer.address}"
+            await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
+            log.info("writer finished %s", self.blob.blob_hash[:8])
+            await self.blob.finished_writing.wait()
+            msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer.address}"
             log.info(msg)
             return True
+        except BlobDownloadError:
+            return False
         except asyncio.CancelledError:
-            msg = f"download {blob.blob_hash[:8]} from {self.peer.address} cancelled"
+            msg = f"download {'None?' if not self.blob else self.blob.blob_hash[:8]} from {self.peer.address} cancelled"
             log.debug(msg)
             if self.transport:
                 self.transport.close()
         except asyncio.TimeoutError:
-            msg = f"download {blob.blob_hash[:8]} from {self.peer.address} timed out"
+            msg = f"download {'None?' if not self.blob else self.blob.blob_hash[:8]} from {self.peer.address} timed out"
             log.debug(msg)
             if self.transport:
                 self.transport.close()
         except Exception:
-            msg = f"download {blob.blob_hash[:8]} from {self.peer.address}"
+            msg = f"download {'None?' if not self.blob else self.blob.blob_hash[:8]} from {self.peer.address} failed"
             log.exception(msg)
             if self.transport:
                 self.transport.close()
         finally:
-            if not downloaded_blob:
-                writer.close_handle()
-            self._downloading_blob = False
-            self._response_fut = None
-            self.write_blob = None
-            self.set_length = None
+            if self.writer and not self.writer.closed():
+                self.writer.close_handle()
         return False
 
     async def download_blob(self, blob: 'BlobFile') -> bool:
+        if blob.get_is_verified():
+            return False
         async with self._request_lock:
-            if not self.transport:
-                if self._response_fut and not self._response_fut.done():
+            try:
+                if self.download_running.is_set():
+                    log.info("wait for download already running")
+                    await self.download_running.wait()
+                if not self.transport:
+                    if self._response_fut and not self._response_fut.done():
+                        self._response_fut.cancel()
+                    return False
+                writer = blob.open_for_writing(self.peer)
+                self.download_running.set()
+                self.blob = blob
+                self.writer = writer
+                self._blob_bytes_received = 0
+                self._response_fut = asyncio.Future(loop=self.loop)
+                return await self._download_blob()
+            except OSError:
+                log.error("race happened")
+                # i'm not sure how to fix this race condition - jack
+                return False
+            except asyncio.TimeoutError:
+                if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
                     self._response_fut.cancel()
                 return False
-            return await self._download_blob(blob)
+            except asyncio.CancelledError as error:
+                if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
+                    self._response_fut.cancel()
+                err = error
+            finally:
+                self.download_running.clear()
+                self._response_fut = None
+                if self.blob:
+                    await self.blob.close()
+                    self.blob = None
+                self.writer = None
+        raise err
 
     def connection_made(self, transport: asyncio.Transport):
         log.info("connection made to %s: %s", self.peer, transport)
@@ -141,11 +173,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.transport.set_write_buffer_limits((2**20)+(64*20**10))
 
     def connection_lost(self, reason):
-        log.info("connection lost to %s" % self.peer)
+        log.info("connection lost to %s (reason: %s)", self.peer, reason)
         if self._response_fut and not self._response_fut.done():
             self._response_fut.cancel()
+        self.download_running.clear()
         self.transport = None
-        self._downloading_blob = False
         self._response_fut = None
-        self.write_blob = None
-        self.set_length = None
+        self.writer = None
+        self.blob = None

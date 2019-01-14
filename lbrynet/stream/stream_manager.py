@@ -43,7 +43,7 @@ comparison_operators = {
 
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', wallet: 'LbryWalletManager',
-                 storage: 'SQLiteStorage', node: 'Node', peer_timeout: int, peer_connect_timeout: int):
+                 storage: 'SQLiteStorage', node: 'Node', peer_timeout: float, peer_connect_timeout: float):
         self.loop = loop
         self.blob_manager = blob_manager
         self.wallet = wallet
@@ -185,9 +185,15 @@ class StreamManager:
 
     async def download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
-                                         sd_blob_timeout: typing.Optional[float] = 60
+                                         sd_blob_timeout: typing.Optional[float] = 60,
+                                         fee_amount: typing.Optional[float] = 0.0,
+                                         fee_address: typing.Optional[str] = None
                                          ) -> typing.Optional[ManagedStream]:
+        log.info("get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
         claim = ClaimDict.load_dict(claim_info['value'])
+        if fee_address and fee_amount:
+            if fee_address > await self.wallet.default_account.get_balance():
+                raise Exception("not enough funds")
         sd_hash = claim.source_hash.decode()
         if sd_hash in self.starting_streams:
             return await self.starting_streams[sd_hash]
@@ -203,12 +209,15 @@ class StreamManager:
             await asyncio.wait_for(stream_task, sd_blob_timeout)
             stream = await stream_task
             self.starting_streams[sd_hash].set_result(stream)
+            if fee_address and fee_amount:
+                await self.wallet.send_amount_to_address(fee_amount, fee_address.encode('latin1'))
             return stream
         except (asyncio.TimeoutError, asyncio.CancelledError):
             return
         finally:
             if sd_hash in self.starting_streams:
                 del self.starting_streams[sd_hash]
+            log.info("returned from get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
 
     def get_filtered_streams(self, sort_by: typing.Optional[str] = None, reverse: typing.Optional[bool] = False,
                              comparison: typing.Optional[str] = None,
