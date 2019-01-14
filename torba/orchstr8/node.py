@@ -164,12 +164,14 @@ class WalletNode:
         })
         self.ledger = self.manager.ledgers[self.ledger_class]
         self.wallet = self.manager.default_wallet
-        if seed is None:
+        if seed is None and self.wallet is not None:
             self.wallet.generate_account(self.ledger)
-        else:
+        elif self.wallet is not None:
             self.ledger.account_class.from_dict(
                 self.ledger, self.wallet, {'seed': seed}
             )
+        else:
+            raise ValueError('Wallet is required.')
         self.account = self.wallet.default_account
         await self.manager.start()
 
