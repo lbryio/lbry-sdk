@@ -1,6 +1,6 @@
 import os
-import requests
-import urllib
+from urllib.parse import urlencode, quote
+import aiohttp
 import textwrap
 import typing
 from typing import Callable, Optional, List
@@ -11,12 +11,10 @@ from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 from lbrynet import __version__
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.extras import system_info
-from lbrynet.extras.reflector import reupload
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.Components import STREAM_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
-from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout, ComponentsNotStarted
@@ -26,8 +24,6 @@ from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.error import URIParseError, DecodeError
 from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.address import decode_address
-from lbrynet.schema.decode import smart_decode
-from lbrynet.extras.daemon import analytics
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
 
@@ -46,12 +42,20 @@ from aiohttp import web
 
 
 if typing.TYPE_CHECKING:
+    from lbrynet.extras.daemon.Components import UPnPComponent
+    from lbrynet.extras.wallet import LbryWalletManager
+    from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbrynet.stream.stream_manager import StreamManager, ManagedStream
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.storage import SQLiteStorage
     from lbrynet.dht.node import Node
 
 log = logging.getLogger(__name__)
+
+
+#
+# async def download_single_blob(node: 'Node', blob_manager: 'BlobFileManager'):
+#     async with node.pe
 
 
 def requires(*components, **conditions):
@@ -124,56 +128,8 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
     return await get_records(**constraints)
 
 
-class Checker:
-    """The looping calls the daemon runs"""
-    INTERNET_CONNECTION = 'internet_connection_checker', 300
-    # CONNECTION_STATUS = 'connection_status_checker'
-
-
-
-
-
-# TODO add login credentials in a conf file
-# TODO alert if your copy of a lbry file is out of date with the name record
-
-
-class NoValidSearch(Exception):
-    pass
-
-
-class CheckInternetConnection:
-    def __init__(self, daemon):
-        self.daemon = daemon
-
-    def __call__(self):
-        self.daemon.connected_to_internet = utils.check_connection()
-
-
-class AlwaysSend:
-    def __init__(self, value_generator, *args, **kwargs):
-        self.value_generator = value_generator
-        self.args = args
-        self.kwargs = kwargs
-
-    def __call__(self):
-        d = defer.maybeDeferred(self.value_generator, *self.args, **self.kwargs)
-        d.addCallback(lambda v: (True, v))
-        return d
-
-
 def sort_claim_results(claims):
     claims.sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
-    return claims
-
-
-def is_first_run():
-    if os.path.isfile(conf.settings.get_db_revision_filename()):
-        return False
-    if os.path.isfile(os.path.join(conf.settings.data_dir, 'lbrynet.sqlite')):
-        return False
-    if os.path.isfile(os.path.join(conf.settings.wallet_dir, 'blockchain_headers')):
-        return False
-    return True
 
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
@@ -294,58 +250,19 @@ class Daemon(metaclass=JSONRPCServerType):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
-
-    component_attributes = {
-        DATABASE_COMPONENT: "storage",
-        DHT_COMPONENT: "dht_node",
-        WALLET_COMPONENT: "wallet_manager",
-        STREAM_MANAGER_COMPONENT: "stream_manager",
-        EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
-        # PAYMENT_RATE_COMPONENT: "payment_rate_manager",
-        # RATE_LIMITER_COMPONENT: "rate_limiter",
-        BLOB_COMPONENT: "blob_manager",
-        UPNP_COMPONENT: "upnp"
-    }
-
     allowed_during_startup = []
 
-    def __init__(self, analytics_manager=None, component_manager=None):
+    def __init__(self, component_manager: typing.Optional[ComponentManager] = None):
         to_skip = conf.settings['components_to_skip']
-        # if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
-        #     to_skip.append('reflector')
         use_authentication = conf.settings['use_auth_http']
         use_https = conf.settings['use_https']
-        self.analytics_manager = None #analytics_manager or analytics.Manager.new_instance()
         self.component_manager = component_manager or ComponentManager(
-            analytics_manager=self.analytics_manager,
             skip_components=to_skip or [],
         )
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
         self._use_https = use_https or conf.settings['use_https']
         self.listening_port = None
         self._component_setup_task = None
-        self.announced_startup = False
-        self.sessions = {}
-        self.is_first_run = is_first_run()
-
-        # TODO: move this to a component
-        self.connected_to_internet = True
-        self.connection_status_code = None
-
-        # components
-        # TODO: delete these, get the components where needed
-        self.storage: 'SQLiteStorage' = None
-        self.dht_node: 'Node' = None
-        self.wallet_manager: LbryWalletManager = None
-        self.stream_manager: 'StreamManager' = None
-        self.exchange_rate_manager = None
-        self.payment_rate_manager = None
-        self.rate_limiter = None
-        self.blob_manager: 'BlobFileManager' = None
-        self.upnp = None
-
-        # TODO: delete this
-        self.streams = {}
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         self.app = web.Application()
@@ -355,6 +272,34 @@ class Daemon(metaclass=JSONRPCServerType):
         self.handler = self.app.make_handler()
         self.server: asyncio.AbstractServer = None
 
+    @property
+    def dht_node(self) -> typing.Optional['Node']:
+        return self.component_manager.get_component(DHT_COMPONENT)
+
+    @property
+    def wallet_manager(self) -> typing.Optional['LbryWalletManager']:
+        return self.component_manager.get_component(WALLET_COMPONENT)
+
+    @property
+    def storage(self) -> typing.Optional['SQLiteStorage']:
+        return self.component_manager.get_component(DATABASE_COMPONENT)
+
+    @property
+    def stream_manager(self) -> typing.Optional['StreamManager']:
+        return self.component_manager.get_component(STREAM_MANAGER_COMPONENT)
+
+    @property
+    def exchange_rate_manager(self) -> typing.Optional['ExchangeRateManager']:
+        return self.component_manager.get_component(EXCHANGE_RATE_MANAGER_COMPONENT)
+
+    @property
+    def blob_manager(self) -> typing.Optional['BlobFileManager']:
+        return self.component_manager.get_component(BLOB_COMPONENT)
+
+    @property
+    def upnp(self) -> typing.Optional['UPnPComponent']:
+        return self.component_manager.get_component(UPNP_COMPONENT)
+
     async def start_listening(self):
         try:
             self.server = await asyncio.get_event_loop().create_server(
@@ -362,35 +307,24 @@ class Daemon(metaclass=JSONRPCServerType):
             )
             log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname()[:2])
             await self.setup()
-            if self.analytics_manager:
-                self.analytics_manager.send_server_startup_success()
         except OSError:
             log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
                       'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
         except asyncio.CancelledError:
             log.info("shutting down before finished starting")
         except Exception as err:
-            if self.analytics_manager:
-                self.analytics_manager.send_server_startup_error(str(err))
             log.exception('Failed to start lbrynet-daemon')
+            await self.component_manager.analytics_manager.send_server_startup_error(str(err))
 
     async def setup(self):
         log.info("Starting lbrynet-daemon")
         log.info("Platform: %s", json.dumps(system_info.get_platform()))
-
-        if self.analytics_manager:
-            if not self.analytics_manager.is_started:
-                self.analytics_manager.start()
-            self.analytics_manager.send_server_startup()
-
-        def update_attribute(component):
-            setattr(self, self.component_attributes[component.component_name], component.component)
-
-        kwargs = {component: update_attribute for component in self.component_attributes.keys()}
-        self._component_setup_task = self.component_manager.setup(**kwargs)
+        self.component_manager.analytics_manager.start()
+        self._component_setup_task = self.component_manager.setup()
         await self._component_setup_task
 
         log.info("Started lbrynet-daemon")
+        await self.component_manager.analytics_manager.send_server_startup()
 
     @staticmethod
     def _already_shutting_down(sig_num, frame):
@@ -408,8 +342,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.app.shutdown()
             await self.handler.shutdown(60.0)
             await self.app.cleanup()
-        if self.analytics_manager:
-            self.analytics_manager.shutdown()
+        self.component_manager.analytics_manager.shutdown()
         try:
             self._component_setup_task.cancel()
         except (AttributeError, asyncio.CancelledError):
@@ -604,22 +537,22 @@ class Daemon(metaclass=JSONRPCServerType):
     #
     #     async def _download_finished(download_id, name, claim_dict):
     #         report = await self._get_stream_analytics_report(claim_dict)
-    #         self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
-    #         self.analytics_manager.send_new_download_success(download_id, name, claim_dict)
+    #        self.component_manager.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
+    #        self.component_manager.analytics_manager.send_new_download_success(download_id, name, claim_dict)
     #
     #     async def _download_failed(error, download_id, name, claim_dict):
     #         report = await self._get_stream_analytics_report(claim_dict)
-    #         self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
+    #        self.component_manager.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
     #                                                      report)
-    #         self.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
+    #        self.component_manager.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
     #
     #     if sd_hash in self.streams:
     #         downloader = self.streams[sd_hash]
     #         return await d2f(downloader.finished_deferred)
     #     else:
     #         download_id = utils.random_string()
-    #         self.analytics_manager.send_download_started(download_id, name, claim_dict)
-    #         self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
+    #        self.component_manager.analytics_manager.send_download_started(download_id, name, claim_dict)
+    #        self.component_manager.analytics_manager.send_new_download_start(download_id, name, claim_dict)
     #         self.streams[sd_hash] = GetStream(
     #             self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
     #             self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
@@ -665,7 +598,7 @@ class Daemon(metaclass=JSONRPCServerType):
     #             d = reupload.reflect_file(publisher.lbry_file)
     #             d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
     #                            log.exception)
-    #     self.analytics_manager.send_claim_action('publish')
+    #    self.component_manager.analytics_manager.send_claim_action('publish')
     #     nout = 0
     #     txo = tx.outputs[nout]
     #     log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
@@ -693,127 +626,30 @@ class Daemon(metaclass=JSONRPCServerType):
     #     return self._get_or_download_sd_blob(
     #         self.blob_manager.completed_blobs([sd_hash.decode()]), sd_hash
     #     )
-    #
-    # def get_size_from_sd_blob(self, sd_blob):
-    #     """
-    #     Get total stream size in bytes from a sd blob
-    #     """
-    #
-    #     d = self.file_manager.sd_identifier.get_metadata_for_sd_blob(sd_blob)
-    #     d.addCallback(lambda metadata: metadata.validator.info_to_show())
-    #     d.addCallback(lambda info: int(dict(info)['stream_size']))
-    #     return d
-    #
-    # def _get_est_cost_from_stream_size(self, size):
-    #     """
-    #     Calculate estimated LBC cost for a stream given its size in bytes
-    #     """
-    #     if self.payment_rate_manager.generous:
-    #         return 0.0
-    #     return size / (10 ** 6) * conf.settings['data_rate']
-    #
-    # async def get_est_cost_using_known_size(self, uri, size):
-    #     """
-    #     Calculate estimated LBC cost for a stream given its size in bytes
-    #     """
-    #     cost = self._get_est_cost_from_stream_size(size)
-    #     resolved = await self.wallet_manager.resolve(uri)
-    #
-    #     if uri in resolved and 'claim' in resolved[uri]:
-    #         claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
-    #         final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
-    #         return final_fee
-    #
-    # async def get_est_cost_from_sd_hash(self, sd_hash):
-    #     """
-    #     Get estimated cost from a sd hash
-    #     """
-    #     sd_blob = await self.get_or_download_sd_blob(sd_hash)
-    #     stream_size = await d2f(self.get_size_from_sd_blob(sd_blob))
-    #     return self._get_est_cost_from_stream_size(stream_size)
-    #
-    # async def _get_est_cost_from_metadata(self, metadata, name):
-    #     try:
-    #         return self._add_key_fee_to_est_data_cost(
-    #             metadata.source_fee, await self.get_est_cost_from_sd_hash(metadata.source_hash)
-    #         )
-    #     except:
-    #         log.warning("Timeout getting blob for cost est for lbry://%s, using only key fee", name)
-    #         return 0.0
-    #
-    # def _add_key_fee_to_est_data_cost(self, fee, data_cost):
-    #     fee_amount = 0.0 if not fee else self.exchange_rate_manager.convert_currency(fee.currency,
-    #                                                                                  "LBC",
-    #                                                                                  fee.amount)
-    #     return data_cost + fee_amount
-    #
-    # async def get_est_cost_from_uri(self, uri):
-    #     """
-    #     Resolve a name and return the estimated stream cost
-    #     """
-    #
-    #     resolved = await self.wallet_manager.resolve(uri)
-    #     if resolved:
-    #         claim_response = resolved[uri]
-    #     else:
-    #         claim_response = None
-    #
-    #     if claim_response and 'claim' in claim_response:
-    #         if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
-    #             claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
-    #             cost = await self._get_est_cost_from_metadata(claim_value, uri)
-    #             return round(cost, 5)
-    #         else:
-    #             log.warning("Failed to estimate cost for %s", uri)
-    #
-    # def get_est_cost(self, uri, size=None):
-    #     """Get a cost estimate for a lbry stream, if size is not provided the
-    #     sd blob will be downloaded to determine the stream size
-    #
-    #     """
-    #     if size is not None:
-    #         return self.get_est_cost_using_known_size(uri, size)
-    #     return self.get_est_cost_from_uri(uri)
 
+    async def get_est_cost_from_uri(self, uri: str) -> typing.Optional[float]:
+        """
+        Resolve a name and return the estimated stream cost
+        """
 
-    def _get_single_peer_downloader(self):
-        downloader = SinglePeerDownloader()
-        downloader.setup(self.wallet_manager)
-        return downloader
+        resolved = await self.wallet_manager.resolve(uri)
+        if resolved:
+            claim_response = resolved[uri]
+        else:
+            claim_response = None
 
-    async def _blob_availability(self, blob_hash, search_timeout, blob_timeout, downloader=None):
-        if not downloader:
-            downloader = self._get_single_peer_downloader()
-        search_timeout = search_timeout or conf.settings['peer_search_timeout']
-        blob_timeout = blob_timeout or conf.settings['sd_download_timeout']
-        reachable_peers = []
-        unreachable_peers = []
-        try:
-            peers = await self.jsonrpc_peer_list(blob_hash, search_timeout)
-            peer_infos = [{"peer": Peer(x['host'], x['port']),
-                           "blob_hash": blob_hash,
-                           "timeout": blob_timeout} for x in peers]
-            dl = []
-            dl_peers = []
-            dl_results = []
-            for peer_info in peer_infos:
-                dl.append(downloader.download_temp_blob_from_peer(**peer_info))
-                dl_peers.append("%s:%i" % (peer_info['peer'].host, peer_info['peer'].port))
-            for dl_peer, download_result in zip(dl_peers, await asyncio.gather(*dl)):
-                if download_result:
-                    reachable_peers.append(dl_peer)
-                else:
-                    unreachable_peers.append(dl_peer)
-                dl_results.append(download_result)
-            is_available = any(dl_results)
-        except Exception as err:
-            return {'error': "Failed to get peers for blob: %s" % err}
-
-        return {
-            'is_available': is_available,
-            'reachable_peers': reachable_peers,
-            'unreachable_peers': unreachable_peers,
-        }
+        if claim_response and 'claim' in claim_response:
+            if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
+                claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
+                if not claim_value.has_fee:
+                    return 0.0
+                return round(
+                    self.exchange_rate_manager.convert_currency(
+                        claim_value.source_fee.currency, "LBC", claim_value.source_fee.amount
+                    ), 5
+                )
+            else:
+                log.warning("Failed to estimate cost for %s", uri)
 
     ############################################################################
     #                                                                          #
@@ -856,7 +692,6 @@ class Daemon(metaclass=JSONRPCServerType):
             {
                 'installation_id': (str) installation id - base58,
                 'is_running': (bool),
-                'is_first_run': bool,
                 'skipped_components': (list) [names of skipped components (str)],
                 'startup_status': { Does not include components which have been skipped
                     'database': (bool),
@@ -914,11 +749,10 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        connection_code = CONNECTION_STATUS_CONNECTED if self.connected_to_internet else CONNECTION_STATUS_NETWORK
+        connection_code = CONNECTION_STATUS_NETWORK
         response = {
             'installation_id': conf.settings.installation_id,
             'is_running': all(self.component_manager.get_components_status().values()),
-            'is_first_run': self.is_first_run,
             'skipped_components': self.component_manager.skip_components,
             'startup_status': self.component_manager.get_components_status(),
             'connection_status': {
@@ -961,7 +795,7 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("Get version info: " + json.dumps(platform_info))
         return platform_info
 
-    def jsonrpc_report_bug(self, message=None):
+    async def jsonrpc_report_bug(self, message=None):
         """
         Report a bug to slack
 
@@ -976,7 +810,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         platform_name = system_info.get_platform()['platform']
-        report_bug_to_slack(
+        await report_bug_to_slack(
             message,
             conf.settings.installation_id,
             platform_name,
@@ -1135,42 +969,6 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return sorted([command for command in self.callable_methods.keys()])
 
-    @deprecated("account_balance")
-    def jsonrpc_wallet_balance(self, address=None):
-        pass
-
-    @deprecated("account_unlock")
-    def jsonrpc_wallet_unlock(self, password):
-        pass
-
-    @deprecated("account_decrypt")
-    def jsonrpc_wallet_decrypt(self):
-        pass
-
-    @deprecated("account_encrypt")
-    def jsonrpc_wallet_encrypt(self, new_password):
-        pass
-
-    @deprecated("address_is_mine")
-    def jsonrpc_wallet_is_address_mine(self, address):
-        pass
-
-    @deprecated()
-    def jsonrpc_wallet_public_key(self, address):
-        pass
-
-    @deprecated("address_list")
-    def jsonrpc_wallet_list(self):
-        pass
-
-    @deprecated("address_unused")
-    def jsonrpc_wallet_new_address(self):
-        pass
-
-    @deprecated("address_unused")
-    def jsonrpc_wallet_unused_address(self):
-        pass
-
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
         """
@@ -1231,15 +1029,15 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise InsufficientFundsError()
             account = self.get_account_or_default(account_id)
             result = await self.wallet_manager.send_points_to_address(reserved_points, amount, account)
-            self.analytics_manager.send_credits_sent()
         else:
             log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
             result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
-        return result
+        try:
+            return result
+        finally:
+            await self.component_manager.analytics_manager.send_credits_sent()
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    # @AuthJSONRPCServer.deprecated("account_fund"), API has changed as well, so we forward for now
-    # marked as deprecated in changelog and will be removed after subsequent release
     def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
         """
         Create new UTXOs, each containing `amount` credits
@@ -1642,8 +1440,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         account = self.get_account_or_default(account_id)
         result = await account.send_to_addresses(amount, addresses, broadcast)
-        self.analytics_manager.send_credits_sent()
-        return result
+        try:
+            return result
+        finally:
+            await self.component_manager.analytics_manager.send_credits_sent()
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_is_mine(self, address, account_id=None):
@@ -1996,8 +1796,16 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
 
+        claim = ClaimDict.load_dict(resolved['value'])
+        fee_amount, fee_address = None, None
+        if claim.has_fee:
+            fee_amount = round(self.exchange_rate_manager.convert_currency(
+                    claim.source_fee.currency, "LBC", claim.source_fee.amount
+                ), 5)
+            fee_address = claim.source_fee.address
+
         stream = await self.stream_manager.download_stream_from_claim(
-            self.dht_node, conf.settings.download_dir, resolved, file_name, timeout
+            self.dht_node, conf.settings.download_dir, resolved, file_name, timeout, fee_amount, fee_address
         )
         if stream:
             return stream.as_dict()
@@ -2027,20 +1835,25 @@ class Daemon(metaclass=JSONRPCServerType):
         if status not in ['start', 'stop']:
             raise Exception('Status must be "start" or "stop".')
 
-        search_type, value = get_lbry_file_search_value(kwargs)
-        lbry_file = self._get_lbry_file(search_type, value, return_json=False)
-        if not lbry_file:
-            raise Exception(f'Unable to find a file for {search_type}:{value}')
-
-        if status == 'start' and lbry_file.stopped or status == 'stop' and not lbry_file.stopped:
-            await d2f(self.stream_manager.toggle_lbry_file_running(lbry_file))
-            msg = "Started downloading file" if status == 'start' else "Stopped downloading file"
-        else:
-            msg = (
-                "File was already being downloaded" if status == 'start'
-                else "File was already stopped"
-            )
-        return msg
+        # streams = self.stream_manager.get_filtered_streams(**kwargs)
+        # if not streams:
+        #     raise Exception('Unable to find a file')
+        # stream = streams[0]
+        #
+        # if status == 'start' and not stream.running and not stream.finished:
+        #     self.stream_manager.load_streams_from_database()
+        #
+        #
+        #
+        #     or status == 'stop' and not lbry_file.stopped:
+        #     await d2f(self.stream_manager.(lbry_file))
+        #     msg = "Started downloading file" if status == 'start' else "Stopped downloading file"
+        # else:
+        #     msg = (
+        #         "File was already being downloaded" if status == 'start'
+        #         else "File was already stopped"
+        #     )
+        # return msg
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
@@ -2098,23 +1911,21 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_stream_cost_estimate(self, uri, size=None):
+    def jsonrpc_stream_cost_estimate(self, uri):
         """
         Get estimated cost for a lbry stream
 
         Usage:
-            stream_cost_estimate (<uri> | --uri=<uri>) [<size> | --size=<size>]
+            stream_cost_estimate (<uri> | --uri=<uri>)
 
         Options:
             --uri=<uri>      : (str) uri to use
-            --size=<size>  : (float) stream size in bytes. if provided an sd blob won't be
-                                     downloaded.
 
         Returns:
             (float) Estimated cost in lbry credits, returns None if uri is not
                 resolvable
         """
-        return self.get_est_cost(uri, size)
+        return self.get_est_cost_from_uri(uri)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_new(self, channel_name, amount, account_id=None):
@@ -2158,17 +1969,19 @@ class Daemon(metaclass=JSONRPCServerType):
             channel_name, amount, self.get_account_or_default(account_id)
         )
         self.default_wallet.save()
-        self.analytics_manager.send_new_channel()
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
-        return {
-            "success": True,
-            "tx": tx,
-            "claim_id": txo.claim_id,
-            "claim_address": txo.get_address(self.ledger),
-            "output": txo
-        }
+        try:
+            return {
+                "success": True,
+                "tx": tx,
+                "claim_id": txo.claim_id,
+                "claim_address": txo.get_address(self.ledger),
+                "output": txo
+            }
+        finally:
+           await self.component_manager.analytics_manager.send_new_channel()
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
@@ -2478,10 +2291,12 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception('Must specify nout')
 
         tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
-        self.analytics_manager.send_claim_action('abandon')
         if blocking:
             await self.ledger.wait(tx)
-        return {"success": True, "tx": tx}
+        try:
+            return {"success": True, "tx": tx}
+        finally:
+            await self.component_manager.analytics_manager.send_claim_action('abandon')
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_new_support(self, name, claim_id, amount, account_id=None):
@@ -2513,8 +2328,11 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
         result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
-        self.analytics_manager.send_claim_action('new_support')
-        return result
+        self.component_manager.analytics_manager.send_claim_action('new_support')
+        try:
+            return result
+        finally:
+            await self.component_manager.analytics_manager.send_claim_action('abandon')
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
@@ -2546,12 +2364,10 @@ class Daemon(metaclass=JSONRPCServerType):
         amount = self.get_dewies_or_error("amount", amount)
         validate_claim_id(claim_id)
         result = await self.wallet_manager.tip_claim(amount, claim_id, account)
-        self.analytics_manager.send_claim_action('new_support')
-        return result
-
-    @deprecated()
-    def jsonrpc_claim_renew(self, outpoint=None, height=None):
-        pass
+        try:
+            return result
+        finally:
+            await self.component_manager.analytics_manager.send_claim_action('new_support')
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
@@ -2915,25 +2731,16 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_blob_get(self, blob_hash, timeout=None, encoding=None, payment_rate_manager=None):
+    async def jsonrpc_blob_get(self, blob_hash, timeout=None):
         """
         Download and return a blob
 
         Usage:
             blob_get (<blob_hash> | --blob_hash=<blob_hash>) [--timeout=<timeout>]
-                     [--encoding=<encoding>] [--payment_rate_manager=<payment_rate_manager>]
 
         Options:
         --blob_hash=<blob_hash>                        : (str) blob hash of the blob to get
         --timeout=<timeout>                            : (int) timeout in number of seconds
-        --encoding=<encoding>                          : (str) by default no attempt at decoding
-                                                         is made, can be set to one of the
-                                                         following decoders:
-                                                            'json'
-        --payment_rate_manager=<payment_rate_manager>  : (str) if not given the default payment rate
-                                                         manager will be used.
-                                                         supported alternative rate managers:
-                                                            'only-free'
 
         Returns:
             (str) Success/Fail message or (dict) decoded data
@@ -3058,39 +2865,39 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         return True
 
-    @requires(STREAM_MANAGER_COMPONENT)
-    async def jsonrpc_file_reflect(self, **kwargs):
-        """
-        Reflect all the blobs in a file matching the filter criteria
-
-        Usage:
-            file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                         [--stream_hash=<stream_hash>] [--rowid=<rowid>]
-                         [--reflector=<reflector>]
-
-        Options:
-            --sd_hash=<sd_hash>          : (str) get file with matching sd hash
-            --file_name=<file_name>      : (str) get file with matching file name in the
-                                           downloads folder
-            --stream_hash=<stream_hash>  : (str) get file with matching stream hash
-            --rowid=<rowid>              : (int) get file with matching row id
-            --reflector=<reflector>      : (str) reflector server, ip address or url
-                                           by default choose a server from the config
-
-        Returns:
-            (list) list of blobs reflected
-        """
-
-        reflector_server = kwargs.get('reflector', None)
-        lbry_files = self._get_lbry_files(**kwargs)
-
-        if len(lbry_files) > 1:
-            raise Exception('Too many (%i) files found, need one' % len(lbry_files))
-        elif not lbry_files:
-            raise Exception('No file found')
-        return await d2f(reupload.reflect_file(
-            lbry_files[0], reflector_server=kwargs.get('reflector', None)
-        ))
+    # @requires(STREAM_MANAGER_COMPONENT)
+    # async def jsonrpc_file_reflect(self, **kwargs):
+    #     """
+    #     Reflect all the blobs in a file matching the filter criteria
+    #
+    #     Usage:
+    #         file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+    #                      [--stream_hash=<stream_hash>] [--rowid=<rowid>]
+    #                      [--reflector=<reflector>]
+    #
+    #     Options:
+    #         --sd_hash=<sd_hash>          : (str) get file with matching sd hash
+    #         --file_name=<file_name>      : (str) get file with matching file name in the
+    #                                        downloads folder
+    #         --stream_hash=<stream_hash>  : (str) get file with matching stream hash
+    #         --rowid=<rowid>              : (int) get file with matching row id
+    #         --reflector=<reflector>      : (str) reflector server, ip address or url
+    #                                        by default choose a server from the config
+    #
+    #     Returns:
+    #         (list) list of blobs reflected
+    #     """
+    #
+    #     reflector_server = kwargs.get('reflector', None)
+    #     lbry_files = self._get_lbry_files(**kwargs)
+    #
+    #     if len(lbry_files) > 1:
+    #         raise Exception('Too many (%i) files found, need one' % len(lbry_files))
+    #     elif not lbry_files:
+    #         raise Exception('No file found')
+    #     return await d2f(reupload.reflect_file(
+    #         lbry_files[0], reflector_server=kwargs.get('reflector', None)
+    #     ))
 
     @requires(BLOB_COMPONENT, WALLET_COMPONENT)
     async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
@@ -3153,39 +2960,39 @@ class Daemon(metaclass=JSONRPCServerType):
         stop_index = start_index + page_size
         return blob_hashes[start_index:stop_index]
 
-    @requires(BLOB_COMPONENT)
-    async def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
-        """
-        Reflects specified blobs
+    # @requires(BLOB_COMPONENT)
+    # async def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
+    #     """
+    #     Reflects specified blobs
+    #
+    #     Usage:
+    #         blob_reflect (<blob_hashes>...) [--reflector_server=<reflector_server>]
+    #
+    #     Options:
+    #         --reflector_server=<reflector_server>          : (str) reflector address
+    #
+    #     Returns:
+    #         (list) reflected blob hashes
+    #     """
+    #     result = await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager, reflector_server))
+    #     return result
 
-        Usage:
-            blob_reflect (<blob_hashes>...) [--reflector_server=<reflector_server>]
-
-        Options:
-            --reflector_server=<reflector_server>          : (str) reflector address
-
-        Returns:
-            (list) reflected blob hashes
-        """
-        result = await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager, reflector_server))
-        return result
-
-    @requires(BLOB_COMPONENT)
-    async def jsonrpc_blob_reflect_all(self):
-        """
-        Reflects all saved blobs
-
-        Usage:
-            blob_reflect_all
-
-        Options:
-            None
-
-        Returns:
-            (bool) true if successful
-        """
-        blob_hashes = await d2f(self.blob_manager.get_all_verified_blobs())
-        return await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager))
+    # @requires(BLOB_COMPONENT)
+    # async def jsonrpc_blob_reflect_all(self):
+    #     """
+    #     Reflects all saved blobs
+    #
+    #     Usage:
+    #         blob_reflect_all
+    #
+    #     Options:
+    #         None
+    #
+    #     Returns:
+    #         (bool) true if successful
+    #     """
+    #     blob_hashes = await d2f(self.blob_manager.get_all_verified_blobs())
+    #     return await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager))
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address=None, port=None):
@@ -3254,8 +3061,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 "node_id": (str) the local dht node id
             }
         """
-        result = {}
-        result['buckets'] = {}
+        result = {
+            'buckets': {}
+        }
 
         for i in range(len(self.dht_node.protocol.routing_table._buckets)):
             result['buckets'][i] = []
@@ -3265,137 +3073,135 @@ class Daemon(metaclass=JSONRPCServerType):
                     "udp_port": contact.udp_port,
                     "tcp_port": contact.tcp_port,
                     "node_id": hexlify(contact.node_id).decode(),
-                    # "blobs": blobs,
                 }
                 result['buckets'][i].append(host)
-                # contact_set.add(hexlify(contact.id).decode())
 
-        # result['contacts'] = list(contact_set)
-        # result['blob_hashes'] = list(blob_hashes)
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
 
-    # the single peer downloader needs wallet access
-    @requires(DHT_COMPONENT, WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_blob_availability(self, blob_hash, search_timeout=None, blob_timeout=None):
-        """
-        Get blob availability
+    # # the single peer downloader needs wallet access
+    # @requires(DHT_COMPONENT, WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    # def jsonrpc_blob_availability(self, blob_hash, search_timeout=None, blob_timeout=None):
+    #     """
+    #     Get blob availability
+    #
+    #     Usage:
+    #         blob_availability (<blob_hash>) [<search_timeout> | --search_timeout=<search_timeout>]
+    #                           [<blob_timeout> | --blob_timeout=<blob_timeout>]
+    #
+    #     Options:
+    #         --blob_hash=<blob_hash>           : (str) check availability for this blob hash
+    #         --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
+    #                                             in the dht
+    #         --blob_timeout=<blob_timeout>     : (int) how long to try downloading from a peer
+    #
+    #     Returns:
+    #         (dict) {
+    #             "is_available": <bool, true if blob is available from a peer from peer list>
+    #             "reachable_peers": ["<ip>:<port>"],
+    #             "unreachable_peers": ["<ip>:<port>"]
+    #         }
+    #     """
+    #     return self._blob_availability(blob_hash, search_timeout, blob_timeout)
+    #
+    # @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    # async def jsonrpc_stream_availability(self, uri, search_timeout=None, blob_timeout=None):
+    #     """
+    #     Get stream availability for lbry uri
+    #
+    #     Usage:
+    #         stream_availability (<uri> | --uri=<uri>)
+    #                             [<search_timeout> | --search_timeout=<search_timeout>]
+    #                             [<blob_timeout> | --blob_timeout=<blob_timeout>]
+    #
+    #     Options:
+    #         --uri=<uri>                       : (str) check availability for this uri
+    #         --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
+    #                                             in the dht
+    #         --blob_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
+    #
+    #     Returns:
+    #         (dict) {
+    #             'is_available': <bool>,
+    #             'did_decode': <bool>,
+    #             'did_resolve': <bool>,
+    #             'is_stream': <bool>,
+    #             'num_blobs_in_stream': <int>,
+    #             'sd_hash': <str>,
+    #             'sd_blob_availability': <dict> see `blob_availability`,
+    #             'head_blob_hash': <str>,
+    #             'head_blob_availability': <dict> see `blob_availability`,
+    #             'use_upnp': <bool>,
+    #             'upnp_redirect_is_set': <bool>,
+    #             'error': <None> | <str> error message
+    #         }
+    #     """
+    #
+    #     search_timeout = search_timeout or conf.settings['peer_search_timeout']
+    #     blob_timeout = blob_timeout or conf.settings['sd_download_timeout']
+    #
+    #     response = {
+    #         'is_available': False,
+    #         'did_decode': False,
+    #         'did_resolve': False,
+    #         'is_stream': False,
+    #         'num_blobs_in_stream': None,
+    #         'sd_hash': None,
+    #         'sd_blob_availability': {},
+    #         'head_blob_hash': None,
+    #         'head_blob_availability': {},
+    #         'use_upnp': conf.settings['use_upnp'],
+    #         'upnp_redirect_is_set': len(self.upnp.upnp_redirects),
+    #         'error': None
+    #     }
+    #
+    #     try:
+    #         resolved_result = (await self.wallet_manager.resolve(uri))[uri]
+    #         response['did_resolve'] = True
+    #     except UnknownNameError:
+    #         response['error'] = "Failed to resolve name"
+    #         return response
+    #     except URIParseError:
+    #         response['error'] = "Invalid URI"
+    #         return response
+    #
+    #     try:
+    #         claim_obj = smart_decode(resolved_result[uri]['claim']['hex'])
+    #         response['did_decode'] = True
+    #     except DecodeError:
+    #         response['error'] = "Failed to decode claim value"
+    #         return response
+    #
+    #     response['is_stream'] = claim_obj.is_stream
+    #     if not claim_obj.is_stream:
+    #         response['error'] = "Claim for \"%s\" does not contain a stream" % uri
+    #         return response
+    #
+    #     sd_hash = claim_obj.source_hash
+    #     response['sd_hash'] = sd_hash
+    #     head_blob_hash = None
+    #     downloader = self._get_single_peer_downloader()
+    #     have_sd_blob = sd_hash in self.blob_manager.blobs
+    #     try:
+    #         sd_blob = await self.jsonrpc_blob_get(sd_hash, timeout=blob_timeout, encoding="json")
+    #         if not have_sd_blob:
+    #             await self.jsonrpc_blob_delete(sd_hash)
+    #         if sd_blob and 'blobs' in sd_blob:
+    #             response['num_blobs_in_stream'] = len(sd_blob['blobs']) - 1
+    #             head_blob_hash = sd_blob['blobs'][0]['blob_hash']
+    #             head_blob_availability = await self._blob_availability(
+    #                 head_blob_hash, search_timeout, blob_timeout, downloader)
+    #             response['head_blob_availability'] = head_blob_availability
+    #     except Exception as err:
+    #         response['error'] = err
+    #     response['head_blob_hash'] = head_blob_hash
+    #     response['sd_blob_availability'] = await self._blob_availability(
+    #         sd_hash, search_timeout, blob_timeout, downloader)
+    #     response['is_available'] = response['sd_blob_availability'].get('is_available') and \
+    #                                response['head_blob_availability'].get('is_available')
+    #     return response
 
-        Usage:
-            blob_availability (<blob_hash>) [<search_timeout> | --search_timeout=<search_timeout>]
-                              [<blob_timeout> | --blob_timeout=<blob_timeout>]
 
-        Options:
-            --blob_hash=<blob_hash>           : (str) check availability for this blob hash
-            --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
-                                                in the dht
-            --blob_timeout=<blob_timeout>     : (int) how long to try downloading from a peer
-
-        Returns:
-            (dict) {
-                "is_available": <bool, true if blob is available from a peer from peer list>
-                "reachable_peers": ["<ip>:<port>"],
-                "unreachable_peers": ["<ip>:<port>"]
-            }
-        """
-        return self._blob_availability(blob_hash, search_timeout, blob_timeout)
-
-    @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_stream_availability(self, uri, search_timeout=None, blob_timeout=None):
-        """
-        Get stream availability for lbry uri
-
-        Usage:
-            stream_availability (<uri> | --uri=<uri>)
-                                [<search_timeout> | --search_timeout=<search_timeout>]
-                                [<blob_timeout> | --blob_timeout=<blob_timeout>]
-
-        Options:
-            --uri=<uri>                       : (str) check availability for this uri
-            --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
-                                                in the dht
-            --blob_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
-
-        Returns:
-            (dict) {
-                'is_available': <bool>,
-                'did_decode': <bool>,
-                'did_resolve': <bool>,
-                'is_stream': <bool>,
-                'num_blobs_in_stream': <int>,
-                'sd_hash': <str>,
-                'sd_blob_availability': <dict> see `blob_availability`,
-                'head_blob_hash': <str>,
-                'head_blob_availability': <dict> see `blob_availability`,
-                'use_upnp': <bool>,
-                'upnp_redirect_is_set': <bool>,
-                'error': <None> | <str> error message
-            }
-        """
-
-        search_timeout = search_timeout or conf.settings['peer_search_timeout']
-        blob_timeout = blob_timeout or conf.settings['sd_download_timeout']
-
-        response = {
-            'is_available': False,
-            'did_decode': False,
-            'did_resolve': False,
-            'is_stream': False,
-            'num_blobs_in_stream': None,
-            'sd_hash': None,
-            'sd_blob_availability': {},
-            'head_blob_hash': None,
-            'head_blob_availability': {},
-            'use_upnp': conf.settings['use_upnp'],
-            'upnp_redirect_is_set': len(self.upnp.upnp_redirects),
-            'error': None
-        }
-
-        try:
-            resolved_result = (await self.wallet_manager.resolve(uri))[uri]
-            response['did_resolve'] = True
-        except UnknownNameError:
-            response['error'] = "Failed to resolve name"
-            return response
-        except URIParseError:
-            response['error'] = "Invalid URI"
-            return response
-
-        try:
-            claim_obj = smart_decode(resolved_result[uri]['claim']['hex'])
-            response['did_decode'] = True
-        except DecodeError:
-            response['error'] = "Failed to decode claim value"
-            return response
-
-        response['is_stream'] = claim_obj.is_stream
-        if not claim_obj.is_stream:
-            response['error'] = "Claim for \"%s\" does not contain a stream" % uri
-            return response
-
-        sd_hash = claim_obj.source_hash
-        response['sd_hash'] = sd_hash
-        head_blob_hash = None
-        downloader = self._get_single_peer_downloader()
-        have_sd_blob = sd_hash in self.blob_manager.blobs
-        try:
-            sd_blob = await self.jsonrpc_blob_get(sd_hash, timeout=blob_timeout, encoding="json")
-            if not have_sd_blob:
-                await self.jsonrpc_blob_delete(sd_hash)
-            if sd_blob and 'blobs' in sd_blob:
-                response['num_blobs_in_stream'] = len(sd_blob['blobs']) - 1
-                head_blob_hash = sd_blob['blobs'][0]['blob_hash']
-                head_blob_availability = await self._blob_availability(
-                    head_blob_hash, search_timeout, blob_timeout, downloader)
-                response['head_blob_availability'] = head_blob_availability
-        except Exception as err:
-            response['error'] = err
-        response['head_blob_hash'] = head_blob_hash
-        response['sd_blob_availability'] = await self._blob_availability(
-            sd_hash, search_timeout, blob_timeout, downloader)
-        response['is_available'] = response['sd_blob_availability'].get('is_available') and \
-                                   response['head_blob_availability'].get('is_available')
-        return response
 
     async def get_channel_or_error(
             self, accounts: List[LBCAccount], channel_id: str = None, channel_name: str = None):
@@ -3447,7 +3253,7 @@ class Daemon(metaclass=JSONRPCServerType):
 def loggly_time_string(dt):
     formatted_dt = dt.strftime("%Y-%m-%dT%H:%M:%S")
     milliseconds = str(round(dt.microsecond * (10.0 ** -5), 3))
-    return urllib.parse.quote(formatted_dt + milliseconds + "Z")
+    return quote(formatted_dt + milliseconds + "Z")
 
 
 def get_loggly_query_string(installation_id):
@@ -3459,11 +3265,11 @@ def get_loggly_query_string(installation_id):
         'from': loggly_time_string(yesterday),
         'to': loggly_time_string(now)
     }
-    data = urllib.parse.urlencode(params)
+    data = urlencode(params)
     return base_loggly_search_url + data
 
 
-def report_bug_to_slack(message, installation_id, platform_name, app_version):
+async def report_bug_to_slack(message, installation_id, platform_name, app_version):
     webhook = utils.deobfuscate(conf.settings['SLACK_WEBHOOK'])
     payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
     payload_params = (
@@ -3475,4 +3281,5 @@ def report_bug_to_slack(message, installation_id, platform_name, app_version):
     payload = {
         "text": payload_template % payload_params
     }
-    requests.post(webhook, json.dumps(payload))
+    async with aiohttp.request('post', webhook, data=json.dumps(payload)) as response:
+        pass

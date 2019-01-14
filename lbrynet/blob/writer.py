@@ -32,6 +32,9 @@ class HashBlobWriter:
     def blob_hash(self):
         return self._hashsum.hexdigest()
 
+    def closed(self):
+        return self.buffer is None or self.buffer.closed
+
     def write(self, data: bytes):
         expected_length = self.get_length()
         if not expected_length:

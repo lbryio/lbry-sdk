@@ -20,7 +20,7 @@ from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob_exchange.server import BlobServer
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.extras.daemon.Component import Component
-from lbrynet.extras.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbrynet.storage import SQLiteStorage
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
@@ -457,7 +457,8 @@ class StreamManagerComponent(Component):
 
         log.info('Starting the file manager')
         self.stream_manager = StreamManager(
-            self.loop, blob_manager, wallet, storage, node, 30, 3
+            self.loop, blob_manager, wallet, storage, node, conf.settings['blob_download_timeout'],
+            conf.settings['peer_connect_timeout']
         )
         await self.stream_manager.start()
         log.info('Done setting up file manager')

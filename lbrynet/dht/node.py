@@ -3,7 +3,7 @@ import asyncio
 import typing
 import socket
 import binascii
-
+import contextlib
 from lbrynet.dht.protocol.protocol import KademliaProtocol
 from lbrynet.dht.iterative_find import IterativeNodeFinder, IterativeValueFinder
 from lbrynet.dht.async_generator_junction import AsyncGeneratorJunction
@@ -157,7 +157,8 @@ class Node:
         return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
                                     key, bottom_out_limit, max_results, None, shortlist)
 
-    def stream_peer_search_junction(self, hash_queue: asyncio.Queue, bottom_out_limit=20,
+    @contextlib.asynccontextmanager
+    async def stream_peer_search_junction(self, hash_queue: asyncio.Queue, bottom_out_limit=20,
                                     max_results=-1) -> AsyncGeneratorJunction:
         peer_generator = AsyncGeneratorJunction(self.loop)
 
@@ -173,13 +174,20 @@ class Node:
                         max_results=max_results
                     )
                 )
-
-        add_blobs_task = self.loop.create_task(_add_hashes_from_queue())
-        peer_generator.add_cleanup(
-            lambda: None if not add_blobs_task or not (add_blobs_task.done() or add_blobs_task.cancelled()) else
-            add_blobs_task.cancel()
-        )
-        return peer_generator
+        add_hashes_task = self.loop.create_task(_add_hashes_from_queue())
+        try:
+            async with peer_generator as junction:
+                yield junction
+        finally:
+            error = None
+            try:
+                await peer_generator.finished.wait()
+            except asyncio.CancelledError as err:
+                error = err
+            if add_hashes_task and not (add_hashes_task.done() or add_hashes_task.cancelled()):
+                add_hashes_task.cancel()
+            if error:
+                raise error
 
     def peer_search_junction(self, node_id: bytes, max_results=constants.k*2, bottom_out_limit=20) -> AsyncGeneratorJunction:
         peer_generator = AsyncGeneratorJunction(self.loop)

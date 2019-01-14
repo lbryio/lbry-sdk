@@ -87,7 +87,6 @@ class BlobFile:
                 while self.writers:
                     other = self.writers.pop()
                     other.finished.cancel()
-                    # other.peer.disconnect_tcp()
                 t = self.loop.create_task(self.save_verified_blob(writer))
                 t.add_done_callback(lambda *_: self.finished_writing.set())
             elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
@@ -110,14 +109,10 @@ class BlobFile:
 
         if self.verified.is_set():
             return
-        await self.blob_write_lock.acquire()
-        try:
+        async with self.blob_write_lock:
             await self.loop.run_in_executor(None, _save_verified)
-        finally:
-            self.verified.set()
-            self.blob_write_lock.release()
-        if self.blob_completed_callback:
             await self.blob_completed_callback(self)
+            self.verified.set()
 
     def open_for_writing(self, peer: typing.Optional['Peer'] = None) -> HashBlobWriter:
         """

@@ -10,6 +10,7 @@ import yaml
 from appdirs import user_data_dir, user_config_dir
 from lbrynet import utils
 from lbrynet.error import InvalidCurrencyError
+from lbrynet.dht import constants
 
 log = logging.getLogger(__name__)
 
@@ -197,6 +198,7 @@ FIXED_SETTINGS = {
 }
 
 ADJUSTABLE_SETTINGS = {
+    'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
     'data_dir': (str, ''),    # these blank defaults will be updated to OS specific defaults
     'wallet_dir': (str, ''),
     'lbryum_wallet_dir': (str, ''),  # to be deprecated
@@ -223,8 +225,6 @@ ADJUSTABLE_SETTINGS = {
     'data_rate': (float, .0001),  # points/megabyte
     'delete_blobs_on_remove': (bool, True),
     'dht_node_port': (int, 4444),
-    'download_timeout': (int, 180),
-    'download_mirrors': (list, ['blobs.lbry.io']),
     'is_generous_host': (bool, True),
     'announce_head_blobs_only': (bool, True),
     'concurrent_announcers': (int, DEFAULT_CONCURRENT_ANNOUNCERS),
@@ -239,22 +239,22 @@ ADJUSTABLE_SETTINGS = {
     'min_valuable_hash_rate': (float, .05),  # points/1000 infos
     'min_valuable_info_rate': (float, .05),  # points/1000 infos
     'peer_port': (int, 3333),
-    'pointtrader_server': (str, 'http://127.0.0.1:2424'),
-    'reflector_port': (int, 5566),
     # if reflect_uploads is True, send files to reflector after publishing (as well as a periodic check in the
     # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
     'reflect_uploads': (bool, True),
     'auto_re_reflect_interval': (int, 86400),  # set to 0 to disable
     'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_list, server_list_reverse),
-    'run_reflector_server': (bool, False),  # adds `reflector` to components_to_skip unless True
-    'sd_download_timeout': (int, 3),
-    'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
-    'peer_search_timeout': (int, 60),
+
+    'download_timeout': (float, 10.0),
+    # 'peer_search_timeout': (int, 60),
+    'peer_connect_timeout': (float, 3.0),
+    'blob_download_timeout': (float, 20.0),  # download must be over 0.1mb/s
+    'node_rpc_timeout': (float, constants.rpc_timeout),
     'use_auth_http': (bool, False),
     'use_https': (bool, False),
     'use_upnp': (bool, True),
     'use_keyring': (bool, False),
-    'wallet': (str, LBRYUM_WALLET),
+    'wallet': (str, TORBA_WALLET),
     'blockchain_name': (str, 'lbrycrd_main'),
     'lbryum_servers': (list, [('lbryumx1.lbry.io', 50001), ('lbryumx2.lbry.io',
         50001)], server_list, server_list_reverse),
