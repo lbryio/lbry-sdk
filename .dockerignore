@@ -1,0 +1,7 @@
+.git
+.tox
+__pycache__
+dist
+lbrynet.egg-info
+docs
+tests
