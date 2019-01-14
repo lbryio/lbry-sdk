@@ -68,15 +68,9 @@ class AsyncGeneratorJunction:
         if not self.can_iterate.is_set():
             await self.can_iterate.wait()
         if not self.running:
-            await self.aclose()
+            raise StopAsyncIteration()
         try:
             return await self.loop.create_task(self.result_queue.get())
-        except Exception as err:
-            try:
-                await self.aclose()
-            except StopAsyncIteration:
-                pass
-            raise err
         finally:
             self.awaiting = None
 
@@ -91,7 +85,7 @@ class AsyncGeneratorJunction:
             raise StopAsyncIteration()
         if not self.finished.is_set():
             self.finished.set()
-        return asyncio.ensure_future(_aclose(), loop=self.loop)
+        return self.loop.create_task(_aclose())
 
     async def __aenter__(self):
         self.tasks.append(self.loop.create_task(self.wait_for_generators()))
@@ -104,6 +98,6 @@ class AsyncGeneratorJunction:
             pass
         finally:
             if exc_type:
-                if not isinstance(exc_type, (asyncio.CancelledError, asyncio.TimeoutError, StopAsyncIteration)):
-                    log.exception("unexpected error")
+                if exc_type not in (asyncio.CancelledError, asyncio.TimeoutError, StopAsyncIteration):
+                    log.exception("unexpected error: %s %s %s", exc_type, exc, tb)
                 raise exc_type()

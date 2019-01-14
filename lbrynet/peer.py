@@ -257,16 +257,12 @@ class Peer:
                 else:
                     log.info("failed to download blob from %s:%i", self.address, self.tcp_port)
                 fut.set_result(success)
-        # except asyncio.CancelledError:
-        #     fut.set_result(False)
-        #     return await fut
-        except asyncio.TimeoutError:
-            log.warning("%s:%i is down", self.address, self.tcp_port)
-            self.report_tcp_down()
+        except asyncio.CancelledError:
             fut.set_result(False)
-            raise
-        except (ConnectionRefusedError, ConnectionAbortedError, OSError):
-            log.warning("%s:%i is down, other", self.address, self.tcp_port)
+            return await fut
+        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError) as err:
+            log.warning("%s:%i is down, %s %s", self.address, self.tcp_port, str(type(err)), str(err))
+            self.report_tcp_down()
             fut.set_result(False)
         return await fut
 
@@ -282,10 +278,9 @@ class Peer:
         try:
             return await self._request_blob(blob, protocol, peer_connect_timeout)
         finally:
-            if protocol.transport:
-                protocol.transport.close()
             async with self.blob_request_lock:
-                del self.blob_exchange_protocol_connections[blob]
+                if blob in self.blob_exchange_protocol_connections:
+                    del self.blob_exchange_protocol_connections[blob]
 
     def report_tcp_down(self):
         self.tcp_last_down = self.loop.time()

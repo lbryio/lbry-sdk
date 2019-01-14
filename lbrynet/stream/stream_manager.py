@@ -90,12 +90,12 @@ class StreamManager:
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
 
-    def stop(self):
+    async def stop(self):
         if self.resume_downloading_task and not self.resume_downloading_task.done():
             self.resume_downloading_task.cancel()
         while self.streams:
             stream = self.streams.pop()
-            stream.stop_download()
+            await stream.stop_download()
         while self.update_stream_finished_futs:
             self.update_stream_finished_futs.pop().cancel()
 
@@ -105,8 +105,7 @@ class StreamManager:
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
-        if stream.running:
-            stream.stop_download()
+        await stream.stop_download()
         self.streams.remove(stream)
         await self.storage.delete_stream(stream.descriptor)
 
@@ -152,7 +151,7 @@ class StreamManager:
             log.info("got descriptor %s for %s", claim.source_hash.decode(), claim_info['name'])
         except (asyncio.TimeoutError, asyncio.CancelledError) as err:
             log.info("stream timeout")
-            downloader.stop()
+            await downloader.stop()
             log.info("stopped stream")
             return
         if not await self.blob_manager.storage.stream_exists(downloader.sd_hash):
@@ -181,7 +180,7 @@ class StreamManager:
             self.wait_for_stream_finished(stream)
             return stream
         except asyncio.CancelledError:
-            downloader.stop()
+            await downloader.stop()
 
     async def download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
@@ -192,7 +191,7 @@ class StreamManager:
         log.info("get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
         claim = ClaimDict.load_dict(claim_info['value'])
         if fee_address and fee_amount:
-            if fee_address > await self.wallet.default_account.get_balance():
+            if fee_amount > await self.wallet.default_account.get_balance():
                 raise Exception("not enough funds")
         sd_hash = claim.source_hash.decode()
         if sd_hash in self.starting_streams:

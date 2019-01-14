@@ -178,16 +178,14 @@ class Node:
         try:
             async with peer_generator as junction:
                 yield junction
-        finally:
-            error = None
-            try:
-                await peer_generator.finished.wait()
-            except asyncio.CancelledError as err:
-                error = err
+            await peer_generator.finished.wait()
+        except asyncio.CancelledError:
             if add_hashes_task and not (add_hashes_task.done() or add_hashes_task.cancelled()):
                 add_hashes_task.cancel()
-            if error:
-                raise error
+            raise
+        finally:
+            if add_hashes_task and not (add_hashes_task.done() or add_hashes_task.cancelled()):
+                add_hashes_task.cancel()
 
     def peer_search_junction(self, node_id: bytes, max_results=constants.k*2, bottom_out_limit=20) -> AsyncGeneratorJunction:
         peer_generator = AsyncGeneratorJunction(self.loop)
