@@ -97,7 +97,7 @@ class Conductor:
 
     async def start_spv(self):
         if not self.spv_started:
-            await self.spv_node.start()
+            await self.spv_node.start(self.blockchain_node)
             self.spv_started = True
 
     async def stop_spv(self):
@@ -107,7 +107,7 @@ class Conductor:
 
     async def start_wallet(self):
         if not self.wallet_started:
-            await self.wallet_node.start()
+            await self.wallet_node.start(self.spv_node)
             self.wallet_started = True
 
     async def stop_wallet(self):
@@ -136,7 +136,7 @@ class Conductor:
 class WalletNode:
 
     def __init__(self, manager_class: Type[BaseWalletManager], ledger_class: Type[BaseLedger],
-                 verbose: bool = False, api_port: int = 5279) -> None:
+                 verbose: bool = False, port: int = 5280) -> None:
         self.manager_class = manager_class
         self.ledger_class = ledger_class
         self.verbose = verbose
@@ -145,9 +145,9 @@ class WalletNode:
         self.wallet: Optional[Wallet] = None
         self.account: Optional[BaseAccount] = None
         self.data_path: Optional[str] = None
-        self.api_port = api_port
+        self.port = port
 
-    async def start(self, seed=None):
+    async def start(self, spv_node: 'SPVNode', seed=None):
         self.data_path = tempfile.mkdtemp()
         wallet_file_name = os.path.join(self.data_path, 'my_wallet.json')
         with open(wallet_file_name, 'w') as wallet_file:
@@ -155,8 +155,8 @@ class WalletNode:
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
-                    'api_port': self.api_port,
-                    'default_servers': [('localhost', 1984)],
+                    'api_port': self.port,
+                    'default_servers': [(spv_node.hostname, spv_node.port)],
                     'data_path': self.data_path
                 }
             },
@@ -190,16 +190,19 @@ class SPVNode:
         self.controller = None
         self.data_path = None
         self.server = None
-        self.port = 1984
+        self.hostname = 'localhost'
+        self.port = 50001 + 1  # avoid conflict with default daemon
 
-    async def start(self):
+    async def start(self, blockchain_node: 'BlockchainNode'):
         self.data_path = tempfile.mkdtemp()
         conf = {
             'DB_DIRECTORY': self.data_path,
-            'DAEMON_URL': 'http://rpcuser:rpcpassword@localhost:50001/',
+            'DAEMON_URL': blockchain_node.rpc_url,
             'REORG_LIMIT': '100',
+            'TCP_HOST': self.hostname,
             'TCP_PORT': str(self.port)
         }
+        # TODO: don't use os.environ
         os.environ.update(conf)
         self.server = Server(Env(self.coin_class))
         self.server.mempool.refresh_secs = self.server.bp.prefetcher.polling_delay = 0.5
@@ -257,7 +260,14 @@ class BlockchainNode:
         self.protocol = None
         self.transport = None
         self._block_expected = 0
-        self.port = 50001
+        self.rpcuser = 'rpcuser'
+        self.rpcpassword = 'rpcpassword'
+        self.hostname = 'localhost'
+        self.port = 9245 + 1  # avoid conflict with default daemon
+
+    @property
+    def rpc_url(self):
+        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.port}/'
 
     def is_expected_block(self, e: BlockHeightEvent):
         return self._block_expected == e.height
@@ -311,7 +321,7 @@ class BlockchainNode:
             self.daemon_bin,
             '-datadir={}'.format(self.data_path),
             '-printtoconsole', '-regtest', '-server', '-txindex',
-            '-rpcuser=rpcuser', '-rpcpassword=rpcpassword', f'-rpcport={self.port}'
+            f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.port}'
         )
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
@@ -334,7 +344,7 @@ class BlockchainNode:
     async def _cli_cmnd(self, *args):
         cmnd_args = [
             self.cli_bin, '-datadir={}'.format(self.data_path), '-regtest',
-            '-rpcuser=rpcuser', '-rpcpassword=rpcpassword', '-rpcport=50001'
+            f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.port}'
         ] + list(args)
         self.log.info(' '.join(cmnd_args))
         loop = asyncio.get_event_loop()

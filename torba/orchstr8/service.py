@@ -66,7 +66,7 @@ class ConductorService:
         self.stack.spv_started or await self.stack.start_spv()
         self.send_message({'type': 'service', 'name': 'spv', 'port': self.stack.spv_node.port})
         self.stack.wallet_started or await self.stack.start_wallet()
-        self.send_message({'type': 'service', 'name': 'wallet', 'port': ''})
+        self.send_message({'type': 'service', 'name': 'wallet', 'port': self.stack.wallet_node.port})
         self.stack.wallet_node.ledger.on_header.listen(self.on_status)
         self.stack.wallet_node.ledger.on_transaction.listen(self.on_status)
         return json_response({'started': True})
