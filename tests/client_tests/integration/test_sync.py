@@ -26,7 +26,7 @@ class SyncTests(IntegrationTestCase):
         wallet_node = WalletNode(
             self.wallet_node.manager_class,
             self.wallet_node.ledger_class,
-            api_port=self.api_port
+            port=self.api_port
         )
         await wallet_node.start(seed)
         self.started_nodes.append(wallet_node)
