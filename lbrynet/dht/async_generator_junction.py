@@ -71,7 +71,7 @@ class AsyncGeneratorJunction:
         if not self.running:
             raise StopAsyncIteration()
         try:
-            return await self.loop.create_task(self.result_queue.get())
+            return await self.result_queue.get()
         finally:
             self.awaiting = None
 
