@@ -32,7 +32,7 @@ class Reflector(AbstractEventLoop):
     
     def __init__(self, protocol_version, slow_callback_duration):
         self.protocol_version = protocol_version
-        self.data_transport = transport
+        self.data_transport = None
         self.stream_writer = None  # write_handle
         self.stream_reader = None  # read_handle
         self.slow_callback_duration = slow_callback_duration
