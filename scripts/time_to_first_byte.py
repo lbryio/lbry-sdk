@@ -48,7 +48,7 @@ def confidence(times, z):
     mean = sum(times) / len(times)
     standard_dev = (sum(((t - sum(times) / len(times)) ** 2.0 for t in times)) / len(times)) ** 0.5
     err = (z * standard_dev) / (len(times) ** 0.5)
-    return f"{round(mean, 3)}s +/- {round(err, 3)}s"
+    return f"{round(mean, 3) + round(err, 3)}s"
 
 
 def variance(times):
