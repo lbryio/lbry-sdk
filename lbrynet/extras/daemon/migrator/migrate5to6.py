@@ -186,10 +186,14 @@ def do_migration(db_dir):
                 (stream_hash, blob_hash, position, iv)
             )
 
+        download_dir = conf.settings.download_dir
+        if not isinstance(download_dir, bytes):
+            download_dir = download_dir.encode()
+
         # insert the file
         transaction.execute(
             "insert or ignore into file values (?, ?, ?, ?, ?)",
-            (stream_hash, stream_name, hexlify(conf.settings.download_dir),
+            (stream_hash, stream_name, hexlify(download_dir),
              data_rate, status)
         )
 
