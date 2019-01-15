@@ -399,11 +399,11 @@ class HashAnnouncerComponent(Component):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = BlobAnnouncer(self.loop, dht_node, storage)
-        # self.hash_announcer.start()
+        self.hash_announcer.start()
         log.info("Started blob announcer")
 
     def stop(self):
-        # self.hash_announcer.stop()
+        self.hash_announcer.stop()
         log.info("Stopped blob announcer")
 
     async def get_status(self):
