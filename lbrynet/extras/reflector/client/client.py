@@ -1,28 +1,66 @@
 import asyncio
-from socket import socket
-from typing import Any, Optional, Text, Tuple, Union, Sequence
+
+from typing import Any, Optional, Text, Tuple, Union, Sequence, Generic
 
 
-class ReflectorClient(asyncio.Protocol, asyncio.DatagramProtocol):
+class ClientFactoryMixin(asyncio.Protocol, asyncio.DatagramProtocol):
     def __init__(self):
-        self.received_server_version = asyncio.ensure_future(self.connection_made)
-        self.stream_descriptor = asyncio.ensure_future(self.datagram_received)
+        self.received_server_version = asyncio.Future()
+        self.sent_stream_info = asyncio.Future()
+    
+    def connection_made(self, transport: asyncio.SubprocessTransport):
+        ...
+    
+    def data_received(self, data: bytes):
+        ...
+    
+    def eof_received(self):
+        ...
+    
+    def connection_lost(self, exc: Optional[Exception]):
+        ...
+
+
+class BlobFactoryMixin(asyncio.Protocol, asyncio.SubprocessProtocol):
+    def __init__(self, *args, **kwargs):
+        asyncio.set_child_watcher(self.pipe_data_received)
+        super().__init__(args, kwargs)
+    
+    def pipe_data_received(self, fd: int, data: Union[bytes, Text]):
+        ...
+    
+    def pipe_connection_lost(self, fd: int, exc: Optional[Exception]):
+        ...
+    
+    def process_exited(self):
+        ...
+
+
+class ReflectorClient(asyncio.Protocol):
+    def __init__(self, lbry_file: Any[Generic]):
+        self.lbry_file = lbry_file
+        self.stream_descriptor = asyncio.Future()
         self.stream_hash = asyncio.Future()
         self.sd_hash = asyncio.Future()
-        self.sent_stream_info = asyncio.ensure_future(self.error_received)
-
-
-class EncryptedFileProtocol(asyncio.StreamReaderProtocol, asyncio.SubprocessProtocol):
-    def __init__(self):
-        blob_read_handle, _ = ReflectorClient()
-        super().__init__(stream_reader=blob_read_handle)
-        self.reflected_blobs = asyncio.get_child_watcher()
-        self.blob_manager = asyncio.ensure_future(self.connection_made)
-        self.blobs_needed = asyncio.ensure_future(self.eof_received)
-        self.blobs_reflected = asyncio.ensure_future(self.pipe_connection_lost)
-        self.blob_hashes_to_send = asyncio.ensure_future(self.data_received)
-        self.failed_blob_hashes = asyncio.Queue()
+        
+    def connection_made(self, transport: asyncio.Transport):
+        ...
     
+    def datagram_received(self, data: Union[bytes, Text], addr: Tuple[str, int]):
+        ...
+    
+    def error_received(self, exc: Exception):
+        ...
+    
+    def connection_lost(self, exc: Optional[Exception]):
+        ...
+
+
+class EncryptedFileProtocol(asyncio.SubprocessProtocol):
+    def __init__(self):
+        self.failed_blob_hashes = asyncio.Queue()
+        self.blobs_reflected = asyncio.Queue()
+
     def pipe_data_received(self, fd: int, data: Union[bytes, Text]):
         ...
     
@@ -30,111 +68,22 @@ class EncryptedFileProtocol(asyncio.StreamReaderProtocol, asyncio.SubprocessProt
         ...
 
 
-class ReflectorClientFactory(asyncio.AbstractEventLoop):
+class EncryptedFileClient(asyncio.StreamReaderProtocol):
+    def __init__(self, blob_manager: Any, blobs: Any[Sequence]):
+        read_handle, _ = ReflectorClient(lbry_file=blobs)
+        super().__init__(stream_reader=read_handle)
+        self.blob_manager = blob_manager
+        self.blob_hashes_to_send = blobs
+        self.blobs_needed = asyncio.Queue()
     
-    def __init__(self):
-        self.protocol_version = asyncio.Future()
-        self.streaming = asyncio.Lock()
-        self.response_buff = bytearray()
-        self.outgoing_buff = bytearray()
-        self.file_sender = asyncio.ensure_future(self.create_datagram_endpoint)
-        self.read_handle = asyncio.ensure_future(self.sock_recv)
-        self.server_version = asyncio.ensure_future(self.sock_accept)
-        # TODO: set __fspath__
-        # TODO: register self.blob_manager = asyncio.ensure_future(self.subprocess_exec)
-    
-    # TODO: test
-    slow_callback_duration = 1.0
-    
-    # TODO: read_handle
-    # TODO: register selector
-    def add_reader(self, fd: ..., callback: ..., *args: Any):
+    def connection_made(self, transport):
         ...
     
-    # TODO: blob_handle
-    # TODO: register selector
-    def add_writer(self, fd: ..., callback: ..., *args: Any):
+    def data_received(self, data: bytes):
         ...
     
-    # TODO: Subscriber
-    # TODO: register recipient
-    def add_signal_handler(self, sig: int, callback: ..., *args: Any):
-        ...
-
-    # TODO: start_handshake
-    def sock_connect(self, sock: socket, address: str):
-        ...
-
-    # TODO: continue
-    def sock_accept(self, sock: socket):
-        ...
-
-    # TODO: handle_handshake_response
-    def sock_recv(self, sock: socket, nbytes: int):
-        ...
-
-    # TODO: send_handshake_response
-    def sock_send(self, sock: socket, data: bytes):
-        ...
-
-    # TODO: reflect_encrypted_file()
-    def sock_sendall(self, sock: socket, data: bytes):
-        ...
-
-    # TODO: subscribe to BlobClient
-    def connect_read_pipe(self, protocol_factory: ..., pipe: Any):
-        ...
-
-    # TODO: Streaming
-    def connect_write_pipe(self, protocol_factory: EncryptedFileProtocol, pipe: Any):
+    def eof_received(self):
         ...
     
-    # TODO: /is_ip()
-    def getnameinfo(self, sockaddr: tuple, flags: int = ...):
-        ...
-    
-    # TODO: /Resolver
-    def getaddrinfo(self, host: Optional[str], port: Union[str, int, None], *,
-                    family: int = ..., type: int = ..., proto: int = ..., flags: int = ...):
-        ...
-    
-    # TODO: /FileSender
-    def create_datagram_endpoint(self, protocol_factory: ...,
-                                 local_addr: Optional[Tuple[str, int]] = ..., remote_addr: Optional[Tuple[str, int]] = ..., *,
-                                 family: int = ..., proto: int = ..., flags: int = ...,
-                                 reuse_address: Optional[bool] = ..., reuse_port: Optional[bool] = ...,
-                                 allow_broadcast: Optional[bool] = ...,
-                                 sock: Optional[socket] = ...):
-        ...
-    
-    # TODO: BlobProtocol.connectionMade
-    def subprocess_exec(self, protocol_factory: ..., *args: Any, stdin: Any = ...,
-                        stdout: Any = ..., stderr: Any = ...,
-                        **kwargs: Any):
-        ...
-    
-    # TODO: BlobClientFactory
-    def subprocess_shell(self, protocol_factory: ..., cmd: Union[bytes, str], *, stdin: Any = ...,
-                         stdout: Any = ..., stderr: Any = ...,
-                         **kwargs: Any):
-        ...
-    
-    # TODO: ReflectorClientFactory
-    def create_server(self, protocol_factory: ..., host: Union[str, Sequence[str]] = ..., port: int = ..., *,
-                      family: int = ..., flags: int = ...,
-                      sock: Optional[socket] = ..., backlog: int = ..., ssl: Any = ...,
-                      reuse_address: Optional[bool] = ...,
-                      reuse_port: Optional[bool] = ...):
-        ...
-    
-    # TODO: shutdown
-    def shutdown_asyncgens(self):
-        ...
-    
-    # TODO: close connections
-    def close(self):
-        ...
-    
-    # TODO: everything to this LOC
-    def get_task_factory(self):
+    def connection_lost(self, exc: Optional[Exception]):
         ...
