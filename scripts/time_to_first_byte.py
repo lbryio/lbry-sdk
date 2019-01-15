@@ -96,12 +96,20 @@ async def main(start_daemon=True, uris=None):
     print(f"Checking {len(uris)} uris from the front page")
     print("**********************************************")
 
+    resolvable = []
+    for name in uris:
+        resolved = await api.resolve(uri=name)
+        if 'error' not in resolved.get(name, {}):
+            resolvable.append(name)
+
+    print(f"{len(resolvable)}/{len(uris)} are resolvable")
+
     first_byte_times = []
     downloaded_times = []
     failures = []
     download_failures = []
 
-    for uri in uris:
+    for uri in resolvable:
         await api.call(
             "file_delete", {
                 "delete_from_download_dir": True,
@@ -110,13 +118,13 @@ async def main(start_daemon=True, uris=None):
             }
         )
 
-    for i, uri in enumerate(uris):
+    for i, uri in enumerate(resolvable):
         start = time.time()
         try:
             await api.call("get", {"uri": uri})
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
-            print(f"{i + 1}/{len(uris)} - {first_byte - start} {uri}")
+            print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
             # downloaded, msg, blobs_in_stream = await wait_for_done(api, uri)
             # if downloaded:
             #     downloaded_times.append((time.time()-start) / downloaded)
@@ -136,11 +144,11 @@ async def main(start_daemon=True, uris=None):
         await asyncio.sleep(0.1)
 
     print("**********************************************")
-    result = f"Tried to start downloading {len(uris)} streams from the front page\n" \
+    result = f"Tried to start downloading {len(resolvable)} streams from the front page\n" \
              f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}\n" \
              f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}\n" \
              f"Variance: {variance(first_byte_times)}\n" \
-             f"Started {len(first_byte_times)}/{len(uris)} streams"
+             f"Started {len(first_byte_times)}/{len(resolvable)} streams"
     if failures:
         nt = '\n\t'
         result += f"\nFailures:\n\t{nt.join([f for f in failures])}"
