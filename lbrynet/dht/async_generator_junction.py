@@ -1,6 +1,7 @@
 import asyncio
 import typing
 import logging
+import traceback
 from types import AsyncGeneratorType
 
 log = logging.getLogger(__name__)
@@ -99,5 +100,5 @@ class AsyncGeneratorJunction:
         finally:
             if exc_type:
                 if exc_type not in (asyncio.CancelledError, asyncio.TimeoutError, StopAsyncIteration):
-                    log.exception("unexpected error: %s %s %s", exc_type, exc, tb)
-                raise exc_type()
+                    err = traceback.format_exception(exc_type, exc, tb)
+                    log.error(err)
