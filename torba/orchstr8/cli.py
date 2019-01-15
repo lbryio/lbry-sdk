@@ -18,9 +18,9 @@ def get_argument_parser():
     subparsers.add_parser("download", help="Download blockchain node binary.")
 
     start = subparsers.add_parser("start", help="Start orchstr8 service.")
-    start.add_argument("--blockchain", help="Start blockchain node.", action="store_true")
-    start.add_argument("--spv", help="Start SPV server.", action="store_true")
-    start.add_argument("--wallet", help="Start wallet daemon.", action="store_true")
+    start.add_argument("--blockchain", help="Hostname to start blockchain node.")
+    start.add_argument("--spv", help="Hostname to start SPV server.")
+    start.add_argument("--wallet", help="Hostname to start wallet daemon.")
 
     generate = subparsers.add_parser("generate", help="Call generate method on running orchstr8 instance.")
     generate.add_argument("blocks", type=int, help="Number of blocks to generate")
@@ -62,10 +62,13 @@ def main():
 
         conductor = Conductor()
         if getattr(args, 'blockchain', False):
+            conductor.blockchain_node.hostname = args.blockchain
             loop.run_until_complete(conductor.start_blockchain())
         if getattr(args, 'spv', False):
+            conductor.spv_node.hostname = args.spv
             loop.run_until_complete(conductor.start_spv())
         if getattr(args, 'wallet', False):
+            conductor.wallet_node.hostname = args.wallet
             loop.run_until_complete(conductor.start_wallet())
 
         service = ConductorService(conductor, loop)
