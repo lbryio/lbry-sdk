@@ -26,9 +26,13 @@ class BlobPriceRequest(BlobMessage):
 
 class BlobPriceResponse(BlobMessage):
     key = 'blob_data_payment_rate'
+    rate_accepted = 'RATE_ACCEPTED'
+    rate_too_low = 'RATE_TOO_LOW'
+    rate_unset = 'RATE_UNSET'
 
     def __init__(self, blob_data_payment_rate: str, **kwargs):
-        assert blob_data_payment_rate in ('RATE_ACCEPTED', 'RATE_TOO_LOW')
+        if blob_data_payment_rate not in (self.rate_accepted, self.rate_too_low, self.rate_unset):
+            raise ValueError(blob_data_payment_rate)
         self.blob_data_payment_rate = blob_data_payment_rate
 
     def to_dict(self) -> typing.Dict:

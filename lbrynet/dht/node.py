@@ -29,25 +29,32 @@ class Node:
         self._refresh_task: asyncio.Task = None
 
     async def refresh_node(self):
-        """ Periodically called to perform k-bucket refreshes and data
-        replication/republishing as necessary """
         while True:
+            # remove peers with expired blob announcements from the datastore
             self.protocol.data_store.removed_expired_peers()
 
             total_peers: typing.List['Peer'] = []
+            # add all peers in the routing table
             total_peers.extend(self.protocol.routing_table.get_peers())
+            # add all the peers who have announed blobs to us
             total_peers.extend(self.protocol.data_store.get_storing_contacts())
 
+            # get ids falling in the midpoint of each bucket that hasn't been recently updated
             node_ids = self.protocol.routing_table.get_refresh_list(0, True)
+            # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
+            # populate/split the buckets further
             buckets_with_contacts = self.protocol.routing_table.buckets_with_contacts()
             if buckets_with_contacts <= 3:
                 for i in range(buckets_with_contacts):
                     node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
                     node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
+
+            # if we have node ids to look up, perform the iterative search until we have k results
             while node_ids:
                 peers = await self.peer_search(node_ids.pop())
                 total_peers.extend(peers)
 
+            # ping the set of peers; upon success/failure the routing able and last replied/failed time will be updated
             to_ping = [peer for peer in set(total_peers) if peer.contact_is_good is not True]
             if to_ping:
                 log.info("ping %i peers during refresh", len(to_ping))
