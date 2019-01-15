@@ -5,6 +5,7 @@ import logging
 import math
 import binascii
 import typing
+import socket
 from hashlib import sha256
 from types import SimpleNamespace
 
@@ -59,6 +60,14 @@ async def get_external_ip():  # used if upnp is disabled or non-functioning
                     return response['data']['ip']
     except Exception as e:
         pass
+
+
+async def resolve_host(loop: asyncio.BaseEventLoop, url: str):
+    info = await loop.getaddrinfo(
+        url, 'https',
+        proto=socket.IPPROTO_TCP,
+    )
+    return info[0][4][0]
 
 
 class DatabaseComponent(Component):
@@ -456,9 +465,13 @@ class StreamManagerComponent(Component):
         node = self.component_manager.get_component(DHT_COMPONENT)
 
         log.info('Starting the file manager')
+
         self.stream_manager = StreamManager(
             self.loop, blob_manager, wallet, storage, node, conf.settings['blob_download_timeout'],
-            conf.settings['peer_connect_timeout']
+            conf.settings['peer_connect_timeout'], [
+                self.component_manager.peer_manager.make_peer(await resolve_host(self.loop, url), tcp_port=port)
+                for url, port in conf.settings['reflector_servers']
+            ]
         )
         await self.stream_manager.start()
         log.info('Done setting up file manager')

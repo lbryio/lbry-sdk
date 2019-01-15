@@ -8,6 +8,7 @@ from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.node import Node
     from lbrynet.storage import SQLiteStorage
@@ -43,7 +44,8 @@ comparison_operators = {
 
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', wallet: 'LbryWalletManager',
-                 storage: 'SQLiteStorage', node: 'Node', peer_timeout: float, peer_connect_timeout: float):
+                 storage: 'SQLiteStorage', node: 'Node', peer_timeout: float, peer_connect_timeout: float,
+                 fixed_peers: typing.Optional[typing.List['Peer']] = None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.wallet = wallet
@@ -55,6 +57,7 @@ class StreamManager:
         self.starting_streams: typing.Dict[str, asyncio.Future] = {}
         self.resume_downloading_task: asyncio.Task = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
+        self.fixed_peers = fixed_peers
 
     async def load_streams_from_database(self):
         infos = await self.storage.get_all_lbry_files()
@@ -65,7 +68,7 @@ class StreamManager:
                 downloader = StreamDownloader(
                     self.loop, self.blob_manager, descriptor.sd_hash, self.peer_timeout,
                     self.peer_connect_timeout, binascii.unhexlify(file_info['download_directory']).decode(),
-                    binascii.unhexlify(file_info['file_name']).decode()
+                    binascii.unhexlify(file_info['file_name']).decode(), self.fixed_peers
                 )
                 stream = ManagedStream(
                     self.loop, self.blob_manager, descriptor,
@@ -144,7 +147,7 @@ class StreamManager:
 
         claim = ClaimDict.load_dict(claim_info['value'])
         downloader = StreamDownloader(self.loop, self.blob_manager, claim.source_hash.decode(), self.peer_timeout,
-                                      self.peer_connect_timeout, download_directory, file_name)
+                                      self.peer_connect_timeout, download_directory, file_name, self.fixed_peers)
         downloader.download(node)
         try:
             await asyncio.wait_for(downloader.got_descriptor.wait(), sd_blob_timeout)

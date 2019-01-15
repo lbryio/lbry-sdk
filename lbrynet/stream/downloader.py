@@ -69,7 +69,8 @@ def drain_into(a: list, b: list):
 class StreamDownloader(StreamAssembler):
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str,
                  peer_timeout: float, peer_connect_timeout: float, output_dir: typing.Optional[str] = None,
-                 output_file_name: typing.Optional[str] = None):
+                 output_file_name: typing.Optional[str] = None,
+                 fixed_peers: typing.Optional[typing.List['Peer']] = None):
         super().__init__(loop, blob_manager, sd_hash)
         self.peer_timeout = peer_timeout
         self.peer_connect_timeout = peer_connect_timeout
@@ -91,6 +92,7 @@ class StreamDownloader(StreamAssembler):
 
         self._lock = asyncio.Lock(loop=self.loop)
         self.max_connections_per_stream = conf.settings.get('max_connections_per_stream', 8)
+        self.fixed_peers = fixed_peers or []
 
     async def _update_current_blob(self, blob: 'BlobFile'):
         async with self._lock:
@@ -199,6 +201,17 @@ class StreamDownloader(StreamAssembler):
         blob_queue = asyncio.Queue(loop=self.loop)
         blob_queue.put_nowait(self.sd_hash)
         task = asyncio.create_task(self.got_descriptor.wait())
+        added_peers = asyncio.Event(loop=self.loop)
+        add_fixed_peers_timer: typing.Optional[asyncio.Handle] = None
+
+        if self.fixed_peers:
+            def check_added_peers():
+                if not added_peers.is_set():
+                    self._add_peer_protocols(self.fixed_peers)
+                    log.info("no dht peers for download yet, adding fixed peer")
+                    added_peers.set()
+
+            add_fixed_peers_timer = self.loop.call_later(2, check_added_peers)
 
         def got_descriptor(f):
             try:
@@ -213,16 +226,20 @@ class StreamDownloader(StreamAssembler):
             async with node.stream_peer_search_junction(blob_queue) as search_junction:
                 log.info("got search junction")
                 async for peers in search_junction:
-                    if not isinstance(peers, list):
+                    if not isinstance(peers, list):  # TODO: what's up with this?
                         log.error("not a list: %s", peers)
                     else:
                         # log.info("add %i peers to download of stream %s", len(peers), self.sd_hash[:8])
                         self._add_peer_protocols(peers)
+                        if not added_peers.is_set():
+                            added_peers.set()
             return
         finally:
-            if task and not (task.cancelled() or task.done()):
+            if task and not task.done():
                 task.cancel()
                 log.info("cancelled head blob task")
+            if add_fixed_peers_timer and not add_fixed_peers_timer.cancelled():
+                add_fixed_peers_timer.cancel()
 
     async def stop(self):
         log.info("stop downloader")
