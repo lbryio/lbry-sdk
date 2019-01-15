@@ -67,7 +67,8 @@ class HashBlobWriter:
             self.buffer.seek(0)
             self.verified_bytes = self.buffer.read()
             self.close_handle()
-            self.finished.set_result(None)
+            if self.finished and not (self.finished.done() or self.finished.cancelled()):
+                self.finished.set_result(None)
 
     def close_handle(self):
         if self.buffer is not None:
