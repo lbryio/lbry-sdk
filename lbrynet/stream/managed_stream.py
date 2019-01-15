@@ -2,12 +2,11 @@ import os
 import asyncio
 import typing
 import logging
-from lbrynet.mime_types import guess_mime_type
+from lbrynet.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 if typing.TYPE_CHECKING:
     from lbrynet.storage import StoredStreamClaim
     from lbrynet.blob.blob_manager import BlobFileManager
-    from lbrynet.storage import SQLiteStorage
     from lbrynet.stream.descriptor import StreamDescriptor
 
 log = logging.getLogger(__name__)
@@ -18,12 +17,10 @@ class ManagedStream:
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
-    def __init__(self,  loop: asyncio.BaseEventLoop, storage: 'SQLiteStorage', blob_manager: 'BlobFileManager',
-                 descriptor: 'StreamDescriptor', download_directory: str, file_name: str,
-                 downloader: typing.Optional[StreamDownloader] = None, status: typing.Optional[str] = STATUS_STOPPED,
-                 claim: typing.Optional['StoredStreamClaim'] = None):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', descriptor: 'StreamDescriptor',
+                 download_directory: str, file_name: str, downloader: typing.Optional[StreamDownloader] = None,
+                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional['StoredStreamClaim'] = None):
         self.loop = loop
-        self.storage = storage
         self.blob_manager = blob_manager
         self.download_directory = download_directory
         self.file_name = file_name
@@ -103,7 +100,7 @@ class ManagedStream:
         full_path = os.path.join(self.download_directory, self.file_name)
         if not os.path.exists(full_path):
             full_path = None
-        mime_type = guess_mime_type(os.path.basename(self.file_name))
+        mime_type = guess_media_type(os.path.basename(self.file_name))
         return {
             'completed': self.finished,
             'file_name': self.file_name,
@@ -134,16 +131,16 @@ class ManagedStream:
         }
 
     @classmethod
-    async def create(cls, loop: asyncio.BaseEventLoop, storage: 'SQLiteStorage', blob_manager: 'BlobFileManager',
+    async def create(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager',
                      file_path: str) -> 'ManagedStream':
         descriptor = await StreamDescriptor.create_stream(
             loop, blob_manager, file_path
         )
-        return cls(loop, storage, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
+        return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
 
-    def stop_download(self):
+    async def stop_download(self):
         if self.downloader:
-            self.downloader.stop()
+            await self.downloader.stop()
         if not self.finished:
             self.update_status(self.STATUS_STOPPED)

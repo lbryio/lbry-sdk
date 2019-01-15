@@ -62,9 +62,9 @@ def bencode(data: dict) -> bytes:
     return _bencode(data)
 
 
-def bdecode(data: bytes, allow_non_dict_return: typing.Optional[bool] = False) -> dict:
-    """ Decoder implementation of the Bencode algorithm. """
-    assert type(data) == bytes  # fixme: _maybe_ remove this after porting
+def bdecode(data: bytes, allow_non_dict_return: typing.Optional[bool] = False) -> typing.Dict:
+    assert type(data) == bytes, DecodeError(f"invalid data type: {str(type(data))}")
+
     if len(data) == 0:
         raise DecodeError('Cannot decode empty string')
     try:

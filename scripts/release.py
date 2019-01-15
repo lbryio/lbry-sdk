@@ -53,6 +53,15 @@ def get_label(pr, prefix):
         return label
 
 
+BACKWARDS_INCOMPATIBLE = 'backwards-incompatible:'
+
+
+def get_backwards_incompatible(desc: str):
+    for line in desc.splitlines():
+        if line.startswith(BACKWARDS_INCOMPATIBLE):
+            yield line[len(BACKWARDS_INCOMPATIBLE):]
+
+
 def get_previous_final(repo, current_release):
     assert current_release.rc is not None, "Need an rc to find the previous final release."
     previous = None
@@ -129,13 +138,16 @@ def release(args):
     else:
         previous_release = repo.release_from_tag(current_version.tag)
 
+    incompats = []
     areas = {}
     for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry"):
         for area_name in get_labels(pr, 'area'):
             area = areas.setdefault(area_name, [])
             type_label = get_label(pr, "type")
+            for incompat in get_backwards_incompatible(pr.body):
+                incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
             if not (args.action == '*-rc' and type_label == 'fixup'):
-                area.append(f'  * [{type_label}] {pr.title} ({pr.html_url})')
+                area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
 
     area_names = list(areas.keys())
     area_names.sort()
@@ -144,6 +156,11 @@ def release(args):
     w = lambda s: body.write(s+'\n')
 
     w(f'## [{new_version}] - {date.today().isoformat()}')
+    if incompats:
+        w('')
+        w(f'### Backwards Incompatible Changes')
+        for incompat in incompats:
+            w(incompat)
     for area in area_names:
         prs = areas[area]
         area = AREA_RENAME.get(area, area.capitalize())

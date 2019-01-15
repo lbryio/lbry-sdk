@@ -32,13 +32,20 @@ class HashBlobWriter:
     def blob_hash(self):
         return self._hashsum.hexdigest()
 
+    def closed(self):
+        return self.buffer is None or self.buffer.closed
+
     def write(self, data: bytes):
         expected_length = self.get_length()
         if not expected_length:
             raise IOError("unknown blob length")
         if self.buffer is None:
             log.warning("writer has already been closed")
+            if not (self.finished.done() or self.finished.cancelled()):
+                self.finished.cancel()
+                return
             raise IOError('I/O operation on closed file')
+
         self._hashsum.update(data)
         self.len_so_far += len(data)
         # log.info("%s %i/%i", self.expected_blob_hash, self.len_so_far, expected_length)
@@ -60,7 +67,8 @@ class HashBlobWriter:
             self.buffer.seek(0)
             self.verified_bytes = self.buffer.read()
             self.close_handle()
-            self.finished.set_result(None)
+            if self.finished and not (self.finished.done() or self.finished.cancelled()):
+                self.finished.set_result(None)
 
     def close_handle(self):
         if self.buffer is not None:

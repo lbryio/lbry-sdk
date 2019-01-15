@@ -1,7 +1,6 @@
 import typing
 import asyncio
 import logging
-from binascii import unhexlify
 from sqlite3 import IntegrityError
 from lbrynet.dht.protocol.data_store import DictDataStore
 from lbrynet.storage import SQLiteStorage
@@ -28,7 +27,7 @@ class BlobFileManager:
                                                       self._node_datastore.completed_blobs
 
     async def setup(self) -> bool:
-        raw_blob_hashes = await self.storage.get_all_finished_blobs().asFuture(self.loop)
+        raw_blob_hashes = await self.get_all_verified_blobs()
         self.completed_blob_hashes.update(raw_blob_hashes)
         return True
 
@@ -45,25 +44,19 @@ class BlobFileManager:
             raise Exception("Blob has a length of 0")
         if blob.blob_hash not in self.completed_blob_hashes:
             self.completed_blob_hashes.add(blob.blob_hash)
-        await self.storage.add_completed_blob(blob.blob_hash).asFuture(self.loop)
+        await self.storage.add_completed_blob(blob.blob_hash)
 
     def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
         """Returns of the blobhashes_to_check, which are valid"""
         blobs = [self.get_blob(b) for b in blob_hashes]
         return [blob.blob_hash for blob in blobs if blob.get_is_verified()]
 
-    async def count_should_announce_blobs(self):
-        return await self.storage.count_should_announce_blobs().asFuture(self.loop)
-
     async def set_should_announce(self, blob_hash: str, should_announce: bool):
-        now = self.storage.clock.seconds()
-        return await self.storage.set_should_announce(blob_hash, now, should_announce).asFuture(self.loop)
-
-    async def get_should_announce(self, blob_hash: str) -> bool:
-        return await self.storage.should_announce(blob_hash).asFuture(self.loop)
+        now = self.loop.time()
+        return await self.storage.set_should_announce(blob_hash, now, should_announce)
 
     async def get_all_verified_blobs(self) -> typing.List[str]:
-        blob_hashes = await self.storage.get_all_blob_hashes().asFuture(self.loop)
+        blob_hashes = await self.storage.get_all_blob_hashes()
         return self.check_completed_blobs(blob_hashes)
 
     async def delete_blobs(self, blob_hashes: typing.List[str]):
@@ -80,7 +73,7 @@ class BlobFileManager:
             if blob_hash in self.completed_blob_hashes:
                 self.completed_blob_hashes.remove(blob_hash)
         try:
-            await self.storage.delete_blobs_from_db(bh_to_delete_from_db).asFuture(self.loop)
+            await self.storage.delete_blobs_from_db(bh_to_delete_from_db)
         except IntegrityError as err:
             if str(err) != "FOREIGN KEY constraint failed":
                 raise err

@@ -151,9 +151,7 @@ types_map = {
 }
 
 
-fallback_mime_type = 'application/octet-stream'
-
-
-def guess_mime_type(path):
+def guess_media_type(path):
     _, ext = os.path.splitext(path)
-    return types_map.get(ext, fallback_mime_type)
+    default = f'application/x-ext-{ext}' if ext else 'application/octet-stream'
+    return types_map.get(ext, default)

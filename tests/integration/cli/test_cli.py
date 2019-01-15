@@ -1,7 +1,7 @@
 import contextlib
-from twisted.trial import unittest
 from io import StringIO
-from twisted.internet import defer
+from unittest import skip
+from torba.testcase import AsyncioTestCase
 
 from lbrynet import conf
 from lbrynet.extras import cli
@@ -18,21 +18,20 @@ class FakeAnalytics:
     def is_started(self):
         return True
 
-    def send_server_startup_success(self):
+    async def send_server_startup_success(self):
         pass
 
-    def send_server_startup(self):
+    async def send_server_startup(self):
         pass
 
     def shutdown(self):
         pass
 
 
-class CLIIntegrationTest(unittest.TestCase):
+class CLIIntegrationTest(AsyncioTestCase):
     USE_AUTH = False
 
-    @defer.inlineCallbacks
-    def setUp(self):
+    async def asyncSetUp(self):
         skip = [
             DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT,
             DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, FILE_MANAGER_COMPONENT,
@@ -46,12 +45,13 @@ class CLIIntegrationTest(unittest.TestCase):
         conf.settings.initialize_post_conf_load()
         Daemon.component_attributes = {}
         self.daemon = Daemon(analytics_manager=FakeAnalytics())
-        yield self.daemon.start_listening()
+        await self.daemon.start_listening()
 
-    def tearDown(self):
-        return self.daemon._shutdown()
+    async def asyncTearDown(self):
+        await self.daemon.shutdown()
 
 
+@skip
 class AuthenticatedCLITest(CLIIntegrationTest):
     USE_AUTH = True
 

@@ -3,10 +3,11 @@ import random
 import logging
 import typing
 
-from lbrynet.peer import Peer
 from lbrynet.dht import constants
 from lbrynet.dht.routing import kbucket
 from lbrynet.dht.routing.distance import Distance
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class TreeRoutingTable:
         self._ongoing_replacements = set()
         self._lock = asyncio.Lock(loop=self._loop)
 
-    def get_peers(self) -> typing.List[Peer]:
+    def get_peers(self) -> typing.List['Peer']:
         contacts = []
         for i in range(len(self._buckets)):
             for contact in self._buckets[i]._contacts:
@@ -55,7 +56,7 @@ class TreeRoutingTable:
         kth_contact = contacts[-1] if len(contacts) < constants.k else contacts[constants.k - 1]
         return distance(to_add) < distance(kth_contact.node_id)
 
-    async def _add_peer(self, peer: Peer):
+    async def _add_peer(self, peer: 'Peer'):
         bucket_index = self._kbucket_index(peer.node_id)
         if self._buckets[bucket_index].add_peer(peer):
             return True
@@ -91,11 +92,16 @@ class TreeRoutingTable:
             # is ignored if the pinged node replies.
 
             not_good_contacts = self._buckets[bucket_index].get_bad_or_unknown_peers()
+            not_recently_replied = [
+                p for p in not_good_contacts if not p.last_replied or not p.last_replied + 60 > self._loop.time()
+            ]
 
-            if not_good_contacts:
-                to_replace = not_good_contacts[0]
+            if not_recently_replied:
+                to_replace = not_recently_replied[0]
             else:
                 to_replace = self._buckets[bucket_index]._contacts[0]
+                if to_replace.last_replied and to_replace.last_replied + 60 > self._loop.time():
+                    return False
             log.debug("pinging %s:%s", to_replace.address, to_replace.udp_port)
             try:
                 await to_replace.ping()
@@ -108,7 +114,7 @@ class TreeRoutingTable:
                     self._buckets[bucket_index].remove_peer(to_replace)
                 return await self._add_peer(peer)
 
-    async def add_peer(self, peer: Peer) -> bool:
+    async def add_peer(self, peer: 'Peer') -> bool:
         if peer.node_id == self._parent_node_id:
             return False
         await self._lock.acquire()
@@ -118,7 +124,7 @@ class TreeRoutingTable:
             self._lock.release()
 
     def find_close_peers(self, key: bytes, count: typing.Optional[int] = None,
-                         sender_node_id: typing.Optional[bytes] = None) -> typing.List[Peer]:
+                         sender_node_id: typing.Optional[bytes] = None) -> typing.List['Peer']:
         exclude = [self._parent_node_id]
         if sender_node_id:
             exclude.append(sender_node_id)
@@ -133,7 +139,7 @@ class TreeRoutingTable:
             return contacts[:min(count, len(contacts))]
         return []
 
-    def get_peer(self, contact_id: bytes) -> Peer:
+    def get_peer(self, contact_id: bytes) -> 'Peer':
         """
         @raise IndexError: No contact with the specified contact ID is known
                            by this node
@@ -151,7 +157,7 @@ class TreeRoutingTable:
             bucket_index += 1
         return refresh_ids
 
-    def remove_peer(self, peer: Peer) -> None:
+    def remove_peer(self, peer: 'Peer') -> None:
         bucket_index = self._kbucket_index(peer.node_id)
         try:
             self._buckets[bucket_index].remove_peer(peer)

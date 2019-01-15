@@ -1,9 +1,9 @@
 import logging
 import typing
 import asyncio
-from twisted.internet import defer
 from lbrynet.error import ComponentStartConditionNotMet
 from lbrynet.peer import PeerManager
+from lbrynet.extras.daemon import analytics
 
 log = logging.getLogger(__name__)
 
@@ -36,13 +36,14 @@ class ComponentManager:
     default_component_classes = {}
 
     def __init__(self, reactor=None, loop: typing.Optional[asyncio.BaseEventLoop] = None,
-                 analytics_manager=None, skip_components=None, peer_manager=None, **override_components):
+                 skip_components=None, peer_manager=None, **override_components):
         self.skip_components = skip_components or []
         self.reactor = reactor
         self.loop = loop or asyncio.get_event_loop()
+        self.analytics_manager = analytics.Manager(self.loop)
         self.component_classes = {}
         self.components = set()
-        self.analytics_manager = analytics_manager
+        self.started = asyncio.Event(loop=self.loop)
         self.peer_manager = peer_manager or PeerManager(asyncio.get_event_loop_policy().get_event_loop())
 
         for component_name, component_class in self.default_component_classes.items():
@@ -111,13 +112,8 @@ class ComponentManager:
             steps.reverse()
         return steps
 
-    @defer.inlineCallbacks
-    def setup(self, **callbacks):
-        """
-        Start Components in sequence sorted by requirements
-
-        :return: (defer.Deferred)
-        """
+    async def setup(self, **callbacks):
+        """ Start Components in sequence sorted by requirements """
         for component_name, cb in callbacks.items():
             if component_name not in self.component_classes:
                 if component_name not in self.skip_components:
@@ -125,19 +121,23 @@ class ComponentManager:
             if not callable(cb):
                 raise ValueError("%s is not callable" % cb)
 
-        def _setup(component):
+        async def _setup(component):
+            await component._setup()
             if component.component_name in callbacks:
-                d = component._setup()
-                d.addCallback(callbacks[component.component_name], component)
-                return d
-            return component._setup()
+                maybe_coro = callbacks[component.component_name](component)
+                if asyncio.iscoroutine(maybe_coro):
+                    asyncio.create_task(maybe_coro)
 
         stages = self.sort_components()
         for stage in stages:
-            yield defer.DeferredList([_setup(component) for component in stage if not component.running])
+            needing_start = [
+                _setup(component) for component in stage if not component.running
+            ]
+            if needing_start:
+                await asyncio.wait(needing_start)
+        self.started.set()
 
-    @defer.inlineCallbacks
-    def stop(self):
+    async def stop(self):
         """
         Stop Components in reversed startup order
 
@@ -145,7 +145,11 @@ class ComponentManager:
         """
         stages = self.sort_components(reverse=True)
         for stage in stages:
-            yield defer.DeferredList([component._stop() for component in stage if component.running])
+            needing_stop = [
+                component._stop() for component in stage if component.running
+            ]
+            if needing_stop:
+                await asyncio.wait(needing_stop)
 
     def all_components_running(self, *component_names):
         """

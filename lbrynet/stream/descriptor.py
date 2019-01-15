@@ -192,7 +192,7 @@ class StreamDescriptor:
         )
         sd_blob = await descriptor.make_sd_blob()
         await blob_manager.blob_completed(sd_blob)
-        await blob_manager.storage.store_stream(sd_blob, descriptor).asFuture(loop)
+        await blob_manager.storage.store_stream(sd_blob, descriptor)
         return descriptor
 
     def lower_bound_decrypted_length(self) -> int:

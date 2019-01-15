@@ -1,10 +1,9 @@
+from lbrynet import conf
 import json
 import aiohttp
 import logging
 from urllib.parse import urlparse
 
-from lbrynet import conf
-from lbrynet.extras.daemon.auth.keyring import Keyring, APIKey
 
 log = logging.getLogger(__name__)
 USER_AGENT = "AuthServiceProxy/0.1"
@@ -37,19 +36,18 @@ class UnAuthAPIClient:
         url_fragment = urlparse(url)
         host = url_fragment.hostname
         port = url_fragment.port
-        connector = aiohttp.TCPConnector(
-            ssl=None if not conf.settings['use_https'] else Keyring.load_from_disk().ssl_context
-        )
+        connector = aiohttp.TCPConnector()
         session = aiohttp.ClientSession(connector=connector)
         return cls(host, port, session)
 
     async def call(self, method, params=None):
         message = {'method': method, 'params': params}
         async with self.session.get(conf.settings.get_api_connection_string(), json=message) as resp:
-            response = await resp.json()
-        if 'error' in response:
-            raise JSONRPCException(response['error'])
-        return response['result']
+            response_dict = await resp.json()
+        if 'error' in response_dict:
+            raise JSONRPCException(response_dict['error'])
+        else:
+            return response_dict['result']
 
 
 class AuthAPIClient:
@@ -100,15 +98,16 @@ class AuthAPIClient:
             if next_secret:
                 self.__api_key.secret = next_secret
 
-            response = await resp.json()
-        if 'error' in response:
-            raise JSONRPCException(response['error'])
-        return response['result']
+            response_dict = await resp.json()
+            if 'error' in response_dict:
+                raise JSONRPCException(response_dict['error'])
+            else:
+                return response_dict['result']
 
     @classmethod
     async def get_client(cls, key_name=None):
         api_key_name = key_name or "api"
-        keyring = Keyring.load_from_disk()
+        keyring = Keyring.load_from_disk()  # pylint: disable=E0602
 
         api_key = keyring.api_key
         login_url = conf.settings.get_api_connection_string(api_key_name, api_key.secret)
@@ -125,12 +124,15 @@ class AuthAPIClient:
         async with session.post(login_url, headers=headers) as r:
             cookies = r.cookies
         uid = cookies.get(TWISTED_SECURE_SESSION if conf.settings['use_https'] else TWISTED_SESSION).value
-        api_key = APIKey.create(seed=uid.encode())
+        api_key = APIKey.create(seed=uid.encode())  # pylint: disable=E0602
         return cls(api_key, session, cookies, url, login_url)
 
 
 class LBRYAPIClient:
     @staticmethod
-    def get_client():
+    def get_client(conf_path=None):
+        conf.conf_file = conf_path
+        if not conf.settings:
+            conf.initialize_settings()
         return AuthAPIClient.get_client() if conf.settings['use_auth_http'] else \
             UnAuthAPIClient.from_url(conf.settings.get_api_connection_string())

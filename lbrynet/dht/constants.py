@@ -4,13 +4,13 @@ import os
 hash_class = hashlib.sha384
 hash_length = hash_class().digest_size
 hash_bits = hash_length * 8
-alpha = 3
+alpha = 5
 k = 8
 replacement_cache_size = 8
-rpc_timeout = 5
+rpc_timeout = 5.0
 rpc_attempts = 5
 rpc_attempts_pruning_window = 600
-iterative_lookup_delay = rpc_timeout / 2
+iterative_lookup_delay = rpc_timeout / 2.0
 refresh_interval = 3600  # 1 hour
 replicate_interval = refresh_interval
 data_expiration = 86400  # 24 hours

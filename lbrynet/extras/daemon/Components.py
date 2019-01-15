@@ -1,13 +1,12 @@
 import os
 import asyncio
+import aiohttp
 import logging
-import treq
-import json
 import math
 import binascii
+import typing
 from hashlib import sha256
 from types import SimpleNamespace
-from twisted.internet import defer, threads, task
 
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
@@ -16,15 +15,15 @@ from aioupnp.fault import UPnPError
 import lbrynet.schema
 from lbrynet import conf
 from lbrynet.dht.node import Node
+from lbrynet.dht.blob_announcer import BlobAnnouncer
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob_exchange.server import BlobServer
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.extras.daemon.Component import Component
-from lbrynet.extras.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbrynet.storage import SQLiteStorage
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
-from lbrynet.utils import DeferredDict, generate_id
 
 
 log = logging.getLogger(__name__)
@@ -37,36 +36,29 @@ HEADERS_COMPONENT = "blockchain_headers"
 WALLET_COMPONENT = "wallet"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
-FILE_MANAGER_COMPONENT = "file_manager"
+STREAM_MANAGER_COMPONENT = "stream_manager"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
 
 
-def from_future(coroutine: asyncio.coroutine) -> defer.Deferred:
-    return defer.Deferred.fromFuture(asyncio.ensure_future(coroutine))
+async def gather_dict(tasks: dict):
+    async def wait_value(key, value):
+        return key, await value
+    return dict(await asyncio.gather(*(
+        wait_value(*kv) for kv in tasks.items()
+    )))
 
 
-def d2f(deferred):
-    return deferred.asFuture(asyncio.get_event_loop())
-
-
-def f2d(future):
-    return defer.Deferred.fromFuture(asyncio.ensure_future(future))
-
-
-@defer.inlineCallbacks
-def get_external_ip():  # used if upnp is disabled or non-functioning
+async def get_external_ip():  # used if upnp is disabled or non-functioning
     try:
-        buf = []
-        response = yield treq.get("https://api.lbry.io/ip")
-        yield treq.collect(response, buf.append)
-        parsed = json.loads(b"".join(buf).decode())
-        if parsed['success']:
-            return parsed['data']['ip']
-        return
-    except Exception as err:
-        return
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.lbry.io/ip") as resp:
+                response = await resp.json()
+                if response['success']:
+                    return response['data']['ip']
+    except Exception as e:
+        pass
 
 
 class DatabaseComponent(Component):
@@ -93,8 +85,7 @@ class DatabaseComponent(Component):
         with open(conf.settings.get_db_revision_filename(), mode='w') as db_revision:
             db_revision.write(str(version_num))
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         # check directories exist, create them if they don't
         log.info("Loading databases")
 
@@ -113,19 +104,19 @@ class DatabaseComponent(Component):
         if old_revision < self.get_current_db_revision():
             from lbrynet.extras.daemon.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
-            yield threads.deferToThread(
-                dbmigrator.migrate_db, conf.settings.data_dir, old_revision, self.get_current_db_revision()
+            await asyncio.get_event_loop().run_in_executor(
+                None, dbmigrator.migrate_db, conf.settings.data_dir, old_revision, self.get_current_db_revision()
             )
             self._write_db_revision_file(self.get_current_db_revision())
             log.info("Finished upgrading the databases.")
 
-        # start SQLiteStorage
-        self.storage = SQLiteStorage(conf.settings.data_dir)
-        yield self.storage.setup()
+        self.storage = SQLiteStorage(
+            os.path.join(conf.settings.data_dir, "lbrynet.sqlite")
+        )
+        await self.storage.open()
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield self.storage.stop()
+    async def stop(self):
+        await self.storage.close()
         self.storage = None
 
 
@@ -148,14 +139,13 @@ class HeadersComponent(Component):
     def component(self):
         return self
 
-    def get_status(self):
+    async def get_status(self):
         return {} if not self._downloading_headers else {
             'downloading_headers': self._downloading_headers,
             'download_progress': self._headers_progress_percent
         }
 
-    @defer.inlineCallbacks
-    def fetch_headers_from_s3(self):
+    async def fetch_headers_from_s3(self):
         def collector(data, h_file):
             h_file.write(data)
             local_size = float(h_file.tell())
@@ -164,29 +154,32 @@ class HeadersComponent(Component):
 
         local_header_size = self.local_header_file_size()
         resume_header = {"Range": f"bytes={local_header_size}-"}
-        response = yield treq.get(HEADERS_URL, headers=resume_header)
-        got_406 = response.code == 406  # our file is bigger
-        final_size_after_download = response.length + local_header_size
-        if got_406:
-            log.warning("s3 is more out of date than we are")
-        # should have something to download and a final length divisible by the header size
-        elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
-            s3_height = (final_size_after_download / HEADER_SIZE) - 1
-            local_height = self.local_header_file_height()
-            if s3_height > local_height:
-                if local_header_size:
-                    log.info("Resuming download of %i bytes from s3", response.length)
-                    with open(self.headers_file, "a+b") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
-                else:
-                    with open(self.headers_file, "wb") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
-                log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
-                self._check_header_file_integrity()
-            else:
+        async with aiohttp.request('get', HEADERS_URL, headers=resume_header) as response:
+            got_406 = response.status == 406  # our file is bigger
+            final_size_after_download = response.content_length + local_header_size
+            if got_406:
                 log.warning("s3 is more out of date than we are")
-        else:
-            log.error("invalid size for headers from s3")
+            # should have something to download and a final length divisible by the header size
+            elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
+                s3_height = (final_size_after_download / HEADER_SIZE) - 1
+                local_height = self.local_header_file_height()
+                if s3_height > local_height:
+                    data = await response.read()
+
+                    if local_header_size:
+                        log.info("Resuming download of %i bytes from s3", response.content_length)
+                        with open(self.headers_file, "a+b") as headers_file:
+                            collector(data, headers_file)
+                    else:
+                        with open(self.headers_file, "wb") as headers_file:
+                            collector(data, headers_file)
+                    log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.",
+                             s3_height)
+                    self._check_header_file_integrity()
+                else:
+                    log.warning("s3 is more out of date than we are")
+            else:
+                log.error("invalid size for headers from s3")
 
     def local_header_file_height(self):
         return max((self.local_header_file_size() / HEADER_SIZE) - 1, 0)
@@ -246,25 +239,24 @@ class HeadersComponent(Component):
             with open(self.headers_file, "rb+") as headers_file:
                 headers_file.truncate(checksum_length_in_bytes)
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         conf.settings.ensure_wallet_dir()
         if not os.path.exists(self.headers_dir):
             os.mkdir(self.headers_dir)
         if os.path.exists(self.old_file):
             log.warning("Moving old headers from %s to %s.", self.old_file, self.headers_file)
             os.rename(self.old_file, self.headers_file)
-        self._downloading_headers = yield f2d(self.should_download_headers_from_s3())
+        self._downloading_headers = await self.should_download_headers_from_s3()
         if self._downloading_headers:
             try:
-                yield self.fetch_headers_from_s3()
+                await self.fetch_headers_from_s3()
             except Exception as err:
                 log.error("failed to fetch headers from s3: %s", err)
             finally:
                 self._downloading_headers = False
 
     def stop(self):
-        return defer.succeed(None)
+        pass
 
 
 class WalletComponent(Component):
@@ -279,7 +271,7 @@ class WalletComponent(Component):
     def component(self):
         return self.wallet_manager
 
-    def get_status(self):
+    async def get_status(self):
         if self.wallet_manager and self.running:
             local_height = self.wallet_manager.network.get_local_height()
             remote_height = self.wallet_manager.network.get_server_height()
@@ -292,19 +284,17 @@ class WalletComponent(Component):
                 'is_locked': not self.wallet_manager.is_wallet_unlocked,
             }
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         conf.settings.ensure_wallet_dir()
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbrynet.schema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet_manager = yield f2d(LbryWalletManager.from_lbrynet_config(conf.settings, storage))
+        self.wallet_manager = await LbryWalletManager.from_lbrynet_config(conf.settings, storage)
         self.wallet_manager.old_db = storage
-        yield f2d(self.wallet_manager.start())
+        await self.wallet_manager.start()
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield f2d(self.wallet_manager.stop())
+    async def stop(self):
+        await self.wallet_manager.stop()
         self.wallet_manager = None
 
 
@@ -317,10 +307,10 @@ class BlobComponent(Component):
         self.blob_manager: BlobFileManager = None
 
     @property
-    def component(self):
+    def component(self) -> typing.Optional[BlobFileManager]:
         return self.blob_manager
 
-    def start(self):
+    async def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         data_store = None
         if DHT_COMPONENT not in self.component_manager.skip_components:
@@ -329,19 +319,16 @@ class BlobComponent(Component):
                 data_store = dht_node.protocol.data_store
         self.blob_manager = BlobFileManager(self.loop, os.path.join(conf.settings.data_dir, "blobfiles"),
                                             storage, data_store)
-        return defer.Deferred.fromFuture(asyncio.ensure_future(self.blob_manager.setup(), loop=self.loop))
+        return await self.blob_manager.setup()
 
     def stop(self):
-        return defer.succeed(None)
+        pass
 
-    @defer.inlineCallbacks
-    def get_status(self):
+    async def get_status(self):
         count = 0
         if self.blob_manager:
-            count = yield self.blob_manager.storage.count_finished_blobs()
-        defer.returnValue({
-            'finished_blobs': count
-        })
+            count = len(self.blob_manager.completed_blob_hashes)
+        return {'finished_blobs': count}
 
 
 class DHTComponent(Component):
@@ -356,28 +343,25 @@ class DHTComponent(Component):
         self.external_peer_port = None
 
     @property
-    def component(self):
+    def component(self) -> typing.Optional[Node]:
         return self.dht_node
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'node_id': binascii.hexlify(conf.settings.get_node_id()),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.protocol.routing_table.get_peers())
         }
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         log.info("start the dht")
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
         self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", conf.settings["peer_port"])
         self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", conf.settings["dht_node_port"])
         node_id = conf.settings.get_node_id()
-        if node_id is None:
-            node_id = generate_id()
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
-            external_ip = yield get_external_ip()
+            external_ip = await get_external_ip()
             if not external_ip:
                 log.warning("failed to get external ip")
 
@@ -390,41 +374,42 @@ class DHTComponent(Component):
             external_ip=external_ip,
             peer_port=self.external_peer_port
         )
-        self.dht_node.start(interface='0.0.0.0', known_node_urls=conf.settings['known_dht_nodes'])
+        self.dht_node.start(
+            interface='0.0.0.0', known_node_urls=conf.settings['known_dht_nodes']
+        )
         log.info("Started the dht")
 
     def stop(self):
         self.dht_node.stop()
-        return defer.succeed(None)
 
 
-# class HashAnnouncerComponent(Component):
-#     component_name = HASH_ANNOUNCER_COMPONENT
-#     depends_on = [DHT_COMPONENT, DATABASE_COMPONENT]
-#
-#     def __init__(self, component_manager):
-#         super().__init__(component_manager)
-#         self.hash_announcer = None
-#
-#     @property
-#     def component(self):
-#         return self.hash_announcer
-#
-#     @defer.inlineCallbacks
-#     def start(self):
-#         storage = self.component_manager.get_component(DATABASE_COMPONENT)
-#         dht_node = self.component_manager.get_component(DHT_COMPONENT)
-#         self.hash_announcer = DHTHashAnnouncer(dht_node, storage)
-#         yield self.hash_announcer.start()
-#
-#     @defer.inlineCallbacks
-#     def stop(self):
-#         yield self.hash_announcer.stop()
-#
-#     def get_status(self):
-#         return {
-#             'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.hash_queue)
-#         }
+class HashAnnouncerComponent(Component):
+    component_name = HASH_ANNOUNCER_COMPONENT
+    depends_on = [DHT_COMPONENT, DATABASE_COMPONENT]
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.hash_announcer: BlobAnnouncer = None
+
+    @property
+    def component(self) -> typing.Optional[BlobAnnouncer]:
+        return self.hash_announcer
+
+    async def start(self):
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        dht_node = self.component_manager.get_component(DHT_COMPONENT)
+        self.hash_announcer = BlobAnnouncer(self.loop, dht_node, storage)
+        self.hash_announcer.start(conf.settings['concurrent_announcers'])
+        log.info("Started blob announcer")
+
+    def stop(self):
+        self.hash_announcer.stop()
+        log.info("Stopped blob announcer")
+
+    async def get_status(self):
+        return {
+            'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.announce_queue)
+        }
 
 
 # class PaymentRateComponent(Component):
@@ -445,8 +430,8 @@ class DHTComponent(Component):
 #         return defer.succeed(None)
 
 
-class FileManagerComponent(Component):
-    component_name = FILE_MANAGER_COMPONENT
+class StreamManagerComponent(Component):
+    component_name = STREAM_MANAGER_COMPONENT
     depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT]
 
     def __init__(self, component_manager):
@@ -454,18 +439,17 @@ class FileManagerComponent(Component):
         self.stream_manager: StreamManager = None
 
     @property
-    def component(self):
+    def component(self) -> typing.Optional[StreamManager]:
         return self.stream_manager
 
-    def get_status(self):
+    async def get_status(self):
         if not self.stream_manager:
             return
         return {
             'managed_files': len(self.stream_manager.streams)
         }
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
@@ -473,14 +457,14 @@ class FileManagerComponent(Component):
 
         log.info('Starting the file manager')
         self.stream_manager = StreamManager(
-            self.loop, blob_manager, wallet, storage, node, 30, 3
+            self.loop, blob_manager, wallet, storage, node, conf.settings['blob_download_timeout'],
+            conf.settings['peer_connect_timeout']
         )
-        yield defer.Deferred.fromFuture(asyncio.ensure_future(self.stream_manager.start(), loop=self.loop))
+        await self.stream_manager.start()
         log.info('Done setting up file manager')
 
-    def stop(self):
-        if self.stream_manager:
-            self.stream_manager.stop()
+    async def stop(self):
+        await self.stream_manager.stop()
 
 
 class PeerProtocolServerComponent(Component):
@@ -492,22 +476,23 @@ class PeerProtocolServerComponent(Component):
         self.blob_server: BlobServer = None
 
     @property
-    def component(self):
+    def component(self) -> typing.Optional[BlobServer]:
         return self.blob_server
 
-    def start(self):
+    async def start(self):
         log.info("start blob server")
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
+        wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
         peer_port = upnp.upnp_redirects.get("TCP", conf.settings["peer_port"])
-        self.blob_server = BlobServer(self.loop, blob_manager)
+        address = await wallet.get_unused_address()
+        self.blob_server = BlobServer(self.loop, blob_manager, address)
         self.blob_server.start_server(peer_port, interface='0.0.0.0')
-        return defer.succeed(None)
+        await self.blob_server.started_listening.wait()
 
     def stop(self):
         if self.blob_server:
             self.blob_server.stop_server()
-        return defer.succeed(None)
 
 
 class UPnPComponent(Component):
@@ -521,29 +506,23 @@ class UPnPComponent(Component):
         self.upnp = None
         self.upnp_redirects = {}
         self.external_ip = None
-        self._maintain_redirects_lc = task.LoopingCall(self._maintain_redirects)
-        self._maintain_redirects_lc.clock = self.component_manager.reactor
+        self._maintain_redirects_task = None
 
     @property
-    def component(self):
+    def component(self) -> 'UPnPComponent':
         return self
 
-    @defer.inlineCallbacks
-    def _setup_redirects(self):
-        d = {}
-        if PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
-            d["TCP"] = from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
-        if DHT_COMPONENT not in self.component_manager.skip_components:
-            d["UDP"] = from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"))
-        upnp_redirects = yield DeferredDict(d)
-        self.upnp_redirects.update(upnp_redirects)
+    async def _repeatedly_maintain_redirects(self, now=True):
+        while True:
+            if now:
+                await self._maintain_redirects()
+            await asyncio.sleep(360)
 
-    @defer.inlineCallbacks
-    def _maintain_redirects(self):
+    async def _maintain_redirects(self):
         # setup the gateway if necessary
         if not self.upnp:
             try:
-                self.upnp = yield from_future(UPnP.discover())
+                self.upnp = await UPnP.discover()
                 log.info("found upnp gateway: %s", self.upnp.gateway.manufacturer_string)
             except Exception as err:
                 log.warning("upnp discovery failed: %s", err)
@@ -553,7 +532,7 @@ class UPnPComponent(Component):
         external_ip = None
         if self.upnp:
             try:
-                external_ip = yield from_future(self.upnp.get_external_ip())
+                external_ip = await self.upnp.get_external_ip()
                 if external_ip != "0.0.0.0" and not self.external_ip:
                     log.info("got external ip from UPnP: %s", external_ip)
             except (asyncio.TimeoutError, UPnPError):
@@ -561,7 +540,7 @@ class UPnPComponent(Component):
 
         if external_ip == "0.0.0.0" or not external_ip:
             log.warning("unable to get external ip from UPnP, checking lbry.io fallback")
-            external_ip = yield get_external_ip()
+            external_ip = await get_external_ip()
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         self.external_ip = external_ip
@@ -572,10 +551,10 @@ class UPnPComponent(Component):
                 log.info("add UPnP port mappings")
                 d = {}
                 if PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
-                    d["TCP"] = from_future(self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port"))
+                    d["TCP"] = self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
                 if DHT_COMPONENT not in self.component_manager.skip_components:
-                    d["UDP"] = from_future(self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port"))
-                upnp_redirects = yield DeferredDict(d)
+                    d["UDP"] = self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
+                upnp_redirects = await gather_dict(d)
                 log.info("set up redirects: %s", upnp_redirects)
                 self.upnp_redirects.update(upnp_redirects)
             except (asyncio.TimeoutError, UPnPError):
@@ -583,7 +562,7 @@ class UPnPComponent(Component):
                 return self._maintain_redirects()
         elif self.upnp:  # check existing redirects are still active
             found = set()
-            mappings = yield from_future(self.upnp.get_redirects())
+            mappings = await self.upnp.get_redirects()
             for mapping in mappings:
                 proto = mapping['NewProtocol']
                 if proto in self.upnp_redirects and mapping['NewExternalPort'] == self.upnp_redirects[proto]:
@@ -591,18 +570,14 @@ class UPnPComponent(Component):
                         found.add(proto)
             if 'UDP' not in found and DHT_COMPONENT not in self.component_manager.skip_components:
                 try:
-                    udp_port = yield from_future(
-                        self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
-                    )
+                    udp_port = await self.upnp.get_next_mapping(self._int_dht_node_port, "UDP", "LBRY DHT port")
                     self.upnp_redirects['UDP'] = udp_port
                     log.info("refreshed upnp redirect for dht port: %i", udp_port)
                 except (asyncio.TimeoutError, UPnPError):
                     del self.upnp_redirects['UDP']
             if 'TCP' not in found and PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components:
                 try:
-                    tcp_port = yield from_future(
-                        self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
-                    )
+                    tcp_port = await self.upnp.get_next_mapping(self._int_peer_port, "TCP", "LBRY peer port")
                     self.upnp_redirects['TCP'] = tcp_port
                     log.info("refreshed upnp redirect for peer port: %i", tcp_port)
                 except (asyncio.TimeoutError, UPnPError):
@@ -613,14 +588,13 @@ class UPnPComponent(Component):
                 if self.upnp_redirects:
                     log.debug("upnp redirects are still active")
 
-    @defer.inlineCallbacks
-    def start(self):
+    async def start(self):
         log.info("detecting external ip")
         if not self.use_upnp:
-            self.external_ip = yield get_external_ip()
+            self.external_ip = await get_external_ip()
             return
         success = False
-        yield self._maintain_redirects()
+        await self._maintain_redirects()
         if self.upnp:
             if not self.upnp_redirects and not all([x in self.component_manager.skip_components for x in
                                                     (DHT_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT)]):
@@ -631,18 +605,19 @@ class UPnPComponent(Component):
                     log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
-        self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, self.get_status())
-        self._maintain_redirects_lc.start(360, now=False)
+        if self.component_manager.analytics_manager:
+            self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, await self.get_status())
+        self._maintain_redirects_task = asyncio.create_task(self._repeatedly_maintain_redirects(now=False))
 
-    def stop(self):
-        if self._maintain_redirects_lc.running:
-            self._maintain_redirects_lc.stop()
-        return defer.DeferredList(
-            [from_future(self.upnp.delete_port_mapping(port, protocol))
-             for protocol, port in self.upnp_redirects.items()]
-        )
+    async def stop(self):
+        if self.upnp_redirects:
+            await asyncio.wait([
+                self.upnp.delete_port_mapping(port, protocol) for protocol, port in self.upnp_redirects.items()
+            ])
+        if self._maintain_redirects_task is not None and not self._maintain_redirects_task.done():
+            self._maintain_redirects_task.cancel()
 
-    def get_status(self):
+    async def get_status(self):
         return {
             'aioupnp_version': aioupnp_version,
             'redirects': self.upnp_redirects,
@@ -661,13 +636,11 @@ class ExchangeRateManagerComponent(Component):
         self.exchange_rate_manager = ExchangeRateManager()
 
     @property
-    def component(self):
+    def component(self) -> ExchangeRateManager:
         return self.exchange_rate_manager
 
-    @defer.inlineCallbacks
-    def start(self):
-        yield self.exchange_rate_manager.start()
+    async def start(self):
+        self.exchange_rate_manager.start()
 
-    @defer.inlineCallbacks
-    def stop(self):
-        yield self.exchange_rate_manager.stop()
+    async def stop(self):
+        self.exchange_rate_manager.stop()

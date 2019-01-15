@@ -1,5 +1,5 @@
 import os
-import asyncio
+from unittest import skip
 from binascii import hexlify
 
 from twisted.internet import defer, error
@@ -20,7 +20,10 @@ from tests import mocks
 from tests.test_utils import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 
+@skip
 class TestReflector(unittest.TestCase):
+
+    @defer.inlineCallbacks
     def setUp(self):
         self.reflector_port = None
         self.port = None
@@ -29,12 +32,12 @@ class TestReflector(unittest.TestCase):
         self.client_db_dir, self.client_blob_dir = mk_db_and_blob_dir()
         prm = OnlyFreePaymentsManager()
         wallet = mocks.Wallet()
-        peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
+        peer_manager = PeerManager()
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
-        self.server_storage = SQLiteStorage(self.server_db_dir)
-        self.server_blob_manager = blob_manager.BlobFileManager(self.server_blob_dir, self.server_storage)
-        self.client_storage = SQLiteStorage(self.client_db_dir)
-        self.client_blob_manager = blob_manager.BlobFileManager(self.client_blob_dir, self.client_storage)
+        self.server_storage = SQLiteStorage(':memory:')
+        self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir, self.server_storage)
+        self.client_storage = SQLiteStorage(':memory:')
+        self.client_blob_manager = BlobManager.DiskBlobManager(self.client_blob_dir, self.client_storage)
         self.server_lbry_file_manager = EncryptedFileManager(
             peer_finder, RateLimiter(), self.server_blob_manager, wallet, prm, self.server_storage,
             descriptor.StreamDescriptorIdentifier()
@@ -62,17 +65,17 @@ class TestReflector(unittest.TestCase):
             ),
         ]
 
-        d = self.server_storage.setup()
-        d.addCallback(lambda _: self.server_blob_manager.setup())
-        d.addCallback(lambda _: self.server_lbry_file_manager.setup())
-        d.addCallback(lambda _: self.client_storage.setup())
-        d.addCallback(lambda _: self.client_blob_manager.setup())
-        d.addCallback(lambda _: self.client_lbry_file_manager.setup())
+        yield f2d(self.server_storage.open())
+        yield f2d(self.server_blob_manager.setup())
+        yield f2d(self.server_lbry_file_manager.setup())
+        yield f2d(self.client_storage.open())
+        yield f2d(self.client_blob_manager.setup())
+        yield f2d(self.client_lbry_file_manager.setup())
 
         @defer.inlineCallbacks
         def verify_equal(sd_info, stream_hash):
             self.assertDictEqual(mocks.create_stream_sd_file, sd_info)
-            sd_hash = yield self.client_storage.get_sd_blob_hash_for_stream(stream_hash)
+            sd_hash = yield f2d(self.client_storage.get_sd_blob_hash_for_stream(stream_hash))
             defer.returnValue(sd_hash)
 
         def save_sd_blob_hash(sd_hash):
@@ -81,7 +84,7 @@ class TestReflector(unittest.TestCase):
 
         def verify_stream_descriptor_file(stream_hash):
             self.stream_hash = stream_hash
-            d = get_sd_info(self.client_storage, stream_hash, True)
+            d = f2d(get_sd_info(self.client_storage, stream_hash, True))
             d.addCallback(verify_equal, stream_hash)
             d.addCallback(save_sd_blob_hash)
             return d
@@ -110,10 +113,9 @@ class TestReflector(unittest.TestCase):
                 except error.CannotListenError:
                     port += 1
 
-        d.addCallback(lambda _: create_stream())
-        d.addCallback(verify_stream_descriptor_file)
-        d.addCallback(lambda _: start_server())
-        return d
+        stream_hash = yield create_stream()
+        yield verify_stream_descriptor_file(stream_hash)
+        yield start_server()
 
     @defer.inlineCallbacks
     def tearDown(self):
@@ -121,15 +123,13 @@ class TestReflector(unittest.TestCase):
         for lbry_file in lbry_files:
             yield self.client_lbry_file_manager.delete_lbry_file(lbry_file)
         yield self.client_lbry_file_manager.stop()
-        yield self.client_blob_manager.stop()
-        yield self.client_storage.stop()
+        yield f2d(self.client_storage.close())
         self.reflector_port.stopListening()
         lbry_files = self.server_lbry_file_manager.lbry_files
         for lbry_file in lbry_files:
             yield self.server_lbry_file_manager.delete_lbry_file(lbry_file)
         yield self.server_lbry_file_manager.stop()
-        yield self.server_blob_manager.stop()
-        yield self.server_storage.stop()
+        yield f2d(self.server_storage.close())
         try:
             rm_db_and_blob_dir(self.client_db_dir, self.client_blob_dir)
         except Exception as err:
@@ -151,15 +151,15 @@ class TestReflector(unittest.TestCase):
         @defer.inlineCallbacks
         def verify_stream_on_reflector():
             # check stream_info_manager has all the right information
-            streams = yield self.server_storage.get_all_streams()
+            streams = yield f2d(self.server_storage.get_all_streams())
             self.assertEqual(1, len(streams))
             self.assertEqual(self.stream_hash, streams[0])
 
-            blobs = yield self.server_storage.get_blobs_for_stream(self.stream_hash)
+            blobs = yield f2d(self.server_storage.get_blobs_for_stream(self.stream_hash))
             blob_hashes = [b.blob_hash for b in blobs if b.blob_hash is not None]
             expected_blob_hashes = [b[0] for b in self.expected_blobs[:-1] if b[0] is not None]
             self.assertEqual(expected_blob_hashes, blob_hashes)
-            sd_hash = yield self.server_storage.get_sd_blob_hash_for_stream(streams[0])
+            sd_hash = yield f2d(self.server_storage.get_sd_blob_hash_for_stream(streams[0]))
             self.assertEqual(self.sd_hash, sd_hash)
 
             # check lbry file manager has the file
@@ -167,14 +167,14 @@ class TestReflector(unittest.TestCase):
 
             self.assertEqual(0, len(files))
 
-            streams = yield self.server_storage.get_all_streams()
+            streams = yield f2d(self.server_storage.get_all_streams())
             self.assertEqual(1, len(streams))
-            stream_info = yield self.server_storage.get_stream_info(self.stream_hash)
+            stream_info = yield f2d(self.server_storage.get_stream_info(self.stream_hash))
             self.assertEqual(self.sd_hash, stream_info[3])
             self.assertEqual(hexlify(b'test_file').decode(), stream_info[0])
 
             # check should_announce blobs on blob_manager
-            blob_hashes = yield self.server_storage.get_all_should_announce_blobs()
+            blob_hashes = yield f2d(self.server_storage.get_all_should_announce_blobs())
             self.assertSetEqual({self.sd_hash, expected_blob_hashes[0]}, set(blob_hashes))
 
         def verify_have_blob(blob_hash, blob_size):
@@ -233,10 +233,10 @@ class TestReflector(unittest.TestCase):
         @defer.inlineCallbacks
         def verify_stream_on_reflector():
             # this protocol should not have any impact on stream info manager
-            streams = yield self.server_storage.get_all_streams()
+            streams = yield f2d(self.server_storage.get_all_streams())
             self.assertEqual(0, len(streams))
             # there should be no should announce blobs here
-            blob_hashes = yield self.server_storage.get_all_should_announce_blobs()
+            blob_hashes = yield f2d(self.server_storage.get_all_should_announce_blobs())
             self.assertEqual(0, len(blob_hashes))
 
         def verify_data_on_reflector():
@@ -271,6 +271,7 @@ class TestReflector(unittest.TestCase):
 
     # test case when we reflect blob, and than that same blob
     # is reflected as stream
+    @defer.inlineCallbacks
     def test_blob_reflect_and_stream(self):
 
         def verify_blob_on_reflector():
@@ -283,20 +284,19 @@ class TestReflector(unittest.TestCase):
         def verify_stream_on_reflector():
             # check stream_info_manager has all the right information
 
-            streams = yield self.server_storage.get_all_streams()
+            streams = yield f2d(self.server_storage.get_all_streams())
             self.assertEqual(1, len(streams))
             self.assertEqual(self.stream_hash, streams[0])
 
-            blobs = yield self.server_storage.get_blobs_for_stream(self.stream_hash)
+            blobs = yield f2d(self.server_storage.get_blobs_for_stream(self.stream_hash))
             blob_hashes = [b.blob_hash for b in blobs if b.blob_hash is not None]
             expected_blob_hashes = [b[0] for b in self.expected_blobs[:-1] if b[0] is not None]
             self.assertEqual(expected_blob_hashes, blob_hashes)
-            sd_hash = yield self.server_storage.get_sd_blob_hash_for_stream(
-                self.stream_hash)
+            sd_hash = yield f2d(self.server_storage.get_sd_blob_hash_for_stream(self.stream_hash))
             self.assertEqual(self.sd_hash, sd_hash)
 
             # check should_announce blobs on blob_manager
-            to_announce = yield self.server_storage.get_all_should_announce_blobs()
+            to_announce = yield f2d(self.server_storage.get_all_should_announce_blobs())
             self.assertSetEqual(set(to_announce), {self.sd_hash, expected_blob_hashes[0]})
 
         def verify_have_blob(blob_hash, blob_size):
@@ -329,11 +329,10 @@ class TestReflector(unittest.TestCase):
         # Modify this to change which blobs to send
         blobs_to_send = self.expected_blobs
 
-        d = send_to_server_as_blobs([x[0] for x in self.expected_blobs])
-        d.addCallback(send_to_server_as_stream)
-        d.addCallback(lambda _: verify_blob_on_reflector())
-        d.addCallback(lambda _: verify_stream_on_reflector())
-        return d
+        finished = yield send_to_server_as_blobs([x[0] for x in self.expected_blobs])
+        yield send_to_server_as_stream(finished)
+        yield verify_blob_on_reflector()
+        yield verify_stream_on_reflector()
 
 
 def iv_generator():

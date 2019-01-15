@@ -1,9 +1,10 @@
 import logging
 import typing
 
-from lbrynet.peer import Peer
 from lbrynet.dht import constants
 from lbrynet.dht.routing.distance import Distance
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer
 
 log = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ class KBucket:
         self.last_accessed = 0
         self.range_min = range_min
         self.range_max = range_max
-        self._contacts: typing.List[Peer] = []
+        self._contacts: typing.List['Peer'] = []
         self._node_id = node_id
 
-    def add_peer(self, contact: Peer) -> bool:
+    def add_peer(self, contact: 'Peer') -> bool:
         """ Add contact to _contact list in the right order. This will move the
         contact to the end of the k-bucket if it is already present.
 
@@ -50,7 +51,7 @@ class KBucket:
             return False
             # raise BucketFull("No space in bucket to insert contact")
 
-    def get_peer(self, contact_id: bytes) -> Peer:
+    def get_peer(self, contact_id: bytes) -> 'Peer':
         """Get the contact specified node ID
 
         @raise IndexError: raised if the contact is not in the bucket
@@ -65,7 +66,7 @@ class KBucket:
                 return contact
         raise IndexError(contact_id)
 
-    def get_peers(self, count=-1, exclude_contact=None, sort_distance_to=None) -> typing.List[Peer]:
+    def get_peers(self, count=-1, exclude_contact=None, sort_distance_to=None) -> typing.List['Peer']:
         """ Returns a list containing up to the first count number of contacts
 
         @param count: The amount of contacts to return (if 0 or less, return
@@ -111,13 +112,11 @@ class KBucket:
 
         return contacts[:min(current_len, count)]
 
-    def get_bad_or_unknown_peers(self) -> typing.List[Peer]:
-        contacts = self.get_peers(sort_distance_to=False)
-        results = [contact for contact in contacts if contact.contact_is_good is False]
-        results.extend(contact for contact in contacts if contact.contact_is_good is None)
-        return results
+    def get_bad_or_unknown_peers(self) -> typing.List['Peer']:
+        peer = self.get_peers(sort_distance_to=False)
+        return [peer for peer in peer if peer.contact_is_good is not True]
 
-    def remove_peer(self, peer: Peer) -> None:
+    def remove_peer(self, peer: 'Peer') -> None:
         self._contacts.remove(peer)
 
     def key_in_range(self, key: bytes) -> bool:

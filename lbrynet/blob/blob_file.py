@@ -2,7 +2,6 @@ import os
 import asyncio
 import logging
 import typing
-from io import BytesIO
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -72,6 +71,7 @@ class BlobFile:
             length = length or int(os.stat(os.path.join(blob_dir, blob_hash)).st_size)
             self.length = length
             self.verified.set()
+            self.finished_writing.set()
         self.saved_verified_blob = False
         self.blob_completed_callback = blob_completed_callback
 
@@ -87,12 +87,12 @@ class BlobFile:
                 while self.writers:
                     other = self.writers.pop()
                     other.finished.cancel()
-                    other.peer.disconnect_tcp()
                 t = self.loop.create_task(self.save_verified_blob(writer))
                 t.add_done_callback(lambda *_: self.finished_writing.set())
             elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
                 if writer.peer:
-                    log.warning(f"failed to download {self.blob_hash[:8]} from {writer.peer.address}: {str(error)}")
+                    msg = f"failed to download {self.blob_hash[:8]} from {writer.peer.address}: {str(error)}"
+                    log.warning(msg)
                 raise error
         return callback
 
@@ -109,14 +109,10 @@ class BlobFile:
 
         if self.verified.is_set():
             return
-        await self.blob_write_lock.acquire()
-        try:
+        async with self.blob_write_lock:
             await self.loop.run_in_executor(None, _save_verified)
-        finally:
-            self.verified.set()
-            self.blob_write_lock.release()
-        if self.blob_completed_callback:
             await self.blob_completed_callback(self)
+            self.verified.set()
 
     def open_for_writing(self, peer: typing.Optional['Peer'] = None) -> HashBlobWriter:
         """
@@ -125,27 +121,29 @@ class BlobFile:
         """
 
         if os.path.exists(self.file_path):
-            raise Exception(f"File already exists '{self.file_path}'")
+            raise OSError(f"File already exists '{self.file_path}'")
 
         for writer in self.writers:
             if writer.peer is peer:
                 raise Exception("Tried to download the same file twice simultaneously from the same peer")
-
-        log.debug(f"Opening {self.blob_hash[:8]} to be written")
+        if not peer:
+            msg = f"Opening {self.blob_hash[:8]} to be written"
+        else:
+            msg = f"Opening {self.blob_hash[:8]} to be written by {peer.address}:{peer.tcp_port}"
+        log.debug(msg)
         fut = asyncio.Future(loop=self.loop)
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut, peer)
         self.writers.append(writer)
         fut.add_done_callback(self.writer_finished(writer))
         return writer
 
-    async def read(self) -> BytesIO:
-        def _read() -> BytesIO:
-            b = BytesIO()
-            with open(self.file_path, "rb") as f:
-                b.write(f.read())
-            return b
+    async def sendfile(self, writer: asyncio.StreamWriter) -> int:
+        """
+        Read and send the file to the writer and return the number of bytes sent
+        """
 
-        return await self.loop.run_in_executor(None, _read)
+        with open(self.file_path, 'rb') as handle:
+            return await self.loop.sendfile(writer.transport, handle)
 
     async def close(self):
         while self.writers:

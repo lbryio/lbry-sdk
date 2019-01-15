@@ -236,3 +236,6 @@ class Account(BaseAccount):
             )
 
         return tx
+
+    async def release_all_outputs(self):
+        await self.ledger.db.release_all_outputs(self)

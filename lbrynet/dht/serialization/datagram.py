@@ -20,18 +20,22 @@ class KademliaDatagramBase:
         'node_id'
     ]
 
+    expected_packet_type = -1
+
     def __init__(self, packet_type: int, rpc_id: bytes, node_id: bytes):
         self.packet_type = packet_type
+        if self.expected_packet_type != packet_type:
+            raise ValueError(f"invalid packet type: {packet_type}, expected {self.expected_packet_type}")
         if len(rpc_id) != constants.rpc_id_length:
-            raise ValueError("invalid rpc node_id: %i bytes (expected 20)" % len(rpc_id))
+            raise ValueError(f"invalid rpc node_id: {len(rpc_id)} bytes (expected 20)")
         if not len(node_id) == constants.hash_length:
-            raise ValueError("invalid node node_id: %i bytes (expected 48)" % len(node_id))
+            raise ValueError(f"invalid node node_id: {len(node_id)} bytes (expected 48)")
         self.rpc_id = rpc_id
         self.node_id = node_id
 
     def bencode(self) -> bytes:
         return bencoding.bencode({
-            i: getattr(self, k) for i, k in enumerate(self.fields)
+           i: getattr(self, k) for i, k in enumerate(self.fields)
         })
 
 
@@ -44,13 +48,63 @@ class RequestDatagram(KademliaDatagramBase):
         'args'
     ]
 
-    def __init__(self, packet_type: int, rpc_id: bytes, node_id: bytes, method: str,
+    expected_packet_type = REQUEST_TYPE
+
+    def __init__(self, packet_type: int, rpc_id: bytes, node_id: bytes, method: bytes,
                  args: typing.Optional[typing.List] = None):
         super().__init__(packet_type, rpc_id, node_id)
         self.method = method
-        self.args = args
-        if self.packet_type != REQUEST_TYPE:
-            raise ValueError
+        self.args = args or []
+        if not self.args:
+            self.args.append({})
+        if isinstance(self.args[-1], dict):
+            self.args[-1][b'protocolVersion'] = 1
+        else:
+            self.args.append({b'protocolVersion': 1})
+
+    @classmethod
+    def make_ping(cls, from_node_id: bytes, rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
+        if rpc_id and len(rpc_id) != constants.rpc_id_length:
+            raise ValueError("invalid rpc id length")
+        elif not rpc_id:
+            rpc_id = constants.generate_id()[:constants.rpc_id_length]
+        if len(from_node_id) != constants.hash_bits // 8:
+            raise ValueError("invalid node id")
+        return cls(REQUEST_TYPE, rpc_id, from_node_id, b'ping')
+
+    @classmethod
+    def make_store(cls, from_node_id: bytes, blob_hash: bytes, token: bytes, port: int,
+                  rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
+        if rpc_id and len(rpc_id) != constants.rpc_id_length:
+            raise ValueError("invalid rpc id length")
+        if not rpc_id:
+            rpc_id = constants.generate_id()[:constants.rpc_id_length]
+        if len(from_node_id) != constants.hash_bits // 8:
+            raise ValueError("invalid node id")
+        store_args = [blob_hash, token, port, from_node_id, 0]
+        return cls(REQUEST_TYPE, rpc_id, from_node_id, b'store', store_args)
+
+    @classmethod
+    def make_find_node(cls, from_node_id: bytes, key: bytes,
+                       rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
+        if rpc_id and len(rpc_id) != constants.rpc_id_length:
+            raise ValueError("invalid rpc id length")
+        if not rpc_id:
+            rpc_id = constants.generate_id()[:constants.rpc_id_length]
+        if len(from_node_id) != constants.hash_bits // 8:
+            raise ValueError("invalid node id")
+        return cls(REQUEST_TYPE, rpc_id, from_node_id, b'findNode', [key])
+
+    @classmethod
+    def make_find_value(cls, from_node_id: bytes, key: bytes,
+                        rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
+        if rpc_id and len(rpc_id) != constants.rpc_id_length:
+            raise ValueError("invalid rpc id length")
+        if not rpc_id:
+            rpc_id = constants.generate_id()[:constants.rpc_id_length]
+        if len(from_node_id) != constants.hash_bits // 8:
+            raise ValueError("invalid node id")
+        return cls(REQUEST_TYPE, rpc_id, from_node_id, b'findValue', [key])
 
 
 class ResponseDatagram(KademliaDatagramBase):
@@ -61,36 +115,28 @@ class ResponseDatagram(KademliaDatagramBase):
         'response'
     ]
 
-    packet_type = RESPONSE_TYPE
+    expected_packet_type = RESPONSE_TYPE
 
-    def __init__(self, packet_type: int, rpc_id, node_id, response):
+    def __init__(self, packet_type: int, rpc_id: bytes, node_id: bytes, response):
         super().__init__(packet_type, rpc_id, node_id)
         self.response = response
-        if self.packet_type != RESPONSE_TYPE:
-            raise ValueError
 
 
-class ErrorDatagram(ResponseDatagram):
+class ErrorDatagram(KademliaDatagramBase):
     fields = [
         'packet_type',
         'rpc_id',
         'node_id',
+        'exception_type',
         'response',
-        'exception_type'
     ]
 
-    def __init__(self, packet_type, rpc_id, node_id, exception_type, response):
-        super().__init__(packet_type, rpc_id, node_id, response)
-        self.exception_type = exception_type
-        if self.packet_type != ERROR_TYPE:
-            raise ValueError
+    expected_packet_type = ERROR_TYPE
 
-
-msg_types = {
-    REQUEST_TYPE: RequestDatagram,
-    RESPONSE_TYPE: ResponseDatagram,
-    ERROR_TYPE: ErrorDatagram
-}
+    def __init__(self, packet_type: int, rpc_id: bytes, node_id: bytes, exception_type: bytes, response: bytes):
+        super().__init__(packet_type, rpc_id, node_id)
+        self.exception_type = exception_type.decode()
+        self.response = response.decode()
 
 
 def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram]:
@@ -99,13 +145,18 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
         RESPONSE_TYPE: ResponseDatagram,
         ERROR_TYPE: ErrorDatagram
     }
-    primative = bencoding.bdecode(datagram)
-    if primative[0] in msg_types:
-        dgram_class = msg_types[primative[0]]
-        kw = {}
-        for i, k in enumerate(dgram_class.fields):
-            if i in primative:
-                kw[k] = primative[i]
-        result = dgram_class(**kw)
-        return result
-    raise ValueError
+
+    primitive: typing.Dict = bencoding.bdecode(datagram)
+    if not isinstance(primitive, dict):
+        raise ValueError("invalid datagram type")
+    if primitive[0] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:  # pylint: disable=unsubscriptable-object
+        datagram_type = primitive[0]  # pylint: disable=unsubscriptable-object
+    else:
+        raise ValueError("invalid datagram type")
+    datagram_class = msg_types[datagram_type]
+    return datagram_class(**{
+            k: primitive[i]  # pylint: disable=unsubscriptable-object
+            for i, k in enumerate(datagram_class.fields)
+            if i in primitive  # pylint: disable=unsupported-membership-test
+        }
+    )

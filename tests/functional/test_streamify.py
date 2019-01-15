@@ -1,6 +1,5 @@
 import os
 import shutil
-import asyncio
 import tempfile
 from hashlib import md5
 from twisted.trial.unittest import TestCase
@@ -28,6 +27,7 @@ test_create_stream_sd_file = mocks.create_stream_sd_file
 class TestStreamify(TestCase):
     maxDiff = 5000
 
+    @defer.inlineCallbacks
     def setUp(self):
         mocks.mock_conf_settings(self)
         self.session = None
@@ -38,20 +38,19 @@ class TestStreamify(TestCase):
         os.mkdir(self.blob_dir)
         self.dht_node = FakeNode()
         self.wallet = FakeWallet()
-        self.peer_manager = PeerManager(asyncio.get_event_loop_policy().get_event_loop())
+        self.peer_manager = PeerManager()
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
-        self.rate_limiter = RateLimiter()
+        self.rate_limiter = DummyRateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.storage = SQLiteStorage(self.db_dir)
+        self.storage = SQLiteStorage(':memory:')
         self.blob_manager = BlobFileManager(self.blob_dir, self.storage, self.dht_node._dataStore)
         self.prm = OnlyFreePaymentsManager()
         self.lbry_file_manager = EncryptedFileManager(
             self.peer_finder, self.rate_limiter, self.blob_manager, self.wallet, self.prm, self.storage,
             self.sd_identifier
         )
-        d = self.storage.setup()
-        d.addCallback(lambda _: self.lbry_file_manager.setup())
-        return d
+        yield f2d(self.storage.open())
+        yield f2d(self.lbry_file_manager.setup())
 
     @defer.inlineCallbacks
     def tearDown(self):
@@ -59,8 +58,8 @@ class TestStreamify(TestCase):
         for lbry_file in lbry_files:
             yield self.lbry_file_manager.delete_lbry_file(lbry_file)
         yield self.lbry_file_manager.stop()
-        yield self.storage.stop()
-        yield threads.deferToThread(shutil.rmtree, self.db_dir)
+        yield f2d(self.storage.close())
+        shutil.rmtree(self.db_dir, ignore_errors=True)
         if os.path.exists("test_file"):
             os.remove("test_file")
 
@@ -70,7 +69,7 @@ class TestStreamify(TestCase):
             self.assertEqual(sd_info, test_create_stream_sd_file)
 
         def verify_stream_descriptor_file(stream_hash):
-            d = get_sd_info(self.storage, stream_hash, True)
+            d = f2d(get_sd_info(self.storage, stream_hash, True))
             d.addCallback(verify_equal)
             return d
 
@@ -98,7 +97,7 @@ class TestStreamify(TestCase):
         test_file = GenFile(53209343, bytes((i + 5) for i in range(0, 64, 6)))
         lbry_file = yield create_lbry_file(self.blob_manager, self.storage, self.prm, self.lbry_file_manager,
                                            "test_file", test_file)
-        sd_hash = yield self.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash)
+        sd_hash = yield f2d(self.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash))
         self.assertTrue(lbry_file.sd_hash, sd_hash)
         yield lbry_file.start()
         f = open('test_file', 'rb')

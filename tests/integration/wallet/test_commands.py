@@ -1,71 +1,30 @@
+import sys
 import json
-import asyncio
 import tempfile
 import logging
 from binascii import unhexlify
-from types import SimpleNamespace
 
-from twisted.trial import unittest
-from twisted.internet import utils, defer
-from twisted.internet.utils import runWithWarningsSuppressed as originalRunWith
-from lbrynet.error import InsufficientFundsError
-from lbrynet.schema.claim import ClaimDict
+import twisted.internet
+from twisted.internet.asyncioreactor import AsyncioSelectorReactor
+
 from lbrynet.extras.wallet.transaction import Transaction
-from torba.testcase import IntegrationTestCase as BaseIntegrationTestCase
+from lbrynet.p2p.Error import InsufficientFundsError
+from lbrynet.schema.claim import ClaimDict
+
+from torba.testcase import IntegrationTestCase
 
 import lbrynet.schema
 lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 from lbrynet import conf as lbry_conf
-from lbrynet.dht.node import Node
-from lbrynet.extras.daemon.Daemon import Daemon
+from lbrynet.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
 from lbrynet.extras.wallet import LbryWalletManager
-from lbrynet.extras.daemon.Components import WalletComponent, DHTComponent, HashAnnouncerComponent, \
-    ExchangeRateManagerComponent
-from lbrynet.extras.daemon.Components import REFLECTOR_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT
-from lbrynet.extras.daemon.Components import UPnPComponent
-from lbrynet.extras.daemon.Components import d2f
+from lbrynet.extras.daemon.Components import WalletComponent
+from lbrynet.extras.daemon.Components import (
+    DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
+    REFLECTOR_COMPONENT, UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+)
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
-from lbrynet.extras.daemon.auth.server import jsonrpc_dumps_pretty
-
-
-class FakeUPnP(UPnPComponent):
-
-    def __init__(self, component_manager):
-        self.component_manager = component_manager
-        self._running = False
-        self.use_upnp = False
-        self.upnp_redirects = {}
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-
-
-class FakeDHT(DHTComponent):
-
-    def start(self):
-        self.dht_node = Node()
-
-
-class FakeExchangeRateComponent(ExchangeRateManagerComponent):
-
-    def start(self):
-        self.exchange_rate_manager = SimpleNamespace()
-
-    def stop(self):
-        pass
-
-
-class FakeHashAnnouncerComponent(HashAnnouncerComponent):
-
-    def start(self):
-        self.hash_announcer = SimpleNamespace()
-
-    def stop(self):
-        pass
 
 
 class FakeAnalytics:
@@ -74,57 +33,41 @@ class FakeAnalytics:
     def is_started(self):
         return True
 
-    def send_new_channel(self):
+    async def send_new_channel(self):
         pass
 
     def shutdown(self):
         pass
 
-    def send_claim_action(self, action):
+    async def send_claim_action(self, action):
         pass
 
-    def send_credits_sent(self):
+    async def send_credits_sent(self):
         pass
 
-    def send_server_startup(self):
+    async def send_server_startup(self):
         pass
-
-
-class IntegrationTestCase(unittest.TestCase, BaseIntegrationTestCase):
-
-    async def setUp(self):
-        await self.asyncSetUp()
-
-    async def tearDown(self):
-        await self.asyncTearDown()
-
-
-def run_with_async_support(suppress, f, *a, **kw):
-    if asyncio.iscoroutinefunction(f):
-        def test_method(*args, **kwargs):
-            return defer.Deferred.fromFuture(asyncio.ensure_future(f(*args, **kwargs)))
-    else:
-        test_method = f
-    return originalRunWith(suppress, test_method, *a, **kw)
-
-
-utils.runWithWarningsSuppressed = run_with_async_support
 
 
 class CommandTestCase(IntegrationTestCase):
 
     timeout = 180
     MANAGER = LbryWalletManager
+    VERBOSITY = logging.WARN
 
-    async def setUp(self):
-        await super().setUp()
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+
+        twisted.internet.reactor = sys.modules['twisted.internet.reactor'] = AsyncioSelectorReactor()
 
         logging.getLogger('lbrynet.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
         lbry_conf.settings = None
         lbry_conf.initialize_settings(
-            load_conf_file=False, data_dir=self.wallet_node.data_path, wallet_dir=self.wallet_node.data_path,
+            load_conf_file=False,
+            data_dir=self.wallet_node.data_path,
+            wallet_dir=self.wallet_node.data_path,
             download_dir=self.wallet_node.data_path
         )
         lbry_conf.settings['use_upnp'] = False
@@ -147,27 +90,22 @@ class CommandTestCase(IntegrationTestCase):
             return self.wallet_component
 
         skip = [
-            #UPNP_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT,
-            REFLECTOR_COMPONENT
+            DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
+            PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
         ]
         analytics_manager = FakeAnalytics()
         self.daemon = Daemon(analytics_manager, ComponentManager(
             analytics_manager=analytics_manager,
-            skip_components=skip, wallet=wallet_maker,
-            dht=FakeDHT, hash_announcer=FakeHashAnnouncerComponent,
-            exchange_rate_manager=FakeExchangeRateComponent,
-            upnp=FakeUPnP
+            skip_components=skip, wallet=wallet_maker
         ))
-        await d2f(self.daemon.setup())
+        await self.daemon.setup()
         self.daemon.wallet_manager = self.wallet_component.wallet_manager
         self.manager.old_db = self.daemon.storage
 
-    async def tearDown(self):
-        self.conductor.spv_node.server.stop()
-        await super().tearDown()
+    async def asyncTearDown(self):
+        await super().asyncTearDown()
         self.wallet_component._running = False
-        await d2f(self.daemon._shutdown())
+        await self.daemon.shutdown()
 
     async def confirm_tx(self, txid):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
@@ -843,3 +781,14 @@ class TransactionCommandsTestCase(CommandTestCase):
         # inexistent
         result = await self.daemon.jsonrpc_transaction_show('0'*64)
         self.assertFalse(result['success'])
+
+    async def test_utxo_release(self):
+        sendtxid = await self.blockchain.send_to_address(
+            await self.account.receiving.get_or_create_usable_address(), 1
+        )
+        await self.confirm_tx(sendtxid)
+        await self.assertBalance(self.account, '11.0')
+        await self.ledger.reserve_outputs(await self.account.get_utxos())
+        await self.assertBalance(self.account, '0.0')
+        await self.daemon.jsonrpc_utxo_release()
+        await self.assertBalance(self.account, '11.0')

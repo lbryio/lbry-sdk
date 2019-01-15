@@ -84,7 +84,6 @@ class TestProtocol(AsyncioTestCase):
             )
             self.assertEqual(1, len(find_value_response[b'2' * 48]))
             self.assertEqual(find_value_response[b'2' * 48][0], peer2_from_peer1.compact_address_tcp())
-
             peer1.stop()
             peer2.stop()
             peer1.disconnect()

@@ -1,319 +1,394 @@
-import binascii
 import asyncio
 import typing
 import logging
 
-from lbrynet.peer import Peer, PeerManager
 from lbrynet.dht import constants
-from lbrynet.dht.error import UnknownRemoteException
+from lbrynet.dht.error import RemoteException
 from lbrynet.dht.routing.distance import Distance
-from lbrynet.dht.routing.routing_table import TreeRoutingTable
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
+    from lbrynet.dht.routing.routing_table import TreeRoutingTable
     from lbrynet.dht.protocol.protocol import KademliaProtocol
+    from lbrynet.peer import Peer, PeerManager
 
 log = logging.getLogger(__name__)
 
 
-def get_contact(contact_list, node_id, address, port):
-    for contact in contact_list:
-        if contact.node_id == node_id and contact.address == address and contact.udp_port == port:
-            return contact
-    raise IndexError(node_id)
+def cancel_task(task: typing.Optional[asyncio.Task]):
+    if task and not (task.done() or task.cancelled()):
+        task.cancel()
 
 
-def expand_peer(compact_peer_info) -> typing.Tuple[bytes, str, int]:
-    host = "{}.{}.{}.{}".format(*compact_peer_info[:4])
-    port = int.from_bytes(compact_peer_info[4:6], 'big')
-    peer_node_id = compact_peer_info[6:]
-    return (peer_node_id, host, port)
+def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
+    for task in tasks:
+        cancel_task(task)
 
 
-def sort_result(cumulative_find_result: typing.Set, key: bytes) -> typing.Union[typing.List[Peer]]:
-    list_result = list(cumulative_find_result)
-    if not all((r.node_id is not None for r in list_result)):
-        return list_result
-    distance = Distance(key)
-    list_result.sort(key=lambda c: distance(c.node_id))
-    return list_result
+def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
+    while tasks:
+        cancel_task(tasks.pop())
 
 
-def get_shortlist(routing_table: TreeRoutingTable, key: bytes, shortlist: typing.Optional[typing.List[Peer]]) -> typing.List[Peer]:
+class FindResponse:
+    @property
+    def found(self) -> bool:
+        raise NotImplementedError()
+
+    def get_close_triples(self) -> typing.List[typing.Tuple[bytes, str, int]]:
+        raise NotImplementedError()
+
+
+class FindNodeResponse(FindResponse):
+    def __init__(self, key: bytes, close_triples: typing.List[typing.Tuple[bytes, str, int]]):
+        self.key = key
+        self.close_triples = close_triples
+
+    @property
+    def found(self) -> bool:
+        return self.key in [triple[0] for triple in self.close_triples]
+
+    def get_close_triples(self) -> typing.List[typing.Tuple[bytes, str, int]]:
+        return self.close_triples
+
+
+class FindValueResponse(FindResponse):
+    def __init__(self, key: bytes, result_dict: typing.Dict):
+        self.key = key
+        self.token = result_dict[b'token']
+        self.close_triples: typing.List[typing.Tuple[bytes, bytes, int]] = result_dict.get(b'contacts', [])
+        self.found_compact_addresses = result_dict.get(key, [])
+
+    @property
+    def found(self) -> bool:
+        return len(self.found_compact_addresses) > 0
+
+    def get_close_triples(self) -> typing.List[typing.Tuple[bytes, str, int]]:
+        return [(node_id, address.decode(), port) for node_id, address, port in self.close_triples]
+
+
+def get_shortlist(routing_table: 'TreeRoutingTable', key: bytes,
+                  shortlist: typing.Optional[typing.List['Peer']]) -> typing.List['Peer']:
+    """
+    If not provided, initialize the shortlist of peers to probe to the (up to) k closest peers in the routing table
+
+    :param routing_table: a TreeRoutingTable
+    :param key: a 48 byte hash
+    :param shortlist: optional manually provided shortlist, this is done during bootstrapping when there are no
+                      peers in the routing table. During bootstrap the shortlist is set to be the seed nodes.
+    """
     if len(key) != constants.hash_length:
         raise ValueError("invalid key length: %i" % len(key))
     if not shortlist:
-        return routing_table.find_close_peers(key)
+        shortlist = routing_table.find_close_peers(key)
+    shortlist.sort(key=Distance(key).to_contact, reverse=True)
     return shortlist
 
 
 class IterativeFinder:
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: PeerManager,
-                 routing_table: TreeRoutingTable, protocol: 'KademliaProtocol', shortlist: typing.List,
-                 key: bytes, rpc: str, exclude: typing.Optional[typing.List] = None, bottom_out_limit: int = 2):
-        self.iteration = 0
-        self.loop = loop
-        self.protocol = protocol
-        self.node_id = protocol.node_id
-        assert rpc in ['findValue', 'findNode'], ValueError(rpc)
-        self.bottom_out_limit = bottom_out_limit
-        self.exclude = set(exclude or [])
+    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
+                 routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
+                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
+                 exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
+                 shortlist: typing.Optional[typing.List['Peer']] = None):
         if len(key) != constants.hash_length:
             raise ValueError("invalid key length: %i" % len(key))
-        self.key = key
-        self.rpc = rpc
-        self.shortlist: typing.List[Peer] = get_shortlist(routing_table, key, list(shortlist or []))
-        self.routing_table = routing_table
+        self.loop = loop
         self.peer_manager = peer_manager
-        # all distance operations in this class only care about the distance
-        # to self.key, so this makes it easier to calculate those
+        self.routing_table = routing_table
+        self.protocol = protocol
+
+        self.key = key
+        self.bottom_out_limit = bottom_out_limit
+        self.max_results = max_results
+        # self.exclude = set(exclude or [])
+
+        self.shortlist: typing.List['Peer'] = get_shortlist(routing_table, key, shortlist)
+        self.active: typing.List['Peer'] = []
+        self.contacted: typing.List[typing.Tuple[str, int]] = []
         self.distance = Distance(key)
 
-        # The closest known and active node yet found
-        self.closest_node = None if not self.shortlist else self.shortlist[0]
-        self.prev_closest_node = None
+        self.closest_peer: 'Peer' = None if not self.shortlist else self.shortlist[0]
+        self.prev_closest_peer: 'Peer' = None
 
-        # List of active queries; len() indicates number of active probes
-        self.active_probes = []
-        # List of contact (address, port) tuples that have already been queried, includes contacts that didn't reply
-        self.already_contacted = []
-        # A list of found and known-to-be-active remote nodes (Contact objects)
-        self.active_contacts = []
+        self.iteration_queue = asyncio.Queue(loop=self.loop)
 
-        # Ensure only one searchIteration call is running at a time
+        self.running_probes: typing.List[asyncio.Task] = []
         self.lock = asyncio.Lock(loop=self.loop)
         self.iteration_count = 0
+        self.bottom_out_count = 0
+        self.running = False
+        self.tasks: typing.List[asyncio.Task] = []
+        self.delayed_calls: typing.List[asyncio.Handle] = []
+        self.finished = asyncio.Event(loop=self.loop)
 
-        self.find_value_result: typing.List[Peer] = []
-        self.pending_iteration_calls: typing.List[asyncio.TimerHandle] = []
-        self.pending_iteration_tasks: typing.List[asyncio.Task] = []
+    async def send_probe(self, peer: 'Peer') -> FindResponse:
+        """
+        Send the rpc request to the peer and return an object with the FindResponse interface
+        """
+        raise NotImplementedError()
 
-        self.is_find_value_request = rpc == "findValue"
-        self.iteration_fut: asyncio.Future = asyncio.Future(loop=self.loop)
-        self.iteration_futures: typing.List[asyncio.Future] = [self.iteration_fut]
+    def check_result_ready(self, response: FindResponse):
+        """
+        Called with a lock after adding peers from an rpc result to the shortlist.
+        This method is responsible for putting a result for the generator into the Queue
+        """
+        raise NotImplementedError()
 
-    def is_closer(self, contact):
-        if not self.closest_node:
+    def get_initial_result(self) -> typing.List['Peer']:
+        """
+        Get an initial or cached result to be put into the Queue. Used for findValue requests where the blob
+        has peers in the local data store of blobs announced to us
+        """
+        return []
+
+    def _is_closer(self, peer: 'Peer') -> bool:
+        if not self.closest_peer:
             return True
-        return self.distance.is_closer(contact.node_id, self.closest_node.node_id)
+        return self.distance.is_closer(peer.node_id, self.closest_peer.node_id)
 
-    def get_contact_triples(self, result):
-        if self.is_find_value_request:
-            contact_triples = result[b'contacts']
-        else:
-            contact_triples = result
-        for contact_tup in contact_triples:
-            if not isinstance(contact_tup, (list, tuple)) or len(contact_tup) != 3:
-                raise ValueError("invalid contact triple")
-            contact_tup[1] = contact_tup[1].decode()  # ips are strings
-        return contact_triples
+    def _update_closest(self):
+        self.shortlist.sort(key=self.distance.to_contact, reverse=True)
+        if self.closest_peer and self.closest_peer is not self.shortlist[-1]:
+            if self._is_closer(self.shortlist[-1]):
+                self.prev_closest_peer = self.closest_peer
+                self.closest_peer = self.shortlist[-1]
 
-    async def probe_contact(self, contact: Peer):
-        log.debug("probe %s(%s) %s:%i (%s)", self.rpc, binascii.hexlify(self.key)[:8].decode(), contact.address,
-                  contact.udp_port, binascii.hexlify(contact.node_id)[:8].decode())
-        if self.rpc == "findNode":
-            fn = contact.find_node
-        else:
-            fn = contact.find_value
+    async def _handle_probe_result(self, peer: 'Peer', response: FindResponse):
+        async with self.lock:
+            if peer not in self.shortlist:
+                self.shortlist.append(peer)
+            if peer not in self.active:
+                self.active.append(peer)
+            for contact_triple in response.get_close_triples():
+                addr_tuple = (contact_triple[1], contact_triple[2])
+                if not self.peer_manager.is_ignored(addr_tuple) and addr_tuple not in self.contacted:
+                    found_peer = self.peer_manager.make_peer(contact_triple[1], node_id=contact_triple[0],
+                                                             udp_port=contact_triple[2])
+                    if found_peer not in self.shortlist:
+                        self.shortlist.append(found_peer)
+            self._update_closest()
+            self.check_result_ready(response)
+
+    async def _send_probe(self, peer: 'Peer'):
         try:
-            response = await fn(self.key)
-            # assert contact in self.node.contacts
-            return await self.extend_shortlist(contact, response)
-        except (TimeoutError, ValueError, IndexError, asyncio.TimeoutError, asyncio.CancelledError) as err:
-            return contact.node_id
-        except UnknownRemoteException as err:
-            log.warning(err)
-            # log.exception("%s %s %s:%i %s - %s", self.rpc, binascii.hexlify(self.key).decode(),
-            #               contact.address, contact.udp_port, binascii.hexlify(contact.node_id).decode(), err)
-            return contact.node_id
+            response = await self.send_probe(peer)
+        except asyncio.CancelledError:
+            return
+        except asyncio.TimeoutError:
+            if peer in self.active:
+                self.active.remove(peer)
+            return
+        except ValueError as err:
+            log.warning(str(err))
+            if peer in self.active:
+                self.active.remove(peer)
+            return
+        except RemoteException:
+            return
+        return await self._handle_probe_result(peer, response)
 
-    async def extend_shortlist(self, contact, result):
-        # The "raw response" tuple contains the response message and the originating address info
-        origin_address = (contact.address, contact.udp_port)
-        if self.iteration_fut.done():
-            return contact.node_id
-        if self.peer_manager.is_ignored(origin_address):
-            raise ValueError("contact is ignored")
-        if contact.node_id == self.node_id:
-            return contact.node_id
+    async def _search_round(self):
+        """
+        Send up to constants.alpha (3) probes to the closest peers in the shortlist
+        """
 
-        if contact not in self.active_contacts:
-            self.active_contacts.append(contact)
-        if contact not in self.shortlist:
-            self.shortlist.append(contact)
-
-        # Now grow extend the (unverified) shortlist with the returned contacts
-        # TODO: some validation on the result (for guarding against attacks)
-        # If we are looking for a value, first see if this result is the value
-        # we are looking for before treating it as a list of contact triples
-        if self.is_find_value_request and self.key in result:
-            # TODO: store the found value to the closest node that did not return a result
-            # We have found the value
-            for peer in result[self.key]:
-                node_id, host, port = expand_peer(peer)
-                if (host, port) not in self.exclude:
-                    self.exclude.add((host, port))
-                    self.find_value_result.append(self.peer_manager.make_peer(host, node_id, tcp_port=port))
-                    log.debug("found new peer: %s", self.find_value_result[-1])
-            if self.find_value_result:
-                async with self.lock:
-                    self.iteration_fut.set_result(self.find_value_result)
-        else:
-            contact_triples = self.get_contact_triples(result)
-            for contact_triple in contact_triples:
-                if (contact_triple[1], contact_triple[2]) in ((c.address, c.udp_port) for c in self.already_contacted):
+        added = 0
+        async with self.lock:
+            self.shortlist.sort(key=self.distance.to_contact, reverse=True)
+            while self.running and len(self.shortlist) and added < constants.alpha:
+                peer = self.shortlist.pop()
+                origin_address = (peer.address, peer.udp_port)
+                if self.peer_manager.is_ignored(origin_address):
                     continue
-                elif self.peer_manager.is_ignored((contact_triple[1], contact_triple[2])):
+                if peer.node_id == self.protocol.node_id:
                     continue
-                else:
-                    found_contact = self.peer_manager.make_peer(contact_triple[1], contact_triple[0],
-                                                                udp_port=contact_triple[2])
-                    if found_contact not in self.shortlist:
-                        self.shortlist.append(found_contact)
+                if peer.address == self.protocol.external_ip:
+                    continue
+                if (peer.address, peer.udp_port) not in self.contacted:
+                    self.contacted.append((peer.address, peer.udp_port))
 
-            if not self.iteration_fut.done() and self.should_stop():
-                self.active_contacts.sort(key=lambda c: self.distance(c.node_id))
-                async with self.lock:
-                    self.iteration_fut.set_result(self.active_contacts[:min(constants.k, len(self.active_contacts))])
+                    t: asyncio.Task = self.loop.create_task(self._send_probe(peer))
 
-        return contact.node_id
+                    def callback(_):
+                        if t and t in self.running_probes:
+                            self.running_probes.remove(t)
+                        if not self.running_probes and self.shortlist:
+                            self.tasks.append(self.loop.create_task(self._search_task(0.0)))
 
-    def should_stop(self) -> bool:
-        if self.is_find_value_request:
-            # search stops when it finds a value, let it run
-            return False
-        if self.prev_closest_node and self.closest_node and self.distance.is_closer(self.prev_closest_node.node_id,
-                                                                                    self.closest_node.node_id):
-            # we're getting further away
-            return True
-        if len(self.active_contacts) >= constants.k:
-            # we have enough results
-            return True
-        return False
+                    t.add_done_callback(callback)
+                    self.running_probes.append(t)
+                    added += 1
 
-    async def _search_iteration(self):
-        log.debug("%s %i contacts in shortlist, active: %i, contacted: %i", self.rpc, len(self.shortlist),
-                 len(self.active_contacts), len(self.already_contacted))
-        self.iteration_count += 1
-        # Sort the discovered active nodes from closest to furthest
-        if len(self.active_contacts):
-            self.active_contacts.sort(key=lambda c: self.distance(c.node_id))
-            self.prev_closest_node = self.closest_node
-            self.closest_node = self.active_contacts[0]
+    async def _search_task(self, delay: typing.Optional[float] = constants.iterative_lookup_delay):
+        try:
+            if self.running:
+                await self._search_round()
+            if self.running:
+                self.delayed_calls.append(self.loop.call_later(delay, self._search))
+        except (asyncio.CancelledError, StopAsyncIteration):
+            if self.running:
+                drain_tasks(self.running_probes)
+                self.running = False
 
-        # Sort the current shortList before contacting other nodes
-        self.shortlist.sort(key=lambda c: self.distance(c.node_id))
-        probes = []
-        already_contacted_addresses = {(c.address, c.udp_port) for c in self.already_contacted}
-        to_remove = []
-        for contact in self.shortlist:
-            if self.peer_manager.is_ignored((contact.address, contact.udp_port)):
-                to_remove.append(contact)  # a contact became bad during iteration
-                continue
-            if (contact.address == self.protocol.external_ip) and (contact.udp_port == self.protocol.udp_port):
-                to_remove.append(contact)
-                continue
-            if (contact.address, contact.udp_port) not in already_contacted_addresses:
-                self.already_contacted.append(contact)
-                to_remove.append(contact)
-                probe = self.probe_contact(contact)
-                probes.append(probe)
-                self.active_probes.append(probe)
-            if len(probes) == constants.alpha:
-                break
+    def _search(self):
+        self.tasks.append(self.loop.create_task(self._search_task()))
 
-        for contact in to_remove:  # these contacts will be re-added to the shortlist when they reply successfully
-            self.shortlist.remove(contact)
+    def search(self):
+        if self.running:
+            raise Exception("already running")
+        self.running = True
+        self._search()
 
-        if probes:
-            self.search_iteration()
-            await asyncio.gather(*tuple(probes), loop=self.loop)
-            for probe in probes:
-                self.active_probes.remove(probe)
-        elif not self.active_probes and not self.iteration_fut.done() and not self.iteration_fut.cancelled():
-            # If no probes were sent, there will not be any improvement, so we're done
-            log.debug("no improvement")
-            if self.is_find_value_request:
-                self.iteration_fut.set_result(self.find_value_result)
-            else:
-                self.active_contacts.sort(key=lambda c: self.distance(c.node_id))
-                self.iteration_fut.set_result(self.active_contacts[:min(constants.k, len(self.active_contacts))])
-        elif not self.iteration_fut.done() and not self.iteration_fut.cancelled():
-            # Force the next iteration
-            self.search_iteration()
-
-    def search_iteration(self, delay=constants.iterative_lookup_delay):
-        l = lambda: self.pending_iteration_tasks.append(self.loop.create_task(self._search_iteration()))
-        self.pending_iteration_calls.append(self.loop.call_later(delay, l))
+    async def next_queue_or_finished(self) -> typing.List['Peer']:
+        peers = self.loop.create_task(self.iteration_queue.get())
+        finished = self.loop.create_task(self.finished.wait())
+        err = None
+        try:
+            await asyncio.wait([peers, finished], loop=self.loop, return_when='FIRST_COMPLETED')
+            if peers.done():
+                return peers.result()
+            raise StopAsyncIteration()
+        except asyncio.CancelledError as error:
+            err = error
+        finally:
+            if not finished.done() and not finished.cancelled():
+                finished.cancel()
+            if not peers.done() and not peers.cancelled():
+                peers.cancel()
+            if err:
+                raise err
 
     def __aiter__(self):
+        self.search()
         return self
 
-    async def __anext__(self) -> typing.List[Peer]:
-        self.iteration += 1
-        if self.iteration == 1 and self.rpc == 'findValue' and self.protocol.data_store.has_peers_for_blob(self.key):
-            log.info("had cached peers")
+    async def __anext__(self) -> typing.List['Peer']:
+        try:
+            if self.iteration_count == 0:
+                initial_results = self.get_initial_result()
+                if initial_results:
+                    self.iteration_queue.put_nowait(initial_results)
+            result = await self.next_queue_or_finished()
+            self.iteration_count += 1
+            return result
+        except (asyncio.CancelledError, StopAsyncIteration):
+            await self.aclose()
+            raise
+
+    def aclose(self):
+        self.running = False
+
+        async def _aclose():
+            async with self.lock:
+                self.running = False
+                if not self.finished.is_set():
+                    self.finished.set()
+                drain_tasks(self.tasks)
+                drain_tasks(self.running_probes)
+                while self.delayed_calls:
+                    timer = self.delayed_calls.pop()
+                    if timer:
+                        timer.cancel()
+
+        return asyncio.ensure_future(_aclose(), loop=self.loop)
+
+
+class IterativeNodeFinder(IterativeFinder):
+    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
+                 routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
+                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
+                 exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
+                 shortlist: typing.Optional[typing.List['Peer']] = None):
+        super().__init__(loop, peer_manager, routing_table, protocol, key, bottom_out_limit, max_results, exclude,
+                         shortlist)
+        self.yielded_peers: typing.Set['Peer'] = set()
+
+    async def send_probe(self, peer: 'Peer') -> FindNodeResponse:
+        response = await peer.find_node(self.key)
+        return FindNodeResponse(self.key, response)
+
+    def put_result(self, from_list: typing.List['Peer']):
+        not_yet_yielded = [peer for peer in from_list if peer not in self.yielded_peers]
+        not_yet_yielded.sort(key=self.distance.to_contact)
+        to_yield = not_yet_yielded[:min(constants.k, len(not_yet_yielded))]
+        if to_yield:
+            for peer in to_yield:
+                self.yielded_peers.add(peer)
+            self.iteration_queue.put_nowait(to_yield)
+
+    def check_result_ready(self, response: FindNodeResponse):
+        found = response.found and self.key != self.protocol.node_id
+
+        if found:
+            log.info("found")
+            self.put_result(self.shortlist)
+            if not self.finished.is_set():
+                self.finished.set()
+            return
+        if self.prev_closest_peer and self.closest_peer and not self._is_closer(self.prev_closest_peer):
+            # log.info("improving, %i %i %i %i %i", len(self.shortlist), len(self.active), len(self.contacted),
+            #          self.bottom_out_count, self.iteration_count)
+            self.bottom_out_count = 0
+        elif self.prev_closest_peer and self.closest_peer:
+            self.bottom_out_count += 1
+            log.info("bottom out %i %i %i %i", len(self.active), len(self.contacted), len(self.shortlist),
+                     self.bottom_out_count)
+        if self.bottom_out_count >= self.bottom_out_limit or self.iteration_count >= self.bottom_out_limit:
+            log.info("limit hit")
+            self.put_result(self.active)
+            if not self.finished.is_set():
+                self.finished.set()
+            return
+        if self.max_results and len(self.active) - len(self.yielded_peers) >= self.max_results:
+            log.info("max results")
+            self.put_result(self.active)
+            if not self.finished.is_set():
+                self.finished.set()
+            return
+
+
+class IterativeValueFinder(IterativeFinder):
+    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
+                 routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
+                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
+                 exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
+                 shortlist: typing.Optional[typing.List['Peer']] = None):
+        super().__init__(loop, peer_manager, routing_table, protocol, key, bottom_out_limit, max_results, exclude,
+                         shortlist)
+        self.blob_peers: typing.Set['Peer'] = set()
+
+    async def send_probe(self, peer: 'Peer') -> FindValueResponse:
+        response = await peer.find_value(self.key)
+        return FindValueResponse(self.key, response)
+
+    def check_result_ready(self, response: FindValueResponse):
+        if response.found:
+            blob_peers = [self.peer_manager.make_tcp_peer_from_compact_address(compact_addr)
+                          for compact_addr in response.found_compact_addresses]
+            to_yield = []
+            self.bottom_out_count = 0
+            for blob_peer in blob_peers:
+                if blob_peer not in self.blob_peers:
+                    self.blob_peers.add(blob_peer)
+                    to_yield.append(blob_peer)
+            if to_yield:
+                # log.info("found %i new peers for blob", len(to_yield))
+                self.iteration_queue.put_nowait(to_yield)
+                # if self.max_results and len(self.blob_peers) >= self.max_results:
+                #     log.info("enough blob peers found")
+                #     if not self.finished.is_set():
+                #         self.finished.set()
+            return
+        if self.prev_closest_peer and self.closest_peer:
+            self.bottom_out_count += 1
+            if self.bottom_out_count >= self.bottom_out_limit:
+                log.info("blob peer search bottomed out")
+                if not self.finished.is_set():
+                    self.finished.set()
+                return
+
+    def get_initial_result(self) -> typing.List['Peer']:
+        if self.protocol.data_store.has_peers_for_blob(self.key):
             return self.protocol.data_store.get_peers_for_blob(self.key)
-        self.search_iteration()
-        try:
-            return await self.next()
-        except asyncio.CancelledError:
-            self.astop()
-            raise StopAsyncIteration()
-
-    async def next(self) -> typing.List[Peer]:
-        try:
-            return await self.iteration_fut
-        finally:
-            try:
-                await self.lock.acquire()
-                self.iteration_fut = asyncio.Future(loop=self.loop)
-                self.iteration_futures.append(self.iteration_fut)
-            finally:
-                self.lock.release()
-
-    def astop(self):
-        while self.pending_iteration_tasks:
-            task = self.pending_iteration_tasks.pop()
-            if task and not (task.done() or task.cancelled()):
-                task.cancel()
-        log.debug("stop %i iteration calls", len(self.pending_iteration_calls))
-        while self.pending_iteration_calls:
-            timer = self.pending_iteration_calls.pop()
-            if timer and not timer.cancelled():
-                timer.cancel()
-
-    async def iterative_find(self, max_results: int = constants.k) -> typing.AsyncIterator[typing.List[Peer]]:
-        """
-        async generator that yields results from an iterative find as they are found
-        """
-        try:
-            accumulated = set()
-            bottomed_out = 0
-            async for iteration_result in self:
-                new_peers: typing.List[Peer] = []
-                if not isinstance(iteration_result, list):
-                    log.error("unexpected iteration result: \"%s\"", iteration_result)
-                    iteration_result = []
-                for peer in iteration_result:
-                    if peer not in accumulated:
-                        accumulated.add(peer)
-                        new_peers.append(peer)
-                        bottomed_out = 0
-                if not new_peers:
-                    bottomed_out += 1
-                else:
-                    bottomed_out = 0
-                    if self.rpc == 'findValue':
-                        log.debug("new peers: %i", len(new_peers))
-                    yield new_peers
-                if (bottomed_out >= self.bottom_out_limit) or ((max_results > 0) and (len(accumulated) >= max_results)):
-                    log.info("%s(%s...) has %i results, bottom out counter: %i", self.rpc, binascii.hexlify(self.key).decode()[:8],
-                             len(accumulated), bottomed_out)
-                    log.info("%i contacts known", len(self.routing_table.get_peers()))
-                    break
-        except Exception as err:
-            log.error("iterative find error: %s", err)
-            raise err
-        finally:
-            self.astop()
-            log.info("stopped iterative finder %s %s", self.rpc, binascii.hexlify(self.key).decode()[:8])
+        return []

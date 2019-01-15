@@ -1,16 +1,13 @@
-import functools
-
+import asyncio
+import typing
 
 # TODO: transactional client
 # TODO: three-way handshake
-# TODO: poll consumer
-# TODO: event-driven consumer
-# TODO: reflect command
-# TODO: subscribe to producer
+# TODO: reflect stream
 
+async def reflect_stream(descriptor: StreamDescriptor,
+                         blob_manager: BlobFileManager,
+                         reflector_url: str) -> typing.List[str]:
+    # returns a list of blob hashes uploaded to the server
+    ...
 
-@functools.singledispatch
-def reflect():
-    pass
-
-# TODO: fire-and-forget abstract methods

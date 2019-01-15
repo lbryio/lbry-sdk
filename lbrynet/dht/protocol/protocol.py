@@ -6,21 +6,28 @@ import asyncio
 from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
 
-from lbrynet.peer import Peer, PeerManager
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
-from lbrynet.dht.error import UnknownRemoteException, TransportNotConnected
+from lbrynet.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE
+from lbrynet.dht.error import RemoteException, TransportNotConnected
 from lbrynet.dht.protocol.ping_queue import PingQueue
 from lbrynet.dht.protocol.rpc import KademliaRPC
 from lbrynet.dht.routing.routing_table import TreeRoutingTable
 from lbrynet.dht.protocol.data_store import DictDataStore
-from lbrynet.dht.iterative_find import IterativeFinder
+if typing.TYPE_CHECKING:
+    from lbrynet.peer import Peer, PeerManager
 
 log = logging.getLogger(__name__)
 
 
+old_protocol_errors = {
+    "findNode() takes exactly 2 arguments (5 given)": "0.19.1",
+    "findValue() takes exactly 2 arguments (5 given)": "0.19.1"
+}
+
+
 class KademliaProtocol(DatagramProtocol):
-    def __init__(self, peer_manager: PeerManager, loop: asyncio.BaseEventLoop, node_id: bytes, external_ip: str,
+    def __init__(self, peer_manager: 'PeerManager', loop: asyncio.BaseEventLoop, node_id: bytes, external_ip: str,
                  udp_port: int, peer_port: int):
         self.peer_manager = peer_manager
         self.loop = loop
@@ -30,7 +37,7 @@ class KademliaProtocol(DatagramProtocol):
         self.peer_port = peer_port
         self.is_seed_node = False
         self.partial_messages: typing.Dict[bytes, typing.Dict[bytes, bytes]] = {}
-        self.sent_messages: typing.Dict[bytes, typing.Tuple[Peer, asyncio.Future, str]] = {}
+        self.sent_messages: typing.Dict[bytes, typing.Tuple[Peer, asyncio.Future, RequestDatagram]] = {}
         self.protocol_version = constants.protocol_version
         self.started_listening_time = 0
         self.transport: DatagramTransport = None
@@ -40,21 +47,15 @@ class KademliaProtocol(DatagramProtocol):
         self.data_store = DictDataStore(self.loop)
         self.ping_queue = PingQueue(self.peer_manager, self.loop)
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)
-        self.refresh_task: asyncio.Task = None
-        self._lock = asyncio.Lock()
+
         self.peer_manager.register_dht_protocol(self)
 
     def connection_made(self, transport: DatagramTransport):
-        log.info("create refresh task")
         self.transport = transport
-        self.ping_queue.start()
-        self.refresh_task = self.loop.create_task(self.refresh_node())
 
     def stop(self):
-        if self.refresh_task and not (self.refresh_task.done() or self.refresh_task.cancelled()):
-            self.refresh_task.cancel()
-        if self.ping_queue.running:
-            self.ping_queue.stop()
+        if self.transport:
+            self.disconnect()
 
     def disconnect(self):
         self.transport.close()
@@ -62,7 +63,7 @@ class KademliaProtocol(DatagramProtocol):
     def connection_lost(self, exc):
         self.stop()
 
-    def _migrate_incoming_rpc_args(self, contact: Peer, method: bytes, *args) -> typing.Tuple[
+    def _migrate_incoming_rpc_args(self, contact: 'Peer', method: bytes, *args) -> typing.Tuple[
         typing.Tuple, typing.Dict
     ]:
         if method == b'store' and contact.protocol_version == 0:
@@ -75,35 +76,169 @@ class KademliaProtocol(DatagramProtocol):
                 return (blob_hash, token, port, original_publisher_id, age), {}
         return args, {}
 
-    def _migrate_outgoing_rpc_args(self, contact, method, *args):
+    def _migrate_outgoing_rpc_args(self, peer: 'Peer', request: RequestDatagram):
         """
         This will reformat protocol version 0 arguments for the store function and will add the
         protocol version keyword argument to calls to contacts who will accept it
         """
-        if contact.protocolVersion == 0:
-            if method == b'store':
-                blob_hash, token, port, originalPublisherID, age = args
-                args = (
+        if peer.protocol_version == 0:
+            if request.method == b'store':
+                blob_hash, token, port, originalPublisherID, age = request.args
+                request.args = [
                     blob_hash, {
                         b'token': token,
                         b'port': port,
                         b'lbryid': originalPublisherID
-                    }, originalPublisherID, False
+                    }
+                ]
+            return
+        if request.args and isinstance(request.args[-1], dict):
+            request.args[-1][b'protocolVersion'] = self.protocol_version
+            return
+        request.args = list((() if not request else tuple(request.args)) + (
+            {b'protocolVersion': self.protocol_version},))
+
+    def handle_rpc(self, sender_contact: 'Peer', message: RequestDatagram):
+        assert sender_contact.node_id != self.node_id, (binascii.hexlify(sender_contact.node_id)[:8].decode(),
+                                                        binascii.hexlify(self.node_id)[:8].decode())
+        method = message.method
+        if method not in [b'ping', b'store', b'findNode', b'findValue']:
+            raise AttributeError('Invalid method: %s' % message.method.decode())
+        if message.args and isinstance(message.args[-1], dict) and b'protocolVersion' in message.args[-1]:
+            # args don't need reformatting
+            sender_contact.update_protocol_version(int(message.args[-1].pop(b'protocolVersion')))
+            a, kw = tuple(message.args[:-1]), message.args[-1]
+            # log.info("peer %s:%i is using a supported version (version %i)", sender_contact.address,
+            #             sender_contact.udp_port, sender_contact.protocol_version)
+        else:
+            sender_contact.update_protocol_version(0)
+            a, kw = self._migrate_incoming_rpc_args(sender_contact, message.method, *message.args)
+            # log.warning("peer %s:%i is using an unsupported version (version %i)", sender_contact.address,
+            #             sender_contact.udp_port, sender_contact.protocol_version)
+        log.debug("%s:%i RECV CALL %s %s:%i", self.external_ip, self.udp_port, message.method.decode(),
+                  sender_contact.address, sender_contact.udp_port)
+
+        if method == b'ping':
+            result = self.node_rpc.ping()
+        elif method == b'store':
+            blob_hash, token, port, original_publisher_id, age = a
+            result = self.node_rpc.store(sender_contact, blob_hash, token, port, original_publisher_id, age)
+        elif method == b'findNode':
+            key, = a
+            result = self.node_rpc.find_node(sender_contact, key)
+        else:
+            assert method == b'findValue'
+            key, = a
+            result = self.node_rpc.find_value(sender_contact, key)
+
+        self.send(
+            sender_contact,
+            ResponseDatagram(RESPONSE_TYPE, message.rpc_id, self.node_id, result),
+            (sender_contact.address, sender_contact.udp_port)
+        )
+
+    def handle_request_datagram(self, address, request_datagram: RequestDatagram):
+        # This is an RPC method request
+        remote_contact = self.peer_manager.make_peer(address[0], request_datagram.node_id, udp_port=address[1])
+        remote_contact.update_last_requested()
+
+        # only add a requesting contact to the routing table if it has replied to one of our requests
+        if remote_contact.contact_is_good is not False and not self.peer_manager.is_ignored(address):
+            self.loop.create_task(self.routing_table.add_peer(remote_contact))
+
+        try:
+            self.handle_rpc(remote_contact, request_datagram)
+            # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
+            # will be added to our routing table if successful
+            if remote_contact.contact_is_good is None and remote_contact.last_replied is None:
+                self.loop.create_task(self.ping_queue.enqueue_maybe_ping(remote_contact))
+        except Exception as err:
+            log.warning("error raised handling %s request from %s:%i - %s(%s)",
+                        request_datagram.method, remote_contact.address, remote_contact.udp_port, str(type(err)),
+                        str(err))
+            self.send(
+                remote_contact,
+                ErrorDatagram(ERROR_TYPE, request_datagram.rpc_id, self.node_id, str(type(err)).encode(),
+                              str(err).encode()), (remote_contact.address, remote_contact.udp_port)
+            )
+
+    def handle_response_datagram(self, address, response_datagram: ResponseDatagram):
+        # Find the message that triggered this response
+        if response_datagram.rpc_id in self.sent_messages:
+            remote_contact, df, request = self.sent_messages[response_datagram.rpc_id]
+
+            # When joining the network we made Contact objects for the seed nodes with node ids set to None
+            # Thus, the sent_to_id will also be None, and the contact objects need the ids to be manually set.
+            # These replies have be distinguished from those where the node node_id in the datagram does not match
+            # the node node_id of the node we sent a message to (these messages are treated as an error)
+            if remote_contact.node_id and remote_contact.node_id != response_datagram.node_id:
+                log.warning(
+                    "mismatch: (%s) %s:%i (%s vs %s)", request.method, remote_contact.address,
+                    remote_contact.udp_port, remote_contact.log_id(False),
+                    binascii.hexlify(response_datagram.node_id).decode()
                 )
-                return args
-            return args
-        if args and isinstance(args[-1], dict):
-            args[-1][b'protocolVersion'] = self.protocol_version
-            return args
-        return args + ({b'protocolVersion': self.protocol_version},)
+                df.set_exception(TimeoutError(remote_contact.node_id))
+                return
+            elif not remote_contact.node_id:
+                remote_contact.set_id(response_datagram.node_id)
+
+            # We got a result from the RPC
+            if remote_contact.node_id == self.node_id:
+                df.set_exception(RemoteException("node has our node id"))
+                return
+            elif response_datagram.node_id == self.node_id:
+                df.set_exception(RemoteException("incoming message is from our node id"))
+                return
+            elif remote_contact.address != address[0]:
+                df.set_exception(RemoteException(
+                    f"response from {address[0]}:{address[1]}, "
+                    f"expected {remote_contact.address}:{remote_contact.udp_port}")
+                )
+                return
+            if not df.cancelled():
+                self.loop.create_task(self.routing_table.add_peer(remote_contact))
+                df.set_result(response_datagram.response)
+            else:
+                log.warning("%s:%i replied, but after we cancelled the request attempt",
+                            remote_contact.address, remote_contact.udp_port)
+        else:
+            # If the original message isn't found, it must have timed out
+            # TODO: we should probably do something with this...
+            pass
+
+    def handle_error_datagram(self, address, error_datagram: ErrorDatagram):
+        # The RPC request raised a remote exception; raise it locally
+        remote_exception = RemoteException(f"{error_datagram.exception_type}({error_datagram.response})")
+        if error_datagram.rpc_id in self.sent_messages:
+            remote_contact, df, request = self.sent_messages.pop(error_datagram.rpc_id)
+
+            error_msg = f"" \
+                f"Error sending '{request.method}' to {remote_contact.address}:{remote_contact.udp_port}\n" \
+                f"Args: {request.args}\n" \
+                f"Raised: {str(remote_exception)}"
+            if error_datagram.response not in old_protocol_errors:
+                log.warning(error_msg)
+            else:
+                log.warning("known dht protocol backwards compatibility error with %s:%i (failures %i, lbrynet v%s)",
+                            remote_contact.address, remote_contact.udp_port, remote_contact.failed_rpcs,
+                            old_protocol_errors[error_datagram.response])
+
+            # reject replies coming from a different address than what we sent our request to
+            if (remote_contact.address, remote_contact.udp_port) != address:
+                log.error("Sent request to node %s at %s:%i, got reply from %s:%i",
+                          remote_contact.log_id(), remote_contact.address,
+                          remote_contact.udp_port, address[0], address[1])
+                remote_exception = TimeoutError(remote_contact.node_id)
+            df.set_exception(remote_exception)
+            return
+        else:
+            msg = f"Received error from {address[0]}:{address[1]}, but it isn't in response to a " \
+                f"pending request: {str(remote_exception)}"
+            log.warning(msg)
 
     def datagram_received(self, datagram: bytes, address: typing.Tuple[str, int]) -> None:
-        """ Handles and parses incoming RPC messages (and responses)
-
-        @note: This is automatically called by Twisted when the protocol
-               receives a UDP datagram
-        """
         # print(f"{self.external_ip}:{self.udp_port} rx {len(datagram)} bytes from {address[0]}:{address[1]}")
+
         if chr(datagram[0]) == '\x00' and chr(datagram[25]) == '\x00':
             total_packets = (datagram[1] << 8) | datagram[2]
             msg_id = datagram[5:25]
@@ -123,134 +258,20 @@ class KademliaProtocol(DatagramProtocol):
                 return
         try:
             message = decode_datagram(datagram)
-        except Exception as err:
+        except Exception:
             log.warning("Couldn't decode dht datagram from %s: %s", address, binascii.hexlify(datagram).decode())
             return
 
         if isinstance(message, RequestDatagram):
-            # This is an RPC method request
-            remote_contact = self.peer_manager.make_peer(address[0], message.node_id, udp_port=address[1])
-            remote_contact.update_last_requested()
-
-            # only add a requesting contact to the routing table if it has replied to one of our requests
-            if remote_contact.contact_is_good is not False and not self.peer_manager.is_ignored(address):
-                self.loop.create_task(self.routing_table.add_peer(remote_contact))
-
-            self.handle_rpc(remote_contact, message)
-
-            # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
-            # will be added to our routing table if successful
-            if remote_contact.contact_is_good is None and remote_contact.last_replied is None:
-                self.loop.create_task(self.ping_queue.enqueue_maybe_ping(remote_contact))
-            return
+            return self.handle_request_datagram(address, message)
         elif isinstance(message, ErrorDatagram):
-            # The RPC request raised a remote exception; raise it locally
-            remote_exception = UnknownRemoteException(message.response)
-            log.error("DHT RECV REMOTE EXCEPTION FROM %s:%i: %s", address[0],
-                      address[1], remote_exception)
-            if message.rpc_id in self.sent_messages:
-                remote_contact, df, method = self.sent_messages.pop(message.rpc_id)
-
-                # reject replies coming from a different address than what we sent our request to
-                if (remote_contact.address, remote_contact.udp_port) != address:
-                    log.error("Sent request to node %s at %s:%i, got reply from %s:%i",
-                              remote_contact.log_id(), remote_contact.address,
-                              remote_contact.udp_port, address[0], address[1])
-                    df.set_exception(TimeoutError(remote_contact.node_id))
-                    return
-
-                # this error is returned by nodes that can be contacted but have an old
-                # and broken version of the ping command, if they return it the node can
-                # be contacted, so we'll treat it as a successful ping
-                old_ping_error = "ping() got an unexpected keyword argument '_rpcNodeContact'"
-                if isinstance(remote_exception, TypeError) and \
-                        message.response == old_ping_error:
-                    log.debug("old pong error")
-                    df.set_result(b'pong')
-                else:
-                    df.set_exception(remote_exception)
-        elif isinstance(message, ResponseDatagram):
-            # Find the message that triggered this response
-            if message.rpc_id in self.sent_messages:
-                # Cancel timeout timer for this RPC
-                remote_contact, df, method = self.sent_messages[message.rpc_id]
-                log.debug("%s:%i got response to %s from %s:%i" % (self.external_ip, self.udp_port,
-                          method, remote_contact.address, remote_contact.udp_port))
-
-                # When joining the network we made Contact objects for the seed nodes with node ids set to None
-                # Thus, the sent_to_id will also be None, and the contact objects need the ids to be manually set.
-                # These replies have be distinguished from those where the node node_id in the datagram does not match
-                # the node node_id of the node we sent a message to (these messages are treated as an error)
-                # if remote_contact.node_id and self.node_id != message.node_id:  # sent_to_id will be None for bootstrap
-                #     # print("mismatch: (%s) %s:%i (%s vs %s)" % (method, remote_contact.address, remote_contact.port,
-                #     #           remote_contact.log_id(False), binascii.hexlify(message.node_id)))
-                #     print(binascii.hexlify(message.node_id),  binascii.hexlify(self.node_id))
-                #     df.set_exception(TimeoutError(remote_contact.node_id))
-                #     return
-                # elif not remote_contact.node_id:
-                #     remote_contact.set_id(message.node_id)
-
-                # We got a result from the RPC
-                try:
-                    assert remote_contact.node_id != self.node_id
-                    assert message.node_id != self.node_id
-                    if remote_contact.node_id is None:
-                        remote_contact.set_id(message.node_id)
-                    err_str = f"response from {address[0]}:{address[1]}, " \
-                              f"expected {remote_contact.address}:{remote_contact.udp_port}"
-                    assert remote_contact.address == address[0], AssertionError(err_str)
-
-                except AssertionError as err:
-                    df.set_exception(UnknownRemoteException(str(err)))
-                    return
-
-                if not df.cancelled():
-                    self.loop.create_task(self.routing_table.add_peer(remote_contact))
-                    df.set_result(message.response)
-                else:
-                    log.warning("%s:%i replied, but after we cancelled the request attempt",
-                                remote_contact.address, remote_contact.udp_port)
-            else:
-                # If the original message isn't found, it must have timed out
-                # TODO: we should probably do something with this...
-                pass
-
-    def handle_rpc(self, sender_contact: Peer, message: RequestDatagram):
-        assert sender_contact.node_id != self.node_id, (binascii.hexlify(sender_contact.node_id)[:8].decode(),
-                                                        binascii.hexlify(self.node_id)[:8].decode())
-        method = message.method
-        if method not in [b'ping', b'store', b'findNode', b'findValue']:
-            raise AttributeError('Invalid method: %s' % message.method.decode())
-        if message.args and isinstance(message.args[-1], dict) and b'protocolVersion' in message.args[-1]:
-            # args don't need reformatting
-            sender_contact.update_protocol_version(int(message.args[-1].pop(b'protocolVersion')))
-            a, kw = tuple(message.args[:-1]), message.args[-1]
+            return self.handle_error_datagram(address, message)
         else:
-            sender_contact.update_protocol_version(0)
-            a, kw = self._migrate_incoming_rpc_args(sender_contact, message.method, *message.args)
+            assert isinstance(message, ResponseDatagram), "sanity"
+            return self.handle_response_datagram(address, message)
 
-        if method == b'ping':
-            result = self.node_rpc.ping()
-        elif method == b'store':
-            blob_hash, token, port, original_publisher_id, age = a
-            result = self.node_rpc.store(sender_contact, blob_hash, token, port, original_publisher_id, age)
-        elif method == b'findNode':
-            key, = a
-            result = self.node_rpc.find_node(sender_contact, key)
-        else:
-            assert method == b'findValue'
-            key, = a
-            result = self.node_rpc.find_value(sender_contact, key)
-        log.debug("%s:%i RECV CALL %s %s:%i", self.external_ip, self.udp_port, message.method.decode(),
-                  sender_contact.address, sender_contact.udp_port)
-        self.loop.create_task(self.send(
-            sender_contact,
-            ResponseDatagram(1, message.rpc_id, self.node_id, result),
-            (sender_contact.address, sender_contact.udp_port)
-        ))
-
-    async def send(self, peer: Peer, message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
-             address: typing.Tuple[str, int]):
+    def send(self, peer: 'Peer', message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram],
+                   address: typing.Tuple[str, int], response_fut: typing.Optional[asyncio.Future] = None):
         """ Transmit the specified data over UDP, breaking it up into several
         packets if necessary
 
@@ -269,6 +290,8 @@ class KademliaProtocol(DatagramProtocol):
         """
         if isinstance(message, (RequestDatagram, ResponseDatagram)):
             assert message.node_id == self.node_id, message
+        # if isinstance(message, RequestDatagram):
+        #     self._migrate_outgoing_rpc_args(peer, message)
         data = message.bencode()
         if len(data) > constants.msg_size_limit:
             # We have to spread the data over multiple UDP datagrams,
@@ -287,29 +310,23 @@ class KademliaProtocol(DatagramProtocol):
                 packet_data = data[start_pos:start_pos + constants.msg_size_limit]
                 enc_seq_number = chr(seq_number >> 8) + chr(seq_number & 0xff)
                 tx_data = f'\x00{enc_total_packets}{enc_seq_number}{message.rpc_id}\x00{packet_data}'
-                self._schedule_send_next(tx_data, address)
+                self.loop.call_soon(self._write, tx_data, address)
                 start_pos += constants.msg_size_limit
                 seq_number += 1
         else:
-            self._schedule_send_next(data, address)
-        fut = asyncio.Future(loop=self.loop)
+            self.loop.call_soon(self._write, data, address)
+        if isinstance(message, RequestDatagram) and response_fut:
+            def timeout(_):
+                if message.rpc_id in self.sent_messages:
+                    self.sent_messages.pop(message.rpc_id)
 
-        def timeout(_):
-            if message.rpc_id in self.sent_messages:
-                self.sent_messages.pop(message.rpc_id)
-
-        fut.add_done_callback(timeout)
-
-        if isinstance(message, RequestDatagram):
+            response_fut.add_done_callback(timeout)
             assert self.node_id != peer.node_id
             assert self.node_id == message.node_id
             self.sent_messages[message.rpc_id] = (
-                self.peer_manager.make_peer(address[0], peer.node_id, udp_port=address[1]), fut,
-                message.method
+                self.peer_manager.make_peer(address[0], peer.node_id, udp_port=address[1]), response_fut,
+                message
             )
-        else:
-            fut.set_result(None)
-        return await fut
 
     def get_pending_message_future(self, rpc_id: bytes) -> asyncio.Future:
         return self.sent_messages[rpc_id][1]
@@ -331,101 +348,32 @@ class KademliaProtocol(DatagramProtocol):
                 return False
         return True
 
-    async def refresh_node(self):
-        """ Periodically called to perform k-bucket refreshes and data
-        replication/republishing as necessary """
-        while True:
-            self.data_store.removed_expired_peers()
-            await self.ping_queue.enqueue_maybe_ping(*self.routing_table.get_peers(), delay=0)
-            await self.ping_queue.enqueue_maybe_ping(*self.data_store.get_storing_contacts(), delay=0)
-            await self.refresh_routing_table()
-            fut = asyncio.Future(loop=self.loop)
-            self.loop.call_later(constants.refresh_interval, fut.set_result, None)
-            await fut
-
-    async def refresh_routing_table(self):
-        node_ids = self.routing_table.get_refresh_list(0, True)
-        buckets_with_contacts = self.routing_table.buckets_with_contacts()
-        if buckets_with_contacts <= 3:
-            for i in range(buckets_with_contacts):
-                node_ids.append(self.routing_table.random_id_in_bucket_range(i))
-                node_ids.append(self.routing_table.random_id_in_bucket_range(i))
-        while node_ids:
-            await self.cumulative_find_node(node_ids.pop())
-
-    def get_find_iterator(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
-                          bottom_out_limit: int = constants.bottom_out_limit,
-                          max_results: int = constants.k):
-        return IterativeFinder(self.loop, self.peer_manager, self.routing_table, self, shortlist, key, rpc,
-                        bottom_out_limit=bottom_out_limit).iterative_find(max_results)
-
-    async def cumulative_find(self, rpc: str, key: bytes, shortlist: typing.Optional[typing.List] = None,
-                              bottom_out_limit: int = constants.bottom_out_limit,
-                              max_results: int = constants.k) -> typing.List[Peer]:
-        results = []
-        async for iteration_result in self.get_find_iterator(rpc, key, shortlist, bottom_out_limit, max_results):
-            assert isinstance(iteration_result, list)
-            for i in iteration_result:
-                if i not in results:
-                    results.append(i)
-            log.debug("%s, %i, %i", rpc, len(iteration_result), len(results))
-        return results
-
-    async def cumulative_find_node(self, key: bytes, shortlist: typing.Optional[typing.List] = None,
-                                   bottom_out_limit: int = constants.bottom_out_limit,
-                                   max_results: int = constants.k) -> typing.List[Peer]:
-        return await self.cumulative_find('findNode', key, shortlist, bottom_out_limit, max_results)
-
-    async def cumulative_find_value(self, key: bytes, shortlist: typing.Optional[typing.List] = None,
-                                    bottom_out_limit: int = constants.bottom_out_limit,
-                                    max_results: int = constants.k) -> typing.List[Peer]:
-        return await self.cumulative_find('findValue', key, shortlist, bottom_out_limit, max_results)
-
-    async def store_to_peer(self, hash_value: bytes, contact: Peer) -> typing.Tuple[bytes, bool]:
+    async def store_to_peer(self, hash_value: bytes, peer: 'Peer') -> typing.Tuple[bytes, bool]:
         try:
-            if not contact.token:
-                await contact.find_value(hash_value)
-            res = await contact.store(hash_value, contact.token, self.peer_port, self.node_id, 0)
+            if not peer.token:
+                await peer.find_value(hash_value)
+            res = await peer.store(hash_value)
             if res != b"OK":
                 raise ValueError(res)
-            log.debug("Stored %s to %s (%s)", binascii.hexlify(hash_value), contact.log_id(), contact.address)
-            return contact.node_id, True
-        except TimeoutError:
+            log.info("Stored %s to %s (%s) version %i", binascii.hexlify(hash_value).decode()[:8], peer.log_id(),
+                     peer.address, peer.protocol_version)
+            return peer.node_id, True
+        except asyncio.TimeoutError:
             log.debug("Timeout while storing blob_hash %s at %s",
-                      binascii.hexlify(hash_value), contact.log_id())
+                      binascii.hexlify(hash_value), peer.log_id())
         except ValueError as err:
             log.error("Unexpected response: %s" % err)
         except Exception as err:
             if 'Invalid token' in str(err):
-                contact.update_token(None)
+                peer.update_token(None)
             else:
-                log.error("Unexpected error while storing blob_hash %s at %s: %s",
-                          binascii.hexlify(hash_value), contact, err)
-        return contact.node_id, False
+                log.exception("Unexpected error while storing blob_hash")
+        return peer.node_id, False
 
-    # async def iterative_announce_hash(self, hash_value: bytes) -> typing.List[bytes]:
-    #     assert len(hash_value) == constants.hash_length
-    #     contacts = await self.cumulative_find_node(hash_value)
-    #
-    #     if not self.external_ip:
-    #         raise Exception("Cannot determine external IP")
-    #
-    #     stored_to_tup = await asyncio.gather(*(asyncio.ensure_future(
-    #         self.store_to_contact(hash_value, self.peer_manager.get_peer(peer.node_id, peer.host, peer.))) for peer in contacts
-    #     ))
-    #     contacted_node_ids = [binascii.hexlify(node_id) for node_id, contacted in stored_to_tup if contacted]
-    #     log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value),
-    #               len(contacted_node_ids), len(contacts))
-    #     return contacted_node_ids
-
-    def _schedule_send_next(self, txData, address):
-        """Schedule the sending of the next UDP packet """
-        delayed_call = self.loop.call_soon(self._write, txData, address)
-
-    def _write(self, txData, address):
+    def _write(self, data: bytes, address: typing.Tuple[str, int]):
         if self.transport:
             try:
-                self.transport.sendto(txData, address)
+                self.transport.sendto(data, address)
             except OSError as err:
                 if err.errno == socket.EWOULDBLOCK:
                     # i'm scared this may swallow important errors, but i get a million of these
@@ -436,7 +384,7 @@ class KademliaProtocol(DatagramProtocol):
                 #     log.error("Network is unreachable")
                 else:
                     log.error("DHT socket error sending %i bytes to %s:%i - %s (code %i)",
-                              len(txData), address[0], address[1], str(err), err.errno)
+                              len(data), address[0], address[1], str(err), err.errno)
                     raise err
         else:
             raise TransportNotConnected()

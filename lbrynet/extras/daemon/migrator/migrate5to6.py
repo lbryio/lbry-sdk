@@ -2,6 +2,7 @@ import sqlite3
 import os
 import json
 import logging
+from binascii import hexlify
 from lbrynet import conf
 from lbrynet.schema.decode import smart_decode
 
@@ -188,7 +189,7 @@ def do_migration(db_dir):
         # insert the file
         transaction.execute(
             "insert or ignore into file values (?, ?, ?, ?, ?)",
-            (stream_hash, stream_name, conf.settings.download_dir.encode('hex'),
+            (stream_hash, stream_name, hexlify(conf.settings.download_dir),
              data_rate, status)
         )
 
