@@ -156,7 +156,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
     def connection_made(self, transport: asyncio.Transport):
         log.info("connection made to %s: %s", self.peer, transport)
         self.transport = transport
-        self.transport.set_write_buffer_limits((2**20)+(64*20**10))
 
     def connection_lost(self, reason):
         log.info("connection lost to %s (reason: %s)", self.peer, reason)
