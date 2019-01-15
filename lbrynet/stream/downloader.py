@@ -2,6 +2,7 @@ import os
 import asyncio
 import typing
 import logging
+from lbrynet import conf
 from lbrynet.stream.assembler import StreamAssembler
 from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
 if typing.TYPE_CHECKING:
@@ -89,6 +90,7 @@ class StreamDownloader(StreamAssembler):
         self.output_file_name = output_file_name
 
         self._lock = asyncio.Lock(loop=self.loop)
+        self.max_connections_per_stream = conf.settings.get('max_connections_per_stream', 8)
 
     async def _update_current_blob(self, blob: 'BlobFile'):
         async with self._lock:
@@ -135,7 +137,7 @@ class StreamDownloader(StreamAssembler):
 
     async def wait_for_download_or_new_peer(self) -> typing.Optional['BlobFile']:
         async with self._lock:
-            if len(self.running_download_requests) < 8:
+            if len(self.running_download_requests) < self.max_connections_per_stream:
                 # update the running download requests
                 self._update_requests()
 

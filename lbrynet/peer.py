@@ -9,10 +9,10 @@ from lbrynet import conf
 from lbrynet.dht import constants
 from lbrynet.dht.error import RemoteException
 from lbrynet.dht.serialization.datagram import RequestDatagram
-from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
+    from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
     from lbrynet.dht.protocol.protocol import KademliaProtocol
     from lbrynet.blob.blob_file import BlobFile
 

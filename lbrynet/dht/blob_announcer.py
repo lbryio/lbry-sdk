@@ -47,11 +47,11 @@ class BlobAnnouncer:
     def announce(self, batch_size: typing.Optional[int] = 10):
         self.announce_task = self.loop.create_task(self._announce(batch_size))
 
-    def start(self):
+    def start(self, batch_size: typing.Optional[int] = 10):
         if self.running:
             raise Exception("already running")
         self.running = True
-        self.announce()
+        self.announce(batch_size)
 
     def stop(self):
         self.running = False
