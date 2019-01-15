@@ -40,7 +40,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             blob_response = response.get_blob_response()
             if blob_response and blob_response.blob_hash == self.blob.blob_hash:
                 self.blob.set_length(blob_response.length)
-            elif self.blob.blob_hash != blob_response.blob_hash:
+            elif blob_response and self.blob.blob_hash != blob_response.blob_hash:
                 log.warning("mismatch with self.blob %s", self.blob.blob_hash)
                 return
         if response.responses:
