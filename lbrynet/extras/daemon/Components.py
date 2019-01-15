@@ -399,7 +399,7 @@ class HashAnnouncerComponent(Component):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = BlobAnnouncer(self.loop, dht_node, storage)
-        self.hash_announcer.start()
+        self.hash_announcer.start(conf.settings['concurrent_announcers'])
         log.info("Started blob announcer")
 
     def stop(self):
