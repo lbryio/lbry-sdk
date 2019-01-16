@@ -46,7 +46,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if response.responses:
             self._response_fut.set_result(response)
         if response.blob_data and self.writer and not self.writer.closed():
-            # log.info("write blob bytes (%s) from %s:%i", self.blob.blob_hash[:8], self.peer.address, self.peer.tcp_port)
             self._blob_bytes_received += len(response.blob_data)
             self.writer.write(response.blob_data)
 

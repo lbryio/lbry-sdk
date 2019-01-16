@@ -2293,10 +2293,9 @@ class Daemon(metaclass=JSONRPCServerType):
         tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
         if blocking:
             await self.ledger.wait(tx)
-        try:
-            return {"success": True, "tx": tx}
-        finally:
-            await self.component_manager.analytics_manager.send_claim_action('abandon')
+
+        self.component_manager.loop.create_task(self.component_manager.analytics_manager.send_claim_action('abandon'))
+        return {"success": True, "tx": tx}
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_new_support(self, name, claim_id, amount, account_id=None):
@@ -2328,11 +2327,10 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
         result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
-        self.component_manager.analytics_manager.send_claim_action('new_support')
-        try:
-            return result
-        finally:
-            await self.component_manager.analytics_manager.send_claim_action('abandon')
+        self.component_manager.loop.create_task(
+            self.component_manager.analytics_manager.send_claim_action('new_support')
+        )
+        return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
@@ -2364,10 +2362,10 @@ class Daemon(metaclass=JSONRPCServerType):
         amount = self.get_dewies_or_error("amount", amount)
         validate_claim_id(claim_id)
         result = await self.wallet_manager.tip_claim(amount, claim_id, account)
-        try:
-            return result
-        finally:
-            await self.component_manager.analytics_manager.send_claim_action('new_support')
+        self.component_manager.loop.create_task(
+            self.component_manager.analytics_manager.send_claim_action('new_support')
+        )
+        return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
@@ -2778,14 +2776,11 @@ class Daemon(metaclass=JSONRPCServerType):
             (str) Success/fail message
         """
 
-        if blob_hash not in self.blob_manager.blobs:
-            return "Don't have that blob"
-        try:
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(blob_hash)
-            await self.storage.delete_stream(stream_hash)
-        except Exception as err:
-            pass
-        await d2f(self.blob_manager.delete_blobs([blob_hash]))
+        streams = self.stream_manager.get_filtered_streams(sd_hash=blob_hash)
+        if streams:
+            await self.stream_manager.delete_stream(streams[0])
+        else:
+            await self.blob_manager.delete_blobs([blob_hash])
         return "Deleted %s" % blob_hash
 
     @requires(DHT_COMPONENT)
@@ -2995,35 +2990,24 @@ class Daemon(metaclass=JSONRPCServerType):
     #     return await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager))
 
     @requires(DHT_COMPONENT)
-    async def jsonrpc_peer_ping(self, node_id, address=None, port=None):
+    async def jsonrpc_peer_ping(self, node_id, address, port):
         """
         Send a kademlia ping to the specified peer. If address and port are provided the peer is directly pinged,
         if not provided the peer is located first.
 
         Usage:
-            peer_ping (<node_id> | --node_id=<node_id>) [<address> | --address=<address>] [<port> | --port=<port>]
-
-        Options:
-            --address=<address>     : (str) ip address of the peer
-            --port=<port>           : (int) udp port of the peer
-
+            peer_ping (<node_id> | --node_id=<node_id>) (<address> | --address=<address>) (<port> | --port=<port>)
 
         Returns:
             (str) pong, or {'error': <error message>} if an error is encountered
         """
         peer = None
-        log.info("%s %s %s", node_id, address, port)
         if node_id and address and port:
             peer = self.component_manager.peer_manager.get_peer(address, unhexlify(node_id), udp_port=int(port))
             if not peer:
                 peer = self.component_manager.peer_manager.make_peer(
                     address, unhexlify(node_id), udp_port=int(port)
                 )
-        # if not contact:
-        #     try:
-        #         contact = await d2f(self.dht_node.findContact(unhexlify(node_id)))
-        #     except TimeoutError:
-        #         return {'error': 'timeout finding peer'}
         if not peer:
             return {'error': 'peer not found'}
         try:
@@ -3050,14 +3034,12 @@ class Daemon(metaclass=JSONRPCServerType):
                     <bucket index>: [
                         {
                             "address": (str) peer address,
-                            "port": (int) peer udp port
+                            "udp_port": (int) peer udp port,
+                            "tcp_port": (int) peer tcp port,
                             "node_id": (str) peer node id,
-                            "blobs": (list) blob hashes announced by peer
                         }
                     ]
                 },
-                "contacts": (list) contact node ids,
-                "blob_hashes": (list) all of the blob hashes stored by peers in the list of buckets,
                 "node_id": (str) the local dht node id
             }
         """

@@ -4,7 +4,7 @@ import logging
 import typing
 
 from lbrynet.dht import constants
-from lbrynet.dht.routing import kbucket
+from lbrynet.dht.routing.kbucket import KBucket
 from lbrynet.dht.routing.distance import Distance
 if typing.TYPE_CHECKING:
     from lbrynet.peer import Peer
@@ -31,8 +31,8 @@ class TreeRoutingTable:
     def __init__(self, parent_node_id: bytes, loop: asyncio.BaseEventLoop):
         self._loop = loop
         self._parent_node_id = parent_node_id
-        self._buckets: typing.List[kbucket.KBucket] = [
-            kbucket.KBucket(
+        self._buckets: typing.List[KBucket] = [
+            KBucket(
                 range_min=0, range_max=2 ** constants.hash_bits, node_id=self._parent_node_id
             )
         ]
@@ -199,7 +199,7 @@ class TreeRoutingTable:
         old_bucket = self._buckets[old_bucket_index]
         split_point = old_bucket.range_max - (old_bucket.range_max - old_bucket.range_min) / 2
         # Create a new k-bucket to cover the range split off from the old bucket
-        new_bucket = kbucket.KBucket(split_point, old_bucket.range_max, self._parent_node_id)
+        new_bucket = KBucket(split_point, old_bucket.range_max, self._parent_node_id)
         old_bucket.range_max = split_point
         # Now, add the new bucket into the routing table tree
         self._buckets.insert(old_bucket_index + 1, new_bucket)

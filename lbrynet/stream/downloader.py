@@ -78,20 +78,14 @@ class StreamDownloader(StreamAssembler):
 
         self.download_task: asyncio.Task = None
         self.accumulate_connections_task: asyncio.Task = None
-
         self.new_peer_event = asyncio.Event(loop=self.loop)
-
         self.active_connections: typing.Dict['Peer', BlobExchangeClientProtocol] = {}
-
         self.running_download_requests: typing.List[asyncio.Task] = []
-
         self.requested_from: typing.Dict[str, typing.Dict['Peer', asyncio.Task]] = {}
-
         self.output_dir = output_dir or os.getcwd()
         self.output_file_name = output_file_name
-
         self._lock = asyncio.Lock(loop=self.loop)
-        self.max_connections_per_stream = conf.settings.get('max_connections_per_stream', 8)
+        self.max_connections_per_stream = conf.settings['max_connections_per_stream']
         self.fixed_peers = fixed_peers or []
 
     async def _update_current_blob(self, blob: 'BlobFile'):
@@ -110,9 +104,10 @@ class StreamDownloader(StreamAssembler):
             self.active_connections[peer] = BlobExchangeClientProtocol(peer, self.loop, self.peer_timeout)
         log.info("request %s from %s:%i", self.current_blob.blob_hash[:8], peer.address, peer.tcp_port)
         success = await peer.request_blob(self.current_blob, self.active_connections[peer],
-                                            self.peer_connect_timeout)
+                                          self.peer_connect_timeout)
         if not success:
-            log.warning("failed to download %s from %s:%i", self.current_blob.blob_hash[:8], peer.address, peer.tcp_port)
+            log.warning("failed to download %s from %s:%i", self.current_blob.blob_hash[:8], peer.address,
+                        peer.tcp_port)
             if peer.tcp_last_down is not None:
                 async with self._lock:
                     proto = self.active_connections.pop(peer, None)
