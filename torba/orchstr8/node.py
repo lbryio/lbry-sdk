@@ -201,7 +201,7 @@ class SPVNode:
             'DB_DIRECTORY': self.data_path,
             'DAEMON_URL': blockchain_node.rpc_url,
             'REORG_LIMIT': '100',
-            'TCP_HOST': self.hostname,
+            'HOST': self.hostname,
             'TCP_PORT': str(self.port)
         }
         # TODO: don't use os.environ
