@@ -1,9 +1,6 @@
 import asyncio
-import typing
 import collections
 import logging
-
-import asyncio
 import aiohttp
 
 from lbrynet import conf, utils

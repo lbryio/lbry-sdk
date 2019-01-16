@@ -1,6 +1,6 @@
 import typing
 from lbrynet.dht import constants
-from lbrynet.dht.serialization import bencoding
+from lbrynet.dht.serialization.bencoding import bencode, bdecode
 
 REQUEST_TYPE = 0
 RESPONSE_TYPE = 1
@@ -34,7 +34,7 @@ class KademliaDatagramBase:
         self.node_id = node_id
 
     def bencode(self) -> bytes:
-        return bencoding.bencode({
+        return bencode({
            i: getattr(self, k) for i, k in enumerate(self.fields)
         })
 
@@ -146,7 +146,7 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
         ERROR_TYPE: ErrorDatagram
     }
 
-    primitive: typing.Dict = bencoding.bdecode(datagram)
+    primitive: typing.Dict = bdecode(datagram)
     if not isinstance(primitive, dict):
         raise ValueError("invalid datagram type")
     if primitive[0] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:  # pylint: disable=unsubscriptable-object

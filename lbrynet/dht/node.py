@@ -194,7 +194,8 @@ class Node:
             if add_hashes_task and not (add_hashes_task.done() or add_hashes_task.cancelled()):
                 add_hashes_task.cancel()
 
-    def peer_search_junction(self, node_id: bytes, max_results=constants.k*2, bottom_out_limit=20) -> AsyncGeneratorJunction:
+    def peer_search_junction(self, node_id: bytes, max_results=constants.k*2,
+                             bottom_out_limit=20) -> AsyncGeneratorJunction:
         peer_generator = AsyncGeneratorJunction(self.loop)
         peer_generator.add_generator(
             self.get_iterative_node_finder(

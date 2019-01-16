@@ -6,16 +6,17 @@ from lbrynet.dht import constants
 if typing.TYPE_CHECKING:
     from lbrynet.peer import PeerManager, Peer
 
-
 log = logging.getLogger(__name__)
 
 
 class PingQueue:
+
+
     def __init__(self, peer_manager: 'PeerManager', loop: asyncio.BaseEventLoop):
         self._peer_manager = peer_manager
         self._loop = loop
-        self._enqueued_contacts: typing.List[Peer] = []
-        self._pending_contacts: typing.Dict[Peer, float] = {}
+        self._enqueued_contacts: typing.List['Peer'] = []
+        self._pending_contacts: typing.Dict['Peer', float] = {}
         self._process_task: asyncio.Task = None
         self._next_task: asyncio.Future = None
         self._next_timer: asyncio.TimerHandle = None

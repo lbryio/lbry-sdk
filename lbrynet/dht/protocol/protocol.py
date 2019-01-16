@@ -37,7 +37,7 @@ class KademliaProtocol(DatagramProtocol):
         self.peer_port = peer_port
         self.is_seed_node = False
         self.partial_messages: typing.Dict[bytes, typing.Dict[bytes, bytes]] = {}
-        self.sent_messages: typing.Dict[bytes, typing.Tuple[Peer, asyncio.Future, RequestDatagram]] = {}
+        self.sent_messages: typing.Dict[bytes, typing.Tuple['Peer', asyncio.Future, RequestDatagram]] = {}
         self.protocol_version = constants.protocol_version
         self.started_listening_time = 0
         self.transport: DatagramTransport = None
