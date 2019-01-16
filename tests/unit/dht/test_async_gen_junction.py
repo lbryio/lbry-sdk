@@ -1,6 +1,6 @@
 import asyncio
 from torba.testcase import AsyncioTestCase
-from lbrynet.dht.async_generator_junction import AsyncGeneratorJunction
+from dht.protocol.async_generator_junction import AsyncGeneratorJunction
 
 
 class MockAsyncGen:

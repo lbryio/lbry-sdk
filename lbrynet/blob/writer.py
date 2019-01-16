@@ -4,16 +4,13 @@ import asyncio
 from io import BytesIO
 from lbrynet.error import InvalidDataError
 from lbrynet.cryptoutils import get_lbry_hash_obj
-if typing.TYPE_CHECKING:
-    from lbrynet.peer import Peer
 
 log = logging.getLogger(__name__)
 
 
 class HashBlobWriter:
     def __init__(self, expected_blob_hash: str, get_length: typing.Callable[[], int],
-                 finished: asyncio.Future, peer: typing.Optional['Peer']):
-        self.peer = peer
+                 finished: asyncio.Future):
         self.expected_blob_hash = expected_blob_hash
         self.get_length = get_length
         self.buffer = BytesIO()

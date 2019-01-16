@@ -3,13 +3,15 @@ import logging
 import os
 
 from lbrynet.error import InvalidStreamDescriptorError
-from lbrynet.stream.descriptor import EncryptedFileStreamType, format_sd_info, format_blobs, validate_descriptor
-from lbrynet.stream.crypt_blob import CryptBlobInfo
+# from lbrynet.stream.descriptor import EncryptedFileStreamType, format_sd_info, format_blobs, validate_descriptor
+# from lbrynet.stream.crypt_blob import CryptBlobInfo
 
 log = logging.getLogger(__name__)
 
 
 def do_migration(db_dir):
+    raise NotImplementedError()
+
     db_path = os.path.join(db_dir, "lbrynet.sqlite")
     blob_dir = os.path.join(db_dir, "blobfiles")
     connection = sqlite3.connect(db_path)

@@ -49,12 +49,12 @@ class StreamAssembler:
             if self.stream_handle.closed:
                 return False
             self.stream_handle.seek(offset)
-            decrypted = blob.decrypt(
+            _decrypted = blob.decrypt(
                 binascii.unhexlify(key), binascii.unhexlify(blob_info.iv.encode())
             )
-            self.stream_handle.write(decrypted)
+            self.stream_handle.write(_decrypted)
             self.stream_handle.flush()
-            self.written_bytes += len(decrypted)
+            self.written_bytes += len(_decrypted)
             return True
 
         decrypted = await self.loop.run_in_executor(None, _decrypt_and_write)
@@ -67,7 +67,8 @@ class StreamAssembler:
             raise OSError(f"output directory does not exist: '{output_dir}' '{output_file_name}'")
         self.sd_blob = await self.get_blob(self.sd_hash)
         await self.blob_manager.blob_completed(self.sd_blob)
-        self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_manager, self.sd_blob)
+        self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_manager.blob_dir,
+                                                                             self.sd_blob)
         if not self.got_descriptor.is_set():
             self.got_descriptor.set()
         self.output_path = await get_next_available_file_name(self.loop, output_dir,
@@ -79,8 +80,15 @@ class StreamAssembler:
         )
         try:
             for blob_info in self.descriptor.blobs[:-1]:
-                blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
-                await self._decrypt_blob(blob, blob_info, self.descriptor.key)
+                while True:
+                    try:
+                        blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
+                        await self._decrypt_blob(blob, blob_info, self.descriptor.key)
+                        break
+                    except ValueError as err:
+                        log.error("failed to decrypt blob %s for stream - %s", blob_info.blob_hash,
+                                  self.descriptor.sd_hash, str(err))
+                        continue
                 if not self.wrote_bytes_event.is_set():
                     self.wrote_bytes_event.set()
             self.stream_finished_event.set()
