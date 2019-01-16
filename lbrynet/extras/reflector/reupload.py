@@ -1,10 +1,9 @@
 import asyncio
 import binascii
-import typing
-import random
 import json
-import logging
+import random
 import re
+import typing
 import urllib.parse
 import urllib.request
 
@@ -13,9 +12,7 @@ from lbrynet import conf
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.stream.descriptor import StreamDescriptor
-    
 
-log = logging.getLogger(__name__)
 
 REFLECTOR_V1 = 0
 REFLECTOR_V2 = 1
@@ -47,7 +44,27 @@ class IncompleteResponse(Exception):
     """
 
 
-async def handle_handshake(version: int, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+async def verify_handshake(handshake: typing.Dict):
+    """
+    Runs response against the two defined checks handshake(key, value); to troubleshoot errors.
+    """
+    while True:
+        version = handshake['version']
+        if not version:
+            return False
+        if not isinstance(version[0], int):
+            return False
+        # log.info('%s accepted connection.\nServer protocol version: %s.' % server, _)
+        return version
+        # log.error('%s did not return the protocol version: %s' % server, exc)
+        # log.error('%s did not respond accordingly: %s' % server, exc)
+        # log.error('%s connection terminated abruptly: %s' % server, exc)
+
+
+async def handle_handshake(version: int, reader, writer):
+    """
+    Handshake sequence.
+    """
     handshake = {'version': version}  # '7b2276657273696f6e223a20317d'
     payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
     await writer.write(payload)
@@ -58,99 +75,63 @@ async def handle_handshake(version: int, reader: asyncio.StreamReader, writer: a
 
 
 async def prepare_handshake(version: int, server: str):
+    """
+    Just in case.
+    """
     if not isinstance(version, int):
         _ = urllib.parse.quote_from_bytes(version)
-        asyncio.run(log.fatal('Got malformed bytes: %s.' % _))
+        # log.fatal('Got malformed bytes: %s.' % _))
         setattr(version, 'value', REFLECTOR_V2)
     elif server not in enumerate([REFLECTOR_V1, REFLECTOR_V2]):
         setattr(server, 'value', REFLECTOR_PROD_SERVER)
     elif not re.fullmatch(r"^[A-Za-z0-9._~()'!*:@,;+?-]*$", server):
         url = urllib.parse.quote_plus(server)
-        asyncio.run(log.fatal('Got malformed URI: %s.' % url))
+        # log.fatal('Got malformed URI: %s.' % url))
         setattr(server, 'value', urllib.parse.urlencode(url))
     return version, server
 
 
-async def send_handshake(protocol_version: typing.Optional[int],
-                         reflector_server: typing.Optional[str]):
+async def send_handshake(version: int, server: str):
     """
     Reflector Handshake
     
     Simple Text-Oriented Messaging Protocol
-    to reliable determine if both the client
+    to reliably determine if both the client
     and server are ready to begin transaction.
     
     returns StreamReader and StreamWriter respectively.
     """
 
-    version, server = await prepare_handshake(protocol_version, reflector_server)
-    reader, writer = await asyncio.open_connection(host=server)
-    handshake_received = await handle_handshake(version, reader, writer)
-
-    try:
-        while True:
-            _ = handshake_received['version']
-            if not _:
-                raise False
-            if not isinstance(_[0], int):
-                return False
-            # log.info('%s accepted connection.\nServer protocol version: %s.' % server, _)
-            await writer.drain()
-            return reader, writer
-    except LookupError as exc:
-        if isinstance(exc, KeyError):
-            # log.error('%s did not return the protocol version: %s' % server, exc)
-            ...
-        elif isinstance(exc, ValueError):
-            # log.error('%s did not respond accordingly: %s' % server, exc)
-            ...
-    except ConnectionError as exc:
-        # log.error('%s connection terminated abruptly: %s' % server, exc)
-        ...
+    _version, _server = await prepare_handshake(version, server)
+    reader, writer = await asyncio.open_connection(host=_server)
+    handshake = await handle_handshake(version, reader, writer)
+    result = await verify_handshake(handshake)
+    if not result:
+        return None
+    await writer.drain()
+    return reader, writer
 
 
+# TODO: list all components that can save us code space.
 async def reflect_stream(descriptor: typing.Optional[StreamDescriptor],
                          blob_manager: typing.Optional[BlobFileManager],
-                         reflector_server_url: typing.Optional[str]) -> typing.List[str]:
+                         server: typing.Optional[str]) -> typing.List[str]:
     loop = asyncio.get_event_loop()
-    handshake = asyncio.run_coroutine_threadsafe(
-        send_handshake(REFLECTOR_V2, REFLECTOR_PROD_SERVER), loop)
-    async with handshake.running():
-        # TODO: prepare all context variables.
-        _loop = asyncio.new_event_loop()
-    return []
-
-"""
-Initiative lbry#1776:
-
-. Integrate Reflector with upstream/asyncio-protocols-refactor
-. lbrynet.extras.daemon[file_reflect] depends on reflector
-. production instance depends on reflector for reflecting new publishes.
-
-Epic reflect stream:
-    define ReflectorClientProtocol(asyncio.Protocol)
-
-Story connection_made:
-    establish connection to the reflector url
-
-Story data_received:
-    attempt to transfer the blobs
-
-Story connection_lost:
-    disconnect(no exc)
-
-Story wait_reflect:
-    return a result indicating what was sent.
-
-"""
+    reflected_blobs = loop.get_task_factory()
+    coro = send_handshake(REFLECTOR_V2, REFLECTOR_PROD_SERVER)
+    handshake = asyncio.create_task(coro)
+    loop.run_until_complete(handshake)
+    handshake_ok = await handshake.result()
+    reader, writer = handshake_ok if handshake.result() is not None else False
+    while handshake.result() is not None:
+        ...
+    result = typing.cast(reflected_blobs.result(), list)
+    return result
 
 # hotfix for lbry#1776
-# TODO: Handshake with server
 # TODO: ReflectorClient choreography
-# TODO: Non-blocking log
 # TODO: return ok | error to daemon
 # TODO: Unit test to verify blob handling is solid
 # TODO: mitmproxy transaction for potential constraints to watch for
 # TODO: Unit test rewrite for lbrynet.extras.daemon.file_reflect use case
 # TODO: squash previous commits
-# TODO: note __doc__ outdated
