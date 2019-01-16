@@ -1,4 +1,5 @@
 import typing
+from functools import reduce
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.bencoding import bencode, bdecode
 
@@ -74,7 +75,7 @@ class RequestDatagram(KademliaDatagramBase):
 
     @classmethod
     def make_store(cls, from_node_id: bytes, blob_hash: bytes, token: bytes, port: int,
-                  rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
+                   rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
         if rpc_id and len(rpc_id) != constants.rpc_id_length:
             raise ValueError("invalid rpc id length")
         if not rpc_id:
@@ -160,3 +161,21 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
             if i in primitive  # pylint: disable=unsupported-membership-test
         }
     )
+
+
+def make_compact_ip(address: str):
+    return reduce(lambda buff, x: buff + bytearray([int(x)]), address.split('.'), bytearray())
+
+
+def make_compact_address(node_id: bytes, address: str, port: int) -> bytearray:
+    compact_ip = make_compact_ip(address)
+    if not 0 <= port <= 65536:
+        raise ValueError(f'Invalid port: {port}')
+    return compact_ip + port.to_bytes(2, 'big') + node_id
+
+
+def decode_compact_address(compact_address: bytes) -> typing.Tuple[bytes, str, int]:
+    address = "{}.{}.{}.{}".format(*compact_address[:4])
+    port = int.from_bytes(compact_address[4:6], 'big')
+    node_id = compact_address[6:]
+    return node_id, address, port

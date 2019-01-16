@@ -16,6 +16,7 @@ from aioupnp.fault import UPnPError
 import lbrynet.schema
 from lbrynet import conf
 from lbrynet.dht.node import Node
+from lbrynet.dht.peer import KademliaPeer
 from lbrynet.dht.blob_announcer import BlobAnnouncer
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob_exchange.server import BlobServer
@@ -375,8 +376,8 @@ class DHTComponent(Component):
                 log.warning("failed to get external ip")
 
         self.dht_node = Node(
-            self.component_manager.peer_manager,
             self.loop,
+            self.component_manager.peer_manager,
             node_id=node_id,
             internal_udp_port=conf.settings['dht_node_port'],
             udp_port=self.external_udp_port,
@@ -469,7 +470,7 @@ class StreamManagerComponent(Component):
         self.stream_manager = StreamManager(
             self.loop, blob_manager, wallet, storage, node, conf.settings['blob_download_timeout'],
             conf.settings['peer_connect_timeout'], [
-                self.component_manager.peer_manager.make_peer(await resolve_host(self.loop, url), tcp_port=port)
+                KademliaPeer(self.loop, address=(await resolve_host(self.loop, url)), tcp_port=port + 1)
                 for url, port in conf.settings['reflector_servers']
             ]
         )

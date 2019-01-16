@@ -1,5 +1,6 @@
 import os
 import asyncio
+import binascii
 import logging
 import typing
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
@@ -8,12 +9,10 @@ from cryptography.hazmat.primitives.padding import PKCS7
 
 from lbrynet.cryptoutils import backend, get_lbry_hash_obj
 from lbrynet.error import DownloadCancelledError, InvalidBlobHashError
-from lbrynet.blob import MAX_BLOB_SIZE, blobhash_length
-from lbrynet.blob.writer import HashBlobWriter
 
-if typing.TYPE_CHECKING:
-    from lbrynet.peer import Peer
-    from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob import MAX_BLOB_SIZE, blobhash_length
+from lbrynet.blob.blob_info import BlobInfo
+from lbrynet.blob.writer import HashBlobWriter
 
 log = logging.getLogger(__name__)
 
@@ -90,9 +89,6 @@ class BlobFile:
                 t = self.loop.create_task(self.save_verified_blob(writer))
                 t.add_done_callback(lambda *_: self.finished_writing.set())
             elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
-                if writer.peer:
-                    msg = f"failed to download {self.blob_hash[:8]} from {writer.peer.address}: {str(error)}"
-                    log.warning(msg)
                 raise error
         return callback
 
@@ -114,25 +110,11 @@ class BlobFile:
             await self.blob_completed_callback(self)
             self.verified.set()
 
-    def open_for_writing(self, peer: typing.Optional['Peer'] = None) -> HashBlobWriter:
-        """
-        open a blob file to be written by peer, supports concurrent
-        writers, as long as they are from different peers.
-        """
-
+    def open_for_writing(self) -> HashBlobWriter:
         if os.path.exists(self.file_path):
             raise OSError(f"File already exists '{self.file_path}'")
-
-        for writer in self.writers:
-            if writer.peer is peer:
-                raise Exception("Tried to download the same file twice simultaneously from the same peer")
-        if not peer:
-            msg = f"Opening {self.blob_hash[:8]} to be written"
-        else:
-            msg = f"Opening {self.blob_hash[:8]} to be written by {peer.address}:{peer.tcp_port}"
-        log.debug(msg)
         fut = asyncio.Future(loop=self.loop)
-        writer = HashBlobWriter(self.blob_hash, self.get_length, fut, peer)
+        writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
         self.writers.append(writer)
         fut.add_done_callback(self.writer_finished(writer))
         return writer
@@ -174,21 +156,19 @@ class BlobFile:
         return unpadder.update(decryptor.update(buff) + decryptor.finalize()) + unpadder.finalize()
 
     @classmethod
-    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', key: bytes,
-                                      iv: bytes, unencrypted: bytes, blob_num: int,
-                                      callback: typing.Callable[[str, bytes, int, int], None]):
+    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_dir: str, key: bytes,
+                                      iv: bytes, unencrypted: bytes, blob_num: int) -> BlobInfo:
         """
         Create an encrypted BlobFile from plaintext bytes
         """
 
         blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
         length = len(blob_bytes)
-        callback(blob_hash, iv, length, blob_num)
-        blob = blob_manager.get_blob(blob_hash, length)
+        blob = cls(loop, blob_dir, blob_hash, length)
         writer = blob.open_for_writing()
         writer.write(blob_bytes)
         await blob.verified.wait()
-        return cls(loop, blob_manager.blob_dir, blob_hash, length)
+        return BlobInfo(blob_num, length, binascii.hexlify(iv).encode(), blob_hash)
 
     def set_length(self, length):
         if self.length is not None and length == self.length:

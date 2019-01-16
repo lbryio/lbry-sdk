@@ -7,12 +7,9 @@ import asyncio
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbrynet.blob import MAX_BLOB_SIZE
 from lbrynet.blob.blob_info import BlobInfo
+from lbrynet.blob.blob_file import BlobFile
 from lbrynet.cryptoutils import get_lbry_hash_obj
 from lbrynet.error import InvalidStreamDescriptorError
-from lbrynet.blob.blob_file import BlobFile
-if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_manager import BlobFileManager
-
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +31,7 @@ def random_iv_generator() -> typing.Generator[bytes, None, None]:
         yield os.urandom(AES.block_size // 8)
 
 
-async def file_reader(file_path: str):
+def file_reader(file_path: str):
     length = int(os.stat(file_path).st_size)
     offset = 0
 
@@ -49,10 +46,11 @@ async def file_reader(file_path: str):
 
 
 class StreamDescriptor:
-    def __init__(self, blob_manager: 'BlobFileManager', stream_name: str, key: str, suggested_file_name: str,
-                 blobs: typing.List[BlobInfo], stream_hash: typing.Optional[str] = None,
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, stream_name: str, key: str,
+                 suggested_file_name: str, blobs: typing.List[BlobInfo], stream_hash: typing.Optional[str] = None,
                  sd_hash: typing.Optional[str] = None):
-        self.blob_manager = blob_manager
+        self.loop = loop
+        self.blob_dir = blob_dir
         self.stream_name = stream_name
         self.key = key
         self.suggested_file_name = suggested_file_name
@@ -83,7 +81,7 @@ class StreamDescriptor:
     async def make_sd_blob(self):
         sd_hash = self.calculate_sd_hash()
         sd_data = self.as_json()
-        sd_blob = self.blob_manager.get_blob(sd_hash, len(sd_data))
+        sd_blob = BlobFile(self.loop, self.blob_dir, sd_hash, len(sd_data))
         if not sd_blob.get_is_verified():
             writer = sd_blob.open_for_writing()
             writer.write(sd_data)
@@ -91,7 +89,8 @@ class StreamDescriptor:
         return sd_blob
 
     @classmethod
-    def _from_stream_descriptor_blob(cls, blob_manager: 'BlobFileManager', blob: BlobFile) -> 'StreamDescriptor':
+    def _from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
+                                     blob: BlobFile) -> 'StreamDescriptor':
         assert os.path.isfile(blob.file_path)
         with open(blob.file_path, 'rb') as f:
             json_bytes = f.read()
@@ -103,7 +102,7 @@ class StreamDescriptor:
         if 'blob_hash' in decoded['blobs'][-1]:
             raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
         descriptor = cls(
-            blob_manager,
+            loop, blob_dir,
             binascii.unhexlify(decoded['stream_name']).decode(),
             decoded['key'],
             binascii.unhexlify(decoded['suggested_file_name']).decode(),
@@ -117,9 +116,9 @@ class StreamDescriptor:
         return descriptor
 
     @classmethod
-    async def from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager',
+    async def from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
                                           blob: BlobFile) -> 'StreamDescriptor':
-        return await loop.run_in_executor(None, lambda: cls._from_stream_descriptor_blob(blob_manager, blob))
+        return await loop.run_in_executor(None, lambda: cls._from_stream_descriptor_blob(loop, blob_dir, blob))
 
     @staticmethod
     def get_blob_hashsum(b: typing.Dict):
@@ -152,47 +151,30 @@ class StreamDescriptor:
         return h.hexdigest()
 
     @classmethod
-    async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager',
+    async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
                             file_path: str, key: typing.Optional[bytes] = None,
-                            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
-                            create_limit: typing.Optional[int] = 20) -> 'StreamDescriptor':
+                            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None
+                            ) -> 'StreamDescriptor':
 
         blobs: typing.List[BlobInfo] = []
 
-        def wrote_blob_callback(blob_hash: str, blob_iv: bytes, length: int, num: int) -> None:
-            blobs.append(BlobInfo(num, length, binascii.hexlify(blob_iv).decode(), blob_hash))
-            return
-
         iv_generator = iv_generator or random_iv_generator()
         key = key or os.urandom(AES.block_size // 8)
-        batch = []
-        blob_num = 0
-
-        async for blob_bytes in file_reader(file_path):
-            batch.append(
-                BlobFile.create_from_unencrypted(
-                    loop, blob_manager, key, next(iv_generator), blob_bytes, blob_num, wrote_blob_callback
-                )
-            )
+        blob_num = -1
+        for num, blob_bytes in file_reader(file_path):
             blob_num += 1
-            if len(batch) >= create_limit:  # create the batch of blobs
-                tasks = []
-                while batch:
-                    tasks.append(batch.pop())
-                await asyncio.gather(*tuple(tasks), loop=loop)
-        if batch:  # create any remaining blobs
-            await asyncio.gather(*tuple(batch), loop=loop)
-
-        blobs.sort(key=lambda blob_info: blob_info.blob_num)  # sort by blob number
+            blob_info = await BlobFile.create_from_unencrypted(
+                    loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num
+                )
+            blobs.append(blob_info)
         blobs.append(
             BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode()))  # add the stream terminator
         descriptor = cls(
-            blob_manager, os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path),
+            loop, blob_dir, os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path),
             blobs
         )
         sd_blob = await descriptor.make_sd_blob()
-        await blob_manager.blob_completed(sd_blob)
-        await blob_manager.storage.store_stream(sd_blob, descriptor)
+        descriptor.sd_hash = sd_blob.blob_hash
         return descriptor
 
     def lower_bound_decrypted_length(self) -> int:

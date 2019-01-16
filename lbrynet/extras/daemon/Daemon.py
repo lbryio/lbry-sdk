@@ -580,36 +580,29 @@ class Daemon(metaclass=JSONRPCServerType):
     #         finally:
     #             del self.streams[sd_hash]
     #         return result
-    #
-    # async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
-    #                     claim_address=None, change_address=None):
-    #     publisher = Publisher(
-    #         account, self.blob_manager, self.payment_rate_manager, self.storage,
-    #         self.file_manager, self.wallet_manager, certificate
-    #     )
-    #     parse_lbry_uri(name)
-    #     if not file_path:
-    #         stream_hash = await self.storage.get_stream_hash_for_sd_hash(
-    #             claim_dict['stream']['source']['source'])
-    #         tx = await publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
-    #     else:
-    #         tx = await publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
-    #         if conf.settings['reflect_uploads']:
-    #             d = reupload.reflect_file(publisher.lbry_file)
-    #             d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
-    #                            log.exception)
-    #    self.component_manager.analytics_manager.send_claim_action('publish')
-    #     nout = 0
-    #     txo = tx.outputs[nout]
-    #     log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-    #     return {
-    #         "success": True,
-    #         "tx": tx,
-    #         "claim_id": txo.claim_id,
-    #         "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
-    #         "output": tx.outputs[nout]
-    #     }
-    #
+
+    async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
+                              claim_address=None, change_address=None):
+        parse_lbry_uri(name)
+        if file_path:
+            log.info("Create stream")
+            stream = await self.stream_manager.create_stream(file_path)
+            sd_hash = stream.descriptor.calculate_sd_hash()
+            log.info("Created stream with sd hash %s from %s", sd_hash, file_path)
+            claim_dict['stream']['source']['source'] = sd_hash
+        tx = await self.wallet_manager.claim_name(account, name, bid, claim_dict, certificate, claim_address)
+        nout = 0
+        txo = tx.outputs[nout]
+        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
+        await self.component_manager.analytics_manager.send_claim_action('publish')
+        return {
+            "success": True,
+            "tx": tx,
+            "claim_id": txo.claim_id,
+            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+            "output": tx.outputs[nout]
+        }
+
     # async def _get_or_download_sd_blob(self, blob, sd_hash):
     #     if blob:
     #         return self.blob_manager.get_blob(blob[0])
@@ -1972,16 +1965,14 @@ class Daemon(metaclass=JSONRPCServerType):
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
-        try:
-            return {
-                "success": True,
-                "tx": tx,
-                "claim_id": txo.claim_id,
-                "claim_address": txo.get_address(self.ledger),
-                "output": txo
-            }
-        finally:
-           await self.component_manager.analytics_manager.send_new_channel()
+        self.component_manager.loop.create_task(self.component_manager.analytics_manager.send_new_channel())
+        return {
+            "success": True,
+            "tx": tx,
+            "claim_id": txo.claim_id,
+            "claim_address": txo.get_address(self.ledger),
+            "output": txo
+        }
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
@@ -3028,7 +3019,7 @@ class Daemon(metaclass=JSONRPCServerType):
             None
 
         Returns:
-            (dict) dictionary containing routing and contact information
+            (dict) dictionary containing routing and peer information
             {
                 "buckets": {
                     <bucket index>: [
@@ -3047,14 +3038,14 @@ class Daemon(metaclass=JSONRPCServerType):
             'buckets': {}
         }
 
-        for i in range(len(self.dht_node.protocol.routing_table._buckets)):
+        for i in range(len(self.dht_node.protocol.routing_table.buckets)):
             result['buckets'][i] = []
-            for contact in self.dht_node.protocol.routing_table._buckets[i]._contacts:
+            for peer in self.dht_node.protocol.routing_table.buckets[i].peers:
                 host = {
-                    "address": contact.address,
-                    "udp_port": contact.udp_port,
-                    "tcp_port": contact.tcp_port,
-                    "node_id": hexlify(contact.node_id).decode(),
+                    "address": peer.address,
+                    "udp_port": peer.udp_port,
+                    "tcp_port": peer.tcp_port,
+                    "node_id": hexlify(peer.node_id).decode(),
                 }
                 result['buckets'][i].append(host)
 
@@ -3182,8 +3173,6 @@ class Daemon(metaclass=JSONRPCServerType):
     #     response['is_available'] = response['sd_blob_availability'].get('is_available') and \
     #                                response['head_blob_availability'].get('is_available')
     #     return response
-
-
 
     async def get_channel_or_error(
             self, accounts: List[LBCAccount], channel_id: str = None, channel_name: str = None):

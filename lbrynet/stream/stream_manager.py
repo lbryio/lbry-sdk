@@ -8,8 +8,8 @@ from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
-    from lbrynet.peer import Peer
     from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.dht.peer import KademliaPeer
     from lbrynet.dht.node import Node
     from lbrynet.storage import SQLiteStorage
     from lbrynet.extras.wallet import LbryWalletManager
@@ -45,7 +45,7 @@ comparison_operators = {
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', wallet: 'LbryWalletManager',
                  storage: 'SQLiteStorage', node: 'Node', peer_timeout: float, peer_connect_timeout: float,
-                 fixed_peers: typing.Optional[typing.List['Peer']] = None):
+                 fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.wallet = wallet
@@ -152,7 +152,7 @@ class StreamManager:
         try:
             await asyncio.wait_for(downloader.got_descriptor.wait(), sd_blob_timeout)
             log.info("got descriptor %s for %s", claim.source_hash.decode(), claim_info['name'])
-        except (asyncio.TimeoutError, asyncio.CancelledError) as err:
+        except (asyncio.TimeoutError, asyncio.CancelledError):
             log.info("stream timeout")
             await downloader.stop()
             log.info("stopped stream")

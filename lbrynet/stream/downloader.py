@@ -4,10 +4,10 @@ import typing
 import logging
 from lbrynet import conf
 from lbrynet.stream.assembler import StreamAssembler
-from lbrynet.blob_exchange.client import BlobExchangeClientProtocol
+from lbrynet.blob_exchange.client import BlobExchangeClientProtocol, request_blob
 if typing.TYPE_CHECKING:
-    from lbrynet.peer import Peer
     from lbrynet.dht.node import Node
+    from lbrynet.dht.peer import KademliaPeer
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.blob.blob_file import BlobFile
 
@@ -70,7 +70,7 @@ class StreamDownloader(StreamAssembler):
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str,
                  peer_timeout: float, peer_connect_timeout: float, output_dir: typing.Optional[str] = None,
                  output_file_name: typing.Optional[str] = None,
-                 fixed_peers: typing.Optional[typing.List['Peer']] = None):
+                 fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None):
         super().__init__(loop, blob_manager, sd_hash)
         self.peer_timeout = peer_timeout
         self.peer_connect_timeout = peer_connect_timeout
@@ -79,9 +79,9 @@ class StreamDownloader(StreamAssembler):
         self.download_task: asyncio.Task = None
         self.accumulate_connections_task: asyncio.Task = None
         self.new_peer_event = asyncio.Event(loop=self.loop)
-        self.active_connections: typing.Dict['Peer', BlobExchangeClientProtocol] = {}
+        self.active_connections: typing.Dict['KademliaPeer', BlobExchangeClientProtocol] = {}
         self.running_download_requests: typing.List[asyncio.Task] = []
-        self.requested_from: typing.Dict[str, typing.Dict['Peer', asyncio.Task]] = {}
+        self.requested_from: typing.Dict[str, typing.Dict['KademliaPeer', asyncio.Task]] = {}
         self.output_dir = output_dir or os.getcwd()
         self.output_file_name = output_file_name
         self._lock = asyncio.Lock(loop=self.loop)
@@ -95,24 +95,23 @@ class StreamDownloader(StreamAssembler):
             if not blob.get_is_verified():
                 self._update_requests()
 
-    async def _request_blob(self, peer: 'Peer'):
+    async def _request_blob(self, peer: 'KademliaPeer'):
         if self.current_blob.get_is_verified():
             log.info("already verified")
             return
         if peer not in self.active_connections:
             log.warning("not active, adding: %s", str(peer))
-            self.active_connections[peer] = BlobExchangeClientProtocol(peer, self.loop, self.peer_timeout)
+            self.active_connections[peer] = BlobExchangeClientProtocol(self.loop, self.peer_timeout)
         log.info("request %s from %s:%i", self.current_blob.blob_hash[:8], peer.address, peer.tcp_port)
-        success = await peer.request_blob(self.current_blob, self.active_connections[peer],
-                                          self.peer_connect_timeout)
+
+        success = await request_blob(self.loop, self.current_blob, self.active_connections[peer],
+                                     peer.address, peer.tcp_port, self.peer_connect_timeout)
         if not success:
             log.warning("failed to download %s from %s:%i", self.current_blob.blob_hash[:8], peer.address,
                         peer.tcp_port)
-            if peer.tcp_last_down is not None:
+            if peer in self.active_connections and self.active_connections[peer].transport is None:
                 async with self._lock:
-                    proto = self.active_connections.pop(peer, None)
-                    if proto and proto.transport:
-                        proto.transport.close()
+                    del self.active_connections[peer]
 
     def _update_requests(self):
         log.info("clear peer event")
@@ -180,11 +179,11 @@ class StreamDownloader(StreamAssembler):
             drain_tasks(self.running_download_requests)
             raise
 
-    def _add_peer_protocols(self, peers: typing.List['Peer']):
+    def _add_peer_protocols(self, peers: typing.List['KademliaPeer']):
         added = 0
         for peer in peers:
             if peer not in self.active_connections:
-                self.active_connections[peer] = BlobExchangeClientProtocol(peer, self.loop, self.peer_timeout)
+                self.active_connections[peer] = BlobExchangeClientProtocol(self.loop, self.peer_timeout)
                 added += 1
         if added:
             log.info("added %i new peers", len(peers))

@@ -2,7 +2,8 @@ import asyncio
 import typing
 import logging
 import traceback
-from types import AsyncGeneratorType
+if typing.TYPE_CHECKING:
+    from types import AsyncGeneratorType
 
 log = logging.getLogger(__name__)
 
@@ -50,13 +51,13 @@ class AsyncGeneratorJunction:
                 self.running_iterators[iterator] = False
 
         while True:
-            async_gen: typing.Union[typing.AsyncGenerator, AsyncGeneratorType] = await self.generator_queue.get()
+            async_gen: typing.Union[typing.AsyncGenerator, 'AsyncGeneratorType'] = await self.generator_queue.get()
             self.running_iterators[async_gen] = True
             self.tasks.append(self.loop.create_task(iterate(async_gen)))
             if not self.can_iterate.is_set():
                 self.can_iterate.set()
 
-    def add_generator(self, async_gen: typing.Union[typing.AsyncGenerator, AsyncGeneratorType]):
+    def add_generator(self, async_gen: typing.Union[typing.AsyncGenerator, 'AsyncGeneratorType']):
         """
         Add an async generator. This can be called during an iteration of the generator junction.
         """
