@@ -2,21 +2,13 @@ import asyncio
 import binascii
 import json
 import random
-import re
 import typing
-import urllib.parse
-import urllib.request
 
 from lbrynet import conf
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.stream.descriptor import StreamDescriptor
-
-
-REFLECTOR_V1 = 0
-REFLECTOR_V2 = 1
-REFLECTOR_PROD_SERVER = random.choice(conf.settings['reflector_servers'])
 
 
 class ReflectorClientVersionError(Exception):
@@ -44,94 +36,99 @@ class IncompleteResponse(Exception):
     """
 
 
-async def verify_handshake(handshake: typing.Dict):
-    """
-    Runs response against the two defined checks handshake(key, value); to troubleshoot errors.
-    """
-    while True:
-        version = handshake['version']
-        if not version:
-            return False
-        if not isinstance(version[0], int):
-            return False
-        # log.info('%s accepted connection.\nServer protocol version: %s.' % server, _)
-        return version
-        # log.error('%s did not return the protocol version: %s' % server, exc)
-        # log.error('%s did not respond accordingly: %s' % server, exc)
-        # log.error('%s connection terminated abruptly: %s' % server, exc)
-
-
-async def handle_handshake(version: int, reader, writer):
-    """
-    Handshake sequence.
-    """
-    handshake = {'version': version}  # '7b2276657273696f6e223a20317d'
-    payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
-    await writer.write(payload)
-    await writer.write_eof()
-    data = await reader.readline()
-    response = await json.loads(binascii.unhexlify(data))
-    return await response.result()  # {'version': 1}
-
-
-async def prepare_handshake(version: int, server: str):
-    """
-    Just in case.
-    """
-    if not isinstance(version, int):
-        _ = urllib.parse.quote_from_bytes(version)
-        # log.fatal('Got malformed bytes: %s.' % _))
-        setattr(version, 'value', REFLECTOR_V2)
-    elif server not in enumerate([REFLECTOR_V1, REFLECTOR_V2]):
-        setattr(server, 'value', REFLECTOR_PROD_SERVER)
-    elif not re.fullmatch(r"^[A-Za-z0-9._~()'!*:@,;+?-]*$", server):
-        url = urllib.parse.quote_plus(server)
-        # log.fatal('Got malformed URI: %s.' % url))
-        setattr(server, 'value', urllib.parse.urlencode(url))
-    return version, server
-
-
-async def send_handshake(version: int, server: str):
-    """
-    Reflector Handshake
+class Reflector:
+    REFLECTOR_V1 = 0
+    REFLECTOR_V2 = 1
+    REFLECTOR_PROD_SERVER = random.choice(conf.settings['reflector_servers'])
     
-    Simple Text-Oriented Messaging Protocol
-    to reliably determine if both the client
-    and server are ready to begin transaction.
-    
-    returns StreamReader and StreamWriter respectively.
+    def __init__(self, version: int, server_url: str):
+        self.version = version
+        self.server = server_url
+        self.server_version = self.handle_handshake()
+        self.descriptor = asyncio.Event()
+        self.blob_file_manager = asyncio.Event()
+        
+    async def handle_handshake(self):
+        """
+        Handshake sequence.
+        """
+        reader, writer = await asyncio.open_connection(host=self.server)
+        handshake = {'version': self.version}  # '7b2276657273696f6e223a20317d'
+        payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
+        await writer.write(payload)
+        await writer.write_eof()
+        data = await reader.readline()
+        response = await json.loads(binascii.unhexlify(data))
+        await writer.drain()
+        return await response.result()['version']  # {'version': 1}
+
+    """
+    ############# Stream descriptor requests and responses #############
+    (if sending blobs directly this is skipped)
+    If the client is reflecting a whole stream, they send a stream descriptor request:
+    {
+        'sd_blob_hash': str,
+        'sd_blob_size': int
+    }
+
+    The server indicates if it's aware of this stream already by requesting (or not requesting)
+    the stream descriptor blob. If the server has a validated copy of the sd blob, it will
+    include the needed_blobs field (a list of blob hashes missing from reflector) in the response.
+    If the server does not have the sd blob the needed_blobs field will not be included, as the
+    server does not know what blobs it is missing - so the client should send all of the blobs
+    in the stream.
+    {
+        'send_sd_blob': bool
+        'needed_blobs': list, conditional
+    }
+
+    The client may begin the file transfer of the sd blob if send_sd_blob was True.
+    If the client sends the blob, after receiving it the server indicates if the
+    transfer was successful:
+    {
+        'received_sd_blob': bool
+    }
+    If the transfer was not successful (False), the blob is added to the needed_blobs queue
     """
 
-    _version, _server = await prepare_handshake(version, server)
-    reader, writer = await asyncio.open_connection(host=_server)
-    handshake = await handle_handshake(version, reader, writer)
-    result = await verify_handshake(handshake)
-    if not result:
-        return None
-    await writer.drain()
-    return reader, writer
-
-
-# TODO: list all components that can save us code space.
-async def reflect_stream(descriptor: typing.Optional[StreamDescriptor],
-                         blob_manager: typing.Optional[BlobFileManager],
-                         server: typing.Optional[str]) -> typing.List[str]:
-    loop = asyncio.get_event_loop()
-    reflected_blobs = loop.get_task_factory()
-    coro = send_handshake(REFLECTOR_V2, REFLECTOR_PROD_SERVER)
-    handshake = asyncio.create_task(coro)
-    loop.run_until_complete(handshake)
-    handshake_ok = await handshake.result()
-    reader, writer = handshake_ok if handshake.result() is not None else False
-    while handshake.result() is not None:
+    # Expecting:
+    # {
+    #     'sd_blob_hash': str,
+    #     'sd_blob_size': int
+    # }
+    async def reflect_stream(self, descriptor: typing.Optional[StreamDescriptor],
+                 blob_manager: typing.Optional[BlobFileManager]) -> typing.List[str]:
         ...
-    result = typing.cast(reflected_blobs.result(), list)
-    return result
+    
+    """
+    ############# Blob requests and responses #############
+    A client with blobs to reflect (either populated by the client or by the stream descriptor
+    response) queries if the server is ready to begin transferring a blob
+    {
+        'blob_hash': str,
+        'blob_size': int
+    }
 
-# hotfix for lbry#1776
-# TODO: ReflectorClient choreography
-# TODO: return ok | error to daemon
-# TODO: Unit test to verify blob handling is solid
-# TODO: mitmproxy transaction for potential constraints to watch for
-# TODO: Unit test rewrite for lbrynet.extras.daemon.file_reflect use case
-# TODO: squash previous commits
+    The server replies, send_blob will be False if the server has a validated copy of the blob:
+    {
+        'send_blob': bool
+    }
+
+    The client may begin the raw blob file transfer if the server replied True.
+    If the client sends the blob, the server replies:
+    {
+        'received_blob': bool
+    }
+    If the transfer was not successful (False), the blob is re-added to the needed_blobs queue
+
+    Blob requests continue for each of the blobs the client has queued to send, when completed
+    the client disconnects.
+    """
+
+    # hotfix for lbry#1776
+    # TODO: ReflectorClient choreography
+    # TODO: return ok | error to daemon
+    # TODO: Unit test to verify blob handling is solid
+    # TODO: mitmproxy transaction for potential constraints to watch for
+    # TODO: Unit test rewrite for lbrynet.extras.daemon.file_reflect use case
+    # TODO: squash previous commits
