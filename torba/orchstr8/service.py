@@ -80,13 +80,16 @@ class ConductorService:
     async def transfer(self, request):
         data = await request.post()
         address = data.get('address')
-        if not address:
+        if not address and self.stack.wallet_started:
             address = await self.stack.wallet_node.account.receiving.get_or_create_usable_address()
+        if not address:
+            raise ValueError("No address was provided.")
         amount = data.get('amount', 1)
         txid = await self.stack.blockchain_node.send_to_address(address, amount)
-        await self.stack.wallet_node.ledger.on_transaction.where(
-            lambda e: e.tx.id == txid and e.address == address
-        )
+        if self.stack.wallet_started:
+            await self.stack.wallet_node.ledger.on_transaction.where(
+                lambda e: e.tx.id == txid and e.address == address
+            )
         return json_response({
             'address': address,
             'amount': amount,
