@@ -158,6 +158,8 @@ class TreeRoutingTable:
         return refresh_ids
 
     def remove_peer(self, peer: 'Peer') -> None:
+        if not peer.node_id:
+            return
         bucket_index = self._kbucket_index(peer.node_id)
         try:
             self._buckets[bucket_index].remove_peer(peer)
