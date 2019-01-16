@@ -47,6 +47,30 @@ class IncompleteResponse(Exception):
     """
 
 
+async def handle_handshake(version: int, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    handshake = {'version': version}  # '7b2276657273696f6e223a20317d'
+    payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
+    await writer.write(payload)
+    await writer.write_eof()
+    data = await reader.readline()
+    response = await json.loads(binascii.unhexlify(data))
+    return await response.result()  # {'version': 1}
+
+
+async def prepare_handshake(version: int, server: str):
+    if not isinstance(version, int):
+        _ = urllib.parse.quote_from_bytes(version)
+        asyncio.run(log.fatal('Got malformed bytes: %s.' % _))
+        setattr(version, 'value', REFLECTOR_V2)
+    elif server not in enumerate([REFLECTOR_V1, REFLECTOR_V2]):
+        setattr(server, 'value', REFLECTOR_PROD_SERVER)
+    elif not re.fullmatch(r"^[A-Za-z0-9._~()'!*:@,;+?-]*$", server):
+        url = urllib.parse.quote_plus(server)
+        asyncio.run(log.fatal('Got malformed URI: %s.' % url))
+        setattr(server, 'value', urllib.parse.urlencode(url))
+    return version, server
+
+
 async def send_handshake(protocol_version: typing.Optional[int],
                          reflector_server: typing.Optional[str]):
     """
@@ -58,58 +82,36 @@ async def send_handshake(protocol_version: typing.Optional[int],
     
     returns StreamReader and StreamWriter respectively.
     """
-    
-    loop = asyncio.get_running_loop()
-    nonblock = asyncio.new_event_loop().call_soon_threadsafe
-    
-    client_version = protocol_version if not None else REFLECTOR_V2
-    if not isinstance(client_version, int):
-        try:
-            _version = urllib.parse.quote_from_bytes(client_version)
-            nonblock(log.fatal, 'Got malformed bytes string: %s.' % _version)
-        finally:
-            client_version = 1
-    
-    url = reflector_server if not None else REFLECTOR_PROD_SERVER
-    if not re.fullmatch(r"^[A-Za-z0-9._~()'!*:@,;+?-]*$", url):
-        _url = urllib.parse.quote_plus(url)
-        try:
-            nonblock(log.fatal, 'Got malformed URI: %s.' % _url)
-        finally:
-            url = urllib.parse.urlencode(_url)
-            
-    reader, writer = await asyncio.open_connection(host=url)
-    
-    handshake = {'version': client_version}  # '7b2276657273696f6e223a20317d'
-    payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
-    eof = await writer.write(payload)
-    loop.run_until_complete(eof)
-    await writer.write_eof()
-    
-    data = await reader.readline()
-    response = await loop.create_future().set_result(json.loads(binascii.unhexlify(data)))
-    loop.run_until_complete(response)
-    handshake_received = response.result() # {'version': 1}
+
+    version, server = await prepare_handshake(protocol_version, reflector_server)
+    reader, writer = await asyncio.open_connection(host=server)
+    handshake_received = await handle_handshake(version, reader, writer)
 
     try:
         while True:
-            _temp = handshake_received['version']
-            _ = isinstance(_temp, int)
-            nonblock(log.info, '%s accepted connection.\nServer protocol version: %i.' % url, _temp)
+            _ = handshake_received['version']
+            if not _:
+                raise False
+            if not isinstance(_[0], int):
+                return False
+            # log.info('%s accepted connection.\nServer protocol version: %s.' % server, _)
             await writer.drain()
             return reader, writer
     except LookupError as exc:
         if isinstance(exc, KeyError):
-            nonblock(log.error, '%s did not return the protocol version: %s' % url, exc)
+            # log.error('%s did not return the protocol version: %s' % server, exc)
+            ...
         elif isinstance(exc, ValueError):
-            nonblock(log.error, '%s did not respond accordingly: %s' % url, exc)
+            # log.error('%s did not respond accordingly: %s' % server, exc)
+            ...
     except ConnectionError as exc:
-        nonblock(log.error, '%s connection terminated abruptly: %s' % url, exc)
-        
+        # log.error('%s connection terminated abruptly: %s' % server, exc)
+        ...
+
 
 async def reflect_stream(descriptor: typing.Optional[StreamDescriptor],
                          blob_manager: typing.Optional[BlobFileManager],
-                         reflector_server_url: typing.Optional[Url]) -> typing.List[str]:
+                         reflector_server_url: typing.Optional[str]) -> typing.List[str]:
     loop = asyncio.get_event_loop()
     handshake = asyncio.run_coroutine_threadsafe(
         send_handshake(REFLECTOR_V2, REFLECTOR_PROD_SERVER), loop)
