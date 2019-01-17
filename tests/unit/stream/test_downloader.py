@@ -8,9 +8,6 @@ from lbrynet.dht.node import Node
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 
-import logging
-logging.getLogger("lbrynet").setLevel(logging.DEBUG)
-
 
 class TestStreamDownloader(BlobExchangeTestBase):
     async def setup_stream(self, blob_count: int = 10):

@@ -1,5 +1,5 @@
 import docopt
-from twisted.trial import unittest
+import unittest
 from lbrynet.extras.daemon.Daemon import Daemon
 
 

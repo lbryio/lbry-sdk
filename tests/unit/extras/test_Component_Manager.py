@@ -4,11 +4,10 @@ from torba.testcase import AdvanceTimeTestCase
 
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
-from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
+from lbrynet.extras.daemon.Components import HEADERS_COMPONENT
 from lbrynet.extras.daemon import Components
-from tests import mocks
 
 
 class TestComponentManager(TestCase):
