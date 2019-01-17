@@ -1283,6 +1283,10 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return sorted([command for command in self.callable_methods.keys()])
 
+    @deprecated("account_balance")
+    def jsonrpc_wallet_balance(self, address=None):
+        pass
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
         """
