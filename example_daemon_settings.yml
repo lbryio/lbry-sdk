@@ -17,9 +17,6 @@ dht_node_port: 4444
 peer_port: 3333
 use_upnp: True
 
-use_auth_http: True
-use_https: True
-
 #components_to_skip:
 #  - peer_protocol_server
 #  - hash_announcer
