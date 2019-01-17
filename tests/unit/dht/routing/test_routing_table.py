@@ -3,7 +3,7 @@ from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbrynet.dht import constants
 from lbrynet.dht.node import Node
-from lbrynet.peer import PeerManager
+from lbrynet.dht.peer import PeerManager
 
 
 class TestRouting(AsyncioTestCase):
@@ -22,7 +22,7 @@ class TestRouting(AsyncioTestCase):
         ]
         with dht_mocks.mock_network_loop(loop):
             nodes = {
-                i: Node(PeerManager(loop), loop, node_id, 4444, 4444, 3333, address)
+                i: Node(loop, PeerManager(loop), node_id, 4444, 4444, 3333, address)
                 for i, (node_id, address) in enumerate(peer_addresses)
             }
             node_1 = nodes[0]
@@ -30,11 +30,11 @@ class TestRouting(AsyncioTestCase):
             for i in range(1, len(peer_addresses)):
                 self.assertEqual(len(node_1.protocol.routing_table.get_peers()), contact_cnt)
                 node = nodes[i]
-                peer = node_1.protocol.peer_manager.make_peer(
-                    node.protocol.external_ip, node_id=node.protocol.node_id,
+                peer = node_1.protocol.peer_manager.get_kademlia_peer(
+                    node.protocol.node_id, node.protocol.external_ip,
                     udp_port=node.protocol.udp_port
                 )
-                added = await node_1.protocol.routing_table.add_peer(peer)
+                added = await node_1.protocol.add_peer(peer)
                 self.assertEqual(True, added)
                 contact_cnt += 1
 

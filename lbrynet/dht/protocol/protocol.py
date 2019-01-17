@@ -145,9 +145,9 @@ class RemoteKademliaRPC:
         """
         if len(blob_hash) != constants.hash_bits // 8:
             raise ValueError(f"invalid length of blob hash: {len(blob_hash)}")
-        if not self.protocol.peer_port or 0 < self.protocol.peer_port < 65535:
+        if not self.protocol.peer_port or not 0 < self.protocol.peer_port < 65535:
             raise ValueError(f"invalid tcp port: {self.protocol.peer_port}")
-        token = await self.peer_tracker.get_node_token(self.peer.node_id)
+        token = self.peer_tracker.get_node_token(self.peer.node_id)
         if not token:
             find_value_resp = await self.find_value(blob_hash)
             token = find_value_resp[b'token']
