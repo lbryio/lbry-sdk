@@ -2,7 +2,7 @@ import typing
 import logging
 import asyncio
 from io import BytesIO
-from lbrynet.error import InvalidDataError
+from lbrynet.error import InvalidBlobHashError, InvalidDataError
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
@@ -25,8 +25,7 @@ class HashBlobWriter:
             log.warning("Garbage collection was called, but writer was not closed yet")
             self.close_handle()
 
-    @property
-    def blob_hash(self):
+    def calculate_blob_hash(self) -> str:
         return self._hashsum.hexdigest()
 
     def closed(self):
@@ -38,16 +37,14 @@ class HashBlobWriter:
             raise IOError("unknown blob length")
         if self.buffer is None:
             log.warning("writer has already been closed")
-            if not (self.finished.done() or self.finished.cancelled()):
+            if not self.finished.done():
                 self.finished.cancel()
                 return
             raise IOError('I/O operation on closed file')
 
         self._hashsum.update(data)
         self.len_so_far += len(data)
-        # log.info("%s %i/%i", self.expected_blob_hash, self.len_so_far, expected_length)
         if self.len_so_far > expected_length:
-            log.warning((self.buffer.getvalue() + data)[expected_length:])
             self.close_handle()
             self.finished.set_result(InvalidDataError(
                 f'Length so far is greater than the expected length. {self.len_so_far} to {expected_length}'
@@ -55,10 +52,11 @@ class HashBlobWriter:
             return
         self.buffer.write(data)
         if self.len_so_far == expected_length:
-            if self.blob_hash != self.expected_blob_hash:
+            blob_hash = self.calculate_blob_hash()
+            if blob_hash != self.expected_blob_hash:
                 self.close_handle()
-                self.finished.set_result(InvalidDataError(
-                    f"blob hash is {self.blob_hash} vs expected {self.expected_blob_hash}"
+                self.finished.set_result(InvalidBlobHashError(
+                    f"blob hash is {blob_hash} vs expected {self.expected_blob_hash}"
                 ))
                 return
             self.buffer.seek(0)

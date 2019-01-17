@@ -6,7 +6,7 @@ import logging
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.storage import StoredStreamClaim
+from lbrynet.storage import StoredStreamClaim, lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.peer import KademliaPeer
@@ -212,7 +212,7 @@ class StreamManager:
             stream = await stream_task
             self.starting_streams[sd_hash].set_result(stream)
             if fee_address and fee_amount:
-                await self.wallet.send_amount_to_address(fee_amount, fee_address.encode('latin1'))
+                await self.wallet.send_amount_to_address(lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1'))
             return stream
         except (asyncio.TimeoutError, asyncio.CancelledError):
             return
