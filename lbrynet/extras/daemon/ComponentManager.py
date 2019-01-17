@@ -2,7 +2,7 @@ import logging
 import typing
 import asyncio
 from lbrynet.error import ComponentStartConditionNotMet
-from lbrynet.peer import PeerManager
+from lbrynet.dht.peer import PeerManager
 from lbrynet.extras.daemon import analytics
 
 log = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ class ComponentManager:
         self.skip_components = skip_components or []
         self.reactor = reactor
         self.loop = loop or asyncio.get_event_loop()
+        self.loop.set_debug(True)
         self.analytics_manager = analytics.Manager(self.loop)
         self.component_classes = {}
         self.components = set()

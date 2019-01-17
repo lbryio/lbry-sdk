@@ -86,7 +86,7 @@ class ManagedStream:
     @property
     def blobs_completed(self) -> int:
         return sum([1 if self.blob_manager.get_blob(b.blob_hash).get_is_verified() else 0
-                            for b in self.descriptor.blobs[:-1]])
+                    for b in self.descriptor.blobs[:-1]])
 
     @property
     def blobs_in_stream(self) -> int:
@@ -134,7 +134,12 @@ class ManagedStream:
     async def create(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager',
                      file_path: str) -> 'ManagedStream':
         descriptor = await StreamDescriptor.create_stream(
-            loop, blob_manager, file_path
+            loop, blob_manager.blob_dir, file_path
+        )
+        sd_blob = blob_manager.get_blob(descriptor.sd_hash)
+        await blob_manager.blob_completed(sd_blob)
+        await blob_manager.storage.store_stream(
+            blob_manager.get_blob(descriptor.sd_hash), descriptor
         )
         return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)

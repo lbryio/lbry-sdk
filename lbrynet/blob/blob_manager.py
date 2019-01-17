@@ -2,17 +2,19 @@ import typing
 import asyncio
 import logging
 from sqlite3 import IntegrityError
-from lbrynet.dht.protocol.data_store import DictDataStore
 from lbrynet.storage import SQLiteStorage
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.stream.descriptor import StreamDescriptor
+
+if typing.TYPE_CHECKING:
+    from lbrynet.dht.protocol.data_store import DictDataStore
 
 log = logging.getLogger(__name__)
 
 
 class BlobFileManager:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, storage: SQLiteStorage,
-                 node_datastore: typing.Optional[DictDataStore] = None):
+                 node_datastore: typing.Optional['DictDataStore'] = None):
         """
         This class stores blobs on the hard disk
 
@@ -23,8 +25,8 @@ class BlobFileManager:
         self.blob_dir = blob_dir
         self.storage = storage
         self._node_datastore = node_datastore
-        self.completed_blob_hashes: typing.Set[str] = set() if not self._node_datastore else \
-                                                      self._node_datastore.completed_blobs
+        self.completed_blob_hashes: typing.Set[str] = set() if not self._node_datastore\
+            else self._node_datastore.completed_blobs
 
     async def setup(self) -> bool:
         raw_blob_hashes = await self.get_all_verified_blobs()
@@ -35,7 +37,7 @@ class BlobFileManager:
         return BlobFile(self.loop, self.blob_dir, blob_hash, length, self.blob_completed)
 
     def get_stream_descriptor(self, sd_hash):
-        return StreamDescriptor.from_stream_descriptor_blob(self.loop, self, self.get_blob(sd_hash))
+        return StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_dir, self.get_blob(sd_hash))
 
     async def blob_completed(self, blob: BlobFile):
         if blob.blob_hash is None:

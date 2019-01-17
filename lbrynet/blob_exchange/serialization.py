@@ -2,7 +2,8 @@ import typing
 import json
 import logging
 from lbrynet.error import BlobDownloadError
-log = logging.getLogger()
+
+log = logging.getLogger(__name__)
 
 
 class BlobMessage:
@@ -15,7 +16,7 @@ class BlobMessage:
 class BlobPriceRequest(BlobMessage):
     key = 'blob_data_payment_rate'
 
-    def __init__(self, blob_data_payment_rate: float, **kwargs):
+    def __init__(self, blob_data_payment_rate: float, **kwargs) -> None:
         self.blob_data_payment_rate = blob_data_payment_rate
 
     def to_dict(self) -> typing.Dict:
@@ -30,7 +31,7 @@ class BlobPriceResponse(BlobMessage):
     rate_too_low = 'RATE_TOO_LOW'
     rate_unset = 'RATE_UNSET'
 
-    def __init__(self, blob_data_payment_rate: str, **kwargs):
+    def __init__(self, blob_data_payment_rate: str, **kwargs) -> None:
         if blob_data_payment_rate not in (self.rate_accepted, self.rate_too_low, self.rate_unset):
             raise ValueError(blob_data_payment_rate)
         self.blob_data_payment_rate = blob_data_payment_rate
@@ -44,7 +45,8 @@ class BlobPriceResponse(BlobMessage):
 class BlobAvailabilityRequest(BlobMessage):
     key = 'requested_blobs'
 
-    def __init__(self, requested_blobs: typing.List[str], lbrycrd_address: typing.Optional[bool] = True, **kwargs):
+    def __init__(self, requested_blobs: typing.List[str], lbrycrd_address: typing.Optional[bool] = True,
+                 **kwargs) -> None:
         assert len(requested_blobs)
         self.requested_blobs = requested_blobs
         self.lbrycrd_address = lbrycrd_address
@@ -59,7 +61,8 @@ class BlobAvailabilityRequest(BlobMessage):
 class BlobAvailabilityResponse(BlobMessage):
     key = 'available_blobs'
 
-    def __init__(self, available_blobs: typing.List[str], lbrycrd_address: typing.Optional[str] = True, **kwargs):
+    def __init__(self, available_blobs: typing.List[str], lbrycrd_address: typing.Optional[str] = True,
+                 **kwargs) -> None:
         self.available_blobs = available_blobs
         self.lbrycrd_address = lbrycrd_address
 
@@ -75,7 +78,7 @@ class BlobAvailabilityResponse(BlobMessage):
 class BlobDownloadRequest(BlobMessage):
     key = 'requested_blob'
 
-    def __init__(self, requested_blob: str, **kwargs):
+    def __init__(self, requested_blob: str, **kwargs) -> None:
         self.requested_blob = requested_blob
 
     def to_dict(self) -> typing.Dict:
@@ -87,7 +90,7 @@ class BlobDownloadRequest(BlobMessage):
 class BlobDownloadResponse(BlobMessage):
     key = 'incoming_blob'
 
-    def __init__(self, **response: typing.Dict):
+    def __init__(self, **response: typing.Dict) -> None:
         incoming_blob = response[self.key]
         if 'error' in incoming_blob:
             raise BlobDownloadError(incoming_blob['error'])
@@ -104,7 +107,7 @@ class BlobDownloadResponse(BlobMessage):
 class BlobPaymentAddressRequest(BlobMessage):
     key = 'lbrycrd_address'
 
-    def __init__(self, lbrycrd_address: str, **kwargs):
+    def __init__(self, lbrycrd_address: str, **kwargs) -> None:
         self.lbrycrd_address = lbrycrd_address
 
     def to_dict(self) -> typing.Dict:
@@ -120,7 +123,7 @@ class BlobPaymentAddressResponse(BlobPaymentAddressRequest):
 class BlobErrorResponse(BlobMessage):
     key = 'error'
 
-    def __init__(self, error: str, **kwargs):
+    def __init__(self, error: str, **kwargs) -> None:
         self.error = error
 
     def to_dict(self) -> typing.Dict:
@@ -170,7 +173,7 @@ def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[ty
 
 
 class BlobRequest:
-    def __init__(self, requests: typing.List[blob_request_types]):
+    def __init__(self, requests: typing.List[blob_request_types]) -> None:
         self.requests = requests
 
     def to_dict(self):
@@ -225,7 +228,7 @@ class BlobRequest:
 
 
 class BlobResponse:
-    def __init__(self, responses: typing.List[blob_response_types], blob_data: typing.Optional[bytes] = None):
+    def __init__(self, responses: typing.List[blob_response_types], blob_data: typing.Optional[bytes] = None) -> None:
         self.responses = responses
         self.blob_data = blob_data
 

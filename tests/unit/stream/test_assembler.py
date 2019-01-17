@@ -31,7 +31,7 @@ class TestStreamAssembler(AsyncioTestCase):
         with open(file_path, 'wb') as f:
             f.write(self.cleartext)
 
-        sd = await StreamDescriptor.create_stream(self.loop, self.blob_manager, file_path, key=self.key)
+        sd = await StreamDescriptor.create_stream(self.loop, tmp_dir, file_path, key=self.key)
 
         # copy blob files
         sd_hash = sd.calculate_sd_hash()

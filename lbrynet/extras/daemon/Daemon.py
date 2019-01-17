@@ -580,36 +580,29 @@ class Daemon(metaclass=JSONRPCServerType):
     #         finally:
     #             del self.streams[sd_hash]
     #         return result
-    #
-    # async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
-    #                     claim_address=None, change_address=None):
-    #     publisher = Publisher(
-    #         account, self.blob_manager, self.payment_rate_manager, self.storage,
-    #         self.file_manager, self.wallet_manager, certificate
-    #     )
-    #     parse_lbry_uri(name)
-    #     if not file_path:
-    #         stream_hash = await self.storage.get_stream_hash_for_sd_hash(
-    #             claim_dict['stream']['source']['source'])
-    #         tx = await publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
-    #     else:
-    #         tx = await publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
-    #         if conf.settings['reflect_uploads']:
-    #             d = reupload.reflect_file(publisher.lbry_file)
-    #             d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
-    #                            log.exception)
-    #    self.component_manager.analytics_manager.send_claim_action('publish')
-    #     nout = 0
-    #     txo = tx.outputs[nout]
-    #     log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-    #     return {
-    #         "success": True,
-    #         "tx": tx,
-    #         "claim_id": txo.claim_id,
-    #         "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
-    #         "output": tx.outputs[nout]
-    #     }
-    #
+
+    async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
+                              claim_address=None, change_address=None):
+        parse_lbry_uri(name)
+        if file_path:
+            log.info("Create stream")
+            stream = await self.stream_manager.create_stream(file_path)
+            sd_hash = stream.descriptor.calculate_sd_hash()
+            log.info("Created stream with sd hash %s from %s", sd_hash, file_path)
+            claim_dict['stream']['source']['source'] = sd_hash
+        tx = await self.wallet_manager.claim_name(account, name, bid, claim_dict, certificate, claim_address)
+        nout = 0
+        txo = tx.outputs[nout]
+        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
+        await self.component_manager.analytics_manager.send_claim_action('publish')
+        return {
+            "success": True,
+            "tx": tx,
+            "claim_id": txo.claim_id,
+            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+            "output": tx.outputs[nout]
+        }
+
     # async def _get_or_download_sd_blob(self, blob, sd_hash):
     #     if blob:
     #         return self.blob_manager.get_blob(blob[0])
@@ -1972,16 +1965,14 @@ class Daemon(metaclass=JSONRPCServerType):
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
-        try:
-            return {
-                "success": True,
-                "tx": tx,
-                "claim_id": txo.claim_id,
-                "claim_address": txo.get_address(self.ledger),
-                "output": txo
-            }
-        finally:
-           await self.component_manager.analytics_manager.send_new_channel()
+        self.component_manager.loop.create_task(self.component_manager.analytics_manager.send_new_channel())
+        return {
+            "success": True,
+            "tx": tx,
+            "claim_id": txo.claim_id,
+            "claim_address": txo.get_address(self.ledger),
+            "output": txo
+        }
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
@@ -2727,39 +2718,36 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_block(blockhash, height)
 
-    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_blob_get(self, blob_hash, timeout=None):
-        """
-        Download and return a blob
-
-        Usage:
-            blob_get (<blob_hash> | --blob_hash=<blob_hash>) [--timeout=<timeout>]
-
-        Options:
-        --blob_hash=<blob_hash>                        : (str) blob hash of the blob to get
-        --timeout=<timeout>                            : (int) timeout in number of seconds
-
-        Returns:
-            (str) Success/Fail message or (dict) decoded data
-        """
-
-        decoders = {
-            'json': json.loads
-        }
-
-        timeout = timeout or 30
-        blob = await self._download_blob(
-            blob_hash, rate_manager=self.payment_rate_manager, timeout=timeout
-        )
-        if encoding and encoding in decoders:
-            blob_file = blob.open_for_reading()
-            result = decoders[encoding](blob_file.read())
-            blob_file.close()
-        else:
-            result = "Downloaded blob %s" % blob_hash
-
-        return result
+    # @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
+    #           conditions=[WALLET_IS_UNLOCKED])
+    # async def jsonrpc_blob_get(self, blob_hash, timeout=None):
+    #     """
+    #     Download and return a blob
+    #
+    #     Usage:
+    #         blob_get (<blob_hash> | --blob_hash=<blob_hash>) [--timeout=<timeout>]
+    #
+    #     Options:
+    #     --blob_hash=<blob_hash>                        : (str) blob hash of the blob to get
+    #     --timeout=<timeout>                            : (int) timeout in number of seconds
+    #
+    #     Returns:
+    #         (str) Success/Fail message or (dict) decoded data
+    #     """
+    #
+    #     timeout = timeout or 30
+    #
+    #     blob = await self._download_blob(
+    #         blob_hash, rate_manager=self.payment_rate_manager, timeout=timeout
+    #     )
+    #     if encoding and encoding in decoders:
+    #         blob_file = blob.open_for_reading()
+    #         result = decoders[encoding](blob_file.read())
+    #         blob_file.close()
+    #     else:
+    #         result = "Downloaded blob %s" % blob_hash
+    #
+    #     return result
 
     @requires(BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_blob_delete(self, blob_hash):
@@ -2894,66 +2882,66 @@ class Daemon(metaclass=JSONRPCServerType):
     #         lbry_files[0], reflector_server=kwargs.get('reflector', None)
     #     ))
 
-    @requires(BLOB_COMPONENT, WALLET_COMPONENT)
-    async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
-                          finished=None, page_size=None, page=None):
-        """
-        Returns blob hashes. If not given filters, returns all blobs known by the blob manager
-
-        Usage:
-            blob_list [--needed] [--finished] [<uri> | --uri=<uri>]
-                      [<stream_hash> | --stream_hash=<stream_hash>]
-                      [<sd_hash> | --sd_hash=<sd_hash>]
-                      [<page_size> | --page_size=<page_size>]
-                      [<page> | --page=<page>]
-
-        Options:
-            --needed                     : (bool) only return needed blobs
-            --finished                   : (bool) only return finished blobs
-            --uri=<uri>                  : (str) filter blobs by stream in a uri
-            --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
-            --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
-            --page_size=<page_size>      : (int) results page size
-            --page=<page>                : (int) page of results to return
-
-        Returns:
-            (list) List of blob hashes
-        """
-        if uri or stream_hash or sd_hash:
-            if uri:
-                metadata = (await self.wallet_manager.resolve(uri))[uri]
-                sd_hash = utils.get_sd_hash(metadata)
-                stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
-            elif stream_hash:
-                sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
-            elif sd_hash:
-                stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
-                sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
-            if stream_hash:
-                crypt_blobs = await self.storage.get_blobs_for_stream(stream_hash)
-                blobs = await d2f(defer.gatherResults([
-                    self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
-                    for crypt_blob in crypt_blobs if crypt_blob.blob_hash is not None
-                ]))
-            else:
-                blobs = []
-            # get_blobs_for_stream does not include the sd blob, so we'll add it manually
-            if sd_hash in self.blob_manager.blobs:
-                blobs = [self.blob_manager.blobs[sd_hash]] + blobs
-        else:
-            blobs = self.blob_manager.blobs.values()
-
-        if needed:
-            blobs = [blob for blob in blobs if not blob.get_is_verified()]
-        if finished:
-            blobs = [blob for blob in blobs if blob.get_is_verified()]
-
-        blob_hashes = [blob.blob_hash for blob in blobs if blob.blob_hash]
-        page_size = page_size or len(blob_hashes)
-        page = page or 0
-        start_index = page * page_size
-        stop_index = start_index + page_size
-        return blob_hashes[start_index:stop_index]
+    # @requires(BLOB_COMPONENT, WALLET_COMPONENT)
+    # async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
+    #                             finished=None, page_size=None, page=None):
+    #     """
+    #     Returns blob hashes. If not given filters, returns all blobs known by the blob manager
+    #
+    #     Usage:
+    #         blob_list [--needed] [--finished] [<uri> | --uri=<uri>]
+    #                   [<stream_hash> | --stream_hash=<stream_hash>]
+    #                   [<sd_hash> | --sd_hash=<sd_hash>]
+    #                   [<page_size> | --page_size=<page_size>]
+    #                   [<page> | --page=<page>]
+    #
+    #     Options:
+    #         --needed                     : (bool) only return needed blobs
+    #         --finished                   : (bool) only return finished blobs
+    #         --uri=<uri>                  : (str) filter blobs by stream in a uri
+    #         --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
+    #         --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
+    #         --page_size=<page_size>      : (int) results page size
+    #         --page=<page>                : (int) page of results to return
+    #
+    #     Returns:
+    #         (list) List of blob hashes
+    #     """
+    #     if uri or stream_hash or sd_hash:
+    #         if uri:
+    #             metadata = (await self.wallet_manager.resolve(uri))[uri]
+    #             sd_hash = utils.get_sd_hash(metadata)
+    #             stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
+    #         elif stream_hash:
+    #             sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
+    #         elif sd_hash:
+    #             stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
+    #             sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
+    #         if stream_hash:
+    #             crypt_blobs = await self.storage.get_blobs_for_stream(stream_hash)
+    #             blobs = await d2f(defer.gatherResults([
+    #                 self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
+    #                 for crypt_blob in crypt_blobs if crypt_blob.blob_hash is not None
+    #             ]))
+    #         else:
+    #             blobs = []
+    #         # get_blobs_for_stream does not include the sd blob, so we'll add it manually
+    #         if sd_hash in self.blob_manager.blobs:
+    #             blobs = [self.blob_manager.blobs[sd_hash]] + blobs
+    #     else:
+    #         blobs = self.blob_manager.blobs.values()
+    #
+    #     if needed:
+    #         blobs = [blob for blob in blobs if not blob.get_is_verified()]
+    #     if finished:
+    #         blobs = [blob for blob in blobs if blob.get_is_verified()]
+    #
+    #     blob_hashes = [blob.blob_hash for blob in blobs if blob.blob_hash]
+    #     page_size = page_size or len(blob_hashes)
+    #     page = page or 0
+    #     start_index = page * page_size
+    #     stop_index = start_index + page_size
+    #     return blob_hashes[start_index:stop_index]
 
     # @requires(BLOB_COMPONENT)
     # async def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
@@ -3028,7 +3016,7 @@ class Daemon(metaclass=JSONRPCServerType):
             None
 
         Returns:
-            (dict) dictionary containing routing and contact information
+            (dict) dictionary containing routing and peer information
             {
                 "buckets": {
                     <bucket index>: [
@@ -3047,14 +3035,14 @@ class Daemon(metaclass=JSONRPCServerType):
             'buckets': {}
         }
 
-        for i in range(len(self.dht_node.protocol.routing_table._buckets)):
+        for i in range(len(self.dht_node.protocol.routing_table.buckets)):
             result['buckets'][i] = []
-            for contact in self.dht_node.protocol.routing_table._buckets[i]._contacts:
+            for peer in self.dht_node.protocol.routing_table.buckets[i].peers:
                 host = {
-                    "address": contact.address,
-                    "udp_port": contact.udp_port,
-                    "tcp_port": contact.tcp_port,
-                    "node_id": hexlify(contact.node_id).decode(),
+                    "address": peer.address,
+                    "udp_port": peer.udp_port,
+                    "tcp_port": peer.tcp_port,
+                    "node_id": hexlify(peer.node_id).decode(),
                 }
                 result['buckets'][i].append(host)
 
@@ -3182,8 +3170,6 @@ class Daemon(metaclass=JSONRPCServerType):
     #     response['is_available'] = response['sd_blob_availability'].get('is_available') and \
     #                                response['head_blob_availability'].get('is_available')
     #     return response
-
-
 
     async def get_channel_or_error(
             self, accounts: List[LBCAccount], channel_id: str = None, channel_name: str = None):

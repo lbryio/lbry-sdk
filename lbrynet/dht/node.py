@@ -4,28 +4,29 @@ import typing
 import socket
 import binascii
 import contextlib
-from lbrynet.dht.protocol.protocol import KademliaProtocol
-from lbrynet.dht.iterative_find import IterativeNodeFinder, IterativeValueFinder
-from lbrynet.dht.async_generator_junction import AsyncGeneratorJunction
 from lbrynet.dht import constants
 from lbrynet.dht.error import RemoteException
-from lbrynet.dht.routing.distance import Distance
+from lbrynet.dht.protocol.async_generator_junction import AsyncGeneratorJunction
+from lbrynet.dht.protocol.distance import Distance
+from lbrynet.dht.protocol.iterative_find import IterativeNodeFinder, IterativeValueFinder
+from lbrynet.dht.protocol.protocol import KademliaProtocol
+from lbrynet.dht.peer import KademliaPeer
 
 if typing.TYPE_CHECKING:
-    from lbrynet.peer import PeerManager, Peer
+    from lbrynet.dht.peer import PeerManager
 
 log = logging.getLogger(__name__)
 
 
 class Node:
-    def __init__(self, peer_manager: 'PeerManager', loop: asyncio.BaseEventLoop, node_id: bytes, udp_port: int,
+    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
-        self.protocol = KademliaProtocol(peer_manager, loop, node_id, external_ip, udp_port, peer_port)
+        self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port)
         self.listening_port: asyncio.DatagramTransport = None
-        self._join_task: asyncio.Task = None
         self.joined = asyncio.Event(loop=self.loop)
+        self._join_task: asyncio.Task = None
         self._refresh_task: asyncio.Task = None
 
     async def refresh_node(self):
@@ -33,7 +34,7 @@ class Node:
             # remove peers with expired blob announcements from the datastore
             self.protocol.data_store.removed_expired_peers()
 
-            total_peers: typing.List['Peer'] = []
+            total_peers: typing.List['KademliaPeer'] = []
             # add all peers in the routing table
             total_peers.extend(self.protocol.routing_table.get_peers())
             # add all the peers who have announed blobs to us
@@ -55,7 +56,7 @@ class Node:
                 total_peers.extend(peers)
 
             # ping the set of peers; upon success/failure the routing able and last replied/failed time will be updated
-            to_ping = [peer for peer in set(total_peers) if peer.contact_is_good is not True]
+            to_ping = [peer for peer in set(total_peers) if self.protocol.peer_manager.peer_is_good(peer) is not True]
             if to_ping:
                 log.info("ping %i peers during refresh", len(to_ping))
                 await self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
@@ -128,7 +129,7 @@ class Node:
                     known_node_addresses.append((info[0][4][0], port))
         futs = []
         for address, port in known_node_addresses:
-            peer = self.protocol.peer_manager.make_peer(address, udp_port=port)
+            peer = self.protocol.get_rpc_peer(KademliaPeer(self.loop, address, udp_port=port))
             futs.append(peer.ping())
         await asyncio.wait(futs, loop=self.loop)
 
@@ -136,7 +137,7 @@ class Node:
             async for peers in junction:
                 for peer in peers:
                     try:
-                        await peer.ping()
+                        await self.protocol.get_rpc_peer(peer).ping()
                     except (asyncio.TimeoutError, RemoteException):
                         pass
         self.joined.set()
@@ -166,7 +167,7 @@ class Node:
 
     @contextlib.asynccontextmanager
     async def stream_peer_search_junction(self, hash_queue: asyncio.Queue, bottom_out_limit=20,
-                                    max_results=-1) -> AsyncGeneratorJunction:
+                                          max_results=-1) -> AsyncGeneratorJunction:
         peer_generator = AsyncGeneratorJunction(self.loop)
 
         async def _add_hashes_from_queue():
@@ -205,8 +206,8 @@ class Node:
         return peer_generator
 
     async def peer_search(self, node_id: bytes, count=constants.k, max_results=constants.k*2,
-                    bottom_out_limit=20) -> typing.List['Peer']:
-        accumulated: typing.List['Peer'] = []
+                          bottom_out_limit=20) -> typing.List['KademliaPeer']:
+        accumulated: typing.List['KademliaPeer'] = []
         async with self.peer_search_junction(self.protocol.node_id, max_results=max_results,
                                              bottom_out_limit=bottom_out_limit) as junction:
             async for peers in junction:
@@ -215,5 +216,5 @@ class Node:
             log.info("junction done")
         log.info("context done")
         distance = Distance(node_id)
-        accumulated.sort(key=distance.to_contact)
+        accumulated.sort(key=lambda peer: distance(peer.node_id))
         return accumulated[:count]
