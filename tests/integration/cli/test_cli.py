@@ -29,7 +29,6 @@ class FakeAnalytics:
 
 
 class CLIIntegrationTest(AsyncioTestCase):
-    USE_AUTH = False
 
     async def asyncSetUp(self):
         skip = [
@@ -40,7 +39,6 @@ class CLIIntegrationTest(AsyncioTestCase):
         ]
         conf.initialize_settings(load_conf_file=False)
         conf.settings['api_port'] = 5299
-        conf.settings['use_auth_http'] = self.USE_AUTH
         conf.settings['components_to_skip'] = skip
         conf.settings.initialize_post_conf_load()
         Daemon.component_attributes = {}
@@ -50,25 +48,7 @@ class CLIIntegrationTest(AsyncioTestCase):
     async def asyncTearDown(self):
         await self.daemon.shutdown()
 
-
-@skip
-class AuthenticatedCLITest(CLIIntegrationTest):
-    USE_AUTH = True
-
     def test_cli_status_command_with_auth(self):
-        self.assertTrue(self.daemon._use_authentication)
-        actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            cli.main(["status"])
-        actual_output = actual_output.getvalue()
-        self.assertIn("connection_status", actual_output)
-
-
-class UnauthenticatedCLITest(CLIIntegrationTest):
-    USE_AUTH = False
-
-    def test_cli_status_command_with_auth(self):
-        self.assertFalse(self.daemon._use_authentication)
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
             cli.main(["status"])

@@ -362,8 +362,6 @@ class Daemon(metaclass=JSONRPCServerType):
             Checker.INTERNET_CONNECTION[0]: (LoopingCall(CheckInternetConnection(self)),
                                              Checker.INTERNET_CONNECTION[1])
         }
-        use_authentication = conf.settings['use_auth_http']
-        use_https = conf.settings['use_https']
         self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
         self.component_manager = component_manager or ComponentManager(
             analytics_manager=self.analytics_manager,
@@ -371,8 +369,6 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).items()})
         self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).items()}
-        self._use_authentication = use_authentication or conf.settings['use_auth_http']
-        self._use_https = use_https or conf.settings['use_https']
         self.listening_port = None
         self._component_setup_task = None
         self.announced_startup = False

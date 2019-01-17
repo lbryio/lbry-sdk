@@ -86,7 +86,8 @@ def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] = None,
     args = parser.parse_args(argv)
     settings = {}
     if args.useauth:
-        settings['use_auth_http'] = True
+        print('--http-auth is no longer supported; an alternative solution using IPC is forthcoming.')
+        return
 
     verbose = None
     if args.verbose:
