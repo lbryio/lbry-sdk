@@ -22,7 +22,7 @@ class MockAsyncGen:
         await asyncio.sleep(self.delay, loop=self.loop)
         return self.result
 
-    def aclose(self):
+    async def aclose(self):
         self.called_close = True
 
 

@@ -45,12 +45,15 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self._response_fut.set_result(response)
         if response.blob_data and self.writer and not self.writer.closed():
             self._blob_bytes_received += len(response.blob_data)
-            self.writer.write(response.blob_data)
+            try:
+                self.writer.write(response.blob_data)
+            except IOError as err:
+                log.error("error downloading blob: %s", err)
 
     def data_received(self, data):
         try:
             return self.handle_data_received(data)
-        except (asyncio.CancelledError, asyncio.TimeoutError, BlobDownloadError) as err:
+        except (asyncio.CancelledError, asyncio.TimeoutError) as err:
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
 

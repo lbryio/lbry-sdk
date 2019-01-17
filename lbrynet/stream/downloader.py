@@ -102,9 +102,10 @@ class StreamDownloader(StreamAssembler):
         if peer not in self.active_connections:
             log.warning("not active, adding: %s", str(peer))
             self.active_connections[peer] = BlobExchangeClientProtocol(self.loop, self.peer_timeout)
-        success, keep_connection = await request_blob(self.loop, self.current_blob, self.active_connections[peer],
+        protocol = self.active_connections[peer]
+        success, keep_connection = await request_blob(self.loop, self.current_blob, protocol,
                                                       peer.address, peer.tcp_port, self.peer_connect_timeout)
-        await self.active_connections[peer].close()
+        await protocol.close()
         if not keep_connection:
             log.info("drop peer %s:%i", peer.address, peer.tcp_port)
             if peer in self.active_connections:

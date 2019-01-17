@@ -177,19 +177,14 @@ class BlobFile:
 
     def set_length(self, length):
         if self.length is not None and length == self.length:
-            return True
+            return
         if self.length is None and 0 <= length <= MAX_BLOB_SIZE:
             self.length = length
-            return True
-        log.warning("Got an invalid length. Previous length: %s, Invalid length: %s",
-                    self.length, length)
-        return False
+            return
+        log.warning("Got an invalid length. Previous length: %s, Invalid length: %s", self.length, length)
 
     def get_length(self):
         return self.length
 
     def get_is_verified(self):
         return self.verified.is_set()
-
-    def is_downloading(self):
-        return len(self.writers) > 0
