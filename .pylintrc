@@ -354,13 +354,13 @@ ignore-mixin-members=yes
 # (useful for modules/projects where namespaces are manipulated during runtime
 # and thus existing member attributes cannot be deduced by static analysis. It
 # supports qualified module names, as well as Unix pattern matching.
-ignored-modules=twisted.internet.reactor,leveldb,distutils
+ignored-modules=leveldb,distutils
 # Ignoring distutils because: https://github.com/PyCQA/pylint/issues/73
 
 # List of classes names for which member attributes should not be checked
 # (useful for classes with attributes dynamically set). This supports can work
 # with qualified names.
-ignored-classes=twisted.internet.reactor,RequestMessage
+# ignored-classes=
 
 
 # List of members which are set dynamically and missed by pylint inference
