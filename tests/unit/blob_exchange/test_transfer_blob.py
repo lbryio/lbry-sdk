@@ -19,8 +19,8 @@ class BlobExchangeTestBase(AsyncioTestCase):
 
         self.client_dir = tempfile.mkdtemp()
         self.server_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(self.client_dir))
-        self.addCleanup(lambda: shutil.rmtree(self.server_dir))
+        self.addCleanup(shutil.rmtree, self.client_dir)
+        self.addCleanup(shutil.rmtree, self.server_dir)
 
         self.server_storage = SQLiteStorage(os.path.join(self.server_dir, "lbrynet.sqlite"))
         self.server_blob_manager = BlobFileManager(self.loop, self.server_dir, self.server_storage)

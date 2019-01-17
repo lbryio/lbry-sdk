@@ -68,10 +68,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
             blob_response = response.get_blob_response()
-            if not availability_response or not availability_response.available_blobs:
+            if not blob_response and (not availability_response or not availability_response.available_blobs):
                 log.warning("blob not in availability response")
                 return False
-            elif availability_response.available_blobs != [self.blob.blob_hash]:
+            elif availability_response.available_blobs and \
+                    availability_response.available_blobs != [self.blob.blob_hash]:
                 log.warning("blob availability response doesn't match our request")
                 return False
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':

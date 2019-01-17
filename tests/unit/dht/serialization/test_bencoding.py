@@ -17,6 +17,10 @@ class EncodeDecodeTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             bencode({b'derp': object()})
 
+    def test_fail_bad_type(self):
+        with self.assertRaises(DecodeError):
+            bdecode(b'd4le', True)
+
     def test_integer(self):
         self.assertEqual(_bencode(42), b'i42e')
         self.assertEqual(bdecode(b'i42e', True), 42)

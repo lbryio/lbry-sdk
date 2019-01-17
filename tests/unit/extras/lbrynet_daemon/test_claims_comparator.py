@@ -35,5 +35,5 @@ class ClaimsComparatorTest(unittest.TestCase):
         self.run_test(results, 'nout', [1, 2, 3])
 
     def run_test(self, results, field, expected):
-        actual = sort_claim_results(results)
-        self.assertEqual(expected, [r[field] for r in actual])
+        sort_claim_results(results)
+        self.assertListEqual(expected, [r[field] for r in results])

@@ -50,15 +50,20 @@ class Node:
                     node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
                     node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
 
-            # if we have node ids to look up, perform the iterative search until we have k results
-            while node_ids:
-                peers = await self.peer_search(node_ids.pop())
-                total_peers.extend(peers)
+            if self.protocol.routing_table.get_peers():
+                # if we have node ids to look up, perform the iterative search until we have k results
+                while node_ids:
+                    peers = await self.peer_search(node_ids.pop())
+                    total_peers.extend(peers)
+            else:
+                fut = asyncio.Future(loop=self.loop)
+                self.loop.call_later(constants.refresh_interval // 4, fut.set_result, None)
+                await fut
+                continue
 
             # ping the set of peers; upon success/failure the routing able and last replied/failed time will be updated
             to_ping = [peer for peer in set(total_peers) if self.protocol.peer_manager.peer_is_good(peer) is not True]
             if to_ping:
-                log.info("ping %i peers during refresh", len(to_ping))
                 await self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
 
             fut = asyncio.Future(loop=self.loop)
@@ -131,7 +136,8 @@ class Node:
         for address, port in known_node_addresses:
             peer = self.protocol.get_rpc_peer(KademliaPeer(self.loop, address, udp_port=port))
             futs.append(peer.ping())
-        await asyncio.wait(futs, loop=self.loop)
+        if futs:
+            await asyncio.wait(futs, loop=self.loop)
 
         async with self.peer_search_junction(self.protocol.node_id, max_results=16) as junction:
             async for peers in junction:

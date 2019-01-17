@@ -215,29 +215,32 @@ class PingQueue:
         async def _ping(p: 'KademliaPeer'):
             try:
                 if self._protocol.peer_manager.peer_is_good(p):
+                    await self._protocol.add_peer(p)
                     return
                 await self._protocol.get_rpc_peer(p).ping()
             except TimeoutError:
                 pass
 
-        if self._enqueued_contacts or self._pending_contacts:
-            # async with self._lock:
-            now = self._loop.time()
-            scheduled = [k for k, d in self._pending_contacts.items() if now >= d]
-            for k in scheduled:
-                del self._pending_contacts[k]
-                if k not in self._enqueued_contacts:
-                    self._enqueued_contacts.append(k)
-            while self._enqueued_contacts:
-                peer = self._enqueued_contacts.pop()
-                delay = 1.0 / float(len(self._enqueued_contacts))
-                self._loop.create_task(self._loop.call_later(delay, _ping, peer))
+        while True:
+            tasks = []
 
-        if not self._next_timer and not self._next_task and self._running:
-            self._next_timer = self._loop.call_later(300, self._schedule_next)
+            async with self._lock:
+                if self._enqueued_contacts or self._pending_contacts:
+                    now = self._loop.time()
+                    scheduled = [k for k, d in self._pending_contacts.items() if now >= d]
+                    for k in scheduled:
+                        del self._pending_contacts[k]
+                        if k not in self._enqueued_contacts:
+                            self._enqueued_contacts.append(k)
+                    while self._enqueued_contacts:
+                        peer = self._enqueued_contacts.pop()
+                        tasks.append(self._loop.create_task(_ping(peer)))
+            if tasks:
+                await asyncio.wait(tasks, loop=self._loop)
 
-    def _schedule_next(self):
-        self._next_task = self._loop.create_task(self._process())
+            f = self._loop.create_future()
+            self._loop.call_later(1.0, lambda: None if f.done() else f.set_result(None))
+            await f
 
     def start(self):
         assert not self._running
@@ -416,15 +419,16 @@ class KademliaProtocol(DatagramProtocol):
         await self.peer_manager.update_contact_triple(request_datagram.node_id, address[0], address[1])
         # only add a requesting contact to the routing table if it has replied to one of our requests
         peer = self.peer_manager.get_kademlia_peer(request_datagram.node_id, address[0], address[1])
-        if self.peer_manager.peer_is_good(peer) is not False:
-            self.loop.create_task(self.add_peer(peer))
         try:
             await self._handle_rpc(peer, request_datagram)
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
             # will be added to our routing table if successful
-            if self.peer_manager.peer_is_good(peer) is None and not self.peer_manager.get_last_replied(peer.address,
-                                                                                                       peer.udp_port):
-                self.loop.create_task(self.ping_queue.enqueue_maybe_ping(peer))
+            is_good = self.peer_manager.peer_is_good(peer)
+            if is_good is None:
+                await self.ping_queue.enqueue_maybe_ping(peer)
+            elif is_good is True:
+                await self.add_peer(peer)
+
         except Exception as err:
             log.warning("error raised handling %s request from %s:%i - %s(%s)",
                         request_datagram.method, peer.address, peer.udp_port, str(type(err)),
@@ -456,8 +460,8 @@ class KademliaProtocol(DatagramProtocol):
             await self.peer_manager.report_last_replied(address[0], address[1])
             await self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():
-                self.loop.create_task(self.add_peer(peer))
                 df.set_result(response_datagram)
+                await self.add_peer(peer)
             else:
                 log.warning("%s:%i replied, but after we cancelled the request attempt",
                             peer.address, peer.udp_port)
@@ -522,6 +526,8 @@ class KademliaProtocol(DatagramProtocol):
             return response
         except (asyncio.TimeoutError, RemoteException):
             await self.peer_manager.report_failure(peer.address, peer.udp_port)
+            if self.peer_manager.peer_is_good(peer) is False:
+                self.routing_table.remove_peer(peer)
             raise
 
     async def send_response(self, peer: 'KademliaPeer', response: ResponseDatagram):

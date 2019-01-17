@@ -107,7 +107,8 @@ class BlobFile:
             return
         async with self.blob_write_lock:
             await self.loop.run_in_executor(None, _save_verified)
-            await self.blob_completed_callback(self)
+            if self.blob_completed_callback:
+                await self.blob_completed_callback(self)
             self.verified.set()
 
     def open_for_writing(self) -> HashBlobWriter:
@@ -168,7 +169,7 @@ class BlobFile:
         writer = blob.open_for_writing()
         writer.write(blob_bytes)
         await blob.verified.wait()
-        return BlobInfo(blob_num, length, binascii.hexlify(iv).encode(), blob_hash)
+        return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), blob_hash)
 
     def set_length(self, length):
         if self.length is not None and length == self.length:

@@ -2,6 +2,7 @@ import asyncio
 import random
 import logging
 import typing
+import itertools
 
 from lbrynet.dht import constants
 from lbrynet.dht.protocol.distance import Distance
@@ -165,11 +166,7 @@ class TreeRoutingTable:
         ]
 
     def get_peers(self) -> typing.List['KademliaPeer']:
-        contacts = []
-        for i in range(len(self.buckets)):
-            for contact in self.buckets[i].peers:
-                contacts.append(contact)
-        return contacts
+        return list(itertools.chain.from_iterable(map(lambda bucket: bucket.peers, self.buckets)))
 
     def should_split(self, bucket_index: int, to_add: bytes) -> bool:
         #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
