@@ -973,10 +973,6 @@ class Daemon(metaclass=JSONRPCServerType):
     #                                                                          #
     ############################################################################
 
-    @deprecated("stop")
-    def jsonrpc_daemon_stop(self):
-        pass
-
     def jsonrpc_stop(self):
         """
         Stop lbrynet
@@ -1287,42 +1283,6 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return sorted([command for command in self.callable_methods.keys()])
 
-    @deprecated("account_balance")
-    def jsonrpc_wallet_balance(self, address=None):
-        pass
-
-    @deprecated("account_unlock")
-    def jsonrpc_wallet_unlock(self, password):
-        pass
-
-    @deprecated("account_decrypt")
-    def jsonrpc_wallet_decrypt(self):
-        pass
-
-    @deprecated("account_encrypt")
-    def jsonrpc_wallet_encrypt(self, new_password):
-        pass
-
-    @deprecated("address_is_mine")
-    def jsonrpc_wallet_is_address_mine(self, address):
-        pass
-
-    @deprecated()
-    def jsonrpc_wallet_public_key(self, address):
-        pass
-
-    @deprecated("address_list")
-    def jsonrpc_wallet_list(self):
-        pass
-
-    @deprecated("address_unused")
-    def jsonrpc_wallet_new_address(self):
-        pass
-
-    @deprecated("address_unused")
-    def jsonrpc_wallet_unused_address(self):
-        pass
-
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
         """
@@ -1388,35 +1348,6 @@ class Daemon(metaclass=JSONRPCServerType):
             log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
             result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
         return result
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    # @AuthJSONRPCServer.deprecated("account_fund"), API has changed as well, so we forward for now
-    # marked as deprecated in changelog and will be removed after subsequent release
-    def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
-        """
-        Create new UTXOs, each containing `amount` credits
-
-        Usage:
-            wallet_prefill_addresses [--no_broadcast]
-                                     (<num_addresses> | --num_addresses=<num_addresses>)
-                                     (<amount> | --amount=<amount>)
-
-        Options:
-            --no_broadcast                    : (bool) whether to broadcast or not
-            --num_addresses=<num_addresses>   : (int) num of addresses to create
-            --amount=<amount>                 : (decimal) initial amount in each address
-
-        Returns:
-            (dict) the resulting transaction
-        """
-        broadcast = not no_broadcast
-        return self.jsonrpc_account_fund(
-            self.default_account.id,
-            self.default_account.id,
-            amount=amount,
-            outputs=num_addresses,
-            broadcast=broadcast
-        )
 
     @requires("wallet")
     def jsonrpc_account_list(self, account_id=None, confirmations=6,
@@ -2715,10 +2646,6 @@ class Daemon(metaclass=JSONRPCServerType):
         result = await self.wallet_manager.tip_claim(amount, claim_id, account)
         await self.analytics_manager.send_claim_action('new_support')
         return result
-
-    @deprecated()
-    def jsonrpc_claim_renew(self, outpoint=None, height=None):
-        pass
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
