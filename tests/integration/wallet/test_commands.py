@@ -596,6 +596,27 @@ class ClaimManagement(CommandTestCase):
         await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
         self.assertEqual('9.97968399', await self.daemon.jsonrpc_account_balance())
 
+    async def test_claim_show(self):
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+        channel_from_claim_show = await self.out(
+            self.daemon.jsonrpc_claim_show(txid=channel['tx']['txid'], nout=channel['output']['nout'])
+        )
+        self.assertEqual(channel_from_claim_show['value'], channel['output']['value'])
+        channel_from_claim_show = await self.out(
+            self.daemon.jsonrpc_claim_show(claim_id=channel['claim_id'])
+        )
+        self.assertEqual(channel_from_claim_show['value'], channel['output']['value'])
+
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        self.assertTrue(abandon['success'])
+        await self.confirm_tx(abandon['tx']['txid'])
+        not_a_claim = await self.out(
+            self.daemon.jsonrpc_claim_show(txid=abandon['tx']['txid'], nout=0)
+        )
+        self.assertEqual(not_a_claim, 'claim not found')
+
     async def test_abandoned_channel_with_signed_claims(self):
         channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
         self.assertTrue(channel['success'])
