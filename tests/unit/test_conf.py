@@ -1,11 +1,8 @@
 import os
 import json
-import sys
 import tempfile
 import shutil
-from unittest import skipIf
-from twisted.trial import unittest
-from twisted.internet import defer
+import unittest
 from lbrynet import conf
 from lbrynet.error import InvalidCurrencyError
 
@@ -13,7 +10,7 @@ from lbrynet.error import InvalidCurrencyError
 class SettingsTest(unittest.TestCase):
     def get_mock_config_instance(self):
         self.tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda : defer.succeed(shutil.rmtree(self.tmp_dir)))
+        self.addCleanup(shutil.rmtree, self.tmp_dir)
         return conf.get_config(self.tmp_dir, self.tmp_dir, self.tmp_dir)
 
     # def test_envvar_is_read(self):
