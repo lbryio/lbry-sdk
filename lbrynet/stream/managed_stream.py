@@ -115,7 +115,7 @@ class ManagedStream:
             'mime_type': mime_type,
             'key': self.descriptor.key,
             'total_bytes_lower_bound': self.descriptor.lower_bound_decrypted_length(),
-            'total_bytes_upper_bound': self.descriptor.upper_bound_decrypted_length(),
+            'total_bytes': self.descriptor.upper_bound_decrypted_length(),
             'written_bytes': None if not full_path else self.downloader.written_bytes or os.stat(full_path).st_size,
             'blobs_completed': self.blobs_completed,
             'blobs_in_stream': self.blobs_in_stream,

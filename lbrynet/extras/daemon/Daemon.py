@@ -1509,6 +1509,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
                       [--claim_name=<claim_name>] [--sort=<sort_by>] [--reverse] [--comparison=<comparison>]
+                      [--full_status=<full_status>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
