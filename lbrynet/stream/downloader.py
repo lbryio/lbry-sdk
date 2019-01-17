@@ -126,7 +126,7 @@ class StreamDownloader(StreamAssembler):
                      min(len(to_add), 8 - len(self.running_download_requests)),
                      len(self.running_download_requests))
         else:
-            log.warning("idle")
+            log.info("downloader idle...")
         for peer in to_add:
             if len(self.running_download_requests) >= 8:
                 break
@@ -220,12 +220,10 @@ class StreamDownloader(StreamAssembler):
         task.add_done_callback(got_descriptor)
         try:
             async with node.stream_peer_search_junction(blob_queue) as search_junction:
-                log.info("got search junction")
                 async for peers in search_junction:
                     if not isinstance(peers, list):  # TODO: what's up with this?
-                        log.error("not a list: %s", peers)
+                        log.error("not a list: %s %s", peers, str(type(peers)))
                     else:
-                        # log.info("add %i peers to download of stream %s", len(peers), self.sd_hash[:8])
                         self._add_peer_protocols(peers)
                         if not added_peers.is_set():
                             added_peers.set()
@@ -240,9 +238,10 @@ class StreamDownloader(StreamAssembler):
                 add_fixed_peers_timer.cancel()
 
     async def stop(self):
-        log.info("stop downloader")
         cancel_task(self.accumulate_connections_task)
         cancel_task(self.download_task)
+        self.accumulate_connections_task = None
+        self.download_task = None
         drain_tasks(self.running_download_requests)
 
         while self.requested_from:
@@ -261,7 +260,6 @@ class StreamDownloader(StreamAssembler):
         log.info("stopped downloader")
 
     async def _download(self):
-        log.info("accumulate connections")
         try:
 
             log.info("download and decrypt stream")
@@ -273,11 +271,10 @@ class StreamDownloader(StreamAssembler):
                 self.descriptor.stream_hash, 'finished'
             )
         except asyncio.CancelledError:
-            log.info("cancelled")
+            pass
         finally:
             await self.stop()
 
     def download(self, node: 'Node'):
-        log.info("make download task")
         self.accumulate_connections_task = self.loop.create_task(self._accumulate_connections(node))
         self.download_task = self.loop.create_task(self._download())
