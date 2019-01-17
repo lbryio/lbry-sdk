@@ -508,7 +508,7 @@ class KademliaProtocol(DatagramProtocol):
         if isinstance(message, RequestDatagram):
             self.loop.create_task(self.handle_request_datagram(address, message))
         elif isinstance(message, ErrorDatagram):
-            self.loop.create_task(self.handle_error_datagram(address, message))
+            self.handle_error_datagram(address, message)
         else:
             assert isinstance(message, ResponseDatagram), "sanity"
             self.loop.create_task(self.handle_response_datagram(address, message))

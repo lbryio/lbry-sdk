@@ -86,7 +86,7 @@ class StreamAssembler:
                         await self._decrypt_blob(blob, blob_info, self.descriptor.key)
                         break
                     except ValueError as err:
-                        log.error("failed to decrypt blob %s for stream - %s", blob_info.blob_hash,
+                        log.error("failed to decrypt blob %s for stream %s - %s", blob_info.blob_hash,
                                   self.descriptor.sd_hash, str(err))
                         continue
                 if not self.wrote_bytes_event.is_set():
