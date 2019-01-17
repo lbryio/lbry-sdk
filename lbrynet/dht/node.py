@@ -10,7 +10,10 @@ from lbrynet.dht.protocol.async_generator_junction import AsyncGeneratorJunction
 from lbrynet.dht.protocol.distance import Distance
 from lbrynet.dht.protocol.iterative_find import IterativeNodeFinder, IterativeValueFinder
 from lbrynet.dht.protocol.protocol import KademliaProtocol
-from lbrynet.dht.peer import PeerManager, KademliaPeer
+from lbrynet.dht.peer import KademliaPeer
+
+if typing.TYPE_CHECKING:
+    from lbrynet.dht.peer import PeerManager
 
 log = logging.getLogger(__name__)
 
