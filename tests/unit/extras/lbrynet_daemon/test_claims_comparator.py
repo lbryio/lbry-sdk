@@ -1,4 +1,4 @@
-from twisted.trial import unittest
+import unittest
 
 from lbrynet.extras.daemon.Daemon import sort_claim_results
 
@@ -37,7 +37,3 @@ class ClaimsComparatorTest(unittest.TestCase):
     def run_test(self, results, field, expected):
         actual = sort_claim_results(results)
         self.assertEqual(expected, [r[field] for r in actual])
-
-
-if __name__ == '__main__':
-    unittest.main()

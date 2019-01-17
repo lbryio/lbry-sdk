@@ -1,6 +1,6 @@
 import asyncio
 from torba.testcase import AsyncioTestCase
-from dht.protocol.async_generator_junction import AsyncGeneratorJunction
+from lbrynet.dht.protocol.async_generator_junction import AsyncGeneratorJunction
 
 
 class MockAsyncGen:
@@ -33,7 +33,6 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
     async def _test_junction(self, expected, *generators):
         order = []
         async with AsyncGeneratorJunction(self.loop) as junction:
-            print("junction", junction)
             for generator in generators:
                 junction.add_generator(generator)
             async for item in junction:

@@ -3,7 +3,12 @@ from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbrynet.dht import constants
 from lbrynet.dht.protocol.protocol import KademliaProtocol
-from lbrynet.peer import PeerManager
+from lbrynet.dht.peer import PeerManager
+
+
+import logging
+log = logging.getLogger("lbrynet")
+log.setLevel(logging.DEBUG)
 
 
 class TestProtocol(AsyncioTestCase):
@@ -12,16 +17,16 @@ class TestProtocol(AsyncioTestCase):
         with dht_mocks.mock_network_loop(loop):
             node_id1 = constants.generate_id()
             peer1 = KademliaProtocol(
-                PeerManager(loop), loop, node_id1, '1.2.3.4', 4444, 3333
+                loop, PeerManager(loop), node_id1, '1.2.3.4', 4444, 3333
             )
             peer2 = KademliaProtocol(
-                PeerManager(loop), loop, constants.generate_id(), '1.2.3.5', 4444, 3333
+                loop, PeerManager(loop), constants.generate_id(), '1.2.3.5', 4444, 3333
             )
             await loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
             await loop.create_datagram_endpoint(lambda: peer2, ('1.2.3.5', 4444))
 
-            peer = peer2.peer_manager.make_peer('1.2.3.4', node_id=node_id1, udp_port=4444)
-            result = await peer.ping()
+            peer = peer2.peer_manager.get_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
+            result = await peer2.get_rpc_peer(peer).ping()
             self.assertEqual(result, b'pong')
             peer1.stop()
             peer2.stop()
@@ -33,18 +38,18 @@ class TestProtocol(AsyncioTestCase):
         with dht_mocks.mock_network_loop(loop):
             node_id1 = constants.generate_id()
             peer1 = KademliaProtocol(
-                PeerManager(loop), loop, node_id1, '1.2.3.4', 4444, 3333
+                loop, PeerManager(loop), node_id1, '1.2.3.4', 4444, 3333
             )
             peer2 = KademliaProtocol(
-                PeerManager(loop), loop, constants.generate_id(), '1.2.3.5', 4444, 3333
+                loop, PeerManager(loop), constants.generate_id(), '1.2.3.5', 4444, 3333
             )
             await loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
             await loop.create_datagram_endpoint(lambda: peer2, ('1.2.3.5', 4444))
 
-            peer = peer2.peer_manager.make_peer('1.2.3.4', node_id=node_id1, udp_port=4444)
-            self.assertEqual(None, peer.token)
-            await peer.find_value(b'1' * 48)
-            self.assertNotEqual(None, peer.token)
+            peer = peer2.peer_manager.get_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
+            self.assertEqual(None, peer2.peer_manager.get_node_token(peer.node_id))
+            await peer2.get_rpc_peer(peer).find_value(b'1' * 48)
+            self.assertNotEqual(None, peer2.peer_manager.get_node_token(peer.node_id))
             peer1.stop()
             peer2.stop()
             peer1.disconnect()
@@ -55,23 +60,23 @@ class TestProtocol(AsyncioTestCase):
         with dht_mocks.mock_network_loop(loop):
             node_id1 = constants.generate_id()
             peer1 = KademliaProtocol(
-                PeerManager(loop), loop, node_id1, '1.2.3.4', 4444, 3333
+                loop, PeerManager(loop), node_id1, '1.2.3.4', 4444, 3333
             )
             peer2 = KademliaProtocol(
-                PeerManager(loop), loop, constants.generate_id(), '1.2.3.5', 4444, 3333
+                loop, PeerManager(loop), constants.generate_id(), '1.2.3.5', 4444, 3333
             )
             await loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
             await loop.create_datagram_endpoint(lambda: peer2, ('1.2.3.5', 4444))
 
-            peer = peer2.peer_manager.make_peer('1.2.3.4', node_id=node_id1, udp_port=4444)
-            peer2_from_peer1 = peer1.peer_manager.make_peer(
-                peer2.external_ip, node_id=peer2.node_id, udp_port=peer2.udp_port, tcp_port=peer2.peer_port
+            peer = peer2.peer_manager.get_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
+            peer2_from_peer1 = peer1.peer_manager.get_kademlia_peer(
+                peer2.node_id, peer2.external_ip, udp_port=peer2.udp_port
             )
-            peer3 = peer1.peer_manager.make_peer(
-                '1.2.3.6', node_id=constants.generate_id(), udp_port=4444
+            peer3 = peer1.peer_manager.get_kademlia_peer(
+                constants.generate_id(), '1.2.3.6', udp_port=4444
             )
-
             store_result = await peer2.store_to_peer(b'2' * 48, peer)
+            log.info(store_result)
             self.assertEqual(store_result[0], peer.node_id)
             self.assertEqual(True, store_result[1])
             self.assertEqual(True, peer1.data_store.has_peers_for_blob(b'2' * 48))
@@ -83,7 +88,9 @@ class TestProtocol(AsyncioTestCase):
                 {b'2' * 48, b'token', b'protocolVersion'}, set(find_value_response.keys())
             )
             self.assertEqual(1, len(find_value_response[b'2' * 48]))
-            self.assertEqual(find_value_response[b'2' * 48][0], peer2_from_peer1.compact_address_tcp())
+            self.assertEqual(find_value_response[b'2' * 48][0], peer2_from_peer1)
+            self.assertEqual(peer2_from_peer1.tcp_port, 3333)
+
             peer1.stop()
             peer2.stop()
             peer1.disconnect()

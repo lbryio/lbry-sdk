@@ -1,14 +1,13 @@
 from lbrynet.schema.fee import Fee
-from lbrynet.extras.daemon import ExchangeRateManager
+from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager, ExchangeRate
 from lbrynet.error import InvalidExchangeRateResponse
-from twisted.trial import unittest
-from twisted.internet import defer
+from torba.testcase import AsyncioTestCase
 from tests import test_utils
-from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from tests.mocks import BTCLBCFeed, USDBTCFeed
+# from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
+# from tests.mocks import BTCLBCFeed, USDBTCFeed
 
 
-class FeeFormatTest(unittest.TestCase):
+class FeeFormatTest(AsyncioTestCase):
     def test_fee_created_with_correct_inputs(self):
         fee_dict = {
             'currency': 'USD',
@@ -30,18 +29,18 @@ class FeeFormatTest(unittest.TestCase):
         self.assertEqual('LBC', fee['currency'])
 
 
-class ExchangeRateTest(unittest.TestCase):
+class ExchangeRateTest(AsyncioTestCase):
     def setUp(self):
         test_utils.reset_time(self)
 
     def test_invalid_rates(self):
         with self.assertRaises(ValueError):
-            ExchangeRateManager.ExchangeRate('USDBTC', 0, test_utils.DEFAULT_ISO_TIME)
+            ExchangeRate('USDBTC', 0, test_utils.DEFAULT_ISO_TIME)
         with self.assertRaises(ValueError):
-            ExchangeRateManager.ExchangeRate('USDBTC', -1, test_utils.DEFAULT_ISO_TIME)
+            ExchangeRate('USDBTC', -1, test_utils.DEFAULT_ISO_TIME)
 
 
-class FeeTest(unittest.TestCase):
+class FeeTest(AsyncioTestCase):
     def setUp(self):
         test_utils.reset_time(self)
 
@@ -79,8 +78,7 @@ class FeeTest(unittest.TestCase):
             manager.convert_currency(fee.currency, "LBC", fee.amount)
 
 
-class LBRYioFeedTest(unittest.TestCase):
-    @defer.inlineCallbacks
+class LBRYioFeedTest(AsyncioTestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.LBRYioFeed()
 
@@ -100,8 +98,7 @@ class LBRYioFeedTest(unittest.TestCase):
             out = yield feed._handle_response(response)
 
 
-class LBRYioBTCFeedTest(unittest.TestCase):
-    @defer.inlineCallbacks
+class LBRYioBTCFeedTest(AsyncioTestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.LBRYioBTCFeed()
 
@@ -120,8 +117,8 @@ class LBRYioBTCFeedTest(unittest.TestCase):
         with self.assertRaises(InvalidExchangeRateResponse):
             out = yield feed._handle_response(response)
 
-class CryptonatorFeedTest(unittest.TestCase):
-    @defer.inlineCallbacks
+
+class CryptonatorFeedTest(AsyncioTestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.CryptonatorFeed()
 
@@ -140,8 +137,8 @@ class CryptonatorFeedTest(unittest.TestCase):
         with self.assertRaises(InvalidExchangeRateResponse):
             out = yield feed._handle_response(response)
 
-class CryptonatorBTCFeedTest(unittest.TestCase):
-    @defer.inlineCallbacks
+
+class CryptonatorBTCFeedTest(AsyncioTestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.CryptonatorBTCFeed()
 
@@ -161,9 +158,7 @@ class CryptonatorBTCFeedTest(unittest.TestCase):
             out = yield feed._handle_response(response)
 
 
-class BittrexFeedTest(unittest.TestCase):
-
-    @defer.inlineCallbacks
+class BittrexFeedTest(AsyncioTestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.BittrexFeed()
 

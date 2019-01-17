@@ -4,7 +4,6 @@ import shutil
 import os
 from torba.testcase import AsyncioTestCase
 from lbrynet.storage import SQLiteStorage
-from lbrynet.blob.blob_file import BlobFile
 from lbrynet.blob.blob_manager import BlobFileManager
 
 
