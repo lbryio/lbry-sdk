@@ -1,6 +1,6 @@
 # import contextlib
 # from io import StringIO
-# from twisted.trial import unittest
+# import unittest
 #
 # from lbrynet.extras.cli import normalize_value, main
 # from lbrynet.extras.system_info import get_platform

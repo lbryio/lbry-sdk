@@ -57,7 +57,7 @@ class MarketFeed:
             return (await response.read()).decode()
 
     def _handle_response(self, response):
-        return NotImplementedError
+        raise NotImplementedError()
 
     def _subtract_fee(self, from_amount):
         # increase amount to account for market fees

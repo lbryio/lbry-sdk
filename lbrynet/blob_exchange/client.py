@@ -38,13 +38,12 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             blob_response = response.get_blob_response()
             if blob_response and blob_response.blob_hash == self.blob.blob_hash:
                 self.blob.set_length(blob_response.length)
-            elif self.blob.blob_hash != blob_response.blob_hash:
+            elif blob_response and self.blob.blob_hash != blob_response.blob_hash:
                 log.warning("mismatch with self.blob %s", self.blob.blob_hash)
                 return
         if response.responses:
             self._response_fut.set_result(response)
         if response.blob_data and self.writer and not self.writer.closed():
-            # log.info("write blob bytes (%s) from %s:%i", self.blob.blob_hash[:8], self.peer.address, self.peer.tcp_port)
             self._blob_bytes_received += len(response.blob_data)
             self.writer.write(response.blob_data)
 
@@ -69,10 +68,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
             blob_response = response.get_blob_response()
-            if not availability_response or not availability_response.available_blobs:
+            if not blob_response and (not availability_response or not availability_response.available_blobs):
                 log.warning("blob not in availability response")
                 return False
-            elif availability_response.available_blobs != [self.blob.blob_hash]:
+            elif availability_response.available_blobs and \
+                    availability_response.available_blobs != [self.blob.blob_hash]:
                 log.warning("blob availability response doesn't match our request")
                 return False
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':

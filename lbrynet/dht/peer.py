@@ -141,7 +141,7 @@ class PeerManager:
         elif last_replied and last_replied > delay:
             return True
         elif last_requested and last_requested > delay:
-            return True
+            return None
         return
 
     def peer_is_good(self, peer: 'KademliaPeer'):

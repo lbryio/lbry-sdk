@@ -161,7 +161,7 @@ class StreamDescriptor:
         iv_generator = iv_generator or random_iv_generator()
         key = key or os.urandom(AES.block_size // 8)
         blob_num = -1
-        for num, blob_bytes in file_reader(file_path):
+        for blob_bytes in file_reader(file_path):
             blob_num += 1
             blob_info = await BlobFile.create_from_unencrypted(
                     loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num

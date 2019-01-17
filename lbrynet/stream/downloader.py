@@ -85,7 +85,7 @@ class StreamDownloader(StreamAssembler):
         self.output_dir = output_dir or os.getcwd()
         self.output_file_name = output_file_name
         self._lock = asyncio.Lock(loop=self.loop)
-        self.max_connections_per_stream = conf.settings['max_connections_per_stream']
+        self.max_connections_per_stream = 8 if not conf.settings else conf.settings['max_connections_per_stream']
         self.fixed_peers = fixed_peers or []
 
     async def _update_current_blob(self, blob: 'BlobFile'):

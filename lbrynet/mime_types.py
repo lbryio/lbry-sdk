@@ -144,6 +144,7 @@ types_map = {
     '.pict': 'image/pict',
     '.rtf': 'application/rtf',
     '.xul': 'text/xul',
+    '.m4v': 'video/m4v',
 
     # microsoft is special and has its own 'standard'
     # https://docs.microsoft.com/en-us/windows/desktop/wmp/file-name-extensions

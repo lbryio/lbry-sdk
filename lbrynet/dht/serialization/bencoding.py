@@ -48,17 +48,17 @@ def _bdecode(data: bytes, start_index: int = 0) -> typing.Tuple[typing.Union[int
         split_pos = data[start_index:].find(b':') + start_index
         try:
             length = int(data[start_index:split_pos])
-        except ValueError:
-            raise DecodeError()
+        except (ValueError, TypeError) as err:
+            raise DecodeError(err)
         start_index = split_pos + 1
         end_pos = start_index + length
         b = data[start_index:end_pos]
         return b, end_pos
 
 
-def bencode(data: dict) -> bytes:
+def bencode(data: typing.Dict) -> bytes:
     if not isinstance(data, dict):
-        raise TypeError
+        raise TypeError()
     return _bencode(data)
 
 
@@ -72,5 +72,5 @@ def bdecode(data: bytes, allow_non_dict_return: typing.Optional[bool] = False) -
         if not allow_non_dict_return and not isinstance(result, dict):
             raise ValueError(f'expected dict, got {type(result)}')
         return result
-    except ValueError as e:
-        raise DecodeError(str(e))
+    except (ValueError, TypeError) as err:
+        raise DecodeError(err)
