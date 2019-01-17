@@ -9,7 +9,6 @@ from aiohttp import client_exceptions
 from lbrynet import utils, conf, log_support
 from lbrynet.extras.daemon import analytics
 from lbrynet.extras.daemon.Daemon import Daemon
-import json
 import aiohttp
 import logging
 from urllib.parse import urlparse
