@@ -1,8 +1,8 @@
 import struct
 import asyncio
 from lbrynet.utils import generate_id
-from lbrynet.dht.routing import kbucket
-from lbrynet.peer import PeerManager
+from lbrynet.dht.protocol.routing_table import KBucket
+from lbrynet.dht.peer import PeerManager
 from lbrynet.dht import constants
 from torba.testcase import AsyncioTestCase
 
@@ -26,24 +26,24 @@ class TestKBucket(AsyncioTestCase):
         self.loop = asyncio.get_event_loop()
         self.address_generator = address_generator()
         self.peer_manager = PeerManager(self.loop)
-        self.kbucket = kbucket.KBucket(0, 2**constants.hash_bits, generate_id())
+        self.kbucket = KBucket(self.peer_manager, 0, 2**constants.hash_bits, generate_id())
 
     def test_add_peer(self):
         # Test if contacts can be added to empty list
         # Add k contacts to bucket
         for i in range(constants.k):
-            peer = self.peer_manager.make_peer(next(self.address_generator), generate_id(), 4444)
+            peer = self.peer_manager.get_kademlia_peer(generate_id(), next(self.address_generator), 4444)
             self.assertTrue(self.kbucket.add_peer(peer))
-            self.assertEqual(peer, self.kbucket._contacts[i])
+            self.assertEqual(peer, self.kbucket.peers[i])
 
         # Test if contact is not added to full list
-        peer = self.peer_manager.make_peer(next(self.address_generator), generate_id(), 4444)
+        peer = self.peer_manager.get_kademlia_peer(generate_id(), next(self.address_generator), 4444)
         self.assertFalse(self.kbucket.add_peer(peer))
 
         # Test if an existing contact is updated correctly if added again
-        existing_peer = self.kbucket._contacts[0]
+        existing_peer = self.kbucket.peers[0]
         self.assertTrue(self.kbucket.add_peer(existing_peer))
-        self.assertEqual(existing_peer, self.kbucket._contacts[-1])
+        self.assertEqual(existing_peer, self.kbucket.peers[-1])
 
     # def testGetContacts(self):
     #     # try and get 2 contacts from empty list
@@ -98,18 +98,18 @@ class TestKBucket(AsyncioTestCase):
 
     def test_remove_peer(self):
         # try remove contact from empty list
-        peer = self.peer_manager.make_peer(next(self.address_generator), generate_id(), 4444)
+        peer = self.peer_manager.get_kademlia_peer(generate_id(), next(self.address_generator), 4444)
         self.assertRaises(ValueError, self.kbucket.remove_peer, peer)
 
         added = []
         # Add couple contacts
         for i in range(constants.k-2):
-            peer = self.peer_manager.make_peer(next(self.address_generator), generate_id(), 4444)
+            peer = self.peer_manager.get_kademlia_peer(generate_id(), next(self.address_generator), 4444)
             self.assertTrue(self.kbucket.add_peer(peer))
             added.append(peer)
 
         while added:
             peer = added.pop()
-            self.assertIn(peer, self.kbucket._contacts)
+            self.assertIn(peer, self.kbucket.peers)
             self.kbucket.remove_peer(peer)
-            self.assertNotIn(peer, self.kbucket._contacts)
+            self.assertNotIn(peer, self.kbucket.peers)

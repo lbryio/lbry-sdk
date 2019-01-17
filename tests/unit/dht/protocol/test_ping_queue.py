@@ -3,7 +3,7 @@ from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbrynet.dht import constants
 from lbrynet.dht.protocol.protocol import KademliaProtocol
-from lbrynet.peer import PeerManager
+from lbrynet.dht.peer import PeerManager
 
 
 class TestPingQueue(AsyncioTestCase):
@@ -25,7 +25,7 @@ class TestPingQueue(AsyncioTestCase):
             advance = dht_mocks.get_time_accelerator(loop, loop.time())
             # start the nodes
             nodes = {
-                i: KademliaProtocol(PeerManager(loop), loop, node_id, address, 4444, 3333)
+                i: KademliaProtocol(loop, PeerManager(loop), node_id, address, 4444, 3333)
                 for i, (node_id, address) in enumerate(peer_addresses)
             }
             for i, p in nodes.items():
@@ -39,8 +39,8 @@ class TestPingQueue(AsyncioTestCase):
             for i in range(1, len(peer_addresses)):
                 node = nodes[i]
                 assert node.node_id != node_1.node_id
-                peer = node_1.peer_manager.make_peer(node.external_ip, node_id=node.node_id, udp_port=node.udp_port)
-                futs.append(peer.ping())
+                peer = node_1.peer_manager.get_kademlia_peer(node.node_id, node.external_ip, udp_port=node.udp_port)
+                futs.append(node_1.get_rpc_peer(peer).ping())
             await advance(3)
             await asyncio.gather(*tuple(futs))
 
