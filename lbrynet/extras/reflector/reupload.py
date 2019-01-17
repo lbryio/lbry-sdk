@@ -36,10 +36,11 @@ class IncompleteResponse(Exception):
     """
 
 
-class Reflector:
+class ReflectorClient(asyncio.Protocol):
+    
     REFLECTOR_V1 = 0
     REFLECTOR_V2 = 1
-    REFLECTOR_PROD_SERVER = random.choice(conf.settings['reflector_servers'])
+    PROD_SERVER = random.choice(conf.settings['reflector_servers'])
     
     def __init__(self, version: int, server_url: str):
         self.version = version
@@ -48,19 +49,19 @@ class Reflector:
         self.descriptor = asyncio.Event()
         self.blob_file_manager = asyncio.Event()
         
-    async def handle_handshake(self):
+    async def handle_handshake(self) -> typing.Any[int, Exception]:
         """
         Handshake sequence.
         """
         reader, writer = await asyncio.open_connection(host=self.server)
-        handshake = {'version': self.version}  # '7b2276657273696f6e223a20317d'
+        handshake = {'version': self.version}
         payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
         await writer.write(payload)
         await writer.write_eof()
         data = await reader.readline()
         response = await json.loads(binascii.unhexlify(data))
         await writer.drain()
-        return await response.result()['version']  # {'version': 1}
+        return await response.result()['version']
 
     """
     ############# Stream descriptor requests and responses #############
