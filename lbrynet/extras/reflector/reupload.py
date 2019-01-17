@@ -1,3 +1,170 @@
+import asyncio
+import binascii
+import json
+import random
+import typing
+
+from lbrynet import conf
+
+if typing.TYPE_CHECKING:
+    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.stream.descriptor import StreamDescriptor
+
+
+class ReflectorClientVersionError(Exception):
+    """
+    Raised by reflector server if client sends an incompatible or unknown version.
+    """
+
+
+class ReflectorRequestError(Exception):
+    """
+    Raised by reflector server if client sends a message without the required fields.
+    """
+
+
+class ReflectorRequestDecodeError(Exception):
+    """
+    Raised by reflector server if client sends an invalid json request.
+    """
+
+
+class IncompleteResponse(Exception):
+    """
+    Raised by reflector server when client sends a portion of a json request,
+    used buffering the incoming request.
+    """
+
+
+REFLECTOR_V1 = 0
+REFLECTOR_V2 = 1
+PROD_SERVER = random.choice(conf.settings['reflector_servers'])
+
+VERSION = 'version'
+SEND_SD_BLOB = 'send_sd_blob'
+NEEDED_SD_BLOBS = 'needed_sd_blobs'
+
+
+class ReflectorClient(asyncio.Protocol):
+    
+    def __init__(self, **kwargs) -> None:
+        super(ReflectorClient, self).__init__(**kwargs)
+        self.transport = None
+        self.missing_sd_blobs = kwargs.get('missing_sd_blob_hashes', default=[])
+        self.sd_hash = kwargs.get('sd_hash', default=None)
+        self.stream_hash = kwargs.get('stream_hash', default=None)
+        self.blob_manager = kwargs.get('blob_manager', default=None)
+        self.blob_hashes_to_send = kwargs.get('blob_hashes', default=[])
+        self.loop = asyncio.get_event_loop_policy().get_event_loop()
+        self.version = REFLECTOR_V2
+        self.data_received(kwargs.get('blob_hashes'))
+
+    async def reflector_handshake_procedure(self):
+        reader, writer = asyncio.open_connection(PROD_SERVER)
+        handshake = {'version': self.version}
+        payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
+        writer.write(payload)
+        writer.write_eof()
+        data = reader.readline()
+        response = json.loads(binascii.unhexlify(data))
+        await writer.drain()
+        if response['version'] is self.version:
+            self.loop.call_soon_threadsafe(self.connection_made)
+    
+    async def connection_made(self, transport: asyncio.Transport) -> None:
+        print("Connection Made to the reflector service.")
+        self.transport = transport
+    
+    # TODO: listen for reflect_blobs and handle event loop.
+    @classmethod
+    async def reflect_blobs(cls, **kwargs) -> None:
+        ...
+    
+    # TODO: listen for reflect_stream and handle event loop.
+    @classmethod
+    async def descriptor_received(cls, **kwargs) -> None:
+        cls.blob_manager = kwargs.get('blob_manager')
+        cls.loop = kwargs.get('loop')
+        cls.sd_hash = None
+        cls.stream_hash = None
+        
+    # TODO: handle SEND_SD_BLOB request.
+    async def send_stream_descriptor_blob(self):
+        ...
+    
+    # TODO: fire-and-forget blobs, return to listener.
+    async def send_missing_blobs(self):
+        ...
+    
+    async def notify_server_version_received(self):
+        ...
+    
+    # TODO: handle NEEDED_SD_BLOBS request
+    async def handle_missing_sd_blobs(self):
+        self.loop.add_writer(self.send_missing_blobs, callback=self.data_received)
+    
+    # TODO: handle response from reflector server.
+    async def data_received(self, data: bytes) -> None:
+        transaction = await json.loads((binascii.unhexlify(data)))
+        for k, v in transaction.items():
+            if k is VERSION:
+                self.loop.add_writer(self.transport, self.notify_server_version_received)
+    
+    # TODO: determine if job done.
+    async def eof_received(self):
+        ...
+
+
+async def reflect_stream(loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager) -> typing.List[str]:
+    
+    await ReflectorClient.descriptor_received(loop=loop, blob_manager=blob_manager)
+    
+    async def _reflect_stream():
+        return typing.cast(list, ReflectorClient.reflect_blobs())
+    return await _reflect_stream()
+
+
+# @defer.inlineCallbacks
+# def _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server):
+#     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+#     factory = EncryptedFileReflectorClientFactory(blob_manager, stream_hash, sd_hash)
+#     ip = yield resolve(reflector_address)
+#     yield reactor.connectTCP(ip, reflector_port, factory)
+#     result = yield factory.finished_deferred
+#     defer.returnValue(result)
+#
+#
+# def _reflect_file(lbry_file, reflector_server):
+#     return _reflect_stream(lbry_file.blob_manager, lbry_file.stream_hash, lbry_file.sd_hash, reflector_server)
+#
+#
+# def reflect_file(lbry_file, reflector_server=None):
+#     if reflector_server:
+#         if len(reflector_server.split(":")) == 2:
+#             host, port = tuple(reflector_server.split(":"))
+#             reflector_server = host, int(port)
+#         else:
+#             reflector_server = reflector_server, 5566
+#     else:
+#         reflector_server = random.choice(conf.settings['reflector_servers'])
+#     return _reflect_file(lbry_file, reflector_server)
+#
+#
+# @defer.inlineCallbacks
+# def reflect_stream(blob_manager, stream_hash, reflector_server=None):
+#     if reflector_server:
+#         if len(reflector_server.split(":")) == 2:
+#             host, port = tuple(reflector_server.split(":"))
+#             reflector_server = host, int(port)
+#         else:
+#             reflector_server = reflector_server, 5566
+#     else:
+#         reflector_server = random.choice(conf.settings['reflector_servers'])
+#     sd_hash = yield blob_manager.storage.get_sd_blob_hash_for_stream(stream_hash)
+#     result = yield _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server)
+#     defer.returnValue(result)
+
+
 # import json
 # import logging
 # import random
@@ -390,42 +557,4 @@
 #     defer.returnValue(ip)
 #
 #
-# @defer.inlineCallbacks
-# def _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server):
-#     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-#     factory = EncryptedFileReflectorClientFactory(blob_manager, stream_hash, sd_hash)
-#     ip = yield resolve(reflector_address)
-#     yield reactor.connectTCP(ip, reflector_port, factory)
-#     result = yield factory.finished_deferred
-#     defer.returnValue(result)
-#
-#
-# def _reflect_file(lbry_file, reflector_server):
-#     return _reflect_stream(lbry_file.blob_manager, lbry_file.stream_hash, lbry_file.sd_hash, reflector_server)
-#
-#
-# def reflect_file(lbry_file, reflector_server=None):
-#     if reflector_server:
-#         if len(reflector_server.split(":")) == 2:
-#             host, port = tuple(reflector_server.split(":"))
-#             reflector_server = host, int(port)
-#         else:
-#             reflector_server = reflector_server, 5566
-#     else:
-#         reflector_server = random.choice(conf.settings['reflector_servers'])
-#     return _reflect_file(lbry_file, reflector_server)
-#
-#
-# @defer.inlineCallbacks
-# def reflect_stream(blob_manager, stream_hash, reflector_server=None):
-#     if reflector_server:
-#         if len(reflector_server.split(":")) == 2:
-#             host, port = tuple(reflector_server.split(":"))
-#             reflector_server = host, int(port)
-#         else:
-#             reflector_server = reflector_server, 5566
-#     else:
-#         reflector_server = random.choice(conf.settings['reflector_servers'])
-#     sd_hash = yield blob_manager.storage.get_sd_blob_hash_for_stream(stream_hash)
-#     result = yield _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server)
-#     defer.returnValue(result)
+
