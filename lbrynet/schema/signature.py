@@ -1,5 +1,7 @@
 from collections import namedtuple
 
+from typing import Union
+
 LEGACY = namedtuple('Legacy', 'payload')
 NAMED_SECP256K1 = namedtuple('NamedSECP256k1', 'raw_signature certificate_id payload')
 FLAGS = {
@@ -9,8 +11,7 @@ FLAGS = {
 
 class Signature:
 
-    def __init__(self, data: namedtuple):
-        assert isinstance(data, (LEGACY, NAMED_SECP256K1))
+    def __init__(self, data: Union[LEGACY, NAMED_SECP256K1]):
         self.data = data
 
     @property

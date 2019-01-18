@@ -39,7 +39,7 @@ class ClaimDict(OrderedDict):
     @property
     def serialized(self):
         """Serialized Claim protobuf"""
-        if self.detached_signature and self.detached_signature.payload:
+        if self.detached_signature:
             return self.detached_signature.serialized
         return self.protobuf.SerializeToString()
 
@@ -52,10 +52,9 @@ class ClaimDict(OrderedDict):
 
     @property
     def has_signature(self):
-        claim = self.protobuf
-        if claim.HasField("publisherSignature"):
-            return True
-        return self.detached_signature and self.detached_signature.certificate_id
+        return self.protobuf.HasField("publisherSignature") or (
+                self.detached_signature and self.detached_signature.raw_signature
+        )
 
     @property
     def is_certificate(self):
@@ -94,11 +93,10 @@ class ClaimDict(OrderedDict):
 
     @property
     def certificate_id(self):
+        if self.protobuf.HasField("publisherSignature"):
+            return binascii.hexlify(self.protobuf.publisherSignature.certificateId)
         if self.detached_signature and self.detached_signature.certificate_id:
             return binascii.hexlify(self.detached_signature.certificate_id)
-        if not self.has_signature:
-            return None
-        return binascii.hexlify(self.protobuf.publisherSignature.certificateId)
 
     @property
     def signature(self):
