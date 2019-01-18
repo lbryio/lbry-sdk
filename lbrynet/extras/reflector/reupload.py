@@ -4,17 +4,12 @@ import json
 import random
 import typing
 import logging
-import functools
-import selectors
 from lbrynet import conf
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
-    from lbrynet.blob.blob_file import BlobFile
     from lbrynet.stream.descriptor import StreamDescriptor
 
-# module variables
-# TODO: define more for API to lbrysdk
 REFLECTOR_V1 = 0
 REFLECTOR_V2 = 1
 PROD_SERVER = random.choice(conf.settings['reflector_servers'])
@@ -47,163 +42,66 @@ class IncompleteResponse(Exception):
     """
 
 
-# spacing like this to track concurrency
-async def _request(*args) -> str:
-    # TODO: during testing this is only way i got to work, doesn't feel right.
-    return await binascii.hexlify(
-        json.dumps(
-            dict.fromkeys(args)
-        ).encode()
-    ).decode()
+async def reflect_stream(loop: asyncio.AbstractEventLoop,
+                         descriptor: StreamDescriptor, blob_manager: BlobFileManager) -> typing.List:
+    """#UNTESTED
+    API call to run reflector service.
+    :param loop:
+    :param descriptor:
+    :param blob_manager:
+    :return:
+    """
+    received_server_version = asyncio.Lock()
+    wait_response = asyncio.Lock()
 
-
-async def _response(*args) -> dict:
-    return await json.loads(
-        binascii.unhexlify(args)
-    )
-
-
-def reflector(factory, queue, handle):
-    @functools.wraps(handle)
-    def proto(*args):
-        # SD_BLOB_SIZE = 'sd_blob_size'
-        # SEND_SD_BLOB = 'send_sd_blob'
-        # NEEDED_SD_BLOBS = 'needed_sd_blobs'
-        # RECEIVED_SD_BLOB = 'received_sd_blob'
-        # BLOB_HASH = 'blob_hash'
-        # BLOB_SIZE = 'blob_size'
-        # SEND_BLOB = 'send_blob'
-        # RECEIVED_BLOB = 'received_blob'
-        # TODO: full conversation vocabulary
-        
-        # Comprehension of expected server response
-        # split '_' in response to get list of context vars for task
-        # __ vars should not be used inside ReflectorProtocol
-        # TODO: possibly resurrect common.py to store comprehensions
-        # blob or sd
-        __SEND = 'send'
-        __RECV = 'received'
-        __NEED = 'needed'
-        # sd or hash or size or blob
-        # if _SD add 'sd_' to all key/vals and flag
-        __VER = 'version'
-        __SD = 'sd'
-        __BLOB = 'blob'
-        __ITER = 'blobs'
-        __HASH = 'hash'
-        __SIZE = 'size'
-        if __VER in args:
-            # asyncio.wait_for(super().data_received, timeout=1.0)
-            super().queue = await asyncio.get_event_loop().get_task_factory()
-        if __ITER in args:
-            # server waiting for client
-            super().blobs = dict.fromkeys(args)
-            # asyncio.wait_for(.data_received, timeout=10.0)
-        if __BLOB in args:
-            if __HASH in args:
-                if __SIZE in args:
-                    # client sending blob details
-                    super().blob = await _request(args)
-                # asyncio.wait_for(super().data_received, timeout=1.0)
-            # server sending ack
-            super().blob = await _request(args)
-        # not including version to inform subscriber
-        # that server version was received during handling.
-        # _PREFIX = __SEND or __NEED or __RECV
-        # if _SD: _BASE = __BLOB or _SD and __BLOB
-        # __SEND is SYN
-        # __NEED is SYN-ACK
-        # __RECV is ACK
-        # _REQUEST = {_BLOB: _INFO}
-        # _RESPONSE = {_PREFIX: _BASE}
-        # _HANDSHAKE = {_VER: REFLECTOR_V2}
-        # TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
-        # TODO: abstract method to call ReflectorClient.recv(sd/blob)
-        # TODO: abstract method to call ReflectorClient.MissingBlobs()
-        
-        # skip_first_ = bool
-        # by default look for version in arg otherwise just send v2.
-        # self.stream = False
-        # if 'sd_' in args:
-        #   for _, arg in args:
-        #       arg.replace('sd_', None)
-        #   tmp flag to add before send
-        # self.stream = True
-        # if 'blobs' not in args:
-        # if 'version' not in args:
-        # print(args)
-        #  self.command = _HANDSHAKE
-        # TODO: callback version
-        '''
-        if args is _REQUEST:
-            ...  # TODO: client
-        elif args is _RESPONSE:
-            ...  # TODO: server
-        else:
-            ...  # TODO: context handler
-        '''
-    
-    @functools.wraps(queue)
-    def set_blobs(blobs: typing.List):
+    def missing_blobs(needed_blobs):
         ...
     
-    @functools.wraps(factory)
-    def build_protocol(client: typing.Optional[typing.Protocol], server: typing.Optional[typing.Protocol]):
-        ...
-    
-    return build_protocol
-
-
-class ReflectorProtocol(asyncio.Protocol):
-    def __init__(self, blob_hashes):
-        # acceptable args: version, *blob, *blob_ blobs
-        self.blob_hashes = blob_hashes
-        self.transport = None
-        self.received_server_version = asyncio.Lock()
+    class ReflectorClientProtocol(asyncio.BaseProtocol):
         
-    async def connection_made(self, transport: asyncio.Transport):
-        await transport.pause_reading()
-        await transport.write(_request({'version': REFLECTOR_V2}))
-        if transport.can_write_eof():
+        async def connection_made(self, transport: asyncio.Transport):
+            await transport.pause_reading()
+            await transport.write(binascii.hexlify(json.dumps({'version': REFLECTOR_V2}).encode()).decode())
             await transport.write_eof()
             await transport.resume_reading()
-            self.transport = transport
-            await self.received_server_version.acquire()
-            self.transport.writelines(self.blob_hashes)
+            await received_server_version.acquire()
+            
+            for index, element in descriptor.as_json():
+                await transport.pause_reading()
+                blob = await binascii.hexlify(json.dumps({'sd_blob': element}).encode()).decode()
+                await transport.write(blob)
+                await transport.write_eof()
+                await transport.resume_reading()
+                await wait_response.acquire()
+                transport = None
+                blob_manager.completed_blob_hashes.add(element)
+
+        async def data_received(self, data: bytes):
+            msg = await json.loads(binascii.unhexlify(data.decode()))
+            if 'version' in msg.keys():
+                if msg['version'] == REFLECTOR_V2:
+                    return received_server_version.release()
+                else:
+                    received_server_version.cancel()
+                    return await self.connection_lost(exc=ConnectionRefusedError())
+            elif 'needed' in msg.keys():
+                if False in msg.values():
+                    super(missing_blobs(msg))
+                elif True in msg.values():
+                    print(msg['needed_blobs'])
+            elif True in msg.values():
+                return wait_response.release()
+            else:
+                wait_response.cancel()
+            return await self.connection_lost(exc=ConnectionError())
     
-    async def _continue(self):
-        await self.received_server_version.release()
-
-    async def data_received(self, data: bytes):
-        msg = await _response(data.decode())
-        if 'needed' in msg.keys():
-            return msg.values()
-            # TODO: missing blobs
-        if True in msg.values():
-            # send_next_blob
-            return
-        if False in msg.values():
-            # reupload
-            super(ReflectorProtocol).__init__()
-        if 'version' in msg.values():
-            asyncio.get_running_loop().call_soon_threadsafe(self._continue)
-        # TODO: send, received, needed
-        #     'send_sd_blob': bool
-        #     'needed_blobs': list, conditional
+        async def connection_lost(self, exc: typing.Optional[Exception]):
+            return exc if exc else log.info('reflected future')
     
-    async def connection_lost(self, exc: typing.Optional[Exception]):
-        return exc if exc else log.info('reflected future')
-
-
-# TODO: change filename to be more pythonic.
-# e.g. reflect.py
-# from reflector import reflect
-# blob_hashes = await asyncio.as_completed(reflect.stream(**kwargs))
-async def reflect_stream(loop: asyncio.BaseEventLoop,
-                         descriptor: StreamDescriptor,
-                         blob_manager: BlobFileManager) -> NotImplemented:
-    ...
-
+    ctx = loop.create_connection(server_hostname=PROD_SERVER, protocol_factory=ReflectorClientProtocol)
+    loop.run_until_complete(ctx)
+    # TODO: NoReturn, have daemon callback blob_manager
+    return await blob_manager.get_all_verified_blobs()
 
 '''
 class ReflectorClient(asyncio.Protocol):
