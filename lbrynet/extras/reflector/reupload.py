@@ -13,6 +13,11 @@ if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import BlobFile
     from lbrynet.stream.descriptor import StreamDescriptor
 
+# Global variables ok to export
+REFLECTOR_V1 = 0
+REFLECTOR_V2 = 1
+PROD_SERVER = random.choice(conf.settings['reflector_servers'])
+
 log = logging.getLogger(__name__)
 
 
@@ -41,26 +46,41 @@ class IncompleteResponse(Exception):
     """
 
 
-REFLECTOR_V1 = 0
-REFLECTOR_V2 = 1
-PROD_SERVER = random.choice(conf.settings['reflector_servers'])
+# SD_BLOB_SIZE = 'sd_blob_size'
+# SEND_SD_BLOB = 'send_sd_blob'
+# NEEDED_SD_BLOBS = 'needed_sd_blobs'
+# RECEIVED_SD_BLOB = 'received_sd_blob'
+# BLOB_HASH = 'blob_hash'
+# BLOB_SIZE = 'blob_size'
+# SEND_BLOB = 'send_blob'
+# RECEIVED_BLOB = 'received_blob'
+# TODO: full conversation vocabulary
 
-_VERSION = 'version'
-_SD_BLOB_HASH = 'sd_blob_hash'
-_SD_BLOB_SIZE = 'sd_blob_size'
-_SEND_SD_BLOB = 'send_sd_blob'
-_NEEDED_SD_BLOBS = 'needed_sd_blobs'
-_RECEIVED_SD_BLOB = 'received_sd_blob'
-_BLOB_HASH = 'blob_hash'
-_BLOB_SIZE = 'blob_size'
-_SEND_BLOB = 'send_blob'
-_RECEIVED_BLOB = 'received_blob'
-
-_SEND = [_SEND_SD_BLOB, _SEND_BLOB]  # TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
-_RECV = [_RECEIVED_SD_BLOB, _RECEIVED_BLOB, ]  # TODO: abstract method to call ReflectorClient.recv(sd/blob)
-_MISS = [_NEEDED_SD_BLOBS]  # TODO: abstract method to call ReflectorClient.MissingBlobs()
-_INFO = [_SD_BLOB_HASH, _SD_BLOB_SIZE, _BLOB_HASH, _BLOB_SIZE]  # TODO: abstract method to call Reflector
-VOCAB = [_SEND, _RECV, _MISS, _INFO]
+# Comprehension of expected server response
+# split '_' in response to get list of context vars for task
+# __ vars should not be used inside ReflectorProtocol
+# TODO: possibly resurrect common.py to store comprehensions
+__SD = 'sd'
+__BLOB = 'blob'
+_BLOB = __BLOB or __SD and __BLOB
+__HASH = 'hash'
+__SIZE = 'size'
+_INFO = _BLOB and __HASH or _BLOB and __SIZE
+__SEND = 'send'
+__RECV = 'received'
+__NEED = 'needed'
+# not including version to inform subscriber
+# that server version was received during handling.
+_PREFIX = __SEND or __NEED or __RECV
+_BASE = __BLOB or __SD and __BLOB
+# __SEND is SYN
+# __NEED is SYN-ACK
+# __RECV is ACK
+_REQUEST = _INFO or __SD and _INFO
+_RESPONSE = _PREFIX and _BASE
+# TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
+# TODO: abstract method to call ReflectorClient.recv(sd/blob)
+# TODO: abstract method to call ReflectorClient.MissingBlobs()
 
 
 class ReflectorClient(asyncio.Protocol):
@@ -73,7 +93,7 @@ class ReflectorClient(asyncio.Protocol):
 
     def data_received(self, data: bytes):
         msg = json.loads(binascii.unhexlify(data))
-        response = [element for element in msg if _RECV in element]
+        response = [element for element in msg if _RESPONSE in element]
         if not response:
             # TODO: handle command
             ...
