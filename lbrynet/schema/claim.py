@@ -120,7 +120,7 @@ class ClaimDict(OrderedDict):
     def claim_dict(self):
         """Claim dictionary with bytes represented as hex and base58"""
 
-        return dict(encode_fields(self))
+        return dict(encode_fields(self, self.detached_signature))
 
     @classmethod
     def load_protobuf_dict(cls, protobuf_dict, detached_signature=None):
@@ -139,9 +139,9 @@ class ClaimDict(OrderedDict):
     @classmethod
     def load_dict(cls, claim_dict):
         """Load ClaimDict from a dictionary with hex and base58 encoded bytes"""
-        detached_signature = claim_dict.detached_signature if hasattr(claim_dict, 'detached_signature') else None
         try:
-            return cls.load_protobuf(cls(decode_fields(claim_dict)).protobuf, detached_signature)
+            claim_dict, detached_signature = decode_fields(claim_dict)
+            return cls.load_protobuf(cls(claim_dict).protobuf, detached_signature)
         except json_format.ParseError as err:
             raise DecodeError(str(err))
 

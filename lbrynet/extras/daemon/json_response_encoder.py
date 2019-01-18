@@ -75,7 +75,7 @@ class JSONResponseEncoder(JSONEncoder):
                         output['channel_name'] = txo.channel.claim_name
                         try:
                             output['valid_signature'] = claim.validate_signature(
-                                txo.get_address(self.ledger), txo.channel.claim
+                                txo.get_address(self.ledger), txo.channel.claim, name=txo.claim_name
                             )
                         except BadSignatureError:
                             output['valid_signature'] = False
