@@ -346,7 +346,7 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
                                                        curve=SECP256k1, name='example', force_detached=True)
         self.assertEqual(
             signed.claim_dict['publisherSignature']['detached_signature'],
-            binascii.hexlify(signed.serialized)
+            binascii.hexlify(signed.serialized).decode()
         )
         signed_copy = ClaimDict.load_dict(signed.claim_dict)
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)

@@ -155,8 +155,8 @@ class Resolver:
         certificate = None
         certificate_id = smart_decode(claim_result['value']).certificate_id
         if certificate_id:
-            certificate = await self.network.get_claims_by_ids(certificate_id.decode())
-            certificate = certificate.pop(certificate_id.decode()) if certificate else None
+            certificate = await self.network.get_claims_by_ids(certificate_id)
+            certificate = certificate.pop(certificate_id) if certificate else None
         return await self.parse_and_validate_claim_result(claim_result, certificate=certificate)
 
     async def parse_and_validate_claim_result(self, claim_result, certificate=None, raw=False):
@@ -180,7 +180,7 @@ class Resolver:
             if decoded.has_signature:
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
-                    certificate = await self.network.get_claims_by_ids(decoded.certificate_id.decode())
+                    certificate = await self.network.get_claims_by_ids(decoded.certificate_id)
                     if not certificate:
                         log.warning('Certificate %s not found', decoded.certificate_id)
                 claim_result['has_signature'] = True
@@ -308,17 +308,10 @@ def format_amount_value(obj):
 
 
 def _get_permanent_url(claim_result, certificate_id):
-    if claim_result.get('has_signature') and claim_result.get('channel_name'):
-        return "{}#{}/{}".format(
-            claim_result['channel_name'],
-            certificate_id,
-            claim_result['name']
-        )
+    if certificate_id:
+        return f"{claim_result['channel_name']}#{certificate_id}/{claim_result['name']}"
     else:
-        return "{}#{}".format(
-            claim_result['name'],
-            claim_result['claim_id']
-        )
+        return f"{claim_result['name']}#{claim_result['claim_id']}"
 
 
 def _verify_proof(name, claim_trie_root, result, height, depth, transaction_class, hash160_to_address):
