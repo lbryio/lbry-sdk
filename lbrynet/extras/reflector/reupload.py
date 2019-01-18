@@ -44,43 +44,54 @@ class IncompleteResponse(Exception):
 REFLECTOR_V1 = 0
 REFLECTOR_V2 = 1
 PROD_SERVER = random.choice(conf.settings['reflector_servers'])
-VERSION = 'version'
-SD_BLOB_HASH = 'sd_blob_hash'
-SD_BLOB_SIZE = 'sd_blob_size'
-SEND_SD_BLOB = 'send_sd_blob'
-NEEDED_SD_BLOBS = 'needed_sd_blobs'
-RECEIVED_SD_BLOB = 'received_sd_blob'
-BLOB_HASH = 'blob_hash'
-BLOB_SIZE = 'blob_size'
-SEND_BLOB = 'send_blob'
-RECEIVED_BLOB = 'received_blob'
+
+_VERSION = 'version'
+_SD_BLOB_HASH = 'sd_blob_hash'
+_SD_BLOB_SIZE = 'sd_blob_size'
+_SEND_SD_BLOB = 'send_sd_blob'
+_NEEDED_SD_BLOBS = 'needed_sd_blobs'
+_RECEIVED_SD_BLOB = 'received_sd_blob'
+_BLOB_HASH = 'blob_hash'
+_BLOB_SIZE = 'blob_size'
+_SEND_BLOB = 'send_blob'
+_RECEIVED_BLOB = 'received_blob'
+
+_SEND = [_SEND_SD_BLOB, _SEND_BLOB]  # TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
+_RECV = [_RECEIVED_SD_BLOB, _RECEIVED_BLOB, ]  # TODO: abstract method to call ReflectorClient.recv(sd/blob)
+_MISS = [_NEEDED_SD_BLOBS]  # TODO: abstract method to call ReflectorClient.MissingBlobs()
+_INFO = [_SD_BLOB_HASH, _SD_BLOB_SIZE, _BLOB_HASH, _BLOB_SIZE]  # TODO: abstract method to call Reflector
+VOCAB = [_SEND, _RECV, _MISS, _INFO]
 
 
 class ReflectorClient(asyncio.Protocol):
     """Reflector Facade"""
     __loop = asyncio.get_event_loop()
+    
     def __init__(self):
         self.needed_blobs = []
-        asyncio.asyncio.get_event_loop().call_soon_threadsafe(ReflectorClient.Handshake)
+        asyncio.get_event_loop().call_soon_threadsafe(ReflectorClient.Handshake)
 
     def data_received(self, data: bytes):
         msg = json.loads(binascii.unhexlify(data))
-        SEND = functools.partial(msg is enumerate([SEND_SD_BLOB, SEND_BLOB]))
-        RECV = functools.partial(msg is enumerate([RECEIVED_BLOB, RECEIVED_SD_BLOB]))
-        MISS = functools.partial(msg is enumerate([NEEDED_SD_BLOBS])
+        response = [i for i, msg in enumerate(VOCAB) if _RECV in msg]
+        if not response:
+            # TODO: handle command
+            ...
         
     @staticmethod
-    def reflect_stream(loop: asyncio.SelectorEventLoop) -> typing.List[str]:
-     return loop.call_soon_threadsafe(ReflectorClient.BlobHashes)
+    async def reflect_stream(loop: asyncio.SelectorEventLoop) -> typing.List[str]:
+        fut = loop.call_soon_threadsafe(ReflectorClient.BlobHashes)
+        return typing.cast(typing.List, fut)
     
-    def connection_lost(self, exc: typing.Optional[Exception]):
-        await self.__loop.call_soon_threadsafe(
-            await self.__loop.shutdown_asyncgens)
+    async def connection_lost(self, exc: typing.Optional[Exception]):
+        self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
+        asyncio.run(log.info(exc if exc else 'Closing connection.'))
         await self.__loop.close()
 
     class Handshake(asyncio.Handle):
         """Handshake Handle"""
         __loop = asyncio.get_running_loop()
+        
         def __init__(self, version: typing.Optional[REFLECTOR_V2]):
             super(ReflectorClient.Handshake, self).__init__(
                 args=version, callback=ReflectorClient.connection_made,
@@ -119,14 +130,18 @@ class ReflectorClient(asyncio.Protocol):
             
         def _run(self):
             # TODO: actual mapping pattern
-            blobs = await self.manager.get_all_verified_blobs()
+            """
+            blobs = await
+            blobs_to_send = []
             for _, element in enumerate(self.needed):
-                for _k, _e in enumerate(blobs):
+                for _k, _e in enumerate(self.manager.get_all_verified_blobs()):
                     if _e == element:
-                        BlobFile.open_for_writing(element)
-                        
+                        writer = BlobFile.open_for_writing(element)
+                        writer.write(_e)
+            """
+
         def cancel(self):
-            self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
+            return self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
     
     class BlobHashes(asyncio.Handle):
         """Handler to handle blob transactions."""
@@ -155,6 +170,7 @@ class ReflectorClient(asyncio.Protocol):
                 loop=self.__loop)
             self.blob_hashes = [blobs]
             await self._run()
+        
         def _run(self):
             #  TODO: get blob_hashes
             #  self.blob_hashes.get_blob(blob_hash=).open_for_writing()
