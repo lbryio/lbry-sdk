@@ -73,7 +73,7 @@ class ReflectorClient(asyncio.Protocol):
 
     def data_received(self, data: bytes):
         msg = json.loads(binascii.unhexlify(data))
-        response = [i for i, msg in enumerate(VOCAB) if _RECV in msg]
+        response = [element for element in msg if _RECV in element]
         if not response:
             # TODO: handle command
             ...
