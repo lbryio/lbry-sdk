@@ -13,7 +13,8 @@ if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import BlobFile
     from lbrynet.stream.descriptor import StreamDescriptor
 
-# Global variables ok to export
+# module variables
+# TODO: define more for API to lbrysdk
 REFLECTOR_V1 = 0
 REFLECTOR_V2 = 1
 PROD_SERVER = random.choice(conf.settings['reflector_servers'])
@@ -46,74 +47,94 @@ class IncompleteResponse(Exception):
     """
 
 
-# SD_BLOB_SIZE = 'sd_blob_size'
-# SEND_SD_BLOB = 'send_sd_blob'
-# NEEDED_SD_BLOBS = 'needed_sd_blobs'
-# RECEIVED_SD_BLOB = 'received_sd_blob'
-# BLOB_HASH = 'blob_hash'
-# BLOB_SIZE = 'blob_size'
-# SEND_BLOB = 'send_blob'
-# RECEIVED_BLOB = 'received_blob'
-# TODO: full conversation vocabulary
-
-# Comprehension of expected server response
-# split '_' in response to get list of context vars for task
-# __ vars should not be used inside ReflectorProtocol
-# TODO: possibly resurrect common.py to store comprehensions
-# blob or sd
-
-# sd or hash or size or blob
-_SD = bool
-# if _SD add 'sd_' to all key/vals and flag
-__HASH = 'hash'
-__SIZE = 'size'
-__BLOB = 'blob'
-# if sd, strip and flag.
-# just set sd to None by default.
-_INFO = bool
-_BLOB = 'blob'  # ACK-SYN
-BLOB_KEY = ""
-BLOB = {}
-PAYLOAD = None
-if _INFO:
-    PAYLOAD = BLOB[__HASH], BLOB[__SIZE]
-if _SD:
-    pass
-__SEND = 'send'
-__RECV = 'received'
-__NEED = 'needed'
-_VER = 'version'
-# not including version to inform subscriber
-# that server version was received during handling.
-_PREFIX = __SEND or __NEED or __RECV
-
-if _SD:
-    _BASE = __BLOB or _SD and __BLOB
-# __SEND is SYN
-# __NEED is SYN-ACK
-# __RECV is ACK
-_REQUEST = {_BLOB: _INFO}
-_RESPONSE = {_PREFIX: _BASE}
-_HANDSHAKE = {_VER: REFLECTOR_V2}
-# TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
-# TODO: abstract method to call ReflectorClient.recv(sd/blob)
-# TODO: abstract method to call ReflectorClient.MissingBlobs()
-
-
-async def _request(req=dict) -> str:
+# spacing like this to track concurrency
+async def _request(*args) -> str:
     # TODO: during testing this is only way i got to work, doesn't feel right.
-    return await binascii.hexlify(json.dumps(req).encode()).decode()
+    return await binascii.hexlify(
+        json.dumps(
+            dict.fromkeys(args)
+        ).encode()
+    ).decode()
 
 
-async def _response(resp) -> dict:
-    return await json.loads(binascii.unhexlify(resp))
+async def _response(*args) -> dict:
+    return await json.loads(
+        binascii.unhexlify(args)
+    )
 
 
-class ReflectorProtocol(asyncio.Protocol):
-    def __init__(self, **kwargs):
-        # by default look for version in kwarg otherwise just send v2.
-        if not kwargs.get('version'):
-            self.command = _HANDSHAKE
+def reflector(factory, queue, handle):
+    
+    @functools.wraps(handle)
+    def proto(*args):
+        # SD_BLOB_SIZE = 'sd_blob_size'
+        # SEND_SD_BLOB = 'send_sd_blob'
+        # NEEDED_SD_BLOBS = 'needed_sd_blobs'
+        # RECEIVED_SD_BLOB = 'received_sd_blob'
+        # BLOB_HASH = 'blob_hash'
+        # BLOB_SIZE = 'blob_size'
+        # SEND_BLOB = 'send_blob'
+        # RECEIVED_BLOB = 'received_blob'
+        # TODO: full conversation vocabulary
+        
+        # Comprehension of expected server response
+        # split '_' in response to get list of context vars for task
+        # __ vars should not be used inside ReflectorProtocol
+        # TODO: possibly resurrect common.py to store comprehensions
+        # blob or sd
+        __SEND = 'send'
+        __RECV = 'received'
+        __NEED = 'needed'
+        # sd or hash or size or blob
+        # if _SD add 'sd_' to all key/vals and flag
+        __VER = 'version'
+        __SD = 'sd'
+        __BLOB = 'blob'
+        __ITER = 'blobs'
+        __HASH = 'hash'
+        __SIZE = 'size'
+        if __VER in args:
+            # asyncio.wait_for(super().data_received, timeout=1.0)
+            super().queue = await asyncio.get_event_loop().get_task_factory()
+        if __ITER in args:
+            # server waiting for client
+            super().blobs = dict.fromkeys(args)
+            # asyncio.wait_for(.data_received, timeout=10.0)
+        if __BLOB in args:
+            if __HASH in args:
+                if __SIZE in args:
+                    # client sending blob details
+                    super().blob = await _request(args)
+                # asyncio.wait_for(super().data_received, timeout=1.0)
+            # server sending ack
+            super().blob = await _request(args)
+        # not including version to inform subscriber
+        # that server version was received during handling.
+        # _PREFIX = __SEND or __NEED or __RECV
+        # if _SD: _BASE = __BLOB or _SD and __BLOB
+        # __SEND is SYN
+        # __NEED is SYN-ACK
+        # __RECV is ACK
+        # _REQUEST = {_BLOB: _INFO}
+        # _RESPONSE = {_PREFIX: _BASE}
+        # _HANDSHAKE = {_VER: REFLECTOR_V2}
+        # TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
+        # TODO: abstract method to call ReflectorClient.recv(sd/blob)
+        # TODO: abstract method to call ReflectorClient.MissingBlobs()
+        
+        # skip_first_ = bool
+        # by default look for version in arg otherwise just send v2.
+        # self.stream = False
+        # if 'sd_' in args:
+        #   for _, arg in args:
+        #       arg.replace('sd_', None)
+        #   tmp flag to add before send
+        # self.stream = True
+        # if 'blobs' not in args:
+        # if 'version' not in args:
+        # print(args)
+        #  self.command = _HANDSHAKE
+        # ...
         # TODO: callback version
         '''
         if args is _REQUEST:
@@ -124,13 +145,31 @@ class ReflectorProtocol(asyncio.Protocol):
             ...  # TODO: context handler
         '''
 
+    @functools.wraps(queue)
+    def set_blobs(blobs: typing.List):
+        ...
+    
+    @functools.wraps(factory)
+    def build_protocol(client: typing.Optional[typing.Protocol], server: typing.Optional[typing.Protocol]):
+        ...
+    return build_protocol
+    
+
+class ReflectorProtocol(asyncio.Protocol):
+    # acceptable args: version, *blob, *blob_ blobs
     async def connection_made(self, transport: asyncio.Transport):
-        await transport.write(self.command)
+        return transport
     
     async def data_received(self, data: bytes):
         msg = await _response(data.decode())
         if 'needed' in msg.keys():
             # TODO: missing blobs
+            ...
+        if True in msg.values():
+            # send_next_blob
+            ...
+        if False in msg.values():
+            # reupload
             ...
         # TODO: send, received, needed
         #     'send_sd_blob': bool
@@ -140,6 +179,16 @@ class ReflectorProtocol(asyncio.Protocol):
         return exc if exc else log.info('reflected future')
 
 
+# TODO: change filename to be more pythonic.
+# e.g. reflect.py
+# from reflector import reflect
+# blob_hashes = await asyncio.as_completed(reflect.stream(**kwargs))
+async def reflect_stream(loop: asyncio.BaseEventLoop,
+                         descriptor: StreamDescriptor,
+                         blob_manager: BlobFileManager) -> NotImplemented:
+    ...
+    
+'''
 class ReflectorClient(asyncio.Protocol):
     """Reflector Facade"""
     __loop = asyncio.get_event_loop()
@@ -242,8 +291,6 @@ class ReflectorClient(asyncio.Protocol):
             
         def _run(self):
             ...
-
-'''
 ############# Stream descriptor requests and responses #############
 (if sending blobs directly this is skipped)
 If the client is reflecting a whole stream, they send a stream descriptor request:
