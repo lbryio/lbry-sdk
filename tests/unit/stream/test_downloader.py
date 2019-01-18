@@ -40,6 +40,7 @@ class TestStreamDownloader(BlobExchangeTestBase):
 
         self.downloader.download(mock_node)
         await self.downloader.stream_finished_event.wait()
+        await self.downloader.stop()
         self.assertTrue(os.path.isfile(self.downloader.output_path))
         with open(self.downloader.output_path, 'rb') as f:
             self.assertEqual(f.read(), self.stream_bytes)
@@ -72,6 +73,7 @@ class TestStreamDownloader(BlobExchangeTestBase):
 
         self.downloader.download(mock_node)
         await self.downloader.stream_finished_event.wait()
+        await self.downloader.stop()
         self.assertTrue(os.path.isfile(self.downloader.output_path))
         with open(self.downloader.output_path, 'rb') as f:
             self.assertEqual(f.read(), self.stream_bytes)

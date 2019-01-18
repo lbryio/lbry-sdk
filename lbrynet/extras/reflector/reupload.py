@@ -1,389 +1,3 @@
-import asyncio
-import binascii
-import json
-import random
-import typing
-import logging
-import functools
-
-from lbrynet import conf
-
-if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_manager import BlobFileManager
-    from lbrynet.blob.blob_file import BlobFile
-    from lbrynet.stream.descriptor import StreamDescriptor
-
-# module variables
-# TODO: define more for API to lbrysdk
-REFLECTOR_V1 = 0
-REFLECTOR_V2 = 1
-PROD_SERVER = random.choice(conf.settings['reflector_servers'])
-
-log = logging.getLogger(__name__)
-
-
-class ReflectorClientVersionError(Exception):
-    """
-    Raised by reflector server if client sends an incompatible or unknown version.
-    """
-
-
-class ReflectorRequestError(Exception):
-    """
-    Raised by reflector server if client sends a message without the required fields.
-    """
-
-
-class ReflectorRequestDecodeError(Exception):
-    """
-    Raised by reflector server if client sends an invalid json request.
-    """
-
-
-class IncompleteResponse(Exception):
-    """
-    Raised by reflector server when client sends a portion of a json request,
-    used buffering the incoming request.
-    """
-
-
-# spacing like this to track concurrency
-async def _request(*args) -> str:
-    # TODO: during testing this is only way i got to work, doesn't feel right.
-    return await binascii.hexlify(
-        json.dumps(
-            dict.fromkeys(args)
-        ).encode()
-    ).decode()
-
-
-async def _response(*args) -> dict:
-    return await json.loads(
-        binascii.unhexlify(args)
-    )
-
-
-def reflector(factory, queue, handle):
-    
-    @functools.wraps(handle)
-    def listener(*args):
-        # SD_BLOB_SIZE = 'sd_blob_size'
-        # SEND_SD_BLOB = 'send_sd_blob'
-        # NEEDED_SD_BLOBS = 'needed_sd_blobs'
-        # RECEIVED_SD_BLOB = 'received_sd_blob'
-        # BLOB_HASH = 'blob_hash'
-        # BLOB_SIZE = 'blob_size'
-        # SEND_BLOB = 'send_blob'
-        # RECEIVED_BLOB = 'received_blob'
-        # TODO: full conversation vocabulary
-        # Comprehension of expected server response
-        # split '_' in response to get list of context vars for task
-        # __ vars should not be used inside ReflectorProtocol
-        # TODO: possibly resurrect common.py to store comprehensions
-        # blob or sd
-        __VER = 'version'
-        
-        __SEND = 'send'
-        __RECV = 'received'
-        __NEED = 'needed'
-        if __SEND in args:
-            if __VER in args:
-                setattr('version', 'protocol_version', REFLECTOR_V2)
-            
-        if __RECV in args:
-            ...
-        if __NEED in args:
-            ...
-        
-        # sd or hash or size or blob
-        # if _SD add 'sd_' to all key/vals and flag
-        
-        __SD = 'sd'
-        __BLOB = 'blob'
-        __ITER = 'blobs'
-        __HASH = 'hash'
-        __SIZE = 'size'
-        if __VER in args:
-            # asyncio.wait_for(super().data_received, timeout=1.0)
-            super().queue = await asyncio.get_event_loop().get_task_factory()
-        if __ITER in args:
-            # server waiting for client
-            super().blobs = dict.fromkeys(args)
-            # asyncio.wait_for(.data_received, timeout=10.0)
-        if __BLOB in args:
-            if __HASH in args:
-                if __SIZE in args:
-                    # client sending blob details
-                    super().blob = await _request(args)
-                # asyncio.wait_for(super().data_received, timeout=1.0)
-            # server sending ack
-            super().blob = await _request(args)
-        # not including version to inform subscriber
-        # that server version was received during handling.
-        # _PREFIX = __SEND or __NEED or __RECV
-        # if _SD: _BASE = __BLOB or _SD and __BLOB
-        # __SEND is SYN
-        # __NEED is SYN-ACK
-        # __RECV is ACK
-        # _REQUEST = {_BLOB: _INFO}
-        # _RESPONSE = {_PREFIX: _BASE}
-        # _HANDSHAKE = {_VER: REFLECTOR_V2}
-        # TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
-        # TODO: abstract method to call ReflectorClient.recv(sd/blob)
-        # TODO: abstract method to call ReflectorClient.MissingBlobs()
-        # skip_first_ = bool
-        # by default look for version in arg otherwise just send v2.
-        # self.stream = False
-        # if 'sd_' in args:
-        #   for _, arg in args:
-        #       arg.replace('sd_', None)
-        #   tmp flag to add before send
-        # self.stream = True
-        # if 'blobs' not in args:
-        # if 'version' not in args:
-        # print(args)
-        #  self.command = _HANDSHAKE
-        # TODO: callback version
-        '''
-        if args is _REQUEST:
-            ...  # TODO: client
-        elif args is _RESPONSE:
-            ...  # TODO: server
-        else:
-            ...  # TODO: context handler
-        '''
-
-    @functools.wraps(queue)
-    def set_blobs(blobs: typing.List):
-        ...
-
-    @functools.wraps(factory)
-    def build_protocol(client: typing.Optional[typing.Protocol], server: typing.Optional[typing.Protocol]):
-        ...
-    return build_protocol
-
-
-class ReflectorProtocol(asyncio.Protocol):
-    # acceptable args: version, *blob, *blob_ blobs
-    async def connection_made(self, transport: asyncio.Transport):
-        return transport
-
-    async def data_received(self, data: bytes):
-        msg = await _response(data.decode())
-        if 'needed' in msg.keys():
-            # TODO: missing blobs
-            ...
-        if True in msg.values():
-            # send_next_blob
-            ...
-        if False in msg.values():
-            # reupload
-            ...
-        
-    async def connection_lost(self, exc: typing.Optional[Exception]):
-        return exc if exc else log.info('reflected future')
-
-
-# TODO: change filename to be more pythonic.
-# e.g. reflect.py
-# from reflector import reflect
-# blob_hashes = await asyncio.as_completed(reflect.stream(**kwargs))
-async def reflect_stream(loop: asyncio.BaseEventLoop,
-                         descriptor: StreamDescriptor,
-                         blob_manager: BlobFileManager) -> NotImplemented:
-    ...
-
-'''
-class ReflectorClient(asyncio.Protocol):
-    """Reflector Facade"""
-    __loop = asyncio.get_event_loop()
-    
-    def __init__(self):
-        self.needed_blobs = []
-        asyncio.get_event_loop().call_soon_threadsafe(ReflectorClient.Handshake)
-
-    def data_received(self, data: bytes):
-        msg = json.loads(binascii.unhexlify(data))
-        response = [element for element in msg if _RESPONSE in element]
-        if not response:
-            # TODO: handle command
-            ...
-        
-    @staticmethod
-    async def reflect_stream(loop: asyncio.SelectorEventLoop) -> typing.List[str]:
-        fut = loop.call_soon_threadsafe(ReflectorClient.BlobHashes)
-        return typing.cast(typing.List, fut)
-    
-    async def connection_lost(self, exc: typing.Optional[Exception]):
-        self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
-        asyncio.run(log.info(exc if exc else 'Closing connection.'))
-        await self.__loop.close()
-
-    class MissingBlobs(asyncio.Handle):
-        """Handler to mitigate blobs_needed response."""
-        __loop = asyncio.get_running_loop()
-        
-        def __init__(self, needed: typing.List, manager: BlobFileManager):
-            super(ReflectorClient.MissingBlobs,self).__init__(
-                args=[needed, manager],
-                loop=self.__loop,
-                callback=ReflectorClient.BlobHashes)
-            self.needed = needed
-            self.manager = manager
-            await self._run()
-            
-        def _run(self):
-            # TODO: actual mapping pattern
-            """
-            blobs = await
-            blobs_to_send = []
-            for _, element in enumerate(self.needed):
-                for _k, _e in enumerate(self.manager.get_all_verified_blobs()):
-                    if _e == element:
-                        writer = BlobFile.open_for_writing(element)
-                        writer.write(_e)
-            """
-
-        def cancel(self):
-            return self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
-    
-    class BlobHashes(asyncio.Handle):
-        """Handler to handle blob transactions."""
-        __loop = asyncio.get_running_loop()
-        
-        def __init__(self, blob_hash: typing.AnyStr, blob_size: typing.Sized):
-            self.blob_hash = blob_hash
-            self.blob_size = blob_size
-            super(ReflectorClient.BlobHashes, self).__init__(
-                args=[blob_hash, blob_size],
-                callback=ReflectorClient.Reflect,
-                loop=self.__loop)
-            await self._run()
-        
-        def cancel(self):
-            self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
-    
-    class Reflect(asyncio.Handle):
-        """Handler for sending verified blobs to server"""
-        __loop = asyncio.get_running_loop()
-        
-        def __init__(self, blobs: typing.List):
-            super(ReflectorClient.Reflect, self).__init__(
-                args=[blobs],
-                callback=ReflectorClient.connection_lost,
-                loop=self.__loop)
-            self.blob_hashes = [blobs]
-            await self._run()
-        
-        def _run(self):
-            #  TODO: get blob_hashes
-            #  self.blob_hashes.get_blob(blob_hash=).open_for_writing()
-            ...
-
-    class Streaming(asyncio.Handle):
-        """Handler for reflecting streaming blobs"""
-        __loop = asyncio.get_running_loop()
-        
-        def __init__(self, blob_manager: BlobFileManager):
-            super(ReflectorClient.Streaming, self).__init__(
-                args=[blob_manager],
-                callback=ReflectorClient.Streaming,
-                loop=self.__loop)
-            self.blob_manager = blob_manager
-            await self._run()
-            
-        def _run(self):
-            ...
-############# Stream descriptor requests and responses #############
-(if sending blobs directly this is skipped)
-If the client is reflecting a whole stream, they send a stream descriptor request:
-{
-    'sd_blob_hash': str,
-    'sd_blob_size': int
-}
-
-The server indicates if it's aware of this stream already by requesting (or not requesting)
-the stream descriptor blob. If the server has a validated copy of the sd blob, it will
-include the needed_blobs field (a list of blob hashes missing from reflector) in the response.
-If the server does not have the sd blob the needed_blobs field will not be included, as the
-server does not know what blobs it is missing - so the client should send all of the blobs
-in the stream.
-{
-    'send_sd_blob': bool
-    'needed_blobs': list, conditional
-}
-
-The client may begin the file transfer of the sd blob if send_sd_blob was True.
-If the client sends the blob, after receiving it the server indicates if the
-transfer was successful:
-{
-    'received_sd_blob': bool
-}
-If the transfer was not successful (False), the blob is added to the needed_blobs queue
-############# Blob requests and responses #############
-A client with blobs to reflect (either populated by the client or by the stream descriptor
-response) queries if the server is ready to begin transferring a blob
-{
-    'blob_hash': str,
-    'blob_size': int
-}
-
-The server replies, send_blob will be False if the server has a validated copy of the blob:
-{
-    'send_blob': bool
-}
-
-The client may begin the raw blob file transfer if the server replied True.
-If the client sends the blob, the server replies:
-{
-    'received_blob': bool
-}
-If the transfer was not successful (False), the blob is re-added to the needed_blobs queue
-
-Blob requests continue for each of the blobs the client has queued to send, when completed
-the client disconnects.
-'''
-# @defer.inlineCallbacks
-# def _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server):
-#     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-#     factory = EncryptedFileReflectorClientFactory(blob_manager, stream_hash, sd_hash)
-#     ip = yield resolve(reflector_address)
-#     yield reactor.connectTCP(ip, reflector_port, factory)
-#     result = yield factory.finished_deferred
-#     defer.returnValue(result)
-#
-#
-# def _reflect_file(lbry_file, reflector_server):
-#     return _reflect_stream(lbry_file.blob_manager, lbry_file.stream_hash, lbry_file.sd_hash, reflector_server)
-#
-#
-# def reflect_file(lbry_file, reflector_server=None):
-#     if reflector_server:
-#         if len(reflector_server.split(":")) == 2:
-#             host, port = tuple(reflector_server.split(":"))
-#             reflector_server = host, int(port)
-#         else:
-#             reflector_server = reflector_server, 5566
-#     else:
-#         reflector_server = random.choice(conf.settings['reflector_servers'])
-#     return _reflect_file(lbry_file, reflector_server)
-#
-#
-# @defer.inlineCallbacks
-# def reflect_stream(blob_manager, stream_hash, reflector_server=None):
-#     if reflector_server:
-#         if len(reflector_server.split(":")) == 2:
-#             host, port = tuple(reflector_server.split(":"))
-#             reflector_server = host, int(port)
-#         else:
-#             reflector_server = reflector_server, 5566
-#     else:
-#         reflector_server = random.choice(conf.settings['reflector_servers'])
-#     sd_hash = yield blob_manager.storage.get_sd_blob_hash_for_stream(stream_hash)
-#     result = yield _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server)
-#     defer.returnValue(result)
-
-
 # import json
 # import logging
 # import random
@@ -776,4 +390,42 @@ the client disconnects.
 #     defer.returnValue(ip)
 #
 #
-
+# @defer.inlineCallbacks
+# def _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server):
+#     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+#     factory = EncryptedFileReflectorClientFactory(blob_manager, stream_hash, sd_hash)
+#     ip = yield resolve(reflector_address)
+#     yield reactor.connectTCP(ip, reflector_port, factory)
+#     result = yield factory.finished_deferred
+#     defer.returnValue(result)
+#
+#
+# def _reflect_file(lbry_file, reflector_server):
+#     return _reflect_stream(lbry_file.blob_manager, lbry_file.stream_hash, lbry_file.sd_hash, reflector_server)
+#
+#
+# def reflect_file(lbry_file, reflector_server=None):
+#     if reflector_server:
+#         if len(reflector_server.split(":")) == 2:
+#             host, port = tuple(reflector_server.split(":"))
+#             reflector_server = host, int(port)
+#         else:
+#             reflector_server = reflector_server, 5566
+#     else:
+#         reflector_server = random.choice(conf.settings['reflector_servers'])
+#     return _reflect_file(lbry_file, reflector_server)
+#
+#
+# @defer.inlineCallbacks
+# def reflect_stream(blob_manager, stream_hash, reflector_server=None):
+#     if reflector_server:
+#         if len(reflector_server.split(":")) == 2:
+#             host, port = tuple(reflector_server.split(":"))
+#             reflector_server = host, int(port)
+#         else:
+#             reflector_server = reflector_server, 5566
+#     else:
+#         reflector_server = random.choice(conf.settings['reflector_servers'])
+#     sd_hash = yield blob_manager.storage.get_sd_blob_hash_for_stream(stream_hash)
+#     result = yield _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server)
+#     defer.returnValue(result)

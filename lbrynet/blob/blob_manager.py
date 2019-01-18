@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 class BlobFileManager:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, storage: SQLiteStorage,
-                 node_datastore: typing.Optional['DictDataStore'] = None):
+                 node_data_store: typing.Optional['DictDataStore'] = None):
         """
         This class stores blobs on the hard disk
 
@@ -24,9 +24,10 @@ class BlobFileManager:
         self.loop = loop
         self.blob_dir = blob_dir
         self.storage = storage
-        self._node_datastore = node_datastore
-        self.completed_blob_hashes: typing.Set[str] = set() if not self._node_datastore\
-            else self._node_datastore.completed_blobs
+        self._node_data_store = node_data_store
+        self.completed_blob_hashes: typing.Set[str] = set() if not self._node_data_store\
+            else self._node_data_store.completed_blobs
+        self.blobs: typing.Dict[str, BlobFile] = {}
 
     async def setup(self) -> bool:
         raw_blob_hashes = await self.get_all_verified_blobs()
@@ -34,7 +35,12 @@ class BlobFileManager:
         return True
 
     def get_blob(self, blob_hash, length: typing.Optional[int] = None):
-        return BlobFile(self.loop, self.blob_dir, blob_hash, length, self.blob_completed)
+        if blob_hash in self.blobs:
+            if length and self.blobs[blob_hash].length is None:
+                self.blobs[blob_hash].set_length(length)
+        else:
+            self.blobs[blob_hash] = BlobFile(self.loop, self.blob_dir, blob_hash, length, self.blob_completed)
+        return self.blobs[blob_hash]
 
     def get_stream_descriptor(self, sd_hash):
         return StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_dir, self.get_blob(sd_hash))

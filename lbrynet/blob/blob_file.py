@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
 
 from lbrynet.cryptoutils import backend, get_lbry_hash_obj
-from lbrynet.error import DownloadCancelledError, InvalidBlobHashError
+from lbrynet.error import DownloadCancelledError, InvalidBlobHashError, InvalidDataError
 
 from lbrynet.blob import MAX_BLOB_SIZE, blobhash_length
 from lbrynet.blob.blob_info import BlobInfo
@@ -88,7 +88,11 @@ class BlobFile:
                     other.finished.cancel()
                 t = self.loop.create_task(self.save_verified_blob(writer))
                 t.add_done_callback(lambda *_: self.finished_writing.set())
+                return
+            if isinstance(error, (InvalidBlobHashError, InvalidDataError)):
+                log.error("writer error downloading %s: %s", self.blob_hash[:8], str(error))
             elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
+                log.exception("something else")
                 raise error
         return callback
 
@@ -173,19 +177,14 @@ class BlobFile:
 
     def set_length(self, length):
         if self.length is not None and length == self.length:
-            return True
+            return
         if self.length is None and 0 <= length <= MAX_BLOB_SIZE:
             self.length = length
-            return True
-        log.warning("Got an invalid length. Previous length: %s, Invalid length: %s",
-                    self.length, length)
-        return False
+            return
+        log.warning("Got an invalid length. Previous length: %s, Invalid length: %s", self.length, length)
 
     def get_length(self):
         return self.length
 
     def get_is_verified(self):
         return self.verified.is_set()
-
-    def is_downloading(self):
-        return len(self.writers) > 0

@@ -102,19 +102,19 @@ class StreamDownloader(StreamAssembler):
         if peer not in self.active_connections:
             log.warning("not active, adding: %s", str(peer))
             self.active_connections[peer] = BlobExchangeClientProtocol(self.loop, self.peer_timeout)
-        log.info("request %s from %s:%i", self.current_blob.blob_hash[:8], peer.address, peer.tcp_port)
-
-        success = await request_blob(self.loop, self.current_blob, self.active_connections[peer],
-                                     peer.address, peer.tcp_port, self.peer_connect_timeout)
-        if not success:
-            log.warning("failed to download %s from %s:%i", self.current_blob.blob_hash[:8], peer.address,
-                        peer.tcp_port)
-            if peer in self.active_connections and self.active_connections[peer].transport is None:
+        protocol = self.active_connections[peer]
+        success, keep_connection = await request_blob(self.loop, self.current_blob, protocol,
+                                                      peer.address, peer.tcp_port, self.peer_connect_timeout)
+        await protocol.close()
+        if not keep_connection:
+            log.info("drop peer %s:%i", peer.address, peer.tcp_port)
+            if peer in self.active_connections:
                 async with self._lock:
                     del self.active_connections[peer]
+            return
+        log.info("keep peer %s:%i", peer.address, peer.tcp_port)
 
     def _update_requests(self):
-        log.info("clear peer event")
         self.new_peer_event.clear()
         if self.current_blob.blob_hash not in self.requested_from:
             self.requested_from[self.current_blob.blob_hash] = {}
@@ -122,8 +122,12 @@ class StreamDownloader(StreamAssembler):
         for peer in self.active_connections.keys():
             if peer not in self.requested_from[self.current_blob.blob_hash] and peer not in to_add:
                 to_add.append(peer)
-        log.info("adding requests for %i peers (%i active)", min(len(to_add), 8 - len(self.running_download_requests)),
-                 len(self.running_download_requests))
+        if to_add or self.running_download_requests:
+            log.info("adding download probes for %i peers to %i already active",
+                     min(len(to_add), 8 - len(self.running_download_requests)),
+                     len(self.running_download_requests))
+        else:
+            log.info("downloader idle...")
         for peer in to_add:
             if len(self.running_download_requests) >= 8:
                 break
@@ -146,15 +150,17 @@ class StreamDownloader(StreamAssembler):
         # wait for a new peer to be added or for a download attempt to finish
         await asyncio.wait([got_new_peer] + download_tasks, return_when='FIRST_COMPLETED',
                            loop=self.loop)
+        if got_new_peer and not got_new_peer.done():
+            got_new_peer.cancel()
         async with self._lock:
             if self.current_blob.get_is_verified():
-                if got_new_peer and not (got_new_peer.cancelled() or got_new_peer.done()):
+                if got_new_peer and not got_new_peer.done():
                     got_new_peer.cancel()
                 drain_tasks(download_tasks)
                 return self.current_blob
             else:
                 for task in download_tasks:
-                    if task and not (task.done() or task.cancelled()):
+                    if task and not task.done():
                         self.running_download_requests.append(task)
                 return
 
@@ -186,9 +192,8 @@ class StreamDownloader(StreamAssembler):
                 self.active_connections[peer] = BlobExchangeClientProtocol(self.loop, self.peer_timeout)
                 added += 1
         if added:
-            log.info("added %i new peers", len(peers))
             if not self.new_peer_event.is_set():
-                log.info("set new peer event")
+                log.info("added %i new peers", len(peers))
                 self.new_peer_event.set()
 
     async def _accumulate_connections(self, node: 'Node'):
@@ -218,16 +223,16 @@ class StreamDownloader(StreamAssembler):
         task.add_done_callback(got_descriptor)
         try:
             async with node.stream_peer_search_junction(blob_queue) as search_junction:
-                log.info("got search junction")
                 async for peers in search_junction:
                     if not isinstance(peers, list):  # TODO: what's up with this?
-                        log.error("not a list: %s", peers)
+                        log.error("not a list: %s %s", peers, str(type(peers)))
                     else:
-                        # log.info("add %i peers to download of stream %s", len(peers), self.sd_hash[:8])
                         self._add_peer_protocols(peers)
                         if not added_peers.is_set():
                             added_peers.set()
             return
+        except asyncio.CancelledError:
+            pass
         finally:
             if task and not task.done():
                 task.cancel()
@@ -236,9 +241,10 @@ class StreamDownloader(StreamAssembler):
                 add_fixed_peers_timer.cancel()
 
     async def stop(self):
-        log.info("stop downloader")
         cancel_task(self.accumulate_connections_task)
         cancel_task(self.download_task)
+        self.accumulate_connections_task = None
+        self.download_task = None
         drain_tasks(self.running_download_requests)
 
         while self.requested_from:
@@ -251,13 +257,12 @@ class StreamDownloader(StreamAssembler):
                     pass
 
         while self.active_connections:
-            _, protocol = self.active_connections.popitem()
-            if protocol and protocol.transport:
-                protocol.transport.close()
+            _, client = self.active_connections.popitem()
+            if client:
+                await client.close()
         log.info("stopped downloader")
 
     async def _download(self):
-        log.info("accumulate connections")
         try:
 
             log.info("download and decrypt stream")
@@ -269,11 +274,13 @@ class StreamDownloader(StreamAssembler):
                 self.descriptor.stream_hash, 'finished'
             )
         except asyncio.CancelledError:
-            log.info("cancelled")
+            pass
+        finally:
             await self.stop()
-            raise
 
     def download(self, node: 'Node'):
-        log.info("make download task")
         self.accumulate_connections_task = self.loop.create_task(self._accumulate_connections(node))
-        self.download_task = self.loop.create_task(self._download())
+        try:
+            self.download_task = self.loop.create_task(self._download())
+        except asyncio.CancelledError:
+            log.exception("cancelled")

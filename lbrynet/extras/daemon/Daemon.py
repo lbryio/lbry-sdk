@@ -1797,10 +1797,18 @@ class Daemon(metaclass=JSONRPCServerType):
                     claim.source_fee.currency, "LBC", claim.source_fee.amount
                 ), 5)
             fee_address = claim.source_fee.address
-
-        stream = await self.stream_manager.download_stream_from_claim(
-            self.dht_node, conf.settings.download_dir, resolved, file_name, timeout, fee_amount, fee_address
-        )
+        outpoint = f"{resolved['txid']}:{resolved['nout']}"
+        existing = self.stream_manager.get_filtered_streams(outpoint=outpoint)
+        if not existing:
+            existing.extend(self.stream_manager.get_filtered_streams(claim_id=resolved['claim_id'],
+                                                                     sd_hash=claim.source_hash))
+        if existing:
+            log.info("already have matching stream for %s", uri)
+            stream = existing[0]
+        else:
+            stream = await self.stream_manager.download_stream_from_claim(
+                self.dht_node, conf.settings.download_dir, resolved, file_name, timeout, fee_amount, fee_address
+            )
         if stream:
             return stream.as_dict()
         raise DownloadSDTimeout(resolved['value']['stream']['source']['source'])

@@ -6,7 +6,7 @@ import logging
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.storage import StoredStreamClaim
+from lbrynet.storage import StoredStreamClaim, lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.peer import KademliaPeer
@@ -23,7 +23,7 @@ filter_fields = [
     'sd_hash',
     'stream_hash',
     'claim_name',
-    'claim_height'
+    'claim_height',
     'claim_id',
     'outpoint',
     'txid',
@@ -189,8 +189,7 @@ class StreamManager:
                                          file_name: typing.Optional[str] = None,
                                          sd_blob_timeout: typing.Optional[float] = 60,
                                          fee_amount: typing.Optional[float] = 0.0,
-                                         fee_address: typing.Optional[str] = None
-                                         ) -> typing.Optional[ManagedStream]:
+                                         fee_address: typing.Optional[str] = None) -> typing.Optional[ManagedStream]:
         log.info("get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
         claim = ClaimDict.load_dict(claim_info['value'])
         if fee_address and fee_amount:
@@ -212,7 +211,7 @@ class StreamManager:
             stream = await stream_task
             self.starting_streams[sd_hash].set_result(stream)
             if fee_address and fee_amount:
-                await self.wallet.send_amount_to_address(fee_amount, fee_address.encode('latin1'))
+                await self.wallet.send_amount_to_address(lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1'))
             return stream
         except (asyncio.TimeoutError, asyncio.CancelledError):
             return
@@ -223,7 +222,7 @@ class StreamManager:
 
     def get_filtered_streams(self, sort_by: typing.Optional[str] = None, reverse: typing.Optional[bool] = False,
                              comparison: typing.Optional[str] = None,
-                             **search_by: typing.Dict[str, typing.Union[str, int]]) -> typing.List[ManagedStream]:
+                             **search_by) -> typing.List[ManagedStream]:
         """
         Get a list of filtered and sorted ManagedStream objects
 

@@ -56,7 +56,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         # download the blob
         downloaded = await request_blob(self.loop, client_blob, protocol, self.server_from_client.address,
                                         self.server_from_client.tcp_port, 2)
-        protocol.transport.close()
+        await protocol.close()
         self.assertEqual(client_blob.get_is_verified(), True)
         self.assertTrue(downloaded)
 

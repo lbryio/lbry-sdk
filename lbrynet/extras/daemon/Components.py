@@ -389,7 +389,7 @@ class DHTComponent(Component):
         )
         log.info("Started the dht")
 
-    def stop(self):
+    async def stop(self):
         self.dht_node.stop()
 
 
@@ -412,7 +412,7 @@ class HashAnnouncerComponent(Component):
         self.hash_announcer.start(conf.settings['concurrent_announcers'])
         log.info("Started blob announcer")
 
-    def stop(self):
+    async def stop(self):
         self.hash_announcer.stop()
         log.info("Stopped blob announcer")
 
@@ -504,7 +504,7 @@ class PeerProtocolServerComponent(Component):
         self.blob_server.start_server(peer_port, interface='0.0.0.0')
         await self.blob_server.started_listening.wait()
 
-    def stop(self):
+    async def stop(self):
         if self.blob_server:
             self.blob_server.stop_server()
 
