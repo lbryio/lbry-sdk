@@ -23,7 +23,7 @@ filter_fields = [
     'sd_hash',
     'stream_hash',
     'claim_name',
-    'claim_height'
+    'claim_height',
     'claim_id',
     'outpoint',
     'txid',
@@ -189,8 +189,7 @@ class StreamManager:
                                          file_name: typing.Optional[str] = None,
                                          sd_blob_timeout: typing.Optional[float] = 60,
                                          fee_amount: typing.Optional[float] = 0.0,
-                                         fee_address: typing.Optional[str] = None
-                                         ) -> typing.Optional[ManagedStream]:
+                                         fee_address: typing.Optional[str] = None) -> typing.Optional[ManagedStream]:
         log.info("get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
         claim = ClaimDict.load_dict(claim_info['value'])
         if fee_address and fee_amount:
@@ -223,7 +222,7 @@ class StreamManager:
 
     def get_filtered_streams(self, sort_by: typing.Optional[str] = None, reverse: typing.Optional[bool] = False,
                              comparison: typing.Optional[str] = None,
-                             **search_by: typing.Dict[str, typing.Union[str, int]]) -> typing.List[ManagedStream]:
+                             **search_by) -> typing.List[ManagedStream]:
         """
         Get a list of filtered and sorted ManagedStream objects
 

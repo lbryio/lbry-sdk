@@ -1,7 +1,6 @@
 import typing
 import json
 import logging
-from lbrynet.error import BlobDownloadError
 
 log = logging.getLogger(__name__)
 
@@ -92,15 +91,18 @@ class BlobDownloadResponse(BlobMessage):
 
     def __init__(self, **response: typing.Dict) -> None:
         incoming_blob = response[self.key]
+        self.error = None
+        self.incoming_blob = None
         if 'error' in incoming_blob:
-            raise BlobDownloadError(incoming_blob['error'])
-        self.incoming_blob = {'blob_hash': incoming_blob['blob_hash'], 'length': incoming_blob['length']}
-        self.length = self.incoming_blob['length']
-        self.blob_hash = self.incoming_blob['blob_hash']
+            self.error = incoming_blob['error']
+        else:
+            self.incoming_blob = {'blob_hash': incoming_blob['blob_hash'], 'length': incoming_blob['length']}
+        self.length = None if not self.incoming_blob else self.incoming_blob['length']
+        self.blob_hash = None if not self.incoming_blob else self.incoming_blob['blob_hash']
 
     def to_dict(self) -> typing.Dict:
         return {
-            self.key: self.incoming_blob,
+            self.key if not self.error else 'error': self.incoming_blob or self.error,
         }
 
 

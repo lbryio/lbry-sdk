@@ -88,9 +88,9 @@ class MarketFeed:
             self._task = asyncio.create_task(self._update_price())
 
     def stop(self):
-        if self._task and not (self._task.done() or self._task.cancelled()):
+        if self._task and not self._task.done():
             self._task.cancel()
-            self._task = None
+        self._task = None
 
 
 class BittrexFeed(MarketFeed):

@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import typing
-from lbrynet.error import BlobDownloadError
 from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import BlobFile
@@ -36,9 +35,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
         if response.responses and self.blob:
             blob_response = response.get_blob_response()
-            if blob_response and blob_response.blob_hash == self.blob.blob_hash:
+            if blob_response and not blob_response.error and blob_response.blob_hash == self.blob.blob_hash:
                 self.blob.set_length(blob_response.length)
-            elif blob_response and self.blob.blob_hash != blob_response.blob_hash:
+            elif blob_response and not blob_response.error and self.blob.blob_hash != blob_response.blob_hash:
                 log.warning("mismatch with self.blob %s", self.blob.blob_hash)
                 return
         if response.responses:
@@ -65,7 +64,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
             blob_response = response.get_blob_response()
-            if not blob_response and (not availability_response or not availability_response.available_blobs):
+            if (not blob_response or not blob_response.error) and\
+                    (not availability_response or not availability_response.available_blobs):
                 log.warning("blob not in availability response")
                 return False, True
             elif availability_response.available_blobs and \
@@ -75,15 +75,15 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':
                 log.warning("data rate rejected")
                 return False, False
-            if not blob_response:
+            if not blob_response or blob_response.error:
                 log.warning("blob cant be downloaded from this peer")
                 return False, True
-            if blob_response.blob_hash != self.blob.blob_hash:
+            if not blob_response.error and blob_response.blob_hash != self.blob.blob_hash:
                 log.warning("incoming blob hash mismatch")
                 return False, False
-            elif self.blob.length is not None and self.blob.length != blob_response.length:
+            if self.blob.length is not None and self.blob.length != blob_response.length:
                 log.warning("incoming blob unexpected length")
-                raise Exception("unexpected")
+                return False, False
             msg = f"downloading {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}," \
                 f" timeout in {self.peer_timeout}"
             log.info(msg)
@@ -92,8 +92,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}"
             log.info(msg)
             return True, True
-        except BlobDownloadError:
-            return False, False
         except asyncio.CancelledError:
             return False, True
         except asyncio.TimeoutError:
