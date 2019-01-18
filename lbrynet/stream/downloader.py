@@ -150,17 +150,17 @@ class StreamDownloader(StreamAssembler):
         # wait for a new peer to be added or for a download attempt to finish
         await asyncio.wait([got_new_peer] + download_tasks, return_when='FIRST_COMPLETED',
                            loop=self.loop)
-        if not got_new_peer.done():
+        if got_new_peer and not got_new_peer.done():
             got_new_peer.cancel()
         async with self._lock:
             if self.current_blob.get_is_verified():
-                if got_new_peer and not (got_new_peer.cancelled() or got_new_peer.done()):
+                if got_new_peer and not got_new_peer.done():
                     got_new_peer.cancel()
                 drain_tasks(download_tasks)
                 return self.current_blob
             else:
                 for task in download_tasks:
-                    if task and not (task.done() or task.cancelled()):
+                    if task and not task.done():
                         self.running_download_requests.append(task)
                 return
 
