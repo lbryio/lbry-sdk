@@ -4,7 +4,8 @@ import json
 import random
 import typing
 import logging
-
+import functools
+import selectors
 from lbrynet import conf
 
 if typing.TYPE_CHECKING:
@@ -49,77 +50,59 @@ SD_BLOB_SIZE = 'sd_blob_size'
 SEND_SD_BLOB = 'send_sd_blob'
 NEEDED_SD_BLOBS = 'needed_sd_blobs'
 RECEIVED_SD_BLOB = 'received_sd_blob'
-
 BLOB_HASH = 'blob_hash'
 BLOB_SIZE = 'blob_size'
 SEND_BLOB = 'send_blob'
 RECEIVED_BLOB = 'received_blob'
 
 
-
 class ReflectorClient(asyncio.Protocol):
     """Reflector Facade"""
+    __loop = asyncio.get_event_loop()
     def __init__(self):
-        self.__loop = asyncio.get_event_loop()
         self.needed_blobs = []
-        self.transport = None
-        self.manager = None
-
-    def connection_made(self, transport: asyncio.Transport):
-        self.transport = transport
-        self.__loop.call_soon(callback=self.Handshake)
+        asyncio.asyncio.get_event_loop().call_soon_threadsafe(ReflectorClient.Handshake)
 
     def data_received(self, data: bytes):
         msg = json.loads(binascii.unhexlify(data))
-        if msg is enumerate([SEND_BLOB, SEND_SD_BLOB]):
-            pass
-        if msg is enumerate([SEND_SD_BLOB, SEND_BLOB]):
-            self.__loop.call_soon_threadsafe(ReflectorClient.BlobHashes)
-        if msg == NEEDED_SD_BLOBS:
-            self.__loop.call_soon_threadsafe(ReflectorClient.MissingBlobs)
-        if msg is enumerate([RECEIVED_BLOB, RECEIVED_SD_BLOB]):
-            self.__loop.call_soon_threadsafe(ReflectorClient)
+        SEND = functools.partial(msg is enumerate([SEND_SD_BLOB, SEND_BLOB]))
+        RECV = functools.partial(msg is enumerate([RECEIVED_BLOB, RECEIVED_SD_BLOB]))
+        MISS = functools.partial(msg is enumerate([NEEDED_SD_BLOBS])
         
     @staticmethod
-    def reflect_stream(loop: asyncio.BaseEventLoop, blob_manager: BlobFileManager) -> typing.List[str]:
-        return loop.call_soon(ReflectorClient.BlobHashes)
+    def reflect_stream(loop: asyncio.SelectorEventLoop) -> typing.List[str]:
+     return loop.call_soon_threadsafe(ReflectorClient.BlobHashes)
     
     def connection_lost(self, exc: typing.Optional[Exception]):
-        self.__loop.call_soon(self.__loop.shutdown_asyncgens)
+        await self.__loop.call_soon_threadsafe(
+            await self.__loop.shutdown_asyncgens)
         await self.__loop.close()
-    
+
     class Handshake(asyncio.Handle):
         """Handshake Handle"""
         __loop = asyncio.get_running_loop()
-        
-        def __init__(self, protocol_version: typing.Optional[REFLECTOR_V2]):
+        def __init__(self, version: typing.Optional[REFLECTOR_V2]):
             super(ReflectorClient.Handshake, self).__init__(
-                args=protocol_version,
-                callback=self.server_version_received,
-                loop=self.__loop)
-            self._run()
-        
-        def server_version_received(self):
-            log.info('%s is running protocol version %i.'% self.hostinfo, self.server_version)
+                args=version, callback=ReflectorClient.connection_made,
+                loop=asyncio.get_running_loop())
+            await self._run()
 
         def _run(self):
-            self.loop = asyncio.get_running_loop()
             handshake = {'version': REFLECTOR_V2}
-            payload = binascii.hexlify(json.dumps(handshake).encode()).decode()
-            reader, writer = await asyncio.open_connection(PROD_SERVER)
-            self.hostinfo = writer.get_extra_info('peerhost')
-            writer.write(payload)
-            writer.write_eof()
-            rdata = reader.readline()
-            response = json.loads(binascii.unhexlify(rdata))
-            if response['version'] == REFLECTOR_V2:
-                self.server_version = response
-            else:
-                self.cancel()
+            payload = await binascii.hexlify(json.dumps(handshake).encode()).decode()
+            _read, _write = await asyncio.open_connection(PROD_SERVER)
+            self.info = await _write.get_extra_info('peerhost')
+            await _write.write(payload)
+            await _write.write_eof()
+            rdata = await _read.readline()
+            response = await json.loads(binascii.unhexlify(rdata))
+            if response['version'] != REFLECTOR_V2:
+                await self.cancel()
+            self.version = response
+            await asyncio.run(log.info('%s is running protocol version %i.' % self.info, self.version))
         
         def cancel(self):
-            self.loop.call_soon_threadsafe(
-                self.loop.shutdown_asyncgens)
+            self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
 
     class MissingBlobs(asyncio.Handle):
         """Handler to mitigate blobs_needed response."""
@@ -132,7 +115,7 @@ class ReflectorClient(asyncio.Protocol):
                 callback=ReflectorClient.BlobHashes)
             self.needed = needed
             self.manager = manager
-            self._run()
+            await self._run()
             
         def _run(self):
             # TODO: actual mapping pattern
@@ -141,10 +124,9 @@ class ReflectorClient(asyncio.Protocol):
                 for _k, _e in enumerate(blobs):
                     if _e == element:
                         BlobFile.open_for_writing(element)
-
+                        
         def cancel(self):
-            self.__loop.call_soon_threadsafe(
-                self.__loop.shutdown_asyncgens)
+            self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
     
     class BlobHashes(asyncio.Handle):
         """Handler to handle blob transactions."""
@@ -153,25 +135,18 @@ class ReflectorClient(asyncio.Protocol):
         def __init__(self, blob_hash: typing.AnyStr, blob_size: typing.Sized):
             self.blob_hash = blob_hash
             self.blob_size = blob_size
-            super(ReflectorClient.BlobHashes,self).__init__(
+            super(ReflectorClient.BlobHashes, self).__init__(
                 args=[blob_hash, blob_size],
                 callback=ReflectorClient.Reflect,
                 loop=self.__loop)
-            self._run()
-        
-        # TODO: sequence
-        def _run(self):
-            sd_hash = None
-            stream_hash = None
-            blob_manager = None
+            await self._run()
         
         def cancel(self):
-            self.__loop.call_soon_threadsafe(
-                self.__loop.shutdown_asyncgens)
+            self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
     
     class Reflect(asyncio.Handle):
         """Handler for sending verified blobs to server"""
-        __loop = asyncio.get_event_loop()
+        __loop = asyncio.get_running_loop()
         
         def __init__(self, blobs: typing.List):
             super(ReflectorClient.Reflect, self).__init__(
@@ -179,7 +154,7 @@ class ReflectorClient(asyncio.Protocol):
                 callback=ReflectorClient.connection_lost,
                 loop=self.__loop)
             self.blob_hashes = [blobs]
-            self._run()
+            await self._run()
         def _run(self):
             #  TODO: get blob_hashes
             #  self.blob_hashes.get_blob(blob_hash=).open_for_writing()
@@ -187,24 +162,19 @@ class ReflectorClient(asyncio.Protocol):
 
     class Streaming(asyncio.Handle):
         """Handler for reflecting streaming blobs"""
-        __loop = asyncio.get_event_loop()
+        __loop = asyncio.get_running_loop()
         
         def __init__(self, blob_manager: BlobFileManager):
             super(ReflectorClient.Streaming, self).__init__(
                 args=[blob_manager],
-                callback=self.descriptor_received,
+                callback=ReflectorClient.Streaming,
                 loop=self.__loop)
             self.blob_manager = blob_manager
-            self._run()
+            await self._run()
             
         def _run(self):
-            # #TODO: get stream_descriptor
-            # sd_blob = await StreamDescriptor().make_sd_blob()
-            # stream_ha
-            # BlobFileManager.get_stream_descriptor()
-            # sd_hash
-            # stream_hash
-            # sd_blob
+            ...
+
 '''
 ############# Stream descriptor requests and responses #############
 (if sending blobs directly this is skipped)
