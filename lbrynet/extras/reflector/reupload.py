@@ -60,27 +60,84 @@ class IncompleteResponse(Exception):
 # split '_' in response to get list of context vars for task
 # __ vars should not be used inside ReflectorProtocol
 # TODO: possibly resurrect common.py to store comprehensions
-__SD = 'sd'
-__BLOB = 'blob'
-_BLOB = __BLOB or __SD and __BLOB
+# blob or sd
+
+# sd or hash or size or blob
+_SD = bool
+# if _SD add 'sd_' to all key/vals and flag
 __HASH = 'hash'
 __SIZE = 'size'
-_INFO = _BLOB and __HASH or _BLOB and __SIZE
+__BLOB = 'blob'
+# if sd, strip and flag.
+# just set sd to None by default.
+_INFO = bool
+_BLOB = 'blob'  # ACK-SYN
+BLOB_KEY = ""
+BLOB = {}
+PAYLOAD = None
+if _INFO:
+    PAYLOAD = BLOB[__HASH], BLOB[__SIZE]
+if _SD:
+    pass
 __SEND = 'send'
 __RECV = 'received'
 __NEED = 'needed'
+_VER = 'version'
 # not including version to inform subscriber
 # that server version was received during handling.
 _PREFIX = __SEND or __NEED or __RECV
-_BASE = __BLOB or __SD and __BLOB
+
+if _SD:
+    _BASE = __BLOB or _SD and __BLOB
 # __SEND is SYN
 # __NEED is SYN-ACK
 # __RECV is ACK
-_REQUEST = _INFO or __SD and _INFO
-_RESPONSE = _PREFIX and _BASE
+_REQUEST = {_BLOB: _INFO}
+_RESPONSE = {_PREFIX: _BASE}
+_HANDSHAKE = {_VER: REFLECTOR_V2}
 # TODO: abstract method to call ReflectorClient.send(sd_blob/blob)
 # TODO: abstract method to call ReflectorClient.recv(sd/blob)
 # TODO: abstract method to call ReflectorClient.MissingBlobs()
+
+
+async def _request(req=dict) -> str:
+    # TODO: during testing this is only way i got to work, doesn't feel right.
+    return await binascii.hexlify(json.dumps(req).encode()).decode()
+
+
+async def _response(resp) -> dict:
+    return await json.loads(binascii.unhexlify(resp))
+
+
+class ReflectorProtocol(asyncio.Protocol):
+    def __init__(self, **kwargs):
+        # by default look for version in kwarg otherwise just send v2.
+        if not kwargs.get('version'):
+            self.command = _HANDSHAKE
+        # TODO: callback version
+        '''
+        if args is _REQUEST:
+            ...  # TODO: client
+        elif args is _RESPONSE:
+            ...  # TODO: server
+        else:
+            ...  # TODO: context handler
+        '''
+
+    async def connection_made(self, transport: asyncio.Transport):
+        await transport.write(self.command)
+    
+    async def data_received(self, data: bytes):
+        msg = await _response(data.decode())
+        if 'needed' in msg.keys():
+            # TODO: missing blobs
+            ...
+        # TODO: send, received, needed
+        #     'send_sd_blob': bool
+        #     'needed_blobs': list, conditional
+        
+    async def connection_lost(self, exc: typing.Optional[Exception]):
+        return exc if exc else log.info('reflected future')
 
 
 class ReflectorClient(asyncio.Protocol):
@@ -108,32 +165,7 @@ class ReflectorClient(asyncio.Protocol):
         asyncio.run(log.info(exc if exc else 'Closing connection.'))
         await self.__loop.close()
 
-    class Handshake(asyncio.Handle):
-        """Handshake Handle"""
-        __loop = asyncio.get_running_loop()
-        
-        def __init__(self, version: typing.Optional[REFLECTOR_V2]):
-            super(ReflectorClient.Handshake, self).__init__(
-                args=version, callback=ReflectorClient.connection_made,
-                loop=asyncio.get_running_loop())
-            await self._run()
-
-        def _run(self):
-            handshake = {'version': REFLECTOR_V2}
-            payload = await binascii.hexlify(json.dumps(handshake).encode()).decode()
-            _read, _write = await asyncio.open_connection(PROD_SERVER)
-            self.info = await _write.get_extra_info('peerhost')
-            await _write.write(payload)
-            await _write.write_eof()
-            rdata = await _read.readline()
-            response = await json.loads(binascii.unhexlify(rdata))
-            if response['version'] != REFLECTOR_V2:
-                await self.cancel()
-            self.version = response
-            await asyncio.run(log.info('%s is running protocol version %i.' % self.info, self.version))
-        
-        def cancel(self):
-            self.__loop.call_soon_threadsafe(self.__loop.shutdown_asyncgens)
+    
 
     class MissingBlobs(asyncio.Handle):
         """Handler to mitigate blobs_needed response."""
