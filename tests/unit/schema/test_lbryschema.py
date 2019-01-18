@@ -336,8 +336,19 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
                                                        curve=SECP256k1, name='example', force_detached=True)
-        #self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
         signed_copy = ClaimDict.deserialize(signed.serialized)
+        self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
+
+    def test_validate_detached_named_ecdsa_signature_from_dict(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        self.assertDictEqual(cert.claim_dict, secp256k1_cert)
+        signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
+                                                       curve=SECP256k1, name='example', force_detached=True)
+        self.assertEqual(
+            signed.claim_dict['publisherSignature']['detached_signature'],
+            binascii.hexlify(signed.serialized)
+        )
+        signed_copy = ClaimDict.load_dict(signed.claim_dict)
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
 
     def test_validate_what_cant_be_serialized_back(self):
@@ -366,6 +377,33 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
         self.assertEqual(signed, signed_copy.serialized)
 
+    def test_validate_what_cant_be_serialized_back_even_by_loading_back_from_dictionary(self):
+        cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
+        self.assertDictEqual(cert.claim_dict, secp256k1_cert)
+        original = ClaimDict.load_dict(example_010).serialized
+        altered = original + b'\x00\x01\x02\x30\x50\x80\x99'  # pretend this extra trash is from some unknown protobuf
+
+        # manually sign
+        signer = get_signer(SECP256k1).load_pem(secp256k1_private_key)
+        signature = signer.sign(
+            b'example',
+            decode_address(claim_address_2),
+            altered,
+            binascii.unhexlify(claim_id_1),
+        )
+        detached_sig = Signature(NAMED_SECP256K1(
+            signature,
+            binascii.unhexlify(claim_id_1),
+            altered
+        ))
+
+        signed = detached_sig.serialized
+        self.assertEqual(signed[85:], altered)
+        signed_copy = ClaimDict.deserialize(signed)
+        signed_copy = ClaimDict.load_dict(signed_copy.claim_dict)
+        self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
+        self.assertEqual(signed, signed_copy.serialized)
+
     def test_fail_to_sign_with_no_claim_address(self):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
@@ -377,7 +415,6 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
                                                        curve=SECP256k1, name='example', force_detached=True)
-        #self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertRaises(Exception, signed_copy.validate_signature, None, cert, name='example')
 
@@ -386,7 +423,6 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
                                                        curve=SECP256k1, name='example', force_detached=True)
-        #self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertRaises(Exception, signed_copy.validate_signature, None, cert, name=None)
 
