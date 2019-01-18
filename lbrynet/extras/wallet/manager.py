@@ -414,7 +414,7 @@ class LbryWalletManager(BaseWalletManager):
         if certificate:
             claim = claim.sign(
                 certificate.private_key, claim_address, certificate.claim_id, curve=SECP256k1, name=name,
-                force_detached=True
+                force_detached=False  # TODO: delete it and make True default everywhere when its out
             )
         existing_claims = await account.get_claims(
             claim_name_type__any={'is_claim': 1, 'is_update': 1},  # exclude is_supports
