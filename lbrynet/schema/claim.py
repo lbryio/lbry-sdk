@@ -92,11 +92,11 @@ class ClaimDict(OrderedDict):
         return None
 
     @property
-    def certificate_id(self):
+    def certificate_id(self) -> str:
         if self.protobuf.HasField("publisherSignature"):
-            return binascii.hexlify(self.protobuf.publisherSignature.certificateId)
+            return binascii.hexlify(self.protobuf.publisherSignature.certificateId).decode()
         if self.detached_signature and self.detached_signature.certificate_id:
-            return binascii.hexlify(self.detached_signature.certificate_id)
+            return binascii.hexlify(self.detached_signature.certificate_id).decode()
 
     @property
     def signature(self):
