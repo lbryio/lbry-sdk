@@ -150,6 +150,8 @@ class StreamDownloader(StreamAssembler):
         # wait for a new peer to be added or for a download attempt to finish
         await asyncio.wait([got_new_peer] + download_tasks, return_when='FIRST_COMPLETED',
                            loop=self.loop)
+        if not got_new_peer.done():
+            got_new_peer.cancel()
         async with self._lock:
             if self.current_blob.get_is_verified():
                 if got_new_peer and not (got_new_peer.cancelled() or got_new_peer.done()):
@@ -278,4 +280,7 @@ class StreamDownloader(StreamAssembler):
 
     def download(self, node: 'Node'):
         self.accumulate_connections_task = self.loop.create_task(self._accumulate_connections(node))
-        self.download_task = self.loop.create_task(self._download())
+        try:
+            self.download_task = self.loop.create_task(self._download())
+        except asyncio.CancelledError:
+            log.exception("cancelled")
