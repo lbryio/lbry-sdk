@@ -36,6 +36,7 @@ from lbrynet.extras.daemon.DaemonConsole import main as daemon_console, LBRYAPIC
 from lbrynet.extras.system_info import get_platform
 
 log = logging.getLogger(lbrynet_name)
+log.addHandler(logging.NullHandler())
 
 optional_path_getter_type = typing.Optional[typing.Callable[[], str]]
 
