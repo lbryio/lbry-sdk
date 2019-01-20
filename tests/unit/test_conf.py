@@ -1,121 +1,156 @@
 import os
 import json
 import sys
+import types
 import tempfile
 import shutil
-from unittest import skipIf
-from twisted.trial import unittest
-from twisted.internet import defer
+import unittest
+import argparse
 from lbrynet import conf
 from lbrynet.p2p.Error import InvalidCurrencyError
 
 
-class SettingsTest(unittest.TestCase):
-    def setUp(self):
-        os.environ['LBRY_TEST'] = 'test_string'
+class TestConfig(conf.Configuration):
+    test = conf.String('the default')
+    test_int = conf.Integer(9)
+    test_toggle = conf.Toggle(False)
+    servers = conf.Servers([('localhost', 80)])
 
-    def tearDown(self):
-        del os.environ['LBRY_TEST']
 
-    def get_mock_config_instance(self):
-        settings = {'test': (str, '')}
-        env = conf.Env(**settings)
-        self.tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda : defer.succeed(shutil.rmtree(self.tmp_dir)))
-        return conf.Config({}, settings, environment=env, data_dir=self.tmp_dir, wallet_dir=self.tmp_dir, download_dir=self.tmp_dir)
+class ConfigurationTests(unittest.TestCase):
 
-    def test_envvar_is_read(self):
-        settings = self.get_mock_config_instance()
-        self.assertEqual('test_string', settings['test'])
+    @unittest.skipIf('linux' not in sys.platform, 'skipping linux only test')
+    def test_linux_defaults(self):
+        c = TestConfig()
+        self.assertEqual(c.data_dir, os.path.expanduser('~/.local/share/lbry/lbrynet'))
+        self.assertEqual(c.wallet_dir, os.path.expanduser('~/.local/share/lbry/lbryum'))
+        self.assertEqual(c.download_dir, os.path.expanduser('~/Downloads'))
+        self.assertEqual(c.config, os.path.expanduser('~/.local/share/lbry/lbrynet/daemon_settings.yml'))
 
-    def test_setting_can_be_overridden(self):
-        settings = self.get_mock_config_instance()
-        settings['test'] = 'my_override'
-        self.assertEqual('my_override', settings['test'])
+    def test_search_order(self):
+        c = TestConfig()
+        c.runtime = {'test': 'runtime'}
+        c.arguments = {'test': 'arguments'}
+        c.environment = {'test': 'environment'}
+        c.persisted = {'test': 'persisted'}
+        self.assertEqual(c.test, 'runtime')
+        c.runtime = {}
+        self.assertEqual(c.test, 'arguments')
+        c.arguments = {}
+        self.assertEqual(c.test, 'environment')
+        c.environment = {}
+        self.assertEqual(c.test, 'persisted')
+        c.persisted = {}
+        self.assertEqual(c.test, 'the default')
 
-    def test_setting_can_be_updated(self):
-        settings = self.get_mock_config_instance()
-        settings.update({'test': 'my_update'})
-        self.assertEqual('my_update', settings['test'])
+    def test_arguments(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--test")
+        args = parser.parse_args(['--test', 'blah'])
+        c = TestConfig.create_from_arguments(args)
+        self.assertEqual(c.test, 'blah')
+        c.arguments = {}
+        self.assertEqual(c.test, 'the default')
 
-    def test_setting_is_in_dict(self):
-        settings = self.get_mock_config_instance()
-        setting_dict = settings.get_current_settings_dict()
-        self.assertEqual({'test': 'test_string'}, setting_dict)
+    def test_environment(self):
+        c = TestConfig()
+        self.assertEqual(c.test, 'the default')
+        c.set_environment({'LBRY_TEST': 'from environ'})
+        self.assertEqual(c.test, 'from environ')
 
-    def test_invalid_setting_raises_exception(self):
-        settings = self.get_mock_config_instance()
-        self.assertRaises(KeyError, settings.set, 'invalid_name', 123)
+    def test_persisted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
 
-    def test_invalid_data_type_raises_exception(self):
-        settings = self.get_mock_config_instance()
-        self.assertIsNone(settings.set('test', 123))
-        self.assertRaises(KeyError, settings.set, 'test', 123, ('fake_data_type',))
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
 
-    def test_setting_precedence(self):
-        settings = self.get_mock_config_instance()
-        settings.set('test', 'cli_test_string', data_types=(conf.TYPE_CLI,))
-        self.assertEqual('cli_test_string', settings['test'])
-        settings.set('test', 'this_should_not_take_precedence', data_types=(conf.TYPE_ENV,))
-        self.assertEqual('cli_test_string', settings['test'])
-        settings.set('test', 'runtime_takes_precedence', data_types=(conf.TYPE_RUNTIME,))
-        self.assertEqual('runtime_takes_precedence', settings['test'])
+            # settings.yml doesn't exist on file system
+            self.assertFalse(c.persisted.exists)
+            self.assertEqual(c.test, 'the default')
 
-    def test_max_key_fee_set(self):
-        fixed_default = {'CURRENCIES':{'BTC':{'type':'crypto'}}}
-        adjustable_settings = {'max_key_fee': (json.loads, {'currency':'USD', 'amount':1})}
-        env = conf.Env(**adjustable_settings)
-        settings = conf.Config(fixed_default, adjustable_settings, environment=env)
+            self.assertEqual(c.modify_order, [c.runtime])
+            with c.update_config():
+                self.assertEqual(c.modify_order, [c.runtime, c.persisted])
+                c.test = 'new value'
+            self.assertEqual(c.modify_order, [c.runtime])
 
-        with self.assertRaises(InvalidCurrencyError):
-            settings.set('max_key_fee', {'currency':'USD', 'amount':1})
+            # share_usage_data has been saved to settings file
+            self.assertTrue(c.persisted.exists)
+            with open(c.config, 'r') as fd:
+                self.assertEqual(fd.read(), 'test: new value\n')
 
-        valid_setting = {'currency':'BTC', 'amount':1}
-        settings.set('max_key_fee', valid_setting)
-        out = settings.get('max_key_fee')
-        self.assertEqual(out, valid_setting)
+            # load the settings file and check share_usage_data is false
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
+            self.assertTrue(c.persisted.exists)
+            self.assertEqual(c.test, 'new value')
 
-    def test_data_dir(self):
-        # check if these directories are returned as string and not unicode
-        # otherwise there will be problems when calling os.path.join on
-        # unicode directory names with string file names
-        settings = conf.Config({}, {})
-        self.assertEqual(str, type(settings.download_dir))
-        self.assertEqual(str, type(settings.data_dir))
-        self.assertEqual(str, type(settings.wallet_dir))
+            # setting in runtime overrides config
+            self.assertNotIn('test', c.runtime)
+            c.test = 'from runtime'
+            self.assertIn('test', c.runtime)
+            self.assertEqual(c.test, 'from runtime')
 
-    @skipIf('win' in sys.platform, 'fix me!')
-    def test_load_save_config_file(self):
-        # setup settings
-        adjustable_settings = {'lbryum_servers': (list, [])}
-        env = conf.Env(**adjustable_settings)
-        settings = conf.Config({}, adjustable_settings, environment=env)
-        conf.settings = settings
-        # setup tempfile
-        conf_entry = b"lbryum_servers: ['localhost:50001', 'localhost:50002']\n"
-        with tempfile.NamedTemporaryFile(suffix='.yml') as conf_file:
-            conf_file.write(conf_entry)
-            conf_file.seek(0)
-            conf.conf_file = conf_file.name
-            # load and save settings from conf file
-            settings.load_conf_file_settings()
-            settings.save_conf_file_settings()
-            # test if overwritten entry equals original entry
-            # use decoded versions, because format might change without
-            # changing the interpretation
-            decoder = conf.settings_decoders['.yml']
-            conf_decoded = decoder(conf_entry)
-            conf_entry_new = conf_file.read()
-            conf_decoded_new = decoder(conf_entry_new)
-            self.assertEqual(conf_decoded, conf_decoded_new)
+            # NOT_SET only clears it in runtime location
+            c.test = conf.NOT_SET
+            self.assertNotIn('test', c.runtime)
+            self.assertEqual(c.test, 'new value')
 
-    def test_load_file(self):
-        settings = self.get_mock_config_instance()
+            # clear it in persisted as well
+            self.assertIn('test', c.persisted)
+            with c.update_config():
+                c.test = conf.NOT_SET
+            self.assertNotIn('test', c.persisted)
+            self.assertEqual(c.test, 'the default')
+            with open(c.config, 'r') as fd:
+                self.assertEqual(fd.read(), '{}\n')
 
-        # invalid extensions
-        for filename in ('monkey.yymmll', 'monkey'):
-            settings.file_name = filename
-            with open(os.path.join(self.tmp_dir, filename), "w"):
-                pass
-            with self.assertRaises(ValueError):
-                settings.load_conf_file_settings()
+    def test_validation(self):
+        c = TestConfig()
+        with self.assertRaisesRegex(AssertionError, 'must be a string'):
+            c.test = 9
+        with self.assertRaisesRegex(AssertionError, 'must be an integer'):
+            c.test_int = 'hi'
+        with self.assertRaisesRegex(AssertionError, 'must be a true/false'):
+            c.test_toggle = 'hi'
+
+    def test_file_extension_validation(self):
+        with self.assertRaisesRegex(AssertionError, "'.json' is not supported"):
+            TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join('settings.json'))
+            )
+
+    def test_serialize_deserialize(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
+            self.assertEqual(c.servers, [('localhost', 80)])
+            with c.update_config():
+                c.servers = [('localhost', 8080)]
+            with open(c.config, 'r+') as fd:
+                self.assertEqual(fd.read(), 'servers:\n- localhost:8080\n')
+                fd.write('servers:\n  - localhost:5566\n')
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
+            self.assertEqual(c.servers, [('localhost', 5566)])
+
+    def test_max_key_fee(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = os.path.join(temp_dir, 'settings.yml')
+            with open(config, 'w') as fd:
+                fd.write('max_key_fee: \'{"currency":"USD", "amount":1}\'\n')
+            c = conf.ServerConfiguration.create_from_arguments(
+                types.SimpleNamespace(config=config)
+            )
+            self.assertEqual(c.max_key_fee['currency'], 'USD')
+            self.assertEqual(c.max_key_fee['amount'], 1)
+            with self.assertRaises(InvalidCurrencyError):
+                c.max_key_fee = {'currency': 'BCH', 'amount': 1}
+            with c.update_config():
+                c.max_key_fee = {'currency': 'BTC', 'amount': 1}
+            with open(config, 'r') as fd:
+                self.assertEqual(fd.read(), 'max_key_fee: \'{"currency": "BTC", "amount": 1}\'\n')
