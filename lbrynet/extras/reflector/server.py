@@ -5,11 +5,7 @@ import typing
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
-    from asyncio.transports import Transport
-
-REFLECTOR_V0 = 0
-REFLECTOR_V1 = REFLECTOR_V0 + 0
-REFLECTOR_V2 = REFLECTOR_V1 + 1
+    from lbrynet.extras.reflector.base import ReflectorVersion
 
 
 class ReflectorClientVersionError(Exception):
@@ -38,12 +34,12 @@ class IncompleteResponse(Exception):
 
 
 class ReflectorServer(asyncio.Protocol):
-    def __init__(self, blob_manager: typing.Any['BlobFileManager'] = BlobFileManager,
-                 blob_file: typing.Any['BlobFile'] = BlobFile):
-        self.transport: typing.Any['Transport'] = None
-        self.handshake = False
+    def __init__(self, blob_manager: typing.Any['BlobFileManager'] = BlobFileManager):
         self.blob_manager = blob_manager
-        self.blob_file = blob_file
+        
+        self.handshake = False
+        self.transport = None
+        self.version = typing.Any[ReflectorVersion]
 
     @staticmethod
     def encode(message: typing.Dict) -> bytes:
@@ -55,7 +51,7 @@ class ReflectorServer(asyncio.Protocol):
     
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
-        return self.encode({'version': REFLECTOR_V1})
+        return self.encode({'version': self.version})
     
     def handle_blob(self, blob: typing.Dict):
         if 'sd_blob' in blob.keys():
@@ -68,12 +64,12 @@ class ReflectorServer(asyncio.Protocol):
         message = self.decode(data)
         if not self.handshake:
             if 'version' not in message.keys():
-                raise ReflectorRequestError
+                return {'error': ReflectorRequestError}
             else:
-                if message.get('version') == 1:
-                    return self.encode({'version': REFLECTOR_V2})
-                elif message.get('version') == 0:
-                    return self.encode({'version': REFLECTOR_V1})
+                if isinstance(ReflectorVersion, message.get('version')):
+                    return self.encode({'version': self.version})
+                else:
+                    return {'error': ReflectorClientVersionError}
         if self.handshake:
             if 'sd_blob' in message.keys():
                 blob = message.get('sd_blob_hash')
