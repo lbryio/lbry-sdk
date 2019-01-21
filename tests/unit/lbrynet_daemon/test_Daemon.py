@@ -4,7 +4,6 @@ import json
 from twisted.internet import defer
 from twisted.trial import unittest
 
-from lbrynet import conf
 from lbrynet.extras.compat import f2d
 from lbrynet.schema.decode import smart_decode
 from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -30,6 +29,7 @@ from tests.test_utils import is_android
 
 
 def get_test_daemon(conf: Config, with_fee=False):
+    conf.data_dir = '/tmp'
     rates = {
         'BTCLBC': {'spot': 3.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
         'USDBTC': {'spot': 2.0, 'ts': test_utils.DEFAULT_ISO_TIME + 2}
