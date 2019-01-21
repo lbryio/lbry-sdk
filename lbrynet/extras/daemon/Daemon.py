@@ -1,51 +1,50 @@
+import asyncio
+import inspect
+import json
+import logging
 import os
-from urllib.parse import urlencode, quote
-import aiohttp
+import signal
 import textwrap
 import typing
-from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
 from copy import deepcopy
+from functools import wraps
 from traceback import format_exc
+from typing import Callable, Optional, List
+from urllib.parse import urlencode, quote
+
+import aiohttp
+from aiohttp import web
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
+
 from lbrynet import __version__
+from lbrynet import conf
+from lbrynet import utils
 from lbrynet.blob.blob_file import is_valid_blobhash
+from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout, ComponentsNotStarted
+from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
 from lbrynet.extras import system_info
-from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbrynet.extras.daemon.Components import STREAM_MANAGER_COMPONENT
-from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
+from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.Components import STREAM_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
+from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
+from lbrynet.extras.daemon.undecorated import undecorated
 from lbrynet.extras.reflector import reupload
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout, ComponentsNotStarted
-from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
-from lbrynet.schema.claim import ClaimDict
-from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.schema.error import URIParseError, DecodeError
-from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.address import decode_address
-from lbrynet.extras.daemon.ComponentManager import ComponentManager
-from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
-
-import asyncio
-import logging
-import json
-import inspect
-import signal
-from functools import wraps
-
-from lbrynet import utils
-from lbrynet.extras.daemon.undecorated import undecorated
-from lbrynet import conf
-
-from aiohttp import web
+from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.error import URIParseError, DecodeError
+from lbrynet.schema.uri import parse_lbry_uri
+from lbrynet.schema.validator import validate_claim_id
 
 if typing.TYPE_CHECKING:
     from lbrynet.extras.daemon.Components import UPnPComponent
     from lbrynet.extras.wallet import LbryWalletManager
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
-    from lbrynet.stream.stream_manager import StreamManager, ManagedStream
+    from lbrynet.stream.stream_manager import StreamManager
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.storage import SQLiteStorage
     from lbrynet.dht.node import Node
@@ -2258,7 +2257,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account, name, amount, claim_dict, file_path,
             certificate, claim_address, change_address
         )
-    
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None, blocking=True):
         """
@@ -2299,7 +2298,7 @@ class Daemon(metaclass=JSONRPCServerType):
         
         self.component_manager.loop.create_task(self.component_manager.analytics_manager.send_claim_action('abandon'))
         return {"success": True, "tx": tx}
-    
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_new_support(self, name, claim_id, amount, account_id=None):
         """
@@ -2334,7 +2333,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self.component_manager.analytics_manager.send_claim_action('new_support')
         )
         return result
-    
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
         """
@@ -2369,7 +2368,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self.component_manager.analytics_manager.send_claim_action('new_support')
         )
         return result
-    
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
         """
@@ -2401,7 +2400,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.wallet_manager.send_claim_to_address(
             claim_id, address, self.get_dewies_or_error("amount", amount) if amount else None
         )
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_claim_list_mine(self, account_id=None, page=None, page_size=None):
         """
@@ -2444,7 +2443,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account.get_claim_count,
             page, page_size
         )
-    
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_list(self, name):
         """
@@ -2481,7 +2480,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claims = await self.wallet_manager.get_claims_for_name(name)  # type: dict
         sort_claim_results(claims['claims'])
         return claims
-    
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
         """
@@ -2535,15 +2534,15 @@ class Daemon(metaclass=JSONRPCServerType):
                 }
             }
         """
-        
+
         uris = tuple(uris)
         page = int(page)
         page_size = int(page_size)
         if uri is not None:
             uris += (uri,)
-        
+
         results = {}
-        
+
         valid_uris = tuple()
         for chan_uri in uris:
             try:
@@ -2556,7 +2555,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     valid_uris += (chan_uri,)
             except URIParseError:
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
-        
+
         resolved = await self.wallet_manager.resolve(*valid_uris, page=page, page_size=page_size)
         if 'error' in resolved:
             return {'error': resolved['error']}
@@ -2571,7 +2570,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     results[u]['returned_page'] = page
                     results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
         return results
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_list(self, account_id=None, page=None, page_size=None):
         """
@@ -2638,7 +2637,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self.ledger.db.get_transaction_count,
             page, page_size, account=account
         )
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
         """
@@ -2654,7 +2653,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) JSON formatted transaction
         """
         return self.wallet_manager.get_transaction(txid)
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_utxo_list(self, account_id=None, page=None, page_size=None):
         """
@@ -2692,7 +2691,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account.get_utxo_count,
             page, page_size
         )
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_utxo_release(self, account_id=None):
         """
@@ -2712,7 +2711,7 @@ class Daemon(metaclass=JSONRPCServerType):
             None
         """
         return self.get_account_or_default(account_id).release_all_outputs()
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_block_show(self, blockhash=None, height=None):
         """
@@ -2729,7 +2728,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Requested block
         """
         return self.wallet_manager.get_block(blockhash, height)
-    
+
     # @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
     #           conditions=[WALLET_IS_UNLOCKED])
     # async def jsonrpc_blob_get(self, blob_hash, timeout=None):
@@ -2760,7 +2759,7 @@ class Daemon(metaclass=JSONRPCServerType):
     #         result = "Downloaded blob %s" % blob_hash
     #
     #     return result
-    
+
     @requires(BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_blob_delete(self, blob_hash):
         """
@@ -2782,7 +2781,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             await self.blob_manager.delete_blobs([blob_hash])
         return "Deleted %s" % blob_hash
-    
+
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_list(self, blob_hash, search_bottom_out_limit=None):
         """
@@ -2802,7 +2801,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (list) List of contact dictionaries {'address': <peer ip>, 'udp_port': <dht port>, 'tcp_port': <peer port>,
              'node_id': <peer node id>}
         """
-        
+
         if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
         if search_bottom_out_limit is not None:
@@ -2825,7 +2824,7 @@ class Daemon(metaclass=JSONRPCServerType):
             for peer in peers
         ]
         return results
-    
+
     @requires(DATABASE_COMPONENT)
     async def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):
         """
@@ -2891,7 +2890,7 @@ class Daemon(metaclass=JSONRPCServerType):
         elif not blob_file:
             raise Exception('No file found')
         else:
-            return await reupload.reflect_blob_file(blob_file=blob_file, reflector_server=reflector_server)
+            return await reupload.reflect(blob_manager=blob_file[0].blob_manager, reflector_server=reflector_server)
 
     # @requires(BLOB_COMPONENT, WALLET_COMPONENT)
     # async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
@@ -2971,7 +2970,7 @@ class Daemon(metaclass=JSONRPCServerType):
         blobs = []
         for blob in blob_hashes:
             blobs.append(self.blob_manager.get_blob(blob_hash=blob))
-        return await reupload.reflect_blob_hashes(blobs=blobs, reflector_server=reflector_server)
+        return await reupload.reflect(blobs=blobs, reflector_server=reflector_server)
 
     @requires(BLOB_COMPONENT)
     async def jsonrpc_blob_reflect_all(self) -> typing.List[typing.Dict]:
@@ -2987,7 +2986,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if successful
         """
-        return await reupload.reflect_blobs(blob_manager=self.blob_manager)
+        return await reupload.reflect(blob_manager=self.blob_manager)
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):
@@ -3015,7 +3014,7 @@ class Daemon(metaclass=JSONRPCServerType):
             return result.decode()
         except TimeoutError:
             return {'error': 'ping timeout'}
-    
+
     @requires(DHT_COMPONENT)
     def jsonrpc_routing_table_get(self):
         """
@@ -3046,7 +3045,7 @@ class Daemon(metaclass=JSONRPCServerType):
         result = {
             'buckets': {}
         }
-        
+
         for i in range(len(self.dht_node.protocol.routing_table.buckets)):
             result['buckets'][i] = []
             for peer in self.dht_node.protocol.routing_table.buckets[i].peers:
@@ -3057,10 +3056,10 @@ class Daemon(metaclass=JSONRPCServerType):
                     "node_id": hexlify(peer.node_id).decode(),
                 }
                 result['buckets'][i].append(host)
-        
+
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
-    
+
     # # the single peer downloader needs wallet access
     # @requires(DHT_COMPONENT, WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     # def jsonrpc_blob_availability(self, blob_hash, search_timeout=None, blob_timeout=None):
@@ -3182,7 +3181,7 @@ class Daemon(metaclass=JSONRPCServerType):
     #     response['is_available'] = response['sd_blob_availability'].get('is_available') and \
     #                                response['head_blob_availability'].get('is_available')
     #     return response
-    
+
     async def get_channel_or_error(
             self, accounts: List[LBCAccount], channel_id: str = None, channel_name: str = None):
         if channel_id is not None:
@@ -3198,18 +3197,18 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise ValueError(f"Couldn't find channel with name '{channel_name}'.")
             return certificates[0]
         raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
-    
+
     def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True):
         if account_id is None:
             return self.default_account
         return self.get_account_or_error(account_id, argument_name, lbc_only)
-    
+
     def get_accounts_or_all(self, account_ids: List[str]):
         return [
             self.get_account_or_error(account_id)
             for account_id in account_ids
         ] if account_ids else self.default_wallet.accounts
-    
+
     def get_account_or_error(self, account_id: str, argument_name: str = "account", lbc_only=True):
         for account in self.default_wallet.accounts:
             if account.id == account_id:
@@ -3221,7 +3220,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     )
                 return account
         raise ValueError(f"Couldn't find account: {account_id}.")
-    
+
     @staticmethod
     def get_dewies_or_error(argument: str, lbc: str):
         try:

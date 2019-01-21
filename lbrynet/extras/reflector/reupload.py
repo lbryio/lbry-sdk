@@ -15,8 +15,6 @@ if typing.TYPE_CHECKING:
     from asyncio.streams import StreamReader
     from asyncio.futures import Future
 
-log = logging.getLogger(__name__)
-
 REFLECTOR_V0 = 0
 REFLECTOR_V1 = REFLECTOR_V0 + 0
 REFLECTOR_V2 = REFLECTOR_V1 + 1
@@ -101,11 +99,12 @@ class ReflectorClientProtocol(asyncio.StreamReaderProtocol):
         self.transport.set_exception(exc)
 
 
-async def reflect(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
+async def reflect(loop: typing.Any['AbstractEventLoop'] = asyncio.AbstractEventLoop(),
                   protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
                   descriptor: typing.Optional['StreamDescriptor'] = None,
                   blob_file: typing.Optional['BlobFile'] = None,
                   blob_manager: typing.Optional['BlobFileManager'] = None,
+                  blobs: typing.Optional[typing.List] = None,
                   reflector_server: typing.Optional[str] = None,
                   tcp_port: typing.Optional[int] = 5566,
                   version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
@@ -113,7 +112,6 @@ async def reflect(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
     Usage:
             reflect [blob_file] [stream_descriptor] [blob_manager] <protocol> <host> <port>
     """
-    blobs = None
     if reflector_server is None:
         reflector_server = random.choice(conf.get_config()['reflector_servers'])
     if descriptor is not None:
@@ -133,110 +131,3 @@ async def reflect(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
             raise exc.with_traceback(loop)
     else:
         raise ValueError("Nothing to reflect from!")
-
-
-async def reflect_stream(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
-                         descriptor: typing.Any['StreamDescriptor'] = None,
-                         protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
-                         reflector_server: typing.Optional[str] = None,
-                         tcp_port: typing.Optional[int] = 5566,
-                         version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
-    """
-    reuploads all stream descriptor blobs.
-    returns reflector response.
-    """
-    if not reflector_server:
-        reflector_server = random.choice(conf.get_config()['reflector_servers'])
-    if not tcp_port:
-        tcp_port = 5566
-    if descriptor is not None:
-        try:
-            blobs = descriptor.blobs.copy()
-            result = await asyncio.wait_for(loop.create_connection(
-                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
-            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
-            return await result.result()
-        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
-                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
-            raise exc
-    else:
-        raise ValueError("Must have stream descriptor to reflect stream!")
-
-
-async def reflect_blob_file(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
-                            blob_file: typing.Any['BlobFile'] = None,
-                            protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
-                            reflector_server: typing.Optional[str] = None,
-                            tcp_port: typing.Optional[int] = 5566,
-                            version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
-    """
-    reuploads all blobfile blobs.
-    returns reflected blobs
-    """
-    if not reflector_server:
-        reflector_server = random.choice(conf.get_config()['reflector_servers'])
-    if not tcp_port:
-        tcp_port = 5566
-    if blob_file is not None:
-        try:
-            blobs = blob_file.get_is_verified()
-            result = await asyncio.wait_for(loop.create_connection(
-                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
-            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
-            return await result.result()
-        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
-                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
-            raise exc
-    else:
-        raise ValueError("No blobfile to reflect blobs from!")
-
-
-async def reflect_blobs(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
-                        blob_manager: typing.Any['BlobFileManager'] = None,
-                        protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
-                        reflector_server: typing.Optional[str] = None,
-                        tcp_port: typing.Optional[int] = 5566,
-                        version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
-    """
-    reuploads all saved blobs.
-    returns reflected blobs.
-    """
-    if reflector_server is None:
-        reflector_server = random.choice(conf.get_config()['reflector_servers'])
-    if blob_manager is not None:
-        try:
-            blobs = blob_manager.get_all_verified_blobs()
-            result = await asyncio.wait_for(loop.create_connection(
-                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
-            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
-            return await result.result()
-        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
-                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
-            raise exc
-    else:
-        raise ValueError("No BlobFileManager to get blobs from!")
-
-
-async def reflect_blob_hashes(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
-                              blobs: typing.List = None,
-                              protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
-                              reflector_server: typing.Optional[str] = None,
-                              tcp_port: typing.Optional[int] = 5566,
-                              version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
-    """
-    reuploads blobs from blob hashes.
-    returns reflected blobs.
-    """
-    if reflector_server is None:
-        reflector_server = random.choice(conf.get_config()['reflector_servers'])
-    if blobs is not None:
-        try:
-            result = await asyncio.wait_for(loop.create_connection(
-                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
-            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
-            return await result.result()
-        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
-                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
-            raise exc
-    else:
-        raise ValueError("No blobs to reflect!")
