@@ -31,7 +31,7 @@ from lbrynet.extras.daemon.Components import STREAM_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbrynet.extras.daemon.undecorated import undecorated
-from lbrynet.extras.reflector import reupload
+from lbrynet.extras.reflector.client import reflect
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.address import decode_address
@@ -2890,7 +2890,7 @@ class Daemon(metaclass=JSONRPCServerType):
         elif not blob_file:
             raise Exception('No file found')
         else:
-            return await reupload.reflect(blob_manager=blob_file[0].blob_manager, reflector_server=reflector_server)
+            return await reflect(blob_manager=blob_file[0].blob_manager, reflector_server=reflector_server)
 
     # @requires(BLOB_COMPONENT, WALLET_COMPONENT)
     # async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
@@ -2970,7 +2970,7 @@ class Daemon(metaclass=JSONRPCServerType):
         blobs = []
         for blob in blob_hashes:
             blobs.append(self.blob_manager.get_blob(blob_hash=blob))
-        return await reupload.reflect(blobs=blobs, reflector_server=reflector_server)
+        return await reflect(blobs=blobs, reflector_server=reflector_server)
 
     @requires(BLOB_COMPONENT)
     async def jsonrpc_blob_reflect_all(self) -> typing.List[typing.Dict]:
@@ -2986,7 +2986,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if successful
         """
-        return await reupload.reflect(blob_manager=self.blob_manager)
+        return await reflect(blob_manager=self.blob_manager)
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):

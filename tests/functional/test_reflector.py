@@ -3,12 +3,12 @@ import typing
 import random
 
 from lbrynet import conf
-from lbrynet.extras.reflector.reupload import ReflectorClientProtocol
-from lbrynet.extras.reflector.reupload import ReflectorClientVersionError
-from lbrynet.extras.reflector.reupload import ReflectorRequestError
-from lbrynet.extras.reflector.reupload import ReflectorRequestDecodeError
-from lbrynet.extras.reflector.reupload import IncompleteResponse
-from lbrynet.extras.reflector.reupload import REFLECTOR_V2
+from lbrynet.extras.reflector.client import ReflectorClient
+from lbrynet.extras.reflector.client import ReflectorClientVersionError
+from lbrynet.extras.reflector.client import ReflectorRequestError
+from lbrynet.extras.reflector.client import ReflectorRequestDecodeError
+from lbrynet.extras.reflector.client import IncompleteResponse
+from lbrynet.extras.reflector.client import REFLECTOR_V2
 
 if typing.TYPE_CHECKING:
     from lbrynet.stream.descriptor import StreamDescriptor
@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
 
 async def reflect_stream(loop: typing.Any['AbstractEventLoop'] = asyncio.AbstractEventLoop(),
                          descriptor: typing.Any['StreamDescriptor'] = None,
-                         protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                         protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClient,
                          reflector_server: typing.Optional[str] = None,
                          tcp_port: typing.Optional[int] = 5566,
                          version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
@@ -47,7 +47,7 @@ async def reflect_stream(loop: typing.Any['AbstractEventLoop'] = asyncio.Abstrac
 
 async def reflect_blob_file(loop: typing.Any['AbstractEventLoop'] = asyncio.AbstractEventLoop(),
                             blob_file: typing.Any['BlobFile'] = None,
-                            protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                            protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClient,
                             reflector_server: typing.Optional[str] = None,
                             tcp_port: typing.Optional[int] = 5566,
                             version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
@@ -75,7 +75,7 @@ async def reflect_blob_file(loop: typing.Any['AbstractEventLoop'] = asyncio.Abst
 
 async def reflect_blobs(loop: typing.Any['AbstractEventLoop'] = asyncio.AbstractEventLoop(),
                         blob_manager: typing.Any['BlobFileManager'] = None,
-                        protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                        protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClient,
                         reflector_server: typing.Optional[str] = None,
                         tcp_port: typing.Optional[int] = 5566,
                         version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
@@ -101,7 +101,7 @@ async def reflect_blobs(loop: typing.Any['AbstractEventLoop'] = asyncio.Abstract
 
 async def reflect_blob_hashes(loop: typing.Any['AbstractEventLoop'] = asyncio.AbstractEventLoop(),
                         blob_manager: typing.Any['BlobFileManager'] = None,
-                        protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                        protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClient,
                         reflector_server: typing.Optional[str] = None,
                         tcp_port: typing.Optional[int] = 5566,
                         version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:

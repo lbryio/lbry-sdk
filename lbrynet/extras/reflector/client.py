@@ -1,7 +1,6 @@
 import asyncio
 import binascii
 import json
-import logging
 import random
 import typing
 
@@ -45,9 +44,9 @@ class IncompleteResponse(Exception):
     """
 
 
-class ReflectorClientProtocol(asyncio.StreamReaderProtocol):
+class ReflectorClient(asyncio.StreamReaderProtocol):
     """
-    ReflectorClientProtocol: Handles the communication between a reflector client and server
+    ReflectorClient: Handles the communication between a reflector client and server
     """
 
     def __init__(self, stream_reader: typing.Any['StreamReader'] = asyncio.streams.StreamReader(),
@@ -100,7 +99,7 @@ class ReflectorClientProtocol(asyncio.StreamReaderProtocol):
 
 
 async def reflect(loop: typing.Any['AbstractEventLoop'] = asyncio.AbstractEventLoop(),
-                  protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                  protocol: typing.Any['ReflectorClient'] = ReflectorClient,
                   descriptor: typing.Optional['StreamDescriptor'] = None,
                   blob_file: typing.Optional['BlobFile'] = None,
                   blob_manager: typing.Optional['BlobFileManager'] = None,
