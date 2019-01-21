@@ -7,153 +7,236 @@ import typing
 
 from lbrynet import conf
 
-REFLECTOR_V1 = 0
-REFLECTOR_V2 = 1
+if typing.TYPE_CHECKING:
+    from lbrynet.stream.descriptor import StreamDescriptor
+    from lbrynet.blob.blob_file import BlobFile
+    from lbrynet.blob.blob_manager import BlobFileManager
+    from asyncio.events import AbstractEventLoop
+    from asyncio.streams import StreamReader
+    from asyncio.futures import Future
 
 log = logging.getLogger(__name__)
 
+REFLECTOR_V0 = 0
+REFLECTOR_V1 = REFLECTOR_V0 + 0
+REFLECTOR_V2 = REFLECTOR_V1 + 1
 
-class ReflectorClientVersionError(ConnectionRefusedError):
+
+class ReflectorClientVersionError(Exception):
     """
     Raised by reflector server if client sends an incompatible or unknown version.
     """
 
 
-class ReflectorRequestError(ConnectionRefusedError):
+class ReflectorRequestError(Exception):
     """
     Raised by reflector server if client sends a message without the required fields.
     """
 
 
-class ReflectorRequestDecodeError(ConnectionAbortedError):
+class ReflectorRequestDecodeError(Exception):
     """
     Raised by reflector server if client sends an invalid json request.
     """
 
 
-class IncompleteResponse(ConnectionResetError):
+class IncompleteResponse(Exception):
     """
     Raised by reflector server when client sends a portion of a json request,
     used buffering the incoming request.
     """
 
 
-class ReflectorClientProtocol(asyncio.Protocol):
-    
-    def __init__(self, loop: asyncio.BaseEventLoop, descriptor):
+class ReflectorClientProtocol(asyncio.StreamReaderProtocol):
+    """
+    ReflectorClientProtocol: Handles the communication between a reflector client and server
+    """
+
+    def __init__(self, stream_reader: typing.Any['StreamReader'] = asyncio.streams.StreamReader(),
+                 loop: typing.Any['AbstractEventLoop'] = asyncio.events.AbstractEventLoop(),
+                 blobs: typing.Any[typing.List] = None,
+                 version: typing.Any[REFLECTOR_V2, REFLECTOR_V1] = None):
         self.loop = loop
+        self.version = version
         self.transport = None
-        self.descriptor = descriptor
-        self._response_fut = loop.create_future()
-        self.reflector_server = typing.Optional[str]
-        self.reflector_port = typing.Optional[int]
-        self.received_server_version = asyncio.Lock(loop=loop)
-        self.wait_response = asyncio.Lock(loop=loop)
-    
-    async def encode_payload(self, request: typing.Dict):
-        return binascii.hexlify(json.dumps(request).encode().decode())
-    
-    async def decode_response(self, response: typing.Optional[bytes]) -> typing.Dict:
-        return json.loads(binascii.unhexlify(response.decode()))
-    
-    async def close(self):
-        if self._response_fut and not self._response_fut.done():
-            self._response_fut.cancel()
-        self._response_fut = None
-        if self.transport:
-            self.transport.close()
-        if self.received_server_version.locked():
-            self.received_server_version.cancel()
-        self.transport = None
-    
-    def connection_made(self, transport: asyncio.Transport):
+        self.handshake_received = asyncio.BoundedSemaphore()
+        _ = await self.handshake_received.acquire()
+        self.blobs = blobs
+        for blob in self.blobs:
+            _blob = self.encode(blob)
+            self.loop.create_task(self.write_blob(_blob))
+        super().__init__(stream_reader=stream_reader, client_connected_cb=self.connection_made)
+
+    @staticmethod
+    def encode(message: typing.Dict) -> bytes:
+        return binascii.hexlify(json.dumps(message).encode()).decode()
+
+    @staticmethod
+    def decode(message: typing.AnyStr) -> typing.Dict:
+        return json.loads(binascii.unhexlify(message.decode()))
+
+    def connection_made(self, transport: asyncio.StreamReader) -> typing.NoReturn:
         self.transport = transport
-        self.reflector_server, self.reflector_port = self.transport.get_extra_info('peername')
-    
-    async def send_handshake(self, protocol_version: typing.Optional[int]) -> typing.NoReturn:
-        _p = {'version': protocol_version}
-        proto = await self.encode_payload(_p)
-        data = await self.receive_handshake(proto)
-        self.loop.call_soon_threadsafe(self.receive_handshake, data)
-    
-    async def receive_handshake(self, data: typing.Optional[bytes]) -> typing.NoReturn:
-        response = await self.decode_response(data)
-        if 'version' in response.keys():
-            if REFLECTOR_V2 in response.values():
-                self.received_server_version.release()
-                return await self.received_server_version.set_result(response['version'])
-            self._response_fut.set_exception(ReflectorRequestDecodeError)
-            return await self.received_server_version.add_done_callback(self.close)
-        self._response_fut.set_exception(ReflectorClientVersionError)
-        await self.received_server_version.add_done_callback(self.close)
-    
-    async def reflect_stream_blobs(self):
-        blobs = await self.descriptor.blobs
-        await self.transport.writeall(blobs)
-        self.wait_response.release()
-    
-    async def reflect_sd_blobs(self, sd_blobs: typing.List, blob_manager) -> typing.List:
-        for blob in sd_blobs:
-            _p = {'sd_blob': blob}
-            payload = await self.encode_payload(_p)
-            self.transport.write(payload)
-            self.transport.write_eof()
-            await blob_manager.completed_blob_hashes.add(blob)
-        blob_hashes = blob_manager.completed_blob_hashes.copy()
-        return blob_hashes
-    
-    async def handle_data_received(self, message: typing.Optional[bytes]) -> typing.NoReturn:
-        msg = await self.decode_response(message)
-        if 'version' in msg.keys():
-            if msg['version'] == REFLECTOR_V2:
-                return self.received_server_version.release()
-            self.received_server_version.cancel()
-            return self.connection_lost(exc=ConnectionRefusedError())
-        elif 'needed' in msg.keys():
-            if False in msg.values():
-                return self.loop.call_soon_threadsafe(self.reflect_stream_blobs)
-            # print(msg['needed_blobs'])
-        elif True in msg.values():
-            self.wait_response.release()
+        payload = self.encode({'version': self.version})
+        self.transport.feed_data(data=payload)
+        self.transport.feed_eof()
+        response = await self.transport.readline()
+        resp = self.decode(response)
+        if resp.get('version') == REFLECTOR_V2:
+            self.version = resp.get('version')
+            self.handshake_received.release()
         else:
-            self.wait_response.cancel()
-        self.connection_lost(exc=ConnectionError())
-    
-    def data_received(self, data: typing.Optional[bytes]):
+            exc = ReflectorClientVersionError()
+            self.transport.set_exception(exc)
+
+    async def write_blob(self, blob) -> typing.NoReturn:
+        self.transport.feed_data(blob)
+        self.transport.feed_eof()
+        return await self.transport.readline()
+
+    async def reflect_blobs(self) -> Future:
+        return await self.loop.get_task_factory()
+
+    def connection_lost(self, exc: typing.Optional[Exception]) -> typing.NoReturn:
+        self.transport.set_exception(exc)
+
+
+async def reflect(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
+                  protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                  descriptor: typing.Optional['StreamDescriptor'] = None,
+                  blob_file: typing.Optional['BlobFile'] = None,
+                  blob_manager: typing.Optional['BlobFileManager'] = None,
+                  reflector_server: typing.Optional[str] = None,
+                  tcp_port: typing.Optional[int] = 5566,
+                  version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
+    """
+    Usage:
+            reflect [blob_file] [stream_descriptor] [blob_manager] <protocol> <host> <port>
+    """
+    blobs = None
+    if reflector_server is None:
+        reflector_server = random.choice(conf.get_config()['reflector_servers'])
+    if descriptor is not None:
+        blobs = descriptor.blobs.copy()
+    elif blob_file is not None:
+        blobs = blob_file.get_is_verified()
+    elif blob_manager is not None:
+        blobs = blob_manager.get_all_verified_blobs()
+    if blobs is not None:
         try:
-            return self.handle_data_received(data)
-        except (asyncio.CancelledError, asyncio.TimeoutError) as err:
-            if self._response_fut and not self._response_fut.done():
-                self._response_fut.set_exception(err)
-    
-    def connection_lost(self, exc: typing.Optional[Exception]):
-        self.transport = None
-        self.loop.create_task(self.close())
+            result = await asyncio.wait_for(loop.create_connection(
+                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
+            ), loop=loop, timeout=30.0).set_result(protocol.reflect_blobs)
+            return await result.result()
+        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
+                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
+            raise exc.with_traceback(loop)
+    else:
+        raise ValueError("Nothing to reflect from!")
 
 
-async def reflect_stream(loop: asyncio.BaseEventLoop, descriptor,
-                         blob_manager, protocol: 'ReflectorClientProtocol',
-                         reflector_server: str, tcp_port: int) -> typing.List:
+async def reflect_stream(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
+                         descriptor: typing.Any['StreamDescriptor'] = None,
+                         protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                         reflector_server: typing.Optional[str] = None,
+                         tcp_port: typing.Optional[int] = 5566,
+                         version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
     """
-    returns all completed blob_hashes in stream.
-    :param loop:
-    :param descriptor:
-    :param blob_manager:
-    :param protocol:
-    :param reflector_server:
-    :param tcp_port:
-    :return:
+    reuploads all stream descriptor blobs.
+    returns reflector response.
     """
-    
     if not reflector_server:
-        reflector_server = random.choice(conf.settings['reflector_servers'])
+        reflector_server = random.choice(conf.get_config()['reflector_servers'])
     if not tcp_port:
         tcp_port = 5566
-    try:
-        await asyncio.wait_for(loop.create_connection(lambda: protocol, reflector_server, tcp_port),
-                               loop=loop, timeout=30.0)
-        sd_blobs = descriptor.blobs.copy()
-        return await protocol.reflect_sd_blobs(sd_blobs, blob_manager)
-    except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
-            ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse):
-        return [None]
+    if descriptor is not None:
+        try:
+            blobs = descriptor.blobs.copy()
+            result = await asyncio.wait_for(loop.create_connection(
+                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
+            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
+            return await result.result()
+        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
+                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
+            raise exc
+    else:
+        raise ValueError("Must have stream descriptor to reflect stream!")
+
+
+async def reflect_blob_file(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
+                            blob_file: typing.Any['BlobFile'] = None,
+                            protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                            reflector_server: typing.Optional[str] = None,
+                            tcp_port: typing.Optional[int] = 5566,
+                            version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
+    """
+    reuploads all blobfile blobs.
+    returns reflected blobs
+    """
+    if not reflector_server:
+        reflector_server = random.choice(conf.get_config()['reflector_servers'])
+    if not tcp_port:
+        tcp_port = 5566
+    if blob_file is not None:
+        try:
+            blobs = blob_file.get_is_verified()
+            result = await asyncio.wait_for(loop.create_connection(
+                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
+            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
+            return await result.result()
+        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
+                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
+            raise exc
+    else:
+        raise ValueError("No blobfile to reflect blobs from!")
+
+
+async def reflect_blobs(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
+                        blob_manager: typing.Any['BlobFileManager'] = None,
+                        protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                        reflector_server: typing.Optional[str] = None,
+                        tcp_port: typing.Optional[int] = 5566,
+                        version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
+    """
+    reuploads all saved blobs.
+    returns reflected blobs.
+    """
+    if reflector_server is None:
+        reflector_server = random.choice(conf.get_config()['reflector_servers'])
+    if blob_manager is not None:
+        try:
+            blobs = blob_manager.get_all_verified_blobs()
+            result = await asyncio.wait_for(loop.create_connection(
+                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
+            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
+            return await result.result()
+        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
+                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
+            raise exc
+    else:
+        raise ValueError("No BlobFileManager to get blobs from!")
+
+
+async def reflect_blob_hashes(loop: typing.Any['AbstractEventLoop'] = AbstractEventLoop(),
+                              blobs: typing.List = None,
+                              protocol: typing.Any['ReflectorClientProtocol'] = ReflectorClientProtocol,
+                              reflector_server: typing.Optional[str] = None,
+                              tcp_port: typing.Optional[int] = 5566,
+                              version: typing.Optional[int] = REFLECTOR_V2) -> typing.List:
+    """
+    reuploads blobs from blob hashes.
+    returns reflected blobs.
+    """
+    if reflector_server is None:
+        reflector_server = random.choice(conf.get_config()['reflector_servers'])
+    if blobs is not None:
+        try:
+            result = await asyncio.wait_for(loop.create_connection(
+                lambda: protocol(version=version, blobs=blobs), reflector_server, tcp_port
+            ), loop=loop, timeout=30.0).set_result(protocol().reflect_blobs())
+            return await result.result()
+        except (asyncio.TimeoutError, asyncio.CancelledError, ReflectorRequestDecodeError,
+                ReflectorClientVersionError, ReflectorRequestError, IncompleteResponse) as exc:
+            raise exc
+    else:
+        raise ValueError("No blobs to reflect!")
