@@ -11,18 +11,17 @@ from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.extras.compat import f2d
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.p2p.Peer import Peer
-from lbrynet import conf
 from lbrynet.cryptoutils import get_lbry_hash_obj
+from lbrynet.conf import Config
 
 
 class BlobManagerTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        conf.initialize_settings(False)
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
-        self.bm = DiskBlobManager(self.blob_dir, SQLiteStorage(':memory:'))
+        self.bm = DiskBlobManager(self.blob_dir, SQLiteStorage(Config(data_dir=self.blob_dir), ':memory:'))
         self.peer = Peer('somehost', 22)
         yield f2d(self.bm.storage.open())
 

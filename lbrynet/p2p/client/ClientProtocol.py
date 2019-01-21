@@ -5,7 +5,8 @@ from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import failure
-from lbrynet import conf, utils
+from lbrynet import utils
+from lbrynet.conf import MAX_RESPONSE_INFO_SIZE
 from lbrynet.p2p.Error import ConnectionClosedBeforeResponseError, NoResponseError
 from lbrynet.p2p.Error import DownloadCanceledError, MisbehavingPeerError
 from lbrynet.p2p.Error import RequestCanceledError
@@ -52,7 +53,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
             self._blob_download_request.write(data)
         else:
             self._response_buff += data
-            if len(self._response_buff) > conf.settings['MAX_RESPONSE_INFO_SIZE']:
+            if len(self._response_buff) > MAX_RESPONSE_INFO_SIZE:
                 log.warning("Response is too large from %s. Size %s",
                             self.peer, len(self._response_buff))
                 self.transport.loseConnection()

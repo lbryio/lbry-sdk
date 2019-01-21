@@ -1,6 +1,8 @@
 import logging
 from twisted.internet import defer
 from twisted._threads import AlreadyQuit
+
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 
 log = logging.getLogger(__name__)
@@ -26,6 +28,7 @@ class Component(metaclass=ComponentType):
     component_name = None
 
     def __init__(self, component_manager):
+        self.conf: Config = component_manager.conf
         self.component_manager = component_manager
         self._running = False
 

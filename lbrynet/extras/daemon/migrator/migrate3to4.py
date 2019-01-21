@@ -5,9 +5,9 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def do_migration(db_dir):
+def do_migration(conf):
     log.info("Doing the migration")
-    migrate_blobs_db(db_dir)
+    migrate_blobs_db(conf.data_dir)
     log.info("Migration succeeded")
 
 

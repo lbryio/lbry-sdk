@@ -1,4 +1,5 @@
 import logging
+from lbrynet.conf import Config
 from lbrynet.p2p.BlobInfo import BlobInfo
 from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
@@ -82,9 +83,10 @@ class DummyBlobHandler:
 
 
 class StandaloneBlobDownloader:
-    def __init__(self, blob_hash, blob_manager, peer_finder,
+    def __init__(self, conf: Config, blob_hash, blob_manager, peer_finder,
                  rate_limiter, payment_rate_manager, wallet,
                  timeout=None):
+        self.conf = conf
         self.blob_hash = blob_hash
         self.blob_manager = blob_manager
         self.peer_finder = peer_finder

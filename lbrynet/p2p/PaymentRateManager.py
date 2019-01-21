@@ -1,13 +1,11 @@
 from decimal import Decimal
-from lbrynet import conf
 from lbrynet.p2p.Strategy import get_default_strategy, OnlyFreeStrategy
 
 
 class BasePaymentRateManager:
-    def __init__(self, rate=None, info_rate=None):
-        self.min_blob_data_payment_rate = rate if rate is not None else conf.settings['data_rate']
-        self.min_blob_info_payment_rate = (
-            info_rate if info_rate is not None else conf.settings['min_info_rate'])
+    def __init__(self, rate, info_rate):
+        self.min_blob_data_payment_rate = rate
+        self.min_blob_info_payment_rate = info_rate
 
 
 class PaymentRateManager:
@@ -37,7 +35,7 @@ class PaymentRateManager:
 
 
 class NegotiatedPaymentRateManager:
-    def __init__(self, base, availability_tracker, generous=None):
+    def __init__(self, base, availability_tracker, generous):
         """
         @param base: a BasePaymentRateManager
         @param availability_tracker: a BlobAvailabilityTracker
@@ -48,10 +46,10 @@ class NegotiatedPaymentRateManager:
         self.min_blob_data_payment_rate = base.min_blob_data_payment_rate
         self.points_paid = 0.0
         self.blob_tracker = availability_tracker
-        self.generous = generous if generous is not None else conf.settings['is_generous_host']
-        self.strategy = get_default_strategy(self.blob_tracker,
-                                             base_price=self.base.min_blob_data_payment_rate,
-                                             is_generous=generous)
+        self.generous = generous
+        self.strategy = get_default_strategy(
+            self.blob_tracker, self.base.min_blob_data_payment_rate, generous
+        )
 
     def get_rate_blob_data(self, peer, blobs):
         response = self.strategy.make_offer(peer, blobs)

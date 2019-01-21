@@ -5,13 +5,12 @@ import logging
 from binascii import hexlify, unhexlify
 
 from twisted.internet import defer
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.extras.compat import f2d
 from lbrynet.p2p.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.p2p.HTTPBlobDownloader import HTTPBlobDownloader
 from lbrynet.utils import short_hash
 from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaver
-from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileDownloader
 from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.p2p.StreamDescriptor import save_sd_info
 
@@ -35,12 +34,12 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
-    def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, storage, lbry_file_manager,
-                 payment_rate_manager, wallet, download_directory, file_name, stream_name, sd_hash, key,
-                 suggested_file_name, download_mirrors=None):
+    def __init__(self, conf: Config, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, storage,
+                 lbry_file_manager, payment_rate_manager, wallet, download_directory, file_name, stream_name,
+                 sd_hash, key, suggested_file_name, download_mirrors=None):
         super().__init__(
-            stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
-            download_directory, key, stream_name, file_name
+            conf, stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager,
+            wallet, download_directory, key, stream_name, file_name
         )
         self.sd_hash = sd_hash
         self.rowid = rowid
@@ -56,9 +55,9 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.channel_name = None
         self.metadata = None
         self.mirror = None
-        if download_mirrors or conf.settings['download_mirrors']:
+        if download_mirrors or conf.download_mirrors:
             self.mirror = HTTPBlobDownloader(
-                self.blob_manager, servers=download_mirrors or conf.settings['download_mirrors']
+                self.blob_manager, servers=download_mirrors or conf.download_mirrors
             )
 
     def set_claim_info(self, claim_info):
@@ -100,7 +99,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         if self.mirror:
             self.mirror.stop()
         # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
-        yield EncryptedFileDownloader.stop(self, err=err)
+        yield super().stop(err)
         if change_status is True:
             status = yield self._save_status()
             defer.returnValue(status)

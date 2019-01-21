@@ -3,11 +3,12 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 """
 import os
 import logging
+import random
 from binascii import hexlify, unhexlify
 
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.extras.compat import f2d
 from lbrynet.extras.reflector.reupload import reflect_file
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
@@ -28,9 +29,11 @@ class EncryptedFileManager:
     # when reflecting files, reflect up to this many files at a time
     CONCURRENT_REFLECTS = 5
 
-    def __init__(self, peer_finder, rate_limiter, blob_manager, wallet, payment_rate_manager, storage, sd_identifier):
-        self.auto_re_reflect = conf.settings['reflect_uploads'] and conf.settings['auto_re_reflect_interval'] > 0
-        self.auto_re_reflect_interval = conf.settings['auto_re_reflect_interval']
+    def __init__(self, conf: Config, peer_finder, rate_limiter, blob_manager, wallet,
+                 payment_rate_manager, storage, sd_identifier):
+        self.conf = conf
+        self.auto_re_reflect = conf.reflect_uploads and conf.auto_re_reflect_interval > 0
+        self.auto_re_reflect_interval = conf.auto_re_reflect_interval
         self.peer_finder = peer_finder
         self.rate_limiter = rate_limiter
         self.blob_manager = blob_manager
@@ -78,6 +81,7 @@ class EncryptedFileManager:
     def _get_lbry_file(self, rowid, stream_hash, payment_rate_manager, sd_hash, key,
                        stream_name, file_name, download_directory, suggested_file_name, download_mirrors=None):
         return ManagedEncryptedFileDownloader(
+            self.conf,
             rowid,
             stream_hash,
             self.peer_finder,
@@ -239,7 +243,7 @@ class EncryptedFileManager:
         sd_hashes_to_reflect = yield f2d(self.storage.get_streams_to_re_reflect())
         for lbry_file in self.lbry_files:
             if lbry_file.sd_hash in sd_hashes_to_reflect:
-                ds.append(sem.run(reflect_file, lbry_file))
+                ds.append(sem.run(reflect_file, lbry_file, random.choice(self.conf.reflector_servers)))
         yield defer.DeferredList(ds)
 
     @defer.inlineCallbacks

@@ -1,133 +1,47 @@
 import sys
-import os
 import json
 import asyncio
 import argparse
-import typing
-
-from twisted.internet import asyncioreactor
-if 'twisted.internet.reactor' not in sys.modules:
-    asyncioreactor.install()
-else:
-    from twisted.internet import reactor
-    if not isinstance(reactor, asyncioreactor.AsyncioSelectorReactor) and getattr(sys, 'frozen', False):
-        # pyinstaller hooks install the default reactor before
-        # any of our code runs, see kivy for similar problem:
-        #    https://github.com/kivy/kivy/issues/4182
-        del sys.modules['twisted.internet.reactor']
-        asyncioreactor.install()
-from twisted.internet import reactor
 import logging
-from aiohttp.client_exceptions import ClientConnectorError
-from requests.exceptions import ConnectionError
 from docopt import docopt
 from textwrap import dedent
 
-from lbrynet import conf, log_support, __name__ as lbrynet_name
-from lbrynet.utils import check_connection, json_dumps_pretty
+import aiohttp
+from lbrynet.extras.compat import force_asyncioreactor_install
+force_asyncioreactor_install()
+
+from lbrynet import log_support, __name__ as lbrynet_name, __version__ as lbrynet_version
 from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
+from lbrynet.conf import Config, CLIConfig
+from lbrynet.utils import check_connection
 from lbrynet.extras.daemon.Daemon import Daemon
-from lbrynet.extras.daemon.DaemonConsole import main as daemon_console, LBRYAPIClient
-from lbrynet.extras.system_info import get_platform
 
 log = logging.getLogger(lbrynet_name)
 log.addHandler(logging.NullHandler())
 
-optional_path_getter_type = typing.Optional[typing.Callable[[], str]]
+
+def display(data):
+    print(json.dumps(data["result"], indent=2))
 
 
-def start_daemon(settings: typing.Optional[typing.Dict] = None,
-                 console_output: typing.Optional[bool] = True, verbose: typing.Optional[typing.List[str]] = None,
-                 data_dir: typing.Optional[str] = None, wallet_dir: typing.Optional[str] = None,
-                 download_dir: typing.Optional[str] = None):
-
-    settings = settings or {}
-    conf.initialize_settings(data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
-    for k, v in settings.items():
-        conf.settings.update({k, v}, data_types=(conf.TYPE_CLI,))
-
-    log_support.configure_logging(conf.settings.get_log_filename(), console_output, verbose)
-
-    if conf.settings['share_usage_data']:
-        loggly_handler = get_loggly_handler(conf.settings['LOGGLY_TOKEN'])
-        loggly_handler.setLevel(logging.ERROR)
-        log.addHandler(loggly_handler)
-
-    log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
-    log.info("Starting lbrynet-daemon from command line")
-
-    if check_connection():
-        daemon = Daemon()
-        reactor._asyncioEventloop.create_task(daemon.start_listening())
-        reactor.run()
-    else:
-        log.info("Not connected to internet, unable to start")
-
-
-def start_daemon_with_cli_args(argv=None, data_dir: typing.Optional[str] = None,
-                               wallet_dir: typing.Optional[str] = None, download_dir: typing.Optional[str] = None):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--http-auth", dest="useauth", action="store_true", default=False
-    )
-    parser.add_argument(
-        '--quiet', dest='quiet', action="store_true",
-        help='Disable all console output.'
-    )
-    parser.add_argument(
-        '--verbose', nargs="*",
-        help=('Enable debug output. Optionally specify loggers for which debug output '
-              'should selectively be applied.')
-    )
-    parser.add_argument(
-        '--version', action="store_true",
-        help='Show daemon version and quit'
-    )
-
-    args = parser.parse_args(argv)
-    settings = {}
-    if args.useauth:
-        print('--http-auth is no longer supported; an alternative solution using IPC is forthcoming.')
-        return
-
-    verbose = None
-    if args.verbose:
-        verbose = args.verbose
-
-    console_output = not args.quiet
-
-    if args.version:
-        print(json_dumps_pretty(get_platform()))
-        return
-
-    return start_daemon(settings, console_output, verbose, data_dir, wallet_dir, download_dir)
-
-
-async def execute_command(method, params, data_dir: typing.Optional[str] = None,
-                          wallet_dir: typing.Optional[str] = None, download_dir: typing.Optional[str] = None):
-    # this check if the daemon is running or not
-    conf.initialize_settings(data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
-    api = None
-    try:
-        api = await LBRYAPIClient.get_client()
-        await api.status()
-    except (ClientConnectorError, ConnectionError):
-        if api:
-            await api.session.close()
-        print("Could not connect to daemon. Are you sure it's running?")
-        return 1
-
-    # this actually executes the method
-    resp = await api.call(method, params)
-
-    try:
-        await api.session.close()
-        print(json.dumps(resp["result"], indent=2))
-    except KeyError:
-        if resp["error"]["code"] == -32500:
-            print(json.dumps(resp["error"], indent=2))
-        else:
-            print(json.dumps(resp["error"]["message"], indent=2))
+async def execute_command(conf, method, params):
+    async with aiohttp.ClientSession() as session:
+        try:
+            message = {'method': method, 'params': params}
+            async with session.get(conf.api_connection_url, json=message) as resp:
+                try:
+                    data = await resp.json()
+                    if 'result' in data:
+                        display(data['result'])
+                    elif 'error' in data:
+                        if 'message' in data['error']:
+                            display(data['error']['message'])
+                        else:
+                            display(data['error'])
+                except Exception as e:
+                    log.exception('Could not process response from server:', exc_info=e)
+        except aiohttp.ClientConnectionError:
+            print("Could not connect to daemon. Are you sure it's running?")
 
 
 def print_help():
@@ -201,82 +115,88 @@ def set_kwargs(parsed_args):
     return kwargs
 
 
+def get_argument_parser():
+    main = argparse.ArgumentParser('lbrynet')
+    main.add_argument(
+        '--version', dest='cli_version', action="store_true",
+        help='Show lbrynet CLI version and exit.'
+    )
+    CLIConfig.contribute_args(main)
+    sub = main.add_subparsers(dest='command')
+    start = sub.add_parser('start', help='Start lbrynet server.')
+    start.add_argument(
+        '--quiet', dest='quiet', action="store_true",
+        help='Disable all console output.'
+    )
+    start.add_argument(
+        '--verbose', nargs="*",
+        help=('Enable debug output. Optionally specify loggers for which debug output '
+              'should selectively be applied.')
+    )
+    start.add_argument(
+        '--version', action="store_true",
+        help='Show daemon version and quit'
+    )
+    Config.contribute_args(start)
+    api = Daemon.get_api_definitions()
+    for group in sorted(api):
+        group_command = sub.add_parser(group, help=api[group]['doc'])
+        group_command.set_defaults(group_doc=group_command)
+        commands = group_command.add_subparsers(dest='subcommand')
+        for command in api[group]['commands']:
+            commands.add_parser(command['name'], help=command['doc'].strip().splitlines()[0])
+    return main
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
-    if not argv:
-        print_help()
-        return 1
+    parser = get_argument_parser()
+    args = parser.parse_args(argv)
 
-    dir_args = {}
-    if len(argv) >= 2:
-        dir_arg_keys = [
-            'data_dir',
-            'wallet_dir',
-            'download_directory'
-        ]
+    conf = Config()
 
-        for arg in argv:
-            found_dir_arg = False
-            for key in dir_arg_keys:
-                if arg.startswith(f'--{key}='):
-                    if key in dir_args:
-                        print(f"Multiple values provided for '{key}' argument")
-                        print_help()
-                        return 1
-                    dir_args[key] = os.path.expanduser(os.path.expandvars(arg.lstrip(f'--{key}=')))
-                    found_dir_arg = True
-            if not found_dir_arg:
-                break
-        argv = argv[len(dir_args):]
+    if args.cli_version:
+        print(f"{lbrynet_name} {lbrynet_version}")
+        return 0
 
-    data_dir = dir_args.get('data_dir')
-    wallet_dir = dir_args.get('wallet_dir')
-    download_dir = dir_args.get('download_directory')
+    elif args.command == 'start':
+        console_output = True
+        verbose = True
 
-    for k, v in dir_args.items():
-        if not os.path.isdir(v):
-            print(f"'{data_dir}' is not a directory, cannot use it for {k}")
-            return 1
+        log_support.configure_logging(conf.log_file_path, console_output, verbose)
 
-    method, args = argv[0], argv[1:]
+        if conf.share_usage_data:
+            loggly_handler = get_loggly_handler()
+            loggly_handler.setLevel(logging.ERROR)
+            log.addHandler(loggly_handler)
 
-    if method in ['help', '--help', '-h']:
-        if len(args) == 1:
-            print_help_for_command(args[0])
+        log.debug('Final Settings: %s', conf.settings_dict)
+        log.info("Starting lbrynet-daemon from command line")
+
+        daemon = Daemon(conf)
+
+        if check_connection():
+            from twisted.internet import reactor
+            reactor._asyncioEventloop.create_task(daemon.start())
+            reactor.run()
         else:
-            print_help()
-        return 0
+            log.info("Not connected to internet, unable to start")
 
-    elif method in ['version', '--version', '-v']:
-        print("{lbrynet_name} {lbrynet_version}".format(
-            lbrynet_name=lbrynet_name, **get_platform()
-        ))
-        return 0
+    elif args.command is not None:
 
-    elif method == 'start':
-        sys.exit(start_daemon_with_cli_args(args, data_dir, wallet_dir, download_dir))
+        if args.subcommand is None:
+            args.group_doc.print_help()
 
-    elif method == 'console':
-        sys.exit(daemon_console())
+        else:
+            method = f'{args.command}_{args.subcommand}'
+            fn = Daemon.callable_methods[method]
+            parsed = docopt(fn.__doc__, [method]+argv[2:])
+            params = set_kwargs(parsed)
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(execute_command(conf, method, params))
 
-    elif method not in Daemon.callable_methods:
-        if method not in Daemon.deprecated_methods:
-            print(f'{method} is not a valid command.')
-            return 1
-
-        new_method = Daemon.deprecated_methods[method].new_command
-        if new_method is None:
-            print(f"{method} is permanently deprecated and does not have a replacement command.")
-            return 0
-
-        print(f"{method} is deprecated, using {new_method}.")
-        method = new_method
-
-    fn = Daemon.callable_methods[method]
-    parsed = docopt(fn.__doc__, args)
-    params = set_kwargs(parsed)
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(execute_command(method, params, data_dir, wallet_dir, download_dir))
+    else:
+        parser.print_help()
 
     return 0
 

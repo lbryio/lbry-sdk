@@ -5,7 +5,7 @@ import logging
 from copy import deepcopy
 from twisted.internet import defer
 from twisted.trial import unittest
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.extras.compat import f2d
 from lbrynet.extras.daemon.storage import SQLiteStorage, open_file_for_writing
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
@@ -84,9 +84,8 @@ class StorageTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        conf.initialize_settings(False)
         self.db_dir = tempfile.mkdtemp()
-        self.storage = SQLiteStorage(':memory:')
+        self.storage = SQLiteStorage(Config(data_dir=self.db_dir), ':memory:')
         yield f2d(self.storage.open())
 
     @defer.inlineCallbacks

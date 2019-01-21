@@ -7,15 +7,17 @@ from twisted.trial import unittest
 
 from lbrynet.p2p import Peer
 from lbrynet.p2p.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
-from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
+from lbrynet.conf import Config
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 
 
 class TestBlobRequestHandlerQueries(unittest.TestCase):
     def setUp(self):
-        mock_conf_settings(self)
+        conf = Config()
         self.blob_manager = mock.Mock()
         self.payment_rate_manager = NegotiatedPaymentRateManager(
-            BasePaymentRateManager(0.001), DummyBlobAvailabilityTracker())
+            BasePaymentRateManager(0.001, conf.min_info_rate), DummyBlobAvailabilityTracker(), conf.is_generous_host
+        )
         from lbrynet.p2p.server import BlobRequestHandler
         self.handler = BlobRequestHandler.BlobRequestHandler(
             self.blob_manager, None, self.payment_rate_manager, None)

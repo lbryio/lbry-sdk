@@ -3,6 +3,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from lbrynet.conf import Config
 from lbrynet.extras.compat import f2d
 from lbrynet.extras.daemon.PeerManager import PeerManager
 from lbrynet.p2p.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
@@ -38,18 +39,20 @@ class CreateEncryptedFileTest(unittest.TestCase):
     timeout = 5
 
     def setUp(self):
-        mocks.mock_conf_settings(self)
         self.tmp_db_dir, self.tmp_blob_dir = mk_db_and_blob_dir()
+        conf = Config(data_dir=self.tmp_blob_dir)
         self.wallet = FakeWallet()
         self.peer_manager = PeerManager()
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
         self.rate_limiter = DummyRateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.storage = SQLiteStorage(':memory:')
+        self.storage = SQLiteStorage(conf, ':memory:')
         self.blob_manager = DiskBlobManager(self.tmp_blob_dir, self.storage)
         self.prm = OnlyFreePaymentsManager()
-        self.lbry_file_manager = EncryptedFileManager(self.peer_finder, self.rate_limiter, self.blob_manager,
-                                                      self.wallet, self.prm, self.storage, self.sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(
+            conf, self.peer_finder, self.rate_limiter, self.blob_manager,
+            self.wallet, self.prm, self.storage, self.sd_identifier
+        )
         d = f2d(self.storage.open())
         d.addCallback(lambda _: f2d(self.lbry_file_manager.setup()))
         return d

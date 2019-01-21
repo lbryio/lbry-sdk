@@ -1,7 +1,8 @@
 import random
 import logging
 from twisted.internet import defer, reactor
-from lbrynet import utils, conf
+from lbrynet import utils
+from lbrynet.conf import Config
 from lbrynet.p2p.client.ClientProtocol import ClientProtocolFactory
 from lbrynet.p2p.Error import InsufficientFundsError
 
@@ -20,11 +21,11 @@ class ConnectionManager:
     MANAGE_CALL_INTERVAL_SEC = 5
     TCP_CONNECT_TIMEOUT = 15
 
-    def __init__(self, downloader, rate_limiter,
-                 primary_request_creators, secondary_request_creators):
+    def __init__(self, downloader, rate_limiter, primary_request_creators, secondary_request_creators):
 
-        self.seek_head_blob_first = conf.settings['seek_head_blob_first']
-        self.max_connections_per_stream = conf.settings['max_connections_per_stream']
+        self.conf: Config = downloader.conf
+        self.seek_head_blob_first = self.conf.seek_head_blob_first
+        self.max_connections_per_stream = self.conf.max_connections_per_stream
 
         self.downloader = downloader
         self.rate_limiter = rate_limiter

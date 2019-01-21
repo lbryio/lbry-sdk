@@ -14,6 +14,7 @@ from lbrynet.p2p.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
+from lbrynet.conf import Config
 
 
 log = logging.getLogger(__name__)
@@ -60,7 +61,8 @@ class SingleBlobDownloadManager:
 
 
 class SinglePeerDownloader:
-    def __init__(self):
+    def __init__(self, conf: Config):
+        self.conf = conf
         self._payment_rate_manager = OnlyFreePaymentsManager()
         self._rate_limiter = DummyRateLimiter()
         self._wallet = None
@@ -81,7 +83,7 @@ class SinglePeerDownloader:
         peer_finder = SinglePeerFinder(peer)
         requester = BlobRequester(blob_manager, peer_finder, self._payment_rate_manager,
                                   self._wallet, download_manager)
-        downloader = StandaloneBlobDownloader(blob_hash, blob_manager, peer_finder,
+        downloader = StandaloneBlobDownloader(self.conf, blob_hash, blob_manager, peer_finder,
                                               self._rate_limiter, self._payment_rate_manager,
                                               self._wallet, timeout=timeout)
         info_exchanger = self._wallet.get_info_exchanger()
@@ -96,7 +98,7 @@ class SinglePeerDownloader:
         defer.returnValue(result)
 
     async def download_temp_blob_from_peer(self, peer, timeout, blob_hash):
-        tmp_storage = SQLiteStorage(':memory:')
+        tmp_storage = SQLiteStorage(Config(), ':memory:')
         await tmp_storage.open()
         tmp_dir = tempfile.mkdtemp()
         tmp_blob_manager = DiskBlobManager(tmp_dir, tmp_storage)

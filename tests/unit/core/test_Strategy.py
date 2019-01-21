@@ -7,8 +7,8 @@ from twisted.trial import unittest
 from lbrynet.p2p.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
 from lbrynet.p2p.Strategy import BasicAvailabilityWeightedStrategy
 from lbrynet.p2p.Offer import Offer
-from tests.mocks\
-    import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
+from lbrynet.conf import Config
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 
 MAX_NEGOTIATION_TURNS = 10
 random.seed(12345)
@@ -52,14 +52,16 @@ def calculate_negotation_turns(client_base, host_base, host_is_generous=True,
     client = mock.Mock()
     client.host = "1.2.3.5"
 
-    client_base_prm = BasePaymentRateManager(client_base)
+    conf = Config()
+
+    client_base_prm = BasePaymentRateManager(client_base, conf.min_info_rate)
     client_prm = NegotiatedPaymentRateManager(client_base_prm,
                                               DummyBlobAvailabilityTracker(),
-                                              generous=client_is_generous)
-    host_base_prm = BasePaymentRateManager(host_base)
+                                              client_is_generous)
+    host_base_prm = BasePaymentRateManager(host_base, conf.min_info_rate)
     host_prm = NegotiatedPaymentRateManager(host_base_prm,
                                             DummyBlobAvailabilityTracker(),
-                                            generous=host_is_generous)
+                                            host_is_generous)
     blobs_to_query = get_random_sample(blobs)
     accepted = False
     turns = 0
@@ -72,11 +74,12 @@ def calculate_negotation_turns(client_base, host_base, host_is_generous=True,
 
 
 class AvailabilityWeightedStrategyTests(unittest.TestCase):
-    def setUp(self):
-        mock_conf_settings(self)
 
     def test_first_offer_is_zero_and_second_is_not_if_offer_not_accepted(self):
-        strategy = BasicAvailabilityWeightedStrategy(DummyBlobAvailabilityTracker())
+        conf = Config()
+        strategy = BasicAvailabilityWeightedStrategy(
+            DummyBlobAvailabilityTracker(), conf.data_rate, conf.is_generous_host
+        )
         peer = "1.1.1.1"
 
         blobs = strategy.price_model.blob_tracker.availability.keys()
@@ -88,8 +91,13 @@ class AvailabilityWeightedStrategyTests(unittest.TestCase):
         self.assertNotEqual(offer2.rate, 0.0)
 
     def test_accept_zero_and_persist_if_accepted(self):
-        host_strategy = BasicAvailabilityWeightedStrategy(DummyBlobAvailabilityTracker())
-        client_strategy = BasicAvailabilityWeightedStrategy(DummyBlobAvailabilityTracker())
+        conf = Config()
+        host_strategy = BasicAvailabilityWeightedStrategy(
+            DummyBlobAvailabilityTracker(), conf.data_rate, conf.is_generous_host
+        )
+        client_strategy = BasicAvailabilityWeightedStrategy(
+            DummyBlobAvailabilityTracker(), conf.data_rate, conf.is_generous_host
+        )
 
         client = "1.1.1.1"
         host = "1.1.1.2"

@@ -2,19 +2,18 @@ import asyncio
 from unittest import TestCase
 from torba.testcase import AdvanceTimeTestCase
 
+from tests import mocks
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
 from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.extras.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
 from lbrynet.extras.daemon import Components
-from tests import mocks
 
 
 class TestComponentManager(TestCase):
     def setUp(self):
-        mocks.mock_conf_settings(self)
-
         self.default_components_sort = [
             [
                 Components.HeadersComponent,
@@ -38,7 +37,7 @@ class TestComponentManager(TestCase):
                 Components.ReflectorComponent
             ]
         ]
-        self.component_manager = ComponentManager()
+        self.component_manager = ComponentManager(Config())
 
     def tearDown(self):
         pass
@@ -62,9 +61,6 @@ class TestComponentManager(TestCase):
 
 
 class TestComponentManagerOverrides(TestCase):
-    def setUp(self):
-        mocks.mock_conf_settings(self)
-
     def test_init_with_overrides(self):
         class FakeWallet:
             component_name = "wallet"
@@ -77,7 +73,7 @@ class TestComponentManagerOverrides(TestCase):
             def component(self):
                 return self
 
-        new_component_manager = ComponentManager(wallet=FakeWallet)
+        new_component_manager = ComponentManager(Config(), wallet=FakeWallet)
         fake_wallet = new_component_manager.get_component("wallet")
         # wallet should be an instance of FakeWallet and not WalletComponent from Components.py
         self.assertIsInstance(fake_wallet, FakeWallet)
@@ -89,14 +85,14 @@ class TestComponentManagerOverrides(TestCase):
             depends_on = []
 
         with self.assertRaises(SyntaxError):
-            ComponentManager(randomComponent=FakeRandomComponent)
+            ComponentManager(Config(), randomComponent=FakeRandomComponent)
 
 
 class TestComponentManagerProperStart(AdvanceTimeTestCase):
 
     def setUp(self):
-        mocks.mock_conf_settings(self)
         self.component_manager = ComponentManager(
+            Config(),
             skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT,
                              PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT,
                              HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT, RATE_LIMITER_COMPONENT,
