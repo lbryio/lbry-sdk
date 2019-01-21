@@ -2881,7 +2881,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) list of blobs reflected
         """
-        reflector_server = kwargs.get('reflector', None)
+        host = kwargs.get('reflector', None)
         kwargs.pop('reflector_server')
         args = kwargs.copy()
         blob_file = self.stream_manager.get_filtered_streams(**args)
@@ -2890,7 +2890,9 @@ class Daemon(metaclass=JSONRPCServerType):
         elif not blob_file:
             raise Exception('No file found')
         else:
-            return await reflect(blob_manager=blob_file[0].blob_manager, reflector_server=reflector_server)
+            stream = blob_file[0].descriptor
+            manager = blob_file[0].blob_manager
+            return await reflect(blob_manager=manager, descriptor=stream, reflector_server=host)
 
     # @requires(BLOB_COMPONENT, WALLET_COMPONENT)
     # async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
@@ -2954,7 +2956,7 @@ class Daemon(metaclass=JSONRPCServerType):
     #     return blob_hashes[start_index:stop_index]
 
     @requires(BLOB_COMPONENT)
-    async def jsonrpc_blob_reflect(self, blob_hashes: typing.List, reflector_server=None) -> typing.List[typing.Dict]:
+    async def jsonrpc_blob_reflect(self, blob_hashes: typing.List, reflector_server=None) -> typing.List:
         """
         Reflects specified blobs
 
@@ -2967,13 +2969,16 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) reflected blob hashes
         """
+        host = reflector_server
+        manager = self.blob_manager
         blobs = []
         for blob in blob_hashes:
-            blobs.append(self.blob_manager.get_blob(blob_hash=blob))
-        return await reflect(blobs=blobs, reflector_server=reflector_server)
+            _blob = manager.get_blob(blob_hash=blob)
+            blobs.append(_blob)
+        return await reflect(blob_manager=manager, blobs=blobs, reflector_server=host)
 
     @requires(BLOB_COMPONENT)
-    async def jsonrpc_blob_reflect_all(self) -> typing.List[typing.Dict]:
+    async def jsonrpc_blob_reflect_all(self) -> typing.List:
         """
         Reflects all saved blobs
 
@@ -2986,7 +2991,13 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if successful
         """
-        return await reflect(blob_manager=self.blob_manager)
+        manager = self.blob_manager
+        hashes = manager.storage.get_all_blob_hashes()
+        blobs = []
+        for blob in hashes:
+            _blob = manager.get_blob(blob_hash=blob)
+            blobs.append(_blob)
+        return await reflect(blob_manager=manager, blobs=blobs)
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):
