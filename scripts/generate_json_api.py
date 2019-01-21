@@ -52,6 +52,7 @@ def get_api(obj):
         'arguments': arguments,
         'returns': returns.strip(),
         'examples': [{
+            'title': f"performing {name} operation",
             'curl': f"""curl -d'{{"method": "{name}"}}' http://localhost:5279/""",
             'lbrynet': f'lbrynet  {name} --some-arg=foo',
             'python': f'requests.post("http://localhost:5279", json={{"method": "{name}"}}).json()',
