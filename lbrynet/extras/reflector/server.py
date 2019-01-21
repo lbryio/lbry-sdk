@@ -79,3 +79,31 @@ class ReflectorServer(asyncio.Protocol):
     
     def connection_lost(self, exc: typing.Optional[Exception]):
         return exc
+
+
+async def reflect(blob_manager: typing.Any['BlobFileManager'],                # Required
+                  loop: asyncio.AbstractEventLoop(),                          # start when called
+                  protocol: typing.Any['ReflectorServer'] = ReflectorServer) -> typing.List[str]:
+    """
+    Reflect Blobs to a Reflector client
+
+    Usage:
+            reflect [blob_manager][blobs]
+
+        Options:
+            --blob_manager=<blob_manager>     : BlobFileManager object to retrieve needed hashes from.
+        Returns:
+            (list) list of blobs reflected
+    """
+    if blob_manager is None:
+        raise ValueError("Need blob manager to reflect blobs!")
+    try:
+        result = await asyncio.wait_for(loop.create_connection(
+            lambda: protocol(version=version, blob_manager=blob_manager),
+            reflector_server, reflector_port), loop=loop, timeout=30.0)
+            return await result.result()
+        except (asyncio.TimeoutError, asyncio.CancelledError, InterruptedError,
+                ValueError, ConnectionError, BytesWarning) as exc:
+            raise exc.with_traceback(loop)
+    else:
+        raise ValueError("Nothing to reflect from!")
