@@ -44,11 +44,19 @@ def get_api(obj):
     for arg in arguments:
         arg['description'] = ' '.join(arg['description'])
 
+    name = obj.__name__[len('jsonrpc_'):]
+
     return {
-        'name': obj.__name__[len('jsonrpc_'):],
+        'name': name,
         'description': description.strip(),
         'arguments': arguments,
-        'returns': returns.strip()
+        'returns': returns.strip(),
+        'examples': [{
+            'curl': f"""curl -d'{{"method": "{name}"}}' http://localhost:5279/""",
+            'lbrynet': f'lbrynet  {name} --some-arg=foo',
+            'python': f'requests.post("http://localhost:5279", json={{"method": "{name}"}}).json()',
+            'output': returns.strip()
+        }]
     }
 
 
