@@ -11,6 +11,7 @@ from lbrynet.p2p.RateLimiter import RateLimiter
 from lbrynet.p2p.Peer import Peer
 from lbrynet.p2p.Error import NoResponseError
 from lbrynet.extras.daemon.PeerManager import PeerManager
+from lbrynet.conf import Config
 
 PEER_PORT = 5551
 LOCAL_HOST = '127.0.0.1'
@@ -118,10 +119,11 @@ class TestIntegrationConnectionManager(TestCase):
 
     def setUp(self):
 
-        conf.initialize_settings(False)
+        conf = Config()
 
         self.TEST_PEER = Peer(LOCAL_HOST, PEER_PORT)
         self.downloader = MocDownloader()
+        self.downloader.conf = conf
         self.rate_limiter = RateLimiter()
         self.primary_request_creator = MocRequestCreator([self.TEST_PEER])
         self.clock = task.Clock()

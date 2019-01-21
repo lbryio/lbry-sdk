@@ -1,9 +1,9 @@
 from twisted.trial import unittest
 from twisted.internet import defer, task
 from lbrynet import utils
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
 from tests.test_utils import random_lbry_hash
-from tests.mocks import mock_conf_settings
 
 
 class MocDHTNode:
@@ -38,7 +38,7 @@ class MocStorage:
 class DHTHashAnnouncerTest(unittest.TestCase):
 
     def setUp(self):
-        mock_conf_settings(self)
+        conf = Config()
         self.num_blobs = 10
         self.blobs_to_announce = []
         for i in range(0, self.num_blobs):
@@ -47,7 +47,7 @@ class DHTHashAnnouncerTest(unittest.TestCase):
         self.clock = self.dht_node.clock
         utils.call_later = self.clock.callLater
         self.storage = MocStorage(self.blobs_to_announce)
-        self.announcer = DHTHashAnnouncer(self.dht_node, self.storage)
+        self.announcer = DHTHashAnnouncer(conf, self.dht_node, self.storage)
 
     @defer.inlineCallbacks
     def test_immediate_announce(self):

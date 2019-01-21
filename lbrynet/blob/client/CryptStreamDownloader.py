@@ -3,6 +3,7 @@ from binascii import unhexlify
 from twisted.internet import defer
 from twisted.python.failure import Failure
 
+from lbrynet.conf import Config
 from lbrynet.p2p.client.BlobRequester import BlobRequester
 from lbrynet.p2p.client.ConnectionManager import ConnectionManager
 from lbrynet.p2p.client.DownloadManager import DownloadManager
@@ -37,7 +38,7 @@ class CryptStreamDownloader:
 
     #implements(IStreamDownloader)
 
-    def __init__(self, peer_finder, rate_limiter, blob_manager, payment_rate_manager, wallet,
+    def __init__(self, conf: Config, peer_finder, rate_limiter, blob_manager, payment_rate_manager, wallet,
                  key, stream_name):
         """Initialize a CryptStreamDownloader
 
@@ -55,7 +56,7 @@ class CryptStreamDownloader:
         @return:
 
         """
-
+        self.conf = conf
         self.peer_finder = peer_finder
         self.rate_limiter = rate_limiter
         self.blob_manager = blob_manager

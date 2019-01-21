@@ -1,62 +1,62 @@
 import os
-import json
 import sys
 import types
 import tempfile
-import shutil
 import unittest
 import argparse
-from lbrynet import conf
+from lbrynet.conf import Config, BaseConfig, String, Integer, Toggle, Servers, NOT_SET
 from lbrynet.p2p.Error import InvalidCurrencyError
 
 
-class TestConfig(conf.Configuration):
-    test = conf.String('the default')
-    test_int = conf.Integer(9)
-    test_toggle = conf.Toggle(False)
-    servers = conf.Servers([('localhost', 80)])
+class TestConfig(BaseConfig):
+    test_str = String('str help', 'the default', previous_names=['old_str'])
+    test_int = Integer('int help', 9)
+    test_toggle = Toggle('toggle help', False)
+    servers = Servers('servers help', [('localhost', 80)])
 
 
 class ConfigurationTests(unittest.TestCase):
 
     @unittest.skipIf('linux' not in sys.platform, 'skipping linux only test')
     def test_linux_defaults(self):
-        c = TestConfig()
+        c = Config()
         self.assertEqual(c.data_dir, os.path.expanduser('~/.local/share/lbry/lbrynet'))
         self.assertEqual(c.wallet_dir, os.path.expanduser('~/.local/share/lbry/lbryum'))
         self.assertEqual(c.download_dir, os.path.expanduser('~/Downloads'))
         self.assertEqual(c.config, os.path.expanduser('~/.local/share/lbry/lbrynet/daemon_settings.yml'))
+        self.assertEqual(c.api_connection_url, 'http://localhost:5279/lbryapi')
+        self.assertEqual(c.log_file_path, os.path.expanduser('~/.local/share/lbry/lbrynet/lbrynet.log'))
 
     def test_search_order(self):
         c = TestConfig()
-        c.runtime = {'test': 'runtime'}
-        c.arguments = {'test': 'arguments'}
-        c.environment = {'test': 'environment'}
-        c.persisted = {'test': 'persisted'}
-        self.assertEqual(c.test, 'runtime')
+        c.runtime = {'test_str': 'runtime'}
+        c.arguments = {'test_str': 'arguments'}
+        c.environment = {'test_str': 'environment'}
+        c.persisted = {'test_str': 'persisted'}
+        self.assertEqual(c.test_str, 'runtime')
         c.runtime = {}
-        self.assertEqual(c.test, 'arguments')
+        self.assertEqual(c.test_str, 'arguments')
         c.arguments = {}
-        self.assertEqual(c.test, 'environment')
+        self.assertEqual(c.test_str, 'environment')
         c.environment = {}
-        self.assertEqual(c.test, 'persisted')
+        self.assertEqual(c.test_str, 'persisted')
         c.persisted = {}
-        self.assertEqual(c.test, 'the default')
+        self.assertEqual(c.test_str, 'the default')
 
     def test_arguments(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("--test")
-        args = parser.parse_args(['--test', 'blah'])
+        parser.add_argument("--test-str")
+        args = parser.parse_args(['--test-str', 'blah'])
         c = TestConfig.create_from_arguments(args)
-        self.assertEqual(c.test, 'blah')
+        self.assertEqual(c.test_str, 'blah')
         c.arguments = {}
-        self.assertEqual(c.test, 'the default')
+        self.assertEqual(c.test_str, 'the default')
 
     def test_environment(self):
         c = TestConfig()
-        self.assertEqual(c.test, 'the default')
-        c.set_environment({'LBRY_TEST': 'from environ'})
-        self.assertEqual(c.test, 'from environ')
+        self.assertEqual(c.test_str, 'the default')
+        c.set_environment({'LBRY_TEST_STR': 'from environ'})
+        self.assertEqual(c.test_str, 'from environ')
 
     def test_persisted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -67,50 +67,63 @@ class ConfigurationTests(unittest.TestCase):
 
             # settings.yml doesn't exist on file system
             self.assertFalse(c.persisted.exists)
-            self.assertEqual(c.test, 'the default')
+            self.assertEqual(c.test_str, 'the default')
 
             self.assertEqual(c.modify_order, [c.runtime])
             with c.update_config():
                 self.assertEqual(c.modify_order, [c.runtime, c.persisted])
-                c.test = 'new value'
+                c.test_str = 'original'
             self.assertEqual(c.modify_order, [c.runtime])
 
             # share_usage_data has been saved to settings file
             self.assertTrue(c.persisted.exists)
             with open(c.config, 'r') as fd:
-                self.assertEqual(fd.read(), 'test: new value\n')
+                self.assertEqual(fd.read(), 'test_str: original\n')
 
             # load the settings file and check share_usage_data is false
             c = TestConfig.create_from_arguments(
                 types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
             )
             self.assertTrue(c.persisted.exists)
-            self.assertEqual(c.test, 'new value')
+            self.assertEqual(c.test_str, 'original')
 
             # setting in runtime overrides config
-            self.assertNotIn('test', c.runtime)
-            c.test = 'from runtime'
-            self.assertIn('test', c.runtime)
-            self.assertEqual(c.test, 'from runtime')
+            self.assertNotIn('test_str', c.runtime)
+            c.test_str = 'from runtime'
+            self.assertIn('test_str', c.runtime)
+            self.assertEqual(c.test_str, 'from runtime')
 
-            # NOT_SET only clears it in runtime location
-            c.test = conf.NOT_SET
-            self.assertNotIn('test', c.runtime)
-            self.assertEqual(c.test, 'new value')
+            # without context manager NOT_SET only clears it in runtime location
+            c.test_str = NOT_SET
+            self.assertNotIn('test_str', c.runtime)
+            self.assertEqual(c.test_str, 'original')
 
-            # clear it in persisted as well
-            self.assertIn('test', c.persisted)
+            # clear it in persisted as well by using context manager
+            self.assertIn('test_str', c.persisted)
             with c.update_config():
-                c.test = conf.NOT_SET
-            self.assertNotIn('test', c.persisted)
-            self.assertEqual(c.test, 'the default')
+                c.test_str = NOT_SET
+            self.assertNotIn('test_str', c.persisted)
+            self.assertEqual(c.test_str, 'the default')
             with open(c.config, 'r') as fd:
                 self.assertEqual(fd.read(), '{}\n')
+
+    def test_persisted_upgrade(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = os.path.join(temp_dir, 'settings.yml')
+            with open(config, 'w') as fd:
+                fd.write('old_str: old stuff\n')
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=config)
+            )
+            self.assertEqual(c.test_str, 'old stuff')
+            self.assertNotIn('old_str', c.persisted)
+            with open(config, 'w') as fd:
+                fd.write('test_str: old stuff\n')
 
     def test_validation(self):
         c = TestConfig()
         with self.assertRaisesRegex(AssertionError, 'must be a string'):
-            c.test = 9
+            c.test_str = 9
         with self.assertRaisesRegex(AssertionError, 'must be an integer'):
             c.test_int = 'hi'
         with self.assertRaisesRegex(AssertionError, 'must be a true/false'):
@@ -143,7 +156,7 @@ class ConfigurationTests(unittest.TestCase):
             config = os.path.join(temp_dir, 'settings.yml')
             with open(config, 'w') as fd:
                 fd.write('max_key_fee: \'{"currency":"USD", "amount":1}\'\n')
-            c = conf.ServerConfiguration.create_from_arguments(
+            c = Config.create_from_arguments(
                 types.SimpleNamespace(config=config)
             )
             self.assertEqual(c.max_key_fee['currency'], 'USD')

@@ -2,7 +2,7 @@ import logging
 import os
 from twisted.internet import defer
 
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.schema.fee import Fee
 
 from lbrynet.p2p.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
@@ -31,17 +31,18 @@ log = logging.getLogger(__name__)
 
 
 class GetStream:
-    def __init__(self, sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, rate_limiter,
-                 payment_rate_manager, storage, max_key_fee, disable_max_key_fee, data_rate=None, timeout=None,
-                 reactor=None):
+    def __init__(self, conf: Config, sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder,
+                 rate_limiter, payment_rate_manager, storage, max_key_fee, disable_max_key_fee, data_rate=None,
+                 timeout=None, reactor=None):
         if not reactor:
             from twisted.internet import reactor
+        self.conf = conf
         self.reactor = reactor
-        self.timeout = timeout or conf.settings['download_timeout']
-        self.data_rate = data_rate or conf.settings['data_rate']
-        self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
-        self.disable_max_key_fee = disable_max_key_fee or conf.settings['disable_max_key_fee']
-        self.download_directory = conf.settings.download_dir
+        self.timeout = timeout or conf.download_timeout
+        self.data_rate = data_rate or conf.data_rate
+        self.max_key_fee = max_key_fee or conf.max_key_fee
+        self.disable_max_key_fee = disable_max_key_fee or conf.disable_max_key_fee
+        self.download_directory = conf.download_dir
         self.timeout_counter = 0
         self.code = None
         self.sd_hash = None
@@ -154,7 +155,7 @@ class GetStream:
     def _download_sd_blob(self):
         sd_blob = yield download_sd_blob(
             self.sd_hash, self.blob_manager, self.peer_finder, self.rate_limiter, self.payment_rate_manager,
-            self.wallet, self.timeout, conf.settings['download_mirrors']
+            self.wallet, self.timeout, self.conf.download_mirrors
         )
         defer.returnValue(sd_blob)
 

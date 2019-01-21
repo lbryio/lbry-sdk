@@ -3,8 +3,6 @@ from twisted.internet import defer
 from lbrynet.blob import CryptBlob
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
-from tests.mocks import mock_conf_settings
-
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 import random
 import string
@@ -39,9 +37,6 @@ def random_string(length):
 
 
 class TestCryptBlob(unittest.TestCase):
-    def setUp(self):
-        mock_conf_settings(self)
-
 
     @defer.inlineCallbacks
     def _test_encrypt_decrypt(self, size_of_data):

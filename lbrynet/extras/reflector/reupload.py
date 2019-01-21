@@ -1,7 +1,4 @@
-import random
-
 from twisted.internet import reactor, defer
-from lbrynet import conf
 from lbrynet.extras.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.extras.reflector.client.blob import BlobReflectorClientFactory
 
@@ -48,40 +45,19 @@ def _reflect_blobs(blob_manager, blob_hashes, reflector_server):
     return result
 
 
-def reflect_file(lbry_file, reflector_server=None):
-    if reflector_server:
-        if len(reflector_server.split(":")) == 2:
-            host, port = tuple(reflector_server.split(":"))
-            reflector_server = host, int(port)
-        else:
-            reflector_server = reflector_server, 5566
+def reflect_file(lbry_file, reflector_server):
+    if len(reflector_server.split(":")) == 2:
+        host, port = tuple(reflector_server.split(":"))
+        reflector_server = host, int(port)
     else:
-        reflector_server = random.choice(conf.settings['reflector_servers'])
+        reflector_server = reflector_server, 5566
     return _reflect_file(lbry_file, reflector_server)
 
 
-@defer.inlineCallbacks
-def reflect_stream(blob_manager, stream_hash, reflector_server=None):
-    if reflector_server:
-        if len(reflector_server.split(":")) == 2:
-            host, port = tuple(reflector_server.split(":"))
-            reflector_server = host, int(port)
-        else:
-            reflector_server = reflector_server, 5566
+def reflect_blob_hashes(blob_hashes, blob_manager, reflector_server):
+    if len(reflector_server.split(":")) == 2:
+        host, port = tuple(reflector_server.split(":"))
+        reflector_server = host, int(port)
     else:
-        reflector_server = random.choice(conf.settings['reflector_servers'])
-    sd_hash = yield blob_manager.storage.get_sd_blob_hash_for_stream(stream_hash)
-    result = yield _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server)
-    defer.returnValue(result)
-
-
-def reflect_blob_hashes(blob_hashes, blob_manager, reflector_server=None):
-    if reflector_server:
-        if len(reflector_server.split(":")) == 2:
-            host, port = tuple(reflector_server.split(":"))
-            reflector_server = host, int(port)
-        else:
-            reflector_server = reflector_server, 5566
-    else:
-        reflector_server = random.choice(conf.settings['reflector_servers'])
+        reflector_server = reflector_server, 5566
     return _reflect_blobs(blob_manager, blob_hashes, reflector_server)

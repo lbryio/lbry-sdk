@@ -1,11 +1,10 @@
 from decimal import Decimal
-from lbrynet import conf
 from lbrynet.p2p.Offer import Offer
 from lbrynet.p2p.PriceModel import MeanAvailabilityWeightedPrice, ZeroPrice
 
 
-def get_default_strategy(blob_tracker, **kwargs):
-    return BasicAvailabilityWeightedStrategy(blob_tracker, **kwargs)
+def get_default_strategy(blob_tracker, base_price, is_generous, **kwargs):
+    return BasicAvailabilityWeightedStrategy(blob_tracker, base_price, is_generous, **kwargs)
 
 
 class Strategy:
@@ -13,10 +12,9 @@ class Strategy:
     Base for negotiation strategies
     """
 
-    def __init__(self, price_model, max_rate, min_rate, is_generous=None):
+    def __init__(self, price_model, max_rate, min_rate, is_generous):
         self.price_model = price_model
-        self.is_generous = (
-            is_generous if is_generous is not None else conf.settings['is_generous_host'])
+        self.is_generous = is_generous
         self.accepted_offers = {}
         self.pending_sent_offers = {}
         self.offers_sent = {}
@@ -98,13 +96,11 @@ class BasicAvailabilityWeightedStrategy(Strategy):
 
     """
 
-    def __init__(self, blob_tracker, acceleration=1.25,
-                 deceleration=0.9, max_rate=None,
-                 min_rate=0.0,
-                 is_generous=None,
-                 base_price=0.0001, alpha=1.0):
+    def __init__(self, blob_tracker, base_price, is_generous,
+                 acceleration=1.25, deceleration=0.9, max_rate=None,
+                 min_rate=0.0, alpha=1.0):
         price_model = MeanAvailabilityWeightedPrice(
-            blob_tracker, base_price=base_price, alpha=alpha)
+            blob_tracker, base_price, alpha=alpha)
         super().__init__(price_model, max_rate, min_rate, is_generous)
         self._acceleration = Decimal(acceleration)  # rate of how quickly to ramp offer
         self._deceleration = Decimal(deceleration)

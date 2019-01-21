@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from twisted.internet import defer
 from twisted.python.failure import Failure
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.p2p.client.ClientRequest import ClientRequest
 from lbrynet.p2p.Error import RequestCanceledError
 from lbrynet.p2p import BlobAvailability
@@ -472,25 +472,3 @@ create_stream_sd_file = {
     'stream_hash': '6d27fbe10c86d81aacfb897c7a426d0a2214f5a299455a6d'
                    '315c0f998c4b3545c2dc60906122d94653c23b1898229e3f'
 }
-
-
-def mock_conf_settings(obj, settings={}):
-    conf.settings = None
-    settings.setdefault('download_mirrors', [])
-    conf.initialize_settings(False)
-    original_settings = conf.settings
-    conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS)
-    conf.settings['data_dir'] = settings.get('data_dir') or conf.settings.data_dir \
-                                or conf.settings.default_data_dir
-    conf.settings['download_directory'] = settings.get('download_directory') or conf.settings.download_dir \
-                                    or conf.settings.default_download_dir
-    conf.settings['wallet_dir'] = settings.get('wallet_dir') or conf.settings.wallet_dir or \
-                                  conf.settings.default_wallet_dir
-    conf.settings.installation_id = conf.settings.get_installation_id()
-    conf.settings.node_id = conf.settings.get_node_id()
-    conf.settings.update(settings)
-
-    def _reset_settings():
-        conf.settings = original_settings
-
-    obj.addCleanup(_reset_settings)

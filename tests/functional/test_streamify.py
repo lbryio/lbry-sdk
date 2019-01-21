@@ -4,6 +4,7 @@ import tempfile
 from hashlib import md5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
+from lbrynet.conf import Config
 from lbrynet.p2p.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.StreamDescriptor import get_sd_info
@@ -31,12 +32,12 @@ class TestStreamify(TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        mocks.mock_conf_settings(self)
         self.session = None
         self.lbry_file_manager = None
         self.is_generous = True
         self.db_dir = tempfile.mkdtemp()
         self.blob_dir = os.path.join(self.db_dir, "blobfiles")
+        conf = Config(data_dir=self.blob_dir)
         os.mkdir(self.blob_dir)
         self.dht_node = FakeNode()
         self.wallet = FakeWallet()
@@ -44,11 +45,11 @@ class TestStreamify(TestCase):
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
         self.rate_limiter = DummyRateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.storage = SQLiteStorage(':memory:')
+        self.storage = SQLiteStorage(conf, ':memory:')
         self.blob_manager = DiskBlobManager(self.blob_dir, self.storage, self.dht_node._dataStore)
         self.prm = OnlyFreePaymentsManager()
         self.lbry_file_manager = EncryptedFileManager(
-            self.peer_finder, self.rate_limiter, self.blob_manager, self.wallet, self.prm, self.storage,
+            conf, self.peer_finder, self.rate_limiter, self.blob_manager, self.wallet, self.prm, self.storage,
             self.sd_identifier
         )
         yield f2d(self.storage.open())

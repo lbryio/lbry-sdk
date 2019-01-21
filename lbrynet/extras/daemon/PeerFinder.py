@@ -2,7 +2,6 @@ import binascii
 import logging
 
 from twisted.internet import defer
-from lbrynet import conf
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ class DHTPeerFinder(DummyPeerFinder):
     def _execute_peer_search(self, dht_node, blob_hash, timeout):
         bin_hash = binascii.unhexlify(blob_hash)
         finished_deferred = dht_node.iterativeFindValue(bin_hash, exclude=self.peers[blob_hash])
-        timeout = timeout or conf.settings['peer_search_timeout']
+        timeout = timeout or self.component_manager.conf.peer_search_timeout
         if timeout:
             finished_deferred.addTimeout(timeout, dht_node.clock)
         try:

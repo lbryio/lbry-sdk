@@ -2,6 +2,7 @@ import os
 import requests
 import urllib
 import textwrap
+import random
 
 from typing import Callable, Optional, List
 from operator import itemgetter
@@ -45,6 +46,7 @@ from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.looping_call_manager import LoopingCallManager
 from lbrynet.p2p.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
+import base58
 
 import asyncio
 import logging
@@ -56,7 +58,7 @@ from twisted.internet import defer
 
 from lbrynet import utils
 from lbrynet.extras.daemon.undecorated import undecorated
-from lbrynet import conf
+from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
 
 from aiohttp import web
 
@@ -211,16 +213,6 @@ def sort_claim_results(claims):
     return claims
 
 
-def is_first_run():
-    if os.path.isfile(conf.settings.get_db_revision_filename()):
-        return False
-    if os.path.isfile(os.path.join(conf.settings.data_dir, 'lbrynet.sqlite')):
-        return False
-    if os.path.isfile(os.path.join(conf.settings.wallet_dir, 'blockchain_headers')):
-        return False
-    return True
-
-
 DHT_HAS_CONTACTS = "dht_has_contacts"
 WALLET_IS_UNLOCKED = "wallet_is_unlocked"
 
@@ -354,26 +346,29 @@ class Daemon(metaclass=JSONRPCServerType):
 
     allowed_during_startup = []
 
-    def __init__(self, analytics_manager=None, component_manager=None):
-        to_skip = conf.settings['components_to_skip']
-        if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
+    def __init__(self, conf: Config, component_manager: ComponentManager = None):
+        self.conf = conf
+        to_skip = conf.components_to_skip
+        if 'reflector' not in to_skip and not conf.run_reflector_server:
             to_skip.append('reflector')
         looping_calls = {
             Checker.INTERNET_CONNECTION[0]: (LoopingCall(CheckInternetConnection(self)),
                                              Checker.INTERNET_CONNECTION[1])
         }
-        self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
+        self._node_id = None
+        self._installation_id = None
+        self.session_id = base58.b58encode(utils.generate_id()).decode()
+        self.analytics_manager = analytics.Manager(conf, self.installation_id, self.session_id)
         self.component_manager = component_manager or ComponentManager(
-            analytics_manager=self.analytics_manager,
-            skip_components=to_skip or [],
+            conf, analytics_manager=self.analytics_manager, skip_components=to_skip or []
         )
+        self.component_manager.daemon = self
         self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).items()})
         self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).items()}
         self.listening_port = None
         self._component_setup_task = None
         self.announced_startup = False
         self.sessions = {}
-        self.is_first_run = is_first_run()
 
         # TODO: move this to a component
         self.connected_to_internet = True
@@ -402,17 +397,86 @@ class Daemon(metaclass=JSONRPCServerType):
         self.handler = self.app.make_handler()
         self.server = None
 
-    async def start_listening(self):
+    @classmethod
+    def get_api_definitions(cls):
+        groups = {}
+        for method in dir(cls):
+            if method.startswith('jsonrpc_'):
+                parts = method.split('_', 2)
+                group = command = parts[1]
+                if len(parts) == 3:
+                    command = parts[2]
+                group_dict = {'doc': getattr(cls, f'{group.upper()}_DOC', ''), 'commands': []}
+                groups.setdefault(group, group_dict)['commands'].append({
+                    'name': command,
+                    'doc': getattr(cls, method).__doc__
+                })
+        del groups['commands']
+        del groups['help']
+        return groups
+
+    @property
+    def db_revision_file_path(self):
+        return os.path.join(self.conf.data_dir, 'db_revision')
+
+    @property
+    def installation_id(self):
+        install_id_filename = os.path.join(self.conf.data_dir, "install_id")
+        if not self._installation_id:
+            if os.path.isfile(install_id_filename):
+                with open(install_id_filename, "r") as install_id_file:
+                    self._installation_id = str(install_id_file.read()).strip()
+        if not self._installation_id:
+            self._installation_id = base58.b58encode(utils.generate_id()).decode()
+            with open(install_id_filename, "w") as install_id_file:
+                install_id_file.write(self._installation_id)
+        return self._installation_id
+
+    @property
+    def node_id(self):
+        node_id_filename = os.path.join(self.conf.data_dir, "node_id")
+        if not self._node_id:
+            if os.path.isfile(node_id_filename):
+                with open(node_id_filename, "r") as node_id_file:
+                    self._node_id = base58.b58decode(str(node_id_file.read()).strip())
+        if not self._node_id:
+            self._node_id = utils.generate_id()
+            with open(node_id_filename, "w") as node_id_file:
+                node_id_file.write(base58.b58encode(self._node_id).decode())
+        return self._node_id
+
+    def ensure_data_dir(self):
+        # although there is a risk of a race condition here we don't
+        # expect there to be multiple processes accessing this
+        # directory so the risk can be ignored
+        if not os.path.isdir(self.conf.data_dir):
+            os.makedirs(self.conf.data_dir)
+        if not os.path.isdir(os.path.join(self.conf.data_dir, "blobfiles")):
+            os.makedirs(os.path.join(self.conf.data_dir, "blobfiles"))
+        return self.conf.data_dir
+
+    def ensure_wallet_dir(self):
+        if not os.path.isdir(self.conf.wallet_dir):
+            os.makedirs(self.conf.wallet_dir)
+
+    def ensure_download_dir(self):
+        if not os.path.isdir(self.conf.download_dir):
+            os.makedirs(self.conf.download_dir)
+
+    async def start(self):
+        self.ensure_data_dir()
+        self.ensure_wallet_dir()
+        self.ensure_download_dir()
         try:
             self.server = await asyncio.get_event_loop().create_server(
-                self.handler, conf.settings['api_host'], conf.settings['api_port']
+                self.handler, self.conf.api_host, self.conf.api_port
             )
             log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname()[:2])
             await self.setup()
             await self.analytics_manager.send_server_startup_success()
         except OSError:
             log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
-                      'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
+                      'already in use by another application.', self.conf.api_host, self.conf.api_port)
         except defer.CancelledError:
             log.info("shutting down before finished starting")
         except Exception as err:
@@ -673,10 +737,9 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.analytics_manager.send_download_started(download_id, name, claim_dict)
             await self.analytics_manager.send_new_download_start(download_id, name, claim_dict)
             self.streams[sd_hash] = GetStream(
-                self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
-                self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
-                conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
-                timeout
+                self.conf, self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager,
+                self.blob_manager, self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager,
+                self.storage, self.conf.max_key_fee, self.conf.disable_max_key_fee, self.conf.data_rate, timeout
             )
             try:
                 lbry_file, finished_deferred = await d2f(self.streams[sd_hash].start(
@@ -713,8 +776,8 @@ class Daemon(metaclass=JSONRPCServerType):
             tx = await publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
         else:
             tx = await publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
-            if conf.settings['reflect_uploads']:
-                d = reupload.reflect_file(publisher.lbry_file)
+            if self.conf.reflect_uploads:
+                d = reupload.reflect_file(publisher.lbry_file, random.choice(self.conf.reflector_servers))
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
         await self.analytics_manager.send_claim_action('publish')
@@ -734,8 +797,8 @@ class Daemon(metaclass=JSONRPCServerType):
             return self.blob_manager.get_blob(blob[0])
         return await d2f(download_sd_blob(
             sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
-            self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
-            download_mirrors=conf.settings['download_mirrors']
+            self.payment_rate_manager, self.wallet_manager, timeout=self.conf.peer_search_timeout,
+            download_mirrors=self.conf.download_mirrors
         ))
 
     def get_or_download_sd_blob(self, sd_hash):
@@ -763,7 +826,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if self.payment_rate_manager.generous:
             return 0.0
-        return size / (10 ** 6) * conf.settings['data_rate']
+        return size / (10 ** 6) * self.conf.data_rate
 
     async def get_est_cost_using_known_size(self, uri, size):
         """
@@ -832,7 +895,7 @@ class Daemon(metaclass=JSONRPCServerType):
         key = hexlify(lbry_file.key) if lbry_file.key else None
         download_directory = lbry_file.download_directory
         if not os.path.exists(download_directory):
-            download_directory = conf.settings.download_dir
+            download_directory = self.conf.download_dir
         full_path = os.path.join(download_directory, lbry_file.file_name)
         mime_type = guess_media_type(lbry_file.file_name)
         if os.path.isfile(full_path):
@@ -925,15 +988,15 @@ class Daemon(metaclass=JSONRPCServerType):
         return field, direction
 
     def _get_single_peer_downloader(self):
-        downloader = SinglePeerDownloader()
+        downloader = SinglePeerDownloader(self.conf)
         downloader.setup(self.wallet_manager)
         return downloader
 
     async def _blob_availability(self, blob_hash, search_timeout, blob_timeout, downloader=None):
         if not downloader:
             downloader = self._get_single_peer_downloader()
-        search_timeout = search_timeout or conf.settings['peer_search_timeout']
-        blob_timeout = blob_timeout or conf.settings['sd_download_timeout']
+        search_timeout = search_timeout or self.conf.peer_search_timeout
+        blob_timeout = blob_timeout or self.conf.sd_download_timeout
         reachable_peers = []
         unreachable_peers = []
         try:
@@ -1000,7 +1063,6 @@ class Daemon(metaclass=JSONRPCServerType):
             {
                 'installation_id': (str) installation id - base58,
                 'is_running': (bool),
-                'is_first_run': bool,
                 'skipped_components': (list) [names of skipped components (str)],
                 'startup_status': { Does not include components which have been skipped
                     'database': (bool),
@@ -1060,9 +1122,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         connection_code = CONNECTION_STATUS_CONNECTED if self.connected_to_internet else CONNECTION_STATUS_NETWORK
         response = {
-            'installation_id': conf.settings.installation_id,
+            'installation_id': self.installation_id,
             'is_running': all(self.component_manager.get_components_status().values()),
-            'is_first_run': self.is_first_run,
             'skipped_components': self.component_manager.skip_components,
             'startup_status': self.component_manager.get_components_status(),
             'connection_status': {
@@ -1118,15 +1179,24 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if successful
         """
-
         platform_name = system_info.get_platform()['platform']
-        report_bug_to_slack(
-            message,
-            conf.settings.installation_id,
-            platform_name,
-            __version__
+        query = get_loggly_query_string(self.installation_id)
+        requests.post(
+            utils.deobfuscate(SLACK_WEBHOOK),
+            json.dumps({
+                "text": (
+                    f"os: {platform_name}\n "
+                    f"version: {__version__}\n"
+                    f"<{query}|loggly>\n"
+                    f"{message}"
+                )
+            })
         )
         return True
+
+    SETTINGS_DOC = """
+    Settings management.
+    """
 
     def jsonrpc_settings_get(self):
         """
@@ -1142,7 +1212,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Dictionary of daemon settings
             See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings
         """
-        return conf.settings.get_adjustable_settings_dict()
+        return self.conf.settings_dict
 
     def jsonrpc_settings_set(self, **kwargs):
         """
@@ -1194,42 +1264,11 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Updated dictionary of daemon settings
         """
-
-        # TODO: improve upon the current logic, it could be made better
-        new_settings = kwargs
-
-        setting_types = {
-            'download_directory': str,
-            'data_rate': float,
-            'download_timeout': int,
-            'peer_port': int,
-            'max_key_fee': dict,
-            'use_upnp': bool,
-            'run_reflector_server': bool,
-            'cache_time': int,
-            'reflect_uploads': bool,
-            'share_usage_data': bool,
-            'disable_max_key_fee': bool,
-            'peer_search_timeout': int,
-            'sd_download_timeout': int,
-            'auto_renew_claim_height_delta': int
-        }
-
-        for key, setting_type in setting_types.items():
-            if key in new_settings:
-                if isinstance(new_settings[key], setting_type):
-                    conf.settings.update({key: new_settings[key]},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                elif setting_type is dict and isinstance(new_settings[key], str):
-                    decoded = json.loads(str(new_settings[key]))
-                    conf.settings.update({key: decoded},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                else:
-                    converted = setting_type(new_settings[key])
-                    conf.settings.update({key: converted},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-        conf.settings.save_conf_file_settings()
-        return conf.settings.get_adjustable_settings_dict()
+        with self.conf.update_config() as c:
+            for key, value in kwargs:
+                attr: Setting = getattr(type(c), key)
+                setattr(c, key, attr.deserialize(value))
+        return self.jsonrpc_settings_get()
 
     def jsonrpc_help(self, command=None):
         """
@@ -1281,7 +1320,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @deprecated("account_balance")
     def jsonrpc_wallet_balance(self, address=None):
-        pass
+        """ deprecated """
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
@@ -1348,6 +1387,10 @@ class Daemon(metaclass=JSONRPCServerType):
             log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
             result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
         return result
+
+    ACCOUNT_DOC = """
+    Account management.
+    """
 
     @requires("wallet")
     def jsonrpc_account_list(self, account_id=None, confirmations=6,
@@ -1728,6 +1771,10 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.analytics_manager.send_credits_sent()
         return result
 
+    ADDRESS_DOC = """
+    Address management.
+    """
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_is_mine(self, address, account_id=None):
         """
@@ -1788,6 +1835,10 @@ class Daemon(metaclass=JSONRPCServerType):
             (str) Unused wallet address in base58
         """
         return self.get_account_or_default(account_id).receiving.get_or_create_usable_address()
+
+    FILE_DOC = """
+    File management.
+    """
 
     @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_list(self, sort=None, **kwargs):
@@ -1881,6 +1932,10 @@ class Daemon(metaclass=JSONRPCServerType):
             return metadata
         except UnknownNameError:
             log.info('Name %s is not known', name)
+
+    CLAIM_DOC = """
+    Claim management.
+    """
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
@@ -2061,7 +2116,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        timeout = timeout if timeout is not None else conf.settings['download_timeout']
+        timeout = timeout if timeout is not None else self.conf.download_timeout
 
         parsed_uri = parse_lbry_uri(uri)
         if parsed_uri.is_channel:
@@ -2213,6 +2268,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 resolvable
         """
         return self.get_est_cost(uri, size)
+
+    CHANNEL_DOC = """
+    Channel management.
+    """
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_new(self, channel_name, amount, account_id=None):
@@ -2849,6 +2908,10 @@ class Daemon(metaclass=JSONRPCServerType):
                     results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
         return results
 
+    CHANNEL_DOC = """
+    Transaction management.
+    """
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_list(self, account_id=None, page=None, page_size=None):
         """
@@ -2932,6 +2995,10 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_transaction(txid)
 
+    UTXO_DOC = """
+    Unspent transaction management.
+    """
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_utxo_list(self, account_id=None, page=None, page_size=None):
         """
@@ -3006,6 +3073,10 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Requested block
         """
         return self.wallet_manager.get_block(blockhash, height)
+
+    BLOB_DOC = """
+    Blob management.
+    """
 
     @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
@@ -3100,7 +3171,7 @@ class Daemon(metaclass=JSONRPCServerType):
             err.trap(defer.TimeoutError)
             return []
 
-        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.dht_node.clock)
+        finished_deferred.addTimeout(timeout or self.conf.peer_search_timeout, self.dht_node.clock)
         finished_deferred.addErrback(trap_timeout)
         peers = await d2f(finished_deferred)
         results = [
@@ -3175,7 +3246,7 @@ class Daemon(metaclass=JSONRPCServerType):
         elif not lbry_files:
             raise Exception('No file found')
         return await d2f(reupload.reflect_file(
-            lbry_files[0], reflector_server=kwargs.get('reflector', None)
+            lbry_files[0], reflector_server=kwargs.get('reflector', random.choice(self.conf.reflector_servers))
         ))
 
     @requires(BLOB_COMPONENT, WALLET_COMPONENT)
@@ -3253,8 +3324,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) reflected blob hashes
         """
-        result = await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager, reflector_server))
-        return result
+        return await d2f(reupload.reflect_blob_hashes(
+            blob_hashes, self.blob_manager, reflector_server or random.choice(self.conf.reflector_servers)
+        ))
 
     @requires(BLOB_COMPONENT)
     async def jsonrpc_blob_reflect_all(self):
@@ -3271,7 +3343,9 @@ class Daemon(metaclass=JSONRPCServerType):
             (bool) true if successful
         """
         blob_hashes = await d2f(self.blob_manager.get_all_verified_blobs())
-        return await d2f(reupload.reflect_blob_hashes(blob_hashes, self.blob_manager))
+        return await d2f(reupload.reflect_blob_hashes(
+            blob_hashes, self.blob_manager, random.choice(self.conf.reflector_servers)
+        ))
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address=None, port=None):
@@ -3427,8 +3501,8 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        search_timeout = search_timeout or conf.settings['peer_search_timeout']
-        blob_timeout = blob_timeout or conf.settings['sd_download_timeout']
+        search_timeout = search_timeout or self.conf.peer_search_timeout
+        blob_timeout = blob_timeout or self.conf.sd_download_timeout
 
         response = {
             'is_available': False,
@@ -3440,7 +3514,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'sd_blob_availability': {},
             'head_blob_hash': None,
             'head_blob_availability': {},
-            'use_upnp': conf.settings['use_upnp'],
+            'use_upnp': self.conf.use_upnp,
             'upnp_redirect_is_set': len(self.upnp.upnp_redirects),
             'error': None
         }
@@ -3555,21 +3629,6 @@ def get_loggly_query_string(installation_id):
     }
     data = urllib.parse.urlencode(params)
     return base_loggly_search_url + data
-
-
-def report_bug_to_slack(message, installation_id, platform_name, app_version):
-    webhook = utils.deobfuscate(conf.settings['SLACK_WEBHOOK'])
-    payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
-    payload_params = (
-        platform_name,
-        app_version,
-        get_loggly_query_string(installation_id),
-        message
-    )
-    payload = {
-        "text": payload_template % payload_params
-    }
-    requests.post(webhook, json.dumps(payload))
 
 
 def get_lbry_file_search_value(search_fields):

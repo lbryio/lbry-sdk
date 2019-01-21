@@ -3,7 +3,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def migrate_db(db_dir, start, end):
+def migrate_db(conf, start, end):
     current = start
     while current < end:
         if current == 1:
@@ -25,7 +25,7 @@ def migrate_db(db_dir, start, end):
         else:
             raise Exception("DB migration of version {} to {} is not available".format(current,
                                                                                        current+1))
-        do_migration(db_dir)
+        do_migration(conf)
         current += 1
         log.info("successfully migrated the database from revision %i to %i", current - 1, current)
     return None

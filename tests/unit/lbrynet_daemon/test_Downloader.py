@@ -17,8 +17,7 @@ from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
 from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.blob.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.extras.wallet import LbryWalletManager
-
-from tests.mocks import mock_conf_settings
+from lbrynet.conf import Config
 
 
 class MocDownloader:
@@ -70,7 +69,7 @@ def moc_pay_key_fee(d):
 class GetStreamTests(unittest.TestCase):
 
     def init_getstream_with_mocs(self):
-        mock_conf_settings(self)
+        conf = Config()
 
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
         wallet = mock.Mock(spec=LbryWalletManager)
@@ -83,7 +82,7 @@ class GetStreamTests(unittest.TestCase):
         disable_max_key_fee = False
         data_rate = {'currency': "LBC", 'amount': 0, 'address': ''}
         getstream = Downloader.GetStream(
-            sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, DummyRateLimiter(), prm,
+            conf, sd_identifier, wallet, exchange_rate_manager, blob_manager, peer_finder, DummyRateLimiter(), prm,
             storage, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate
         )
         getstream.download_manager = mock.Mock(spec=DownloadManager)

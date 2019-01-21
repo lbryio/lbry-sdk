@@ -3,6 +3,7 @@ import logging
 from lbrynet.p2p.Error import ComponentStartConditionNotMet
 from lbrynet.extras.daemon.PeerManager import PeerManager
 from lbrynet.extras.daemon.PeerFinder import DHTPeerFinder
+from lbrynet.conf import Config
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +35,9 @@ class RequiredCondition(metaclass=RequiredConditionType):
 class ComponentManager:
     default_component_classes = {}
 
-    def __init__(self, reactor=None, analytics_manager=None, skip_components=None,
+    def __init__(self, conf: Config, reactor=None, analytics_manager=None, skip_components=None,
                  peer_manager=None, peer_finder=None, **override_components):
+        self.conf = conf
         self.skip_components = skip_components or []
         self.reactor = reactor
         self.component_classes = {}
@@ -55,6 +57,7 @@ class ComponentManager:
 
         for component_class in self.component_classes.values():
             self.components.add(component_class(self))
+        self.daemon = None
 
     def evaluate_condition(self, condition_name):
         if condition_name not in RegisteredConditions.conditions:

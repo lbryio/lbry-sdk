@@ -4,6 +4,7 @@ import traceback
 from binascii import hexlify, unhexlify
 from twisted.internet import defer, threads
 
+from lbrynet.conf import Config
 from lbrynet.extras.compat import f2d
 from lbrynet.p2p.StreamDescriptor import save_sd_info
 from lbrynet.blob.client.CryptStreamDownloader import CryptStreamDownloader
@@ -18,9 +19,9 @@ log = logging.getLogger(__name__)
 class EncryptedFileDownloader(CryptStreamDownloader):
     """Classes which inherit from this class download LBRY files"""
 
-    def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
+    def __init__(self, conf: Config, stream_hash, peer_finder, rate_limiter, blob_manager,
                  storage, payment_rate_manager, wallet, key, stream_name, file_name):
-        super().__init__(peer_finder, rate_limiter, blob_manager,
+        super().__init__(conf, peer_finder, rate_limiter, blob_manager,
                          payment_rate_manager, wallet, key, stream_name)
         self.stream_hash = stream_hash
         self.storage = storage
@@ -37,7 +38,7 @@ class EncryptedFileDownloader(CryptStreamDownloader):
 
     def stop(self, err=None):
         self._close_output()
-        return CryptStreamDownloader.stop(self, err=err)
+        return super().stop(err=err)
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading,
@@ -97,7 +98,8 @@ class EncryptedFileDownloader(CryptStreamDownloader):
 class EncryptedFileDownloaderFactory:
     #implements(IStreamDownloaderFactory)
 
-    def __init__(self, peer_finder, rate_limiter, blob_manager, storage, wallet):
+    def __init__(self, conf: Config, peer_finder, rate_limiter, blob_manager, storage, wallet):
+        self.conf = conf
         self.peer_finder = peer_finder
         self.rate_limiter = rate_limiter
         self.blob_manager = blob_manager
@@ -130,9 +132,9 @@ class EncryptedFileDownloaderFactory:
 
 
 class EncryptedFileSaver(EncryptedFileDownloader):
-    def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
-                 download_directory, key, stream_name, file_name):
-        super().__init__(stream_hash, peer_finder, rate_limiter,
+    def __init__(self, conf: Config, stream_hash, peer_finder, rate_limiter, blob_manager, storage,
+                 payment_rate_manager, wallet, download_directory, key, stream_name, file_name):
+        super().__init__(conf, stream_hash, peer_finder, rate_limiter,
                          blob_manager, storage, payment_rate_manager,
                          wallet, key, stream_name, file_name)
         self.download_directory = unhexlify(download_directory).decode()
@@ -141,10 +143,6 @@ class EncryptedFileSaver(EncryptedFileDownloader):
 
     def __str__(self):
         return str(self.file_written_to)
-
-    def stop(self, err=None):
-        d = EncryptedFileDownloader.stop(self, err=err)
-        return d
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading,
@@ -182,8 +180,8 @@ class EncryptedFileSaver(EncryptedFileDownloader):
 
 
 class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
-    def __init__(self, peer_finder, rate_limiter, blob_manager, storage, wallet, download_directory):
-        super().__init__(peer_finder, rate_limiter, blob_manager, storage, wallet)
+    def __init__(self, conf: Config, peer_finder, rate_limiter, blob_manager, storage, wallet, download_directory):
+        super().__init__(conf, peer_finder, rate_limiter, blob_manager, storage, wallet)
         self.download_directory = hexlify(download_directory.encode())
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
@@ -191,8 +189,9 @@ class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
         key = stream_info.raw_info['key']
         suggested_file_name = stream_info.raw_info['suggested_file_name']
         return EncryptedFileSaver(
-            stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager, self.storage, payment_rate_manager,
-            self.wallet, self.download_directory, key=key, stream_name=stream_name, file_name=suggested_file_name
+            self.conf, stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager, self.storage,
+            payment_rate_manager, self.wallet, self.download_directory, key=key, stream_name=stream_name,
+            file_name=suggested_file_name
         )
 
     @staticmethod

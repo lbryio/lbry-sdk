@@ -5,7 +5,7 @@ import traceback
 import typing
 from binascii import hexlify, unhexlify
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
 from lbrynet.blob.CryptBlob import CryptBlobInfo
@@ -132,15 +132,16 @@ class SQLiteStorage(SQLiteMixin):
             );
     """
 
-    def __init__(self, path, loop=None):
+    def __init__(self, conf: Config, path, loop=None):
         super().__init__(path)
+        self.conf = conf
         self.content_claim_callbacks = {}
         self.check_should_announce_lc = None
         self.loop = loop or asyncio.get_event_loop()
 
     async def open(self):
         await super().open()
-        if 'reflector' not in conf.settings['components_to_skip']:
+        if 'reflector' not in self.conf.components_to_skip:
             self.check_should_announce_lc = looping_call(
                 600, self.verify_will_announce_all_head_and_sd_blobs
             )
@@ -236,7 +237,7 @@ class SQLiteStorage(SQLiteMixin):
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
             timestamp = self.loop.time()
-            if conf.settings['announce_head_blobs_only']:
+            if self.conf.announce_head_blobs_only:
                 r = transaction.execute(
                     "select blob_hash from blob "
                     "where blob_hash is not null and "
@@ -797,7 +798,7 @@ class SQLiteStorage(SQLiteMixin):
             "select s.sd_hash from stream s "
             "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
             "where r.timestamp is null or r.timestamp < ?",
-            self.loop.time() - conf.settings['auto_re_reflect_interval']
+            self.loop.time() - self.conf.auto_re_reflect_interval
         )
 
 

@@ -5,9 +5,9 @@ import logging
 log = logging.getLogger(__name__)
 UNSET_NOUT = -1
 
-def do_migration(db_dir):
+def do_migration(conf):
     log.info("Doing the migration")
-    migrate_blockchainname_db(db_dir)
+    migrate_blockchainname_db(conf.data_dir)
     log.info("Migration succeeded")
 
 
