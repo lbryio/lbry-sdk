@@ -21,7 +21,7 @@ log.addHandler(logging.NullHandler())
 
 
 def display(data):
-    print(json.dumps(data["result"], indent=2))
+    print(json.dumps(data, indent=2))
 
 
 async def execute_command(conf, method, params):
@@ -153,7 +153,7 @@ def main(argv=None):
     parser = get_argument_parser()
     args = parser.parse_args(argv)
 
-    conf = Config()
+    conf = Config.create_from_arguments(args)
 
     if args.cli_version:
         print(f"{lbrynet_name} {lbrynet_version}")
@@ -184,16 +184,26 @@ def main(argv=None):
 
     elif args.command is not None:
 
-        if args.subcommand is None:
-            args.group_doc.print_help()
-
-        else:
+        if args.subcommand is not None:
             method = f'{args.command}_{args.subcommand}'
-            fn = Daemon.callable_methods[method]
-            parsed = docopt(fn.__doc__, [method]+argv[2:])
-            params = set_kwargs(parsed)
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(execute_command(conf, method, params))
+            command_before_args = args.subcommand
+        elif args.command in ('status', 'publish', 'version'):
+            method = command_before_args = args.command
+        else:
+            args.group_doc.print_help()
+            return 0
+
+        command_index = 0
+        for i in range(len(argv)):
+            if argv[i] == command_before_args:
+                command_index = i
+                break
+
+        fn = Daemon.callable_methods[method]
+        parsed = docopt(fn.__doc__, argv[command_index+1:])
+        params = set_kwargs(parsed)
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(execute_command(conf, method, params))
 
     else:
         parser.print_help()
