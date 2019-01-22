@@ -22,7 +22,7 @@ from lbrynet.blob.client.EncryptedFileDownloader import EncryptedFileSaverFactor
 from lbrynet.blob.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.dht.node import Node
 from lbrynet.extras.daemon.Component import Component
-from lbrynet.extras.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.HashAnnouncer import DHTHashAnnouncer
 from lbrynet.extras.reflector.server.server import ReflectorServerFactory
