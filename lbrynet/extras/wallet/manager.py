@@ -166,14 +166,12 @@ class LbryWalletManager(BaseWalletManager):
             'lbrycrd_main':    'lbc_mainnet',
             'lbrycrd_testnet': 'lbc_testnet',
             'lbrycrd_regtest': 'lbc_regtest'
-        }[settings['blockchain_name']]
+        }[settings.blockchain_name]
 
         ledger_config = {
             'auto_connect': True,
-            'default_servers': settings['lbryum_servers'],
+            'default_servers': settings.lbryum_servers,
             'data_path': settings.wallet_dir,
-            'use_keyring': settings['use_keyring'],
-            #'db': db
         }
 
         wallets_directory = os.path.join(settings.wallet_dir, 'wallets')

@@ -429,7 +429,7 @@ class EncryptedFileStreamDescriptorValidator:
 
 
 @defer.inlineCallbacks
-def download_sd_blob(blob_hash, blob_manager, peer_finder, rate_limiter, payment_rate_manager, wallet, timeout=None,
+def download_sd_blob(conf, blob_hash, blob_manager, peer_finder, rate_limiter, payment_rate_manager, wallet, timeout=None,
                      download_mirrors=None):
     """
     Downloads a single blob from the network
@@ -443,7 +443,8 @@ def download_sd_blob(blob_hash, blob_manager, peer_finder, rate_limiter, payment
     @return: An object of type HashBlob
     """
 
-    downloader = StandaloneBlobDownloader(blob_hash,
+    downloader = StandaloneBlobDownloader(conf,
+                                          blob_hash,
                                           blob_manager,
                                           peer_finder,
                                           rate_limiter,

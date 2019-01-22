@@ -157,7 +157,7 @@ class HTTPBlobDownloader:
 
     @defer.inlineCallbacks
     def _write_blob(self, writer, blob):
-        response = yield self.client.get(url_for(choice(self.servers), blob.blob_hash))
+        response = yield self.client.get(url_for('{}:{}'.format(*choice(self.servers)), blob.blob_hash))
         if response.code != 200:
             log.debug('Missing a blob: %s', blob.blob_hash)
             if blob.blob_hash in self.blob_hashes:

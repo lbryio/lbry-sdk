@@ -154,7 +154,7 @@ class GetStream:
     @defer.inlineCallbacks
     def _download_sd_blob(self):
         sd_blob = yield download_sd_blob(
-            self.sd_hash, self.blob_manager, self.peer_finder, self.rate_limiter, self.payment_rate_manager,
+            self.conf, self.sd_hash, self.blob_manager, self.peer_finder, self.rate_limiter, self.payment_rate_manager,
             self.wallet, self.timeout, self.conf.download_mirrors
         )
         defer.returnValue(sd_blob)

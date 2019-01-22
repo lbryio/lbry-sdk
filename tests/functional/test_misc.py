@@ -155,7 +155,7 @@ class TestTransfer(unittest.TestCase):
     @defer.inlineCallbacks
     def test_lbry_transfer(self):
         sd_blob = yield download_sd_blob(
-            self.sd_hash, self.blob_manager, self.peer_finder, self.rate_limiter, self.prm, self.wallet
+            self.conf, self.sd_hash, self.blob_manager, self.peer_finder, self.rate_limiter, self.prm, self.wallet
         )
         metadata = yield self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
         downloader = yield metadata.factories[0].make_downloader(

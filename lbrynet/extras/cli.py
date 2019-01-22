@@ -144,6 +144,8 @@ def get_argument_parser():
     for group in sorted(api):
         group_command = sub.add_parser(group, help=api[group]['doc'])
         group_command.set_defaults(group_doc=group_command)
+        if group in ('status', 'publish', 'version', 'help', 'wallet_balance', 'get'):
+            continue
         commands = group_command.add_subparsers(dest='subcommand')
         for command in api[group]['commands']:
             commands.add_parser(command['name'], help=command['doc'].strip().splitlines()[0])
@@ -165,10 +167,8 @@ def main(argv=None):
         return 0
 
     elif args.command == 'start':
-        console_output = True
-        verbose = True
 
-        log_support.configure_logging(conf.log_file_path, console_output, verbose)
+        log_support.configure_logging(conf.log_file_path, not args.quiet, args.verbose)
 
         if conf.share_usage_data:
             loggly_handler = get_loggly_handler()
@@ -204,10 +204,10 @@ def main(argv=None):
 
     elif args.command is not None:
 
-        if args.subcommand is not None:
-            method = f'{args.command}_{args.subcommand}'
-        elif args.command in ('status', 'publish', 'version', 'help', 'wallet_balance'):
+        if args.command in ('status', 'publish', 'version', 'help', 'wallet_balance', 'get'):
             method = args.command
+        elif args.subcommand is not None:
+            method = f'{args.command}_{args.subcommand}'
         else:
             args.group_doc.print_help()
             return 0
