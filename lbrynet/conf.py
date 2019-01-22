@@ -457,11 +457,11 @@ class Config(CLIConfig):
         self.set_default_paths()
 
     def set_default_paths(self):
-        if 'win' in sys.platform:
-            get_directories = get_windows_directories
-        elif 'darwin' in sys.platform:
+        if 'darwin' in sys.platform.lower():
             get_directories = get_darwin_directories
-        elif 'linux' in sys.platform:
+        elif 'win' in sys.platform.lower():
+            get_directories = get_windows_directories
+        elif 'linux' in sys.platform.lower():
             get_directories = get_linux_directories
         else:
             return
