@@ -116,13 +116,19 @@ def set_kwargs(parsed_args):
 
 
 def get_argument_parser():
-    main = argparse.ArgumentParser('lbrynet')
+    main = argparse.ArgumentParser('lbrynet', add_help=False)
     main.add_argument(
         '--version', dest='cli_version', action="store_true",
         help='Show lbrynet CLI version and exit.'
     )
+    main.add_argument(
+        '-h', '--help', dest='help', action="store_true",
+        help='Show this help message and exit'
+    )
     CLIConfig.contribute_args(main)
     sub = main.add_subparsers(dest='command')
+    help = sub.add_parser('help', help='Detailed help for remote commands.')
+    help.add_argument('help_command', nargs='*')
     start = sub.add_parser('start', help='Start lbrynet server.')
     start.add_argument(
         '--quiet', dest='quiet', action="store_true",
@@ -133,10 +139,6 @@ def get_argument_parser():
         help=('Enable debug output. Optionally specify loggers for which debug output '
               'should selectively be applied.')
     )
-    start.add_argument(
-        '--version', action="store_true",
-        help='Show daemon version and quit'
-    )
     Config.contribute_args(start)
     api = Daemon.get_api_definitions()
     for group in sorted(api):
@@ -145,13 +147,16 @@ def get_argument_parser():
         commands = group_command.add_subparsers(dest='subcommand')
         for command in api[group]['commands']:
             commands.add_parser(command['name'], help=command['doc'].strip().splitlines()[0])
+    for deprecated in Daemon.deprecated_methods:
+        group_command = sub.add_parser(deprecated)
+        group_command.add_subparsers(dest='subcommand')
     return main
 
 
 def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
-    args = parser.parse_args(argv)
+    args, command_args = parser.parse_known_args(argv)
 
     conf = Config.create_from_arguments(args)
 
@@ -182,25 +187,41 @@ def main(argv=None):
         else:
             log.info("Not connected to internet, unable to start")
 
+    elif args.command == 'help':
+
+        if args.help_command:
+            method = '_'.join(args.help_command)
+        else:
+            parser.print_help()
+            return 0
+
+        if method not in Daemon.callable_methods:
+            print('Invalid command name: {method}')
+            return 1
+
+        fn = Daemon.callable_methods[method]
+        print(fn.__doc__)
+
     elif args.command is not None:
 
         if args.subcommand is not None:
             method = f'{args.command}_{args.subcommand}'
-            command_before_args = args.subcommand
-        elif args.command in ('status', 'publish', 'version'):
-            method = command_before_args = args.command
+        elif args.command in ('status', 'publish', 'version', 'help', 'wallet_balance'):
+            method = args.command
         else:
             args.group_doc.print_help()
             return 0
 
-        command_index = 0
-        for i, argv_i in enumerate(argv):
-            if argv_i == command_before_args:
-                command_index = i
-                break
+        if method in Daemon.deprecated_methods:
+            new_method = Daemon.deprecated_methods[method].new_command
+            if new_method is None:
+                print(f"{method} is permanently deprecated and does not have a replacement command.")
+                return 0
+            print(f"{method} is deprecated, using {new_method}.")
+            method = new_method
 
         fn = Daemon.callable_methods[method]
-        parsed = docopt(fn.__doc__, argv[command_index+1:])
+        parsed = docopt(fn.__doc__, command_args)
         params = set_kwargs(parsed)
         loop = asyncio.get_event_loop()
         loop.run_until_complete(execute_command(conf, method, params))

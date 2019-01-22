@@ -44,8 +44,7 @@ class CLITest(unittest.TestCase):
         with contextlib.redirect_stdout(actual_output):
             main(['help'])
         actual_output = actual_output.getvalue()
-        self.assertSubstring('lbrynet - LBRY command line client.', actual_output)
-        self.assertSubstring('USAGE', actual_output)
+        self.assertSubstring('usage: lbrynet [--version] [-h]', actual_output)
 
     def test_help_for_command_command(self):
         actual_output = StringIO()
@@ -64,7 +63,7 @@ class CLITest(unittest.TestCase):
     def test_version_command(self):
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
-            main(['version'])
+            main(['--version'])
         self.assertEqual(
             actual_output.getvalue().strip(),
             "lbrynet {lbrynet_version}".format(**get_platform())
@@ -72,12 +71,12 @@ class CLITest(unittest.TestCase):
 
     def test_invalid_command(self):
         actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            main(['publish1'])
-        self.assertEqual(
-            actual_output.getvalue().strip(),
-            "publish1 is not a valid command."
-        )
+        with contextlib.redirect_stderr(actual_output):
+            try:
+                main(['publish1'])
+            except SystemExit:
+                pass
+        self.assertSubstring("invalid choice: 'publish1'", actual_output.getvalue())
 
     def test_valid_command_daemon_not_started(self):
         actual_output = StringIO()
