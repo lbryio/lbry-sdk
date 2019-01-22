@@ -1,7 +1,5 @@
+import asyncio
 import logging
-from twisted.internet import defer
-from twisted._threads import AlreadyQuit
-
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 
@@ -57,7 +55,7 @@ class Component(metaclass=ComponentType):
             result = await self.start()
             self._running = True
             return result
-        except (defer.CancelledError, AlreadyQuit):
+        except asyncio.CancelledError:
             pass
         except Exception as err:
             log.exception("Error setting up %s", self.component_name or self.__class__.__name__)
@@ -68,7 +66,7 @@ class Component(metaclass=ComponentType):
             result = await self.stop()
             self._running = False
             return result
-        except (defer.CancelledError, AlreadyQuit):
+        except asyncio.CancelledError:
             pass
         except Exception as err:
             log.exception("Error stopping %s", self.__class__.__name__)

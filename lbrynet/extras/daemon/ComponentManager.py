@@ -1,9 +1,8 @@
-import asyncio
 import logging
-from lbrynet.p2p.Error import ComponentStartConditionNotMet
-from lbrynet.extras.daemon.PeerManager import PeerManager
-from lbrynet.extras.daemon.PeerFinder import DHTPeerFinder
+import asyncio
 from lbrynet.conf import Config
+from lbrynet.error import ComponentStartConditionNotMet
+from lbrynet.dht.peer import PeerManager
 
 log = logging.getLogger(__name__)
 
@@ -35,16 +34,16 @@ class RequiredCondition(metaclass=RequiredConditionType):
 class ComponentManager:
     default_component_classes = {}
 
-    def __init__(self, conf: Config, reactor=None, analytics_manager=None, skip_components=None,
-                 peer_manager=None, peer_finder=None, **override_components):
+    def __init__(self, conf: Config, analytics_manager=None, skip_components=None,
+                 peer_manager=None, **override_components):
         self.conf = conf
         self.skip_components = skip_components or []
-        self.reactor = reactor
+        self.loop = asyncio.get_event_loop()
+        self.analytics_manager = analytics_manager
         self.component_classes = {}
         self.components = set()
-        self.analytics_manager = analytics_manager
-        self.peer_manager = peer_manager or PeerManager()
-        self.peer_finder = peer_finder or DHTPeerFinder(self)
+        self.started = asyncio.Event(loop=self.loop)
+        self.peer_manager = peer_manager or PeerManager(asyncio.get_event_loop_policy().get_event_loop())
 
         for component_name, component_class in self.default_component_classes.items():
             if component_name in override_components:
@@ -127,7 +126,7 @@ class ComponentManager:
             if component.component_name in callbacks:
                 maybe_coro = callbacks[component.component_name](component)
                 if asyncio.iscoroutine(maybe_coro):
-                    asyncio.create_task(maybe_coro)
+                    await asyncio.create_task(maybe_coro)
 
         stages = self.sort_components()
         for stage in stages:
@@ -136,12 +135,11 @@ class ComponentManager:
             ]
             if needing_start:
                 await asyncio.wait(needing_start)
+        self.started.set()
 
     async def stop(self):
         """
         Stop Components in reversed startup order
-
-        :return: (defer.Deferred)
         """
         stages = self.sort_components(reverse=True)
         for stage in stages:
@@ -149,7 +147,7 @@ class ComponentManager:
                 component._stop() for component in stage if component.running
             ]
             if needing_stop:
-                await asyncio.wait(needing_stop)
+                await asyncio.wait(needing_stop, loop=self.loop)
 
     def all_components_running(self, *component_names):
         """
