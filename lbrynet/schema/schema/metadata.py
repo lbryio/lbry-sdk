@@ -14,4 +14,8 @@ class Metadata(Schema):
         if 'fee' in _metadata:
             fee_pb = Fee.load(_metadata.pop('fee'))
             _message_pb.fee.CopyFrom(fee_pb)
-        return cls._load(_metadata, _message_pb)
+        _message_pb.releaseTime = int(_metadata.get('releaseTime', 0))
+        built_message = cls._load(_metadata, _message_pb)
+        if built_message.releaseTime == 0:
+            built_message.ClearField('releaseTime')
+        return built_message

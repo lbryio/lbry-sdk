@@ -14,6 +14,10 @@ def encode_fields(claim_dictionary, detached_signature: Signature):
     claim_value = claim_dictionary[claim_type]
     if claim_type == CLAIM_TYPES[STREAM_TYPE]:
         claim_value['source']['source'] = binascii.hexlify(claim_value['source']['source']).decode()
+        if 'releaseTime' in claim_value['metadata']:
+            release_time = int(claim_value['metadata'].pop('releaseTime'))
+            if release_time != 0:
+                claim_value['metadata']['releaseTime'] = release_time
         if 'fee' in claim_value['metadata']:
             try:
                 address = encode_address(claim_value['metadata']['fee']['address'])
