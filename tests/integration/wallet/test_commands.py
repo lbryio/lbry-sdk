@@ -612,6 +612,29 @@ class ClaimManagement(CommandTestCase):
         )
         self.assertEqual(not_a_claim, 'claim not found')
 
+    async def test_claim_list(self):
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+        claim = await self.make_claim(amount='0.0001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(claim['success'])
+        unsigned_claim = await self.make_claim(amount='0.0001', name='unsigned')
+        self.assertTrue(claim['success'])
+
+        channel_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('@abc'))
+        self.assertEqual(channel_from_claim_list['claims'][0]['value'], channel['output']['value'])
+        signed_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('on-channel-claim'))
+        self.assertEqual(signed_claim_from_claim_list['claims'][0]['value'], claim['output']['value'])
+        unsigned_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('unsigned'))
+        self.assertEqual(unsigned_claim_from_claim_list['claims'][0]['value'], unsigned_claim['output']['value'])
+
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        self.assertTrue(abandon['success'])
+        await self.confirm_tx(abandon['tx']['txid'])
+
+        empty = await self.out(self.daemon.jsonrpc_claim_list('@abc'))
+        self.assertEqual(len(empty['claims']), 0)
+
     async def test_abandoned_channel_with_signed_claims(self):
         channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
         self.assertTrue(channel['success'])
