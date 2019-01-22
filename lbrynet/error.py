@@ -10,7 +10,7 @@ class DuplicateStreamHashError(Exception):
     pass
 
 
-class DownloadCanceledError(Exception):
+class DownloadCancelledError(Exception):
     pass
 
 
