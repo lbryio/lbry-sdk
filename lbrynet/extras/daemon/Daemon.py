@@ -464,9 +464,6 @@ class Daemon(metaclass=JSONRPCServerType):
             os.makedirs(self.conf.download_dir)
 
     async def start(self):
-        self.ensure_data_dir()
-        self.ensure_wallet_dir()
-        self.ensure_download_dir()
         try:
             self.server = await asyncio.get_event_loop().create_server(
                 self.handler, self.conf.api_host, self.conf.api_port
@@ -486,6 +483,10 @@ class Daemon(metaclass=JSONRPCServerType):
     async def setup(self):
         log.info("Starting lbrynet-daemon")
         log.info("Platform: %s", json.dumps(system_info.get_platform()))
+
+        self.ensure_data_dir()
+        self.ensure_wallet_dir()
+        self.ensure_download_dir()
 
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
