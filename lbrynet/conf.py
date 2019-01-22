@@ -8,7 +8,7 @@ import yaml
 from argparse import ArgumentParser
 from contextlib import contextmanager
 from appdirs import user_data_dir, user_config_dir
-from lbrynet.p2p.Error import InvalidCurrencyError
+from lbrynet.error import InvalidCurrencyError
 
 log = logging.getLogger(__name__)
 
@@ -407,10 +407,10 @@ class Config(CLIConfig):
     data_rate = Float("points/megabyte", .0001)
     delete_blobs_on_remove = Toggle("", True)
     dht_node_port = Integer("", 4444)
-    download_timeout = Integer("", 180)
-    download_mirrors = Servers("", [
-        ('blobs.lbry.io', 80)
-    ])
+    download_timeout = Float("", 30.0)
+    blob_download_timeout = Float("", 20.0)
+    peer_connect_timeout = Float("", 3.0)
+    node_rpc_timeout = Float("", constants.rpc_timeout)
     is_generous_host = Toggle("", True)
     announce_head_blobs_only = Toggle("", True)
     concurrent_announcers = Integer("", 10)
