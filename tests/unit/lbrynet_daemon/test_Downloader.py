@@ -11,7 +11,7 @@ from lbrynet.p2p.BlobManager import DiskBlobManager
 from lbrynet.p2p.RateLimiter import DummyRateLimiter
 from lbrynet.p2p.client.DownloadManager import DownloadManager
 from lbrynet.extras.daemon import Downloader
-from lbrynet.extras.daemon import ExchangeRateManager
+from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.PeerFinder import DummyPeerFinder
 from lbrynet.blob.EncryptedFileStatusReport import EncryptedFileStatusReport
