@@ -1,88 +1,85 @@
-import hashlib
-import struct
-
-from twisted.trial import unittest
-from twisted.internet import defer
-from lbrynet.dht.node import Node
+import asyncio
+import typing
+from torba.testcase import AsyncioTestCase
+from tests import dht_mocks
 from lbrynet.dht import constants
-from lbrynet.utils import generate_id
+from lbrynet.dht.node import Node
+from lbrynet.dht.peer import PeerManager
 
 
-class NodeIDTest(unittest.TestCase):
+class TestNodePingQueueDiscover(AsyncioTestCase):
+    async def test_ping_queue_discover(self):
+        loop = asyncio.get_event_loop()
 
-    def setUp(self):
-        self.node = Node()
+        peer_addresses = [
+            (constants.generate_id(1), '1.2.3.1'),
+            (constants.generate_id(2), '1.2.3.2'),
+            (constants.generate_id(3), '1.2.3.3'),
+            (constants.generate_id(4), '1.2.3.4'),
+            (constants.generate_id(5), '1.2.3.5'),
+            (constants.generate_id(6), '1.2.3.6'),
+            (constants.generate_id(7), '1.2.3.7'),
+            (constants.generate_id(8), '1.2.3.8'),
+            (constants.generate_id(9), '1.2.3.9'),
+        ]
+        with dht_mocks.mock_network_loop(loop):
+            advance = dht_mocks.get_time_accelerator(loop, loop.time())
+            # start the nodes
+            nodes: typing.Dict[int, Node] = {
+                i: Node(loop, PeerManager(loop), node_id, 4444, 4444, 3333, address)
+                for i, (node_id, address) in enumerate(peer_addresses)
+            }
+            for i, n in nodes.items():
+                n.start(peer_addresses[i][1], [])
 
-    def test_new_node_has_auto_created_id(self):
-        self.assertEqual(type(self.node.node_id), bytes)
-        self.assertEqual(len(self.node.node_id), 48)
+            await advance(1)
 
-    def test_uniqueness_and_length_of_generated_ids(self):
-        previous_ids = []
-        for i in range(100):
-            new_id = self.node._generateID()
-            self.assertNotIn(new_id, previous_ids, f'id at index {i} not unique')
-            self.assertEqual(len(new_id), 48, 'id at index {} wrong length: {}'.format(i, len(new_id)))
-            previous_ids.append(new_id)
+            node_1 = nodes[0]
 
+            # ping 8 nodes from node_1, this will result in a delayed return ping
+            futs = []
+            for i in range(1, len(peer_addresses)):
+                node = nodes[i]
+                assert node.protocol.node_id != node_1.protocol.node_id
+                peer = node_1.protocol.peer_manager.get_kademlia_peer(
+                    node.protocol.node_id, node.protocol.external_ip, udp_port=node.protocol.udp_port
+                )
+                futs.append(node_1.protocol.get_rpc_peer(peer).ping())
+            await advance(3)
+            replies = await asyncio.gather(*tuple(futs))
+            self.assertTrue(all(map(lambda reply: reply == b"pong", replies)))
 
-class NodeDataTest(unittest.TestCase):
-    """ Test case for the Node class's data-related functions """
+            # run for long enough for the delayed pings to have been sent by node 1
+            await advance(1000)
 
-    def setUp(self):
-        h = hashlib.sha384()
-        h.update(b'test')
-        self.node = Node()
-        self.contact = self.node.contact_manager.make_contact(
-            h.digest(), '127.0.0.1', 12345, self.node._protocol)
-        self.token = self.node.make_token(self.contact.compact_ip())
-        self.cases = []
-        for i in range(5):
-            h.update(str(i).encode())
-            self.cases.append((h.digest(), 5000+2*i))
-            self.cases.append((h.digest(), 5001+2*i))
+            # verify all of the previously pinged peers have node_1 in their routing tables
+            for n in nodes.values():
+                peers = n.protocol.routing_table.get_peers()
+                if n is node_1:
+                    self.assertEqual(8, len(peers))
+                else:
+                    self.assertEqual(1, len(peers))
+                    self.assertEqual((peers[0].node_id, peers[0].address, peers[0].udp_port),
+                                     (node_1.protocol.node_id, node_1.protocol.external_ip, node_1.protocol.udp_port))
 
-    @defer.inlineCallbacks
-    def test_store(self):
-        """ Tests if the node can store (and privately retrieve) some data """
-        for key, port in self.cases:
-            yield self.node.store(
-                self.contact, key, self.token, port, self.contact.id, 0
-            )
-        for key, value in self.cases:
-            expected_result = self.contact.compact_ip() + struct.pack('>H', value) + self.contact.id
-            self.assertTrue(self.node._dataStore.hasPeersForBlob(key),
-                            "Stored key not found in node's DataStore: '%s'" % key)
-            self.assertIn(expected_result, self.node._dataStore.getPeersForBlob(key),
-                            "Stored val not found in node's DataStore: key:'%s' port:'%s' %s"
-                            % (key, value, self.node._dataStore.getPeersForBlob(key)))
+            # run long enough for the refresh loop to run
+            await advance(3600)
 
+            # verify all the nodes know about each other
+            for n in nodes.values():
+                if n is node_1:
+                    continue
+                peers = n.protocol.routing_table.get_peers()
+                self.assertEqual(8, len(peers))
+                self.assertSetEqual(
+                    {n_id[0] for n_id in peer_addresses if n_id[0] != n.protocol.node_id},
+                    {c.node_id for c in peers}
+                )
+                self.assertSetEqual(
+                    {n_addr[1] for n_addr in peer_addresses if n_addr[1] != n.protocol.external_ip},
+                    {c.address for c in peers}
+                )
 
-class NodeContactTest(unittest.TestCase):
-    """ Test case for the Node class's contact management-related functions """
-    def setUp(self):
-        self.node = Node()
-
-    @defer.inlineCallbacks
-    def test_add_contact(self):
-        """ Tests if a contact can be added and retrieved correctly """
-        # Create the contact
-        contact_id = generate_id(b'node1')
-        contact = self.node.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.node._protocol)
-        # Now add it...
-        yield self.node.addContact(contact)
-        # ...and request the closest nodes to it using FIND_NODE
-        closest_nodes = self.node._routingTable.findCloseNodes(contact_id, constants.k)
-        self.assertEqual(len(closest_nodes), 1)
-        self.assertIn(contact, closest_nodes)
-
-    @defer.inlineCallbacks
-    def test_add_self_as_contact(self):
-        """ Tests the node's behaviour when attempting to add itself as a contact """
-        # Create a contact with the same ID as the local node's ID
-        contact = self.node.contact_manager.make_contact(self.node.node_id, '127.0.0.1', 9182, None)
-        # Now try to add it
-        yield self.node.addContact(contact)
-        # ...and request the closest nodes to it using FIND_NODE
-        closest_nodes = self.node._routingTable.findCloseNodes(self.node.node_id, constants.k)
-        self.assertNotIn(contact, closest_nodes, 'Node added itself as a contact.')
+            # teardown
+            for n in nodes.values():
+                n.stop()
