@@ -797,7 +797,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if blob:
             return self.blob_manager.get_blob(blob[0])
         return await d2f(download_sd_blob(
-            sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
+            self.conf, sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
             self.payment_rate_manager, self.wallet_manager, timeout=self.conf.peer_search_timeout,
             download_mirrors=self.conf.download_mirrors
         ))
