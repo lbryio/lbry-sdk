@@ -1,10 +1,38 @@
 import unittest
 from lbrynet.schema.fee import Fee
 from lbrynet.extras.daemon import exchange_rate_manager
-from lbrynet.p2p.Error import InvalidExchangeRateResponse
+from lbrynet.error import InvalidExchangeRateResponse
 from tests import test_utils
-from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from tests.mocks import BTCLBCFeed, USDBTCFeed
+
+
+class BTCLBCFeed(exchange_rate_manager.MarketFeed):
+    def __init__(self):
+        super().__init__(
+            "BTCLBC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+
+class USDBTCFeed(exchange_rate_manager.MarketFeed):
+    def __init__(self):
+        super().__init__(
+            "USDBTC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+
+class DummyExchangeRateManager(exchange_rate_manager.ExchangeRateManager):
+    def __init__(self, market_feeds, rates):
+        self.market_feeds = market_feeds
+        for feed in self.market_feeds:
+            feed.rate = exchange_rate_manager.ExchangeRate(
+                feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
 
 class FeeFormatTest(unittest.TestCase):
@@ -91,11 +119,11 @@ class LBRYioFeedTest(unittest.TestCase):
 
         response = '{}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
         response = '{"success":true,"result":[]}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
 
 class TestExchangeRateFeeds(unittest.TestCase):
@@ -129,11 +157,11 @@ class TestExchangeRateFeeds(unittest.TestCase):
 
         response = '{}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
         response = '{"success":true,"ticker":{}}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
     def test_handle_cryptonator_btc_response(self):
         feed = exchange_rate_manager.CryptonatorBTCFeed()
@@ -147,11 +175,11 @@ class TestExchangeRateFeeds(unittest.TestCase):
 
         response = '{}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
         response = '{"success":true,"ticker":{}}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
     def test_handle_bittrex_response(self):
         feed = exchange_rate_manager.BittrexFeed()
@@ -167,8 +195,8 @@ class TestExchangeRateFeeds(unittest.TestCase):
 
         response = '{}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
         response = '{"success":true,"result":[]}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)

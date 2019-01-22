@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from lbrynet import utils
 
-from twisted.trial import unittest
+import unittest
 
 
 class CompareVersionTest(unittest.TestCase):
