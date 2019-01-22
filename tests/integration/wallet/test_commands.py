@@ -16,7 +16,7 @@ from torba.testcase import IntegrationTestCase
 import lbrynet.schema
 lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
-from lbrynet import conf as lbry_conf
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.daemon.Components import WalletComponent
@@ -63,19 +63,16 @@ class CommandTestCase(IntegrationTestCase):
         logging.getLogger('lbrynet.p2p').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
-        lbry_conf.settings = None
-        lbry_conf.initialize_settings(
-            load_conf_file=False,
-            data_dir=self.wallet_node.data_path,
-            wallet_dir=self.wallet_node.data_path,
-            download_dir=self.wallet_node.data_path
-        )
-        lbry_conf.settings['use_upnp'] = False
-        lbry_conf.settings['reflect_uploads'] = False
-        lbry_conf.settings['blockchain_name'] = 'lbrycrd_regtest'
-        lbry_conf.settings['lbryum_servers'] = [('localhost', 50001)]
-        lbry_conf.settings['known_dht_nodes'] = []
-        lbry_conf.settings.node_id = None
+        conf = Config()
+        conf.data_dir = self.wallet_node.data_path
+        conf.wallet_dir = self.wallet_node.data_path
+        conf.download_dir = self.wallet_node.data_path
+        conf.share_usage_data = False
+        conf.use_upnp = False
+        conf.reflect_uploads = False
+        conf.blockchain_name = 'lbrycrd_regtest'
+        conf.lbryum_servers = [('localhost', 50001)]
+        conf.known_dht_nodes = []
 
         await self.account.ensure_address_gap()
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
@@ -89,14 +86,12 @@ class CommandTestCase(IntegrationTestCase):
             self.wallet_component._running = True
             return self.wallet_component
 
-        skip = [
+        conf.components_to_skip = [
             DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
             PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
         ]
-        analytics_manager = FakeAnalytics()
-        self.daemon = Daemon(analytics_manager, ComponentManager(
-            analytics_manager=analytics_manager,
-            skip_components=skip, wallet=wallet_maker
+        self.daemon = Daemon(conf, ComponentManager(
+            conf, skip_components=conf.components_to_skip, wallet=wallet_maker
         ))
         await self.daemon.setup()
         self.daemon.wallet_manager = self.wallet_component.wallet_manager
