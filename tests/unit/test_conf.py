@@ -5,7 +5,7 @@ import tempfile
 import unittest
 import argparse
 from lbrynet.conf import Config, BaseConfig, String, Integer, Toggle, Servers, NOT_SET
-from lbrynet.p2p.Error import InvalidCurrencyError
+from lbrynet.error import InvalidCurrencyError
 
 
 class TestConfig(BaseConfig):
