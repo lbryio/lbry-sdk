@@ -19,7 +19,9 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.blob_manager.get_blob.side_effect = lambda _: self.blob
         self.response = MagicMock(code=200, length=400)
         self.client.get.side_effect = lambda uri: defer.succeed(self.response)
-        self.downloader = HTTPBlobDownloader(self.blob_manager, [self.blob_hash], ['server1'], self.client, retry=False)
+        self.downloader = HTTPBlobDownloader(
+            self.blob_manager, [self.blob_hash], [('server1', 80)], self.client, retry=False
+        )
         self.downloader.interval = 0
 
     def tearDown(self):
@@ -31,7 +33,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.client.collect.side_effect = collect
         yield self.downloader.start()
         self.blob_manager.get_blob.assert_called_with(self.blob_hash)
-        self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
+        self.client.get.assert_called_with(f'http://server1:80/{self.blob_hash}')
         self.client.collect.assert_called()
         self.assertEqual(self.blob.get_length(), self.response.length)
         self.assertTrue(self.blob.get_is_verified())
@@ -50,7 +52,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.client.collect.side_effect = lambda response, write: defer.fail(IOError('I/O operation on closed file'))
         yield self.downloader.start()
         self.blob_manager.get_blob.assert_called_with(self.blob_hash)
-        self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
+        self.client.get.assert_called_with(f'http://server1:80/{self.blob_hash}')
         self.client.collect.assert_called()
         self.assertEqual(self.blob.get_length(), self.response.length)
         self.assertEqual(self.blob.writers, {})
@@ -70,7 +72,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.response.code = 404
         yield self.downloader.start()
         self.blob_manager.get_blob.assert_called_with(self.blob_hash)
-        self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
+        self.client.get.assert_called_with(f'http://server1:80/{self.blob_hash}')
         self.client.collect.assert_not_called()
         self.assertFalse(self.blob.get_is_verified())
         self.assertEqual(self.blob.writers, {})
@@ -80,7 +82,7 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.downloader.start()  # hangs if yielded, as intended, to simulate a long ongoing write while we call stop
         self.downloader.stop()
         self.blob_manager.get_blob.assert_called_with(self.blob_hash)
-        self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
+        self.client.get.assert_called_with(f'http://server1:80/{self.blob_hash}')
         self.client.collect.assert_called()
         self.assertEqual(self.blob.get_length(), self.response.length)
         self.assertFalse(self.blob.get_is_verified())
