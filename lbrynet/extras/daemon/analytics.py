@@ -40,6 +40,10 @@ class Manager:
         self.session_id = session_id
         self.task: asyncio.Task = None
 
+    @property
+    def is_started(self):
+        return self.task is not None
+
     def start(self):
         if self._enabled and self.task is None:
             self.task = asyncio.create_task(self.run())
