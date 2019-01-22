@@ -1,43 +1,11 @@
-import json
 import logging
 import logging.handlers
 import sys
-import traceback
-import treq
 import twisted.python.log
-from twisted.internet import defer
-from lbrynet import __version__ as lbrynet_version, build_type
-from lbrynet import utils, conf
-
-
-class HTTPSHandler(logging.Handler):
-    def __init__(self, url, fqdn=False, localname=None, facility=None, cookies=None):
-        super().__init__()
-        self.url = url
-        self.fqdn = fqdn
-        self.localname = localname
-        self.facility = facility
-        self.cookies = cookies or {}
-
-    def get_full_message(self, record):
-        if record.exc_info:
-            return '\n'.join(traceback.format_exception(*record.exc_info))
-        else:
-            return record.getMessage()
-
-    @defer.inlineCallbacks
-    def _emit(self, record):
-        payload = self.format(record)
-        response = yield treq.post(self.url, data=payload.encode(), cookies=self.cookies)
-        self.cookies.update(response.cookies())
-
-    def emit(self, record):
-        return self._emit(record)
 
 
 DEFAULT_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s"
 DEFAULT_FORMATTER = logging.Formatter(DEFAULT_FORMAT)
-LOGGLY_URL = "https://logs-01.loggly.com/inputs/{token}/tag/{tag}"
 
 
 def remove_handlers(log, handler_name):
@@ -106,63 +74,6 @@ def configure_file_handler(file_name, **kwargs):
     handler.setFormatter(DEFAULT_FORMATTER)
     handler.name = 'file'
     return handler
-
-
-def get_loggly_url(token=None, version=None):
-    token = token or utils.deobfuscate(conf.settings['LOGGLY_TOKEN'])
-    version = version or lbrynet_version
-    return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
-
-
-def configure_loggly_handler():
-    if build_type.BUILD == 'dev':
-        return
-    if not conf.settings['share_usage_data']:
-        return
-    level = logging.ERROR
-    handler = get_loggly_handler(level=level, installation_id=conf.settings.installation_id,
-                                 session_id=conf.settings.get_session_id())
-    log = logging.getLogger("lbrynet")
-    if handler.name:
-        remove_handlers(log, handler.name)
-    handler.setLevel(level)
-    log.addHandler(handler)
-    # need to reduce the logger's level down to the
-    # handler's level or else the handler won't
-    # get those messages
-    if log.level > level:
-        log.setLevel(level)
-
-
-def get_loggly_handler(level, installation_id, session_id):
-    formatter = JsonFormatter(level=level, installation_id=installation_id, session_id=session_id)
-    handler = HTTPSHandler(get_loggly_url())
-    handler.setFormatter(formatter)
-    handler.name = 'loggly'
-    return handler
-
-
-class JsonFormatter(logging.Formatter):
-    """Format log records using json serialization"""
-
-    def __init__(self, **kwargs):
-        self.attributes = kwargs
-
-    def format(self, record):
-        data = {
-            'loggerName': record.name,
-            'asciTime': self.formatTime(record),
-            'fileName': record.filename,
-            'functionName': record.funcName,
-            'levelNo': record.levelno,
-            'lineNo': record.lineno,
-            'levelName': record.levelname,
-            'message': record.getMessage(),
-        }
-        data.update(self.attributes)
-        if record.exc_info:
-            data['exc_info'] = self.formatException(record.exc_info)
-        return json.dumps(data)
 
 
 def failure(failure, log, msg, *args):

@@ -31,6 +31,7 @@ from textwrap import dedent
 
 from lbrynet import conf, log_support, __name__ as lbrynet_name
 from lbrynet.utils import check_connection, json_dumps_pretty
+from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
 from lbrynet.extras.daemon.Daemon import Daemon
 from lbrynet.extras.daemon.DaemonConsole import main as daemon_console, LBRYAPIClient
 from lbrynet.extras.system_info import get_platform
@@ -52,7 +53,12 @@ def start_daemon(settings: typing.Optional[typing.Dict] = None,
         conf.settings.update({k, v}, data_types=(conf.TYPE_CLI,))
 
     log_support.configure_logging(conf.settings.get_log_filename(), console_output, verbose)
-    log_support.configure_loggly_handler()
+
+    if conf.settings['share_usage_data']:
+        loggly_handler = get_loggly_handler(conf.settings['LOGGLY_TOKEN'])
+        loggly_handler.setLevel(logging.ERROR)
+        log.addHandler(loggly_handler)
+
     log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
     log.info("Starting lbrynet-daemon from command line")
 
