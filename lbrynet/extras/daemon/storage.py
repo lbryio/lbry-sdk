@@ -9,6 +9,7 @@ from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
 from lbrynet.dht.constants import data_expiration
+from lbrynet.blob.blob_info import BlobInfo
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import BlobFile
@@ -342,6 +343,46 @@ class SQLiteStorage(SQLiteMixin):
             )
 
         return self.db.run(_store_stream)
+
+    def get_blobs_for_stream(self, stream_hash, only_completed=False):
+        def _get_blobs_for_stream(transaction):
+            crypt_blob_infos = []
+            stream_blobs = transaction.execute(
+                "select blob_hash, position, iv from stream_blob where stream_hash=?", (stream_hash, )
+            ).fetchall()
+            if only_completed:
+                lengths = transaction.execute(
+                    "select b.blob_hash, b.blob_length from blob b "
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and b.status='finished' and s.stream_hash=?",
+                    (stream_hash, )
+                ).fetchall()
+            else:
+                lengths = transaction.execute(
+                    "select b.blob_hash, b.blob_length from blob b "
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and s.stream_hash=?",
+                    (stream_hash, )
+                ).fetchall()
+
+            blob_length_dict = {}
+            for blob_hash, length in lengths:
+                blob_length_dict[blob_hash] = length
+
+            for blob_hash, position, iv in stream_blobs:
+                blob_length = blob_length_dict.get(blob_hash, 0)
+                crypt_blob_infos.append(BlobInfo(position, blob_length, iv, blob_hash))
+            crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
+            return crypt_blob_infos
+        return self.db.run(_get_blobs_for_stream)
+
+    def get_sd_blob_hash_for_stream(self, stream_hash):
+        return self.run_and_return_one_or_none(
+            "select sd_hash from stream where stream_hash=?", stream_hash
+        )
+
+    def get_stream_hash_for_sd_hash(self, sd_blob_hash):
+        return self.run_and_return_one_or_none(
+            "select stream_hash from stream where sd_hash = ?", sd_blob_hash
+        )
 
     def delete_stream(self, descriptor: 'StreamDescriptor'):
         def _delete_stream(transaction: sqlite3.Connection):
