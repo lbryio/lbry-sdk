@@ -39,7 +39,7 @@ class CLIIntegrationTest(AsyncioTestCase):
         conf = Config()
         conf.data_dir = '/tmp'
         conf.share_usage_data = False
-        conf.api_port = 5299
+        conf.api = 'localhost:5299'
         conf.components_to_skip = skip
         Daemon.component_attributes = {}
         self.daemon = Daemon(conf)
@@ -51,6 +51,6 @@ class CLIIntegrationTest(AsyncioTestCase):
     def test_cli_status_command_with_auth(self):
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
-            cli.main(["--api-port", "5299", "status"])
+            cli.main(["--api", "localhost:5299", "status"])
         actual_output = actual_output.getvalue()
         self.assertIn("connection_status", actual_output)

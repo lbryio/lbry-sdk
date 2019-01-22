@@ -370,19 +370,19 @@ class BaseConfig:
 
 class CLIConfig(BaseConfig):
 
-    # Changing this value is not-advised as it could potentially
-    # expose the lbrynet daemon to the outside world which would
-    # give an attacker access to your wallet and you could lose
-    # all of your credits.
-    api_host = String(
-        'Host name for lbrynet daemon API.', 'localhost',
-        previous_names=['API_INTERFACE']
-    )
-    api_port = Integer('Port for lbrynet daemon API.', 5279)
+    api = String('Host name and port for lbrynet daemon API.', 'localhost:5279')
 
     @property
     def api_connection_url(self) -> str:
-        return f"http://{self.api_host}:{self.api_port}/lbryapi"
+        return f"http://{self.api}/lbryapi"
+
+    @property
+    def api_host(self):
+        return self.api.split(':')[0]
+
+    @property
+    def api_port(self):
+        return int(self.api.split(':')[1])
 
 
 class Config(CLIConfig):

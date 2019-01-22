@@ -472,8 +472,8 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.setup()
             await self.analytics_manager.send_server_startup_success()
         except OSError:
-            log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
-                      'already in use by another application.', self.conf.api_host, self.conf.api_port)
+            log.error('lbrynet API failed to bind TCP %s for listening. Daemon is already running or this port is '
+                      'already in use by another application.', self.conf.api)
         except defer.CancelledError:
             log.info("shutting down before finished starting")
         except Exception as err:
