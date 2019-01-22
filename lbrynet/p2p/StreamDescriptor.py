@@ -429,8 +429,8 @@ class EncryptedFileStreamDescriptorValidator:
 
 
 @defer.inlineCallbacks
-def download_sd_blob(conf, blob_hash, blob_manager, peer_finder, rate_limiter, payment_rate_manager, wallet, timeout=None,
-                     download_mirrors=None):
+def download_sd_blob(conf, blob_hash, blob_manager, peer_finder, rate_limiter, payment_rate_manager, wallet,
+                     timeout=None, download_mirrors=None):
     """
     Downloads a single blob from the network
 
