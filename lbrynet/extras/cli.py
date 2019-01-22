@@ -194,8 +194,8 @@ def main(argv=None):
             return 0
 
         command_index = 0
-        for i in range(len(argv)):
-            if argv[i] == command_before_args:
+        for i, argv_i in enumerate(argv):
+            if argv_i == command_before_args:
                 command_index = i
                 break
 
