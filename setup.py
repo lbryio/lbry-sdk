@@ -25,7 +25,6 @@ setup(
     install_requires=[
         'aiohttp',
         'aioupnp',
-        'twisted[tls]==18.7.0',
         'appdirs',
         'distro',
         'base58==1.0.0',
@@ -38,9 +37,6 @@ setup(
         'ecdsa',
         'torba',
         'pyyaml',
-        'requests',
-        'txJSON-RPC',
-        'treq',
         'docopt',
         'colorama==0.3.7',
     ],
