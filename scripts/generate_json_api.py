@@ -2,7 +2,6 @@ import os
 import re
 import json
 import inspect
-from textwrap import dedent
 from lbrynet.extras.daemon.Daemon import Daemon
 
 
