@@ -160,28 +160,6 @@ class Manager:
     async def _send_heartbeat(self):
         await self.track(self._event(HEARTBEAT))
 
-    async def _update_tracked_metrics(self):
-        should_send, value = self.summarize_and_reset(BLOB_BYTES_UPLOADED)
-        if should_send:
-            await self.track(self._metric_event(BLOB_BYTES_UPLOADED, value))
-
-    def add_observation(self, metric, value):
-        self._tracked_data[metric].append(value)
-
-    def summarize_and_reset(self, metric, op=sum):
-        """Apply `op` on the current values for `metric`.
-
-        This operation also resets the metric.
-
-        Returns:
-            a tuple (should_send, value)
-        """
-        try:
-            values = self._tracked_data.pop(metric)
-            return True, op(values)
-        except KeyError:
-            return False, None
-
     def _event(self, event, event_properties=None):
         return {
             'userId': 'lbry',
