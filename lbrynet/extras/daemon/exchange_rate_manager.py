@@ -4,7 +4,7 @@ import time
 import logging
 import json
 
-from lbrynet.p2p.Error import InvalidExchangeRateResponse, CurrencyConversionError
+from lbrynet.error import InvalidExchangeRateResponse, CurrencyConversionError
 
 log = logging.getLogger(__name__)
 

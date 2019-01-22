@@ -3,7 +3,7 @@ import logging
 from ecdsa import BadSignatureError
 from binascii import unhexlify, hexlify
 from lbrynet.extras.wallet.dewies import dewies_to_lbc
-from lbrynet.p2p.Error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
+from lbrynet.error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
 from lbrynet.schema.address import is_address
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
