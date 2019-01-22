@@ -2,7 +2,6 @@ import contextlib
 from io import StringIO
 import unittest
 
-from docopt import DocoptExit
 from lbrynet.extras.cli import normalize_value, main
 from lbrynet.extras.system_info import get_platform
 
