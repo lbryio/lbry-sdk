@@ -4,10 +4,10 @@ import typing
 import logging
 from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
+from lbrynet.stream.descriptor import StreamDescriptor
 if typing.TYPE_CHECKING:
     from lbrynet.extras.daemon.storage import StoredStreamClaim
     from lbrynet.blob.blob_manager import BlobFileManager
-    from lbrynet.stream.descriptor import StreamDescriptor
 
 log = logging.getLogger(__name__)
 
