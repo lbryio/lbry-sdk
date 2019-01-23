@@ -115,20 +115,37 @@ def set_kwargs(parsed_args):
     return kwargs
 
 
+class ArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, add_help=False, **kwargs)
+        self.add_argument(
+            '--help', dest='help', action='store_true', default=False,
+            help='show this help message and exit'
+        )
+
+
+def add_command_parser(parent, command):
+    subcommand = parent.add_parser(
+        command['name'],
+        help=command['doc'].strip().splitlines()[0]
+    )
+    subcommand.set_defaults(
+        api_method_name=command['api_method_name'],
+        command=command['name'],
+        doc=command['doc'],
+        replaced_by=command.get('replaced_by', None)
+    )
+
+
 def get_argument_parser():
-    main = argparse.ArgumentParser('lbrynet', add_help=False)
+    main = ArgumentParser('lbrynet')
     main.add_argument(
         '--version', dest='cli_version', action="store_true",
         help='Show lbrynet CLI version and exit.'
     )
-    main.add_argument(
-        '-h', '--help', dest='help', action="store_true",
-        help='Show this help message and exit'
-    )
+    main.set_defaults(group=None, command=None)
     CLIConfig.contribute_args(main)
-    sub = main.add_subparsers(dest='command')
-    help = sub.add_parser('help', help='Detailed help for remote commands.')
-    help.add_argument('help_command', nargs='*')
+    sub = main.add_subparsers()
     start = sub.add_parser('start', help='Start lbrynet server.')
     start.add_argument(
         '--quiet', dest='quiet', action="store_true",
@@ -139,19 +156,22 @@ def get_argument_parser():
         help=('Enable debug output. Optionally specify loggers for which debug output '
               'should selectively be applied.')
     )
+    start.set_defaults(command='start', start_parser=start)
     Config.contribute_args(start)
+
     api = Daemon.get_api_definitions()
-    for group in sorted(api):
-        group_command = sub.add_parser(group, help=api[group]['doc'])
-        group_command.set_defaults(group_doc=group_command)
-        if group in ('status', 'publish', 'version', 'help', 'wallet_balance', 'get'):
-            continue
-        commands = group_command.add_subparsers(dest='subcommand')
-        for command in api[group]['commands']:
-            commands.add_parser(command['name'], help=command['doc'].strip().splitlines()[0])
-    for deprecated in Daemon.deprecated_methods:
-        group_command = sub.add_parser(deprecated)
-        group_command.add_subparsers(dest='subcommand')
+    groups = {}
+    for group_name in sorted(api['groups']):
+        group_parser = sub.add_parser(group_name, help=api['groups'][group_name])
+        group_parser.set_defaults(group=group_name, group_parser=group_parser)
+        groups[group_name] = group_parser.add_subparsers()
+    for command_name in sorted(api['commands']):
+        command = api['commands'][command_name]
+        if command['group'] is None:
+            add_command_parser(sub, command)
+        else:
+            add_command_parser(groups[command['group']], command)
+
     return main
 
 
@@ -167,6 +187,10 @@ def main(argv=None):
         return 0
 
     elif args.command == 'start':
+
+        if args.help:
+            args.start_parser.print_help()
+            return 0
 
         log_support.configure_logging(conf.log_file_path, not args.quiet, args.verbose)
 
@@ -187,44 +211,25 @@ def main(argv=None):
         else:
             log.info("Not connected to internet, unable to start")
 
-    elif args.command == 'help':
-
-        if args.help_command:
-            method = '_'.join(args.help_command)
-        else:
-            parser.print_help()
-            return 0
-
-        if method not in Daemon.callable_methods:
-            print('Invalid command name: {method}')
-            return 1
-
-        fn = Daemon.callable_methods[method]
-        print(fn.__doc__)
-
     elif args.command is not None:
 
-        if args.command in ('status', 'publish', 'version', 'help', 'wallet_balance', 'get'):
-            method = args.command
-        elif args.subcommand is not None:
-            method = f'{args.command}_{args.subcommand}'
+        doc = args.doc
+        api_method_name = args.api_method_name
+        if args.replaced_by:
+            print(f"{args.api_method_name} is deprecated, using {args.replaced_by['api_method_name']}.")
+            doc = args.replaced_by['doc']
+            api_method_name = args.replaced_by['api_method_name']
+
+        if args.help:
+            print(doc)
         else:
-            args.group_doc.print_help()
-            return 0
+            parsed = docopt(doc, command_args)
+            params = set_kwargs(parsed)
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(execute_command(conf, api_method_name, params))
 
-        if method in Daemon.deprecated_methods:
-            new_method = Daemon.deprecated_methods[method].new_command
-            if new_method is None:
-                print(f"{method} is permanently deprecated and does not have a replacement command.")
-                return 0
-            print(f"{method} is deprecated, using {new_method}.")
-            method = new_method
-
-        fn = Daemon.callable_methods[method]
-        parsed = docopt(fn.__doc__, command_args)
-        params = set_kwargs(parsed)
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(execute_command(conf, method, params))
+    elif args.group is not None:
+        args.group_parser.print_help()
 
     else:
         parser.print_help()

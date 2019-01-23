@@ -399,21 +399,50 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @classmethod
     def get_api_definitions(cls):
-        groups = {}
-        for method in dir(cls):
-            if method.startswith('jsonrpc_'):
-                parts = method.split('_', 2)
-                group = command = parts[1]
-                if len(parts) == 3:
-                    command = parts[2]
-                group_dict = {'doc': getattr(cls, f'{group.upper()}_DOC', ''), 'commands': []}
-                groups.setdefault(group, group_dict)['commands'].append({
-                    'name': command,
-                    'doc': getattr(cls, method).__doc__
-                })
-        del groups['commands']
-        del groups['help']
-        return groups
+        prefix = 'jsonrpc_'
+        skip = ['commands', 'help']
+        not_grouped = ['block_show', 'report_bug', 'resolve_name', 'routing_table_get']
+        api = {
+            'groups': {
+                group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
+                for group_name in dir(cls) if group_name.endswith('_DOC')
+            },
+            'commands': {}
+        }
+        for jsonrpc_method in dir(cls):
+            if jsonrpc_method.startswith(prefix):
+                full_name = jsonrpc_method[len(prefix):]
+                if full_name in skip:
+                    continue
+                method = getattr(cls, jsonrpc_method)
+                if full_name in not_grouped:
+                    name_parts = [full_name]
+                else:
+                    name_parts = full_name.split('_', 1)
+                if len(name_parts) == 1:
+                    group = None
+                    name, = name_parts
+                elif len(name_parts) == 2:
+                    group, name = name_parts
+                    assert group in api['groups'],\
+                        f"Group {group} does not have doc string for command {full_name}."
+                else:
+                    raise NameError(f'Could not parse method name: {jsonrpc_method}')
+                api['commands'][full_name] = {
+                    'api_method_name': full_name,
+                    'name': name,
+                    'group': group,
+                    'doc': method.__doc__,
+                    'method': method,
+                }
+                if hasattr(method, '_deprecated'):
+                    api['commands'][full_name]['replaced_by'] = method.new_command
+
+        for command in api['commands'].values():
+            if 'replaced_by' in command:
+                command['replaced_by'] = api['commands'][command['replaced_by']]
+
+        return api
 
     @property
     def db_revision_file_path(self):
@@ -1318,6 +1347,10 @@ class Daemon(metaclass=JSONRPCServerType):
             (list) list of available commands
         """
         return sorted([command for command in self.callable_methods.keys()])
+
+    WALLET_DOC = """
+    Wallet management.
+    """
 
     @deprecated("account_balance")
     def jsonrpc_wallet_balance(self, address=None):
@@ -2249,6 +2282,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 log.info("Deleted file: %s", file_name)
             return True
 
+    STREAM_DOC = """
+    Stream information.
+    """
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
@@ -2909,7 +2945,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
         return results
 
-    CHANNEL_DOC = """
+    TRANSACTION_DOC = """
     Transaction management.
     """
 
@@ -3146,6 +3182,10 @@ class Daemon(metaclass=JSONRPCServerType):
             pass
         await d2f(self.blob_manager.delete_blobs([blob_hash]))
         return "Deleted %s" % blob_hash
+
+    PEER_DOC = """
+    DHT / Blob Exchange peer commands.
+    """
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_list(self, blob_hash, timeout=None):
