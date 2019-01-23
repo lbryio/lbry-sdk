@@ -44,8 +44,8 @@ comparison_operators = {
 
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', wallet: 'LbryWalletManager',
-                 storage: 'SQLiteStorage', node: 'Node', peer_timeout: float, peer_connect_timeout: float,
-                 fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None):
+                 storage: 'SQLiteStorage', node: typing.Optional['Node'], peer_timeout: float,
+                 peer_connect_timeout: float, fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.wallet = wallet
@@ -79,6 +79,9 @@ class StreamManager:
                 self.streams.add(stream)
 
     async def resume(self):
+        if not self.node:
+            log.warning("no DHT node given, cannot resume downloads")
+            return
         await self.node.joined.wait()
         resumed = 0
         for stream in self.streams:
