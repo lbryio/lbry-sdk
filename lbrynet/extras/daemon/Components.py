@@ -434,7 +434,7 @@ class HashAnnouncerComponent(Component):
 
 class StreamManagerComponent(Component):
     component_name = STREAM_MANAGER_COMPONENT
-    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT]
+    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -455,8 +455,10 @@ class StreamManagerComponent(Component):
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        node = self.component_manager.get_component(DHT_COMPONENT)
-
+        try:
+            node = self.component_manager.get_component(DHT_COMPONENT)
+        except NameError:
+            node = None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
         self.stream_manager = StreamManager(
