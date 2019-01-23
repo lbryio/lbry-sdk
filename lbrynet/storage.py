@@ -4,11 +4,12 @@ import typing
 import asyncio
 import binascii
 from torba.client.basedatabase import SQLiteMixin
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.schema.decode import smart_decode
 from lbrynet.dht.constants import data_expiration
+from lbrynet.blob.blob_info import BlobInfo
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import BlobFile
@@ -110,12 +111,6 @@ def _batched_select(transaction, query, parameters):
         for result in transaction.execute(query.format(bind), current_batch):
             yield result
 
-    for start_index in range(0, len(parameters), 900):
-        current_batch = parameters[start_index:start_index + 900]
-        bind = "({})".format(','.join(['?'] * len(current_batch)))
-        for result in transaction.execute(query.format(bind), current_batch):
-            yield result
-
 
 class SQLiteStorage(SQLiteMixin):
     CREATE_TABLES_QUERY = """
@@ -189,8 +184,9 @@ class SQLiteStorage(SQLiteMixin):
             );
     """
 
-    def __init__(self, path, loop=None):
+    def __init__(self, conf: Config, path, loop=None):
         super().__init__(path)
+        self.conf = conf
         self.content_claim_callbacks = {}
         self.loop = loop or asyncio.get_event_loop()
 
@@ -206,30 +202,30 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # blob functions # # # # # # # # #
 
-    def add_completed_blob(self, blob_hash):
+    def add_completed_blob(self, blob_hash: str):
         log.debug("Adding a completed blob. blob_hash=%s", blob_hash)
         return self.db.execute("update blob set status='finished' where blob.blob_hash=?", (blob_hash, ))
 
-    def set_should_announce(self, blob_hash, next_announce_time, should_announce):
+    def set_should_announce(self, blob_hash: str, next_announce_time: int, should_announce: int):
         return self.db.execute(
             "update blob set next_announce_time=?, should_announce=? where blob_hash=?",
             (next_announce_time or 0, int(bool(should_announce)), blob_hash)
         )
 
-    # def get_blob_status(self, blob_hash):
-    #     return self.run_and_return_one_or_none(
-    #         "select status from blob where blob_hash=?", blob_hash
-    #     )
+    def get_blob_status(self, blob_hash: str):
+        return self.run_and_return_one_or_none(
+            "select status from blob where blob_hash=?", blob_hash
+        )
 
-    def add_known_blob(self, blob_hash, length):
+    def add_known_blob(self, blob_hash: str, length: int):
         return self.db.execute(
             "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)", (blob_hash, length, 0, 0, "pending", 0, 0)
         )
 
-    # def should_announce(self, blob_hash):
-    #     return self.run_and_return_one_or_none(
-    #         "select should_announce from blob where blob_hash=?", blob_hash
-    #     )
+    def should_announce(self, blob_hash: str):
+        return self.run_and_return_one_or_none(
+            "select should_announce from blob where blob_hash=?", blob_hash
+        )
 
     def count_should_announce_blobs(self):
         return self.run_and_return_one_or_none(
@@ -252,11 +248,14 @@ class SQLiteStorage(SQLiteMixin):
         )
 
     def update_last_announced_blobs(self, blob_hashes: typing.List[str], last_announced: float):
-        return self.db.execute(
-            f"update blob set next_announce_time=?, last_announced_time=?, single_announce=0 "
-            f"where blob_hash in ({('?, ' * len(blob_hashes))[:-2]})",
-            (int(last_announced + (data_expiration / 2)), int(last_announced), *tuple(blob_hashes))
-        )
+        def _update_last_announced_blobs(transaction: sqlite3.Connection):
+            return transaction.executemany(
+                "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 "
+                "where blob_hash=?",
+                [(int(last_announced + (data_expiration / 2)), int(last_announced), blob_hash)
+                 for blob_hash in blob_hashes]
+            )
+        return self.db.run(_update_last_announced_blobs)
 
     def should_single_announce_blobs(self, blob_hashes, immediate=False):
         def set_single_announce(transaction):
@@ -276,7 +275,7 @@ class SQLiteStorage(SQLiteMixin):
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
             timestamp = self.loop.time()
-            if conf.settings and conf.settings['announce_head_blobs_only']:
+            if self.conf.announce_head_blobs_only:
                 r = transaction.execute(
                     "select blob_hash from blob "
                     "where blob_hash is not null and "
@@ -294,8 +293,9 @@ class SQLiteStorage(SQLiteMixin):
 
     def delete_blobs_from_db(self, blob_hashes):
         def delete_blobs(transaction):
-            for blob_hash in blob_hashes:
-                transaction.execute("delete from blob where blob_hash=?;", (blob_hash,))
+            transaction.executemany(
+                "delete from blob where blob_hash=?;", [(blob_hash,) for blob_hash in blob_hashes]
+            )
         return self.db.run(delete_blobs)
 
     def get_all_blob_hashes(self):
@@ -315,6 +315,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
         def _store_stream(transaction: sqlite3.Connection):
+            # add the head blob and set it to be announced
             transaction.execute(
                 "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?),  (?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -322,29 +323,66 @@ class SQLiteStorage(SQLiteMixin):
                     descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0
                 )
             )
+            # add the rest of the blobs with announcement off
             if len(descriptor.blobs) > 2:
-                args = []
-                for blob in descriptor.blobs[1:-1]:
-                    args.extend([blob.blob_hash, blob.length, 0, 0, "pending", 0, 0])
-                transaction.execute(
-                    f"insert or ignore into blob values "
-                    f"{('(?, ?, ?, ?, ?, ?, ?), ' * len(descriptor.blobs[1:-1]))[:-2]}",
-                    tuple(args)
+                transaction.executemany(
+                    "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+                    [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
+                     for blob in descriptor.blobs[1:-1]]
                 )
-            transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?);",
-                                 (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
-                                  binascii.hexlify(descriptor.stream_name.encode()).decode(),
-                                  binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
-            args = []
-            for blob in descriptor.blobs:
-                args.extend([descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv])
-            transaction.execute(
-                f"insert or ignore into stream_blob values "
-                f"{('(?, ?, ?, ?), ' * len(descriptor.blobs))[:-2]}",
-                tuple(args)
+            # associate the blobs to the stream
+            transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?)",
+                                (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
+                                 binascii.hexlify(descriptor.stream_name.encode()).decode(),
+                                 binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
+            # add the stream
+            transaction.executemany(
+                "insert or ignore into stream_blob values (?, ?, ?, ?)",
+                [(descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv)
+                 for blob in descriptor.blobs]
             )
 
         return self.db.run(_store_stream)
+
+    def get_blobs_for_stream(self, stream_hash, only_completed=False):
+        def _get_blobs_for_stream(transaction):
+            crypt_blob_infos = []
+            stream_blobs = transaction.execute(
+                "select blob_hash, position, iv from stream_blob where stream_hash=?", (stream_hash, )
+            ).fetchall()
+            if only_completed:
+                lengths = transaction.execute(
+                    "select b.blob_hash, b.blob_length from blob b "
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and b.status='finished' and s.stream_hash=?",
+                    (stream_hash, )
+                ).fetchall()
+            else:
+                lengths = transaction.execute(
+                    "select b.blob_hash, b.blob_length from blob b "
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and s.stream_hash=?",
+                    (stream_hash, )
+                ).fetchall()
+
+            blob_length_dict = {}
+            for blob_hash, length in lengths:
+                blob_length_dict[blob_hash] = length
+
+            for blob_hash, position, iv in stream_blobs:
+                blob_length = blob_length_dict.get(blob_hash, 0)
+                crypt_blob_infos.append(BlobInfo(position, blob_length, iv, blob_hash))
+            crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
+            return crypt_blob_infos
+        return self.db.run(_get_blobs_for_stream)
+
+    def get_sd_blob_hash_for_stream(self, stream_hash):
+        return self.run_and_return_one_or_none(
+            "select sd_hash from stream where stream_hash=?", stream_hash
+        )
+
+    def get_stream_hash_for_sd_hash(self, sd_blob_hash):
+        return self.run_and_return_one_or_none(
+            "select stream_hash from stream where sd_hash = ?", sd_blob_hash
+        )
 
     def delete_stream(self, descriptor: 'StreamDescriptor'):
         def _delete_stream(transaction: sqlite3.Connection):
@@ -353,10 +391,8 @@ class SQLiteStorage(SQLiteMixin):
             transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash, ))
             transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash, ))
             transaction.execute("delete from blob where blob_hash=?", (descriptor.sd_hash, ))
-            for blob in descriptor.blobs[:-1]:
-                transaction.execute(
-                    "delete from blob where blob_hash=?", (blob.blob_hash, )
-                )
+            transaction.executemany("delete from blob where blob_hash=?",
+                                    [(blob.blob_hash, ) for blob in descriptor.blobs[:-1]])
         return self.db.run(_delete_stream)
 
     # # # # # # # # # file stuff # # # # # # # # #
@@ -410,6 +446,9 @@ class SQLiteStorage(SQLiteMixin):
     def change_file_status(self, stream_hash: str, new_status: str):
         log.info("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute("update file set status=? where stream_hash=?", (new_status, stream_hash))
+
+    def get_all_stream_hashes(self):
+        return self.run_and_return_list("select stream_hash from stream")
 
     # # # # # # # # # support functions # # # # # # # # #
 
@@ -480,8 +519,9 @@ class SQLiteStorage(SQLiteMixin):
                     "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (outpoint, claim_id, name, amount, height, serialized, certificate_id, address, sequence)
                 )
-                if 'supports' in claim_info:  # if this response doesn't have support info don't overwrite the existing
-                                              # support info
+                # if this response doesn't have support info don't overwrite the existing
+                # support info
+                if 'supports' in claim_info:
                     support_callbacks.append((claim_id, claim_info['supports']))
                 if not source_hash:
                     continue
@@ -588,7 +628,7 @@ class SQLiteStorage(SQLiteMixin):
         return claim
 
     async def get_claims_from_stream_hashes(self, stream_hashes: typing.List[str],
-                                      include_supports: typing.Optional[bool] = True):
+                                            include_supports: typing.Optional[bool] = True):
         claims = await self.db.run(get_claims_from_stream_hashes, stream_hashes)
         return {stream_hash: claim_info.as_dict() for stream_hash, claim_info in claims.items()}
 
@@ -654,6 +694,5 @@ class SQLiteStorage(SQLiteMixin):
             "select s.sd_hash from stream s "
             "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
             "where r.timestamp is null or r.timestamp < ?",
-            self.loop.time() - conf.settings['auto_re_reflect_interval']
+            self.loop.time() - self.conf.auto_re_reflect_interval
         )
-

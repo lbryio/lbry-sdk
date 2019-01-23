@@ -2,7 +2,7 @@ import os
 import asyncio
 import typing
 import logging
-from lbrynet import conf
+from lbrynet.utils import drain_tasks, cancel_task
 from lbrynet.stream.assembler import StreamAssembler
 from lbrynet.blob_exchange.client import BlobExchangeClientProtocol, request_blob
 if typing.TYPE_CHECKING:
@@ -14,63 +14,17 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def cancel_task(task: typing.Optional[asyncio.Task]):
-    if task and not (task.done() or task.cancelled()):
-        task.cancel()
-
-
-def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
-    for task in tasks:
-        cancel_task(task)
-
-
-def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
-    while tasks:
-        cancel_task(tasks.pop())
-
-
 def drain_into(a: list, b: list):
     while a:
         b.append(a.pop())
 
-# class SinglePeerStreamDownloader(StreamAssembler):
-#     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', peer: 'Peer', sd_hash: str,
-#                  peer_timeout: int, peer_connect_timeout: int, output_dir: typing.Optional[str] = None,
-#                  output_file_name: typing.Optional[str] = None):
-#         super().__init__(loop, blob_manager, sd_hash)
-#         self.peer = peer
-#         self.peer_timeout = peer_timeout
-#         self.peer_connect_timeout = peer_connect_timeout
-#         self.download_task: asyncio.Task = None
-#         self.output_dir = output_dir or os.getcwd()
-#         self.output_file_name = output_file_name
-#
-#     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
-#         blob = self.blob_manager.get_blob(blob_hash, length)
-#         if not blob.get_is_verified():
-#             await self.peer.request_blobs([blob], self.peer_timeout, self.peer_connect_timeout)
-#         return blob
-#
-#     async def _download(self, finished_callback: typing.Callable[[], None]):
-#         try:
-#             await self.assemble_decrypted_stream(self.output_dir, self.output_file_name)
-#             log.info(
-#                 "downloaded stream %s -> %s", self.sd_hash, self.output_path
-#             )
-#             finished_callback()
-#         finally:
-#             self.peer.disconnect_tcp()
-#             self.stop()
-#
-#     def download(self, finished_callback: typing.Callable[[], None]):
-#         self.download_task = self.loop.create_task(self._download(finished_callback))
 
-
-class StreamDownloader(StreamAssembler):
+class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor to inherit BlobDownloader
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str,
                  peer_timeout: float, peer_connect_timeout: float, output_dir: typing.Optional[str] = None,
                  output_file_name: typing.Optional[str] = None,
-                 fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None):
+                 fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None,
+                 max_connections_per_stream: typing.Optional[int] = 8):
         super().__init__(loop, blob_manager, sd_hash)
         self.peer_timeout = peer_timeout
         self.peer_connect_timeout = peer_connect_timeout
@@ -85,7 +39,7 @@ class StreamDownloader(StreamAssembler):
         self.output_dir = output_dir or os.getcwd()
         self.output_file_name = output_file_name
         self._lock = asyncio.Lock(loop=self.loop)
-        self.max_connections_per_stream = 8 if not conf.settings else conf.settings['max_connections_per_stream']
+        self.max_connections_per_stream = max_connections_per_stream
         self.fixed_peers = fixed_peers or []
 
     async def _update_current_blob(self, blob: 'BlobFile'):
@@ -242,9 +196,7 @@ class StreamDownloader(StreamAssembler):
 
     async def stop(self):
         cancel_task(self.accumulate_connections_task)
-        cancel_task(self.download_task)
         self.accumulate_connections_task = None
-        self.download_task = None
         drain_tasks(self.running_download_requests)
 
         while self.requested_from:
@@ -280,7 +232,4 @@ class StreamDownloader(StreamAssembler):
 
     def download(self, node: 'Node'):
         self.accumulate_connections_task = self.loop.create_task(self._accumulate_connections(node))
-        try:
-            self.download_task = self.loop.create_task(self._download())
-        except asyncio.CancelledError:
-            log.exception("cancelled")
+        self.download_task = self.loop.create_task(self._download())

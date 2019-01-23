@@ -3,7 +3,7 @@ import typing
 import logging
 if typing.TYPE_CHECKING:
     from lbrynet.dht.node import Node
-    from lbrynet.storage import SQLiteStorage
+    from lbrynet.extras.daemon.storage import SQLiteStorage
 
 log = logging.getLogger(__name__)
 

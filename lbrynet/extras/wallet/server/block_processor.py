@@ -1,11 +1,11 @@
 import hashlib
 import struct
+from binascii import unhexlify
 
 import msgpack
 from torba.server.hash import hash_to_hex_str
 
 from torba.server.block_processor import BlockProcessor
-from lbrynet.schema.proto.claim_pb2 import Claim
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.decode import smart_decode
 
@@ -150,14 +150,14 @@ class LBRYBlockProcessor(BlockProcessor):
     def _checksig(self, name, value, address):
         try:
             parse_lbry_uri(name.decode())  # skip invalid names
-            cert_id = Claim.FromString(value).publisherSignature.certificateId[::-1] or None
+            claim_dict = smart_decode(value)
+            cert_id = unhexlify(claim_dict.certificate_id)[::-1]
             if not self.should_validate_signatures:
                 return cert_id
             if cert_id:
                 cert_claim = self.db.get_claim_info(cert_id)
                 if cert_claim:
                     certificate = smart_decode(cert_claim.value)
-                    claim_dict = smart_decode(value)
                     claim_dict.validate_signature(address, certificate)
                     return cert_id
         except Exception as e:

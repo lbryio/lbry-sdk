@@ -4,65 +4,477 @@ import sys
 import typing
 import json
 import logging
-import envparse
-import base58
 import yaml
+from argparse import ArgumentParser
+from contextlib import contextmanager
 from appdirs import user_data_dir, user_config_dir
-from lbrynet import utils
 from lbrynet.error import InvalidCurrencyError
 from lbrynet.dht import constants
 
 log = logging.getLogger(__name__)
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-ENV_NAMESPACE = 'LBRY_'
+NOT_SET = type(str('NOT_SET'), (object,), {})
+T = typing.TypeVar('T')
 
-LBRYCRD_WALLET = 'lbrycrd'
-LBRYUM_WALLET = 'lbryum'
-PTC_WALLET = 'ptc'
-TORBA_WALLET = 'torba'
-
-PROTOCOL_PREFIX = 'lbry'
-APP_NAME = 'LBRY'
-
-LINUX = 1
-DARWIN = 2
-WINDOWS = 3
-ANDROID = 4
 KB = 2 ** 10
 MB = 2 ** 20
 
-DEFAULT_CONCURRENT_ANNOUNCERS = 10
-
-DEFAULT_DHT_NODES = [
-    ('lbrynet1.lbry.io', 4444),  # US EAST
-    ('lbrynet2.lbry.io', 4444),  # US WEST
-    ('lbrynet3.lbry.io', 4444),  # EU
-    ('lbrynet4.lbry.io', 4444)  # ASIA
-]
-
-settings_decoders = {
-    '.json': json.loads,
-    '.yml': yaml.load
+ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
+ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
+API_ADDRESS = 'lbryapi'
+APP_NAME = 'LBRY'
+BLOBFILES_DIR = 'blobfiles'
+CRYPTSD_FILE_EXTENSION = '.cryptsd'
+CURRENCIES = {
+    'BTC': {'type': 'crypto'},
+    'LBC': {'type': 'crypto'},
+    'USD': {'type': 'fiat'},
 }
+ICON_PATH = 'icons' if 'win' in sys.platform else 'app.icns'
+LOG_FILE_NAME = 'lbrynet.log'
+LOG_POST_URL = 'https://lbry.io/log-upload'
+MAX_BLOB_REQUEST_SIZE = 64 * KB
+MAX_HANDSHAKE_SIZE = 64 * KB
+MAX_REQUEST_SIZE = 64 * KB
+MAX_RESPONSE_INFO_SIZE = 64 * KB
+MAX_BLOB_INFOS_TO_REQUEST = 20
+PROTOCOL_PREFIX = 'lbry'
+SLACK_WEBHOOK = (
+    'nUE0pUZ6Yl9bo29epl5moTSwnl5wo20ip2IlqzywMKZiIQSFZR5'
+    'AHx4mY0VmF0WQZ1ESEP9kMHZlp1WzJwWOoKN3ImR1M2yUAaMyqGZ='
+)
+HEADERS_FILE_SHA256_CHECKSUM = (
+    366295, 'b0c8197153a33ccbc52fb81a279588b6015b68b7726f73f6a2b81f7e25bfe4b9'
+)
 
-settings_encoders = {
-    '.json': json.dumps,
-    '.yml': yaml.safe_dump
-}
 
-if 'ANDROID_ARGUMENT' in os.environ:
-    # https://github.com/kivy/kivy/blob/master/kivy/utils.py#L417-L421
-    platform = ANDROID
-elif 'darwin' in sys.platform:
-    platform = DARWIN
-elif 'win' in sys.platform:
-    platform = WINDOWS
-else:
-    platform = LINUX
+class Setting(typing.Generic[T]):
 
-ICON_PATH = 'icons' if platform is WINDOWS else 'app.icns'
+    def __init__(self, doc: str, default: typing.Optional[T] = None,
+                 previous_names: typing.Optional[typing.List[str]] = None):
+        self.doc = doc
+        self.default = default
+        self.previous_names = previous_names or []
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, obj: typing.Optional['BaseConfig'], owner) -> T:
+        if obj is None:
+            return self
+        for location in obj.search_order:
+            if self.name in location:
+                return location[self.name]
+        return self.default
+
+    def __set__(self, obj: 'BaseConfig', val: typing.Union[T, NOT_SET]):
+        if val == NOT_SET:
+            for location in obj.modify_order:
+                if self.name in location:
+                    del location[self.name]
+        else:
+            self.validate(val)
+            for location in obj.modify_order:
+                location[self.name] = val
+
+    def validate(self, val):
+        raise NotImplementedError()
+
+    def deserialize(self, value):
+        return value
+
+    def serialize(self, value):
+        return value
+
+
+class String(Setting[str]):
+    def validate(self, val):
+        assert isinstance(val, str), \
+            f"Setting '{self.name}' must be a string."
+
+
+class Integer(Setting[int]):
+    def validate(self, val):
+        assert isinstance(val, int), \
+            f"Setting '{self.name}' must be an integer."
+
+
+class Float(Setting[float]):
+    def validate(self, val):
+        assert isinstance(val, float), \
+            f"Setting '{self.name}' must be a decimal."
+
+
+class Toggle(Setting[bool]):
+    def validate(self, val):
+        assert isinstance(val, bool), \
+            f"Setting '{self.name}' must be a true/false value."
+
+
+class Path(String):
+    def __init__(self, doc: str, default: str = '', *args, **kwargs):
+        super().__init__(doc, default, *args, **kwargs)
+
+    def __get__(self, obj, owner):
+        value = super().__get__(obj, owner)
+        if isinstance(value, str):
+            return os.path.expanduser(os.path.expandvars(value))
+        return value
+
+
+class MaxKeyFee(Setting[dict]):
+
+    def validate(self, value):
+        assert isinstance(value, dict), \
+            f"Setting '{self.name}' must be of the format \"{'currency': 'USD', 'amount': 50.0}\"."
+        assert set(value) == {'currency', 'amount'}, \
+            f"Setting '{self.name}' must contain a 'currency' and an 'amount' field."
+        currency = str(value["currency"]).upper()
+        if currency not in CURRENCIES:
+            raise InvalidCurrencyError(currency)
+
+    serialize = staticmethod(json.dumps)
+    deserialize = staticmethod(json.loads)
+
+
+class Servers(Setting[list]):
+
+    def validate(self, val):
+        assert isinstance(val, (tuple, list)), \
+            f"Setting '{self.name}' must be a tuple or list of servers."
+        for idx, server in enumerate(val):
+            assert isinstance(server, (tuple, list)) and len(server) == 2, \
+                f"Server defined '{server}' at index {idx} in setting " \
+                f"'{self.name}' must be a tuple or list of two items."
+            assert isinstance(server[0], str), \
+                f"Server defined '{server}' at index {idx} in setting " \
+                f"'{self.name}' must be have hostname as string in first position."
+            assert isinstance(server[1], int), \
+                f"Server defined '{server}' at index {idx} in setting " \
+                f"'{self.name}' must be have port as int in second position."
+
+    def deserialize(self, value):
+        servers = []
+        if isinstance(value, list):
+            for server in value:
+                if isinstance(server, str) and server.count(':') == 1:
+                    host, port = server.split(':')
+                    try:
+                        servers.append((host, int(port)))
+                    except ValueError:
+                        pass
+        return servers
+
+    def serialize(self, value):
+        if value:
+            return [f"{host}:{port}" for host, port in value]
+        return value
+
+
+class Strings(Setting[list]):
+
+    def validate(self, val):
+        assert isinstance(val, (tuple, list)), \
+            f"Setting '{self.name}' must be a tuple or list of strings."
+        for idx, string in enumerate(val):
+            assert isinstance(string, str), \
+                f"Value of '{string}' at index {idx} in setting " \
+                f"'{self.name}' must be a string."
+
+
+class EnvironmentAccess:
+    PREFIX = 'LBRY_'
+
+    def __init__(self, environ: dict):
+        self.environ = environ
+
+    def __contains__(self, item: str):
+        return f'{self.PREFIX}{item.upper()}' in self.environ
+
+    def __getitem__(self, item: str):
+        return self.environ[f'{self.PREFIX}{item.upper()}']
+
+
+class ArgumentAccess:
+
+    def __init__(self, args: dict):
+        self.args = args
+
+    def __contains__(self, item: str):
+        return getattr(self.args, item, None) is not None
+
+    def __getitem__(self, item: str):
+        return getattr(self.args, item)
+
+
+class ConfigFileAccess:
+
+    def __init__(self, config: 'BaseConfig', path: str):
+        self.configuration = config
+        self.path = path
+        self.data = {}
+        if self.exists:
+            self.load()
+
+    @property
+    def exists(self):
+        return self.path and os.path.exists(self.path)
+
+    def load(self):
+        cls = type(self.configuration)
+        with open(self.path, 'r') as config_file:
+            raw = config_file.read()
+        serialized = yaml.load(raw) or {}
+        for key, value in serialized.items():
+            attr = getattr(cls, key, None)
+            if attr is None:
+                for setting in self.configuration.settings:
+                    if key in setting.previous_names:
+                        attr = setting
+                        break
+            if attr is not None:
+                self.data[key] = attr.deserialize(value)
+
+    def save(self):
+        cls = type(self.configuration)
+        serialized = {}
+        for key, value in self.data.items():
+            attr = getattr(cls, key)
+            serialized[key] = attr.serialize(value)
+        with open(self.path, 'w') as config_file:
+            config_file.write(yaml.safe_dump(serialized, default_flow_style=False))
+
+    def upgrade(self) -> bool:
+        upgraded = False
+        for key in list(self.data):
+            for setting in self.configuration.settings:
+                if key in setting.previous_names:
+                    self.data[setting.name] = self.data[key]
+                    del self.data[key]
+                    upgraded = True
+                    break
+        return upgraded
+
+    def __contains__(self, item: str):
+        return item in self.data
+
+    def __getitem__(self, item: str):
+        return self.data[item]
+
+    def __setitem__(self, key, value):
+        self.data[key] = value
+
+    def __delitem__(self, key):
+        del self.data[key]
+
+
+class BaseConfig:
+
+    config = Path("Path to configuration file.")
+
+    def __init__(self, **kwargs):
+        self.runtime = {}      # set internally or by various API calls
+        self.arguments = {}    # from command line arguments
+        self.environment = {}  # from environment variables
+        self.persisted = {}    # from config file
+        self._updating_config = False
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    @contextmanager
+    def update_config(self):
+        if not isinstance(self.persisted, ConfigFileAccess):
+            raise TypeError("Config file cannot be updated.")
+        self._updating_config = True
+        yield self
+        self._updating_config = False
+        self.persisted.save()
+
+    @property
+    def modify_order(self):
+        locations = [self.runtime]
+        if self._updating_config:
+            locations.append(self.persisted)
+        return locations
+
+    @property
+    def search_order(self):
+        return [
+            self.runtime,
+            self.arguments,
+            self.environment,
+            self.persisted
+        ]
+
+    @classmethod
+    def get_settings(cls):
+        for setting in cls.__dict__.values():
+            if isinstance(setting, Setting):
+                yield setting
+
+    @property
+    def settings(self):
+        return self.get_settings()
+
+    @property
+    def settings_dict(self):
+        return {
+            setting.name: getattr(self, setting.name) for setting in self.settings
+        }
+
+    @classmethod
+    def create_from_arguments(cls, args):
+        conf = cls()
+        conf.set_arguments(args)
+        conf.set_environment()
+        conf.set_persisted()
+        return conf
+
+    @classmethod
+    def contribute_args(cls, parser: ArgumentParser):
+        for setting in cls.get_settings():
+            if isinstance(setting, Toggle):
+                parser.add_argument(
+                    f"--{setting.name.replace('_', '-')}",
+                    help=setting.doc,
+                    action="store_true"
+                )
+            else:
+                parser.add_argument(
+                    f"--{setting.name.replace('_', '-')}",
+                    help=setting.doc
+                )
+
+    def set_arguments(self, args):
+        self.arguments = ArgumentAccess(args)
+
+    def set_environment(self, environ=None):
+        self.environment = EnvironmentAccess(environ or os.environ)
+
+    def set_persisted(self, config_file_path=None):
+        if config_file_path is None:
+            config_file_path = self.config
+
+        if not config_file_path:
+            return
+
+        ext = os.path.splitext(config_file_path)[1]
+        assert ext in ('.yml', '.yaml'),\
+            f"File extension '{ext}' is not supported, " \
+            f"configuration file must be in YAML (.yaml)."
+
+        self.persisted = ConfigFileAccess(self, config_file_path)
+        if self.persisted.upgrade():
+            self.persisted.save()
+
+
+class CLIConfig(BaseConfig):
+
+    api = String('Host name and port for lbrynet daemon API.', 'localhost:5279')
+
+    @property
+    def api_connection_url(self) -> str:
+        return f"http://{self.api}/lbryapi"
+
+    @property
+    def api_host(self):
+        return self.api.split(':')[0]
+
+    @property
+    def api_port(self):
+        return int(self.api.split(':')[1])
+
+
+class Config(CLIConfig):
+
+    data_dir = Path("Directory path to store blobs.")
+    download_dir = Path("Directory path to place assembled files downloaded from LBRY.")
+    wallet_dir = Path(
+        "Directory containing a 'wallets' subdirectory with 'default_wallet' file.",
+        previous_names=['lbryum_wallet_dir']
+    )
+
+    share_usage_data = Toggle(
+        "Whether to share usage stats and diagnostic info with LBRY.", True,
+        previous_names=['upload_log', 'upload_log', 'share_debug_info']
+    )
+
+    # claims set to expire within this many blocks will be
+    # automatically renewed after startup (if set to 0, renews
+    # will not be made automatically)
+    auto_renew_claim_height_delta = Integer("", 0)
+    cache_time = Integer("", 150)
+    data_rate = Float("points/megabyte", .0001)
+    delete_blobs_on_remove = Toggle("", True)
+    dht_node_port = Integer("", 4444)
+    download_timeout = Float("", 30.0)
+    blob_download_timeout = Float("", 20.0)
+    peer_connect_timeout = Float("", 3.0)
+    node_rpc_timeout = Float("", constants.rpc_timeout)
+    is_generous_host = Toggle("", True)
+    announce_head_blobs_only = Toggle("", True)
+    concurrent_announcers = Integer("", 10)
+    known_dht_nodes = Servers("", [
+        ('lbrynet1.lbry.io', 4444),  # US EAST
+        ('lbrynet2.lbry.io', 4444),  # US WEST
+        ('lbrynet3.lbry.io', 4444),  # EU
+        ('lbrynet4.lbry.io', 4444)  # ASIA
+    ])
+    max_connections_per_stream = Integer("", 5)
+    seek_head_blob_first = Toggle("", True)
+    # TODO: writing json on the cmd line is a pain, come up with a nicer
+    # parser for this data structure. maybe 'USD:25'
+    max_key_fee = MaxKeyFee("", {'currency': 'USD', 'amount': 50.0})
+    disable_max_key_fee = Toggle("", False)
+    min_info_rate = Float("points/1000 infos", .02)
+    min_valuable_hash_rate = Float("points/1000 infos", .05)
+    min_valuable_info_rate = Float("points/1000 infos", .05)
+    peer_port = Integer("", 3333)
+    pointtrader_server = String("", 'http://127.0.0.1:2424')
+    reflector_port = Integer("", 5566)
+    # if reflect_uploads is True, send files to reflector after publishing (as well as a periodic check in the
+    # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
+    reflect_uploads = Toggle("", True)
+    auto_re_reflect_interval = Integer("set to 0 to disable", 86400)
+    reflector_servers = Servers("", [
+        ('reflector.lbry.io', 5566)
+    ])
+    run_reflector_server = Toggle("adds reflector to components_to_skip unless True", False)
+    sd_download_timeout = Integer("", 3)
+    peer_search_timeout = Integer("", 60)
+    use_upnp = Toggle("", True)
+    use_keyring = Toggle("", False)
+    blockchain_name = String("", 'lbrycrd_main')
+    lbryum_servers = Servers("", [
+        ('lbryumx1.lbry.io', 50001),
+        ('lbryumx2.lbry.io', 50001)
+    ])
+    s3_headers_depth = Integer("download headers from s3 when the local height is more than 10 chunks behind", 96 * 10)
+    components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.set_default_paths()
+
+    def set_default_paths(self):
+        if 'darwin' in sys.platform.lower():
+            get_directories = get_darwin_directories
+        elif 'win' in sys.platform.lower():
+            get_directories = get_windows_directories
+        elif 'linux' in sys.platform.lower():
+            get_directories = get_linux_directories
+        else:
+            return
+        cls = type(self)
+        cls.data_dir.default, cls.wallet_dir.default, cls.download_dir.default = get_directories()
+        cls.config.default = os.path.join(
+            self.data_dir, 'daemon_settings.yml'
+        )
+
+    @property
+    def log_file_path(self):
+        return os.path.join(self.data_dir, 'lbrynet.log')
 
 
 def get_windows_directories() -> typing.Tuple[str, str, str]:
@@ -92,7 +504,6 @@ def get_darwin_directories() -> typing.Tuple[str, str, str]:
 
 
 def get_linux_directories() -> typing.Tuple[str, str, str]:
-    download_dir = None
     try:
         with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
             down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
@@ -112,587 +523,3 @@ def get_linux_directories() -> typing.Tuple[str, str, str]:
 
     # new
     return user_data_dir('lbry/lbrynet'), user_data_dir('lbry/lbryum'), download_dir
-
-
-def server_port(server_and_port):
-    server, port = server_and_port.split(':')
-    return server, int(port)
-
-
-def server_list(servers):
-    return [server_port(server) for server in servers]
-
-
-def server_list_reverse(servers):
-    return [f"{server}:{port}" for server, port in servers]
-
-
-class Env(envparse.Env):
-    """An Env parser that automatically namespaces the variables with LBRY"""
-
-    def __init__(self, **schema):
-        self.original_schema = schema
-        my_schema = {
-            self._convert_key(key): self._convert_value(value)
-            for key, value in schema.items()
-            }
-        super().__init__(**my_schema)
-
-    def __call__(self, key, *args, **kwargs):
-        my_key = self._convert_key(key)
-        return super().__call__(my_key, *args, **kwargs)
-
-    @staticmethod
-    def _convert_key(key):
-        return ENV_NAMESPACE + key.upper()
-
-    @staticmethod
-    def _convert_value(value):
-        """ Allow value to be specified as a tuple or list.
-
-        If you do this, the tuple/list must be of the
-        form (cast, default) or (cast, default, subcast)
-        """
-
-        if isinstance(value, (tuple, list)):
-            new_value = {'cast': value[0], 'default': value[1]}
-            if len(value) == 3:
-                new_value['subcast'] = value[2]
-            return new_value
-        return value
-
-
-TYPE_DEFAULT = 'default'
-TYPE_PERSISTED = 'persisted'
-TYPE_ENV = 'env'
-TYPE_CLI = 'cli'
-TYPE_RUNTIME = 'runtime'
-
-FIXED_SETTINGS = {
-    'ANALYTICS_ENDPOINT': 'https://api.segment.io/v1',
-    'ANALYTICS_TOKEN': 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H=',
-    'API_ADDRESS': 'lbryapi',
-    'APP_NAME': APP_NAME,
-    'BLOBFILES_DIR': 'blobfiles',
-    'CRYPTSD_FILE_EXTENSION': '.cryptsd',
-    'CURRENCIES': {
-        'BTC': {'type': 'crypto'},
-        'LBC': {'type': 'crypto'},
-        'USD': {'type': 'fiat'},
-    },
-    'DB_REVISION_FILE_NAME': 'db_revision',
-    'ICON_PATH': ICON_PATH,
-    'LOGGLY_TOKEN': 'BQEzZmMzLJHgAGxkBF00LGD0YGuyATVgAmqxAQEuAQZ2BQH4',
-    'LOG_FILE_NAME': 'lbrynet.log',
-    'LOG_POST_URL': 'https://lbry.io/log-upload',
-    'MAX_BLOB_REQUEST_SIZE': 64 * KB,
-    'MAX_HANDSHAKE_SIZE': 64 * KB,
-    'MAX_REQUEST_SIZE': 64 * KB,
-    'MAX_RESPONSE_INFO_SIZE': 64 * KB,
-    'MAX_BLOB_INFOS_TO_REQUEST': 20,
-    'PROTOCOL_PREFIX': PROTOCOL_PREFIX,
-    'SLACK_WEBHOOK': ('nUE0pUZ6Yl9bo29epl5moTSwnl5wo20ip2IlqzywMKZiIQSFZR5'
-                      'AHx4mY0VmF0WQZ1ESEP9kMHZlp1WzJwWOoKN3ImR1M2yUAaMyqGZ='),
-    'WALLET_TYPES': [LBRYUM_WALLET, LBRYCRD_WALLET],
-    'HEADERS_FILE_SHA256_CHECKSUM': (366295, 'b0c8197153a33ccbc52fb81a279588b6015b68b7726f73f6a2b81f7e25bfe4b9')
-}
-
-ADJUSTABLE_SETTINGS = {
-    'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
-    'data_dir': (str, ''),    # these blank defaults will be updated to OS specific defaults
-    'wallet_dir': (str, ''),
-    'lbryum_wallet_dir': (str, ''),  # to be deprecated
-    'download_directory': (str, ''),
-
-    # By default, daemon will block all cross origin requests
-    # but if this is set, this value will be used for the
-    # Access-Control-Allow-Origin. For example
-    # set to '*' to allow all requests, or set to 'http://localhost:8080'
-    # if you're running a test UI on that port
-    'allowed_origin': (str, ''),
-
-    # Changing this value is not-advised as it could potentially
-    # expose the lbrynet daemon to the outside world which would
-    # give an attacker access to your wallet and you could lose
-    # all of your credits.
-    'api_host': (str, 'localhost'),
-    'api_port': (int, 5279),
-    # claims set to expire within this many blocks will be
-    # automatically renewed after startup (if set to 0, renews
-    # will not be made automatically)
-    'auto_renew_claim_height_delta': (int, 0),
-    'cache_time': (int, 150),
-    'data_rate': (float, .0001),  # points/megabyte
-    'delete_blobs_on_remove': (bool, True),
-    'dht_node_port': (int, 4444),
-    'is_generous_host': (bool, True),
-    'announce_head_blobs_only': (bool, True),
-    'concurrent_announcers': (int, DEFAULT_CONCURRENT_ANNOUNCERS),
-    'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_list, server_list_reverse),
-    'max_connections_per_stream': (int, 5),
-    'seek_head_blob_first': (bool, True),
-    # TODO: writing json on the cmd line is a pain, come up with a nicer
-    # parser for this data structure. maybe 'USD:25'
-    'max_key_fee': (json.loads, {'currency': 'USD', 'amount': 50.0}),
-    'disable_max_key_fee': (bool, False),
-    'min_info_rate': (float, .02),  # points/1000 infos
-    'min_valuable_hash_rate': (float, .05),  # points/1000 infos
-    'min_valuable_info_rate': (float, .05),  # points/1000 infos
-    'peer_port': (int, 3333),
-    # if reflect_uploads is True, send files to reflector after publishing (as well as a periodic check in the
-    # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
-    'reflect_uploads': (bool, True),
-    'auto_re_reflect_interval': (int, 86400),  # set to 0 to disable
-    'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_list, server_list_reverse),
-
-    'download_timeout': (float, 10.0),
-    # 'peer_search_timeout': (int, 60),
-    'peer_connect_timeout': (float, 3.0),
-    'blob_download_timeout': (float, 20.0),  # download must be over 0.1mb/s
-    'node_rpc_timeout': (float, constants.rpc_timeout),
-    'use_auth_http': (bool, False),
-    'use_https': (bool, False),
-    'use_upnp': (bool, True),
-    'use_keyring': (bool, False),
-    'wallet': (str, TORBA_WALLET),
-    'blockchain_name': (str, 'lbrycrd_main'),
-    'lbryum_servers': (list, [('lbryumx1.lbry.io', 50001), ('lbryumx2.lbry.io',
-        50001)], server_list, server_list_reverse),
-    's3_headers_depth': (int, 96 * 10),   # download headers from s3 when the local height is more than 10 chunks behind
-    'components_to_skip': (list, [])  # components which will be skipped during start-up of daemon
-}
-
-
-optional_str = typing.Optional[str]
-
-
-class Config:
-    def __init__(self, fixed_defaults, adjustable_defaults: typing.Dict, persisted_settings=None, environment=None,
-                 cli_settings=None, data_dir: optional_str = None, wallet_dir: optional_str = None,
-                 download_dir: optional_str = None, file_name: optional_str = None):
-        self._installation_id = None
-        self._session_id = base58.b58encode(utils.generate_id()).decode()
-        self._node_id = None
-
-        self._fixed_defaults = fixed_defaults
-
-        # copy the default adjustable settings
-        self._adjustable_defaults = {k: v for k, v in adjustable_defaults.items()}
-
-        # set the os specific default directories
-        if platform is WINDOWS:
-            self.default_data_dir, self.default_wallet_dir, self.default_download_dir = get_windows_directories()
-        elif platform is DARWIN:
-            self.default_data_dir, self.default_wallet_dir, self.default_download_dir = get_darwin_directories()
-        elif platform is LINUX:
-            self.default_data_dir, self.default_wallet_dir, self.default_download_dir = get_linux_directories()
-        else:
-            assert None not in [data_dir, wallet_dir, download_dir]
-        if data_dir:
-            self.default_data_dir = data_dir
-        if wallet_dir:
-            self.default_wallet_dir = wallet_dir
-        if download_dir:
-            self.default_download_dir = download_dir
-
-        self._data = {
-            TYPE_DEFAULT: {},  # defaults
-            TYPE_PERSISTED: {},  # stored settings from daemon_settings.yml (or from a db, etc)
-            TYPE_ENV: {},  # settings from environment variables
-            TYPE_CLI: {},  # command-line arguments
-            TYPE_RUNTIME: {},  # set during runtime (using self.set(), etc)
-        }
-
-        # the order in which a piece of data is searched for. earlier types override later types
-        self._search_order = (
-            TYPE_RUNTIME, TYPE_CLI, TYPE_ENV, TYPE_PERSISTED, TYPE_DEFAULT
-        )
-
-        # types of data where user specified config values can be stored
-        self._user_specified = (
-            TYPE_RUNTIME, TYPE_CLI, TYPE_ENV, TYPE_PERSISTED
-        )
-
-        self._data[TYPE_DEFAULT].update(self._fixed_defaults)
-        self._data[TYPE_DEFAULT].update(
-            {k: v[1] for (k, v) in self._adjustable_defaults.items()}
-        )
-        if persisted_settings is None:
-            persisted_settings = {}
-        self._validate_settings(persisted_settings)
-        self._data[TYPE_PERSISTED].update(persisted_settings)
-
-        env_settings = self._parse_environment(environment)
-        self._validate_settings(env_settings)
-        self._data[TYPE_ENV].update(env_settings)
-
-        if cli_settings is None:
-            cli_settings = {}
-        self._validate_settings(cli_settings)
-        self._data[TYPE_CLI].update(cli_settings)
-        self.file_name = file_name or 'daemon_settings.yml'
-        if data_dir:
-            self['data_dir'] = data_dir
-        if wallet_dir:
-            self['wallet_dir'] = wallet_dir
-        if download_dir:
-            self['download_directory'] = download_dir
-
-    @property
-    def installation_id(self):
-        return self._installation_id
-
-    @property
-    def data_dir(self) -> optional_str:
-        data_dir = self.get('data_dir')
-        if not data_dir:
-            return
-        return os.path.expanduser(os.path.expandvars(data_dir))
-
-    @property
-    def download_dir(self) -> optional_str:
-        download_dir = self.get('download_directory')
-        if not download_dir:
-            return
-        return os.path.expanduser(os.path.expandvars(download_dir))
-
-    @property
-    def wallet_dir(self) -> optional_str:
-        if self.get('lbryum_wallet_dir') and not self.get('wallet_dir'):
-            log.warning("'lbryum_wallet_dir' setting will be deprecated, please update to 'wallet_dir'")
-            self['wallet_dir'] = self['lbryum_wallet_dir']
-        wallet_dir = self.get('wallet_dir')
-        if not wallet_dir:
-            return
-        return os.path.expanduser(os.path.expandvars(wallet_dir))
-
-    def __repr__(self):
-        return self.get_current_settings_dict().__repr__()
-
-    def __iter__(self):
-        for k in self._data[TYPE_DEFAULT].keys():
-            yield k
-
-    def __getitem__(self, name):
-        return self.get(name)
-
-    def __setitem__(self, name, value):
-        return self.set(name, value)
-
-    def __contains__(self, name):
-        return name in self._data[TYPE_DEFAULT]
-
-    @staticmethod
-    def _parse_environment(environment: typing.Optional[Env]):
-        env_settings = {}
-        if environment is not None:
-            assert isinstance(environment, Env)
-            for opt in environment.original_schema:
-                if environment(opt) is not None:
-                    env_settings[opt] = environment(opt)
-        return env_settings
-
-    def _assert_valid_data_type(self, data_type):
-        if data_type not in self._data:
-            raise KeyError(f'{data_type} in is not a valid data type')
-
-    def get_valid_setting_names(self):
-        return self._data[TYPE_DEFAULT].keys()
-
-    def _is_valid_setting(self, name):
-        return name in self.get_valid_setting_names()
-
-    def _assert_valid_setting(self, name):
-        if not self._is_valid_setting(name):
-            raise KeyError(f'{name} is not a valid setting')
-
-    def _validate_settings(self, data):
-        invalid_settings = set(data.keys()) - set(self.get_valid_setting_names())
-        if len(invalid_settings) > 0:
-            raise KeyError('invalid settings: {}'.format(', '.join(invalid_settings)))
-
-    def _assert_editable_setting(self, name):
-        self._assert_valid_setting(name)
-        if name in self._fixed_defaults:
-            raise ValueError(f'{name} is not an editable setting')
-
-    def _assert_valid_setting_value(self, name, value):
-        if name == "max_key_fee":
-            currency = str(value["currency"]).upper()
-            if currency not in self._fixed_defaults['CURRENCIES'].keys():
-                raise InvalidCurrencyError(currency)
-        elif name == "download_directory":
-            directory = str(value)
-            if not os.path.exists(directory):
-                log.warning("download directory '%s' does not exist", directory)
-        else:
-            setting_type = self._adjustable_defaults[name][0]
-            if not isinstance(value, setting_type):
-                try:
-                    return setting_type(value)
-                except (ValueError, TypeError):
-                    raise TypeError(f"expected type {setting_type} for setting {name}, got {type(value)}")
-
-    def is_default(self, name):
-        """Check if a config value is wasn't specified by the user
-
-        Args:
-            name: the name of the value to check
-
-        Returns: true if config value is the default one, false if it was specified by
-        the user
-
-        Sometimes it may be helpful to understand if a config value was specified
-        by the user or if it still holds its default value. This function will return
-        true when the config value is still the default. Note that when the user
-        specifies a value that is equal to the default one, it will still be considered
-        as 'user specified'
-        """
-
-        self._assert_valid_setting(name)
-        for possible_data_type in self._user_specified:
-            if name in self._data[possible_data_type]:
-                return False
-        return True
-
-    def get(self, name, data_type=None):
-        """Get a config value
-
-        Args:
-            name: the name of the value to get
-            data_type: if given, get the value from a specific data set (see below)
-
-        Returns: the config value for the given name
-
-        If data_type is None, get() will search for the given name in each data set, in
-        order of precedence. It will return the first value it finds. This is the "effective"
-        value of a config name. For example, ENV values take precedence over DEFAULT values,
-        so if a value is present in ENV and in DEFAULT, the ENV value will be returned
-        """
-        self._assert_valid_setting(name)
-        if data_type is not None:
-            self._assert_valid_data_type(data_type)
-            return self._data[data_type][name]
-        for possible_data_type in self._search_order:
-            if name in self._data[possible_data_type]:
-                return self._data[possible_data_type][name]
-        raise KeyError(f'{name} is not a valid setting')
-
-    def set(self, name, value, data_types=(TYPE_RUNTIME,)):
-        """Set a config value
-
-        Args:
-            name: the name of the value to set
-            value: the value
-            data_types: what type(s) of data this is
-
-        Returns: None
-
-        By default, this sets the RUNTIME value of a config. If you wish to set other
-        data types (e.g. PERSISTED values to save to a file, CLI values from parsed
-        command-line options, etc), you can specify that with the data_types param
-        """
-        self._assert_editable_setting(name)
-        self._assert_valid_setting_value(name, value)
-
-        for data_type in data_types:
-            self._assert_valid_data_type(data_type)
-            self._data[data_type][name] = value
-
-    def update(self, updated_settings, data_types=(TYPE_RUNTIME,)):
-        for k, v in updated_settings.items():
-            try:
-                self.set(k, v, data_types=data_types)
-            except (KeyError, AssertionError):
-                pass
-
-    def get_current_settings_dict(self):
-        current_settings = {}
-        for key in self.get_valid_setting_names():
-            current_settings[key] = self.get(key)
-        return current_settings
-
-    def get_adjustable_settings_dict(self):
-        return {
-            key: val for key, val in self.get_current_settings_dict().items()
-            if key in self._adjustable_defaults
-            }
-
-    def save_conf_file_settings(self):
-        # reverse the conversions done after loading the settings from the conf
-        # file
-        rev = self._convert_conf_file_lists_reverse(self._data[TYPE_PERSISTED])
-        ext = os.path.splitext(self.file_name)[1]
-        encoder = settings_encoders.get(ext, False)
-        if not encoder:
-            raise ValueError('Unknown settings format: {}. Available formats: {}'
-                             .format(ext, list(settings_encoders.keys())))
-        with open(os.path.join(self.data_dir, self.file_name), 'w') as settings_file:
-            settings_file.write(encoder(rev))
-
-    @staticmethod
-    def _convert_conf_file_lists_reverse(converted):
-        rev = {}
-        for k in converted.keys():
-            if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) == 4:
-                rev[k] = ADJUSTABLE_SETTINGS[k][3](converted[k])
-            else:
-                rev[k] = converted[k]
-        return rev
-
-    @staticmethod
-    def _convert_conf_file_lists(decoded):
-        converted = {}
-        for k, v in decoded.items():
-            if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) >= 3:
-                converted[k] = ADJUSTABLE_SETTINGS[k][2](v)
-            else:
-                converted[k] = v
-        return converted
-
-    def initialize_post_conf_load(self):
-        self._installation_id = self.get_installation_id()
-        self._node_id = self.get_node_id()
-
-    def load_conf_file_settings(self):
-        path = os.path.join(self.data_dir or self.default_data_dir, self.file_name)
-        if os.path.isfile(path):
-            self._read_conf_file(path)
-        self['data_dir'] = self.data_dir or self.default_data_dir
-        self['download_directory'] = self.download_dir or self.default_download_dir
-        self['wallet_dir'] = self.wallet_dir or self.default_wallet_dir
-        # initialize members depending on config file
-        self.initialize_post_conf_load()
-
-    def _read_conf_file(self, path):
-        if not path or not os.path.exists(path):
-            raise FileNotFoundError(path)
-        ext = os.path.splitext(path)[1]
-        decoder = settings_decoders.get(ext, False)
-        if not decoder:
-            raise ValueError('Unknown settings format: {}. Available formats: {}'
-                             .format(ext, list(settings_decoders.keys())))
-        with open(path, 'r') as settings_file:
-            data = settings_file.read()
-        decoded = self._fix_old_conf_file_settings(decoder(data))
-        log.info('Loaded settings file: %s', path)
-        self._validate_settings(decoded)
-        self._data[TYPE_PERSISTED].update(self._convert_conf_file_lists(decoded))
-
-    def _fix_old_conf_file_settings(self, settings_dict):
-        if 'API_INTERFACE' in settings_dict:
-            settings_dict['api_host'] = settings_dict['API_INTERFACE']
-            del settings_dict['API_INTERFACE']
-        if 'startup_scripts' in settings_dict:
-            del settings_dict['startup_scripts']
-        if 'upload_log' in settings_dict:
-            settings_dict['share_usage_data'] = settings_dict['upload_log']
-            del settings_dict['upload_log']
-        if 'share_debug_info' in settings_dict:
-            settings_dict['share_usage_data'] = settings_dict['share_debug_info']
-            del settings_dict['share_debug_info']
-        for key in list(settings_dict.keys()):
-            if not self._is_valid_setting(key):
-                log.warning('Ignoring invalid conf file setting: %s', key)
-                del settings_dict[key]
-        return settings_dict
-
-    def ensure_data_dir(self):
-        # although there is a risk of a race condition here we don't
-        # expect there to be multiple processes accessing this
-        # directory so the risk can be ignored
-        if not os.path.isdir(self.data_dir):
-            os.makedirs(self.data_dir)
-        if not os.path.isdir(os.path.join(self.data_dir, "blobfiles")):
-            os.makedirs(os.path.join(self.data_dir, "blobfiles"))
-        return self.data_dir
-
-    def ensure_wallet_dir(self):
-        if not os.path.isdir(self.wallet_dir):
-            os.makedirs(self.wallet_dir)
-
-    def ensure_download_dir(self):
-        if not os.path.isdir(self.download_dir):
-            os.makedirs(self.download_dir)
-
-    def get_log_filename(self):
-        """
-        Return the log file for this platform.
-        Also ensure the containing directory exists.
-        """
-        return os.path.join(self.ensure_data_dir(), self['LOG_FILE_NAME'])
-
-    def get_api_connection_string(self, user: str = None, password: str = None) -> str:
-        return 'http%s://%s%s:%i/%s' % (
-            "" if not self['use_https'] else "s",
-            "" if not (user and password) else f"{user}:{password}@",
-            self['api_host'],
-            self['api_port'],
-            self['API_ADDRESS']
-        )
-
-    def get_db_revision_filename(self):
-        return os.path.join(self.ensure_data_dir(), self['DB_REVISION_FILE_NAME'])
-
-    def get_installation_id(self):
-        install_id_filename = os.path.join(self.ensure_data_dir(), "install_id")
-        if not self._installation_id:
-            if os.path.isfile(install_id_filename):
-                with open(install_id_filename, "r") as install_id_file:
-                    self._installation_id = str(install_id_file.read()).strip()
-        if not self._installation_id:
-            self._installation_id = base58.b58encode(utils.generate_id()).decode()
-            with open(install_id_filename, "w") as install_id_file:
-                install_id_file.write(self._installation_id)
-        return self._installation_id
-
-    def get_node_id(self):
-        node_id_filename = os.path.join(self.ensure_data_dir(), "node_id")
-        if not self._node_id:
-            if os.path.isfile(node_id_filename):
-                with open(node_id_filename, "r") as node_id_file:
-                    self._node_id = base58.b58decode(str(node_id_file.read()).strip())
-        if not self._node_id:
-            self._node_id = utils.generate_id()
-            with open(node_id_filename, "w") as node_id_file:
-                node_id_file.write(base58.b58encode(self._node_id).decode())
-        return self._node_id
-
-    def get_session_id(self):
-        return self._session_id
-
-
-settings: Config = None
-
-
-def get_default_env() -> Env:
-    env_defaults = {}
-    for k, v in ADJUSTABLE_SETTINGS.items():
-        if len(v) == 3:
-            env_defaults[k] = (v[0], None, v[2])
-        elif len(v) == 4:
-            env_defaults[k] = (v[0], None, v[2], v[3])
-        else:
-            env_defaults[k] = (v[0], None)
-    return Env(**env_defaults)
-
-
-def get_config(data_dir: optional_str = None, wallet_dir: optional_str = None, download_dir: optional_str = None):
-    return Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS, environment=get_default_env(),
-                  data_dir=data_dir, wallet_dir=wallet_dir, download_dir=download_dir)
-
-
-def initialize_settings(load_conf_file: typing.Optional[bool] = True,
-                        data_dir: optional_str = None, wallet_dir: optional_str = None,
-                        download_dir: optional_str = None):
-    global settings
-    if settings is None:
-        settings = get_config(data_dir, wallet_dir, download_dir)
-        if load_conf_file:
-            settings.load_conf_file_settings()
-        settings['data_dir'] = settings.data_dir or settings.default_data_dir
-        settings['download_directory'] = settings.download_dir or settings.default_download_dir
-        settings['wallet_dir'] = settings.wallet_dir or settings.default_wallet_dir
-        settings.ensure_data_dir()
-        settings.ensure_wallet_dir()
-        settings.ensure_download_dir()

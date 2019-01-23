@@ -1,109 +1,169 @@
 import os
-import json
+import sys
+import types
 import tempfile
-import shutil
 import unittest
-from lbrynet import conf
+import argparse
+from lbrynet.conf import Config, BaseConfig, String, Integer, Toggle, Servers, NOT_SET
 from lbrynet.error import InvalidCurrencyError
 
 
-class SettingsTest(unittest.TestCase):
-    def get_mock_config_instance(self):
-        self.tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.tmp_dir)
-        return conf.get_config(self.tmp_dir, self.tmp_dir, self.tmp_dir)
+class TestConfig(BaseConfig):
+    test_str = String('str help', 'the default', previous_names=['old_str'])
+    test_int = Integer('int help', 9)
+    test_toggle = Toggle('toggle help', False)
+    servers = Servers('servers help', [('localhost', 80)])
 
-    # def test_envvar_is_read(self):
-    #     os.environ['LBRY_dht_node_port'] = '4445'
-    #     self.addCleanup(lambda: os.environ.pop('LBRY_dht_node_port'))
-    #     settings = self.get_mock_config_instance()
-    #     self.assertEqual(4445, settings['dht_node_port'])
 
-    def test_setting_can_be_overridden(self):
-        settings = self.get_mock_config_instance()
-        settings['dht_node_port'] = 5000
-        self.assertEqual(5000, settings['dht_node_port'])
+class ConfigurationTests(unittest.TestCase):
 
-    def test_setting_can_be_updated(self):
-        settings = self.get_mock_config_instance()
-        settings.update({'dht_node_port': 5001})
-        self.assertEqual(5001, settings['dht_node_port'])
+    @unittest.skipIf('linux' not in sys.platform, 'skipping linux only test')
+    def test_linux_defaults(self):
+        c = Config()
+        self.assertEqual(c.data_dir, os.path.expanduser('~/.local/share/lbry/lbrynet'))
+        self.assertEqual(c.wallet_dir, os.path.expanduser('~/.local/share/lbry/lbryum'))
+        self.assertEqual(c.download_dir, os.path.expanduser('~/Downloads'))
+        self.assertEqual(c.config, os.path.expanduser('~/.local/share/lbry/lbrynet/daemon_settings.yml'))
+        self.assertEqual(c.api_connection_url, 'http://localhost:5279/lbryapi')
+        self.assertEqual(c.log_file_path, os.path.expanduser('~/.local/share/lbry/lbrynet/lbrynet.log'))
 
-    def test_invalid_setting_raises_exception(self):
-        settings = self.get_mock_config_instance()
-        self.assertRaises(KeyError, settings.set, 'invalid_name', 123)
+    def test_search_order(self):
+        c = TestConfig()
+        c.runtime = {'test_str': 'runtime'}
+        c.arguments = {'test_str': 'arguments'}
+        c.environment = {'test_str': 'environment'}
+        c.persisted = {'test_str': 'persisted'}
+        self.assertEqual(c.test_str, 'runtime')
+        c.runtime = {}
+        self.assertEqual(c.test_str, 'arguments')
+        c.arguments = {}
+        self.assertEqual(c.test_str, 'environment')
+        c.environment = {}
+        self.assertEqual(c.test_str, 'persisted')
+        c.persisted = {}
+        self.assertEqual(c.test_str, 'the default')
 
-    def test_invalid_data_type_raises_exception(self):
-        settings = self.get_mock_config_instance()
-        self.assertRaises(TypeError, settings.set, 'dht_node_port', 'string')
+    def test_arguments(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--test-str")
+        args = parser.parse_args(['--test-str', 'blah'])
+        c = TestConfig.create_from_arguments(args)
+        self.assertEqual(c.test_str, 'blah')
+        c.arguments = {}
+        self.assertEqual(c.test_str, 'the default')
 
-    def test_setting_precedence(self):
-        settings = self.get_mock_config_instance()
-        settings.set('dht_node_port', 4445, data_types=(conf.TYPE_CLI,))
-        self.assertEqual(4445, settings['dht_node_port'])
-        settings.set('dht_node_port', 4446, data_types=(conf.TYPE_ENV,))
-        self.assertEqual(4445, settings['dht_node_port'])
-        settings.set('dht_node_port', 4447, data_types=(conf.TYPE_RUNTIME,))
-        self.assertEqual(4447, settings['dht_node_port'])
+    def test_environment(self):
+        c = TestConfig()
+        self.assertEqual(c.test_str, 'the default')
+        c.set_environment({'LBRY_TEST_STR': 'from environ'})
+        self.assertEqual(c.test_str, 'from environ')
 
-    def test_max_key_fee_set(self):
-        fixed_default = {'CURRENCIES':{'BTC':{'type':'crypto'}}}
-        adjustable_settings = {'max_key_fee': (json.loads, {'currency':'USD', 'amount':1})}
-        env = conf.Env(**adjustable_settings)
-        settings = conf.Config(fixed_default, adjustable_settings, environment=env)
+    def test_persisted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
 
-        with self.assertRaises(InvalidCurrencyError):
-            settings.set('max_key_fee', {'currency':'USD', 'amount':1})
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
 
-        valid_setting = {'currency':'BTC', 'amount':1}
-        settings.set('max_key_fee', valid_setting)
-        out = settings.get('max_key_fee')
-        self.assertEqual(out, valid_setting)
+            # settings.yml doesn't exist on file system
+            self.assertFalse(c.persisted.exists)
+            self.assertEqual(c.test_str, 'the default')
 
-    def test_data_dir(self):
-        # check if these directories are returned as string and not unicode
-        # otherwise there will be problems when calling os.path.join on
-        # unicode directory names with string file names
-        settings = self.get_mock_config_instance()
-        self.assertEqual(self.tmp_dir, settings.download_dir)
-        self.assertEqual(self.tmp_dir, settings.data_dir)
-        self.assertEqual(self.tmp_dir, settings.wallet_dir)
-        self.assertEqual(str, type(settings.default_wallet_dir))
-        self.assertEqual(str, type(settings.default_download_dir))
-        self.assertEqual(str, type(settings.default_data_dir))
+            self.assertEqual(c.modify_order, [c.runtime])
+            with c.update_config():
+                self.assertEqual(c.modify_order, [c.runtime, c.persisted])
+                c.test_str = 'original'
+            self.assertEqual(c.modify_order, [c.runtime])
 
-    # @skipIf('win' in sys.platform, 'fix me!')
-    # def test_load_save_config_file(self):
-    #     # setup settings
-    #     adjustable_settings = {'lbryum_servers': (list, [])}
-    #     env = conf.Env(**adjustable_settings)
-    #     settings = conf.Config({}, adjustable_settings, environment=env)
-    #     conf.settings = settings
-    #     # setup tempfile
-    #     conf_entry = b"lbryum_servers: ['localhost:50001', 'localhost:50002']\n"
-    #     with tempfile.NamedTemporaryFile(suffix='.yml') as conf_file:
-    #         conf_file.write(conf_entry)
-    #         conf_file.seek(0)
-    #         settings.file_name = conf_file.name
-    #         # load and save settings from conf file
-    #         settings.load_conf_file_settings()
-    #         settings.save_conf_file_settings()
-    #         # test if overwritten entry equals original entry
-    #         # use decoded versions, because format might change without
-    #         # changing the interpretation
-    #         decoder = conf.settings_decoders['.yml']
-    #         conf_decoded = decoder(conf_entry)
-    #         conf_entry_new = conf_file.read()
-    #         conf_decoded_new = decoder(conf_entry_new)
-    #         self.assertEqual(conf_decoded, conf_decoded_new)
+            # share_usage_data has been saved to settings file
+            self.assertTrue(c.persisted.exists)
+            with open(c.config, 'r') as fd:
+                self.assertEqual(fd.read(), 'test_str: original\n')
 
-    def test_load_file(self):
-        settings = self.get_mock_config_instance()
+            # load the settings file and check share_usage_data is false
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
+            self.assertTrue(c.persisted.exists)
+            self.assertEqual(c.test_str, 'original')
 
-        # invalid extensions
-        for filename in ('monkey.yymmll', 'monkey'):
-            settings.file_name = filename
-            with open(os.path.join(self.tmp_dir, filename), "w"):
-                pass
-            with self.assertRaises(ValueError):
-                settings.load_conf_file_settings()
+            # setting in runtime overrides config
+            self.assertNotIn('test_str', c.runtime)
+            c.test_str = 'from runtime'
+            self.assertIn('test_str', c.runtime)
+            self.assertEqual(c.test_str, 'from runtime')
+
+            # without context manager NOT_SET only clears it in runtime location
+            c.test_str = NOT_SET
+            self.assertNotIn('test_str', c.runtime)
+            self.assertEqual(c.test_str, 'original')
+
+            # clear it in persisted as well by using context manager
+            self.assertIn('test_str', c.persisted)
+            with c.update_config():
+                c.test_str = NOT_SET
+            self.assertNotIn('test_str', c.persisted)
+            self.assertEqual(c.test_str, 'the default')
+            with open(c.config, 'r') as fd:
+                self.assertEqual(fd.read(), '{}\n')
+
+    def test_persisted_upgrade(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = os.path.join(temp_dir, 'settings.yml')
+            with open(config, 'w') as fd:
+                fd.write('old_str: old stuff\n')
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=config)
+            )
+            self.assertEqual(c.test_str, 'old stuff')
+            self.assertNotIn('old_str', c.persisted)
+            with open(config, 'w') as fd:
+                fd.write('test_str: old stuff\n')
+
+    def test_validation(self):
+        c = TestConfig()
+        with self.assertRaisesRegex(AssertionError, 'must be a string'):
+            c.test_str = 9
+        with self.assertRaisesRegex(AssertionError, 'must be an integer'):
+            c.test_int = 'hi'
+        with self.assertRaisesRegex(AssertionError, 'must be a true/false'):
+            c.test_toggle = 'hi'
+
+    def test_file_extension_validation(self):
+        with self.assertRaisesRegex(AssertionError, "'.json' is not supported"):
+            TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join('settings.json'))
+            )
+
+    def test_serialize_deserialize(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
+            self.assertEqual(c.servers, [('localhost', 80)])
+            with c.update_config():
+                c.servers = [('localhost', 8080)]
+            with open(c.config, 'r+') as fd:
+                self.assertEqual(fd.read(), 'servers:\n- localhost:8080\n')
+                fd.write('servers:\n  - localhost:5566\n')
+            c = TestConfig.create_from_arguments(
+                types.SimpleNamespace(config=os.path.join(temp_dir, 'settings.yml'))
+            )
+            self.assertEqual(c.servers, [('localhost', 5566)])
+
+    def test_max_key_fee(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = os.path.join(temp_dir, 'settings.yml')
+            with open(config, 'w') as fd:
+                fd.write('max_key_fee: \'{"currency":"USD", "amount":1}\'\n')
+            c = Config.create_from_arguments(
+                types.SimpleNamespace(config=config)
+            )
+            self.assertEqual(c.max_key_fee['currency'], 'USD')
+            self.assertEqual(c.max_key_fee['amount'], 1)
+            with self.assertRaises(InvalidCurrencyError):
+                c.max_key_fee = {'currency': 'BCH', 'amount': 1}
+            with c.update_config():
+                c.max_key_fee = {'currency': 'BTC', 'amount': 1}
+            with open(config, 'r') as fd:
+                self.assertEqual(fd.read(), 'max_key_fee: \'{"currency": "BTC", "amount": 1}\'\n')

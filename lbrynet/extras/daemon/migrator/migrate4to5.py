@@ -5,9 +5,9 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def do_migration(db_dir):
+def do_migration(conf):
     log.info("Doing the migration")
-    add_lbry_file_metadata(db_dir)
+    add_lbry_file_metadata(conf.data_dir)
     log.info("Migration succeeded")
 
 

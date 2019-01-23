@@ -1,67 +1,62 @@
-import asyncio
-import inspect
-import json
-import logging
 import os
+import asyncio
+import logging
+import json
+import inspect
 import signal
 import textwrap
 import typing
+import aiohttp
+import base58
+from urllib.parse import urlencode, quote
+from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
 from copy import deepcopy
-from functools import wraps
 from traceback import format_exc
-from typing import Callable, Optional, List
-from urllib.parse import urlencode, quote
-
-import aiohttp
 from aiohttp import web
+from functools import wraps
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
-from lbrynet import __version__
-from lbrynet import conf
-from lbrynet import utils
+from lbrynet import __version__, utils
+from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
 from lbrynet.blob.blob_file import is_valid_blobhash
+from lbrynet.blob_exchange.downloader import BlobDownloader
 from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout, ComponentsNotStarted
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
 from lbrynet.extras import system_info
-from lbrynet.extras.daemon.ComponentManager import ComponentManager
-from lbrynet.extras.daemon.ComponentManager import RequiredCondition
-from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
-from lbrynet.extras.daemon.Components import STREAM_MANAGER_COMPONENT
+from lbrynet.extras.daemon import analytics
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
+from lbrynet.extras.daemon.Components import STREAM_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
+from lbrynet.extras.daemon.ComponentManager import RequiredCondition
+from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbrynet.extras.daemon.undecorated import undecorated
-from lbrynet.extras.reflector import reflector
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.schema.address import decode_address
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.schema.error import URIParseError, DecodeError
 from lbrynet.schema.uri import parse_lbry_uri
+from lbrynet.schema.error import URIParseError, DecodeError
 from lbrynet.schema.validator import validate_claim_id
+from lbrynet.schema.address import decode_address
 
 if typing.TYPE_CHECKING:
+    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.Components import UPnPComponent
     from lbrynet.extras.wallet import LbryWalletManager
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
+    from lbrynet.extras.daemon.storage import SQLiteStorage
     from lbrynet.stream.stream_manager import StreamManager
-    from lbrynet.blob.blob_manager import BlobFileManager
-    from lbrynet.storage import SQLiteStorage
-    from lbrynet.dht.node import Node
 
 log = logging.getLogger(__name__)
-
-
-#
-# async def download_single_blob(node: 'Node', blob_manager: 'BlobFileManager'):
-#     async with node.pe
 
 
 def requires(*components, **conditions):
     if conditions and ["conditions"] != list(conditions.keys()):
         raise SyntaxError("invalid conditions argument")
     condition_names = conditions.get("conditions", [])
-    
+
     def _wrap(fn):
         @wraps(fn)
         def _inner(*args, **kwargs):
@@ -74,9 +69,7 @@ def requires(*components, **conditions):
                 raise ComponentsNotStarted("the following required components have not yet started: "
                                            "%s" % json.dumps(components))
             return fn(*args, **kwargs)
-        
         return _inner
-    
     return _wrap
 
 
@@ -85,7 +78,6 @@ def deprecated(new_command=None):
         f.new_command = new_command
         f._deprecated = True
         return f
-    
     return _deprecated_wrapper
 
 
@@ -119,12 +111,12 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
                          page: Optional[int], page_size: Optional[int], **constraints):
     if None not in (page, page_size):
         constraints.update({
-            "offset": page_size * (page - 1),
+            "offset": page_size * (page-1),
             "limit": page_size
         })
         return {
             "items": await get_records(**constraints),
-            "total_pages": int(((await get_record_count(**constraints)) + (page_size - 1)) / page_size),
+            "total_pages": int(((await get_record_count(**constraints)) + (page_size-1)) / page_size),
             "page": page, "page_size": page_size
         }
     return await get_records(**constraints)
@@ -132,6 +124,7 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
 
 def sort_claim_results(claims):
     claims.sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
+    return claims
 
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
@@ -142,7 +135,7 @@ class DHTHasContacts(RequiredCondition):
     name = DHT_HAS_CONTACTS
     component = DHT_COMPONENT
     message = "your node is not connected to the dht"
-    
+
     @staticmethod
     def evaluate(component):
         return len(component.contacts) > 0
@@ -152,7 +145,7 @@ class WalletIsUnlocked(RequiredCondition):
     name = WALLET_IS_UNLOCKED
     component = WALLET_COMPONENT
     message = "your wallet is locked"
-    
+
     @staticmethod
     def evaluate(component):
         return not component.check_locked()
@@ -167,7 +160,7 @@ class JSONRPCError:
     CODE_INTERNAL_ERROR = -32603  # Internal JSON-RPC error (I think this is like a 500?)
     CODE_APPLICATION_ERROR = -32500  # Generic error with our app??
     CODE_AUTHENTICATION_ERROR = -32501  # Authentication failed
-    
+
     MESSAGES = {
         CODE_PARSE_ERROR: "Parse Error. Data is not valid JSON.",
         CODE_INVALID_REQUEST: "JSON data is not a valid Request",
@@ -176,7 +169,7 @@ class JSONRPCError:
         CODE_INTERNAL_ERROR: "Internal Error",
         CODE_AUTHENTICATION_ERROR: "Authentication Failed",
     }
-    
+
     HTTP_CODES = {
         CODE_INVALID_REQUEST: 400,
         CODE_PARSE_ERROR: 400,
@@ -186,7 +179,7 @@ class JSONRPCError:
         CODE_APPLICATION_ERROR: 500,
         CODE_AUTHENTICATION_ERROR: 401,
     }
-    
+
     def __init__(self, message, code=CODE_APPLICATION_ERROR, traceback=None, data=None):
         assert isinstance(code, int), "'code' must be an int"
         assert (data is None or isinstance(data, dict)), "'data' must be None or a dict"
@@ -201,16 +194,16 @@ class JSONRPCError:
             for i, t in enumerate(trace_lines):
                 if "--- <exception caught here> ---" in t:
                     if len(trace_lines) > i + 1:
-                        self.traceback = [j for j in trace_lines[i + 1:] if j]
+                        self.traceback = [j for j in trace_lines[i+1:] if j]
                         break
-    
+
     def to_dict(self):
         return {
             'code': self.code,
             'message': self.message,
             'data': self.traceback
         }
-    
+
     @classmethod
     def create_from_exception(cls, message, code=CODE_APPLICATION_ERROR, traceback=None):
         return cls(message, code=code, traceback=traceback)
@@ -237,7 +230,7 @@ class JSONRPCServerType(type):
         klass = type.__new__(mcs, name, bases, newattrs)
         klass.callable_methods = {}
         klass.deprecated_methods = {}
-        
+
         for methodname in dir(klass):
             if methodname.startswith("jsonrpc_"):
                 method = getattr(klass, methodname)
@@ -253,19 +246,21 @@ class Daemon(metaclass=JSONRPCServerType):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
     allowed_during_startup = []
-    
-    def __init__(self, component_manager: typing.Optional[ComponentManager] = None):
-        to_skip = conf.settings['components_to_skip']
-        use_authentication = conf.settings['use_auth_http']
-        use_https = conf.settings['use_https']
+
+    def __init__(self, conf: Config, analytics_manager: typing.Optional[analytics.Manager] = None,
+                 component_manager: typing.Optional[ComponentManager] = None):
+        self.conf = conf
+        self._node_id = None
+        self._installation_id = None
+        self.session_id = base58.b58encode(utils.generate_id()).decode()
+        to_skip = conf.components_to_skip
+        self.analytics_manager = analytics_manager or analytics.Manager(conf, self.installation_id, self.session_id)
         self.component_manager = component_manager or ComponentManager(
-            skip_components=to_skip or [],
+            conf, analytics_manager=self.analytics_manager, skip_components=to_skip or []
         )
-        self._use_authentication = use_authentication or conf.settings['use_auth_http']
-        self._use_https = use_https or conf.settings['use_https']
         self.listening_port = None
         self._component_setup_task = None
-        
+
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         self.app = web.Application()
         self.app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
@@ -273,65 +268,132 @@ class Daemon(metaclass=JSONRPCServerType):
         self.app.router.add_post('/', self.handle_old_jsonrpc)
         self.handler = self.app.make_handler()
         self.server: asyncio.AbstractServer = None
-    
+
     @property
     def dht_node(self) -> typing.Optional['Node']:
         return self.component_manager.get_component(DHT_COMPONENT)
-    
+
     @property
     def wallet_manager(self) -> typing.Optional['LbryWalletManager']:
         return self.component_manager.get_component(WALLET_COMPONENT)
-    
+
     @property
     def storage(self) -> typing.Optional['SQLiteStorage']:
         return self.component_manager.get_component(DATABASE_COMPONENT)
-    
+
     @property
     def stream_manager(self) -> typing.Optional['StreamManager']:
         return self.component_manager.get_component(STREAM_MANAGER_COMPONENT)
-    
+
     @property
     def exchange_rate_manager(self) -> typing.Optional['ExchangeRateManager']:
         return self.component_manager.get_component(EXCHANGE_RATE_MANAGER_COMPONENT)
-    
+
     @property
     def blob_manager(self) -> typing.Optional['BlobFileManager']:
         return self.component_manager.get_component(BLOB_COMPONENT)
-    
+
     @property
     def upnp(self) -> typing.Optional['UPnPComponent']:
         return self.component_manager.get_component(UPNP_COMPONENT)
-    
+
+    @classmethod
+    def get_api_definitions(cls):
+        groups = {}
+        for method in dir(cls):
+            if method.startswith('jsonrpc_'):
+                parts = method.split('_', 2)
+                group = command = parts[1]
+                if len(parts) == 3:
+                    command = parts[2]
+                group_dict = {'doc': getattr(cls, f'{group.upper()}_DOC', ''), 'commands': []}
+                groups.setdefault(group, group_dict)['commands'].append({
+                    'name': command,
+                    'doc': getattr(cls, method).__doc__
+                })
+        del groups['commands']
+        del groups['help']
+        return groups
+
+    @property
+    def db_revision_file_path(self):
+        return os.path.join(self.conf.data_dir, 'db_revision')
+
+    @property
+    def installation_id(self):
+        install_id_filename = os.path.join(self.conf.data_dir, "install_id")
+        if not self._installation_id:
+            if os.path.isfile(install_id_filename):
+                with open(install_id_filename, "r") as install_id_file:
+                    self._installation_id = str(install_id_file.read()).strip()
+        if not self._installation_id:
+            self._installation_id = base58.b58encode(utils.generate_id()).decode()
+            with open(install_id_filename, "w") as install_id_file:
+                install_id_file.write(self._installation_id)
+        return self._installation_id
+
+    def ensure_data_dir(self):
+        # although there is a risk of a race condition here we don't
+        # expect there to be multiple processes accessing this
+        # directory so the risk can be ignored
+        if not os.path.isdir(self.conf.data_dir):
+            os.makedirs(self.conf.data_dir)
+        if not os.path.isdir(os.path.join(self.conf.data_dir, "blobfiles")):
+            os.makedirs(os.path.join(self.conf.data_dir, "blobfiles"))
+        return self.conf.data_dir
+
+    def ensure_wallet_dir(self):
+        if not os.path.isdir(self.conf.wallet_dir):
+            os.makedirs(self.conf.wallet_dir)
+
+    def ensure_download_dir(self):
+        if not os.path.isdir(self.conf.download_dir):
+            os.makedirs(self.conf.download_dir)
+
     async def start_listening(self):
         try:
             self.server = await asyncio.get_event_loop().create_server(
-                self.handler, conf.settings['api_host'], conf.settings['api_port']
+                self.handler, self.conf.api_host, self.conf.api_port
             )
             log.info('lbrynet API listening on TCP %s:%i', *self.server.sockets[0].getsockname()[:2])
             await self.setup()
+            if self.analytics_manager:
+                await self.analytics_manager.send_server_startup_success()
         except OSError:
-            log.error('lbrynet API failed to bind TCP %s:%i for listening. Daemon is already running or this port is '
-                      'already in use by another application.', conf.settings['api_host'], conf.settings['api_port'])
+            log.error('lbrynet API failed to bind TCP %s for listening. Daemon is already running or this port is '
+                      'already in use by another application.', self.conf.api)
+            raise
+        try:
+            await self.setup()
         except asyncio.CancelledError:
             log.info("shutting down before finished starting")
+            await self.shutdown()
+            raise
         except Exception as err:
+            if self.analytics_manager:
+                await self.analytics_manager.send_server_startup_error(str(err))
             log.exception('Failed to start lbrynet-daemon')
-            await self.component_manager.analytics_manager.send_server_startup_error(str(err))
-    
+
     async def setup(self):
         log.info("Starting lbrynet-daemon")
         log.info("Platform: %s", json.dumps(system_info.get_platform()))
-        self.component_manager.analytics_manager.start()
+
+        self.ensure_data_dir()
+        self.ensure_wallet_dir()
+        self.ensure_download_dir()
+
+        if self.analytics_manager:
+            self.analytics_manager.start()
+
         self._component_setup_task = self.component_manager.setup()
         await self._component_setup_task
-        
+        await self.analytics_manager.send_server_startup()
         log.info("Started lbrynet-daemon")
-        await self.component_manager.analytics_manager.send_server_startup()
-    
+
     @staticmethod
     def _already_shutting_down(sig_num, frame):
         log.info("Already shutting down")
-    
+
     async def shutdown(self):
         # ignore INT/TERM signals once shutdown has started
         signal.signal(signal.SIGINT, self._already_shutting_down)
@@ -344,14 +406,15 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.app.shutdown()
             await self.handler.shutdown(60.0)
             await self.app.cleanup()
-        self.component_manager.analytics_manager.shutdown()
+        if self.analytics_manager:
+            self.analytics_manager.stop()
         try:
             self._component_setup_task.cancel()
         except (AttributeError, asyncio.CancelledError):
             pass
         if self.component_manager is not None:
             await self.component_manager.stop()
-    
+
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
         result = await self._process_rpc_call(data)
@@ -359,24 +422,24 @@ class Daemon(metaclass=JSONRPCServerType):
             text=jsonrpc_dumps_pretty(result, ledger=self.ledger),
             content_type='application/json'
         )
-    
+
     async def _process_rpc_call(self, data):
         args = data.get('params', {})
-        
+
         try:
             function_name = data['method']
         except KeyError:
             return JSONRPCError(
                 "Missing 'method' value in request.", JSONRPCError.CODE_METHOD_NOT_FOUND
             )
-        
+
         try:
             fn = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError:
             return JSONRPCError(
                 f"Invalid method requested: {function_name}.", JSONRPCError.CODE_METHOD_NOT_FOUND
             )
-        
+
         if args in ([{}], []):
             _args, _kwargs = (), {}
         elif isinstance(args, dict):
@@ -391,7 +454,7 @@ class Daemon(metaclass=JSONRPCServerType):
             return JSONRPCError(
                 f"Invalid parameters format.", JSONRPCError.CODE_INVALID_PARAMS
             )
-        
+
         params_error, erroneous_params = self._check_params(fn, _args, _kwargs)
         if params_error is not None:
             params_error_message = '{} for {} command: {}'.format(
@@ -401,21 +464,22 @@ class Daemon(metaclass=JSONRPCServerType):
             return JSONRPCError(
                 params_error_message, JSONRPCError.CODE_INVALID_PARAMS
             )
-        
+
         try:
             result = fn(self, *_args, **_kwargs)
             if asyncio.iscoroutine(result):
                 result = await result
             return result
         except Exception as e:  # pylint: disable=broad-except
+            log.exception("error handling api request")
             return JSONRPCError(
                 str(e), JSONRPCError.CODE_APPLICATION_ERROR, format_exc()
             )
-    
+
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
-    
+
     def _get_jsonrpc_method(self, function_path):
         if function_path in self.deprecated_methods:
             new_command = self.deprecated_methods[function_path].new_command
@@ -424,29 +488,29 @@ class Daemon(metaclass=JSONRPCServerType):
             function_path = new_command
         self._verify_method_is_callable(function_path)
         return self.callable_methods.get(function_path)
-    
+
     @staticmethod
     def _check_params(function, args_tup, args_dict):
         argspec = inspect.getfullargspec(undecorated(function))
         num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
-        
+
         duplicate_params = [
             duplicate_param
             for duplicate_param in argspec.args[1:len(args_tup) + 1]
             if duplicate_param in args_dict
         ]
-        
+
         if duplicate_params:
             return 'Duplicate parameters', duplicate_params
-        
+
         missing_required_params = [
             required_param
-            for required_param in argspec.args[len(args_tup) + 1:-num_optional_params]
+            for required_param in argspec.args[len(args_tup)+1:-num_optional_params]
             if required_param not in args_dict
         ]
         if len(missing_required_params):
             return 'Missing required parameters', missing_required_params
-        
+
         extraneous_params = [] if argspec.varkw is not None else [
             extra_param
             for extra_param in args_dict
@@ -454,185 +518,41 @@ class Daemon(metaclass=JSONRPCServerType):
         ]
         if len(extraneous_params):
             return 'Extraneous parameters', extraneous_params
-        
+
         return None, None
-    
+
     @property
     def default_wallet(self):
         try:
             return self.wallet_manager.default_wallet
         except AttributeError:
             return None
-    
+
     @property
     def default_account(self):
         try:
             return self.wallet_manager.default_account
         except AttributeError:
             return None
-    
+
     @property
     def ledger(self):
         try:
             return self.wallet_manager.default_account.ledger
         except AttributeError:
             return None
-    
-    # async def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
-    #     """
-    #     Download a blob
-    #
-    #     :param blob_hash (str): blob hash
-    #     :param rate_manager (PaymentRateManager), optional: the payment rate manager to use,
-    #                                                      defaults to session.payment_rate_manager
-    #     :param timeout (int): blob timeout
-    #     :return: BlobFile
-    #     """
-    #     if not blob_hash:
-    #         raise Exception("Nothing to download")
-    #
-    #     rate_manager = rate_manager or self.payment_rate_manager
-    #     timeout = timeout or 30
-    #     downloader = StandaloneBlobDownloader(
-    #         blob_hash, self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
-    #         rate_manager, self.wallet_manager, timeout
-    #     )
-    #     return await d2f(downloader.download())
-    #
-    # async def _get_stream_analytics_report(self, claim_dict):
-    #     sd_hash = claim_dict.source_hash.decode()
-    #     try:
-    #         stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
-    #     except Exception:
-    #         stream_hash = None
-    #     report = {
-    #         "sd_hash": sd_hash,
-    #         "stream_hash": stream_hash,
-    #     }
-    #     blobs = {}
-    #     try:
-    #         sd_host = await d2f(self.blob_manager.get_host_downloaded_from(sd_hash))
-    #     except Exception:
-    #         sd_host = None
-    #     report["sd_blob"] = sd_host
-    #     if stream_hash:
-    #         blob_infos = await self.storage.get_blobs_for_stream(stream_hash)
-    #         report["known_blobs"] = len(blob_infos)
-    #     else:
-    #         blob_infos = []
-    #         report["known_blobs"] = 0
-    #     # for blob_hash, blob_num, iv, length in blob_infos:
-    #     #     try:
-    #     #         host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
-    #     #     except Exception:
-    #     #         host = None
-    #     #     if host:
-    #     #         blobs[blob_num] = host
-    #     # report["blobs"] = json.dumps(blobs)
-    #     return report
-    #
-    # async def _download_name(self, name, claim_dict, sd_hash, txid, nout, timeout=None, file_name=None):
-    #     """
-    #     Add a lbry file to the file manager, start the download, and return the new lbry file.
-    #     If it already exists in the file manager, return the existing lbry file
-    #     """
-    #
-    #     async def _download_finished(download_id, name, claim_dict):
-    #         report = await self._get_stream_analytics_report(claim_dict)
-    #        self.component_manager.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
-    #        self.component_manager.analytics_manager.send_new_download_success(download_id, name, claim_dict)
-    #
-    #     async def _download_failed(error, download_id, name, claim_dict):
-    #         report = await self._get_stream_analytics_report(claim_dict)
-    #        self.component_manager.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
-    #                                                      report)
-    #        self.component_manager.analytics_manager.send_new_download_fail(download_id, name, claim_dict, error)
-    #
-    #     if sd_hash in self.streams:
-    #         downloader = self.streams[sd_hash]
-    #         return await d2f(downloader.finished_deferred)
-    #     else:
-    #         download_id = utils.random_string()
-    #        self.component_manager.analytics_manager.send_download_started(download_id, name, claim_dict)
-    #        self.component_manager.analytics_manager.send_new_download_start(download_id, name, claim_dict)
-    #         self.streams[sd_hash] = GetStream(
-    #             self.file_manager.sd_identifier, self.wallet_manager, self.exchange_rate_manager, self.blob_manager,
-    #             self.component_manager.peer_finder, self.rate_limiter, self.payment_rate_manager, self.storage,
-    #             conf.settings['max_key_fee'], conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
-    #             timeout
-    #         )
-    #         try:
-    #             lbry_file, finished_deferred = await d2f(self.streams[sd_hash].start(
-    #                 claim_dict, name, txid, nout, file_name
-    #             ))
-    #             finished_deferred.addCallbacks(
-    #                 lambda _: asyncio.create_task(_download_finished(download_id, name, claim_dict)),
-    #                 lambda e: asyncio.create_task(_download_failed(e, download_id, name, claim_dict))
-    #             )
-    #             result = await self._get_lbry_file_dict(lbry_file)
-    #         except Exception as err:
-    #             await _download_failed(err, download_id, name, claim_dict)
-    #             if isinstance(err, (DownloadDataTimeout, DownloadSDTimeout)):
-    #                 log.warning('Failed to get %s (%s)', name, err)
-    #             else:
-    #                 log.error('Failed to get %s (%s)', name, err)
-    #             if self.streams[sd_hash].downloader and self.streams[sd_hash].code != 'running':
-    #                 await d2f(self.streams[sd_hash].downloader.stop(err))
-    #             result = {'error': str(err)}
-    #         finally:
-    #             del self.streams[sd_hash]
-    #         return result
-    
-    async def _publish_stream(self, account, name, bid, claim_dict, file_path=None, certificate=None,
-                              claim_address=None, change_address=None):
-        parse_lbry_uri(name)
-        if file_path:
-            log.info("Create stream")
-            stream = await self.stream_manager.create_stream(file_path)
-            sd_hash = stream.descriptor.calculate_sd_hash()
-            log.info("Created stream with sd hash %s from %s", sd_hash, file_path)
-            claim_dict['stream']['source']['source'] = sd_hash
-        tx = await self.wallet_manager.claim_name(account, name, bid, claim_dict, certificate, claim_address)
-        nout = 0
-        txo = tx.outputs[nout]
-        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-        await self.component_manager.analytics_manager.send_claim_action('publish')
-        return {
-            "success": True,
-            "tx": tx,
-            "claim_id": txo.claim_id,
-            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
-            "output": tx.outputs[nout]
-        }
-    
-    # async def _get_or_download_sd_blob(self, blob, sd_hash):
-    #     if blob:
-    #         return self.blob_manager.get_blob(blob[0])
-    #     return await d2f(download_sd_blob(
-    #         sd_hash.decode(), self.blob_manager, self.component_manager.peer_finder, self.rate_limiter,
-    #         self.payment_rate_manager, self.wallet_manager, timeout=conf.settings['peer_search_timeout'],
-    #         download_mirrors=conf.settings['download_mirrors']
-    #     ))
-    #
-    # def get_or_download_sd_blob(self, sd_hash):
-    #     """Return previously downloaded sd blob if already in the blob
-    #     manager, otherwise download and return it
-    #     """
-    #     return self._get_or_download_sd_blob(
-    #         self.blob_manager.completed_blobs([sd_hash.decode()]), sd_hash
-    #     )
-    
+
     async def get_est_cost_from_uri(self, uri: str) -> typing.Optional[float]:
         """
         Resolve a name and return the estimated stream cost
         """
-        
+
         resolved = await self.wallet_manager.resolve(uri)
         if resolved:
             claim_response = resolved[uri]
         else:
             claim_response = None
-        
+
         if claim_response and 'claim' in claim_response:
             if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
                 claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
@@ -645,17 +565,13 @@ class Daemon(metaclass=JSONRPCServerType):
                 )
             else:
                 log.warning("Failed to estimate cost for %s", uri)
-    
+
     ############################################################################
     #                                                                          #
     #                JSON-RPC API methods start here                           #
     #                                                                          #
     ############################################################################
-    
-    @deprecated("stop")
-    def jsonrpc_daemon_stop(self):
-        pass
-    
+
     def jsonrpc_stop(self):
         """
         Stop lbrynet
@@ -671,7 +587,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         log.info("Shutting down lbrynet daemon")
         return "Shutting down"
-    
+
     async def jsonrpc_status(self):
         """
         Get daemon status
@@ -743,10 +659,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 }
             }
         """
-        
+
         connection_code = CONNECTION_STATUS_NETWORK
         response = {
-            'installation_id': conf.settings.installation_id,
+            'installation_id': self.installation_id,
             'is_running': all(self.component_manager.get_components_status().values()),
             'skipped_components': self.component_manager.skip_components,
             'startup_status': self.component_manager.get_components_status(),
@@ -760,7 +676,7 @@ class Daemon(metaclass=JSONRPCServerType):
             if status:
                 response[component.component_name] = status
         return response
-    
+
     def jsonrpc_version(self):
         """
         Get lbry version information
@@ -789,7 +705,7 @@ class Daemon(metaclass=JSONRPCServerType):
         platform_info = system_info.get_platform()
         log.info("Get version info: " + json.dumps(platform_info))
         return platform_info
-    
+
     async def jsonrpc_report_bug(self, message=None):
         """
         Report a bug to slack
@@ -803,16 +719,27 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if successful
         """
-        
+
         platform_name = system_info.get_platform()['platform']
-        await report_bug_to_slack(
-            message,
-            conf.settings.installation_id,
+        webhook = utils.deobfuscate(SLACK_WEBHOOK)
+        payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
+        payload_params = (
             platform_name,
-            __version__
+            __version__,
+            get_loggly_query_string(self.installation_id),
+            message
         )
+        payload = {
+            "text": payload_template % payload_params
+        }
+        async with aiohttp.request('post', webhook, data=json.dumps(payload)) as response:
+            pass
         return True
-    
+
+    SETTINGS_DOC = """
+    Settings management.
+    """
+
     def jsonrpc_settings_get(self):
         """
         Get daemon settings
@@ -827,8 +754,8 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Dictionary of daemon settings
             See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings
         """
-        return conf.settings.get_adjustable_settings_dict()
-    
+        return self.conf.settings_dict
+
     def jsonrpc_settings_set(self, **kwargs):
         """
         Set daemon settings
@@ -879,43 +806,12 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Updated dictionary of daemon settings
         """
-        
-        # TODO: improve upon the current logic, it could be made better
-        new_settings = kwargs
-        
-        setting_types = {
-            'download_directory': str,
-            'data_rate': float,
-            'download_timeout': int,
-            'peer_port': int,
-            'max_key_fee': dict,
-            'use_upnp': bool,
-            'run_reflector_server': bool,
-            'cache_time': int,
-            'reflect_uploads': bool,
-            'share_usage_data': bool,
-            'disable_max_key_fee': bool,
-            'peer_search_timeout': int,
-            'sd_download_timeout': int,
-            'auto_renew_claim_height_delta': int
-        }
-        
-        for key, setting_type in setting_types.items():
-            if key in new_settings:
-                if isinstance(new_settings[key], setting_type):
-                    conf.settings.update({key: new_settings[key]},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                elif setting_type is dict and isinstance(new_settings[key], str):
-                    decoded = json.loads(str(new_settings[key]))
-                    conf.settings.update({key: decoded},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                else:
-                    converted = setting_type(new_settings[key])
-                    conf.settings.update({key: converted},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-        conf.settings.save_conf_file_settings()
-        return conf.settings.get_adjustable_settings_dict()
-    
+        with self.conf.update_config() as c:
+            for key, value in kwargs:
+                attr: Setting = getattr(type(c), key)
+                setattr(c, key, attr.deserialize(value))
+        return self.jsonrpc_settings_get()
+
     def jsonrpc_help(self, command=None):
         """
         Return a useful message for an API command
@@ -929,7 +825,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) Help message
         """
-        
+
         if command is None:
             return {
                 'about': 'This is the LBRY JSON-RPC API',
@@ -938,17 +834,17 @@ class Daemon(metaclass=JSONRPCServerType):
                 'command_list': 'Get a full list of commands using the `commands` method',
                 'more_info': 'Visit https://lbry.io/api for more info',
             }
-        
+
         fn = self.callable_methods.get(command)
         if fn is None:
             raise Exception(
                 f"No help available for '{command}'. It is not a valid command."
             )
-        
+
         return {
             'help': textwrap.dedent(fn.__doc__ or '')
         }
-    
+
     def jsonrpc_commands(self):
         """
         Return a list of available commands
@@ -963,7 +859,11 @@ class Daemon(metaclass=JSONRPCServerType):
             (list) list of available commands
         """
         return sorted([command for command in self.callable_methods.keys()])
-    
+
+    @deprecated("account_balance")
+    def jsonrpc_wallet_balance(self, address=None):
+        """ deprecated """
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
         """
@@ -1003,62 +903,37 @@ class Daemon(metaclass=JSONRPCServerType):
                 fee : (float) fee paid for the transaction
             }
         """
-        
+
         amount = self.get_dewies_or_error("amount", amount)
         if not amount:
             raise NullFundsError
         elif amount < 0:
             raise NegativeFundsError()
-        
+
         if address and claim_id:
             raise Exception("Given both an address and a claim id")
         elif not address and not claim_id:
             raise Exception("Not given an address or a claim id")
-        
+
         if address:
             # raises an error if the address is invalid
             decode_address(address)
-            
+
             reserved_points = self.wallet_manager.reserve_points(address, amount)
             if reserved_points is None:
                 raise InsufficientFundsError()
             account = self.get_account_or_default(account_id)
             result = await self.wallet_manager.send_points_to_address(reserved_points, amount, account)
+            await self.analytics_manager.send_credits_sent()
         else:
             log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
             result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
-        try:
-            return result
-        finally:
-            await self.component_manager.analytics_manager.send_credits_sent()
-    
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
-        """
-        Create new UTXOs, each containing `amount` credits
+        return result
 
-        Usage:
-            wallet_prefill_addresses [--no_broadcast]
-                                     (<num_addresses> | --num_addresses=<num_addresses>)
-                                     (<amount> | --amount=<amount>)
+    ACCOUNT_DOC = """
+    Account management.
+    """
 
-        Options:
-            --no_broadcast                    : (bool) whether to broadcast or not
-            --num_addresses=<num_addresses>   : (int) num of addresses to create
-            --amount=<amount>                 : (decimal) initial amount in each address
-
-        Returns:
-            (dict) the resulting transaction
-        """
-        broadcast = not no_broadcast
-        return self.jsonrpc_account_fund(
-            self.default_account.id,
-            self.default_account.id,
-            amount=amount,
-            outputs=num_addresses,
-            broadcast=broadcast
-        )
-    
     @requires("wallet")
     def jsonrpc_account_list(self, account_id=None, confirmations=6,
                              include_claims=False, show_seed=False):
@@ -1088,7 +963,7 @@ class Daemon(metaclass=JSONRPCServerType):
             return self.get_account_or_error(account_id).get_details(**kwargs)
         else:
             return self.wallet_manager.get_detailed_accounts(**kwargs)
-    
+
     @requires("wallet")
     async def jsonrpc_account_balance(self, account_id=None, confirmations=0):
         """
@@ -1109,7 +984,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
         dewies = await account.get_balance(confirmations=confirmations)
         return dewies_to_lbc(dewies)
-    
+
     @requires("wallet")
     async def jsonrpc_account_add(
             self, account_name, single_key=False, seed=None, private_key=None, public_key=None):
@@ -1144,19 +1019,19 @@ class Daemon(metaclass=JSONRPCServerType):
                 }
             }
         )
-        
+
         if self.ledger.network.is_connected:
             await self.ledger.subscribe_account(account)
-        
+
         self.default_wallet.save()
-        
+
         result = account.to_dict()
         result['id'] = account.id
         result['status'] = 'added'
         result.pop('certificates', None)
         result['is_default'] = self.default_wallet.accounts[0] == account
         return result
-    
+
     @requires("wallet")
     async def jsonrpc_account_create(self, account_name, single_key=False):
         """
@@ -1179,19 +1054,19 @@ class Daemon(metaclass=JSONRPCServerType):
                 'name': SingleKey.name if single_key else HierarchicalDeterministic.name
             }
         )
-        
+
         if self.ledger.network.is_connected:
             await self.ledger.subscribe_account(account)
-        
+
         self.default_wallet.save()
-        
+
         result = account.to_dict()
         result['id'] = account.id
         result['status'] = 'created'
         result.pop('certificates', None)
         result['is_default'] = self.default_wallet.accounts[0] == account
         return result
-    
+
     @requires("wallet")
     def jsonrpc_account_remove(self, account_id):
         """
@@ -1215,7 +1090,7 @@ class Daemon(metaclass=JSONRPCServerType):
         result['status'] = 'removed'
         result.pop('certificates', None)
         return result
-    
+
     @requires("wallet")
     def jsonrpc_account_set(
             self, account_id, default=False, new_name=None,
@@ -1246,7 +1121,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         account = self.get_account_or_error(account_id)
         change_made = False
-        
+
         if account.receiving.name == HierarchicalDeterministic.name:
             address_changes = {
                 'change': {'gap': change_gap, 'maximum_uses_per_address': change_max_uses},
@@ -1258,25 +1133,25 @@ class Daemon(metaclass=JSONRPCServerType):
                     if value is not None:
                         setattr(chain, attr, value)
                         change_made = True
-        
+
         if new_name is not None:
             account.name = new_name
             change_made = True
-        
+
         if default:
             self.default_wallet.accounts.remove(account)
             self.default_wallet.accounts.insert(0, account)
             change_made = True
-        
+
         if change_made:
             self.default_wallet.save()
-        
+
         result = account.to_dict()
         result['id'] = account.id
         result.pop('certificates', None)
         result['is_default'] = self.default_wallet.accounts[0] == account
         return result
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_account_unlock(self, password, account_id=None):
         """
@@ -1291,11 +1166,11 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if account is unlocked, otherwise false
         """
-        
+
         return self.wallet_manager.unlock_account(
             password, self.get_account_or_default(account_id, lbc_only=False)
         )
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_account_lock(self, account_id=None):
         """
@@ -1310,9 +1185,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if account is locked, otherwise false
         """
-        
+
         return self.wallet_manager.lock_account(self.get_account_or_default(account_id, lbc_only=False))
-    
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_account_decrypt(self, account_id=None):
         """
@@ -1327,9 +1202,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        
+
         return self.wallet_manager.decrypt_account(self.get_account_or_default(account_id, lbc_only=False))
-    
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_account_encrypt(self, new_password, account_id=None):
         """
@@ -1344,12 +1219,12 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        
+
         return self.wallet_manager.encrypt_account(
             new_password,
             self.get_account_or_default(account_id, lbc_only=False)
         )
-    
+
     @requires("wallet")
     def jsonrpc_account_max_address_gap(self, account_id):
         """
@@ -1368,7 +1243,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (map) maximum gap for change and receiving addresses
         """
         return self.get_account_or_error(account_id).get_max_gap()
-    
+
     @requires("wallet")
     def jsonrpc_account_fund(self, to_account=None, from_account=None, amount='0.0',
                              everything=False, outputs=1, broadcast=False):
@@ -1408,7 +1283,7 @@ class Daemon(metaclass=JSONRPCServerType):
             to_account=to_account, amount=amount, everything=everything,
             outputs=outputs, broadcast=broadcast
         )
-    
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_account_send(self, amount, addresses, account_id=None, broadcast=False):
         """
@@ -1423,23 +1298,25 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns:
         """
-        
+
         amount = self.get_dewies_or_error("amount", amount)
         if not amount:
             raise NullFundsError
         elif amount < 0:
             raise NegativeFundsError()
-        
+
         for address in addresses:
             decode_address(address)
-        
+
         account = self.get_account_or_default(account_id)
         result = await account.send_to_addresses(amount, addresses, broadcast)
-        try:
-            return result
-        finally:
-            await self.component_manager.analytics_manager.send_credits_sent()
-    
+        await self.analytics_manager.send_credits_sent()
+        return result
+
+    ADDRESS_DOC = """
+    Address management.
+    """
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_is_mine(self, address, account_id=None):
         """
@@ -1459,7 +1336,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.wallet_manager.address_is_mine(
             address, self.get_account_or_default(account_id)
         )
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_list(self, account_id=None, page=None, page_size=None):
         """
@@ -1483,7 +1360,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account.get_address_count,
             page, page_size
         )
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_unused(self, account_id=None):
         """
@@ -1500,7 +1377,11 @@ class Daemon(metaclass=JSONRPCServerType):
             (str) Unused wallet address in base58
         """
         return self.get_account_or_default(account_id).receiving.get_or_create_usable_address()
-    
+
+    FILE_DOC = """
+    File management.
+    """
+
     @requires(STREAM_MANAGER_COMPONENT)
     def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, **kwargs):
         """
@@ -1570,7 +1451,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 sort, reverse, comparison, **kwargs
             )
         ]
-    
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_resolve_name(self, name, force=False):
         """
@@ -1587,7 +1468,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Metadata dictionary from name claim, None if the name is not
                     resolvable
         """
-        
+
         try:
             name = parse_lbry_uri(name).name
             metadata = await self.wallet_manager.resolve(name, check_cache=not force)
@@ -1596,7 +1477,11 @@ class Daemon(metaclass=JSONRPCServerType):
             return metadata
         except UnknownNameError:
             log.info('Name %s is not known', name)
-    
+
+    CLAIM_DOC = """
+    Claim management.
+    """
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
         """
@@ -1640,7 +1525,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             raise Exception("Must specify either txid/nout, or claim_id")
         return claim_results
-    
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_resolve(self, force=False, uri=None, uris=None):
         """
@@ -1709,13 +1594,13 @@ class Daemon(metaclass=JSONRPCServerType):
                     }
             }
         """
-        
+
         uris = tuple(uris or [])
         if uri is not None:
             uris += (uri,)
-        
+
         results = {}
-        
+
         valid_uris = tuple()
         for u in uris:
             try:
@@ -1723,12 +1608,12 @@ class Daemon(metaclass=JSONRPCServerType):
                 valid_uris += (u,)
             except URIParseError:
                 results[u] = {"error": "%s is not a valid uri" % u}
-        
+
         resolved = await self.wallet_manager.resolve(*valid_uris, check_cache=not force)
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri]
         return results
-    
+
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               STREAM_MANAGER_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
@@ -1775,29 +1660,29 @@ class Daemon(metaclass=JSONRPCServerType):
                 'claim_name': (str) claim name
             }
         """
-        
-        timeout = timeout if timeout is not None else conf.settings['download_timeout']
-        
+
+        timeout = timeout if timeout is not None else self.conf.download_timeout
+
         parsed_uri = parse_lbry_uri(uri)
         if parsed_uri.is_channel:
             raise Exception("cannot download a channel claim, specify a /path")
-        
+
         resolved = (await self.wallet_manager.resolve(uri)).get(uri, {})
         resolved = resolved if 'value' in resolved else resolved.get('claim')
-        
+
         if not resolved:
             raise ResolveError(
                 "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
             )
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
-        
+
         claim = ClaimDict.load_dict(resolved['value'])
         fee_amount, fee_address = None, None
         if claim.has_fee:
             fee_amount = round(self.exchange_rate_manager.convert_currency(
-                claim.source_fee.currency, "LBC", claim.source_fee.amount
-            ), 5)
+                    claim.source_fee.currency, "LBC", claim.source_fee.amount
+                ), 5)
             fee_address = claim.source_fee.address
         outpoint = f"{resolved['txid']}:{resolved['nout']}"
         existing = self.stream_manager.get_filtered_streams(outpoint=outpoint)
@@ -1809,12 +1694,12 @@ class Daemon(metaclass=JSONRPCServerType):
             stream = existing[0]
         else:
             stream = await self.stream_manager.download_stream_from_claim(
-                self.dht_node, conf.settings.download_dir, resolved, file_name, timeout, fee_amount, fee_address
+                self.dht_node, self.conf.download_dir, resolved, file_name, timeout, fee_amount, fee_address
             )
         if stream:
             return stream.as_dict()
         raise DownloadSDTimeout(resolved['value']['stream']['source']['source'])
-    
+
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
         """
@@ -1835,30 +1720,27 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) Confirmation message
         """
-        
+
         if status not in ['start', 'stop']:
             raise Exception('Status must be "start" or "stop".')
-        
-        # streams = self.stream_manager.get_filtered_streams(**kwargs)
-        # if not streams:
-        #     raise Exception('Unable to find a file')
-        # stream = streams[0]
-        #
-        # if status == 'start' and not stream.running and not stream.finished:
-        #     self.stream_manager.load_streams_from_database()
-        #
-        #
-        #
-        #     or status == 'stop' and not lbry_file.stopped:
-        #     await d2f(self.stream_manager.(lbry_file))
-        #     msg = "Started downloading file" if status == 'start' else "Stopped downloading file"
-        # else:
-        #     msg = (
-        #         "File was already being downloaded" if status == 'start'
-        #         else "File was already stopped"
-        #     )
-        # return msg
-    
+
+        streams = self.stream_manager.get_filtered_streams(**kwargs)
+        if not streams:
+            raise Exception(f'Unable to find a file for {kwargs}')
+        stream = streams[0]
+        if status == 'start' and not stream.running and not stream.finished:
+            stream.downloader.download(self.dht_node)
+            msg = "Resumed download"
+        elif status == 'stop' and stream.running:
+            await stream.stop_download()
+            msg = "Stopped download"
+        else:
+            msg = (
+                "File was already being downloaded" if status == 'start'
+                else "File was already stopped"
+            )
+        return msg
+
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
         """
@@ -1890,9 +1772,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if deletion was successful
         """
-        
+
         streams = self.stream_manager.get_filtered_streams(**kwargs)
-        
+
         if len(streams) > 1:
             if not delete_all:
                 log.warning("There are %i files to delete, use narrower filters to select one",
@@ -1901,7 +1783,7 @@ class Daemon(metaclass=JSONRPCServerType):
             else:
                 log.warning("Deleting %i files",
                             len(streams))
-        
+
         if not streams:
             log.warning("There is no file to delete")
             return False
@@ -1911,7 +1793,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 log.info("Deleted file: %s", stream.file_name)
             result = True
         return result
-    
+
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
@@ -1930,7 +1812,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 resolvable
         """
         return self.get_est_cost_from_uri(uri)
-    
+
+    CHANNEL_DOC = """
+    Channel management.
+    """
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_new(self, channel_name, amount, account_id=None):
         """
@@ -1964,19 +1850,19 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise Exception("Invalid channel uri")
         except (TypeError, URIParseError):
             raise Exception("Invalid channel name")
-        
+
         amount = self.get_dewies_or_error("amount", amount)
         if amount <= 0:
             raise Exception("Invalid amount")
-        
+
         tx = await self.wallet_manager.claim_new_channel(
             channel_name, amount, self.get_account_or_default(account_id)
         )
         self.default_wallet.save()
+        await self.analytics_manager.send_new_channel()
         nout = 0
         txo = tx.outputs[nout]
         log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
-        self.component_manager.loop.create_task(self.component_manager.analytics_manager.send_new_channel())
         return {
             "success": True,
             "tx": tx,
@@ -1984,7 +1870,7 @@ class Daemon(metaclass=JSONRPCServerType):
             "claim_address": txo.get_address(self.ledger),
             "output": txo
         }
-    
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
         """
@@ -2009,7 +1895,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account.get_channel_count,
             page, page_size
         )
-    
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_export(self, claim_id):
         """
@@ -2024,9 +1910,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) Serialized certificate information
         """
-        
+
         return await self.wallet_manager.export_certificate_info(claim_id)
-    
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_import(self, serialized_certificate_info):
         """
@@ -2041,9 +1927,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Result dictionary
         """
-        
+
         return await self.wallet_manager.import_certificate_info(serialized_certificate_info)
-    
+
     @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_publish(
@@ -2131,24 +2017,25 @@ class Daemon(metaclass=JSONRPCServerType):
                 'claim_id' : (str) claim ID of the resulting claim
             }
         """
-        
+
         try:
             parse_lbry_uri(name)
         except (TypeError, URIParseError):
             raise Exception("Invalid name given to publish")
-        
+
         amount = self.get_dewies_or_error('bid', bid)
         if amount <= 0:
             raise ValueError("Bid value must be greater than 0.0")
-        
+
         for address in [claim_address, change_address]:
             if address is not None:
                 # raises an error if the address is invalid
                 decode_address(address)
-        
+
         account = self.get_account_or_default(account_id)
-        
+
         available = await account.get_balance()
+        existing_claims = []
         if amount >= available:
             existing_claims = await account.get_claims(claim_name=name)
             if len(existing_claims) == 1:
@@ -2158,7 +2045,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"Please lower the bid value, the maximum amount "
                     f"you can specify for this claim is {dewies_to_lbc(available)}."
                 )
-        
+
         metadata = metadata or {}
         if fee is not None:
             metadata['fee'] = fee
@@ -2180,16 +2067,16 @@ class Daemon(metaclass=JSONRPCServerType):
             metadata['preview'] = preview
         if nsfw is not None:
             metadata['nsfw'] = bool(nsfw)
-        
+
         metadata['version'] = '_0_1_0'
-        
+
         # check for original deprecated format {'currency':{'address','amount'}}
         # add address, version to fee if unspecified
         if 'fee' in metadata:
             if len(metadata['fee'].keys()) == 1 and isinstance(metadata['fee'].values()[0], dict):
                 raise Exception('Old format for fee no longer supported. '
                                 'Fee must be specified as {"currency":,"address":,"amount":}')
-            
+
             if 'amount' in metadata['fee'] and 'currency' in metadata['fee']:
                 if not metadata['fee']['amount']:
                     log.warning("Stripping empty fee from published metadata")
@@ -2199,7 +2086,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     metadata['fee']['address'] = address
             if 'fee' in metadata and 'version' not in metadata['fee']:
                 metadata['fee']['version'] = '_0_0_1'
-        
+
         claim_dict = {
             'version': '_0_0_1',
             'claimType': 'streamType',
@@ -2208,7 +2095,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'version': '_0_0_1'
             }
         }
-        
+
         # this will be used to verify the format with lbrynet.schema
         claim_copy = deepcopy(claim_dict)
         if sources is not None:
@@ -2235,13 +2122,13 @@ class Daemon(metaclass=JSONRPCServerType):
             # there was a problem with a metadata field, raise an error here rather than
             # waiting to find out when we go to publish the claim (after having made the stream)
             raise Exception(f"invalid publish metadata: {err}")
-        
+
         certificate = None
         if channel_id or channel_name:
             certificate = await self.get_channel_or_error(
                 self.get_accounts_or_all(channel_account_id), channel_id, channel_name
             )
-        
+
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
@@ -2252,11 +2139,46 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_id': channel_id,
             'channel_name': channel_name
         })
-        
-        return await self._publish_stream(
-            account, name, amount, claim_dict, file_path,
-            certificate, claim_address, change_address
+
+        from lbrynet.extras.daemon.mime_types import guess_media_type
+
+        if file_path:
+            if not os.path.isfile(file_path):
+                raise Exception(f"File {file_path} not found")
+            if os.path.getsize(file_path) == 0:
+                raise Exception(f"Cannot publish empty file {file_path}")
+            claim_dict['stream']['source'] = {}
+
+            stream = await self.stream_manager.create_stream(file_path)
+            stream_hash = stream.stream_hash
+            await self.storage.save_published_file(stream_hash, os.path.basename(file_path),
+                                                   os.path.dirname(file_path), 0)
+            claim_dict['stream']['source']['source'] = stream.sd_hash
+            claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
+            claim_dict['stream']['source']['contentType'] = guess_media_type(file_path)
+            claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
+        else:
+            if not ('source' not in claim_dict['stream'] and existing_claims):
+                raise Exception("no previous stream to update")
+            claim_dict['stream']['source'] = existing_claims[-1].claim_dict['stream']['source']
+            stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
+        tx = await self.default_wallet.claim_name(
+            account, name, bid, claim_dict, certificate, claim_address
         )
+        await self.storage.save_content_claim(
+            stream_hash, tx.outputs[0].id
+        )
+        await self.analytics_manager.send_claim_action('publish')
+        nout = 0
+        txo = tx.outputs[nout]
+        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
+        return {
+            "success": True,
+            "tx": tx,
+            "claim_id": txo.claim_id,
+            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
+            "output": tx.outputs[nout]
+        }
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None, blocking=True):
@@ -2284,19 +2206,18 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         account = self.get_account_or_default(account_id)
-        
+
         if claim_id is None and txid is None and nout is None:
             raise Exception('Must specify claim_id, or txid and nout')
         if txid is None and nout is not None:
             raise Exception('Must specify txid')
         if nout is None and txid is not None:
             raise Exception('Must specify nout')
-        
+
         tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
+        await self.analytics_manager.send_claim_action('abandon')
         if blocking:
             await self.ledger.wait(tx)
-        
-        self.component_manager.loop.create_task(self.component_manager.analytics_manager.send_claim_action('abandon'))
         return {"success": True, "tx": tx}
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -2329,9 +2250,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
         result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
-        self.component_manager.loop.create_task(
-            self.component_manager.analytics_manager.send_claim_action('new_support')
-        )
+        await self.analytics_manager.send_claim_action('new_support')
         return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -2364,9 +2283,7 @@ class Daemon(metaclass=JSONRPCServerType):
         amount = self.get_dewies_or_error("amount", amount)
         validate_claim_id(claim_id)
         result = await self.wallet_manager.tip_claim(amount, claim_id, account)
-        self.component_manager.loop.create_task(
-            self.component_manager.analytics_manager.send_claim_action('new_support')
-        )
+        await self.analytics_manager.send_claim_action('new_support')
         return result
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
@@ -2571,6 +2488,10 @@ class Daemon(metaclass=JSONRPCServerType):
                     results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
         return results
 
+    TX_DOC = """
+    Transaction management.
+    """
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_list(self, account_id=None, page=None, page_size=None):
         """
@@ -2654,6 +2575,10 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_transaction(txid)
 
+    UTXO_DOC = """
+    Unspent transaction management.
+    """
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_utxo_list(self, account_id=None, page=None, page_size=None):
         """
@@ -2729,36 +2654,34 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_block(blockhash, height)
 
-    # @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
-    #           conditions=[WALLET_IS_UNLOCKED])
-    # async def jsonrpc_blob_get(self, blob_hash, timeout=None):
-    #     """
-    #     Download and return a blob
-    #
-    #     Usage:
-    #         blob_get (<blob_hash> | --blob_hash=<blob_hash>) [--timeout=<timeout>]
-    #
-    #     Options:
-    #     --blob_hash=<blob_hash>                        : (str) blob hash of the blob to get
-    #     --timeout=<timeout>                            : (int) timeout in number of seconds
-    #
-    #     Returns:
-    #         (str) Success/Fail message or (dict) decoded data
-    #     """
-    #
-    #     timeout = timeout or 30
-    #
-    #     blob = await self._download_blob(
-    #         blob_hash, rate_manager=self.payment_rate_manager, timeout=timeout
-    #     )
-    #     if encoding and encoding in decoders:
-    #         blob_file = blob.open_for_reading()
-    #         result = decoders[encoding](blob_file.read())
-    #         blob_file.close()
-    #     else:
-    #         result = "Downloaded blob %s" % blob_hash
-    #
-    #     return result
+    BLOB_DOC = """
+    Blob management.
+    """
+
+    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
+              conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_blob_get(self, blob_hash, timeout=None, read=False):
+        """
+        Download and return a blob
+
+        Usage:
+            blob_get (<blob_hash> | --blob_hash=<blob_hash>) [--timeout=<timeout>] [--read]
+
+        Options:
+        --blob_hash=<blob_hash>                        : (str) blob hash of the blob to get
+        --timeout=<timeout>                            : (int) timeout in number of seconds
+
+        Returns:
+            (str) Success/Fail message or (dict) decoded data
+        """
+
+        downloader = BlobDownloader(asyncio.get_event_loop(), self.blob_manager, self.conf)
+        blob = await downloader.get_blob(blob_hash, self.dht_node)
+        if read:
+            with open(blob.file_path, 'rb') as handle:
+                return handle.read().decode()
+        else:
+            return "Downloaded blob %s" % blob_hash
 
     @requires(BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_blob_delete(self, blob_hash):
@@ -2774,7 +2697,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) Success/fail message
         """
-        
+
         streams = self.stream_manager.get_filtered_streams(sd_hash=blob_hash)
         if streams:
             await self.stream_manager.delete_stream(streams[0])
@@ -2859,106 +2782,62 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         return True
 
-    @requires(STREAM_MANAGER_COMPONENT)
-    async def jsonrpc_file_reflect(self, **kwargs) -> typing.List[str]:
+    @requires(BLOB_COMPONENT, WALLET_COMPONENT)
+    async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
+                                finished=None, page_size=None, page=None):
         """
-        Reflect all the blobs in a file matching the filter criteria
+        Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
         Usage:
-             file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                          [--stream_hash=<stream_hash>] [--rowid=<rowid>]
-                          [--reflector=<reflector>]
+            blob_list [--needed] [--finished] [<uri> | --uri=<uri>]
+                      [<stream_hash> | --stream_hash=<stream_hash>]
+                      [<sd_hash> | --sd_hash=<sd_hash>]
+                      [<page_size> | --page_size=<page_size>]
+                      [<page> | --page=<page>]
 
         Options:
-            --sd_hash=<sd_hash>          : (str) get file with matching sd hash
-            --file_name=<file_name>      : (str) get file with matching file name in the
-                                            downloads folder
-            --stream_hash=<stream_hash>  : (str) get file with matching stream hash
-            --rowid=<rowid>              : (int) get file with matching row id
-            --reflector=<reflector>      : (str) reflector server, ip address or url
-                                             by default choose a server from the config
+            --needed                     : (bool) only return needed blobs
+            --finished                   : (bool) only return finished blobs
+            --uri=<uri>                  : (str) filter blobs by stream in a uri
+            --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
+            --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
+            --page_size=<page_size>      : (int) results page size
+            --page=<page>                : (int) page of results to return
 
         Returns:
-            (list) list of blobs reflected
+            (list) List of blob hashes
         """
-        _DuplicateBlobFileError: Exception('Too many files found, need one')
-        _NoFileFound: Exception('No file found')
-        try:
-            host = kwargs.get('reflector', None)
-            manager = self.stream_manager.get_filtered_streams(**kwargs)
-            assert len(manager) == 1, _DuplicateBlobFileError
-            assert manager is not None, _NoFileFound
-            blob_hashes = self.storage.get_all_blob_hashes()
-            args = (self.stream_manager.blob_manager, self.blob_manager.loop, blob_hashes, host)
-            return await reflector.reflect(*args)
-        except (_DuplicateBlobFileError, _NoFileFound) as exc:
-            raise exc
 
-
-    # @requires(BLOB_COMPONENT, WALLET_COMPONENT)
-    # async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
-    #                             finished=None, page_size=None, page=None):
-    #     """
-    #     Returns blob hashes. If not given filters, returns all blobs known by the blob manager
-    #
-    #     Usage:
-    #         blob_list [--needed] [--finished] [<uri> | --uri=<uri>]
-    #                   [<stream_hash> | --stream_hash=<stream_hash>]
-    #                   [<sd_hash> | --sd_hash=<sd_hash>]
-    #                   [<page_size> | --page_size=<page_size>]
-    #                   [<page> | --page=<page>]
-    #
-    #     Options:
-    #         --needed                     : (bool) only return needed blobs
-    #         --finished                   : (bool) only return finished blobs
-    #         --uri=<uri>                  : (str) filter blobs by stream in a uri
-    #         --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
-    #         --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
-    #         --page_size=<page_size>      : (int) results page size
-    #         --page=<page>                : (int) page of results to return
-    #
-    #     Returns:
-    #         (list) List of blob hashes
-    #     """
-    #     if uri or stream_hash or sd_hash:
-    #         if uri:
-    #             metadata = (await self.wallet_manager.resolve(uri))[uri]
-    #             sd_hash = utils.get_sd_hash(metadata)
-    #             stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
-    #         elif stream_hash:
-    #             sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
-    #         elif sd_hash:
-    #             stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
-    #             sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
-    #         if stream_hash:
-    #             crypt_blobs = await self.storage.get_blobs_for_stream(stream_hash)
-    #             blobs = await d2f(defer.gatherResults([
-    #                 self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
-    #                 for crypt_blob in crypt_blobs if crypt_blob.blob_hash is not None
-    #             ]))
-    #         else:
-    #             blobs = []
-    #         # get_blobs_for_stream does not include the sd blob, so we'll add it manually
-    #         if sd_hash in self.blob_manager.blobs:
-    #             blobs = [self.blob_manager.blobs[sd_hash]] + blobs
-    #     else:
-    #         blobs = self.blob_manager.blobs.values()
-    #
-    #     if needed:
-    #         blobs = [blob for blob in blobs if not blob.get_is_verified()]
-    #     if finished:
-    #         blobs = [blob for blob in blobs if blob.get_is_verified()]
-    #
-    #     blob_hashes = [blob.blob_hash for blob in blobs if blob.blob_hash]
-    #     page_size = page_size or len(blob_hashes)
-    #     page = page or 0
-    #     start_index = page * page_size
-    #     stop_index = start_index + page_size
-    #     return blob_hashes[start_index:stop_index]
+        if uri or stream_hash or sd_hash:
+            if uri:
+                metadata = (await self.wallet_manager.resolve(uri))[uri]
+                sd_hash = utils.get_sd_hash(metadata)
+                stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
+            elif stream_hash:
+                sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
+            elif sd_hash:
+                stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
+                sd_hash = await self.storage.get_sd_blob_hash_for_stream(stream_hash)
+            if sd_hash:
+                blobs = [sd_hash]
+            else:
+                blobs = []
+            if stream_hash:
+                blobs.extend([b.blob_hash for b in await self.storage.get_blobs_for_stream(stream_hash)])
+        else:
+            blobs = list(self.blob_manager.completed_blob_hashes)
+        if needed:
+            blobs = [blob_hash for blob_hash in blobs if not self.blob_manager.get_blob(blob_hash).get_is_verified()]
+        if finished:
+            blobs = [blob_hash for blob_hash in blobs if self.blob_manager.get_blob(blob_hash).get_is_verified()]
+        page_size = page_size or len(blobs)
+        page = page or 0
+        start_index = page * page_size
+        stop_index = start_index + page_size
+        return blobs[start_index:stop_index]
 
     @requires(BLOB_COMPONENT)
-    async def jsonrpc_blob_reflect(self, blob_hashes: typing.List,
-                                   reflector_server=None) -> typing.List[str]:
+    async def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
         """
         Reflects specified blobs
 
@@ -2971,26 +2850,50 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) reflected blob hashes
         """
-        args = (self.blob_manager, self.blob_manager.loop, blob_hashes, reflector_server)
-        return await reflector.reflect(*args)
+
+        raise NotImplementedError()
 
     @requires(BLOB_COMPONENT)
-    async def jsonrpc_blob_reflect_all(self) -> typing.List[str]:
+    async def jsonrpc_blob_reflect_all(self):
         """
         Reflects all saved blobs
 
         Usage:
             blob_reflect_all
-    
+
         Options:
             None
 
         Returns:
             (bool) true if successful
         """
-        blobs = await self.blob_manager.storage.get_all_blob_hashes()
-        args = (self.blob_manager, self.blob_manager.loop, blobs)
-        return await reflector.reflect(*args)
+
+        raise NotImplementedError()
+
+    @requires(STREAM_MANAGER_COMPONENT)
+    async def jsonrpc_file_reflect(self, **kwargs):
+        """
+        Reflect all the blobs in a file matching the filter criteria
+
+        Usage:
+            file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+                         [--stream_hash=<stream_hash>] [--rowid=<rowid>]
+                         [--reflector=<reflector>]
+
+        Options:
+            --sd_hash=<sd_hash>          : (str) get file with matching sd hash
+            --file_name=<file_name>      : (str) get file with matching file name in the
+                                           downloads folder
+            --stream_hash=<stream_hash>  : (str) get file with matching stream hash
+            --rowid=<rowid>              : (int) get file with matching row id
+            --reflector=<reflector>      : (str) reflector server, ip address or url
+                                           by default choose a server from the config
+
+        Returns:
+            (list) list of blobs reflected
+        """
+
+        raise NotImplementedError()
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):
@@ -3064,135 +2967,13 @@ class Daemon(metaclass=JSONRPCServerType):
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
 
-    # # the single peer downloader needs wallet access
-    # @requires(DHT_COMPONENT, WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    # def jsonrpc_blob_availability(self, blob_hash, search_timeout=None, blob_timeout=None):
-    #     """
-    #     Get blob availability
-    #
-    #     Usage:
-    #         blob_availability (<blob_hash>) [<search_timeout> | --search_timeout=<search_timeout>]
-    #                           [<blob_timeout> | --blob_timeout=<blob_timeout>]
-    #
-    #     Options:
-    #         --blob_hash=<blob_hash>           : (str) check availability for this blob hash
-    #         --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
-    #                                             in the dht
-    #         --blob_timeout=<blob_timeout>     : (int) how long to try downloading from a peer
-    #
-    #     Returns:
-    #         (dict) {
-    #             "is_available": <bool, true if blob is available from a peer from peer list>
-    #             "reachable_peers": ["<ip>:<port>"],
-    #             "unreachable_peers": ["<ip>:<port>"]
-    #         }
-    #     """
-    #     return self._blob_availability(blob_hash, search_timeout, blob_timeout)
-    #
-    # @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    # async def jsonrpc_stream_availability(self, uri, search_timeout=None, blob_timeout=None):
-    #     """
-    #     Get stream availability for lbry uri
-    #
-    #     Usage:
-    #         stream_availability (<uri> | --uri=<uri>)
-    #                             [<search_timeout> | --search_timeout=<search_timeout>]
-    #                             [<blob_timeout> | --blob_timeout=<blob_timeout>]
-    #
-    #     Options:
-    #         --uri=<uri>                       : (str) check availability for this uri
-    #         --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
-    #                                             in the dht
-    #         --blob_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
-    #
-    #     Returns:
-    #         (dict) {
-    #             'is_available': <bool>,
-    #             'did_decode': <bool>,
-    #             'did_resolve': <bool>,
-    #             'is_stream': <bool>,
-    #             'num_blobs_in_stream': <int>,
-    #             'sd_hash': <str>,
-    #             'sd_blob_availability': <dict> see `blob_availability`,
-    #             'head_blob_hash': <str>,
-    #             'head_blob_availability': <dict> see `blob_availability`,
-    #             'use_upnp': <bool>,
-    #             'upnp_redirect_is_set': <bool>,
-    #             'error': <None> | <str> error message
-    #         }
-    #     """
-    #
-    #     search_timeout = search_timeout or conf.settings['peer_search_timeout']
-    #     blob_timeout = blob_timeout or conf.settings['sd_download_timeout']
-    #
-    #     response = {
-    #         'is_available': False,
-    #         'did_decode': False,
-    #         'did_resolve': False,
-    #         'is_stream': False,
-    #         'num_blobs_in_stream': None,
-    #         'sd_hash': None,
-    #         'sd_blob_availability': {},
-    #         'head_blob_hash': None,
-    #         'head_blob_availability': {},
-    #         'use_upnp': conf.settings['use_upnp'],
-    #         'upnp_redirect_is_set': len(self.upnp.upnp_redirects),
-    #         'error': None
-    #     }
-    #
-    #     try:
-    #         resolved_result = (await self.wallet_manager.resolve(uri))[uri]
-    #         response['did_resolve'] = True
-    #     except UnknownNameError:
-    #         response['error'] = "Failed to resolve name"
-    #         return response
-    #     except URIParseError:
-    #         response['error'] = "Invalid URI"
-    #         return response
-    #
-    #     try:
-    #         claim_obj = smart_decode(resolved_result[uri]['claim']['hex'])
-    #         response['did_decode'] = True
-    #     except DecodeError:
-    #         response['error'] = "Failed to decode claim value"
-    #         return response
-    #
-    #     response['is_stream'] = claim_obj.is_stream
-    #     if not claim_obj.is_stream:
-    #         response['error'] = "Claim for \"%s\" does not contain a stream" % uri
-    #         return response
-    #
-    #     sd_hash = claim_obj.source_hash
-    #     response['sd_hash'] = sd_hash
-    #     head_blob_hash = None
-    #     downloader = self._get_single_peer_downloader()
-    #     have_sd_blob = sd_hash in self.blob_manager.blobs
-    #     try:
-    #         sd_blob = await self.jsonrpc_blob_get(sd_hash, timeout=blob_timeout, encoding="json")
-    #         if not have_sd_blob:
-    #             await self.jsonrpc_blob_delete(sd_hash)
-    #         if sd_blob and 'blobs' in sd_blob:
-    #             response['num_blobs_in_stream'] = len(sd_blob['blobs']) - 1
-    #             head_blob_hash = sd_blob['blobs'][0]['blob_hash']
-    #             head_blob_availability = await self._blob_availability(
-    #                 head_blob_hash, search_timeout, blob_timeout, downloader)
-    #             response['head_blob_availability'] = head_blob_availability
-    #     except Exception as err:
-    #         response['error'] = err
-    #     response['head_blob_hash'] = head_blob_hash
-    #     response['sd_blob_availability'] = await self._blob_availability(
-    #         sd_hash, search_timeout, blob_timeout, downloader)
-    #     response['is_available'] = response['sd_blob_availability'].get('is_available') and \
-    #                                response['head_blob_availability'].get('is_available')
-    #     return response
-
     async def get_channel_or_error(
             self, accounts: List[LBCAccount], channel_id: str = None, channel_name: str = None):
         if channel_id is not None:
             certificates = await self.wallet_manager.get_certificates(
                 private_key_accounts=accounts, claim_id=channel_id)
             if not certificates:
-                raise ValueError("Couldn't find channel with claim_id '{}'.".format(channel_id))
+                raise ValueError("Couldn't find channel with claim_id '{}'." .format(channel_id))
             return certificates[0]
         if channel_name is not None:
             certificates = await self.wallet_manager.get_certificates(
@@ -3220,7 +3001,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     raise ValueError(
                         "Found '{}', but it's an {} ledger account. "
                         "'{}' requires specifying an LBC ledger account."
-                            .format(account_id, account.ledger.symbol, argument_name)
+                        .format(account_id, account.ledger.symbol, argument_name)
                     )
                 return account
         raise ValueError(f"Couldn't find account: {account_id}.")
@@ -3250,19 +3031,3 @@ def get_loggly_query_string(installation_id):
     }
     data = urlencode(params)
     return base_loggly_search_url + data
-
-
-async def report_bug_to_slack(message, installation_id, platform_name, app_version):
-    webhook = utils.deobfuscate(conf.settings['SLACK_WEBHOOK'])
-    payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
-    payload_params = (
-        platform_name,
-        app_version,
-        get_loggly_query_string(installation_id),
-        message
-    )
-    payload = {
-        "text": payload_template % payload_params
-    }
-    async with aiohttp.request('post', webhook, data=json.dumps(payload)) as response:
-        pass

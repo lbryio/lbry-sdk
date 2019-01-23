@@ -8,9 +8,9 @@ from lbrynet.stream.descriptor import StreamDescriptor
 log = logging.getLogger(__name__)
 
 
-def do_migration(db_dir):
-    db_path = os.path.join(db_dir, "lbrynet.sqlite")
-    blob_dir = os.path.join(db_dir, "blobfiles")
+def do_migration(conf):
+    db_path = os.path.join(conf.data_dir, "lbrynet.sqlite")
+    blob_dir = os.path.join(conf.data_dir, "blobfiles")
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
 

@@ -4,7 +4,7 @@ import asyncio
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob_exchange.server import BlobServer
 from lbrynet.schema.address import decode_address
-from lbrynet.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 
 
 async def main(address: str):

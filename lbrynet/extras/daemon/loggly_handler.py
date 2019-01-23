@@ -6,6 +6,9 @@ import traceback
 from lbrynet import utils, __version__
 
 
+LOGGLY_TOKEN = 'BQEzZmMzLJHgAGxkBF00LGD0YGuyATVgAmqxAQEuAQZ2BQH4'
+
+
 class JsonFormatter(logging.Formatter):
     """Format log records using json serialization"""
 
@@ -55,8 +58,7 @@ class HTTPSLogglyHandler(logging.Handler):
         asyncio.ensure_future(self._emit(record))
 
 
-def get_loggly_handler(loggly_token):
-    handler = HTTPSLogglyHandler(loggly_token)
+def get_loggly_handler():
+    handler = HTTPSLogglyHandler(LOGGLY_TOKEN)
     handler.setFormatter(JsonFormatter())
-    handler.name = "loggly"
     return handler

@@ -5,6 +5,7 @@ from lbrynet.schema.address import decode_address
 from lbrynet.schema.encoding import decode_b64_fields
 from lbrynet.schema.schema.certificate import Certificate
 from lbrynet.schema.schema.claim import Claim
+from lbrynet.schema.signature import Signature, NAMED_SECP256K1
 from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.schema import V_0_0_1, CLAIM_TYPE, CLAIM_TYPES, CERTIFICATE_TYPE, VERSION
 from lbrynet.schema.schema import NIST256p, NIST384p, SECP256k1, SHA256, SHA384
@@ -45,24 +46,41 @@ class NIST_ECDSASigner(object):
     def generate(cls):
         return cls(ecdsa.SigningKey.generate(curve=cls.CURVE, hashfunc=cls.HASHFUNC_NAME))
 
-    def sign_stream_claim(self, claim, claim_address, cert_claim_id):
+    def sign(self, *fields):
+        digest = self.HASHFUNC(bytearray(b''.join(fields))).digest()
+        return self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC)
+
+    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name, detached=False):
         validate_claim_id(cert_claim_id)
+        raw_cert_id = binascii.unhexlify(cert_claim_id)
         decoded_addr = decode_address(claim_address)
+        if detached:
+            assert name, "Name is required for detached signatures"
+            assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
+            signature = self.sign(
+                name.lower().encode(),
+                decoded_addr,
+                claim.serialized_no_signature,
+                raw_cert_id,
+            )
+        else:
+            signature = self.sign(decoded_addr, claim.serialized_no_signature, raw_cert_id)
 
-        to_sign = bytearray()
-        to_sign.extend(decoded_addr)
-        to_sign.extend(claim.serialized_no_signature)
-        to_sign.extend(binascii.unhexlify(cert_claim_id))
-
-        digest = self.HASHFUNC(to_sign).digest()
+        if detached:
+            return Claim.load(decode_b64_fields(claim.protobuf_dict)), Signature(NAMED_SECP256K1(
+                signature,
+                raw_cert_id,
+                claim.serialized_no_signature
+            ))
+        # -- Legacy signer (signature inside protobuf) --
 
         if not isinstance(self.private_key, ecdsa.SigningKey):
             raise Exception("Not given a signing key")
         sig_dict = {
             "version": V_0_0_1,
             "signatureType": self.CURVE_NAME,
-            "signature": self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC),
-            "certificateId": binascii.unhexlify(cert_claim_id)
+            "signature": signature,
+            "certificateId": raw_cert_id
         }
 
         msg = {
@@ -71,7 +89,8 @@ class NIST_ECDSASigner(object):
             "publisherSignature": sig_dict
         }
 
-        return Claim.load(msg)
+        proto = Claim.load(msg)
+        return proto, Signature.flagged_parse(proto.SerializeToString())
 
 
 class NIST256pSigner(NIST_ECDSASigner):

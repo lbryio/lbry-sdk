@@ -1,9 +1,8 @@
 import logging
-import typing
 import asyncio
+from lbrynet.conf import Config
 from lbrynet.error import ComponentStartConditionNotMet
 from lbrynet.dht.peer import PeerManager
-from lbrynet.extras.daemon import analytics
 
 log = logging.getLogger(__name__)
 
@@ -35,13 +34,12 @@ class RequiredCondition(metaclass=RequiredConditionType):
 class ComponentManager:
     default_component_classes = {}
 
-    def __init__(self, reactor=None, loop: typing.Optional[asyncio.BaseEventLoop] = None,
-                 skip_components=None, peer_manager=None, **override_components):
+    def __init__(self, conf: Config, analytics_manager=None, skip_components=None,
+                 peer_manager=None, **override_components):
+        self.conf = conf
         self.skip_components = skip_components or []
-        self.reactor = reactor
-        self.loop = loop or asyncio.get_event_loop()
-        self.loop.set_debug(True)
-        self.analytics_manager = analytics.Manager(self.loop)
+        self.loop = asyncio.get_event_loop()
+        self.analytics_manager = analytics_manager
         self.component_classes = {}
         self.components = set()
         self.started = asyncio.Event(loop=self.loop)
@@ -127,7 +125,7 @@ class ComponentManager:
             if component.component_name in callbacks:
                 maybe_coro = callbacks[component.component_name](component)
                 if asyncio.iscoroutine(maybe_coro):
-                    asyncio.create_task(maybe_coro)
+                    await asyncio.create_task(maybe_coro)
 
         stages = self.sort_components()
         for stage in stages:
@@ -141,8 +139,6 @@ class ComponentManager:
     async def stop(self):
         """
         Stop Components in reversed startup order
-
-        :return: (defer.Deferred)
         """
         stages = self.sort_components(reverse=True)
         for stage in stages:
@@ -150,7 +146,7 @@ class ComponentManager:
                 component._stop() for component in stage if component.running
             ]
             if needing_stop:
-                await asyncio.wait(needing_stop)
+                await asyncio.wait(needing_stop, loop=self.loop)
 
     def all_components_running(self, *component_names):
         """

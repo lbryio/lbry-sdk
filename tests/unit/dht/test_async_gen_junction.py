@@ -70,8 +70,6 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
         self.assertEqual(slow_gen.called_close, True)
 
     async def test_stop_when_encapsulating_task_cancelled(self):
-        expected_order = [1, 2, 1, 1, 2, 1]
-        order = []
         fast_gen = MockAsyncGen(self.loop, 1, 0.1)
         slow_gen = MockAsyncGen(self.loop, 2, 0.2)
 
@@ -79,8 +77,8 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
             async with AsyncGeneratorJunction(self.loop) as junction:
                 junction.add_generator(fast_gen)
                 junction.add_generator(slow_gen)
-                async for item in junction:
-                    order.append(item)
+                async for _ in junction:
+                    pass
 
         task = self.loop.create_task(_task())
         self.loop.call_later(0.5, task.cancel)
@@ -88,4 +86,3 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
             await task
         self.assertEqual(fast_gen.called_close, True)
         self.assertEqual(slow_gen.called_close, True)
-        self.assertListEqual(order, expected_order)

@@ -1,9 +1,8 @@
 import contextlib
 from io import StringIO
-from unittest import skip
 from torba.testcase import AsyncioTestCase
 
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.extras import cli
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT, \
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, FILE_MANAGER_COMPONENT, \
@@ -29,7 +28,6 @@ class FakeAnalytics:
 
 
 class CLIIntegrationTest(AsyncioTestCase):
-    USE_AUTH = False
 
     async def asyncSetUp(self):
         skip = [
@@ -38,39 +36,21 @@ class CLIIntegrationTest(AsyncioTestCase):
             PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT,
             RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT
         ]
-        conf.initialize_settings(load_conf_file=False)
-        conf.settings['api_port'] = 5299
-        conf.settings['use_auth_http'] = self.USE_AUTH
-        conf.settings['components_to_skip'] = skip
-        conf.settings.initialize_post_conf_load()
+        conf = Config()
+        conf.data_dir = '/tmp'
+        conf.share_usage_data = False
+        conf.api = 'localhost:5299'
+        conf.components_to_skip = skip
         Daemon.component_attributes = {}
-        self.daemon = Daemon(analytics_manager=FakeAnalytics())
-        await self.daemon.start_listening()
+        self.daemon = Daemon(conf)
+        await self.daemon.start()
 
     async def asyncTearDown(self):
         await self.daemon.shutdown()
 
-
-@skip
-class AuthenticatedCLITest(CLIIntegrationTest):
-    USE_AUTH = True
-
     def test_cli_status_command_with_auth(self):
-        self.assertTrue(self.daemon._use_authentication)
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
-            cli.main(["status"])
-        actual_output = actual_output.getvalue()
-        self.assertIn("connection_status", actual_output)
-
-
-class UnauthenticatedCLITest(CLIIntegrationTest):
-    USE_AUTH = False
-
-    def test_cli_status_command_with_auth(self):
-        self.assertFalse(self.daemon._use_authentication)
-        actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            cli.main(["status"])
+            cli.main(["--api", "localhost:5299", "status"])
         actual_output = actual_output.getvalue()
         self.assertIn("connection_status", actual_output)

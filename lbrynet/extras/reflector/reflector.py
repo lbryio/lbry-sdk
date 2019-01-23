@@ -60,23 +60,6 @@ class IncompleteResponse(Exception):
     __context__ = BufferError
 
 
-# TODO: determine if this is worth using.
-class Blobs(typing.AsyncIterator):
-    def __init__(self, blobs):
-        self.blob = iter(blobs)
-
-    def __await__(self):
-        return self
-
-    async def __anext__(self):
-        await asyncio.sleep(0.1)
-        try:
-            blob = next(self.blob)
-        except StopAsyncIteration:
-            raise StopAsyncIteration
-        return blob
-
-
 class ReflectorProtocol(asyncio.Protocol):
     def __init__(self, manager: typing.Any[BlobFileManager],
                  blobs: typing.Optional[typing.List] = None,
@@ -85,47 +68,55 @@ class ReflectorProtocol(asyncio.Protocol):
         self.blobs = blobs
         self.reflected = []
         self.manager = manager
-        self.transport = None
+        self.transport = asyncio.Transport()
 
     def connection_made(self, transport: asyncio.Transport) -> typing.NoReturn:
         self.transport = transport
+
+    async def handle_sd_blob(self, blob):
+        # TODO: should I use this self.manager.storage.update_reflected_stream()
+        if not self.manager.storage.stream_exists(blob):
+            await self.manager.storage.store_stream(
+                blob, await self.manager.get_stream_descriptor(blob))
+            return await self.transport.write(
+                await _encode({'sd_blob_hash': blob}))
+        else:
+            needed = await self.manager.storage.get_streams_to_re_reflect()
+            return await self.transport.write(
+                await _encode({'received': blob, 'needed': needed}))
+    
+    async def server_handle(self, message: typing.Dict) -> typing.NoReturn:
+        async with message:
+            if 'sd_blob_hash' in message:
+                blob, size = await asyncio.gather(
+                    await message.get('sd_blob_hash'),
+                    await message.get('sd_blob_size'))
+                return await asyncio.current_task(await self.handle_sd_blob(blob))
+            elif 'blob_hash' in message:
+                blob, size = await asyncio.gather(
+                    await message.get('blob_hash'),
+                    await message.get('blob_hash_length'))
+                if not self.manager.get_blob(blob, size):
+                    await self.manager.storage.add_known_blob(blob)
+
+    async def client_handle(self, message: typing.Dict) -> typing.NoReturn:
+        async with message:
+            if 'received' in message:
+                if await message.get('received'):
+                    return True
+            elif 'send' in message:
+                # TODO: reflect blobs on context
+                send = await message.get(''.startswith('send'))
+                if 'needed' in message:
+                    needed = await message.get(''.startswith('needed'))
 
     async def handle_response(self, data: typing.AnyStr[bytes]) -> typing.NoReturn:
         try:
             message = await _decode(data)
             if ('blob_hash', 'sd_blob_hash') in message:
-                async with message:
-                    if 'sd_blob_hash' in message:
-                        blob, size = await asyncio.gather(
-                            await message.get('sd_blob_hash'),
-                            await message.get('sd_blob_size'))
-                        # TODO: should I use this self.manager.storage.update_reflected_stream()
-                        if not self.manager.storage.stream_exists(blob):
-                            await self.manager.storage.store_stream(
-                                blob, await self.manager.get_stream_descriptor(blob))
-                            return await self.transport.write(
-                                await _encode({'sd_blob_hash': blob}))
-                        # TODO: look into deeper self.manager.storage.run_and_return_list()
-                        needed = await self.manager.storage.get_streams_to_re_reflect()
-                        return await self.transport.write(
-                            await _encode({'received': blob, 'needed': needed}))
-                    elif 'blob_hash' in message:
-                        blob, size = await asyncio.gather(
-                            await message.get('blob_hash'),
-                            await message.get('blob_hash_length'))
-                        if not self.manager.get_blob(blob, size):
-                            await self.manager.storage.add_known_blob(blob)
+                return await self.server_handle(message)
             elif ('received', 'send', 'needed') in message:
-                async with message:
-                    if 'received' in message:
-                        if await message.get('received'):
-                            # TODO: file transfer
-                            pass
-                    elif 'send' in message:
-                        # TODO: reflect blobs on context
-                        send = await message.get(''.startswith('send'))
-                        if 'needed' in message:
-                            needed = await message.get(''.startswith('needed'))
+                return await self.client_handle(message)
             else:
                 pass  # hmm...
         except (IncompleteResponse, ReflectorRequestError) as exc:
@@ -143,21 +134,16 @@ async def reflect(manager: typing.Any[BlobFileManager] = BlobFileManager,
                   host: typing.Optional[Reflector.SERVERS, str] = Reflector.HOST,
                   port: typing.Optional[int] = Reflector.PORT) -> typing.Any:
     """
-    Reflect Blobs to a Reflector
+    Reflect Blobs to Reflector
 
     Usage:
-            reflect (blob_manager)(blobs)(loop)
-                    [--reflector_server=<hostname>][--reflector_port=<port>][--version=<version>]
+            reflect (blob_manager)(blobs)
+                    [--reflector_host=<host>][--reflector_port=<port>]
 
         Options:
             blob_manager=(<BlobFileManager>...): BlobFileManager
             blobs=(<blobs>...)                 : Blobs[list] to reflect
-            reflector=(<Reflector>)
-            service=(<Service>)
-            protocol=(<ReflectorProtocol>)
-            --version=<version>                : Reflector protocol version number
-                                                 by default use V2
-            --reflector_server=<hostname>      : Reflector server hostname
+            --reflector_host=<host>            : Reflector server hostname
             --reflector_port=<port>            : Reflector port number
                                                  by default choose a server and port from the config
 

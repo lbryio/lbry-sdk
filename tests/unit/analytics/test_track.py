@@ -3,6 +3,7 @@ from lbrynet.extras.daemon import analytics
 import unittest
 
 
+@unittest.SkipTest
 class TrackTest(unittest.TestCase):
     pass
     # def test_empty_summarize_is_none(self):

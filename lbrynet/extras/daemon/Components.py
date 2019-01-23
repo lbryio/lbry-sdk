@@ -8,13 +8,15 @@ import typing
 import socket
 from hashlib import sha256
 from types import SimpleNamespace
+import base58
 
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
 
 import lbrynet.schema
-from lbrynet import conf
+from lbrynet import utils
+from lbrynet.conf import HEADERS_FILE_SHA256_CHECKSUM
 from lbrynet.dht.node import Node
 from lbrynet.dht.peer import KademliaPeer
 from lbrynet.dht.blob_announcer import BlobAnnouncer
@@ -23,7 +25,7 @@ from lbrynet.blob_exchange.server import BlobServer
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.extras.daemon.Component import Component
 from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
-from lbrynet.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.wallet import Network
 
@@ -86,25 +88,24 @@ class DatabaseComponent(Component):
     def get_current_db_revision():
         return 9
 
-    @staticmethod
-    def get_revision_filename():
-        return conf.settings.get_db_revision_filename()
+    @property
+    def revision_filename(self):
+        return os.path.join(self.conf.data_dir, 'db_revision')
 
-    @staticmethod
-    def _write_db_revision_file(version_num):
-        with open(conf.settings.get_db_revision_filename(), mode='w') as db_revision:
+    def _write_db_revision_file(self, version_num):
+        with open(self.revision_filename, mode='w') as db_revision:
             db_revision.write(str(version_num))
 
     async def start(self):
         # check directories exist, create them if they don't
         log.info("Loading databases")
 
-        if not os.path.exists(self.get_revision_filename()):
+        if not os.path.exists(self.revision_filename):
             log.warning("db_revision file not found. Creating it")
             self._write_db_revision_file(self.get_current_db_revision())
 
         # check the db migration and run any needed migrations
-        with open(self.get_revision_filename(), "r") as revision_read_handle:
+        with open(self.revision_filename, "r") as revision_read_handle:
             old_revision = int(revision_read_handle.read().strip())
 
         if old_revision > self.get_current_db_revision():
@@ -115,13 +116,13 @@ class DatabaseComponent(Component):
             from lbrynet.extras.daemon.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
             await asyncio.get_event_loop().run_in_executor(
-                None, dbmigrator.migrate_db, conf.settings.data_dir, old_revision, self.get_current_db_revision()
+                None, dbmigrator.migrate_db, self.conf.data_dir, old_revision, self.get_current_db_revision()
             )
             self._write_db_revision_file(self.get_current_db_revision())
             log.info("Finished upgrading the databases.")
 
         self.storage = SQLiteStorage(
-            os.path.join(conf.settings.data_dir, "lbrynet.sqlite")
+            self.conf, os.path.join(self.conf.data_dir, "lbrynet.sqlite")
         )
         await self.storage.open()
 
@@ -139,9 +140,9 @@ class HeadersComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.headers_dir = os.path.join(conf.settings.wallet_dir, 'lbc_mainnet')
+        self.headers_dir = os.path.join(self.conf.wallet_dir, 'lbc_mainnet')
         self.headers_file = os.path.join(self.headers_dir, 'headers')
-        self.old_file = os.path.join(conf.settings.wallet_dir, 'blockchain_headers')
+        self.old_file = os.path.join(self.conf.wallet_dir, 'blockchain_headers')
         self._downloading_headers = None
         self._headers_progress_percent = 0
 
@@ -156,8 +157,8 @@ class HeadersComponent(Component):
         }
 
     async def fetch_headers_from_s3(self):
-        def collector(data, h_file):
-            h_file.write(data)
+        def collector(d, h_file):
+            h_file.write(d)
             local_size = float(h_file.tell())
             final_size = float(final_size_after_download)
             self._headers_progress_percent = math.ceil(local_size / final_size * 100)
@@ -202,8 +203,8 @@ class HeadersComponent(Component):
     async def get_remote_height(self):
         ledger = SimpleNamespace()
         ledger.config = {
-            'default_servers': conf.settings['lbryum_servers'],
-            'data_path': conf.settings.wallet_dir
+            'default_servers': self.conf.lbryum_servers,
+            'data_path': self.conf.wallet_dir
         }
         net = Network(ledger)
         first_connection = net.on_connected.first
@@ -214,10 +215,10 @@ class HeadersComponent(Component):
         return remote_height
 
     async def should_download_headers_from_s3(self):
-        if conf.settings['blockchain_name'] != "lbrycrd_main":
+        if self.conf.blockchain_name != "lbrycrd_main":
             return False
         self._check_header_file_integrity()
-        s3_headers_depth = conf.settings['s3_headers_depth']
+        s3_headers_depth = self.conf.s3_headers_depth
         if not s3_headers_depth:
             return False
         local_height = self.local_header_file_height()
@@ -229,10 +230,10 @@ class HeadersComponent(Component):
 
     def _check_header_file_integrity(self):
         # TODO: temporary workaround for usability. move to txlbryum and check headers instead of file integrity
-        if conf.settings['blockchain_name'] != "lbrycrd_main":
+        if self.conf.blockchain_name != "lbrycrd_main":
             return
         hashsum = sha256()
-        checksum_height, checksum = conf.settings['HEADERS_FILE_SHA256_CHECKSUM']
+        checksum_height, checksum = HEADERS_FILE_SHA256_CHECKSUM
         checksum_length_in_bytes = checksum_height * HEADER_SIZE
         if self.local_header_file_size() < checksum_length_in_bytes:
             return
@@ -250,7 +251,6 @@ class HeadersComponent(Component):
                 headers_file.truncate(checksum_length_in_bytes)
 
     async def start(self):
-        conf.settings.ensure_wallet_dir()
         if not os.path.exists(self.headers_dir):
             os.mkdir(self.headers_dir)
         if os.path.exists(self.old_file):
@@ -265,7 +265,7 @@ class HeadersComponent(Component):
             finally:
                 self._downloading_headers = False
 
-    def stop(self):
+    async def stop(self):
         pass
 
 
@@ -295,11 +295,10 @@ class WalletComponent(Component):
             }
 
     async def start(self):
-        conf.settings.ensure_wallet_dir()
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        lbrynet.schema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet_manager = await LbryWalletManager.from_lbrynet_config(conf.settings, storage)
+        lbrynet.schema.BLOCKCHAIN_NAME = self.conf.blockchain_name
+        self.wallet_manager = await LbryWalletManager.from_lbrynet_config(self.conf, storage)
         self.wallet_manager.old_db = storage
         await self.wallet_manager.start()
 
@@ -327,12 +326,14 @@ class BlobComponent(Component):
             dht_node: Node = self.component_manager.get_component(DHT_COMPONENT)
             if dht_node:
                 data_store = dht_node.protocol.data_store
-        self.blob_manager = BlobFileManager(self.loop, os.path.join(conf.settings.data_dir, "blobfiles"),
+        self.blob_manager = BlobFileManager(asyncio.get_event_loop(), os.path.join(self.conf.data_dir, "blobfiles"),
                                             storage, data_store)
         return await self.blob_manager.setup()
 
-    def stop(self):
-        pass
+    async def stop(self):
+        while self.blob_manager and self.blob_manager.blobs:
+            _, blob = self.blob_manager.blobs.popitem()
+            await blob.close()
 
     async def get_status(self):
         count = 0
@@ -358,16 +359,25 @@ class DHTComponent(Component):
 
     async def get_status(self):
         return {
-            'node_id': binascii.hexlify(conf.settings.get_node_id()),
+            'node_id': binascii.hexlify(self.dht_node.protocol.node_id),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.protocol.routing_table.get_peers())
         }
+
+    def get_node_id(self):
+        node_id_filename = os.path.join(self.conf.data_dir, "node_id")
+        if os.path.isfile(node_id_filename):
+            with open(node_id_filename, "r") as node_id_file:
+                return base58.b58decode(str(node_id_file.read()).strip())
+        node_id = utils.generate_id()
+        with open(node_id_filename, "w") as node_id_file:
+            node_id_file.write(base58.b58encode(node_id).decode())
+        return node_id
 
     async def start(self):
         log.info("start the dht")
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
-        self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", conf.settings["peer_port"])
-        self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", conf.settings["dht_node_port"])
-        node_id = conf.settings.get_node_id()
+        self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", self.conf.peer_port)
+        self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", self.conf.dht_node_port)
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
@@ -376,16 +386,16 @@ class DHTComponent(Component):
                 log.warning("failed to get external ip")
 
         self.dht_node = Node(
-            self.loop,
+            asyncio.get_event_loop(),
             self.component_manager.peer_manager,
-            node_id=node_id,
-            internal_udp_port=conf.settings['dht_node_port'],
+            node_id=self.get_node_id(),
+            internal_udp_port=self.conf.dht_node_port,
             udp_port=self.external_udp_port,
             external_ip=external_ip,
             peer_port=self.external_peer_port
         )
         self.dht_node.start(
-            interface='0.0.0.0', known_node_urls=conf.settings['known_dht_nodes']
+            interface='0.0.0.0', known_node_urls=self.conf.known_dht_nodes
         )
         log.info("Started the dht")
 
@@ -408,8 +418,8 @@ class HashAnnouncerComponent(Component):
     async def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
-        self.hash_announcer = BlobAnnouncer(self.loop, dht_node, storage)
-        self.hash_announcer.start(conf.settings['concurrent_announcers'])
+        self.hash_announcer = BlobAnnouncer(asyncio.get_event_loop(), dht_node, storage)
+        self.hash_announcer.start(self.conf.concurrent_announcers)
         log.info("Started blob announcer")
 
     async def stop(self):
@@ -420,24 +430,6 @@ class HashAnnouncerComponent(Component):
         return {
             'announce_queue_size': 0 if not self.hash_announcer else len(self.hash_announcer.announce_queue)
         }
-
-
-# class PaymentRateComponent(Component):
-#     component_name = PAYMENT_RATE_COMPONENT
-#
-#     def __init__(self, component_manager):
-#         super().__init__(component_manager)
-#         self.payment_rate_manager = OnlyFreePaymentsManager()
-#
-#     @property
-#     def component(self):
-#         return self.payment_rate_manager
-#
-#     def start(self):
-#         return defer.succeed(None)
-#
-#     def stop(self):
-#         return defer.succeed(None)
 
 
 class StreamManagerComponent(Component):
@@ -466,12 +458,12 @@ class StreamManagerComponent(Component):
         node = self.component_manager.get_component(DHT_COMPONENT)
 
         log.info('Starting the file manager')
-
+        loop = asyncio.get_event_loop()
         self.stream_manager = StreamManager(
-            self.loop, blob_manager, wallet, storage, node, conf.settings['blob_download_timeout'],
-            conf.settings['peer_connect_timeout'], [
-                KademliaPeer(self.loop, address=(await resolve_host(self.loop, url)), tcp_port=port + 1)
-                for url, port in conf.settings['reflector_servers']
+            loop, blob_manager, wallet, storage, node, self.conf.blob_download_timeout,
+            self.conf.peer_connect_timeout, [
+                KademliaPeer(loop, address=(await resolve_host(loop, url)), tcp_port=port + 1)
+                for url, port in self.conf.reflector_servers
             ]
         )
         await self.stream_manager.start()
@@ -498,9 +490,9 @@ class PeerProtocolServerComponent(Component):
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
         wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
-        peer_port = upnp.upnp_redirects.get("TCP", conf.settings["peer_port"])
+        peer_port = upnp.upnp_redirects.get("TCP", self.conf.peer_port)
         address = await wallet.get_unused_address()
-        self.blob_server = BlobServer(self.loop, blob_manager, address)
+        self.blob_server = BlobServer(asyncio.get_event_loop(), blob_manager, address)
         self.blob_server.start_server(peer_port, interface='0.0.0.0')
         await self.blob_server.started_listening.wait()
 
@@ -514,9 +506,9 @@ class UPnPComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self._int_peer_port = conf.settings['peer_port']
-        self._int_dht_node_port = conf.settings['dht_node_port']
-        self.use_upnp = conf.settings['use_upnp']
+        self._int_peer_port = self.conf.peer_port
+        self._int_dht_node_port = self.conf.dht_node_port
+        self.use_upnp = self.conf.use_upnp
         self.upnp = None
         self.upnp_redirects = {}
         self.external_ip = None
@@ -628,7 +620,7 @@ class UPnPComponent(Component):
             await asyncio.wait([
                 self.upnp.delete_port_mapping(port, protocol) for protocol, port in self.upnp_redirects.items()
             ])
-        if self._maintain_redirects_task is not None and not self._maintain_redirects_task.done():
+        if self._maintain_redirects_task and not self._maintain_redirects_task.done():
             self._maintain_redirects_task.cancel()
 
     async def get_status(self):

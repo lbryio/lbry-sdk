@@ -138,13 +138,10 @@ class BlobFile:
 
     async def delete(self):
         await self.close()
-        await self.blob_write_lock.acquire()
-        try:
+        async with self.blob_write_lock:
             self.saved_verified_blob = False
             if os.path.isfile(self.file_path):
                 os.remove(self.file_path)
-        finally:
-            self.blob_write_lock.release()
 
     def decrypt(self, key: bytes, iv: bytes) -> bytes:
         """

@@ -2,7 +2,7 @@ import typing
 import asyncio
 import logging
 from sqlite3 import IntegrityError
-from lbrynet.storage import SQLiteStorage
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.stream.descriptor import StreamDescriptor
 
@@ -80,6 +80,8 @@ class BlobFileManager:
                 log.warning("Failed to delete blob file. Reason: %s", e)
             if blob_hash in self.completed_blob_hashes:
                 self.completed_blob_hashes.remove(blob_hash)
+            if blob_hash in self.blobs:
+                del self.blobs[blob_hash]
         try:
             await self.storage.delete_blobs_from_db(bh_to_delete_from_db)
         except IntegrityError as err:

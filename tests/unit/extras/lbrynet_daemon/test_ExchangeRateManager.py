@@ -1,14 +1,41 @@
+import unittest
 from lbrynet.schema.fee import Fee
-from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager, ExchangeRate, LBRYioFeed, BittrexFeed
-from lbrynet.extras.daemon.exchange_rate_manager import CryptonatorFeed, CryptonatorBTCFeed, LBRYioBTCFeed
+from lbrynet.extras.daemon import exchange_rate_manager
 from lbrynet.error import InvalidExchangeRateResponse
-from torba.testcase import AsyncioTestCase
 from tests import test_utils
-# from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-# from tests.mocks import BTCLBCFeed, USDBTCFeed
 
 
-class FeeFormatTest(AsyncioTestCase):
+class BTCLBCFeed(exchange_rate_manager.MarketFeed):
+    def __init__(self):
+        super().__init__(
+            "BTCLBC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+
+class USDBTCFeed(exchange_rate_manager.MarketFeed):
+    def __init__(self):
+        super().__init__(
+            "USDBTC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+
+class DummyExchangeRateManager(exchange_rate_manager.ExchangeRateManager):
+    def __init__(self, market_feeds, rates):
+        self.market_feeds = market_feeds
+        for feed in self.market_feeds:
+            feed.rate = exchange_rate_manager.ExchangeRate(
+                feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
+
+
+class FeeFormatTest(unittest.TestCase):
     def test_fee_created_with_correct_inputs(self):
         fee_dict = {
             'currency': 'USD',
@@ -30,58 +57,58 @@ class FeeFormatTest(AsyncioTestCase):
         self.assertEqual('LBC', fee['currency'])
 
 
-class ExchangeRateTest(AsyncioTestCase):
+class ExchangeRateTest(unittest.TestCase):
     def setUp(self):
         test_utils.reset_time(self)
 
     def test_invalid_rates(self):
         with self.assertRaises(ValueError):
-            ExchangeRate('USDBTC', 0, test_utils.DEFAULT_ISO_TIME)
+            exchange_rate_manager.ExchangeRate('USDBTC', 0, test_utils.DEFAULT_ISO_TIME)
         with self.assertRaises(ValueError):
-            ExchangeRate('USDBTC', -1, test_utils.DEFAULT_ISO_TIME)
+            exchange_rate_manager.ExchangeRate('USDBTC', -1, test_utils.DEFAULT_ISO_TIME)
 
 
-# class FeeTest(AsyncioTestCase):
-#     def setUp(self):
-#         test_utils.reset_time(self)
-#
-#     def test_fee_converts_to_lbc(self):
-#         fee = Fee({
-#             'currency': 'USD',
-#             'amount': 10.0,
-#             'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-#             })
-#
-#         rates = {
-#             'BTCLBC': {'spot': 3.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
-#             'USDBTC': {'spot': 2.0, 'ts': test_utils.DEFAULT_ISO_TIME + 2}
-#         }
-#
-#         market_feeds = [BTCLBCFeed(), USDBTCFeed()]
-#         manager = DummyExchangeRateManager(market_feeds, rates)
-#         result = manager.convert_currency(fee.currency, "LBC", fee.amount)
-#         self.assertEqual(60.0, result)
-#
-#     def test_missing_feed(self):
-#         # test when a feed is missing for conversion
-#         fee = Fee({
-#             'currency':'USD',
-#             'amount': 1.0,
-#             'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-#             })
-#
-#         rates = {
-#             'BTCLBC': {'spot': 1.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
-#         }
-#         market_feeds = [BTCLBCFeed()]
-#         manager = DummyExchangeRateManager(market_feeds, rates)
-#         with self.assertRaises(Exception):
-#             manager.convert_currency(fee.currency, "LBC", fee.amount)
+class FeeTest(unittest.TestCase):
+    def setUp(self):
+        test_utils.reset_time(self)
+
+    def test_fee_converts_to_lbc(self):
+        fee = Fee({
+            'currency': 'USD',
+            'amount': 10.0,
+            'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
+            })
+
+        rates = {
+            'BTCLBC': {'spot': 3.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
+            'USDBTC': {'spot': 2.0, 'ts': test_utils.DEFAULT_ISO_TIME + 2}
+        }
+
+        market_feeds = [BTCLBCFeed(), USDBTCFeed()]
+        manager = DummyExchangeRateManager(market_feeds, rates)
+        result = manager.convert_currency(fee.currency, "LBC", fee.amount)
+        self.assertEqual(60.0, result)
+
+    def test_missing_feed(self):
+        # test when a feed is missing for conversion
+        fee = Fee({
+            'currency': 'USD',
+            'amount': 1.0,
+            'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
+            })
+
+        rates = {
+            'BTCLBC': {'spot': 1.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
+        }
+        market_feeds = [BTCLBCFeed()]
+        manager = DummyExchangeRateManager(market_feeds, rates)
+        with self.assertRaises(Exception):
+            manager.convert_currency(fee.currency, "LBC", fee.amount)
 
 
-class LBRYioFeedTest(AsyncioTestCase):
+class LBRYioFeedTest(unittest.TestCase):
     def test_handle_response(self):
-        feed = LBRYioFeed()
+        feed = exchange_rate_manager.LBRYioFeed()
 
         response = '{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ' \
                    '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ' \
@@ -92,16 +119,16 @@ class LBRYioFeedTest(AsyncioTestCase):
 
         response = '{}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
         response = '{"success":true,"result":[]}'
         with self.assertRaises(InvalidExchangeRateResponse):
-            out = feed._handle_response(response)
+            feed._handle_response(response)
 
 
-class LBRYioBTCFeedTest(AsyncioTestCase):
-    def test_handle_response(self):
-        feed = LBRYioBTCFeed()
+class TestExchangeRateFeeds(unittest.TestCase):
+    def test_handle_lbryio_btc_response(self):
+        feed = exchange_rate_manager.LBRYioBTCFeed()
 
         response = '{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ' \
                    '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ' \
@@ -118,10 +145,8 @@ class LBRYioBTCFeedTest(AsyncioTestCase):
         with self.assertRaises(InvalidExchangeRateResponse):
             out = feed._handle_response(response)
 
-
-class CryptonatorFeedTest(AsyncioTestCase):
-    def test_handle_response(self):
-        feed = CryptonatorFeed()
+    def test_handle_cryptonator_lbc_response(self):
+        feed = exchange_rate_manager.CryptonatorFeed()
 
         response = '{\"ticker\":{\"base\":\"BTC\",\"target\":\"LBC\",\"price\":\"23657.44026496\"' \
                    ',\"volume\":\"\",\"change\":\"-5.59806916\"},\"timestamp\":1507470422' \
@@ -138,10 +163,8 @@ class CryptonatorFeedTest(AsyncioTestCase):
         with self.assertRaises(InvalidExchangeRateResponse):
             feed._handle_response(response)
 
-
-class CryptonatorBTCFeedTest(AsyncioTestCase):
-    def test_handle_response(self):
-        feed = CryptonatorBTCFeed()
+    def test_handle_cryptonator_btc_response(self):
+        feed = exchange_rate_manager.CryptonatorBTCFeed()
 
         response = '{\"ticker\":{\"base\":\"USD\",\"target\":\"BTC\",\"price\":\"0.00022123\",' \
                    '\"volume\":\"\",\"change\":\"-0.00000259\"},\"timestamp\":1507471141,' \
@@ -158,10 +181,8 @@ class CryptonatorBTCFeedTest(AsyncioTestCase):
         with self.assertRaises(InvalidExchangeRateResponse):
             feed._handle_response(response)
 
-
-class BittrexFeedTest(AsyncioTestCase):
-    def test_handle_response(self):
-        feed = BittrexFeed()
+    def test_handle_bittrex_response(self):
+        feed = exchange_rate_manager.BittrexFeed()
 
         response = '{"success":true,"message":"","result":[{"Id":6902471,"TimeStamp":"2017-02-2'\
         '7T23:41:52.213","Quantity":56.12611239,"Price":0.00001621,"Total":0.00090980,"FillType":"'\

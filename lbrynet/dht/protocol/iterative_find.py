@@ -1,7 +1,7 @@
 import asyncio
 import typing
 import logging
-
+from lbrynet.utils import drain_tasks
 from lbrynet.dht import constants
 from lbrynet.dht.error import RemoteException
 from lbrynet.dht.protocol.distance import Distance
@@ -13,21 +13,6 @@ if TYPE_CHECKING:
     from lbrynet.dht.peer import PeerManager, KademliaPeer
 
 log = logging.getLogger(__name__)
-
-
-def cancel_task(task: typing.Optional[asyncio.Task]):
-    if task and not (task.done() or task.cancelled()):
-        task.cancel()
-
-
-def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
-    for task in tasks:
-        cancel_task(task)
-
-
-def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
-    while tasks:
-        cancel_task(tasks.pop())
 
 
 class FindResponse:

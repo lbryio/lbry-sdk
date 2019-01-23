@@ -163,14 +163,12 @@ class LbryWalletManager(BaseWalletManager):
             'lbrycrd_main':    'lbc_mainnet',
             'lbrycrd_testnet': 'lbc_testnet',
             'lbrycrd_regtest': 'lbc_regtest'
-        }[settings['blockchain_name']]
+        }[settings.blockchain_name]
 
         ledger_config = {
             'auto_connect': True,
-            'default_servers': settings['lbryum_servers'],
+            'default_servers': settings.lbryum_servers,
             'data_path': settings.wallet_dir,
-            'use_keyring': settings['use_keyring'],
-            #'db': db
         }
 
         wallets_directory = os.path.join(settings.wallet_dir, 'wallets')
@@ -274,8 +272,9 @@ class LbryWalletManager(BaseWalletManager):
     async def get_claims_for_name(self, name: str):
         response = await self.ledger.network.get_claims_for_name(name)
         if 'claims' in response:
-            to_resolve = [(claim['name'] + '#' + claim['claim_id']) for claim in response['claims']]
-            response['claims'] = [resolution['claim'] for resolution in (await self.resolve(*to_resolve)).values()]
+            resolutions = await self.resolve(*[f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']])
+            resolutions = resolutions.values()
+            response['claims'] = [resolution.get('claim', resolution.get('certificate')) for resolution in resolutions]
         return response
 
     async def address_is_mine(self, unknown_address, account):
@@ -404,7 +403,8 @@ class LbryWalletManager(BaseWalletManager):
             claim_address = await account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
-                certificate.private_key, claim_address, certificate.claim_id, curve=SECP256k1
+                certificate.private_key, claim_address, certificate.claim_id, curve=SECP256k1, name=name,
+                force_detached=False  # TODO: delete it and make True default everywhere when its out
             )
         existing_claims = await account.get_claims(
             claim_name_type__any={'is_claim': 1, 'is_update': 1},  # exclude is_supports

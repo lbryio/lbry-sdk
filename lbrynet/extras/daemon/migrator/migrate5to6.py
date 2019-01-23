@@ -3,7 +3,6 @@ import os
 import json
 import logging
 from binascii import hexlify
-from lbrynet import conf
 from lbrynet.schema.decode import smart_decode
 
 log = logging.getLogger(__name__)
@@ -104,13 +103,13 @@ def verify_sd_blob(sd_hash, blob_dir):
     return decoded, sd_length
 
 
-def do_migration(db_dir):
-    new_db_path = os.path.join(db_dir, "lbrynet.sqlite")
+def do_migration(conf):
+    new_db_path = os.path.join(conf.data_dir, "lbrynet.sqlite")
     connection = sqlite3.connect(new_db_path)
 
-    metadata_db = sqlite3.connect(os.path.join(db_dir, "blockchainname.db"))
-    lbryfile_db = sqlite3.connect(os.path.join(db_dir, 'lbryfile_info.db'))
-    blobs_db = sqlite3.connect(os.path.join(db_dir, 'blobs.db'))
+    metadata_db = sqlite3.connect(os.path.join(conf.data_dir, "blockchainname.db"))
+    lbryfile_db = sqlite3.connect(os.path.join(conf.data_dir, 'lbryfile_info.db'))
+    blobs_db = sqlite3.connect(os.path.join(conf.data_dir, 'blobs.db'))
 
     name_metadata_cursor = metadata_db.cursor()
     lbryfile_cursor = lbryfile_db.cursor()
@@ -186,7 +185,7 @@ def do_migration(db_dir):
                 (stream_hash, blob_hash, position, iv)
             )
 
-        download_dir = conf.settings.download_dir
+        download_dir = conf.download_dir
         if not isinstance(download_dir, bytes):
             download_dir = download_dir.encode()
 
@@ -278,7 +277,7 @@ def do_migration(db_dir):
 
         # recover damaged streams
         if damaged_stream_sds:
-            blob_dir = os.path.join(db_dir, "blobfiles")
+            blob_dir = os.path.join(conf.data_dir, "blobfiles")
             damaged_sds_on_disk = [] if not os.path.isdir(blob_dir) else list({p for p in os.listdir(blob_dir)
                                                                                if p in damaged_stream_sds})
             for damaged_sd in damaged_sds_on_disk:
@@ -316,7 +315,7 @@ def do_migration(db_dir):
             log.warning("detected a failed previous migration to revision 6, repairing it")
             connection.close()
             os.remove(new_db_path)
-            return do_migration(db_dir)
+            return do_migration(conf)
         raise err
 
     connection.close()

@@ -79,7 +79,7 @@ class MarketFeed:
             try:
                 response = await asyncio.wait_for(self._make_request(), self.REQUESTS_TIMEOUT)
                 self._save_price(self._subtract_fee(self._handle_response(response)))
-            except (asyncio.CancelledError, asyncio.TimeoutError, InvalidExchangeRateResponse) as err:
+            except (asyncio.TimeoutError, InvalidExchangeRateResponse) as err:
                 self._on_error(err)
             await asyncio.sleep(self.EXCHANGE_RATE_UPDATE_RATE_SEC)
 

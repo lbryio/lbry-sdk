@@ -5,10 +5,13 @@ import random
 import socket
 import string
 import json
+import typing
+import asyncio
 import logging
 import pkg_resources
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.cryptoutils import get_lbry_hash_obj
+
 
 log = logging.getLogger(__name__)
 
@@ -118,3 +121,18 @@ def get_sd_hash(stream_info):
 
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
+
+
+def cancel_task(task: typing.Optional[asyncio.Task]):
+    if task and not task.done():
+        task.cancel()
+
+
+def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
+    for task in tasks:
+        cancel_task(task)
+
+
+def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
+    while tasks:
+        cancel_task(tasks.pop())

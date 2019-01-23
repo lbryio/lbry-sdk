@@ -155,8 +155,8 @@ class Resolver:
         certificate = None
         certificate_id = smart_decode(claim_result['value']).certificate_id
         if certificate_id:
-            certificate = await self.network.get_claims_by_ids(certificate_id.decode())
-            certificate = certificate.pop(certificate_id.decode()) if certificate else None
+            certificate = await self.network.get_claims_by_ids(certificate_id)
+            certificate = certificate.pop(certificate_id) if certificate else None
         return await self.parse_and_validate_claim_result(claim_result, certificate=certificate)
 
     async def parse_and_validate_claim_result(self, claim_result, certificate=None, raw=False):
@@ -180,13 +180,13 @@ class Resolver:
             if decoded.has_signature:
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
-                    certificate = await self.network.get_claims_by_ids(decoded.certificate_id.decode())
+                    certificate = await self.network.get_claims_by_ids(decoded.certificate_id)
                     if not certificate:
                         log.warning('Certificate %s not found', decoded.certificate_id)
                 claim_result['has_signature'] = True
                 claim_result['signature_is_valid'] = False
                 validated, channel_name = validate_claim_signature_and_get_channel_name(
-                    decoded, certificate, claim_result['address'])
+                    decoded, certificate, claim_result['address'], claim_result['name'])
                 claim_result['channel_name'] = channel_name
                 if validated:
                     claim_result['signature_is_valid'] = True
@@ -197,7 +197,7 @@ class Resolver:
         if 'amount' in claim_result:
             claim_result = format_amount_value(claim_result)
 
-        claim_result['permanent_url'] = _get_permanent_url(claim_result)
+        claim_result['permanent_url'] = _get_permanent_url(claim_result, decoded.certificate_id)
 
         return claim_result
 
@@ -307,18 +307,11 @@ def format_amount_value(obj):
     return obj
 
 
-def _get_permanent_url(claim_result):
-    if claim_result.get('has_signature') and claim_result.get('channel_name'):
-        return "{}#{}/{}".format(
-            claim_result['channel_name'],
-            claim_result['value']['publisherSignature']['certificateId'],
-            claim_result['name']
-        )
+def _get_permanent_url(claim_result, certificate_id):
+    if certificate_id:
+        return f"{claim_result['channel_name']}#{certificate_id}/{claim_result['name']}"
     else:
-        return "{}#{}".format(
-            claim_result['name'],
-            claim_result['claim_id']
-        )
+        return f"{claim_result['name']}#{claim_result['claim_id']}"
 
 
 def _verify_proof(name, claim_trie_root, result, height, depth, transaction_class, hash160_to_address):
@@ -386,7 +379,7 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
 
 
 def validate_claim_signature_and_get_channel_name(claim, certificate_claim,
-                                                  claim_address, decoded_certificate=None):
+                                                  claim_address, name, decoded_certificate=None):
     if not certificate_claim:
         return False, None
     if 'value' not in certificate_claim:
@@ -395,18 +388,18 @@ def validate_claim_signature_and_get_channel_name(claim, certificate_claim,
     certificate = decoded_certificate or smart_decode(certificate_claim['value'])
     if not isinstance(certificate, ClaimDict):
         raise TypeError("Certificate is not a ClaimDict: %s" % str(type(certificate)))
-    if _validate_signed_claim(claim, claim_address, certificate):
+    if _validate_signed_claim(claim, claim_address, name, certificate):
         return True, certificate_claim['name']
     return False, None
 
 
-def _validate_signed_claim(claim, claim_address, certificate):
+def _validate_signed_claim(claim, claim_address, name, certificate):
     if not claim.has_signature:
         raise Exception("Claim is not signed")
     if not is_address(claim_address):
         raise Exception("Not given a valid claim address")
     try:
-        if claim.validate_signature(claim_address, certificate.protobuf):
+        if claim.validate_signature(claim_address, certificate.protobuf, name):
             return True
     except BadSignatureError:
         # print_msg("Signature for %s is invalid" % claim_id)

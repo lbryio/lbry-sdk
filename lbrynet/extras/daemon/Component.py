@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 
 log = logging.getLogger(__name__)
@@ -24,10 +25,10 @@ class Component(metaclass=ComponentType):
     depends_on = []
     component_name = None
 
-    def __init__(self, component_manager: ComponentManager):
+    def __init__(self, component_manager):
+        self.conf: Config = component_manager.conf
         self.component_manager = component_manager
         self._running = False
-        self.loop = self.component_manager.loop
 
     def __lt__(self, other):
         return self.component_name < other.component_name

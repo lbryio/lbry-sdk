@@ -16,7 +16,7 @@ from torba.testcase import IntegrationTestCase
 import lbrynet.schema
 lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
-from lbrynet import conf as lbry_conf
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
 from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.daemon.Components import WalletComponent
@@ -63,19 +63,16 @@ class CommandTestCase(IntegrationTestCase):
         logging.getLogger('lbrynet.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
 
-        lbry_conf.settings = None
-        lbry_conf.initialize_settings(
-            load_conf_file=False,
-            data_dir=self.wallet_node.data_path,
-            wallet_dir=self.wallet_node.data_path,
-            download_dir=self.wallet_node.data_path
-        )
-        lbry_conf.settings['use_upnp'] = False
-        lbry_conf.settings['reflect_uploads'] = False
-        lbry_conf.settings['blockchain_name'] = 'lbrycrd_regtest'
-        lbry_conf.settings['lbryum_servers'] = [('localhost', 50001)]
-        lbry_conf.settings['known_dht_nodes'] = []
-        lbry_conf.settings.node_id = None
+        conf = Config()
+        conf.data_dir = self.wallet_node.data_path
+        conf.wallet_dir = self.wallet_node.data_path
+        conf.download_dir = self.wallet_node.data_path
+        conf.share_usage_data = False
+        conf.use_upnp = False
+        conf.reflect_uploads = False
+        conf.blockchain_name = 'lbrycrd_regtest'
+        conf.lbryum_servers = [('localhost', 50001)]
+        conf.known_dht_nodes = []
 
         await self.account.ensure_address_gap()
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
@@ -89,14 +86,12 @@ class CommandTestCase(IntegrationTestCase):
             self.wallet_component._running = True
             return self.wallet_component
 
-        skip = [
+        conf.components_to_skip = [
             DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
             PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
         ]
-        analytics_manager = FakeAnalytics()
-        self.daemon = Daemon(analytics_manager, ComponentManager(
-            analytics_manager=analytics_manager,
-            skip_components=skip, wallet=wallet_maker
+        self.daemon = Daemon(conf, ComponentManager(
+            conf, skip_components=conf.components_to_skip, wallet=wallet_maker
         ))
         await self.daemon.setup()
         self.daemon.wallet_manager = self.wallet_component.wallet_manager
@@ -595,6 +590,50 @@ class ClaimManagement(CommandTestCase):
         self.assertEqual('9.979793', await self.daemon.jsonrpc_account_balance())
         await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
         self.assertEqual('9.97968399', await self.daemon.jsonrpc_account_balance())
+
+    async def test_claim_show(self):
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+        channel_from_claim_show = await self.out(
+            self.daemon.jsonrpc_claim_show(txid=channel['tx']['txid'], nout=channel['output']['nout'])
+        )
+        self.assertEqual(channel_from_claim_show['value'], channel['output']['value'])
+        channel_from_claim_show = await self.out(
+            self.daemon.jsonrpc_claim_show(claim_id=channel['claim_id'])
+        )
+        self.assertEqual(channel_from_claim_show['value'], channel['output']['value'])
+
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        self.assertTrue(abandon['success'])
+        await self.confirm_tx(abandon['tx']['txid'])
+        not_a_claim = await self.out(
+            self.daemon.jsonrpc_claim_show(txid=abandon['tx']['txid'], nout=0)
+        )
+        self.assertEqual(not_a_claim, 'claim not found')
+
+    async def test_claim_list(self):
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+        claim = await self.make_claim(amount='0.0001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(claim['success'])
+        unsigned_claim = await self.make_claim(amount='0.0001', name='unsigned')
+        self.assertTrue(claim['success'])
+
+        channel_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('@abc'))
+        self.assertEqual(channel_from_claim_list['claims'][0]['value'], channel['output']['value'])
+        signed_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('on-channel-claim'))
+        self.assertEqual(signed_claim_from_claim_list['claims'][0]['value'], claim['output']['value'])
+        unsigned_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('unsigned'))
+        self.assertEqual(unsigned_claim_from_claim_list['claims'][0]['value'], unsigned_claim['output']['value'])
+
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        self.assertTrue(abandon['success'])
+        await self.confirm_tx(abandon['tx']['txid'])
+
+        empty = await self.out(self.daemon.jsonrpc_claim_list('@abc'))
+        self.assertEqual(len(empty['claims']), 0)
 
     async def test_abandoned_channel_with_signed_claims(self):
         channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))

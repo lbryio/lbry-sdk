@@ -1,6 +1,8 @@
 import asyncio
+import binascii
 import logging
 import typing
+from json.decoder import JSONDecodeError
 from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest, blob_response_types
 from lbrynet.blob_exchange.serialization import BlobAvailabilityResponse, BlobPriceResponse, BlobDownloadResponse, \
     BlobPaymentAddressResponse
@@ -63,13 +65,20 @@ class BlobServer(asyncio.Protocol):
         # self.transport.close()
 
     def data_received(self, data):
-        message, separator, remainder = data.rpartition(b'}')
-        if not separator:
-            self.buf += data
-            return
-        else:
-            request = BlobRequest.deserialize(data)
-            self.buf = remainder
+        request = None
+        if data:
+            message, separator, remainder = data.rpartition(b'}')
+            if not separator:
+                self.buf += data
+                return
+            try:
+                request = BlobRequest.deserialize(data)
+                self.buf = remainder
+            except JSONDecodeError:
+                addr = self.transport.get_extra_info('peername')
+                peer_address, peer_port = addr
+                log.error("failed to decode blob request from %s:%i (%i bytes): %s", peer_address, peer_port,
+                          len(data), '' if not data else binascii.hexlify(data).decode())
         if not request:
             addr = self.transport.get_extra_info('peername')
             peer_address, peer_port = addr
