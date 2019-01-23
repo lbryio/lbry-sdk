@@ -2394,7 +2394,7 @@ class Daemon(metaclass=JSONRPCServerType):
             description=None, author=None, language=None, license=None,
             license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
             channel_name=None, channel_id=None, channel_account_id=None, account_id=None,
-            claim_address=None, change_address=None):
+            claim_address=None, change_address=None, release_time=None):
         """
         Make a new name claim and publish associated data to lbrynet,
         update over existing claim if user already has a claim for name.
@@ -2420,6 +2420,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--channel_name=<channel_name>] [--channel_id=<channel_id>]
                     [--channel_account_id=<channel_account_id>...] [--account_id=<account_id>]
                     [--claim_address=<claim_address>] [--change_address=<change_address>]
+                    [--release_time=<release_time>]
 
         Options:
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
@@ -2452,6 +2453,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --thumbnail=<thumbnail>        : (str) thumbnail url
             --preview=<preview>            : (str) preview url
             --nsfw=<nsfw>                  : (bool) whether the content is nsfw
+            --release_time=<release_time>  : (int) seconds since Unix Epoch in GMT time. Can be negative.
             --sources=<sources>            : (str) {'lbry_sd_hash': sd_hash} specifies sd hash of file
             --channel_name=<channel_name>  : (str) name of the publisher channel name in the wallet
             --channel_id=<channel_id>      : (str) claim id of the publisher channel, does not check
@@ -2523,6 +2525,8 @@ class Daemon(metaclass=JSONRPCServerType):
             metadata['preview'] = preview
         if nsfw is not None:
             metadata['nsfw'] = bool(nsfw)
+        if release_time is not None:
+            metadata['releaseTime'] = int(release_time)
 
         metadata['version'] = '_0_1_0'
 
