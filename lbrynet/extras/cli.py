@@ -215,8 +215,10 @@ def main(argv=None):
 
     if args.cli_version:
         print(f"{lbrynet_name} {lbrynet_version}")
-        return 0
     elif args.command == 'start':
+        if args.help:
+            args.start_parser.print_help()
+            return 0
         try:
             asyncio.run(start_daemon(conf, args))
         except (KeyboardInterrupt, asyncio.CancelledError):
@@ -237,10 +239,8 @@ def main(argv=None):
             asyncio.run(execute_command(conf, api_method_name, params))
     elif args.group is not None:
         args.group_parser.print_help()
-
     else:
         parser.print_help()
-
     return 0
 
 
