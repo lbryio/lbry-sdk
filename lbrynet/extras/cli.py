@@ -217,7 +217,10 @@ def main(argv=None):
         print(f"{lbrynet_name} {lbrynet_version}")
         return 0
     elif args.command == 'start':
-        return asyncio.run(start_daemon(conf, args))
+        try:
+            asyncio.run(start_daemon(conf, args))
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            return 0
     elif args.command is not None:
         doc = args.doc
         api_method_name = args.api_method_name
