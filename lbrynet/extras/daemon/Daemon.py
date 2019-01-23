@@ -751,17 +751,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         platform_name = system_info.get_platform()['platform']
         webhook = utils.deobfuscate(SLACK_WEBHOOK)
-        payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
-        payload_params = (
-            platform_name,
-            __version__,
-            get_loggly_query_string(self.installation_id),
-            message
-        )
-        payload = {
-            "text": payload_template % payload_params
-        }
-        async with aiohttp.request('post', webhook, data=json.dumps(payload)) as response:
+        payload = json.dumps({
+            "text": f"os: {platform_name}\n"
+                    f" version: {__version__}\n"
+                    f"<{get_loggly_query_string(self.installation_id)}|loggly>\n"
+                    f"{message}"
+        })
+        async with aiohttp.request('post', webhook, data=payload):
             pass
         return True
 
