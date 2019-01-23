@@ -1,7 +1,7 @@
 import typing
 import contextlib
 import socket
-import mock
+from unittest import mock
 import functools
 import asyncio
 if typing.TYPE_CHECKING:
