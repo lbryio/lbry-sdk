@@ -1,14 +1,10 @@
-import sys
 import json
 import tempfile
 import logging
 from binascii import unhexlify
 
-import twisted.internet
-from twisted.internet.asyncioreactor import AsyncioSelectorReactor
-
 from lbrynet.extras.wallet.transaction import Transaction
-from lbrynet.p2p.Error import InsufficientFundsError
+from lbrynet.error import InsufficientFundsError
 from lbrynet.schema.claim import ClaimDict
 
 from torba.testcase import IntegrationTestCase
@@ -22,31 +18,9 @@ from lbrynet.extras.wallet import LbryWalletManager
 from lbrynet.extras.daemon.Components import WalletComponent
 from lbrynet.extras.daemon.Components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
-    REFLECTOR_COMPONENT, UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+    UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
-
-
-class FakeAnalytics:
-
-    @property
-    def is_started(self):
-        return True
-
-    async def send_new_channel(self):
-        pass
-
-    def shutdown(self):
-        pass
-
-    async def send_claim_action(self, action):
-        pass
-
-    async def send_credits_sent(self):
-        pass
-
-    async def send_server_startup(self):
-        pass
 
 
 class CommandTestCase(IntegrationTestCase):
@@ -57,8 +31,6 @@ class CommandTestCase(IntegrationTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
-
-        twisted.internet.reactor = sys.modules['twisted.internet.reactor'] = AsyncioSelectorReactor()
 
         logging.getLogger('lbrynet.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
@@ -88,13 +60,12 @@ class CommandTestCase(IntegrationTestCase):
 
         conf.components_to_skip = [
             DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+            PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
         ]
         self.daemon = Daemon(conf, ComponentManager(
             conf, skip_components=conf.components_to_skip, wallet=wallet_maker
         ))
         await self.daemon.setup()
-        self.daemon.wallet_manager = self.wallet_component.wallet_manager
         self.manager.old_db = self.daemon.storage
 
     async def asyncTearDown(self):

@@ -28,6 +28,15 @@ jobs:
         - coverage combine
         - bash <(curl -s https://codecov.io/bash)
 
+    - name: "Integration Tests"
+      install:
+        - pip install tox-travis coverage
+        - pushd .. && git clone https://github.com/lbryio/torba.git && popd
+      script: tox
+      after_success:
+        - coverage combine tests/
+        - bash <(curl -s https://codecov.io/bash)
+
     - stage: build
       name: "Windows"
       language: generic

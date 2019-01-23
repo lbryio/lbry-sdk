@@ -4,43 +4,26 @@ from torba.testcase import AsyncioTestCase
 
 from lbrynet.conf import Config
 from lbrynet.extras import cli
-from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT, \
-    DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, FILE_MANAGER_COMPONENT, \
-    PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, \
-    RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT
+from lbrynet.extras.daemon.Components import (
+    DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT,
+    HASH_ANNOUNCER_COMPONENT, STREAM_MANAGER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
+    UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+)
 from lbrynet.extras.daemon.Daemon import Daemon
-
-
-class FakeAnalytics:
-
-    @property
-    def is_started(self):
-        return True
-
-    async def send_server_startup_success(self):
-        pass
-
-    async def send_server_startup(self):
-        pass
-
-    def shutdown(self):
-        pass
 
 
 class CLIIntegrationTest(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        skip = [
-            DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT,
-            DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, FILE_MANAGER_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT,
-            RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT
-        ]
         conf = Config()
         conf.data_dir = '/tmp'
         conf.share_usage_data = False
         conf.api = 'localhost:5299'
-        conf.components_to_skip = skip
+        conf.components_to_skip = (
+            DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT,
+            HASH_ANNOUNCER_COMPONENT, STREAM_MANAGER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
+            UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+        )
         Daemon.component_attributes = {}
         self.daemon = Daemon(conf)
         await self.daemon.start()

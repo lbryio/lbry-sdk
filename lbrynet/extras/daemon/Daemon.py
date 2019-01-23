@@ -247,14 +247,13 @@ class Daemon(metaclass=JSONRPCServerType):
     """
     allowed_during_startup = []
 
-    def __init__(self, conf: Config, analytics_manager: typing.Optional[analytics.Manager] = None,
-                 component_manager: typing.Optional[ComponentManager] = None):
+    def __init__(self, conf: Config, component_manager: typing.Optional[ComponentManager] = None):
         self.conf = conf
         self._node_id = None
         self._installation_id = None
         self.session_id = base58.b58encode(utils.generate_id()).decode()
         to_skip = conf.components_to_skip
-        self.analytics_manager = analytics_manager or analytics.Manager(conf, self.installation_id, self.session_id)
+        self.analytics_manager = analytics.Manager(conf, self.installation_id, self.session_id)
         self.component_manager = component_manager or ComponentManager(
             conf, analytics_manager=self.analytics_manager, skip_components=to_skip or []
         )
@@ -447,8 +446,12 @@ class Daemon(metaclass=JSONRPCServerType):
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
         result = await self._process_rpc_call(data)
+        ledger = None
+        if 'wallet' in self.component_manager.get_components_status():
+            # self.ledger only available if wallet component is not skipped
+            ledger = self.ledger
         return web.Response(
-            text=jsonrpc_dumps_pretty(result, ledger=self.ledger),
+            text=jsonrpc_dumps_pretty(result, ledger=ledger),
             content_type='application/json'
         )
 
@@ -2195,8 +2198,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise Exception("no previous stream to update")
             claim_dict['stream']['source'] = existing_claims[-1].claim_dict['stream']['source']
             stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
-        tx = await self.default_wallet.claim_name(
-            account, name, bid, claim_dict, certificate, claim_address
+        tx = await self.wallet_manager.claim_name(
+            account, name, amount, claim_dict, certificate, claim_address
         )
         await self.storage.save_content_claim(
             stream_hash, tx.outputs[0].id
