@@ -280,10 +280,8 @@ class LbryWalletManager(BaseWalletManager):
 
     async def get_claims_for_name(self, name: str):
         response = await self.ledger.network.get_claims_for_name(name)
-        if 'claims' in response:
-            resolutions = await self.resolve(*[f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']])
-            resolutions = resolutions.values()
-            response['claims'] = [resolution.get('claim', resolution.get('certificate')) for resolution in resolutions]
+        resolutions = await self.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']))
+        response['claims'] = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
         return response
 
     async def address_is_mine(self, unknown_address, account):
