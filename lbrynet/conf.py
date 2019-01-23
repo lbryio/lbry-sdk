@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 from contextlib import contextmanager
 from appdirs import user_data_dir, user_config_dir
 from lbrynet.error import InvalidCurrencyError
+from lbrynet.dht import constants
 
 log = logging.getLogger(__name__)
 

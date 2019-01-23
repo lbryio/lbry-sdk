@@ -8,12 +8,14 @@ import typing
 import socket
 from hashlib import sha256
 from types import SimpleNamespace
+import base58
 
 from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
 
 import lbrynet.schema
+from lbrynet import utils
 from lbrynet.conf import HEADERS_FILE_SHA256_CHECKSUM
 from lbrynet.dht.node import Node
 from lbrynet.dht.peer import KademliaPeer
@@ -88,7 +90,7 @@ class DatabaseComponent(Component):
 
     @property
     def revision_filename(self):
-        return self.component_manager.daemon.db_revision_file_path
+        return os.path.join(self.conf.data_dir, 'db_revision')
 
     def _write_db_revision_file(self, version_num):
         with open(self.revision_filename, mode='w') as db_revision:
@@ -357,16 +359,25 @@ class DHTComponent(Component):
 
     async def get_status(self):
         return {
-            'node_id': binascii.hexlify(self.component_manager.daemon.node_id),
+            'node_id': binascii.hexlify(self.dht_node.protocol.node_id),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.protocol.routing_table.get_peers())
         }
+
+    def get_node_id(self):
+        node_id_filename = os.path.join(self.conf.data_dir, "node_id")
+        if os.path.isfile(node_id_filename):
+            with open(node_id_filename, "r") as node_id_file:
+                return base58.b58decode(str(node_id_file.read()).strip())
+        node_id = utils.generate_id()
+        with open(node_id_filename, "w") as node_id_file:
+            node_id_file.write(base58.b58encode(node_id).decode())
+        return node_id
 
     async def start(self):
         log.info("start the dht")
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
         self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", self.conf.peer_port)
         self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", self.conf.dht_node_port)
-        node_id = self.component_manager.daemon.node_id
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
@@ -377,7 +388,7 @@ class DHTComponent(Component):
         self.dht_node = Node(
             asyncio.get_event_loop(),
             self.component_manager.peer_manager,
-            node_id=node_id,
+            node_id=self.get_node_id(),
             internal_udp_port=self.conf.dht_node_port,
             udp_port=self.external_udp_port,
             external_ip=external_ip,
@@ -479,7 +490,7 @@ class PeerProtocolServerComponent(Component):
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
         wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
-        peer_port = upnp.upnp_redirects.get("TCP", self.conf.settings["peer_port"])
+        peer_port = upnp.upnp_redirects.get("TCP", self.conf.peer_port)
         address = await wallet.get_unused_address()
         self.blob_server = BlobServer(asyncio.get_event_loop(), blob_manager, address)
         self.blob_server.start_server(peer_port, interface='0.0.0.0')

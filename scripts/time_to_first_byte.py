@@ -6,7 +6,8 @@ import aiohttp
 import time
 
 from aiohttp import ClientConnectorError
-from lbrynet import conf, __version__
+from lbrynet import __version__
+from lbrynet.conf import Config
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.extras.daemon.client import LBRYAPIClient
 from lbrynet.extras import system_info, cli
@@ -79,18 +80,11 @@ async def wait_for_done(api, uri):
 async def main(start_daemon=True, uris=None):
     if not uris:
         uris = await get_frontpage_uris()
-    api = await LBRYAPIClient.get_client()
+    api = LBRYAPIClient(Config())
     daemon = None
     try:
         await api.status()
     except (ClientConnectorError, ConnectionError):
-        await api.session.close()
-        if start_daemon:
-            print("Could not connect to running daemon, starting...")
-            daemon = await cli.start_daemon(console_output=False)
-            await daemon.component_manager.started.wait()
-            print("Started daemon")
-            return await main(start_daemon=False, uris=uris)
         print("Could not connect to daemon")
         return 1
     print(f"Checking {len(uris)} uris from the front page")
@@ -110,18 +104,12 @@ async def main(start_daemon=True, uris=None):
     download_failures = []
 
     for uri in resolvable:
-        await api.call(
-            "file_delete", {
-                "delete_from_download_dir": True,
-                "delete_all": True,
-                "claim_name": parse_lbry_uri(uri).name
-            }
-        )
+        await api.file_delete(delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
 
     for i, uri in enumerate(resolvable):
         start = time.time()
         try:
-            await api.call("get", {"uri": uri})
+            await api.get(uri)
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
@@ -135,12 +123,7 @@ async def main(start_daemon=True, uris=None):
         except:
             print(f"{i + 1}/{len(uris)} -  timeout in {time.time() - start} {uri}")
             failures.append(uri)
-        await api.call(
-            "file_delete", {
-                "delete_from_download_dir": True,
-                "claim_name": parse_lbry_uri(uri).name
-            }
-        )
+        await api.file_delete(delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
         await asyncio.sleep(0.1)
 
     print("**********************************************")
@@ -153,12 +136,11 @@ async def main(start_daemon=True, uris=None):
         nt = '\n\t'
         result += f"\nFailures:\n\t{nt.join([f for f in failures])}"
     print(result)
-    await api.session.close()
     if daemon:
         await daemon.shutdown()
-    webhook = os.environ.get('TTFB_SLACK_TOKEN', None)
-    if webhook:
-        await report_to_slack(result, webhook)
+    # webhook = os.environ.get('TTFB_SLACK_TOKEN', None)
+    # if webhook:
+    #     await report_to_slack(result, webhook)
 
 
 if __name__ == "__main__":
@@ -167,6 +149,4 @@ if __name__ == "__main__":
     parser.add_argument("--wallet_dir")
     parser.add_argument("--download_directory")
     args = parser.parse_args()
-
-    conf.initialize_settings()
     asyncio.run(main())

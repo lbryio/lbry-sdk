@@ -1,14 +1,9 @@
 import curses
 import time
-import logging
 import asyncio
-from lbrynet import conf
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.client import LBRYAPIClient
 
-log = logging.getLogger(__name__)
-log.addHandler(logging.FileHandler("dht contacts.log"))
-# log.addHandler(logging.StreamHandler())
-log.setLevel(logging.INFO)
 stdscr = curses.initscr()
 
 
@@ -52,8 +47,7 @@ def refresh(routing_table_info):
 
 
 async def main():
-    conf.initialize_settings()
-    api = await LBRYAPIClient.get_client()
+    api = LBRYAPIClient(Config())
 
     try:
         init_curses()
@@ -64,7 +58,6 @@ async def main():
             c = stdscr.getch()
             time.sleep(0.1)
     finally:
-        await api.session.close()
         teardown_curses()
 
 

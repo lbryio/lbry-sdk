@@ -253,8 +253,8 @@ class Daemon(metaclass=JSONRPCServerType):
         self._node_id = None
         self._installation_id = None
         self.session_id = base58.b58encode(utils.generate_id()).decode()
-        to_skip = conf.settings['components_to_skip']
-        self.analytics_manager = analytics_manager or analytics.Manager(asyncio.get_event_loop())
+        to_skip = conf.components_to_skip
+        self.analytics_manager = analytics_manager or analytics.Manager(conf, self.installation_id, self.session_id)
         self.component_manager = component_manager or ComponentManager(
             conf, analytics_manager=self.analytics_manager, skip_components=to_skip or []
         )
@@ -360,19 +360,6 @@ class Daemon(metaclass=JSONRPCServerType):
             with open(install_id_filename, "w") as install_id_file:
                 install_id_file.write(self._installation_id)
         return self._installation_id
-
-    @property
-    def node_id(self):
-        node_id_filename = os.path.join(self.conf.data_dir, "node_id")
-        if not self._node_id:
-            if os.path.isfile(node_id_filename):
-                with open(node_id_filename, "r") as node_id_file:
-                    self._node_id = base58.b58decode(str(node_id_file.read()).strip())
-        if not self._node_id:
-            self._node_id = utils.generate_id()
-            with open(node_id_filename, "w") as node_id_file:
-                node_id_file.write(base58.b58encode(self._node_id).decode())
-        return self._node_id
 
     def ensure_data_dir(self):
         # although there is a risk of a race condition here we don't
