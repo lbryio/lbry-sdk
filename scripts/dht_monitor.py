@@ -2,7 +2,7 @@ import curses
 import time
 import asyncio
 from lbrynet.conf import Config
-from lbrynet.extras.daemon.client import LBRYAPIClient
+from lbrynet.extras.daemon.client import daemon_rpc
 
 stdscr = curses.initscr()
 
@@ -47,13 +47,12 @@ def refresh(routing_table_info):
 
 
 async def main():
-    api = LBRYAPIClient(Config())
-
+    conf = Config()
     try:
         init_curses()
         c = None
         while c not in [ord('q'), ord('Q')]:
-            routing_info = await api.routing_table_get()
+            routing_info = await daemon_rpc(conf, 'routing_table_get')
             refresh(routing_info)
             c = stdscr.getch()
             time.sleep(0.1)

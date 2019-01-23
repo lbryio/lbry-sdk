@@ -9,7 +9,7 @@ from aiohttp import ClientConnectorError
 from lbrynet import __version__
 from lbrynet.conf import Config
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.extras.daemon.client import LBRYAPIClient
+from lbrynet.extras.daemon.client import daemon_rpc
 from lbrynet.extras import system_info, cli
 
 
@@ -80,10 +80,10 @@ async def wait_for_done(api, uri):
 async def main(start_daemon=True, uris=None):
     if not uris:
         uris = await get_frontpage_uris()
-    api = LBRYAPIClient(Config())
+    conf = Config()
     daemon = None
     try:
-        await api.status()
+        await daemon_rpc(conf, 'status')
     except (ClientConnectorError, ConnectionError):
         print("Could not connect to daemon")
         return 1
@@ -92,7 +92,7 @@ async def main(start_daemon=True, uris=None):
 
     resolvable = []
     for name in uris:
-        resolved = await api.resolve(uri=name)
+        resolved = await daemon_rpc(conf, 'resolve', uri=name)
         if 'error' not in resolved.get(name, {}):
             resolvable.append(name)
 
@@ -104,12 +104,12 @@ async def main(start_daemon=True, uris=None):
     download_failures = []
 
     for uri in resolvable:
-        await api.file_delete(delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
+        await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
 
     for i, uri in enumerate(resolvable):
         start = time.time()
         try:
-            await api.get(uri)
+            await daemon_rpc(conf, 'get', uri)
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
@@ -123,7 +123,7 @@ async def main(start_daemon=True, uris=None):
         except:
             print(f"{i + 1}/{len(uris)} -  timeout in {time.time() - start} {uri}")
             failures.append(uri)
-        await api.file_delete(delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
+        await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
         await asyncio.sleep(0.1)
 
     print("**********************************************")

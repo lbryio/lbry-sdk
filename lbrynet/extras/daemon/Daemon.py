@@ -379,7 +379,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if not os.path.isdir(self.conf.download_dir):
             os.makedirs(self.conf.download_dir)
 
-    async def start_listening(self):
+    async def start(self):
         try:
             self.server = await asyncio.get_event_loop().create_server(
                 self.handler, self.conf.api_host, self.conf.api_port
