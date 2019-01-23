@@ -1,5 +1,5 @@
 import os
-import mock
+from unittest import mock
 import asyncio
 import contextlib
 from lbrynet.stream.descriptor import StreamDescriptor
