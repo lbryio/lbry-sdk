@@ -117,8 +117,8 @@ class Server:
     def run(self):
         loop = asyncio.get_event_loop()
         try:
-            loop.add_signal_handler(signal.SIGINT, self.stop)
-            loop.add_signal_handler(signal.SIGTERM, self.stop)
+            loop.add_signal_handler(signal.SIGINT, lambda: asyncio.ensure_future(self.stop()))
+            loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.ensure_future(self.stop()))
             loop.run_until_complete(self.start())
             loop.run_until_complete(self.shutdown_event.wait())
         finally:
