@@ -197,7 +197,7 @@ class Resolver:
         if 'amount' in claim_result:
             claim_result = format_amount_value(claim_result)
 
-        claim_result['permanent_url'] = _get_permanent_url(claim_result, decoded.certificate_id)
+        claim_result['permanent_url'] = _get_permanent_url(claim_result, decoded.certificate_id if decoded else None)
 
         return claim_result
 
