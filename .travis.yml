@@ -116,6 +116,15 @@ jobs:
         - python3 scripts/set_build.py
         - pip3 install -e .
 
+    - if: tag IS present
+      stage: docker
+      name: "Wallet Server Docker Image"
+      script:
+          - set -e
+          - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
+          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f scripts/Dockerfile.wallet_server .
+          - docker push lbry/wallet-server:$TRAVIS_TAG
+
 cache:
   directories:
     - $HOME/.cache/pip
