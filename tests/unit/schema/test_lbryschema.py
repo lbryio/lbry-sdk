@@ -206,19 +206,19 @@ class TestNIST256pSignatures(UnitTest):
     def test_validate_ecdsa_signature(self):
         cert = ClaimDict.generate_certificate(nist256p_private_key, curve=NIST256p)
         signed = ClaimDict.load_dict(example_010).sign(nist256p_private_key,
-                                                       claim_address_2, claim_id_1, curve=NIST256p)
+                                                       claim_address_2, claim_id_1, curve=NIST256p, legacy=True)
         self.assertDictEqual(signed.claim_dict, claim_010_signed_nist256p)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert), True)
 
     def test_remove_signature_equals_unsigned(self):
         unsigned = ClaimDict.load_dict(example_010)
-        signed = unsigned.sign(nist256p_private_key, claim_address_1, claim_id_1, curve=NIST256p)
+        signed = unsigned.sign(nist256p_private_key, claim_address_1, claim_id_1, curve=NIST256p, legacy=True)
         self.assertEqual(unsigned.serialized, signed.serialized_no_signature)
 
     def test_fail_to_validate_fake_ecdsa_signature(self):
         signed = ClaimDict.load_dict(example_010).sign(nist256p_private_key, claim_address_1,
-                                                       claim_id_1, curve=NIST256p)
+                                                       claim_id_1, curve=NIST256p, legacy=True)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         fake_key = get_signer(NIST256p).generate().private_key.to_pem()
         fake_cert = ClaimDict.generate_certificate(fake_key, curve=NIST256p)
@@ -228,7 +228,7 @@ class TestNIST256pSignatures(UnitTest):
     def test_fail_to_validate_ecdsa_sig_for_altered_claim(self):
         cert = ClaimDict.generate_certificate(nist256p_private_key, curve=NIST256p)
         altered = ClaimDict.load_dict(example_010).sign(nist256p_private_key, claim_address_1,
-                                                        claim_id_1, curve=NIST256p)
+                                                        claim_id_1, curve=NIST256p, legacy=True)
         sd_hash = altered['stream']['source']['source']
         altered['stream']['source']['source'] = sd_hash[::-1]
         altered_copy = ClaimDict.load_dict(altered.claim_dict)
@@ -245,19 +245,19 @@ class TestNIST384pSignatures(UnitTest):
     def test_validate_ecdsa_signature(self):
         cert = ClaimDict.generate_certificate(nist384p_private_key, curve=NIST384p)
         signed = ClaimDict.load_dict(example_010).sign(nist384p_private_key,
-                                                       claim_address_2, claim_id_1, curve=NIST384p)
+                                                       claim_address_2, claim_id_1, curve=NIST384p, legacy=True)
         self.assertDictEqual(signed.claim_dict, claim_010_signed_nist384p)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert), True)
 
     def test_remove_signature_equals_unsigned(self):
         unsigned = ClaimDict.load_dict(example_010)
-        signed = unsigned.sign(nist384p_private_key, claim_address_1, claim_id_1, curve=NIST384p)
+        signed = unsigned.sign(nist384p_private_key, claim_address_1, claim_id_1, curve=NIST384p, legacy=True)
         self.assertEqual(unsigned.serialized, signed.serialized_no_signature)
 
     def test_fail_to_validate_fake_ecdsa_signature(self):
         signed = ClaimDict.load_dict(example_010).sign(nist384p_private_key, claim_address_1,
-                                                       claim_id_1, curve=NIST384p)
+                                                       claim_id_1, curve=NIST384p, legacy=True)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         fake_key = get_signer(NIST384p).generate().private_key.to_pem()
         fake_cert = ClaimDict.generate_certificate(fake_key, curve=NIST384p)
@@ -267,7 +267,7 @@ class TestNIST384pSignatures(UnitTest):
     def test_fail_to_validate_ecdsa_sig_for_altered_claim(self):
         cert = ClaimDict.generate_certificate(nist384p_private_key, curve=NIST384p)
         altered = ClaimDict.load_dict(example_010).sign(nist384p_private_key, claim_address_1,
-                                                        claim_id_1, curve=NIST384p)
+                                                        claim_id_1, curve=NIST384p, legacy=True)
         sd_hash = altered['stream']['source']['source']
         altered['stream']['source']['source'] = sd_hash[::-1]
         altered_copy = ClaimDict.load_dict(altered.claim_dict)
@@ -285,7 +285,7 @@ class TestSECP256k1Signatures(UnitTest):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2,
-                                                       claim_id_1, curve=SECP256k1)
+                                                       claim_id_1, curve=SECP256k1, legacy=True)
         self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert), True)
@@ -300,19 +300,19 @@ class TestSECP256k1Signatures(UnitTest):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2,
-                                                       claim_id_1, curve=SECP256k1)
+                                                       claim_id_1, curve=SECP256k1, legacy=True)
         self.assertDictEqual(signed.claim_dict, claim_010_signed_secp256k1)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertRaises(Exception, signed_copy.validate_signature, None, cert)
 
     def test_remove_signature_equals_unsigned(self):
         unsigned = ClaimDict.load_dict(example_010)
-        signed = unsigned.sign(secp256k1_private_key, claim_address_1, claim_id_1, curve=SECP256k1)
+        signed = unsigned.sign(secp256k1_private_key, claim_address_1, claim_id_1, curve=SECP256k1, legacy=True)
         self.assertEqual(unsigned.serialized, signed.serialized_no_signature)
 
     def test_fail_to_validate_fake_ecdsa_signature(self):
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_1,
-                                                       claim_id_1, curve=SECP256k1)
+                                                       claim_id_1, curve=SECP256k1, legacy=True)
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         fake_key = get_signer(SECP256k1).generate().private_key.to_pem()
         fake_cert = ClaimDict.generate_certificate(fake_key, curve=SECP256k1)
@@ -322,7 +322,7 @@ class TestSECP256k1Signatures(UnitTest):
     def test_fail_to_validate_ecdsa_sig_for_altered_claim(self):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         altered = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_1,
-                                                        claim_id_1, curve=SECP256k1)
+                                                        claim_id_1, curve=SECP256k1, legacy=True)
         sd_hash = altered['stream']['source']['source']
         altered['stream']['source']['source'] = sd_hash[::-1]
         altered_copy = ClaimDict.load_dict(altered.claim_dict)
@@ -335,7 +335,7 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
-                                                       curve=SECP256k1, name='example', force_detached=True)
+                                                       curve=SECP256k1, name='example')
         signed_copy = ClaimDict.deserialize(signed.serialized)
         self.assertEqual(signed_copy.validate_signature(claim_address_2, cert, name='example'), True)
 
@@ -343,7 +343,7 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
-                                                       curve=SECP256k1, name='example', force_detached=True)
+                                                       curve=SECP256k1, name='example')
         self.assertEqual(
             signed.claim_dict['publisherSignature']['detached_signature'],
             binascii.hexlify(signed.serialized).decode()
@@ -408,13 +408,13 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         self.assertRaises(Exception, ClaimDict.load_dict(example_010).sign, secp256k1_private_key,
-                          None, claim_id_1, curve=SECP256k1, name='example', force_detached=True)
+                          None, claim_id_1, curve=SECP256k1, name='example')
 
     def test_fail_to_validate_with_no_claim_address(self):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
-                                                       curve=SECP256k1, name='example', force_detached=True)
+                                                       curve=SECP256k1, name='example')
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertRaises(Exception, signed_copy.validate_signature, None, cert, name='example')
 
@@ -422,19 +422,19 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         self.assertDictEqual(cert.claim_dict, secp256k1_cert)
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_2, claim_id_1,
-                                                       curve=SECP256k1, name='example', force_detached=True)
+                                                       curve=SECP256k1, name='example')
         signed_copy = ClaimDict.load_protobuf(signed.protobuf)
         self.assertRaises(Exception, signed_copy.validate_signature, None, cert, name=None)
 
     def test_remove_signature_equals_unsigned(self):
         unsigned = ClaimDict.load_dict(example_010)
         signed = unsigned.sign(secp256k1_private_key, claim_address_1, claim_id_1,
-                               curve=SECP256k1, name='example', force_detached=True)
+                               curve=SECP256k1, name='example')
         self.assertEqual(unsigned.serialized, signed.serialized_no_signature)
 
     def test_fail_to_validate_fake_ecdsa_signature(self):
         signed = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_1, claim_id_1,
-                                                       curve=SECP256k1, name='example', force_detached=True)
+                                                       curve=SECP256k1, name='example')
         signed_copy = ClaimDict.deserialize(signed.serialized)
         fake_key = get_signer(SECP256k1).generate().private_key.to_pem()
         fake_cert = ClaimDict.generate_certificate(fake_key, curve=SECP256k1)
@@ -444,7 +444,7 @@ class TestDetachedNamedSECP256k1Signatures(UnitTest):
     def test_fail_to_validate_ecdsa_sig_for_altered_claim(self):
         cert = ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1)
         altered = ClaimDict.load_dict(example_010).sign(secp256k1_private_key, claim_address_1, claim_id_1,
-                                                        curve=SECP256k1, name='example', force_detached=True)
+                                                        curve=SECP256k1, name='example')
         original_serialization = altered.serialized
         sd_hash = altered['stream']['source']['source']
         altered['stream']['source']['source'] = sd_hash[::-1]

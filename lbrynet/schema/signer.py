@@ -50,11 +50,11 @@ class NIST_ECDSASigner(object):
         digest = self.HASHFUNC(bytearray(b''.join(fields))).digest()
         return self.private_key.sign_digest_deterministic(digest, hashfunc=self.HASHFUNC)
 
-    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name, detached=False):
+    def sign_stream_claim(self, claim, claim_address, cert_claim_id, name, legacy=False):
         validate_claim_id(cert_claim_id)
         raw_cert_id = binascii.unhexlify(cert_claim_id)
         decoded_addr = decode_address(claim_address)
-        if detached:
+        if not legacy:
             assert name, "Name is required for detached signatures"
             assert self.CURVE_NAME == SECP256k1, f"Only SECP256k1 is supported, not: {self.CURVE_NAME}"
             signature = self.sign(
@@ -66,7 +66,7 @@ class NIST_ECDSASigner(object):
         else:
             signature = self.sign(decoded_addr, claim.serialized_no_signature, raw_cert_id)
 
-        if detached:
+        if not legacy:
             return Claim.load(decode_b64_fields(claim.protobuf_dict)), Signature(NAMED_SECP256K1(
                 signature,
                 raw_cert_id,
