@@ -1,5 +1,5 @@
 import unittest
-import mock
+from unittest import mock
 import json
 
 from lbrynet.conf import Config
