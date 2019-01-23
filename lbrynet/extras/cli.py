@@ -195,7 +195,9 @@ def main(argv=None):
             args.start_parser.print_help()
             return 0
         default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
-        file_handler = logging.handlers.RotatingFileHandler(conf.log_file_path, maxBytes = 2097152, backupCount = 5)
+        file_handler = logging.handlers.RotatingFileHandler(
+            conf.log_file_path, maxBytes=2097152, backupCount=5
+        )
         file_handler.setFormatter(default_formatter)
         log.addHandler(file_handler)
 
