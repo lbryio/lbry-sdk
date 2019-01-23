@@ -11,6 +11,7 @@ from textwrap import dedent
 from lbrynet import __name__ as lbrynet_name, __version__ as lbrynet_version
 from lbrynet.conf import Config, CLIConfig
 from lbrynet.extras.daemon.Daemon import Daemon
+from lbrynet.extras.daemon.client import LBRYAPIClient, JSONRPCException
 from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
 
 log = logging.getLogger(lbrynet_name)
@@ -49,7 +50,6 @@ async def start_daemon(conf: Config, args):
 
     log.info("Starting lbrynet-daemon from command line")
     daemon = Daemon(conf)
-
     try:
         await daemon.start_listening()
     except (OSError, asyncio.CancelledError):
@@ -66,23 +66,14 @@ def display(data):
 
 
 async def execute_command(conf, method, params):
-    async with aiohttp.ClientSession() as session:
-        try:
-            message = {'method': method, 'params': params}
-            async with session.get(conf.api_connection_url, json=message) as resp:
-                try:
-                    data = await resp.json()
-                    if 'result' in data:
-                        display(data['result'])
-                    elif 'error' in data:
-                        if 'message' in data['error']:
-                            display(data['error']['message'])
-                        else:
-                            display(data['error'])
-                except Exception as e:
-                    log.exception('Could not process response from server:', exc_info=e)
-        except aiohttp.ClientConnectionError:
-            print("Could not connect to daemon. Are you sure it's running?")
+    client = LBRYAPIClient(conf)
+    try:
+        result = await getattr(client, method)(params)
+        print(display(result))
+    except aiohttp.ClientConnectionError:
+        print("Could not connect to daemon. Are you sure it's running?")
+    except JSONRPCException as err:
+        print(err)
 
 
 def print_help():

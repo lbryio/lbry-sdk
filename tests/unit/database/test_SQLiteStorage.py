@@ -4,6 +4,7 @@ import unittest
 import asyncio
 import logging
 from torba.testcase import AsyncioTestCase
+from lbrynet.conf import Config
 from lbrynet.blob.blob_info import BlobInfo
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.stream.descriptor import StreamDescriptor
@@ -67,7 +68,7 @@ fake_claim_info = {
 
 class StorageTest(AsyncioTestCase):
     async def asyncSetUp(self):
-        self.storage = SQLiteStorage(':memory:')
+        self.storage = SQLiteStorage(Config(), ':memory:')
         self.blob_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.blob_dir)
         self.blob_manager = BlobFileManager(asyncio.get_event_loop(), self.blob_dir, self.storage)

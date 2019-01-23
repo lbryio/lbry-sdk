@@ -10,6 +10,7 @@ from lbrynet.dht.peer import PeerManager
 class TestNodePingQueueDiscover(AsyncioTestCase):
     async def test_ping_queue_discover(self):
         loop = asyncio.get_event_loop()
+        loop.set_debug(False)
 
         peer_addresses = [
             (constants.generate_id(1), '1.2.3.1'),

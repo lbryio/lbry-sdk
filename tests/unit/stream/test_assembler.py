@@ -3,6 +3,7 @@ import asyncio
 import tempfile
 import shutil
 from torba.testcase import AsyncioTestCase
+from lbrynet.conf import Config
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -19,7 +20,7 @@ class TestStreamAssembler(AsyncioTestCase):
     async def test_create_and_decrypt_one_blob_stream(self):
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-        self.storage = SQLiteStorage(os.path.join(tmp_dir, "lbrynet.sqlite"))
+        self.storage = SQLiteStorage(Config(), os.path.join(tmp_dir, "lbrynet.sqlite"))
         await self.storage.open()
         self.blob_manager = BlobFileManager(self.loop, tmp_dir, self.storage)
 
@@ -39,7 +40,7 @@ class TestStreamAssembler(AsyncioTestCase):
         for blob_info in sd.blobs:
             if blob_info.blob_hash:
                 shutil.copy(os.path.join(tmp_dir, blob_info.blob_hash), os.path.join(download_dir, blob_info.blob_hash))
-        downloader_storage = SQLiteStorage(os.path.join(download_dir, "lbrynet.sqlite"))
+        downloader_storage = SQLiteStorage(Config(), os.path.join(download_dir, "lbrynet.sqlite"))
         await downloader_storage.open()
 
         # add the blobs to the blob table (this would happen upon a blob download finishing)

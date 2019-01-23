@@ -2,7 +2,6 @@ import os
 import asyncio
 import typing
 import logging
-from lbrynet import conf
 from lbrynet.utils import drain_tasks, cancel_task
 from lbrynet.stream.assembler import StreamAssembler
 from lbrynet.blob_exchange.client import BlobExchangeClientProtocol, request_blob
@@ -24,7 +23,8 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str,
                  peer_timeout: float, peer_connect_timeout: float, output_dir: typing.Optional[str] = None,
                  output_file_name: typing.Optional[str] = None,
-                 fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None):
+                 fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None,
+                 max_connections_per_stream: typing.Optional[int] = 8):
         super().__init__(loop, blob_manager, sd_hash)
         self.peer_timeout = peer_timeout
         self.peer_connect_timeout = peer_connect_timeout
@@ -39,7 +39,7 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
         self.output_dir = output_dir or os.getcwd()
         self.output_file_name = output_file_name
         self._lock = asyncio.Lock(loop=self.loop)
-        self.max_connections_per_stream = 8 if not conf.settings else conf.settings['max_connections_per_stream']
+        self.max_connections_per_stream = max_connections_per_stream
         self.fixed_peers = fixed_peers or []
 
     async def _update_current_blob(self, blob: 'BlobFile'):

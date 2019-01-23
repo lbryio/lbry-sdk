@@ -3,6 +3,7 @@ import tempfile
 import shutil
 import os
 from torba.testcase import AsyncioTestCase
+from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_manager import BlobFileManager
 
@@ -16,7 +17,7 @@ class TestBlobfile(AsyncioTestCase):
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
 
-        storage = SQLiteStorage(os.path.join(tmp_dir, "lbrynet.sqlite"))
+        storage = SQLiteStorage(Config(), os.path.join(tmp_dir, "lbrynet.sqlite"))
         blob_manager = BlobFileManager(loop, tmp_dir, storage)
 
         await storage.open()

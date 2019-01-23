@@ -56,7 +56,6 @@ class ComponentManager:
 
         for component_class in self.component_classes.values():
             self.components.add(component_class(self))
-        self.daemon = None
 
     def evaluate_condition(self, condition_name):
         if condition_name not in RegisteredConditions.conditions:

@@ -58,7 +58,7 @@ class HTTPSLogglyHandler(logging.Handler):
         asyncio.ensure_future(self._emit(record))
 
 
-def get_loggly_handler(loggly_token=LOGGLY_TOKEN):
-    handler = HTTPSLogglyHandler(loggly_token)
+def get_loggly_handler():
+    handler = HTTPSLogglyHandler(LOGGLY_TOKEN)
     handler.setFormatter(JsonFormatter())
     return handler
