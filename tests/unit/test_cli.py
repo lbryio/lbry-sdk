@@ -1,12 +1,24 @@
 import contextlib
 from io import StringIO
-from twisted.trial import unittest
+import unittest
 
+from docopt import DocoptExit
 from lbrynet.extras.cli import normalize_value, main
 from lbrynet.extras.system_info import get_platform
 
 
 class CLITest(unittest.TestCase):
+
+    @staticmethod
+    def shell(argv):
+        actual_output = StringIO()
+        with contextlib.redirect_stdout(actual_output):
+            with contextlib.redirect_stderr(actual_output):
+                try:
+                    main(argv)
+                except SystemExit as e:
+                    print(e.args[0])
+        return actual_output.getvalue().strip()
 
     def test_guess_type(self):
         self.assertEqual('0.3.8', normalize_value('0.3.8'))
@@ -39,58 +51,65 @@ class CLITest(unittest.TestCase):
 
         self.assertEqual(3, normalize_value('3', key="some_other_thing"))
 
-    def test_help_command(self):
-        actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            main(['help'])
-        actual_output = actual_output.getvalue()
-        self.assertSubstring('usage: lbrynet [--version] [-h]', actual_output)
-
-    def test_help_for_command_command(self):
-        actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            main(['help', 'publish'])
-        actual_output = actual_output.getvalue()
-        self.assertSubstring('Make a new name claim and publish', actual_output)
-        self.assertSubstring('Usage:', actual_output)
-
-    def test_help_for_command_command_with_invalid_command(self):
-        actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            main(['help', 'publish1'])
-        self.assertSubstring('Invalid command name', actual_output.getvalue())
-
-    def test_version_command(self):
-        actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            main(['--version'])
-        self.assertEqual(
-            actual_output.getvalue().strip(),
-            "lbrynet {lbrynet_version}".format(**get_platform())
+    def test_help(self):
+        self.assertIn(
+            'usage: lbrynet [--help] [--version] [--api API]', self.shell(['--help'])
+        )
+        # start is special command, with separate help handling
+        self.assertIn(
+            '--share-usage-data', self.shell(['start', '--help'])
+        )
+        # publish is ungrouped command, returns usage only implicitly
+        self.assertIn(
+            'publish (<name> | --name=<name>)', self.shell(['publish'])
+        )
+        # publish is ungrouped command, with explicit --help
+        self.assertIn(
+            'Make a new name claim and publish', self.shell(['publish', '--help'])
+        )
+        # account is a group, returns help implicitly
+        self.assertIn(
+            '{add,balance,create,decrypt,encrypt,fund,list,lock,max_address_gap,remove,send,set,unlock}',
+            self.shell(['account'])
+        )
+        # account is a group, with explicit --help
+        self.assertIn(
+            '{add,balance,create,decrypt,encrypt,fund,list,lock,max_address_gap,remove,send,set,unlock}',
+            self.shell(['account', '--help'])
+        )
+        # account add is a grouped command, returns usage implicitly
+        self.assertIn(
+            'account_add (<account_name> | --account_name=<account_name>)',
+            self.shell(['account', 'add'])
+        )
+        # account add is a grouped command, with explicit --help
+        self.assertIn(
+            'Add a previously created account from a seed,', self.shell(['account', 'add', '--help'])
+        )
+        # help for invalid command, with explicit --help
+        self.assertIn(
+            "invalid choice: 'publish1'", self.shell(['publish1', '--help'])
+        )
+        # help for invalid command, implicit
+        self.assertIn(
+            "invalid choice: 'publish1'", self.shell(['publish1'])
         )
 
-    def test_invalid_command(self):
-        actual_output = StringIO()
-        with contextlib.redirect_stderr(actual_output):
-            try:
-                main(['publish1'])
-            except SystemExit:
-                pass
-        self.assertSubstring("invalid choice: 'publish1'", actual_output.getvalue())
+    def test_version_command(self):
+        self.assertEqual(
+            "lbrynet {lbrynet_version}".format(**get_platform()), self.shell(['--version'])
+        )
 
     def test_valid_command_daemon_not_started(self):
-        actual_output = StringIO()
-        with contextlib.redirect_stdout(actual_output):
-            main(["publish", '--name=asd', '--bid=99'])
         self.assertEqual(
-            actual_output.getvalue().strip(),
-            "Could not connect to daemon. Are you sure it's running?"
+            "Could not connect to daemon. Are you sure it's running?",
+            self.shell(["publish", '--name=asd', '--bid=99'])
         )
 
     def test_deprecated_command_daemon_not_started(self):
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
-            main(["wallet_balance"])
+            main(["wallet", "balance"])
         self.assertEqual(
             actual_output.getvalue().strip(),
             "wallet_balance is deprecated, using account_balance.\n"
