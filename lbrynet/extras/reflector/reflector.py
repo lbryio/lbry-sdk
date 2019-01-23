@@ -8,138 +8,106 @@ from lbrynet import conf
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.stream.stream_manager import StreamManager
+    from asyncio import Protocol
 
-__all__ = 'reflect'
+__all__ = ('reflect', 'Reflector', 'ReflectorProtocol')
 
-V0 = 0  # Base integer to increment every version release.
-V1 = V0 + 0  # V1 = 0.
-V2 = V1 + 1  # V2 = 1.
+_V1 = 0
+_V2 = 1
+
+_VERSION = typing.Any[_V2, _V1]  # Peer Flag
+
+_SERVERS = conf.get_config()['reflector_servers']
+_HOST = random.choice(_SERVERS)
 
 
 async def encode(message) -> bytes:
-    return binascii.hexlify(json.dumps(message).encode()).decode()  # Encode message.
+    return binascii.hexlify(json.dumps(message).encode()).decode()
 
 
 async def decode(message) -> typing.Dict:
-    return json.loads(binascii.unhexlify(message.decode()))  # Decode message.
+    return json.loads(binascii.unhexlify(message.decode()))
 
-Version = typing.Any[V2, V1]  # Peer Flag
-
-Client = typing.NewType('Client', type)
-Server = typing.NewType('Server', type)
-Reflector = typing.Any[Client, Server]  # Peer identifier
-
-TCP = typing.NewType('TCP', type)
-UPnP = typing.NewType('UPnP', type)
-Service = typing.Any[TCP, UPnP]  # Peer Fingerprint
+protocol: 'ReflectorProtocol'
+Manager: typing.Any[BlobFileManager, StreamManager]
+Reflector: typing.NewType('Reflector', type)
 
 # Raised by reflector server if client sends an incompatible or unknown version.
-VersionError = typing.NewType('VersionError', Exception)
+VersionError: typing.NewType('VersionError', Exception)
 
 # Raised by reflector server if client sends a message without the required fields.
-RequestError = typing.NewType('RequestError', Exception)
+RequestError: typing.NewType('RequestError', Exception)
 
 # Raised by reflector server if client sends an invalid json request.
-RequestDecodeError = typing.NewType('RequestDecodeError', Exception)
+RequestDecodeError: typing.NewType('RequestDecodeError', Exception)
 
 # Raised by reflector server when client sends a portion of a json request,
 # used buffering the incoming request.
-IncompleteResponse = typing.NewType('IncompleteResponse', Exception)
+IncompleteResponse: typing.NewType('IncompleteResponse', Exception)
+
+
+class Blobs(typing.AsyncIterator):
+    needed = asyncio.Queue()
+    send = asyncio.Queue()
+    reflected = asyncio.Queue()
+
+    def __init__(self, blobs, manager):
+        self.manager = manager
+        self.blob = iter(blobs)
+
+    def __await__(self):
+        blob = self.needed.get()
+        _ = self.manager.get_blob(blob)
+        self.send.put(_)
+        return self
+
+    async def __anext__(self):
+        await asyncio.sleep(0.02)
+        try:
+            blob = next(self.blob)
+        except StopIteration:
+            raise StopAsyncIteration
+        return blob
 
 
 class ReflectorProtocol(asyncio.Protocol):
-    class Blobs:
-        def __init__(self, blobs):
-            self._blob = iter(blobs)
-
-        async def __aiter__(self):
-            return self
-
-        async def __anext__(self):
-            await asyncio.sleep(0.2)
-            try:
-                blob = next(self._blob)
-            except StopIteration:
-                raise StopAsyncIteration
-            return blob
-
-    def __init__(self, blob_manager: typing.Any['BlobFileManager'],
-                 version: typing.Any[Version],
-                 reflector: typing.Any['Reflector'], service: typing.Any['Service']):
-        self.blob_manager = blob_manager
+    def __init__(self, version: typing.Any[_VERSION] = _V2):
         self.version = version
-        self.reflector = reflector
-        self.service = service
-        self.transport = None
 
     def connection_made(self, transport: asyncio.Transport) -> typing.NoReturn:
-        self.transport = transport
+        payload = encode({'message': self.version})
+        transport.write(payload)
 
-    async def handshake(self) -> typing.NoReturn:
-        self.transport.write(encode({'version': self.version}))
-
-    async def send_data(self, message: typing.AnyStr[str]) -> typing.NoReturn:
-        self.transport.write(encode(message))
-
-    async def handle_handshake(self, message: typing.Dict):
-        if isinstance(message.get('version'), Version):
-            if isinstance(Reflector, Server):
-                self.transport.write(message.get('version'))
-                self.transport.make_connection(
-                    self.transport.get_host_info('peerinfo'))
-            elif isinstance(Reflector, Client):
-                self.transport.make_connection(
-                    self.transport.get_host_info('peerinfo'))
-            else:
-                self.transport.write(encode({'error': 'ReflectorVersionError'}))
-                self.transport.close()
-
-    async def client_handle(self, message: typing.AnyStr):
-        message = await decode(message)
-        if message.keys() == 'version':
-            _ = await self.handle_handshake(message)
-        elif message.keys() == 'needed':
-            needed = message.get('needed')
-            for blob in needed:
-                _blob = self.blob_manager.get_blob(blob)
-                self.transport.write(_blob)
-        elif True or False in message.values():
-            blobs = self.blob_manager.blobs
-            self.transport.writelines(blobs)
-        else:
-            return message['error']
-
-    async def server_handle(self, message: typing.AnyStr[bytes]):
-        message = await decode(message)
-        if 'version' in message.keys():
-            _ = await self.handle_handshake(message)
-
-    async def handle_response(self, message: typing.AnyStr[bytes]):
-        if isinstance(self.reflector, Client):
-            return self.client_handle(message)
-        elif isinstance(self.reflector, Server):
-            return self.server_handle(message)
-
-    def data_received(self, data: bytes):
+    async def handle_response(self, data: typing.AnyStr[bytes]) -> typing.NoReturn:
+        message = await decode(data)
         try:
-            self.handle_response(data)
-        except (asyncio.CancelledError, asyncio.IncompleteReadError) as exc:
-            self.transport.close()
+            if 'version' in message.keys():
+                if not message.get('version') == self.version:
+                    raise VersionError
+                await message.get('version')
+            elif 'send_' in message.keys():
+                await Blobs.send.put(message.get('send_'.endswith('blob')))
+                await Blobs.needed.put(message.get('needed_blobs'))
+            elif 'blob_hash' in message.keys():
+                # TODO: have server look up blob hash
+                pass
+            return
+        except (IncompleteResponse, RequestDecodeError) as exc:
             raise exc
 
-    def connection_lost(self, exc: typing.Optional[Exception]):
-        raise exc
+    def data_received(self, data: bytes) -> typing.Coroutine:
+        try:
+            return self.handle_response(data)
+        except (asyncio.CancelledError, asyncio.IncompleteReadError) as exc:
+            raise exc
 
 
-async def reflect(blobs: typing.Any[typing.List[str]] = None,
-                  blob_manager: typing.Any['BlobFileManager'] = None,
-                  loop: typing.Any[asyncio.BaseEventLoop] = None,
-                  reflector: typing.Any['Reflector'] = Reflector['Client'],
-                  service: typing.Any['Service'] = Service['TCP'],
-                  protocol: typing.Any['ReflectorProtocol'] = ReflectorProtocol,
-                  version: typing.Any['Version'] = V2,
-                  reflector_server: typing.Optional[str] = None,
-                  reflector_port: typing.Optional[int] = 5566) -> typing.List[str]:
+async def reflect(manager: typing.Any[Manager] = BlobFileManager,
+                  loop: typing.Any[asyncio.BaseEventLoop] = asyncio.get_event_loop(),
+                  blobs: typing.Optional[typing.Any] = None,
+                  host: typing.Optional[_SERVERS, str] = _HOST,
+                  port: typing.Optional[int] = 5566) -> typing.Coroutine[typing.Any[typing.List]]:
     """
     Reflect Blobs to a Reflector
 
@@ -163,20 +131,41 @@ async def reflect(blobs: typing.Any[typing.List[str]] = None,
         Returns:
             (list) list of blobs reflected
     """
-    if isinstance(reflector, Client):
-        if reflector_server is None and isinstance(Reflector, Client):
-            reflector_server = random.choice(conf.get_config()['reflector_servers'])
-        if blobs is not None:
-            try:
-                return await asyncio.wait_for(
-                    loop.create_connection(
-                        lambda: protocol(blob_manager, version, reflector, service),
-                        reflector_server, reflector_port), loop=loop, timeout=30.0
-                ).set_result(protocol.Blobs(blobs))
-            except (asyncio.TimeoutError, asyncio.CancelledError, InterruptedError,
-                    ValueError, ConnectionError, BytesWarning) as exc:
-                raise exc.with_traceback(loop)
-        else:
-            raise ValueError('Nothing to reflect from!')
-    elif isinstance(reflector, Server):
-        pass
+    async def connect(_loop, _proto, _host, _port):
+        return await asyncio.wait_for(
+            _loop.create_connection(
+                lambda: _proto, _host, _port),
+            loop=_loop, timeout=3.0)
+
+    if isinstance(manager, StreamManager):
+        server = await connect(loop, protocol, host, port)
+        async with server:
+            reader, writer = server
+            req = await decode(reader.readline())
+            if 'blob_hash' in req:
+                yield
+            elif 'sd_blob_hash' in req:
+                yield
+            else:
+                yield
+            await server.serve_forever()
+
+    fut = loop.create_future()
+    client = await connect(loop, protocol, host, port)
+    async with client:
+        blob = Blobs(blobs, manager)
+        errors = []
+        try:
+            reader, writer = client
+            writer.write(encode(blob))
+            resp = await reader.readline()
+            message = await decode(resp)
+            if not'received' in message.keys():
+                await errors.append(blob.reflected.get())
+            await blob.needed.put(message.get(''.startswith('needed')))
+        finally:
+            _ = []
+            while not blob.reflected.empty():
+                _.append(blob.reflected.get())
+            fut.set_result(_)
+            yield fut.result()

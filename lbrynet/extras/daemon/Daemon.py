@@ -2863,12 +2863,12 @@ class Daemon(metaclass=JSONRPCServerType):
     async def jsonrpc_file_reflect(self, **kwargs) -> typing.List[str]:
         """
         Reflect all the blobs in a file matching the filter criteria
-        
+
         Usage:
              file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                           [--stream_hash=<stream_hash>] [--rowid=<rowid>]
                           [--reflector=<reflector>]
-  
+
         Options:
             --sd_hash=<sd_hash>          : (str) get file with matching sd hash
             --file_name=<file_name>      : (str) get file with matching file name in the
@@ -2881,21 +2881,19 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) list of blobs reflected
         """
-        reflector_server = kwargs.get('reflector', None)
-        kwargs.pop('reflector_server')
-        args = kwargs.copy()
-        blob_file = self.stream_manager.get_filtered_streams(**args)
-        if len(blob_file) > 1:
-            raise Exception('Too many (%i) files found, need one' % len(blob_file))
-        elif not blob_file:
-            raise Exception('No file found')
-        else:
-            stream_manager = blob_file[0]
-            blobs = stream_manager.blob_manager.blobs
-            blob_manager = stream_manager.blob_manager
-            loop = stream_manager.blob_manager.loop
-            return await reflector.reflect(blobs, blob_manager, loop,
-                                           reflector_server=reflector_server)
+        _DuplicateBlobFileError: Exception('Too many files found, need one')
+        _NoFileFound: Exception('No file found')
+        try:
+            host = kwargs.get('reflector', None)
+            manager = self.stream_manager.get_filtered_streams(**kwargs)
+            assert len(manager) == 1, _DuplicateBlobFileError
+            assert manager is not None, _NoFileFound
+            blob_hashes = self.storage.get_all_blob_hashes()
+            args = (self.stream_manager.blob_manager, self.blob_manager.loop, blob_hashes, host)
+            return await reflector.reflect(*args)
+        except (_DuplicateBlobFileError, _NoFileFound) as exc:
+            raise exc
+
 
     # @requires(BLOB_COMPONENT, WALLET_COMPONENT)
     # async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
@@ -2973,13 +2971,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (list) reflected blob hashes
         """
-        blobs = []
-        blob_manager = self.blob_manager
-        loop = self.blob_manager.loop
-        for blob in blob_hashes:
-            blobs.append(blob_manager.get_blob(blob))
-        return await reflector.reflect(blobs, blob_manager, loop,
-                                       reflector_server=reflector_server)
+        args = (self.blob_manager, self.blob_manager.loop, blob_hashes, reflector_server)
+        return await reflector.reflect(*args)
 
     @requires(BLOB_COMPONENT)
     async def jsonrpc_blob_reflect_all(self) -> typing.List[str]:
@@ -2995,13 +2988,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if successful
         """
-        hashes = self.blob_manager.storage.get_all_blob_hashes()
-        blobs = []
-        blob_manager = self.blob_manager
-        loop = self.blob_manager.loop
-        for blob in hashes:
-            blobs.append(blob_manager.get_blob(blob))
-        return await reflector.reflect(blobs, blob_manager, loop)
+        blobs = await self.blob_manager.storage.get_all_blob_hashes()
+        args = (self.blob_manager, self.blob_manager.loop, blobs)
+        return await reflector.reflect(*args)
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):
