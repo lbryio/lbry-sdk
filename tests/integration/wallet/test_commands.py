@@ -2,6 +2,7 @@ import sys
 import json
 import tempfile
 import logging
+import time
 from binascii import unhexlify
 
 import twisted.internet
@@ -418,12 +419,12 @@ class ClaimManagement(CommandTestCase):
 
     VERBOSITY = logging.WARN
 
-    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!', channel_name=None, confirm=True):
+    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!', channel_name=None, confirm=True, **kwargs):
         with tempfile.NamedTemporaryFile() as file:
             file.write(data)
             file.flush()
             claim = await self.out(self.daemon.jsonrpc_publish(
-                name, amount, file_path=file.name, channel_name=channel_name
+                name, amount, file_path=file.name, channel_name=channel_name, **kwargs
             ))
             self.assertTrue(claim['success'])
             if confirm:
@@ -611,6 +612,31 @@ class ClaimManagement(CommandTestCase):
             self.daemon.jsonrpc_claim_show(txid=abandon['tx']['txid'], nout=0)
         )
         self.assertEqual(not_a_claim, 'claim not found')
+
+    async def test_release_time_create_update(self):
+        channel = await self.out(self.daemon.jsonrpc_channel_new('@rickroll-news', "1.0"))
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx']['txid'])
+        release_time = int(time.time())
+        claim = await self.make_claim(name='today', channel_name='@rickroll-news', release_time=release_time)
+        self.assertTrue(claim['success'])
+
+        uri = 'lbry://@rickroll-news/today'
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertEqual(response[uri]['claim']['value']['stream']['metadata']['releaseTime'], release_time)
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+
+        # moar news! stop the machines! update today's edition with extra metadata!
+        release_time = int(time.time())
+        self.assertTrue(claim['success'])
+        metadata = response[uri]['claim']['value']['stream']['metadata']
+        metadata['title'] = "[YOU WONT BELIEVE IT!] Hamster tries to climb a tree"
+        metadata['description'] = "Never gonna give you up; Never gonna let you down"
+        metadata['releaseTime'] = release_time
+        await self.make_claim(amount='0.0001', name='today', channel_name='@rickroll-news', metadata=metadata)
+        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        self.assertEqual(response[uri]['claim']['value']['stream']['metadata'], metadata)
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
 
     async def test_abandoned_channel_with_signed_claims(self):
         channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
