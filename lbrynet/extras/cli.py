@@ -173,6 +173,11 @@ def get_argument_parser():
     return main
 
 
+async def run_daemon(daemon: Daemon):
+    await daemon.start()
+    await daemon.server.wait_closed()
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
@@ -217,7 +222,7 @@ def main(argv=None):
         log.info("Starting lbrynet-daemon from command line")
 
         daemon = Daemon(conf)
-        asyncio.run(daemon.start())
+        asyncio.run(run_daemon(daemon))
 
     elif args.command is not None:
 
