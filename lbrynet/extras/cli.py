@@ -2,63 +2,20 @@ import sys
 import json
 import asyncio
 import argparse
-import typing
+import logging
 import logging.handlers
-import aiohttp
 from docopt import docopt
 from textwrap import dedent
 
+import aiohttp
+
 from lbrynet import __name__ as lbrynet_name, __version__ as lbrynet_version
+from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
 from lbrynet.conf import Config, CLIConfig
 from lbrynet.extras.daemon.Daemon import Daemon
-from lbrynet.extras.daemon.client import LBRYAPIClient, JSONRPCException
-from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
 
 log = logging.getLogger(lbrynet_name)
 log.addHandler(logging.NullHandler())
-default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
-
-optional_path_getter_type = typing.Optional[typing.Callable[[], str]]
-
-
-async def start_daemon(conf: Config, args):
-    file_handler = logging.handlers.RotatingFileHandler(conf.log_file_path,
-                                                        maxBytes=2097152, backupCount=5)
-    file_handler.setFormatter(default_formatter)
-    log.addHandler(file_handler)
-
-    if not args.quiet:
-        handler = logging.StreamHandler()
-        handler.setFormatter(default_formatter)
-        log.addHandler(handler)
-
-    # mostly disable third part logging
-    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
-    logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
-    logging.getLogger('aioupnp').setLevel(logging.WARNING)
-    logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
-
-    if args.verbose:
-        log.setLevel(logging.DEBUG)
-    else:
-        log.setLevel(logging.INFO)
-
-    if conf.share_usage_data:
-        loggly_handler = get_loggly_handler()
-        loggly_handler.setLevel(logging.ERROR)
-        log.addHandler(loggly_handler)
-
-    log.info("Starting lbrynet-daemon from command line")
-    daemon = Daemon(conf)
-    try:
-        await daemon.start_listening()
-    except (OSError, asyncio.CancelledError):
-        return 1
-    try:
-        await daemon.server.wait_closed()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        await daemon.shutdown()
-    return 0
 
 
 def display(data):
@@ -66,21 +23,30 @@ def display(data):
 
 
 async def execute_command(conf, method, params):
-    client = LBRYAPIClient(conf)
-    try:
-        result = await getattr(client, method)(params)
-        print(display(result))
-    except aiohttp.ClientConnectionError:
-        print("Could not connect to daemon. Are you sure it's running?")
-    except JSONRPCException as err:
-        print(err)
+    async with aiohttp.ClientSession() as session:
+        try:
+            message = {'method': method, 'params': params}
+            async with session.get(conf.api_connection_url, json=message) as resp:
+                try:
+                    data = await resp.json()
+                    if 'result' in data:
+                        display(data['result'])
+                    elif 'error' in data:
+                        if 'message' in data['error']:
+                            display(data['error']['message'])
+                        else:
+                            display(data['error'])
+                except Exception as e:
+                    log.exception('Could not process response from server:', exc_info=e)
+        except aiohttp.ClientConnectionError:
+            print("Could not connect to daemon. Are you sure it's running?")
 
 
 def print_help():
     print(dedent("""
     NAME
        lbrynet - LBRY command line client.
-    
+
     USAGE
        lbrynet [--data_dir=<blob and database directory>] [--wallet_dir=<wallet directory>]
                [--download_dir=<downloads directory>] <command> [<args>]
@@ -211,36 +177,71 @@ def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
     args, command_args = parser.parse_known_args(argv)
+
     conf = Config.create_from_arguments(args)
 
     if args.cli_version:
         print(f"{lbrynet_name} {lbrynet_version}")
+        return 0
+
     elif args.command == 'start':
+
         if args.help:
             args.start_parser.print_help()
             return 0
-        try:
-            asyncio.run(start_daemon(conf, args))
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            return 0
+        default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
+        file_handler = logging.handlers.RotatingFileHandler(conf.log_file_path, maxBytes = 2097152, backupCount = 5)
+        file_handler.setFormatter(default_formatter)
+        log.addHandler(file_handler)
+
+        if not args.quiet:
+            handler = logging.StreamHandler()
+            handler.setFormatter(default_formatter)
+            log.addHandler(handler)
+        # mostly disable third part logging
+        logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+        logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
+        logging.getLogger('aioupnp').setLevel(logging.WARNING)
+        logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
+
+        if args.verbose:
+            log.setLevel(logging.DEBUG)
+        else:
+            log.setLevel(logging.INFO)
+        if conf.share_usage_data:
+            loggly_handler = get_loggly_handler()
+            loggly_handler.setLevel(logging.ERROR)
+            log.addHandler(loggly_handler)
+
+        log.debug('Final Settings: %s', conf.settings_dict)
+        log.info("Starting lbrynet-daemon from command line")
+
+        daemon = Daemon(conf)
+        asyncio.run(daemon.start())
+
     elif args.command is not None:
+
         doc = args.doc
         api_method_name = args.api_method_name
         if args.replaced_by:
             print(f"{args.api_method_name} is deprecated, using {args.replaced_by['api_method_name']}.")
             doc = args.replaced_by['doc']
             api_method_name = args.replaced_by['api_method_name']
+
         if args.help:
             print(doc)
-            return 0
         else:
             parsed = docopt(doc, command_args)
             params = set_kwargs(parsed)
-            asyncio.run(execute_command(conf, api_method_name, params))
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(execute_command(conf, api_method_name, params))
+
     elif args.group is not None:
         args.group_parser.print_help()
+
     else:
         parser.print_help()
+
     return 0
 
 
