@@ -1,9 +1,13 @@
 import contextlib
 from io import StringIO
+from unittest import TestCase
+
+import docopt
+from torba.testcase import AsyncioTestCase
 
 from lbrynet.extras.cli import normalize_value, main
 from lbrynet.extras.system_info import get_platform
-from torba.testcase import AsyncioTestCase
+from lbrynet.extras.daemon.Daemon import Daemon
 
 
 class CLITest(AsyncioTestCase):
@@ -114,3 +118,18 @@ class CLITest(AsyncioTestCase):
             "wallet_balance is deprecated, using account_balance.\n"
             "Could not connect to daemon. Are you sure it's running?"
         )
+
+
+class DaemonDocsTests(TestCase):
+
+    def test_can_parse_api_method_docs(self):
+        failures = []
+        for name, fn in Daemon.callable_methods.items():
+            try:
+                docopt.docopt(fn.__doc__, ())
+            except docopt.DocoptLanguageError as err:
+                failures.append(f"invalid docstring for {name}, {err.message}")
+            except docopt.DocoptExit:
+                pass
+        if failures:
+            self.fail("\n" + "\n".join(failures))
