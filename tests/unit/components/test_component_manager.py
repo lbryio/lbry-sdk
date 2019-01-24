@@ -1,6 +1,5 @@
 import asyncio
-import unittest
-from torba.testcase import AdvanceTimeTestCase
+from torba.testcase import AsyncioTestCase, AdvanceTimeTestCase
 
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
@@ -11,7 +10,7 @@ from lbrynet.extras.daemon.Components import HEADERS_COMPONENT
 from lbrynet.extras.daemon import Components
 
 
-class TestComponentManager(unittest.TestCase):
+class TestComponentManager(AsyncioTestCase):
 
     def setUp(self):
         self.default_components_sort = [
@@ -50,7 +49,7 @@ class TestComponentManager(unittest.TestCase):
             self.component_manager.get_component("random_component")
 
 
-class TestComponentManagerOverrides(unittest.TestCase):
+class TestComponentManagerOverrides(AsyncioTestCase):
 
     def test_init_with_overrides(self):
         class FakeWallet:
