@@ -3,7 +3,6 @@ import asyncio
 import logging
 import json
 import inspect
-import signal
 import textwrap
 import typing
 import aiohttp
