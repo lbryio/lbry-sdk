@@ -30,6 +30,7 @@ filter_fields = [
     'nout',
     'channel_claim_id',
     'channel_name',
+    'full_status'
 ]
 
 comparison_operators = {
@@ -246,6 +247,8 @@ class StreamManager:
             streams = []
             for stream in self.streams:
                 for search, val in search_by.items():
+                    if search == 'full_status':
+                        continue
                     if comparison_operators[comparison](getattr(stream, search), val):
                         streams.append(stream)
                         break
