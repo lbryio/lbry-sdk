@@ -52,10 +52,12 @@ HEADERS_FILE_SHA256_CHECKSUM = (
 class Setting(typing.Generic[T]):
 
     def __init__(self, doc: str, default: typing.Optional[T] = None,
-                 previous_names: typing.Optional[typing.List[str]] = None):
+                 previous_names: typing.Optional[typing.List[str]] = None,
+                 metavar: typing.Optional[str] = None):
         self.doc = doc
         self.default = default
         self.previous_names = previous_names or []
+        self.metavar = metavar
 
     def __set_name__(self, owner, name):
         self.name = name
@@ -343,7 +345,8 @@ class BaseConfig:
             else:
                 parser.add_argument(
                     f"--{setting.name.replace('_', '-')}",
-                    help=setting.doc
+                    help=setting.doc,
+                    metavar=setting.metavar
                 )
 
     def set_arguments(self, args):
@@ -371,7 +374,7 @@ class BaseConfig:
 
 class CLIConfig(BaseConfig):
 
-    api = String('Host name and port for lbrynet daemon API.', 'localhost:5279')
+    api = String('Host name and port for lbrynet daemon API.', 'localhost:5279', metavar='HOST:PORT')
 
     @property
     def api_connection_url(self) -> str:
