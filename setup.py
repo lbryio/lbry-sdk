@@ -28,7 +28,6 @@ setup(
         'appdirs',
         'distro',
         'base58==1.0.0',
-        'envparse',
         'jsonrpc',
         'cryptography',
         'protobuf==3.6.1',
