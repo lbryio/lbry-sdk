@@ -56,7 +56,7 @@ class CLITest(AsyncioTestCase):
 
     def test_help(self):
         self.assertIn(
-            'usage: lbrynet [--help] [--version] [--api API]', self.shell(['--help'])
+            'Usage:  lbrynet [-v] [--api HOST:PORT]', self.shell(['--help'])
         )
         # start is special command, with separate help handling
         self.assertIn(
@@ -72,12 +72,12 @@ class CLITest(AsyncioTestCase):
         )
         # account is a group, returns help implicitly
         self.assertIn(
-            '{add,balance,create,decrypt,encrypt,fund,list,lock,max_address_gap,remove,send,set,unlock}',
+            'Return the balance of an account',
             self.shell(['account'])
         )
         # account is a group, with explicit --help
         self.assertIn(
-            '{add,balance,create,decrypt,encrypt,fund,list,lock,max_address_gap,remove,send,set,unlock}',
+            'Return the balance of an account',
             self.shell(['account', '--help'])
         )
         # account add is a grouped command, returns usage implicitly
