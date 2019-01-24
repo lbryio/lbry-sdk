@@ -111,26 +111,11 @@ class ComponentManager:
             steps.reverse()
         return steps
 
-    async def setup(self, **callbacks):
+    async def start(self):
         """ Start Components in sequence sorted by requirements """
-        for component_name, cb in callbacks.items():
-            if component_name not in self.component_classes:
-                if component_name not in self.skip_components:
-                    raise NameError("unknown component: %s" % component_name)
-            if not callable(cb):
-                raise ValueError("%s is not callable" % cb)
-
-        async def _setup(component):
-            await component._setup()
-            if component.component_name in callbacks:
-                maybe_coro = callbacks[component.component_name](component)
-                if asyncio.iscoroutine(maybe_coro):
-                    await asyncio.create_task(maybe_coro)
-
-        stages = self.sort_components()
-        for stage in stages:
+        for stage in self.sort_components():
             needing_start = [
-                _setup(component) for component in stage if not component.running
+                component._setup() for component in stage if not component.running
             ]
             if needing_start:
                 await asyncio.wait(needing_start)
@@ -146,7 +131,7 @@ class ComponentManager:
                 component._stop() for component in stage if component.running
             ]
             if needing_stop:
-                await asyncio.wait(needing_stop, loop=self.loop)
+                await asyncio.wait(needing_stop)
 
     def all_components_running(self, *component_names):
         """
