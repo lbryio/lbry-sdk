@@ -1,12 +1,12 @@
 import contextlib
 from io import StringIO
-import unittest
 
 from lbrynet.extras.cli import normalize_value, main
 from lbrynet.extras.system_info import get_platform
+from torba.testcase import AsyncioTestCase
 
 
-class CLITest(unittest.TestCase):
+class CLITest(AsyncioTestCase):
 
     @staticmethod
     def shell(argv):
