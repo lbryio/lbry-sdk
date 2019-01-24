@@ -8,6 +8,7 @@ from docopt import docopt
 from textwrap import dedent
 
 import aiohttp
+from aiohttp.web import GracefulExit
 
 from lbrynet import __name__ as lbrynet_name, __version__ as lbrynet_version
 from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
@@ -136,11 +137,6 @@ def get_argument_parser():
     return main
 
 
-async def run_daemon(daemon: Daemon):
-    await daemon.start()
-    await daemon.server.wait_closed()
-
-
 def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
@@ -168,8 +164,7 @@ def main(argv=None):
             handler = logging.StreamHandler()
             handler.setFormatter(default_formatter)
             log.addHandler(handler)
-        # mostly disable third part logging
-        logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+
         logging.getLogger('aioupnp').setLevel(logging.WARNING)
         logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 
@@ -182,11 +177,17 @@ def main(argv=None):
             loggly_handler.setLevel(logging.ERROR)
             log.addHandler(loggly_handler)
 
-        log.debug('Final Settings: %s', conf.settings_dict)
-        log.info("Starting lbrynet-daemon from command line")
-
         daemon = Daemon(conf)
-        asyncio.run(run_daemon(daemon))
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(daemon.start())
+        try:
+            loop.run_forever()
+        except (GracefulExit, KeyboardInterrupt):
+            pass
+        finally:
+            loop.run_until_complete(daemon.stop())
+        if hasattr(loop, 'shutdown_asyncgens'):
+            loop.run_until_complete(loop.shutdown_asyncgens())
 
     elif args.command is not None:
 

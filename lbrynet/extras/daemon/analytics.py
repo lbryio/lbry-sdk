@@ -47,7 +47,6 @@ class Manager:
     def start(self):
         if self._enabled and self.task is None:
             self.task = asyncio.create_task(self.run())
-            log.info("Start")
 
     async def run(self):
         while True:
