@@ -207,7 +207,6 @@ def main(argv=None):
             log.addHandler(handler)
         # mostly disable third part logging
         logging.getLogger('urllib3').setLevel(logging.CRITICAL)
-        logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
         logging.getLogger('aioupnp').setLevel(logging.WARNING)
         logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 
