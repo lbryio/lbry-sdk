@@ -583,7 +583,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     def jsonrpc_stop(self):
         """
-        Stop lbrynet
+        Stop lbrynet API server.
 
         Usage:
             stop
@@ -688,7 +688,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     def jsonrpc_version(self):
         """
-        Get lbry version information
+        Get lbrynet API server version information
 
         Usage:
             version
