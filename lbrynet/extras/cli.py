@@ -42,43 +42,6 @@ async def execute_command(conf, method, params):
             print("Could not connect to daemon. Are you sure it's running?")
 
 
-def print_help():
-    print(dedent("""
-    NAME
-       lbrynet - LBRY command line client.
-
-    USAGE
-       lbrynet [--data_dir=<blob and database directory>] [--wallet_dir=<wallet directory>]
-               [--download_dir=<downloads directory>] <command> [<args>]
-
-    EXAMPLES
-        lbrynet start                                # starts the daemon and listens for jsonrpc commands
-        lbrynet help                                 # display this message
-        lbrynet help <command_name>                  # get help for a command(doesn't need the daemon to be running)
-        lbrynet commands                             # list available commands
-        lbrynet status                               # get the running status of the daemon
-        lbrynet resolve what                         # resolve a name
-
-        lbrynet --wallet_dir=~/wallet2 start         # start the daemon using an alternative wallet directory
-        lbrynet --data_dir=~/lbry start              # start the daemon using an alternative data directory
-
-        lbrynet --data_dir=~/lbry <command_name>     # run a command on a daemon using an alternative data directory,
-                                                     # which can contain a full daemon_settings.yml config file.
-                                                     # Note: since the daemon is what runs the wallet and
-                                                     # downloads files, only the --data_dir setting is needed when
-                                                     # running commands. The wallet_dir and download_dir would only
-                                                     # by used when starting the daemon.
-    """))
-
-
-def print_help_for_command(command):
-    fn = Daemon.callable_methods.get(command)
-    if fn:
-        print(dedent(fn.__doc__))
-    else:
-        print("Invalid command name")
-
-
 def normalize_value(x, key=None):
     if not isinstance(x, str):
         return x
