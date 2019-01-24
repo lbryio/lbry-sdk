@@ -413,7 +413,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if self.analytics_manager:
             self.analytics_manager.start()
 
-        self._component_setup_task = self.component_manager.setup()
+        self._component_setup_task = self.component_manager.start()
         await self._component_setup_task
         await self.analytics_manager.send_server_startup()
         log.info("Started lbrynet-daemon")

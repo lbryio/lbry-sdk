@@ -149,7 +149,7 @@ class TestFileListSorting(unittest.TestCase):
             'ashlee27', 'bfrederick', 'brittanyhicks', 'davidsonjeffrey', 'heidiherring',
             'jlewis', 'kswanson', 'michelle50', 'richard64', 'xsteele'
         ]
-        return f2d(self.test_daemon.component_manager.setup())
+        return f2d(self.test_daemon.component_manager.start())
 
     def test_sort_by_points_paid_no_direction_specified(self):
         sort_options = ['points_paid']
