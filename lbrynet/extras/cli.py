@@ -5,7 +5,6 @@ import argparse
 import logging
 import logging.handlers
 from docopt import docopt
-from textwrap import dedent
 
 import aiohttp
 from aiohttp.web import GracefulExit
