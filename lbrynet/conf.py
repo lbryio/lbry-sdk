@@ -136,9 +136,6 @@ class MaxKeyFee(Setting[dict]):
         if currency not in CURRENCIES:
             raise InvalidCurrencyError(currency)
 
-    serialize = staticmethod(json.dumps)
-    deserialize = staticmethod(json.loads)
-
 
 class Servers(Setting[list]):
 

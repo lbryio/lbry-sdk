@@ -155,7 +155,7 @@ class ConfigurationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = os.path.join(temp_dir, 'settings.yml')
             with open(config, 'w') as fd:
-                fd.write('max_key_fee: \'{"currency":"USD", "amount":1}\'\n')
+                fd.write('max_key_fee: {currency: USD, amount: 1}\n')
             c = Config.create_from_arguments(
                 types.SimpleNamespace(config=config)
             )
@@ -166,4 +166,4 @@ class ConfigurationTests(unittest.TestCase):
             with c.update_config():
                 c.max_key_fee = {'currency': 'BTC', 'amount': 1}
             with open(config, 'r') as fd:
-                self.assertEqual(fd.read(), 'max_key_fee: \'{"currency": "BTC", "amount": 1}\'\n')
+                self.assertEqual(fd.read(), 'max_key_fee:\n  amount: 1\n  currency: BTC\n')
