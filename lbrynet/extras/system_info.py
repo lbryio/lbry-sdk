@@ -20,11 +20,8 @@ def get_platform() -> dict:
         "build": build_type.BUILD,  # CI server sets this during build step
     }
     if p["os_system"] == "Linux":
-        try:
-            import distro
-            p["distro"] = distro.info()
-            p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
-        except ModuleNotFoundError:
-            pass
+        import distro
+        p["distro"] = distro.info()
+        p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
 
     return p
