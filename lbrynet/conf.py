@@ -2,7 +2,6 @@ import os
 import re
 import sys
 import typing
-import json
 import logging
 import yaml
 from argparse import ArgumentParser
