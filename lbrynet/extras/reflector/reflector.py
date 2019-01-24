@@ -84,7 +84,7 @@ class ReflectorProtocol(asyncio.Protocol):
             needed = await self.manager.storage.get_streams_to_re_reflect()
             return await self.transport.write(
                 await _encode({'received': blob, 'needed': needed}))
-    
+
     async def server_handle(self, message: typing.Dict) -> typing.NoReturn:
         async with message:
             if 'sd_blob_hash' in message:
@@ -103,11 +103,13 @@ class ReflectorProtocol(asyncio.Protocol):
         async with message:
             if 'received' in message:
                 if await message.get('received'):
-                    return True
+                    # TODO: sendfile
+                    pass
             elif 'send' in message:
                 # TODO: reflect blobs on context
                 send = await message.get(''.startswith('send'))
                 if 'needed' in message:
+                    # TODO: reflect needed blobs
                     needed = await message.get(''.startswith('needed'))
 
     async def handle_response(self, data: typing.AnyStr[bytes]) -> typing.NoReturn:
@@ -118,7 +120,7 @@ class ReflectorProtocol(asyncio.Protocol):
             elif ('received', 'send', 'needed') in message:
                 return await self.client_handle(message)
             else:
-                pass  # hmm...
+                pass  # TODO: make sure all responses accounted for in test
         except (IncompleteResponse, ReflectorRequestError) as exc:
             raise exc
 
@@ -150,6 +152,7 @@ async def reflect(manager: typing.Any[BlobFileManager] = BlobFileManager,
         Returns:
             (list) list of blobs reflected
     """
+    # TODO: if debug enabled start server instead
     client = await asyncio.open_connection(
         protocol_factory=ReflectorProtocol(manager, blobs),
         host=host, port=port)
