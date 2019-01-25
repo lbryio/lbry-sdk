@@ -11,7 +11,8 @@ from lbrynet.error import InvalidCurrencyError
 class TestConfig(BaseConfig):
     test_str = String('str help', 'the default', previous_names=['old_str'])
     test_int = Integer('int help', 9)
-    test_toggle = Toggle('toggle help', False)
+    test_false_toggle = Toggle('toggle help', False)
+    test_true_toggle = Toggle('toggle help', True)
     servers = Servers('servers help', [('localhost', 80)])
 
 
@@ -45,12 +46,39 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_arguments(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("--test-str")
+        TestConfig.contribute_args(parser)
+
+        args = parser.parse_args([])
+        c = TestConfig.create_from_arguments(args)
+        self.assertEqual(c.test_str, 'the default')
+        self.assertTrue(c.test_true_toggle)
+        self.assertFalse(c.test_false_toggle)
+        self.assertEqual(c.servers, [('localhost', 80)])
+
         args = parser.parse_args(['--test-str', 'blah'])
         c = TestConfig.create_from_arguments(args)
         self.assertEqual(c.test_str, 'blah')
-        c.arguments = {}
-        self.assertEqual(c.test_str, 'the default')
+        self.assertTrue(c.test_true_toggle)
+        self.assertFalse(c.test_false_toggle)
+
+        args = parser.parse_args(['--test-true-toggle'])
+        c = TestConfig.create_from_arguments(args)
+        self.assertTrue(c.test_true_toggle)
+        self.assertFalse(c.test_false_toggle)
+
+        args = parser.parse_args(['--test-false-toggle'])
+        c = TestConfig.create_from_arguments(args)
+        self.assertTrue(c.test_true_toggle)
+        self.assertTrue(c.test_false_toggle)
+
+        args = parser.parse_args(['--no-test-true-toggle'])
+        c = TestConfig.create_from_arguments(args)
+        self.assertFalse(c.test_true_toggle)
+        self.assertFalse(c.test_false_toggle)
+
+        args = parser.parse_args(['--servers', 'localhost:1', '192.168.0.1:2'])
+        c = TestConfig.create_from_arguments(args)
+        self.assertEqual(c.servers, [('localhost', 1), ('192.168.0.1', 2)])
 
     def test_environment(self):
         c = TestConfig()
@@ -127,7 +155,8 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'must be an integer'):
             c.test_int = 'hi'
         with self.assertRaisesRegex(AssertionError, 'must be a true/false'):
-            c.test_toggle = 'hi'
+            c.test_true_toggle = 'hi'
+            c.test_false_toggle = 'hi'
 
     def test_file_extension_validation(self):
         with self.assertRaisesRegex(AssertionError, "'.json' is not supported"):

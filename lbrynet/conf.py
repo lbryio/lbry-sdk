@@ -196,14 +196,23 @@ class EnvironmentAccess:
 
 class ArgumentAccess:
 
-    def __init__(self, args: dict):
-        self.args = args
+    def __init__(self, config: 'BaseConfig', args: dict):
+        self.configuration = config
+        self.args = {}
+        if args:
+            self.load(args)
+
+    def load(self, args):
+        for setting in self.configuration.get_settings():
+            value = getattr(args, setting.name, NOT_SET)
+            if value not in (None, NOT_SET):
+                self.args[setting.name] = setting.deserialize(value)
 
     def __contains__(self, item: str):
-        return getattr(self.args, item, None) is not None
+        return item in self.args
 
     def __getitem__(self, item: str):
-        return getattr(self.args, item)
+        return self.args[item]
 
 
 class ConfigFileAccess:
@@ -337,17 +346,33 @@ class BaseConfig:
                 parser.add_argument(
                     f"--{setting.name.replace('_', '-')}",
                     help=setting.doc,
-                    action="store_true"
+                    action="store_true",
+                    default=NOT_SET
+                )
+                parser.add_argument(
+                    f"--no-{setting.name.replace('_', '-')}",
+                    help=f"Opposite of --{setting.name.replace('_', '-')}",
+                    dest=setting.name,
+                    action="store_false",
+                    default=NOT_SET
+                )
+            elif isinstance(setting, Servers):
+                parser.add_argument(
+                    f"--{setting.name.replace('_', '-')}",
+                    nargs="*",
+                    help=setting.doc,
+                    default=None
                 )
             else:
                 parser.add_argument(
                     f"--{setting.name.replace('_', '-')}",
                     help=setting.doc,
-                    metavar=setting.metavar
+                    metavar=setting.metavar,
+                    default=NOT_SET
                 )
 
     def set_arguments(self, args):
-        self.arguments = ArgumentAccess(args)
+        self.arguments = ArgumentAccess(self, args)
 
     def set_environment(self, environ=None):
         self.environment = EnvironmentAccess(environ or os.environ)

@@ -258,12 +258,11 @@ class Daemon(metaclass=JSONRPCServerType):
         self.component_startup_task = None
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
-        self.app = web.Application()
-        self.app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
-        self.app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
-        self.app.router.add_post('/', self.handle_old_jsonrpc)
-        self.runner = web.AppRunner(self.app)
-        self.site = None
+        app = web.Application()
+        app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
+        app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
+        app.router.add_post('/', self.handle_old_jsonrpc)
+        self.runner = web.AppRunner(app)
 
     @property
     def dht_node(self) -> typing.Optional['Node']:
@@ -378,11 +377,11 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("Platform: %s", json.dumps(system_info.get_platform(), indent=2))
         await self.analytics_manager.send_server_startup()
         await self.runner.setup()
-        self.site = web.TCPSite(self.runner, self.conf.api_host, self.conf.api_port)
 
         try:
-            await self.site.start()
-            log.info('lbrynet API listening on TCP %s:%i', *self.site._server.sockets[0].getsockname()[:2])
+            site = web.TCPSite(self.runner, self.conf.api_host, self.conf.api_port)
+            await site.start()
+            log.info('lbrynet API listening on TCP %s:%i', *site._server.sockets[0].getsockname()[:2])
         except OSError as e:
             log.error('lbrynet API failed to bind TCP %s for listening. Daemon is already running or this port is '
                       'already in use by another application.', self.conf.api)
