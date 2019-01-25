@@ -5,20 +5,10 @@ import random
 import json
 
 if typing.TYPE_CHECKING:
-    from lbrynet.stream.stream_manager import StreamManager, SQLiteStorage
+    from lbrynet.stream.stream_manager import SQLiteStorage
     from lbrynet.stream.descriptor import StreamDescriptor
 
 __all__ = ('reflect', 'Reflector')
-
-# todo user dht/protocol/serialization instead
-
-
-async def _encode(message: dict) -> bytes:
-    return await binascii.hexlify(json.dumps(message).decode()).encode()
-
-
-async def _decode(message: bytes) -> typing.Dict:
-    return await json.loads(binascii.unhexlify(message.decode()).encode())
 
 
 class _Reflector(typing.Type):
@@ -61,37 +51,46 @@ class Reflector(asyncio.Protocol):
         self.descriptor: StreamDescriptor = descriptor
         self.reflector_server: _Reflector.HOST = reflector_server
         self.reflector_port: _Reflector.PORT = reflector_port
+        self.transport: asyncio.Transport = None
+
+    @classmethod
+    async def _encode(cls, message: dict) -> bytes:
+        return await binascii.hexlify(json.dumps(message).decode()).encode()
+
+    @classmethod
+    async def _decode(cls, message: bytes) -> typing.Dict:
+        return await json.loads(binascii.unhexlify(message.decode()).encode())
 
     def connection_made(self, transport: asyncio.Transport):
-        reader, writer = transport
+        self.transport = transport
         # print(f'connected to {writer.get_extra_info("peerhost")}')
-        _handshake = await _encode({'version': _Reflector.V2})
-        writer.write(_handshake)
-        return reader, writer
+        _handshake = self._encode({'version': _Reflector.V2})
+        self.transport.write(await _handshake)
+        return self.transport
 
     def data_received(self, data: bytes) -> typing.Any:
-        message = await _decode(data)
+        message = await self._decode(data)
         m = message.keys()
         if 'version' in m:
             return
-        _ = set
+        _ = set  # TODO: handle retrieval of blobs
         if 'received' in m:
             await _.update(message.pop('received_sd_blob'))
         if 'send' in m:
             await _.update(message.pop('send_sd_blob'))
         elif 'need' in m:
             await _.update(message.pop('needed_blobs'))
-        return
+        return _
 
     async def _send_sd_blob(self) -> typing.NoReturn:
-        return await _encode(await self.descriptor.make_sd_blob())
+        return await self._encode(await self.descriptor.make_sd_blob())
 
     async def _send_stream_blobs(self) -> typing.NoReturn:
-        blob = await self._send_sd_blob()
-        return await self.storage.get_blobs_for_stream(blob)
+        return await self.storage.get_blobs_for_stream(self._send_sd_blob())
 
 
-async def reflect(storage: SQLiteStorage, descriptor: StreamDescriptor, *,
+async def reflect(storage: SQLiteStorage, *,
+                  descriptor: StreamDescriptor = None,
                   reflector_server: typing.AnyStr = 'reflector.lbry.io',
                   reflector_port: int = 5566) -> typing.Any[typing.List]:
     """
@@ -110,4 +109,4 @@ async def reflect(storage: SQLiteStorage, descriptor: StreamDescriptor, *,
     """
     loop = asyncio.get_running_loop()
     protocol = Reflector(storage, descriptor, reflector_server, reflector_port)
-    reader, writer = await loop.create_connection(lambda: protocol)
+    return await loop.create_connection(lambda: protocol)
