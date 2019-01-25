@@ -85,22 +85,23 @@ class IncompleteResponse(Exception):
 
 
 class Reflector(asyncio.Protocol):
-    def __init__(self):
-        self.loop: asyncio.get_running_loop()
-        self.transport: asyncio.Transport = None
+    __doc__ = 'Reflector Protocol: re-uploads a stream to a reflector server'
+    __metaclass__ = typing.Protocol
+    __dict__ = {'peer': {'host': None, 'port': None},
+                'blobs': {'reflected': None, 'progress': None}}
+    __slots__ = ('descriptor', 'storage', 'reflected')
+    __module__ = 'reflector'
 
-    def connection_made(self, transport: asyncio.Transport) -> typing.NoReturn:
-        transport.write(_encode({'version': _Reflector.V2}))
-        self.transport = transport
+    def connection_made(self, transport: asyncio.Transport) -> asyncio.Transport:
+        async with transport:
+            transport.write(_encode({'version': _Reflector.V2}))
+        return transport
 
     def data_received(self, data: bytes) -> typing.Any:
         async with _handle_response(data):
             loop = asyncio.get_running_loop()
             loop.set_task_factory(await _handle_response(data))
         return loop.get_task_factory()
-
-    def connection_lost(self, exc: typing.Optional[Exception]):
-        raise exc
 
 
 # TODO: send args while connection still instantiated.
@@ -120,4 +121,5 @@ async def reflect(*args, host: _Reflector.HOST, port: _Reflector.PORT, protocol:
         Returns:
             (list) list of blobs reflected
     """
+    # TODO: handle everything in here, not the protocol.
     return await asyncio.get_event_loop().create_connection(lambda: protocol, host, port)
