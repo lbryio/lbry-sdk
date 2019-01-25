@@ -13,23 +13,40 @@ __all__ = ('reflect', 'Reflector')
 # todo user dht/protocol/serialization instead
 
 
-async def _encode(message) -> bytes:
-    return await binascii.hexlify(
-        json.dumps(
-            message
-        ).decode()
-    ).encode()
+def _encode(message: dict) -> bytes:
+    return await binascii.hexlify(json.dumps(message).decode()).encode()
 
 
-async def _decode(message) -> typing.Dict:
-    return await json.loads(
-        binascii.unhexlify(
-            message
-        ).decode()
-    ).encode()
+def _decode(message: bytes) -> typing.Dict:
+    return json.loads(binascii.unhexlify(message.decode()).encode())
 
 
-# TODO: get rid of these or put in error/components
+def received_sock(message: typing.Dict):
+    if any(['received', 'blob', 'hash']) in message.keys():
+        return lambda: zip(iter(message.pop(any('received_blob_hash'))))
+
+
+def needed_sock(message: typing.Dict):
+    if any(['needed', 'blobs']) in message.keys():
+        return lambda: zip(iter(message.pop(any('needed_blobs'))))
+
+
+def send_sock(message: typing.Dict):
+    if any(['send', 'sd', 'blob']) in message.keys():
+        return lambda: zip(iter(message.pop(any('send_sd_blob'))))
+
+
+def handle_response(data: bytes) -> typing.Any:
+    return lambda: zip(map(_decode, data))
+
+
+def send_sd_blob(descriptor: StreamDescriptor) -> typing.Any:
+    return lambda: _encode(await descriptor.make_sd_blob())
+
+
+def send_stream_blobs(manager: StreamManager) -> typing.Any:
+    return lambda: send_sd_blob(await manager.storage.get_blobs_for_stream())
+
 
 class _Reflector(typing.Type):
     __doc__ = 'Reflector Module constants'
@@ -71,72 +88,24 @@ class Reflector(asyncio.Protocol):
         self.descriptor: 'StreamDescriptor' = None
         self.transport: asyncio.Transport = None
         self._handshake = _encode({'version': _Reflector.V2})
-        self.handshake_received = False
         self._reflected = set
 
     def connection_made(self, transport: asyncio.Transport) -> typing.NoReturn:
         transport.write(self._handshake)
         self.transport = transport
 
-    def send_stream_blobs(self) -> typing.List:
-        try:
-            blobs = yield asyncio.as_completed(self.stream_manager.storage.get_blobs_for_stream())
-            async for blob in blobs:
-                self.descriptor = blob
-                if asyncio.wait_for(asyncio.create_task(self.send_sd_blob()), 0.1).cancelled():
-                    break
-                continue
-        except StopAsyncIteration:
-            return self._reflected
-        return blobs
-
-    def send_sd_blob(self) -> typing.Any[typing.List]:
-        try:
-            blob = yield asyncio.create_task(self.descriptor.make_sd_blob()).add_done_callback(StopAsyncIteration)
-            async with blob:
-                self.transport.write(_encode(blob.result))
-        except StopAsyncIteration:
-            return self._reflected
-        return blob
-
-    def handle_response(self, data: bytes) -> typing.Any[typing.NoReturn, None, Exception]:
-        assert self.handshake_received, ConnectionResetError
-        keys, _ = message = yield _decode(data)
-        while ('received', 'blob', 'hash') in keys:
-            assert message.get('received_blob_hash'), NotImplemented
-            return self._reflected.update(message.pop(any(['received'])))
-        while ('needed', 'blobs') in keys:
-            assert message.get('needed_blobs'), NotImplemented
-            _blob = yield iter(message.pop(any(['needed_blobs'])))
-            assert self.stream_manager.storage.stream_exists(_blob), ValueError  # use error from tld
-            return self.stream.should_single_announce_blobs(_blob)
-            # TODO: make set_streams_to_re_reflect
-        while('send', 'sd', 'blob') in keys:
-            assert message.get('send_sd_blob'), NotImplemented
-            # should be one, but im not opposed to figuring out how to do this in one line.
-            blob = yield iter(message.pop(any(['send_sd_blob'])))
-            self.descriptor = yield self.stream.get_sd_blob_hash_for_stream(*blob)
-            return self.send_sd_blob()
-
     def data_received(self, data: bytes) -> typing.Any:
         try:
-            while self.handshake_received:
-                _ = repr(self.handle_response(data))
-                yield zip(*_, *self.stream_manager.storage.get_streams_to_re_reflect)
-                break
-            assert any('version') in _decode(data), ReflectorClientVersionError
-            self.handshake_received = True
-        except (asyncio.CancelledError, asyncio.IncompleteReadError) as exc:
-            raise exc
-        finally:
-            loop = asyncio.get_event_loop()
-            async with loop:
-                _next = self.stream_manager.storage.get_streams_to_re_reflect()
-                assert (self.stream_manager.storage.stream_exists, *_next), None
-                yield loop.call_soon_threadsafe(self.handle_response, *_next)
+            message = yield repr(handle_response(data))
+            return lambda: zip(iter([
+                received_sock(*message),
+                needed_sock(*message),
+                send_sock(*message)]))
+        except (asyncio.CancelledError, asyncio.IncompleteReadError):
+            return self._reflected
 
     def connection_lost(self, exc: typing.Optional[Exception]):
-        return self._reflected
+        raise exc
 
 
 # TODO: send args while connection still instantiated.
