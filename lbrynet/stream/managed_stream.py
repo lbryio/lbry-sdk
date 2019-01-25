@@ -101,6 +101,13 @@ class ManagedStream:
         if not os.path.exists(full_path):
             full_path = None
         mime_type = guess_media_type(os.path.basename(self.file_name))
+
+        if self.downloader:
+            written_bytes = self.downloader.written_bytes
+        elif full_path:
+            written_bytes = os.stat(full_path).st_size
+        else:
+            written_bytes = None
         return {
             'completed': self.finished,
             'file_name': self.file_name,
@@ -116,7 +123,7 @@ class ManagedStream:
             'key': self.descriptor.key,
             'total_bytes_lower_bound': self.descriptor.lower_bound_decrypted_length(),
             'total_bytes': self.descriptor.upper_bound_decrypted_length(),
-            'written_bytes': None if not full_path else self.downloader.written_bytes or os.stat(full_path).st_size,
+            'written_bytes': written_bytes,
             'blobs_completed': self.blobs_completed,
             'blobs_in_stream': self.blobs_in_stream,
             'status': self.status,
