@@ -48,8 +48,8 @@ class TestStreamDownloader(BlobExchangeTestBase):
     async def test_transfer_stream(self):
         await self._test_transfer_stream(10)
 
-    async def test_transfer_hundred_blob_stream(self):
-        await self._test_transfer_stream(100)
+    # async def test_transfer_hundred_blob_stream(self):
+    #     await self._test_transfer_stream(100)
 
     async def test_transfer_stream_bad_first_peer_good_second(self):
         await self.setup_stream(2)
