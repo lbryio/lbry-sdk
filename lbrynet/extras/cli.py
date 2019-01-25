@@ -252,8 +252,8 @@ def main(argv=None):
 
         daemon = Daemon(conf)
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(daemon.start())
         try:
+            loop.run_until_complete(daemon.start())
             loop.run_forever()
         except (GracefulExit, KeyboardInterrupt):
             pass
