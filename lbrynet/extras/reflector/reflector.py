@@ -4,12 +4,13 @@ import typing
 import random
 import json
 
-from lbrynet import conf
-
 if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.stream.stream_manager import StreamManager, SQLiteStorage
+    from lbrynet.stream.descriptor import StreamDescriptor
 
-__all__ = ('reflect', 'Reflector', 'ReflectorProtocol')
+__all__ = ('reflect', 'Reflector')
+
+# todo user dht/protocol/serialization instead
 
 
 async def _encode(message) -> bytes:
@@ -28,19 +29,20 @@ async def _decode(message) -> typing.Dict:
     ).encode()
 
 
-class Reflector(typing.Type):
+# TODO: get rid of these or put in error/components
+
+class _Reflector(typing.Type):
     __doc__ = 'Reflector Module constants'
-    V1 = 0
     V2 = 1
-    VERSION = typing.Any[V2, V1]
-    SERVERS = conf.get_config()['reflector_servers']
+    VERSION = typing.Any[V2]
+    SERVERS = 'reflector.lbry.io'  # conf.get_config()['reflector_servers']
     HOST = random.choice(SERVERS)
     PORT = 5566
 
 
 class ReflectorClientVersionError(Exception):
     __doc__ = 'Raised by reflector server if client sends an incompatible or unknown version.'
-    __cause__ = Reflector.VERSION is not Reflector.V1 | Reflector.VERSION is not Reflector.V2
+    __cause__ = _Reflector.VERSION is not _Reflector.V2
     __context__ = ValueError
 
 
@@ -60,110 +62,98 @@ class IncompleteResponse(Exception):
     __context__ = BufferError
 
 
-class ReflectorProtocol(asyncio.Protocol):
-    def __init__(self, manager: typing.Any[BlobFileManager],
-                 blobs: typing.Optional[typing.List] = None,
-                 version: typing.Any[Reflector.VERSION] = Reflector.V2):
-        self.version = version
-        self.blobs = blobs
-        self.reflected = []
-        self.manager = manager
-        self.transport = asyncio.Transport()
+class Reflector(asyncio.Protocol):
+    def __init__(self):
+        self.loop: asyncio.get_running_loop()
+        self.version = _Reflector.VERSION
+        self.stream_manager: 'StreamManager' = None
+        self.stream: 'SQLiteStorage' = None
+        self.descriptor: 'StreamDescriptor' = None
+        self.transport: asyncio.Transport = None
+        self._handshake = _encode({'version': _Reflector.V2})
+        self.handshake_received = False
+        self._reflected = set
 
     def connection_made(self, transport: asyncio.Transport) -> typing.NoReturn:
+        transport.write(self._handshake)
         self.transport = transport
 
-    async def handle_sd_blob(self, blob):
-        # TODO: should I use this self.manager.storage.update_reflected_stream()
-        if not self.manager.storage.stream_exists(blob):
-            await self.manager.storage.store_stream(
-                blob, await self.manager.get_stream_descriptor(blob))
-            return await self.transport.write(
-                await _encode({'sd_blob_hash': blob}))
-        else:
-            needed = await self.manager.storage.get_streams_to_re_reflect()
-            return await self.transport.write(
-                await _encode({'received': blob, 'needed': needed}))
-
-    async def server_handle(self, message: typing.Dict) -> typing.NoReturn:
-        async with message:
-            if 'sd_blob_hash' in message:
-                blob, size = await asyncio.gather(
-                    await message.get('sd_blob_hash'),
-                    await message.get('sd_blob_size'))
-                return await asyncio.current_task(await self.handle_sd_blob(blob))
-            elif 'blob_hash' in message:
-                blob, size = await asyncio.gather(
-                    await message.get('blob_hash'),
-                    await message.get('blob_hash_length'))
-                if not self.manager.get_blob(blob, size):
-                    await self.manager.storage.add_known_blob(blob)
-
-    async def client_handle(self, message: typing.Dict) -> typing.NoReturn:
-        async with message:
-            if 'received' in message:
-                if await message.get('received'):
-                    # TODO: sendfile
-                    pass
-            elif 'send' in message:
-                # TODO: reflect blobs on context
-                send = await message.get(''.startswith('send'))
-                if 'needed' in message:
-                    # TODO: reflect needed blobs
-                    needed = await message.get(''.startswith('needed'))
-
-    async def handle_response(self, data: typing.AnyStr[bytes]) -> typing.NoReturn:
+    def send_stream_blobs(self) -> typing.List:
         try:
-            message = await _decode(data)
-            if ('blob_hash', 'sd_blob_hash') in message:
-                return await self.server_handle(message)
-            elif ('received', 'send', 'needed') in message:
-                return await self.client_handle(message)
-            else:
-                pass  # TODO: make sure all responses accounted for in test
-        except (IncompleteResponse, ReflectorRequestError) as exc:
-            raise exc
+            blobs = yield asyncio.as_completed(self.stream_manager.storage.get_blobs_for_stream())
+            async for blob in blobs:
+                self.descriptor = blob
+                if asyncio.wait_for(asyncio.create_task(self.send_sd_blob()), 0.1).cancelled():
+                    break
+                continue
+        except StopAsyncIteration:
+            return self._reflected
+        return blobs
 
-    def data_received(self, data: bytes) -> typing.Coroutine:
+    def send_sd_blob(self) -> typing.Any[typing.List]:
         try:
-            return self.handle_response(data)
+            blob = yield asyncio.create_task(self.descriptor.make_sd_blob()).add_done_callback(StopAsyncIteration)
+            async with blob:
+                self.transport.write(_encode(blob.result))
+        except StopAsyncIteration:
+            return self._reflected
+        return blob
+
+    def handle_response(self, data: bytes) -> typing.Any[typing.NoReturn, None, Exception]:
+        assert self.handshake_received, ConnectionResetError
+        keys, _ = message = yield _decode(data)
+        while ('received', 'blob', 'hash') in keys:
+            assert message.get('received_blob_hash'), NotImplemented
+            return self._reflected.update(message.pop(any(['received'])))
+        while ('needed', 'blobs') in keys:
+            assert message.get('needed_blobs'), NotImplemented
+            _blob = yield iter(message.pop(any(['needed_blobs'])))
+            assert self.stream_manager.storage.stream_exists(_blob), ValueError  # use error from tld
+            return self.stream.should_single_announce_blobs(_blob)
+            # TODO: make set_streams_to_re_reflect
+        while('send', 'sd', 'blob') in keys:
+            assert message.get('send_sd_blob'), NotImplemented
+            # should be one, but im not opposed to figuring out how to do this in one line.
+            blob = yield iter(message.pop(any(['send_sd_blob'])))
+            self.descriptor = yield self.stream.get_sd_blob_hash_for_stream(*blob)
+            return self.send_sd_blob()
+
+    def data_received(self, data: bytes) -> typing.Any:
+        try:
+            while self.handshake_received:
+                _ = repr(self.handle_response(data))
+                yield zip(*_, *self.stream_manager.storage.get_streams_to_re_reflect)
+                break
+            assert any('version') in _decode(data), ReflectorClientVersionError
+            self.handshake_received = True
         except (asyncio.CancelledError, asyncio.IncompleteReadError) as exc:
             raise exc
+        finally:
+            loop = asyncio.get_event_loop()
+            async with loop:
+                _next = self.stream_manager.storage.get_streams_to_re_reflect()
+                assert (self.stream_manager.storage.stream_exists, *_next), None
+                yield loop.call_soon_threadsafe(self.handle_response, *_next)
+
+    def connection_lost(self, exc: typing.Optional[Exception]):
+        return self._reflected
 
 
-async def reflect(manager: typing.Any[BlobFileManager] = BlobFileManager,
-                  blobs: typing.Optional[typing.Any] = None,
-                  host: typing.Optional[Reflector.SERVERS, str] = Reflector.HOST,
-                  port: typing.Optional[int] = Reflector.PORT) -> typing.Any:
+# TODO: send args while connection still instantiated.
+async def reflect(*args, host: _Reflector.HOST, port: _Reflector.PORT, protocol: 'Reflector'
+                  ) -> typing.Any[typing.Sequence]:
     """
     Reflect Blobs to Reflector
-
     Usage:
-            reflect (blob_manager)(blobs)
+            reflect (StreamManager/SQLiteStorage[later])
+                    [--descriptor=<StreamDescriptor>]
                     [--reflector_host=<host>][--reflector_port=<port>]
-
         Options:
-            blob_manager=(<BlobFileManager>...): BlobFileManager
-            blobs=(<blobs>...)                 : Blobs[list] to reflect
+            --descriptor=<StreamDescriptor>     : StreamDescriptor
             --reflector_host=<host>            : Reflector server hostname
             --reflector_port=<port>            : Reflector port number
                                                  by default choose a server and port from the config
-
         Returns:
             (list) list of blobs reflected
     """
-    # TODO: if debug enabled start server instead
-    client = await asyncio.open_connection(
-        protocol_factory=ReflectorProtocol(manager, blobs),
-        host=host, port=port)
-
-    async with client:
-        reader, writer = client
-        try:
-            async for blob in blobs:
-                yield writer.write(blob)
-        except (IncompleteResponse, ReflectorDecodeError,
-                ReflectorRequestError, ReflectorClientVersionError) as exc:
-            raise exc
-        finally:
-            pass
+    return asyncio.get_event_loop().create_connection(lambda: protocol, host, port).gi_yieldfrom
