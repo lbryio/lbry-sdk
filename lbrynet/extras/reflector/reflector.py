@@ -150,13 +150,14 @@ class Reflector(asyncio.Protocol):
         return await self._encode(await self.descriptor.make_sd_blob())
 
     async def _send_stream_blobs(self) -> typing.NoReturn:
-        return await self.storage.get_blobs_for_stream(self._send_sd_blob())
+        return await self.storage.get_blobs_for_stream(await self._send_sd_blob())
 
 
-async def reflect(
-        storage: SQLiteStorage, *, descriptor: StreamDescriptor = None,
-        reflector_server: str = 'reflector.lbry.io',
-        reflector_port: int = 5566) -> typing.Any[typing.Awaitable[typing.List]]:
+async def reflect(storage: SQLiteStorage, *,
+                  descriptor: 'StreamDescriptor',
+                  reflector_server: '_Reflector.HOST',
+                  reflector_port: '_Reflector.PORT',
+                  ) -> typing.Awaitable[typing.List]:
     """
     Reflect Blobs to Reflector
     Usage:
@@ -164,13 +165,20 @@ async def reflect(
                     [--descriptor=<StreamDescriptor>]
                     [--reflector_host=<host>][--reflector_port=<port>]
         Options:
-            --descriptor=<StreamDescriptor>     : StreamDescriptor
-            --reflector_host=<host>            : Reflector server hostname
+            --descriptor=<StreamDescriptor>    : StreamDescriptor
+            --reflector_host=<host>            : Reflector server IP Address location
             --reflector_port=<port>            : Reflector port number
                                                  by default choose a server and port from the config
         Returns:
             (list) list of blobs reflected
     """
+    # TODO: reflect_streams in StreamManager
+    # TODO: open connection to client package
+    # TODO: open connection to server package
+    # TODO: merge
     loop = asyncio.get_running_loop()
     protocol = Reflector(storage, descriptor, reflector_server, reflector_port)
-    return await loop.create_connection(lambda: protocol)
+    return await asyncio.wait_for(
+        asyncio.create_task(
+            loop.create_connection(lambda: protocol)
+        ), 10.0).result()
