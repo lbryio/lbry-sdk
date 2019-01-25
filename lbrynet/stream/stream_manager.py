@@ -3,6 +3,7 @@ import asyncio
 import typing
 import binascii
 import logging
+import random
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -46,7 +47,8 @@ comparison_operators = {
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', wallet: 'LbryWalletManager',
                  storage: 'SQLiteStorage', node: typing.Optional['Node'], peer_timeout: float,
-                 peer_connect_timeout: float, fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None):
+                 peer_connect_timeout: float, fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None,
+                 reflector_servers: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.wallet = wallet
@@ -59,6 +61,7 @@ class StreamManager:
         self.resume_downloading_task: asyncio.Task = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
         self.fixed_peers = fixed_peers
+        self.reflector_servers = reflector_servers
 
     async def load_streams_from_database(self):
         infos = await self.storage.get_all_lbry_files()
@@ -93,6 +96,20 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
+    async def reflect_streams(self):
+        streams = list(self.streams)
+        batch = []
+        while streams:
+            stream = streams.pop()
+            if not stream.fully_reflected.is_set():
+                host, port = random.choice(self.reflector_servers)
+                batch.append(stream.upload_to_reflector(host, port))
+            if len(batch) >= 10:
+                await asyncio.gather(*batch)
+                batch = []
+        if batch:
+            await asyncio.gather(*batch)
+
     async def start(self):
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
@@ -106,9 +123,13 @@ class StreamManager:
         while self.update_stream_finished_futs:
             self.update_stream_finished_futs.pop().cancel()
 
-    async def create_stream(self, file_path: str) -> ManagedStream:
-        stream = await ManagedStream.create(self.loop, self.blob_manager, file_path)
+    async def create_stream(self, file_path: str, key: typing.Optional[bytes] = None,
+                            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
+        stream = await ManagedStream.create(self.loop, self.blob_manager, file_path, key, iv_generator)
         self.streams.add(stream)
+        if self.reflector_servers:
+            host, port = random.choice(self.reflector_servers)
+            self.loop.create_task(stream.upload_to_reflector(host, port))
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
