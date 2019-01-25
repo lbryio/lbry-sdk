@@ -1,6 +1,7 @@
 import signal
 import logging
 import asyncio
+from concurrent.futures.thread import ThreadPoolExecutor
 
 import torba
 from torba.server.mempool import MemPool, MemPoolAPI
@@ -116,6 +117,8 @@ class Server:
 
     def run(self):
         loop = asyncio.get_event_loop()
+        executor = ThreadPoolExecutor(1)
+        loop.set_default_executor(executor)
 
         def __exit():
             raise SystemExit()
@@ -123,9 +126,8 @@ class Server:
             loop.add_signal_handler(signal.SIGINT, __exit)
             loop.add_signal_handler(signal.SIGTERM, __exit)
             loop.run_until_complete(self.start())
-            loop.run_until_complete(self.shutdown_event.wait())
         except (SystemExit, KeyboardInterrupt):
             pass
         finally:
+            executor.shutdown(True)
             loop.run_until_complete(self.stop())
-            loop.run_until_complete(loop.shutdown_asyncgens())
