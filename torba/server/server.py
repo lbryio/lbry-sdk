@@ -116,10 +116,16 @@ class Server:
 
     def run(self):
         loop = asyncio.get_event_loop()
+
+        def __exit():
+            raise SystemExit()
         try:
-            loop.add_signal_handler(signal.SIGINT, lambda: asyncio.ensure_future(self.stop()))
-            loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.ensure_future(self.stop()))
+            loop.add_signal_handler(signal.SIGINT, __exit)
+            loop.add_signal_handler(signal.SIGTERM, __exit)
             loop.run_until_complete(self.start())
             loop.run_until_complete(self.shutdown_event.wait())
+        except (SystemExit, KeyboardInterrupt):
+            pass
         finally:
+            loop.run_until_complete(self.stop())
             loop.run_until_complete(loop.shutdown_asyncgens())
