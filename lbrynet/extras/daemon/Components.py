@@ -466,7 +466,7 @@ class StreamManagerComponent(Component):
             self.conf.peer_connect_timeout, [
                 KademliaPeer(loop, address=(await resolve_host(loop, url)), tcp_port=port + 1)
                 for url, port in self.conf.reflector_servers
-            ]
+            ], self.conf.reflector_servers
         )
         await self.stream_manager.start()
         log.info('Done setting up file manager')

@@ -5,6 +5,7 @@ import logging
 from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
+from lbrynet.stream.reflector.client import StreamReflectorClient
 if typing.TYPE_CHECKING:
     from lbrynet.extras.daemon.storage import StoredStreamClaim
     from lbrynet.blob.blob_manager import BlobFileManager
@@ -30,6 +31,7 @@ class ManagedStream:
         self.stream_claim_info = claim
         self._status = status
         self._store_after_finished: asyncio.Task = None
+        self.fully_reflected = asyncio.Event(loop=self.loop)
 
     @property
     def status(self) -> str:
@@ -139,9 +141,10 @@ class ManagedStream:
 
     @classmethod
     async def create(cls, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager',
-                     file_path: str) -> 'ManagedStream':
+                     file_path: str, key: typing.Optional[bytes] = None,
+                     iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> 'ManagedStream':
         descriptor = await StreamDescriptor.create_stream(
-            loop, blob_manager.blob_dir, file_path
+            loop, blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator
         )
         sd_blob = blob_manager.get_blob(descriptor.sd_hash)
         await blob_manager.blob_completed(sd_blob)
@@ -156,3 +159,38 @@ class ManagedStream:
             await self.downloader.stop()
         if not self.finished:
             self.update_status(self.STATUS_STOPPED)
+
+    async def upload_to_reflector(self, host: str, port: int) -> typing.List[str]:
+        sent = []
+        protocol = StreamReflectorClient(self.blob_manager, self.descriptor)
+        try:
+            await self.loop.create_connection(lambda: protocol, host, port)
+        except ConnectionRefusedError:
+            return sent
+        try:
+            await protocol.send_handshake()
+        except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
+            if protocol.transport:
+                protocol.transport.close()
+            return sent
+        try:
+            sent_sd, needed = await protocol.send_descriptor()
+            if sent_sd:
+                sent.append(self.sd_hash)
+        except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
+            if protocol.transport:
+                protocol.transport.close()
+            return sent
+        for blob_hash in needed:
+            try:
+                await protocol.send_blob(blob_hash)
+                sent.append(blob_hash)
+            except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
+                if protocol.transport:
+                    protocol.transport.close()
+                return sent
+        if protocol.transport:
+            protocol.transport.close()
+        if not self.fully_reflected.is_set():
+            self.fully_reflected.set()
+        return sent
