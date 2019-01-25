@@ -118,12 +118,20 @@ jobs:
 
     - if: tag IS present
       stage: docker
-      name: "Wallet Server Docker Image"
+      name: "Wallet Server Docker Image - Tagged Release"
       script:
           - set -e
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
           - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f scripts/Dockerfile.wallet_server .
           - docker push lbry/wallet-server:$TRAVIS_TAG
+    - if: tag IS blank AND branch = master
+      stage: docker
+      name: "Wallet Server Docker Image - Master"
+      script:
+          - set -e
+          - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
+          - travis_retry docker build -t lbry/wallet-server:master -f scripts/Dockerfile.wallet_server .
+          - docker push lbry/wallet-server:master
 
 cache:
   directories:
