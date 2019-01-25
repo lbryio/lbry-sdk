@@ -21,38 +21,6 @@ async def _decode(message: bytes) -> typing.Dict:
     return await json.loads(binascii.unhexlify(message.decode()).encode())
 
 
-def _received_sock(message: typing.Dict):
-    assert any(['received', 'blob', 'hash']) in message.keys(), None
-    return message.pop(any('received_blob_hash'))
-
-
-def _needed_sock(message: typing.Dict):
-    assert any(['needed', 'blobs']) in message.keys(), None
-    return message.pop(any('needed_blobs'))
-
-
-def _send_sock(message: typing.Dict):
-    assert any(['send', 'sd', 'blob']) in message.keys(), None
-    return message.pop(any('send_sd_blob'))
-
-
-async def _handle_response(data: bytes) -> typing.Any:
-    message = await _decode(data)
-    await asyncio.gather(
-        await _received_sock(message),
-        await _needed_sock(message),
-        await _send_sock(message)
-    ).add_done_callback(StopAsyncIteration)
-
-
-def _send_sd_blob(descriptor: StreamDescriptor) -> bytes:
-    return await _encode(await descriptor.make_sd_blob())
-
-
-def _send_stream_blobs(manager: StreamManager) -> typing.Any:
-    return _send_sd_blob(await manager.storage.get_blobs_for_stream())
-
-
 class _Reflector(typing.Type):
     __doc__ = 'Reflector Module constants'
     V2 = 1
@@ -87,30 +55,49 @@ class IncompleteResponse(Exception):
 class Reflector(asyncio.Protocol):
     __doc__ = 'Reflector Protocol: re-uploads a stream to a reflector server'
     __metaclass__ = typing.Protocol
-    __dict__ = {'peer': {'host': None, 'port': None},
-                'blobs': {'reflected': None, 'progress': None}}
-    __slots__ = ('descriptor', 'storage', 'reflected')
-    __module__ = 'reflector'
 
-    def connection_made(self, transport: asyncio.Transport) -> asyncio.Transport:
-        async with transport:
-            transport.write(_encode({'version': _Reflector.V2}))
-        return transport
+    def __init__(self, storage, descriptor, reflector_server, reflector_port):
+        self.storage: SQLiteStorage = storage
+        self.descriptor: StreamDescriptor = descriptor
+        self.reflector_server: _Reflector.HOST = reflector_server
+        self.reflector_port: _Reflector.PORT = reflector_port
+
+    def connection_made(self, transport: asyncio.Transport):
+        reader, writer = transport
+        # print(f'connected to {writer.get_extra_info("peerhost")}')
+        _handshake = await _encode({'version': _Reflector.V2})
+        writer.write(_handshake)
+        return reader, writer
 
     def data_received(self, data: bytes) -> typing.Any:
-        async with _handle_response(data):
-            loop = asyncio.get_running_loop()
-            loop.set_task_factory(await _handle_response(data))
-        return loop.get_task_factory()
+        message = await _decode(data)
+        m = message.keys()
+        if 'version' in m:
+            return
+        _ = set
+        if 'received' in m:
+            await _.update(message.pop('received_sd_blob'))
+        if 'send' in m:
+            await _.update(message.pop('send_sd_blob'))
+        elif 'need' in m:
+            await _.update(message.pop('needed_blobs'))
+        return
+
+    async def _send_sd_blob(self) -> typing.NoReturn:
+        return await _encode(await self.descriptor.make_sd_blob())
+
+    async def _send_stream_blobs(self) -> typing.NoReturn:
+        blob = await self._send_sd_blob()
+        return await self.storage.get_blobs_for_stream(blob)
 
 
-# TODO: send args while connection still instantiated.
-async def reflect(*args, host: _Reflector.HOST, port: _Reflector.PORT, protocol: 'Reflector'
-                  ) -> typing.Any[typing.Sequence]:
+async def reflect(storage: SQLiteStorage, descriptor: StreamDescriptor, *,
+                  reflector_server: typing.AnyStr = 'reflector.lbry.io',
+                  reflector_port: int = 5566) -> typing.Any[typing.List]:
     """
     Reflect Blobs to Reflector
     Usage:
-            reflect (StreamManager/SQLiteStorage[later])
+            reflect (SQLiteStorage)
                     [--descriptor=<StreamDescriptor>]
                     [--reflector_host=<host>][--reflector_port=<port>]
         Options:
@@ -121,5 +108,6 @@ async def reflect(*args, host: _Reflector.HOST, port: _Reflector.PORT, protocol:
         Returns:
             (list) list of blobs reflected
     """
-    # TODO: handle everything in here, not the protocol.
-    return await asyncio.get_event_loop().create_connection(lambda: protocol, host, port)
+    loop = asyncio.get_running_loop()
+    protocol = Reflector(storage, descriptor, reflector_server, reflector_port)
+    reader, writer = await loop.create_connection(lambda: protocol)
