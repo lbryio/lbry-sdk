@@ -87,22 +87,17 @@ class IncompleteResponse(Exception):
 class Reflector(asyncio.Protocol):
     def __init__(self):
         self.loop: asyncio.get_running_loop()
-        self.version = _Reflector.VERSION
-        self.stream_manager: 'StreamManager' = None
-        self.stream: 'SQLiteStorage' = None
-        self.descriptor: 'StreamDescriptor' = None
         self.transport: asyncio.Transport = None
-        self._reflected = set
 
     def connection_made(self, transport: asyncio.Transport) -> typing.NoReturn:
         transport.write(_encode({'version': _Reflector.V2}))
         self.transport = transport
 
     def data_received(self, data: bytes) -> typing.Any:
-        try:
-            return repr(_handle_response(data))
-        except (asyncio.CancelledError, asyncio.IncompleteReadError):
-            return self._reflected
+        async with _handle_response(data):
+            loop = asyncio.get_running_loop()
+            loop.set_task_factory(await _handle_response(data))
+        return loop.get_task_factory()
 
     def connection_lost(self, exc: typing.Optional[Exception]):
         raise exc
