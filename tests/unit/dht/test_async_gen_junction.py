@@ -49,8 +49,8 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
 
     async def test_one_stopped_first(self):
         expected_order = [1, 2, 1, 1, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2]
-        fast_gen = MockAsyncGen(self.loop, 1, 0.1, 5)
-        slow_gen = MockAsyncGen(self.loop, 2, 0.2)
+        fast_gen = MockAsyncGen(self.loop, 1, 0.101, 5)
+        slow_gen = MockAsyncGen(self.loop, 2, 0.201)
         await self._test_junction(expected_order, fast_gen, slow_gen)
         self.assertEqual(fast_gen.called_close, True)
         self.assertEqual(slow_gen.called_close, True)
@@ -62,10 +62,10 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
             for i in range(10):
                 if i == 5:
                     return
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.101)
                 yield 1
 
-        slow_gen = MockAsyncGen(self.loop, 2, 0.2)
+        slow_gen = MockAsyncGen(self.loop, 2, 0.201)
         await self._test_junction(expected_order, fast_gen(), slow_gen)
         self.assertEqual(slow_gen.called_close, True)
 
