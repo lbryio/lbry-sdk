@@ -126,8 +126,9 @@ class Server:
             loop.add_signal_handler(signal.SIGINT, __exit)
             loop.add_signal_handler(signal.SIGTERM, __exit)
             loop.run_until_complete(self.start())
+            loop.run_until_complete(self.shutdown_event.wait())
         except (SystemExit, KeyboardInterrupt):
             pass
         finally:
-            executor.shutdown(True)
             loop.run_until_complete(self.stop())
+            executor.shutdown(True)
