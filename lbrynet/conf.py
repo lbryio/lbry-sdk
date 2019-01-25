@@ -269,7 +269,7 @@ class ConfigFileAccess:
 
 class BaseConfig:
 
-    config = Path("Path to configuration file.")
+    config = Path("Path to configuration file.", metavar='FILE')
 
     def __init__(self, **kwargs):
         self.runtime = {}      # set internally or by various API calls
@@ -307,7 +307,8 @@ class BaseConfig:
 
     @classmethod
     def get_settings(cls):
-        for setting in cls.__dict__.values():
+        for attr in dir(cls):
+            setting = getattr(cls, attr)
             if isinstance(setting, Setting):
                 yield setting
 
@@ -387,11 +388,14 @@ class CLIConfig(BaseConfig):
 
 class Config(CLIConfig):
 
-    data_dir = Path("Directory path to store blobs.")
-    download_dir = Path("Directory path to place assembled files downloaded from LBRY.")
+    data_dir = Path("Directory path to store blobs.", metavar='DIR')
+    download_dir = Path(
+        "Directory path to place assembled files downloaded from LBRY.",
+        previous_names=['download_directory'], metavar='DIR'
+    )
     wallet_dir = Path(
         "Directory containing a 'wallets' subdirectory with 'default_wallet' file.",
-        previous_names=['lbryum_wallet_dir']
+        previous_names=['lbryum_wallet_dir'], metavar='DIR'
     )
 
     share_usage_data = Toggle(

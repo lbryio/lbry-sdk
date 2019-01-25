@@ -172,7 +172,11 @@ def get_argument_parser():
     main.set_defaults(group=None, command=None)
     CLIConfig.contribute_args(main)
     sub = main.add_subparsers(metavar='COMMAND')
-    start = sub.add_parser('start', usage='lbrynet start [OPTIONS]', help='Start lbrynet API server.')
+    start = sub.add_parser(
+        'start',
+        usage='lbrynet start [--config FILE] [--data-dir DIR] [--wallet-dir DIR] [--download-dir DIR] ...',
+        help='Start lbrynet API server.'
+    )
     start.add_argument(
         '--quiet', dest='quiet', action="store_true",
         help='Disable all console output.'
