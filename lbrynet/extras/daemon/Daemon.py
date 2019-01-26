@@ -780,7 +780,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --data_rate=<data_rate>                    : (float) 0.0001
             --download_timeout=<download_timeout>      : (int) 180
             --peer_port=<peer_port>                    : (int) 3333
-            --max_key_fee=<max_key_fee>                : (dict) maximum key fee for downloads,
+            --max_key_fee=<max_key_fee>                : (str) maximum key fee for downloads,
                                                           in the format: '<amount> <currency>'
                                                           Supported currency symbols: LBC, USD, BTC
             --no_max_key_fee                 : (bool) Disable max key fee.
@@ -801,7 +801,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Updated dictionary of daemon settings
         """
         with self.conf.update_config() as c:
-            for key, value in kwargs:
+            for key, value in kwargs.items():
                 attr: Setting = getattr(type(c), key)
                 setattr(c, key, attr.deserialize(value))
         return self.jsonrpc_settings_get()

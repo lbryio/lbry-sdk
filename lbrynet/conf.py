@@ -4,7 +4,6 @@ import sys
 import typing
 import logging
 import yaml
-import decimal
 from argparse import ArgumentParser
 from contextlib import contextmanager
 from appdirs import user_data_dir, user_config_dir
@@ -117,11 +116,17 @@ class Integer(Setting[int]):
         assert isinstance(val, int), \
             f"Setting '{self.name}' must be an integer."
 
+    def deserialize(self, value):
+        return int(value)
+
 
 class Float(Setting[float]):
     def validate(self, val):
         assert isinstance(val, float), \
             f"Setting '{self.name}' must be a decimal."
+
+    def deserialize(self, value):
+        return float(value)
 
 
 class Toggle(Setting[bool]):
@@ -169,8 +174,8 @@ class MaxKeyFee(Setting[dict]):
     def _parse_list(l):
         assert len(l) == 2, 'Max key fee is made up of two values: "AMOUNT CURRENCY".'
         try:
-            amount = decimal.Decimal(l[0])
-        except decimal.InvalidOperation:
+            amount = float(l[0])
+        except ValueError:
             raise AssertionError('First value in max key fee is a decimal: "AMOUNT CURRENCY"')
         currency = str(l[1]).upper()
         if currency not in CURRENCIES:
@@ -183,7 +188,7 @@ class MaxKeyFee(Setting[dict]):
         if isinstance(value, dict):
             return {
                 'currency': value['currency'],
-                'amount': decimal.Decimal(value['amount']),
+                'amount': float(value['amount']),
             }
         if isinstance(value, str):
             value = value.split()
