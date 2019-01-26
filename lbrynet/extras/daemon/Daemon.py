@@ -766,7 +766,6 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--download_timeout=<download_timeout>]
                          [--peer_port=<peer_port>]
                          [--max_key_fee=<max_key_fee>]
-                         [--disable_max_key_fee=<disable_max_key_fee>]
                          [--use_upnp=<use_upnp>]
                          [--run_reflector_server=<run_reflector_server>]
                          [--cache_time=<cache_time>]
@@ -787,9 +786,9 @@ class Daemon(metaclass=JSONRPCServerType):
                                                             'currency': <currency_symbol>,
                                                             'amount': <amount>
                                                           }.
-                                                          In the CLI, it must be an escaped JSON string
+                                                          In the CLI, it must be: '<amount> <currency>'
                                                           Supported currency symbols: LBC, USD, BTC
-            --disable_max_key_fee=<disable_max_key_fee> : (bool) False
+            --no_max_key_fee                 : (bool) Disable max key fee.
             --use_upnp=<use_upnp>            : (bool) True
             --run_reflector_server=<run_reflector_server>  : (bool) False
             --cache_time=<cache_time>  : (int) 150

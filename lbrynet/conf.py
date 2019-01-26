@@ -159,10 +159,11 @@ class Path(String):
 class MaxKeyFee(Setting[dict]):
 
     def validate(self, value):
-        assert isinstance(value, dict) and set(value) == {'currency', 'amount'}, \
-            f"Setting '{self.name}' must be a dict like \"{{'amount': 50.0, 'currency': 'USD'}}\"."
-        if value["currency"] not in CURRENCIES:
-            raise InvalidCurrencyError(value["currency"])
+        if value is not None:
+            assert isinstance(value, dict) and set(value) == {'currency', 'amount'}, \
+                f"Setting '{self.name}' must be a dict like \"{{'amount': 50.0, 'currency': 'USD'}}\"."
+            if value["currency"] not in CURRENCIES:
+                raise InvalidCurrencyError(value["currency"])
 
     @staticmethod
     def _parse_list(l):
