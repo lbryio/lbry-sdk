@@ -3,7 +3,9 @@ import sqlite3
 import typing
 import asyncio
 import binascii
+import functools
 from torba.client.basedatabase import SQLiteMixin
+from lbrynet.stream.reflector import auto_reflector
 from lbrynet.conf import Config
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import ClaimDict
@@ -677,7 +679,6 @@ class SQLiteStorage(SQLiteMixin):
         return self.db.run(_save_claim_heights)
 
     # # # # # # # # # reflector functions # # # # # # # # #
-
     def update_reflected_stream(self, sd_hash, reflector_address, success=True):
         if success:
             return self.db.execute(
@@ -688,7 +689,7 @@ class SQLiteStorage(SQLiteMixin):
             "delete from reflected_stream where sd_hash=? and reflector_address=?",
             (sd_hash, reflector_address)
         )
-
+    
     def get_streams_to_re_reflect(self):
         return self.run_and_return_list(
             "select s.sd_hash from stream s "
@@ -696,3 +697,4 @@ class SQLiteStorage(SQLiteMixin):
             "where r.timestamp is null or r.timestamp < ?",
             self.loop.time() - self.conf.auto_re_reflect_interval
         )
+    functools.update_wrapper(auto_reflector(self, ))
