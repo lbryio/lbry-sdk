@@ -781,12 +781,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --download_timeout=<download_timeout>      : (int) 180
             --peer_port=<peer_port>                    : (int) 3333
             --max_key_fee=<max_key_fee>                : (dict) maximum key fee for downloads,
-                                                          in the format:
-                                                          {
-                                                            'currency': <currency_symbol>,
-                                                            'amount': <amount>
-                                                          }.
-                                                          In the CLI, it must be: '<amount> <currency>'
+                                                          in the format: '<amount> <currency>'
                                                           Supported currency symbols: LBC, USD, BTC
             --no_max_key_fee                 : (bool) Disable max key fee.
             --use_upnp=<use_upnp>            : (bool) True
