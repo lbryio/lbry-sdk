@@ -141,6 +141,10 @@ class ArgumentParser(argparse.ArgumentParser):
             self, action, "Commands", lambda parser: 'group' not in parser._defaults
         )
 
+    def error(self, message):
+        self.print_help(argparse._sys.stderr)
+        self.exit(2, '\n'+message+'\n')
+
 
 class HelpFormatter(argparse.HelpFormatter):
 
@@ -164,7 +168,9 @@ def add_command_parser(parent, command):
 
 
 def get_argument_parser():
-    main = ArgumentParser('lbrynet')
+    main = ArgumentParser(
+        'lbrynet', description='An interface to the LBRY Network.'
+    )
     main.add_argument(
         '-v', '--version', dest='cli_version', action="store_true",
         help='Show lbrynet CLI version and exit.'
@@ -175,7 +181,7 @@ def get_argument_parser():
     start = sub.add_parser(
         'start',
         usage='lbrynet start [--config FILE] [--data-dir DIR] [--wallet-dir DIR] [--download-dir DIR] ...',
-        help='Start lbrynet API server.'
+        help='Start lbrynet network interface.'
     )
     start.add_argument(
         '--quiet', dest='quiet', action="store_true",
