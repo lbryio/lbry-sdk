@@ -176,7 +176,7 @@ def get_argument_parser():
         help='Show lbrynet CLI version and exit.'
     )
     main.set_defaults(group=None, command=None)
-    CLIConfig.contribute_args(main)
+    CLIConfig.contribute_to_argparse(main)
     sub = main.add_subparsers(metavar='COMMAND')
     start = sub.add_parser(
         'start',
@@ -193,7 +193,7 @@ def get_argument_parser():
               'should selectively be applied.')
     )
     start.set_defaults(command='start', start_parser=start)
-    Config.contribute_args(start)
+    Config.contribute_to_argparse(start)
 
     api = Daemon.get_api_definitions()
     groups = {}

@@ -196,6 +196,10 @@ class ConfigurationTests(unittest.TestCase):
                 c.max_key_fee = {'currency': 'BTC', 'amount': 1}
             with open(config, 'r') as fd:
                 self.assertEqual(fd.read(), 'max_key_fee:\n  amount: 1\n  currency: BTC\n')
+            with c.update_config():
+                c.max_key_fee = None
+            with open(config, 'r') as fd:
+                self.assertEqual(fd.read(), 'max_key_fee: null\n')
 
     def test_max_key_fee_from_args(self):
         parser = argparse.ArgumentParser()
