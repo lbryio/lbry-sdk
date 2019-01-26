@@ -46,7 +46,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_arguments(self):
         parser = argparse.ArgumentParser()
-        TestConfig.contribute_args(parser)
+        TestConfig.contribute_to_argparse(parser)
 
         args = parser.parse_args([])
         c = TestConfig.create_from_arguments(args)
@@ -180,7 +180,7 @@ class ConfigurationTests(unittest.TestCase):
             )
             self.assertEqual(c.servers, [('localhost', 5566)])
 
-    def test_max_key_fee(self):
+    def test_max_key_fee_from_yaml(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = os.path.join(temp_dir, 'settings.yml')
             with open(config, 'w') as fd:
@@ -196,3 +196,22 @@ class ConfigurationTests(unittest.TestCase):
                 c.max_key_fee = {'currency': 'BTC', 'amount': 1}
             with open(config, 'r') as fd:
                 self.assertEqual(fd.read(), 'max_key_fee:\n  amount: 1\n  currency: BTC\n')
+
+    def test_max_key_fee_from_args(self):
+        parser = argparse.ArgumentParser()
+        Config.contribute_to_argparse(parser)
+
+        # default
+        args = parser.parse_args([])
+        c = Config.create_from_arguments(args)
+        self.assertEqual(c.max_key_fee, {'amount': 50.0, 'currency': 'USD'})
+
+        # disabled
+        args = parser.parse_args(['--no-max-key-fee'])
+        c = Config.create_from_arguments(args)
+        self.assertEqual(c.max_key_fee, None)
+
+        # set
+        args = parser.parse_args(['--max-key-fee', '1.0', 'BTC'])
+        c = Config.create_from_arguments(args)
+        self.assertEqual(c.max_key_fee, {'amount': 1.0, 'currency': 'BTC'})
