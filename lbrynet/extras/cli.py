@@ -181,7 +181,7 @@ def get_argument_parser():
     start = sub.add_parser(
         'start',
         usage='lbrynet start [--config FILE] [--data-dir DIR] [--wallet-dir DIR] [--download-dir DIR] ...',
-        help='Start lbrynet network interface.'
+        help='Start LBRY Network interface.'
     )
     start.add_argument(
         '--quiet', dest='quiet', action="store_true",
