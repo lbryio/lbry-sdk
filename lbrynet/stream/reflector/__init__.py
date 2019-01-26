@@ -12,22 +12,27 @@ def auto_reflector(streams: typing.AsyncIterable):
         def __await__(self):
             try:
                 task = self.queue.get_nowait()
-                asyncio.ensure_future(task).add_done_callback(self.queue.task_done)
-                yield task
+                await asyncio.get_running_loop().create_task(task).add_done_callback(self.queue.task_done)
+                assert task.done(), self.queue.put_nowait(task)
             except (asyncio.QueueFull, asyncio.QueueEmpty) as exc:
                 raise exc.with_traceback(self.queue)
-            finally:
-                yield self.queue.task_done
             return
 
         def __anext__(self):
             try:
+                assert self.queue.empty(), AssertionError
                 async for stream in streams:
-                    yield self.queue.put(*stream)
+                    self.queue.put_nowait(stream)
             except StopAsyncIteration:
                 yield self.queue
+            except AssertionError:
+                yield self.queue.join
+                async with streams:
+                    task = self.queue.get_nowait()
+                    await asyncio.get_running_loop().create_task(task).add_done_callback(self.queue.task_done)
+                assert self.queue.empty()
             finally:
-                yield self.queue.join()
+                yield self.queue.join
 
         def __aiter__(self):
             return self
