@@ -295,8 +295,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @classmethod
     def get_api_definitions(cls):
         prefix = 'jsonrpc_'
-        skip = ['commands', 'help']
-        not_grouped = ['block_show', 'report_bug', 'resolve_name', 'routing_table_get']
+        not_grouped = ['block_show', 'report_bug', 'routing_table_get']
         api = {
             'groups': {
                 group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
@@ -307,8 +306,6 @@ class Daemon(metaclass=JSONRPCServerType):
         for jsonrpc_method in dir(cls):
             if jsonrpc_method.startswith(prefix):
                 full_name = jsonrpc_method[len(prefix):]
-                if full_name in skip:
-                    continue
                 method = getattr(cls, jsonrpc_method)
                 if full_name in not_grouped:
                     name_parts = [full_name]
@@ -815,54 +812,6 @@ class Daemon(metaclass=JSONRPCServerType):
                 attr: Setting = getattr(type(c), key)
                 setattr(c, key, attr.deserialize(value))
         return self.jsonrpc_settings_get()
-
-    def jsonrpc_help(self, command=None):
-        """
-        Return a useful message for an API command
-
-        Usage:
-            help [<command> | --command=<command>]
-
-        Options:
-            --command=<command>  : (str) command to retrieve documentation for
-
-        Returns:
-            (str) Help message
-        """
-
-        if command is None:
-            return {
-                'about': 'This is the LBRY JSON-RPC API',
-                'command_help': 'Pass a `command` parameter to this method to see ' +
-                                'help for that command (e.g. `help command=resolve_name`)',
-                'command_list': 'Get a full list of commands using the `commands` method',
-                'more_info': 'Visit https://lbry.io/api for more info',
-            }
-
-        fn = self.callable_methods.get(command)
-        if fn is None:
-            raise Exception(
-                f"No help available for '{command}'. It is not a valid command."
-            )
-
-        return {
-            'help': textwrap.dedent(fn.__doc__ or '')
-        }
-
-    def jsonrpc_commands(self):
-        """
-        Return a list of available commands
-
-        Usage:
-            commands
-
-        Options:
-            None
-
-        Returns:
-            (list) list of available commands
-        """
-        return sorted([command for command in self.callable_methods.keys()])
 
     WALLET_DOC = """
     Wallet management.
@@ -1459,32 +1408,6 @@ class Daemon(metaclass=JSONRPCServerType):
                 sort, reverse, comparison, **kwargs
             )
         ]
-
-    @requires(WALLET_COMPONENT)
-    async def jsonrpc_resolve_name(self, name, force=False):
-        """
-        Resolve stream info from a LBRY name
-
-        Usage:
-            resolve_name (<name> | --name=<name>) [--force]
-
-        Options:
-            --name=<name> : (str) the name to resolve
-            --force       : (bool) force refresh and do not check cache
-
-        Returns:
-            (dict) Metadata dictionary from name claim, None if the name is not
-                    resolvable
-        """
-
-        try:
-            name = parse_lbry_uri(name).name
-            metadata = await self.wallet_manager.resolve(name, check_cache=not force)
-            if name in metadata:
-                metadata = metadata[name]
-            return metadata
-        except UnknownNameError:
-            log.info('Name %s is not known', name)
 
     CLAIM_DOC = """
     Claim management.

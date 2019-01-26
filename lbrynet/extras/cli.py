@@ -201,7 +201,7 @@ def get_argument_parser():
         group_parser = sub.add_parser(group_name, group_name=group_name, help=api['groups'][group_name])
         groups[group_name] = group_parser.add_subparsers(metavar='COMMAND')
 
-    nicer_order = ['stop', 'get', 'publish', 'resolve', 'resolve_name']
+    nicer_order = ['stop', 'get', 'publish', 'resolve']
     for command_name in sorted(api['commands']):
         if command_name not in nicer_order:
             nicer_order.append(command_name)
