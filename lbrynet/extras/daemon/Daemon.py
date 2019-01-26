@@ -756,55 +756,21 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.conf.settings_dict
 
-    def jsonrpc_settings_set(self, **kwargs):
+    def jsonrpc_settings_set(self, key, value):
         """
         Set daemon settings
 
         Usage:
-            settings_set [--download_directory=<download_directory>]
-                         [--data_rate=<data_rate>]
-                         [--download_timeout=<download_timeout>]
-                         [--peer_port=<peer_port>]
-                         [--max_key_fee=<max_key_fee>]
-                         [--use_upnp=<use_upnp>]
-                         [--run_reflector_server=<run_reflector_server>]
-                         [--cache_time=<cache_time>]
-                         [--reflect_uploads=<reflect_uploads>]
-                         [--share_usage_data=<share_usage_data>]
-                         [--peer_search_timeout=<peer_search_timeout>]
-                         [--sd_download_timeout=<sd_download_timeout>]
-                         [--auto_renew_claim_height_delta=<auto_renew_claim_height_delta>]
-
-        Options:
-            --download_directory=<download_directory>  : (str) path of download directory
-            --data_rate=<data_rate>                    : (float) 0.0001
-            --download_timeout=<download_timeout>      : (int) 180
-            --peer_port=<peer_port>                    : (int) 3333
-            --max_key_fee=<max_key_fee>                : (str) maximum key fee for downloads,
-                                                          in the format: '<amount> <currency>'
-                                                          Supported currency symbols: LBC, USD, BTC
-            --no_max_key_fee                 : (bool) Disable max key fee.
-            --use_upnp=<use_upnp>            : (bool) True
-            --run_reflector_server=<run_reflector_server>  : (bool) False
-            --cache_time=<cache_time>  : (int) 150
-            --reflect_uploads=<reflect_uploads>  : (bool) True
-            --share_usage_data=<share_usage_data>  : (bool) True
-            --peer_search_timeout=<peer_search_timeout>  : (int) 3
-            --sd_download_timeout=<sd_download_timeout>  : (int) 3
-            --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int) 0
-                claims set to expire within this many blocks will be
-                automatically renewed after startup (if set to 0, renews
-                will not be made automatically)
-
+            settings_set <key> <value>
 
         Returns:
             (dict) Updated dictionary of daemon settings
         """
         with self.conf.update_config() as c:
-            for key, value in kwargs.items():
-                attr: Setting = getattr(type(c), key)
-                setattr(c, key, attr.deserialize(value))
-        return self.jsonrpc_settings_get()
+            attr: Setting = getattr(type(c), key)
+            cleaned = attr.deserialize(value)
+            setattr(c, key, cleaned)
+        return {key: cleaned}
 
     WALLET_DOC = """
     Wallet management.
