@@ -3,7 +3,6 @@ import asyncio
 import logging
 import json
 import inspect
-import textwrap
 import typing
 import aiohttp
 import base58
@@ -20,7 +19,7 @@ from lbrynet import __version__, utils
 from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.blob_exchange.downloader import BlobDownloader
-from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout, ComponentsNotStarted
+from lbrynet.error import InsufficientFundsError, DownloadSDTimeout, ComponentsNotStarted
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
 from lbrynet.extras import system_info
 from lbrynet.extras.daemon import analytics
