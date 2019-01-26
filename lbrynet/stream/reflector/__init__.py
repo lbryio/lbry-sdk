@@ -1,3 +1,39 @@
+import asyncio
+import functools
+import typing
+
+
+def auto_reflector(streams: typing.AsyncIterable):
+
+    @functools.wraps(auto_reflector)
+    class Reflect:
+        queue = asyncio.Queue()
+
+        def __await__(self):
+            try:
+                task = self.queue.get_nowait()
+                asyncio.ensure_future(task).add_done_callback(self.queue.task_done)
+                yield task
+            except (asyncio.QueueFull, asyncio.QueueEmpty) as exc:
+                raise exc.with_traceback(self.queue)
+            finally:
+                yield self.queue.task_done
+            return
+
+        def __anext__(self):
+            try:
+                async for stream in streams:
+                    yield self.queue.put(*stream)
+            except StopAsyncIteration:
+                yield self.queue
+            finally:
+                yield self.queue.join()
+
+        def __aiter__(self):
+            return self
+    return Reflect
+
+
 __doc__ = """Reflector is a protocol to re-host lbry blobs and streams.
 
 API Reference:
@@ -12,7 +48,7 @@ API Reference:
 
     If the Client sends the blob:
         Server indicates if the transfer was successful: {'received_sd_blob': bool,}
-    If the transfer was not successful (False):
+    If the transfer was not successful:
         blob is added to the needed_blobs queue.
 
 Server API Reference:
