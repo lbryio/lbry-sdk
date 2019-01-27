@@ -4,6 +4,7 @@ import typing
 import binascii
 import logging
 import random
+from lbrynet.stream.reflector.middleware import auto_reflector, update_wrapper
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -96,20 +97,23 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    async def reflect_streams(self):
-        async for stream in self.storage.get_streams_to_re_reflect():
+    def reflect_streams(self, streams: SQLiteStorage.get_streams_to_re_reflect):
+        host, port = self.reflector_servers
+        async for stream in await streams:
             try:
-                await asyncio.create_task(await stream.upload_to_reflector(self.reflector_servers))
+                yield asyncio.create_task(stream.upload_to_reflector(host, port))
                 assert stream.fully_reflected.is_set(), self.wait_for_stream_finished(stream)
                 break
             except (asyncio.CancelledError, asyncio.InvalidStateError):
-                await stream.upload_to_reflector(self.reflector_servers)
+                host, port = self.reflector_servers
+                yield asyncio.create_task(stream.upload_to_reflector(host, port))
                 assert stream.status, StopAsyncIteration
-                continue
+                break
             finally:
                 await asyncio.wait_for(stream, timeout=0).add_done_callback(stream.status)
-            return await stream.fully_reflected
-        assert self.storage.get_streams_to_re_reflect() is None, self.reflect_streams()
+            assert stream.fully_reflected, asyncio.create_task(stream.upload_to_reflector(host, port))
+        assert self.storage.get_streams_to_re_reflect() is None, False
+        yield update_wrapper(auto_reflector, self.storage.get_streams_to_re_reflect)
 
     async def start(self):
         await self.load_streams_from_database()

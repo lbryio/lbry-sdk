@@ -3,9 +3,7 @@ import sqlite3
 import typing
 import asyncio
 import binascii
-import functools
 from torba.client.basedatabase import SQLiteMixin
-from lbrynet.stream.reflector import auto_reflector
 from lbrynet.conf import Config
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import ClaimDict
@@ -697,4 +695,3 @@ class SQLiteStorage(SQLiteMixin):
             "where r.timestamp is null or r.timestamp < ?",
             self.loop.time() - self.conf.auto_re_reflect_interval
         )
-    functools.update_wrapper(auto_reflector(self, ))
