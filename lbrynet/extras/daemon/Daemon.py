@@ -3,7 +3,6 @@ import asyncio
 import logging
 import json
 import inspect
-import textwrap
 import typing
 import aiohttp
 import base58
@@ -20,7 +19,7 @@ from lbrynet import __version__, utils
 from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.blob_exchange.downloader import BlobDownloader
-from lbrynet.error import InsufficientFundsError, UnknownNameError, DownloadSDTimeout, ComponentsNotStarted
+from lbrynet.error import InsufficientFundsError, DownloadSDTimeout, ComponentsNotStarted
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
 from lbrynet.extras import system_info
 from lbrynet.extras.daemon import analytics
@@ -295,8 +294,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @classmethod
     def get_api_definitions(cls):
         prefix = 'jsonrpc_'
-        skip = ['commands', 'help']
-        not_grouped = ['block_show', 'report_bug', 'resolve_name', 'routing_table_get']
+        not_grouped = ['block_show', 'report_bug', 'routing_table_get']
         api = {
             'groups': {
                 group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
@@ -307,8 +305,6 @@ class Daemon(metaclass=JSONRPCServerType):
         for jsonrpc_method in dir(cls):
             if jsonrpc_method.startswith(prefix):
                 full_name = jsonrpc_method[len(prefix):]
-                if full_name in skip:
-                    continue
                 method = getattr(cls, jsonrpc_method)
                 if full_name in not_grouped:
                     name_parts = [full_name]
@@ -760,109 +756,21 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.conf.settings_dict
 
-    def jsonrpc_settings_set(self, **kwargs):
+    def jsonrpc_settings_set(self, key, value):
         """
         Set daemon settings
 
         Usage:
-            settings_set [--download_directory=<download_directory>]
-                         [--data_rate=<data_rate>]
-                         [--download_timeout=<download_timeout>]
-                         [--peer_port=<peer_port>]
-                         [--max_key_fee=<max_key_fee>]
-                         [--disable_max_key_fee=<disable_max_key_fee>]
-                         [--use_upnp=<use_upnp>]
-                         [--run_reflector_server=<run_reflector_server>]
-                         [--cache_time=<cache_time>]
-                         [--reflect_uploads=<reflect_uploads>]
-                         [--share_usage_data=<share_usage_data>]
-                         [--peer_search_timeout=<peer_search_timeout>]
-                         [--sd_download_timeout=<sd_download_timeout>]
-                         [--auto_renew_claim_height_delta=<auto_renew_claim_height_delta>]
-
-        Options:
-            --download_directory=<download_directory>  : (str) path of download directory
-            --data_rate=<data_rate>                    : (float) 0.0001
-            --download_timeout=<download_timeout>      : (int) 180
-            --peer_port=<peer_port>                    : (int) 3333
-            --max_key_fee=<max_key_fee>                : (dict) maximum key fee for downloads,
-                                                          in the format:
-                                                          {
-                                                            'currency': <currency_symbol>,
-                                                            'amount': <amount>
-                                                          }.
-                                                          In the CLI, it must be an escaped JSON string
-                                                          Supported currency symbols: LBC, USD, BTC
-            --disable_max_key_fee=<disable_max_key_fee> : (bool) False
-            --use_upnp=<use_upnp>            : (bool) True
-            --run_reflector_server=<run_reflector_server>  : (bool) False
-            --cache_time=<cache_time>  : (int) 150
-            --reflect_uploads=<reflect_uploads>  : (bool) True
-            --share_usage_data=<share_usage_data>  : (bool) True
-            --peer_search_timeout=<peer_search_timeout>  : (int) 3
-            --sd_download_timeout=<sd_download_timeout>  : (int) 3
-            --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int) 0
-                claims set to expire within this many blocks will be
-                automatically renewed after startup (if set to 0, renews
-                will not be made automatically)
-
+            settings_set <key> <value>
 
         Returns:
             (dict) Updated dictionary of daemon settings
         """
         with self.conf.update_config() as c:
-            for key, value in kwargs:
-                attr: Setting = getattr(type(c), key)
-                setattr(c, key, attr.deserialize(value))
-        return self.jsonrpc_settings_get()
-
-    def jsonrpc_help(self, command=None):
-        """
-        Return a useful message for an API command
-
-        Usage:
-            help [<command> | --command=<command>]
-
-        Options:
-            --command=<command>  : (str) command to retrieve documentation for
-
-        Returns:
-            (str) Help message
-        """
-
-        if command is None:
-            return {
-                'about': 'This is the LBRY JSON-RPC API',
-                'command_help': 'Pass a `command` parameter to this method to see ' +
-                                'help for that command (e.g. `help command=resolve_name`)',
-                'command_list': 'Get a full list of commands using the `commands` method',
-                'more_info': 'Visit https://lbry.io/api for more info',
-            }
-
-        fn = self.callable_methods.get(command)
-        if fn is None:
-            raise Exception(
-                f"No help available for '{command}'. It is not a valid command."
-            )
-
-        return {
-            'help': textwrap.dedent(fn.__doc__ or '')
-        }
-
-    def jsonrpc_commands(self):
-        """
-        Return a list of available commands
-
-        Usage:
-            commands
-
-        Options:
-            None
-
-        Returns:
-            (list) list of available commands
-        """
-        return sorted([command for command in self.callable_methods.keys()])
+            attr: Setting = getattr(type(c), key)
+            cleaned = attr.deserialize(value)
+            setattr(c, key, cleaned)
+        return {key: cleaned}
 
     WALLET_DOC = """
     Wallet management.
@@ -1459,32 +1367,6 @@ class Daemon(metaclass=JSONRPCServerType):
                 sort, reverse, comparison, **kwargs
             )
         ]
-
-    @requires(WALLET_COMPONENT)
-    async def jsonrpc_resolve_name(self, name, force=False):
-        """
-        Resolve stream info from a LBRY name
-
-        Usage:
-            resolve_name (<name> | --name=<name>) [--force]
-
-        Options:
-            --name=<name> : (str) the name to resolve
-            --force       : (bool) force refresh and do not check cache
-
-        Returns:
-            (dict) Metadata dictionary from name claim, None if the name is not
-                    resolvable
-        """
-
-        try:
-            name = parse_lbry_uri(name).name
-            metadata = await self.wallet_manager.resolve(name, check_cache=not force)
-            if name in metadata:
-                metadata = metadata[name]
-            return metadata
-        except UnknownNameError:
-            log.info('Name %s is not known', name)
 
     CLAIM_DOC = """
     Claim management.

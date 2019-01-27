@@ -55,48 +55,29 @@ class CLITest(AsyncioTestCase):
         self.assertEqual(3, normalize_value('3', key="some_other_thing"))
 
     def test_help(self):
-        self.assertIn(
-            'Usage:  lbrynet [-v] [--api HOST:PORT]', self.shell(['--help'])
-        )
+        self.assertIn('lbrynet [-v] [--api HOST:PORT]', self.shell(['--help']))
         # start is special command, with separate help handling
-        self.assertIn(
-            '--share-usage-data', self.shell(['start', '--help'])
-        )
+        self.assertIn('--share-usage-data', self.shell(['start', '--help']))
         # publish is ungrouped command, returns usage only implicitly
-        self.assertIn(
-            'publish (<name> | --name=<name>)', self.shell(['publish'])
-        )
+        self.assertIn('publish (<name> | --name=<name>)', self.shell(['publish']))
         # publish is ungrouped command, with explicit --help
-        self.assertIn(
-            'Make a new name claim and publish', self.shell(['publish', '--help'])
-        )
+        self.assertIn('Make a new name claim and publish', self.shell(['publish', '--help']))
         # account is a group, returns help implicitly
-        self.assertIn(
-            'Return the balance of an account',
-            self.shell(['account'])
-        )
+        self.assertIn('Return the balance of an account', self.shell(['account']))
         # account is a group, with explicit --help
-        self.assertIn(
-            'Return the balance of an account',
-            self.shell(['account', '--help'])
-        )
+        self.assertIn('Return the balance of an account', self.shell(['account', '--help']))
         # account add is a grouped command, returns usage implicitly
-        self.assertIn(
-            'account_add (<account_name> | --account_name=<account_name>)',
-            self.shell(['account', 'add'])
-        )
+        self.assertIn('account_add (<account_name> | --account_name=<account_name>)', self.shell(['account', 'add']))
         # account add is a grouped command, with explicit --help
-        self.assertIn(
-            'Add a previously created account from a seed,', self.shell(['account', 'add', '--help'])
-        )
+        self.assertIn('Add a previously created account from a seed,', self.shell(['account', 'add', '--help']))
+
+    def test_help_error_handling(self):
+        # person tries `help` command, then they get help even though that's invalid command
+        self.assertIn('--config FILE', self.shell(['help']))
         # help for invalid command, with explicit --help
-        self.assertIn(
-            "invalid choice: 'publish1'", self.shell(['publish1', '--help'])
-        )
+        self.assertIn('--config FILE', self.shell(['nonexistant', '--help']))
         # help for invalid command, implicit
-        self.assertIn(
-            "invalid choice: 'publish1'", self.shell(['publish1'])
-        )
+        self.assertIn('--config FILE', self.shell(['nonexistant']))
 
     def test_version_command(self):
         self.assertEqual(

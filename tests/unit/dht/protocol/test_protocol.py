@@ -1,6 +1,8 @@
 import asyncio
+import binascii
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
+from lbrynet.dht.serialization.bencoding import bencode, bdecode
 from lbrynet.dht import constants
 from lbrynet.dht.protocol.protocol import KademliaProtocol
 from lbrynet.dht.peer import PeerManager
@@ -67,6 +69,7 @@ class TestProtocol(AsyncioTestCase):
             peer2_from_peer1 = peer1.peer_manager.get_kademlia_peer(
                 peer2.node_id, peer2.external_ip, udp_port=peer2.udp_port
             )
+            peer2_from_peer1.update_tcp_port(3333)
             peer3 = peer1.peer_manager.get_kademlia_peer(
                 constants.generate_id(), '1.2.3.6', udp_port=4444
             )
@@ -76,14 +79,14 @@ class TestProtocol(AsyncioTestCase):
             self.assertEqual(True, peer1.data_store.has_peers_for_blob(b'2' * 48))
             self.assertEqual(False, peer1.data_store.has_peers_for_blob(b'3' * 48))
             self.assertListEqual([peer2_from_peer1], peer1.data_store.get_storing_contacts())
-
+            peer1.data_store.completed_blobs.add(binascii.hexlify(b'2' * 48).decode())
             find_value_response = peer1.node_rpc.find_value(peer3, b'2' * 48)
             self.assertSetEqual(
                 {b'2' * 48, b'token', b'protocolVersion'}, set(find_value_response.keys())
             )
-            self.assertEqual(1, len(find_value_response[b'2' * 48]))
-            self.assertEqual(find_value_response[b'2' * 48][0], peer2_from_peer1)
-            # self.assertEqual(peer2_from_peer1.tcp_port, 3333)
+            self.assertEqual(2, len(find_value_response[b'2' * 48]))
+            self.assertEqual(find_value_response[b'2' * 48][0], peer2_from_peer1.compact_address_tcp())
+            self.assertDictEqual(bdecode(bencode(find_value_response)), find_value_response)
 
             peer1.stop()
             peer2.stop()
