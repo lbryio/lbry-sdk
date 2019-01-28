@@ -453,6 +453,7 @@ class CLIConfig(BaseConfig):
 
 
 class Config(CLIConfig):
+    # directories
     data_dir = Path("Directory path to store blobs.", metavar='DIR')
     download_dir = Path(
         "Directory path to place assembled files downloaded from LBRY.",
@@ -463,41 +464,69 @@ class Config(CLIConfig):
         previous_names=['lbryum_wallet_dir'], metavar='DIR'
     )
 
-    share_usage_data = Toggle(
-        "Whether to share usage stats and diagnostic info with LBRY.", True,
-        previous_names=['upload_log', 'upload_log', 'share_debug_info']
+    # network
+    use_upnp = Toggle(
+        "Use UPnP to setup temporary port redirects for the DHT and the hosting of blobs. If you manually forward"
+        "ports or have firewall rules you likely want to disable this.", True
     )
-    cache_time = Integer("", 150)
-    dht_node_port = Integer("", 4444)
-    download_timeout = Float("", 30.0)
-    blob_download_timeout = Float("", 20.0)
-    peer_connect_timeout = Float("", 3.0)
-    node_rpc_timeout = Float("", constants.rpc_timeout)
-    announce_head_blobs_only = Toggle("", True)
-    concurrent_announcers = Integer("", 10)
-    known_dht_nodes = Servers("", [
+    udp_port = Integer("UDP port for communicating on the LBRY DHT", 4444, previous_names=['dht_node_port'])
+    tcp_port = Integer("TCP port to listen for incoming blob requests", 3333, previous_names=['peer_port'])
+    network_interface = String("Interface to use for the DHT and blob exchange", '0.0.0.0')
+
+    # protocol timeouts
+    download_timeout = Float("Cumulative timeout for a stream to begin downloading before giving up", 30.0)
+    blob_download_timeout = Float("Timeout to download a blob from a peer", 20.0)
+    peer_connect_timeout = Float("Timeout to establish a TCP connection to a peer", 3.0)
+    node_rpc_timeout = Float("Timeout when making a DHT request", constants.rpc_timeout)
+
+    # blob announcement and download
+    announce_head_and_sd_only = Toggle(
+        "Announce only the descriptor and first (rather than all) data blob for a stream to the DHT", True,
+        previous_names=['announce_head_blobs_only']
+    )
+    concurrent_blob_announcers = Integer(
+        "Number of blobs to iteratively announce at once", 10, previous_names=['concurrent_announcers']
+    )
+    max_connections_per_download = Integer(
+        "Maximum number of peers to connect to while downloading a blob", 5,
+        previous_names=['max_connections_per_stream']
+    )
+    max_key_fee = MaxKeyFee(
+        "Don't download streams with fees exceeding this amount", {'currency': 'USD', 'amount': 50.0}
+    )  # TODO: use this
+
+    # reflector settings
+    reflect_streams = Toggle(
+        "Upload completed streams (published and downloaded) reflector in order to re-host them", True,
+        previous_names=['reflect_uploads']
+    )
+
+    # servers
+    reflector_servers = Servers("Reflector re-hosting servers", [
+        ('reflector.lbry.io', 5566)
+    ])
+    lbryum_servers = Servers("SPV wallet servers", [
+        ('lbryumx1.lbry.io', 50001),
+        ('lbryumx2.lbry.io', 50001)
+    ])
+    known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
         ('lbrynet1.lbry.io', 4444),  # US EAST
         ('lbrynet2.lbry.io', 4444),  # US WEST
         ('lbrynet3.lbry.io', 4444),  # EU
         ('lbrynet4.lbry.io', 4444)  # ASIA
     ])
-    max_connections_per_stream = Integer("", 5)
-    max_key_fee = MaxKeyFee("", {'currency': 'USD', 'amount': 50.0})
-    peer_port = Integer("", 3333)
-    # if reflect_uploads is True, send files to reflector after publishing (as well as a periodic check in the
-    # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
-    reflect_uploads = Toggle("", True)
-    reflector_servers = Servers("", [
-        ('reflector.lbry.io', 5566)
-    ])
-    use_upnp = Toggle("", True)
-    blockchain_name = String("", 'lbrycrd_main')
-    lbryum_servers = Servers("", [
-        ('lbryumx1.lbry.io', 50001),
-        ('lbryumx2.lbry.io', 50001)
-    ])
+
+    # blockchain
+    blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
     s3_headers_depth = Integer("download headers from s3 when the local height is more than 10 chunks behind", 96 * 10)
+    cache_time = Integer("Time to cache resolved claims", 150)  # TODO: use this
+
+    # daemon
     components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
+    share_usage_data = Toggle(
+        "Whether to share usage stats and diagnostic info with LBRY.", True,
+        previous_names=['upload_log', 'upload_log', 'share_debug_info']
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

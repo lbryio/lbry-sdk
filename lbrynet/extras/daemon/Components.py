@@ -376,8 +376,8 @@ class DHTComponent(Component):
     async def start(self):
         log.info("start the dht")
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
-        self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", self.conf.peer_port)
-        self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", self.conf.dht_node_port)
+        self.external_peer_port = self.upnp_component.upnp_redirects.get("TCP", self.conf.tcp_port)
+        self.external_udp_port = self.upnp_component.upnp_redirects.get("UDP", self.conf.udp_port)
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
@@ -389,13 +389,14 @@ class DHTComponent(Component):
             asyncio.get_event_loop(),
             self.component_manager.peer_manager,
             node_id=self.get_node_id(),
-            internal_udp_port=self.conf.dht_node_port,
+            internal_udp_port=self.conf.udp_port,
             udp_port=self.external_udp_port,
             external_ip=external_ip,
-            peer_port=self.external_peer_port
+            peer_port=self.external_peer_port,
+            rpc_timeout=self.conf.node_rpc_timeout
         )
         self.dht_node.start(
-            interface='0.0.0.0', known_node_urls=self.conf.known_dht_nodes
+            interface=self.conf.network_interface, known_node_urls=self.conf.known_dht_nodes
         )
         log.info("Started the dht")
 
@@ -419,7 +420,7 @@ class HashAnnouncerComponent(Component):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = BlobAnnouncer(asyncio.get_event_loop(), dht_node, storage)
-        self.hash_announcer.start(self.conf.concurrent_announcers)
+        self.hash_announcer.start(self.conf.concurrent_blob_announcers)
         log.info("Started blob announcer")
 
     async def stop(self):
@@ -492,10 +493,10 @@ class PeerProtocolServerComponent(Component):
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
         wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
-        peer_port = upnp.upnp_redirects.get("TCP", self.conf.peer_port)
+        peer_port = upnp.upnp_redirects.get("TCP", self.conf.tcp_port)
         address = await wallet.get_unused_address()
         self.blob_server = BlobServer(asyncio.get_event_loop(), blob_manager, address)
-        self.blob_server.start_server(peer_port, interface='0.0.0.0')
+        self.blob_server.start_server(peer_port, interface=self.conf.network_interface)
         await self.blob_server.started_listening.wait()
 
     async def stop(self):
@@ -508,8 +509,8 @@ class UPnPComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self._int_peer_port = self.conf.peer_port
-        self._int_dht_node_port = self.conf.dht_node_port
+        self._int_peer_port = self.conf.tcp_port
+        self._int_dht_node_port = self.conf.udp_port
         self.use_upnp = self.conf.use_upnp
         self.upnp = None
         self.upnp_redirects = {}

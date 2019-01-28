@@ -1551,8 +1551,6 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        timeout = timeout if timeout is not None else self.conf.download_timeout
-
         parsed_uri = parse_lbry_uri(uri)
         if parsed_uri.is_channel:
             raise Exception("cannot download a channel claim, specify a /path")
@@ -1584,7 +1582,7 @@ class Daemon(metaclass=JSONRPCServerType):
             stream = existing[0]
         else:
             stream = await self.stream_manager.download_stream_from_claim(
-                self.dht_node, self.conf.download_dir, resolved, file_name, timeout, fee_amount, fee_address
+                self.dht_node, self.conf, resolved, file_name, timeout, fee_amount, fee_address
             )
         if stream:
             return stream.as_dict()
