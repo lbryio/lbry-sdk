@@ -485,7 +485,8 @@ class Config(CLIConfig):
         previous_names=['announce_head_blobs_only']
     )
     concurrent_blob_announcers = Integer(
-        "Number of blobs to iteratively announce at once", 10, previous_names=['concurrent_announcers']
+        "Number of blobs to iteratively announce at once, set to 0 to disable", 10,
+        previous_names=['concurrent_announcers']
     )
     max_connections_per_download = Integer(
         "Maximum number of peers to connect to while downloading a blob", 5,
