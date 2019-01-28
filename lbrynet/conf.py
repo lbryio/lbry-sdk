@@ -16,29 +16,11 @@ log = logging.getLogger(__name__)
 NOT_SET = type(str('NOT_SET'), (object,), {})
 T = typing.TypeVar('T')
 
-KB = 2 ** 10
-MB = 2 ** 20
-
-ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
-ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
-API_ADDRESS = 'lbryapi'
-APP_NAME = 'LBRY'
-BLOBFILES_DIR = 'blobfiles'
-CRYPTSD_FILE_EXTENSION = '.cryptsd'
 CURRENCIES = {
     'BTC': {'type': 'crypto'},
     'LBC': {'type': 'crypto'},
     'USD': {'type': 'fiat'},
 }
-ICON_PATH = 'icons' if 'win' in sys.platform else 'app.icns'
-LOG_FILE_NAME = 'lbrynet.log'
-LOG_POST_URL = 'https://lbry.io/log-upload'
-MAX_BLOB_REQUEST_SIZE = 64 * KB
-MAX_HANDSHAKE_SIZE = 64 * KB
-MAX_REQUEST_SIZE = 64 * KB
-MAX_RESPONSE_INFO_SIZE = 64 * KB
-MAX_BLOB_INFOS_TO_REQUEST = 20
-PROTOCOL_PREFIX = 'lbry'
 SLACK_WEBHOOK = (
     'nUE0pUZ6Yl9bo29epl5moTSwnl5wo20ip2IlqzywMKZiIQSFZR5'
     'AHx4mY0VmF0WQZ1ESEP9kMHZlp1WzJwWOoKN3ImR1M2yUAaMyqGZ='
@@ -471,7 +453,6 @@ class CLIConfig(BaseConfig):
 
 
 class Config(CLIConfig):
-
     data_dir = Path("Directory path to store blobs.", metavar='DIR')
     download_dir = Path(
         "Directory path to place assembled files downloaded from LBRY.",
@@ -486,20 +467,12 @@ class Config(CLIConfig):
         "Whether to share usage stats and diagnostic info with LBRY.", True,
         previous_names=['upload_log', 'upload_log', 'share_debug_info']
     )
-
-    # claims set to expire within this many blocks will be
-    # automatically renewed after startup (if set to 0, renews
-    # will not be made automatically)
-    auto_renew_claim_height_delta = Integer("", 0)
     cache_time = Integer("", 150)
-    data_rate = Float("points/megabyte", .0001)
-    delete_blobs_on_remove = Toggle("", True)
     dht_node_port = Integer("", 4444)
     download_timeout = Float("", 30.0)
     blob_download_timeout = Float("", 20.0)
     peer_connect_timeout = Float("", 3.0)
     node_rpc_timeout = Float("", constants.rpc_timeout)
-    is_generous_host = Toggle("", True)
     announce_head_blobs_only = Toggle("", True)
     concurrent_announcers = Integer("", 10)
     known_dht_nodes = Servers("", [
@@ -509,26 +482,15 @@ class Config(CLIConfig):
         ('lbrynet4.lbry.io', 4444)  # ASIA
     ])
     max_connections_per_stream = Integer("", 5)
-    seek_head_blob_first = Toggle("", True)
     max_key_fee = MaxKeyFee("", {'currency': 'USD', 'amount': 50.0})
-    min_info_rate = Float("points/1000 infos", .02)
-    min_valuable_hash_rate = Float("points/1000 infos", .05)
-    min_valuable_info_rate = Float("points/1000 infos", .05)
     peer_port = Integer("", 3333)
-    pointtrader_server = String("", 'http://127.0.0.1:2424')
-    reflector_port = Integer("", 5566)
     # if reflect_uploads is True, send files to reflector after publishing (as well as a periodic check in the
     # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
     reflect_uploads = Toggle("", True)
-    auto_re_reflect_interval = Integer("set to 0 to disable", 86400)
     reflector_servers = Servers("", [
         ('reflector.lbry.io', 5566)
     ])
-    run_reflector_server = Toggle("adds reflector to components_to_skip unless True", False)
-    sd_download_timeout = Integer("", 3)
-    peer_search_timeout = Integer("", 60)
     use_upnp = Toggle("", True)
-    use_keyring = Toggle("", False)
     blockchain_name = String("", 'lbrycrd_main')
     lbryum_servers = Servers("", [
         ('lbryumx1.lbry.io', 50001),
