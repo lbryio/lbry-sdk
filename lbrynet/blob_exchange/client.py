@@ -59,37 +59,40 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
     async def _download_blob(self) -> typing.Tuple[bool, bool]:
         request = BlobRequest.make_request_for_blob_hash(self.blob.blob_hash)
         try:
-            self.transport.write(request.serialize())
+            msg = request.serialize()
+            log.debug("send request to %s:%i -> %s", self.peer_address, self.peer_port, msg.decode())
+            self.transport.write(msg)
             response: BlobResponse = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
             blob_response = response.get_blob_response()
             if (not blob_response or blob_response.error) and\
                     (not availability_response or not availability_response.available_blobs):
-                log.warning("blob not in availability response")
+                log.warning("blob not in availability response from %s:%i", self.peer_address, self.peer_port)
                 return False, True
             elif availability_response.available_blobs and \
                     availability_response.available_blobs != [self.blob.blob_hash]:
-                log.warning("blob availability response doesn't match our request")
+                log.warning("blob availability response doesn't match our request from %s:%i",
+                            self.peer_address, self.peer_port)
                 return False, False
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':
-                log.warning("data rate rejected")
+                log.warning("data rate rejected by %s:%i", self.peer_address, self.peer_port)
                 return False, False
             if not blob_response or blob_response.error:
-                log.warning("blob cant be downloaded from this peer")
+                log.warning("blob cant be downloaded from %s:%i", self.peer_address, self.peer_port)
                 return False, True
             if not blob_response.error and blob_response.blob_hash != self.blob.blob_hash:
-                log.warning("incoming blob hash mismatch")
+                log.warning("incoming blob hash mismatch from %s:%i", self.peer_address, self.peer_port)
                 return False, False
             if self.blob.length is not None and self.blob.length != blob_response.length:
-                log.warning("incoming blob unexpected length")
+                log.warning("incoming blob unexpected length from %s:%i", self.peer_address, self.peer_port)
                 return False, False
             msg = f"downloading {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}," \
                 f" timeout in {self.peer_timeout}"
-            log.info(msg)
+            log.debug(msg)
             await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
             await self.blob.finished_writing.wait()
-            msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}"
+            msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}"
             log.info(msg)
             return True, True
         except asyncio.CancelledError:
@@ -127,7 +130,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 self._response_fut = asyncio.Future(loop=self.loop)
                 return await self._download_blob()
             except OSError:
-                log.error("race happened")
+                log.error("race happened downloading from %s:%i", self.peer_address, self.peer_port)
                 # i'm not sure how to fix this race condition - jack
                 return False, True
             except asyncio.TimeoutError:
@@ -142,10 +145,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
         self.peer_address, self.peer_port = self.transport.get_extra_info('peername')
-        # log.info("connection made to %s: %s", self.peer_address, transport)
+        log.debug("connection made to %s:%i", self.peer_address, self.peer_port)
 
     def connection_lost(self, reason):
-        # log.info("connection lost to %s (reason: %s)", self.peer_address, reason)
+        log.debug("connection lost to %s:%i (reason: %s, %s)", self.peer_address, self.peer_port, str(reason),
+                  str(type(reason)))
         self.transport = None
         self.loop.create_task(self.close())
 
