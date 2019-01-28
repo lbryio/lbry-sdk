@@ -37,6 +37,5 @@ setup(
         'torba',
         'pyyaml',
         'docopt',
-        'colorama==0.3.7',
     ],
 )
