@@ -159,10 +159,8 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
 
         if self.fixed_peers:
             def check_added_peers():
-                if not added_peers.is_set():
-                    self._add_peer_protocols(self.fixed_peers)
-                    log.info("no dht peers for download yet, adding fixed peer")
-                    added_peers.set()
+                self._add_peer_protocols(self.fixed_peers)
+                log.info("adding fixed peer %s:%i", self.fixed_peers[0].address, self.fixed_peers[0].tcp_port)
 
             add_fixed_peers_timer = self.loop.call_later(2, check_added_peers)
 
