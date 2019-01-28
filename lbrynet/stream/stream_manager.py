@@ -4,11 +4,11 @@ import typing
 import binascii
 import logging
 import random
-from lbrynet.stream.reflector.middleware import AutoReflector
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.extras.daemon.storage import StoredStreamClaim, lbc_to_dewies
+from lbrynet.conf import Config
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.peer import KademliaPeer
@@ -281,3 +281,14 @@ class StreamManager:
             if reverse:
                 streams.reverse()
         return streams
+
+    def _auto_reflector(self) -> typing.AwaitableGenerator:
+        # TODO: set flag in StreamManager?
+        # TODO: find appropriate place to call this
+        host, port = self.reflector_servers
+        async for index, stream in self.storage.get_streams_to_re_reflect():
+            loop = asyncio.new_event_loop()
+            loop.create_task(stream.upload_to_reflector(stream, host, port))
+            while divmod(index, 10):
+                await loop.run_in_executor(self.storage, self.reflect_streams)
+        return self.loop.call_at(Config.auto_re_reflect_interval, callback=self._auto_reflector)
