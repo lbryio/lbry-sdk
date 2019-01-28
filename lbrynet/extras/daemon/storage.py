@@ -687,7 +687,7 @@ class SQLiteStorage(SQLiteMixin):
             "delete from reflected_stream where sd_hash=? and reflector_address=?",
             (sd_hash, reflector_address)
         )
-    
+
     def get_streams_to_re_reflect(self):
         return self.run_and_return_list(
             "select s.sd_hash from stream s "
