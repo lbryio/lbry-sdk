@@ -19,15 +19,14 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
         self.writer: 'HashBlobWriter' = None
         self.blob: 'BlobFile' = None
-        self.download_running = asyncio.Event(loop=self.loop)
 
         self._blob_bytes_received = 0
         self._response_fut: asyncio.Future = None
         self._request_lock = asyncio.Lock(loop=self.loop)
 
-    def handle_data_received(self, data: bytes):
-        if self.transport.is_closing():
-            if self._response_fut and not (self._response_fut.done() or self._response_fut.cancelled()):
+    def data_received(self, data: bytes):
+        if self.transport.is_closing():  # TODO: is this needed?
+            if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
             return
 
@@ -36,27 +35,36 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if response.responses and self.blob:
             blob_response = response.get_blob_response()
             if blob_response and not blob_response.error and blob_response.blob_hash == self.blob.blob_hash:
+                # set the expected length for the incoming blob if we didn't know it
                 self.blob.set_length(blob_response.length)
             elif blob_response and not blob_response.error and self.blob.blob_hash != blob_response.blob_hash:
+                # the server started sending a blob we didn't request
                 log.warning("mismatch with self.blob %s", self.blob.blob_hash)
                 return
         if response.responses:
+            log.debug("got response from %s:%i <- %s", self.peer_address, self.peer_port, response.to_dict())
+            # fire the Future with the response to our request
             self._response_fut.set_result(response)
         if response.blob_data and self.writer and not self.writer.closed():
+            log.debug("got %i blob bytes from %s:%i", len(response.blob_data), self.peer_address, self.peer_port)
+            # write blob bytes if we're writing a blob and have blob bytes to write
             self._blob_bytes_received += len(response.blob_data)
             try:
                 self.writer.write(response.blob_data)
+                return
             except IOError as err:
-                log.error("error downloading blob: %s", err)
-
-    def data_received(self, data):
-        try:
-            return self.handle_data_received(data)
-        except (asyncio.CancelledError, asyncio.TimeoutError) as err:
-            if self._response_fut and not self._response_fut.done():
-                self._response_fut.set_exception(err)
+                log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
+                if self._response_fut and not self._response_fut.done():
+                    self._response_fut.set_exception(err)
+            except (asyncio.CancelledError, asyncio.TimeoutError) as err:  # TODO: is this needed?
+                log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
+                if self._response_fut and not self._response_fut.done():
+                    self._response_fut.set_exception(err)
 
     async def _download_blob(self) -> typing.Tuple[bool, bool]:
+        """
+        :return: download success (bool), keep connection (bool)
+        """
         request = BlobRequest.make_request_for_blob_hash(self.blob.blob_hash)
         try:
             msg = request.serialize()
@@ -109,7 +117,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self.writer.close_handle()
         if self.blob:
             await self.blob.close()
-        self.download_running.clear()
         self._response_fut = None
         self.writer = None
         self.blob = None
@@ -122,11 +129,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             return False, True
         async with self._request_lock:
             try:
-                if self.download_running.is_set():
-                    log.info("wait for download already running")
-                    await self.download_running.wait()
                 self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
-                self.download_running.set()
                 self._response_fut = asyncio.Future(loop=self.loop)
                 return await self._download_blob()
             except OSError:
@@ -160,9 +163,6 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', protocol: 
     Returns [<downloaded blob>, <keep connection>]
     """
     if blob.get_is_verified():
-        return False, True
-    if blob.get_is_verified():
-        log.info("already verified")
         return False, True
     try:
         await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
