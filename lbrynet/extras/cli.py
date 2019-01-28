@@ -141,6 +141,10 @@ class ArgumentParser(argparse.ArgumentParser):
             self, action, "Commands", lambda parser: 'group' not in parser._defaults
         )
 
+    def error(self, message):
+        self.print_help(argparse._sys.stderr)
+        self.exit(2, '\n'+message+'\n')
+
 
 class HelpFormatter(argparse.HelpFormatter):
 
@@ -164,18 +168,20 @@ def add_command_parser(parent, command):
 
 
 def get_argument_parser():
-    main = ArgumentParser('lbrynet')
+    main = ArgumentParser(
+        'lbrynet', description='An interface to the LBRY Network.'
+    )
     main.add_argument(
         '-v', '--version', dest='cli_version', action="store_true",
         help='Show lbrynet CLI version and exit.'
     )
     main.set_defaults(group=None, command=None)
-    CLIConfig.contribute_args(main)
+    CLIConfig.contribute_to_argparse(main)
     sub = main.add_subparsers(metavar='COMMAND')
     start = sub.add_parser(
         'start',
         usage='lbrynet start [--config FILE] [--data-dir DIR] [--wallet-dir DIR] [--download-dir DIR] ...',
-        help='Start lbrynet API server.'
+        help='Start LBRY Network interface.'
     )
     start.add_argument(
         '--quiet', dest='quiet', action="store_true",
@@ -187,7 +193,7 @@ def get_argument_parser():
               'should selectively be applied.')
     )
     start.set_defaults(command='start', start_parser=start)
-    Config.contribute_args(start)
+    Config.contribute_to_argparse(start)
 
     api = Daemon.get_api_definitions()
     groups = {}
@@ -195,7 +201,7 @@ def get_argument_parser():
         group_parser = sub.add_parser(group_name, group_name=group_name, help=api['groups'][group_name])
         groups[group_name] = group_parser.add_subparsers(metavar='COMMAND')
 
-    nicer_order = ['stop', 'get', 'publish', 'resolve', 'resolve_name']
+    nicer_order = ['stop', 'get', 'publish', 'resolve']
     for command_name in sorted(api['commands']):
         if command_name not in nicer_order:
             nicer_order.append(command_name)
