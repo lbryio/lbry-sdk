@@ -282,13 +282,13 @@ class StreamManager:
                 streams.reverse()
         return streams
 
-    def _auto_reflector(self) -> typing.AwaitableGenerator:
+    async def _auto_reflector(self) -> typing.AwaitableGenerator:
         # TODO: set flag in StreamManager?
         # TODO: find appropriate place to call this
         host, port = self.reflector_servers
         async for index, stream in self.storage.get_streams_to_re_reflect():
             loop = asyncio.new_event_loop()
-            loop.create_task(stream.upload_to_reflector(stream, host, port))
+            await loop.create_task(stream.upload_to_reflector(stream, host, port))
             while divmod(index, 10):
                 await loop.run_in_executor(self.storage, self.reflect_streams)
         return self.loop.call_at(Config.auto_re_reflect_interval, callback=self._auto_reflector)
