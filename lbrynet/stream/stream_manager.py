@@ -4,7 +4,7 @@ import typing
 import binascii
 import logging
 import random
-from lbrynet.stream.reflector.middleware import auto_reflector, update_wrapper
+from lbrynet.stream.reflector.middleware import AutoReflector
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -97,23 +97,19 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    def reflect_streams(self, streams: SQLiteStorage.get_streams_to_re_reflect):
-        host, port = self.reflector_servers
-        async for stream in await streams:
-            try:
-                yield asyncio.create_task(stream.upload_to_reflector(host, port))
-                assert stream.fully_reflected.is_set(), self.wait_for_stream_finished(stream)
-                break
-            except (asyncio.CancelledError, asyncio.InvalidStateError):
-                host, port = self.reflector_servers
-                yield asyncio.create_task(stream.upload_to_reflector(host, port))
-                assert stream.status, StopAsyncIteration
-                break
-            finally:
-                await asyncio.wait_for(stream, timeout=0).add_done_callback(stream.status)
-            assert stream.fully_reflected, asyncio.create_task(stream.upload_to_reflector(host, port))
-        assert self.storage.get_streams_to_re_reflect() is None, False
-        yield update_wrapper(auto_reflector, self.storage.get_streams_to_re_reflect)
+    async def reflect_streams(self):
+        streams = list(self.streams)
+        batch = []
+        while streams:
+            stream = streams.pop()
+            if not stream.fully_reflected.is_set():
+                host, port = random.choice(self.reflector_servers)
+                batch.append(stream.upload_to_reflector(host, port))
+            if len(batch) >= 10:
+                await asyncio.gather(*batch)
+                batch = []
+        if batch:
+            await asyncio.gather(*batch)
 
     async def start(self):
         await self.load_streams_from_database()
