@@ -9,6 +9,7 @@ from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.extras.daemon.storage import StoredStreamClaim, lbc_to_dewies
 if typing.TYPE_CHECKING:
+    from lbrynet.conf import Config
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.peer import KademliaPeer
     from lbrynet.dht.node import Node
@@ -166,16 +167,14 @@ class StreamManager:
         )
 
     async def _download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
-                                          file_name: typing.Optional[str] = None, data_rate: typing.Optional[int] = 0,
-                                          sd_blob_timeout: typing.Optional[float] = 60
-                                          ) -> typing.Optional[ManagedStream]:
+                                          file_name: typing.Optional[str] = None) -> typing.Optional[ManagedStream]:
 
         claim = ClaimDict.load_dict(claim_info['value'])
         downloader = StreamDownloader(self.loop, self.blob_manager, claim.source_hash.decode(), self.peer_timeout,
                                       self.peer_connect_timeout, download_directory, file_name, self.fixed_peers)
         try:
             downloader.download(node)
-            await asyncio.wait_for(downloader.got_descriptor.wait(), sd_blob_timeout)
+            await downloader.got_descriptor.wait()
             log.info("got descriptor %s for %s", claim.source_hash.decode(), claim_info['name'])
         except (asyncio.TimeoutError, asyncio.CancelledError):
             log.info("stream timeout")
@@ -187,7 +186,7 @@ class StreamManager:
         if not await self.blob_manager.storage.file_exists(downloader.sd_hash):
             await self.blob_manager.storage.save_downloaded_file(
                 downloader.descriptor.stream_hash, os.path.basename(downloader.output_path), download_directory,
-                data_rate
+                0.0
             )
         await self.blob_manager.storage.save_content_claim(
             downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}"
@@ -210,9 +209,9 @@ class StreamManager:
         except asyncio.CancelledError:
             await downloader.stop()
 
-    async def download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
+    async def download_stream_from_claim(self, node: 'Node', config: 'Config', claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
-                                         sd_blob_timeout: typing.Optional[float] = 60,
+                                         timeout: typing.Optional[float] = 60,
                                          fee_amount: typing.Optional[float] = 0.0,
                                          fee_address: typing.Optional[str] = None) -> typing.Optional[ManagedStream]:
         log.info("get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
@@ -229,10 +228,10 @@ class StreamManager:
 
         self.starting_streams[sd_hash] = asyncio.Future(loop=self.loop)
         stream_task = self.loop.create_task(
-            self._download_stream_from_claim(node, download_directory, claim_info, file_name, 0, sd_blob_timeout)
+            self._download_stream_from_claim(node, config.download_dir, claim_info, file_name)
         )
         try:
-            await asyncio.wait_for(stream_task, sd_blob_timeout)
+            await asyncio.wait_for(stream_task, timeout or config.download_timeout)
             stream = await stream_task
             self.starting_streams[sd_hash].set_result(stream)
             if fee_address and fee_amount:

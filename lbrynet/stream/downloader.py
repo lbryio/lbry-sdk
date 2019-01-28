@@ -83,7 +83,7 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
         else:
             log.info("downloader idle...")
         for peer in to_add:
-            if len(self.running_download_requests) >= 8:
+            if len(self.running_download_requests) >= self.max_connections_per_stream:
                 break
             task = self.loop.create_task(self._request_blob(peer))
             self.requested_from[self.current_blob.blob_hash][peer] = task
