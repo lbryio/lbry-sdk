@@ -51,7 +51,7 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
 
     async def _request_blob(self, peer: 'KademliaPeer'):
         if self.current_blob.get_is_verified():
-            log.info("already verified")
+            log.debug("already verified")
             return
         if peer not in self.active_connections:
             log.warning("not active, adding: %s", str(peer))
@@ -61,12 +61,12 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
                                                       peer.address, peer.tcp_port, self.peer_connect_timeout)
         await protocol.close()
         if not keep_connection:
-            log.info("drop peer %s:%i", peer.address, peer.tcp_port)
+            log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
             if peer in self.active_connections:
                 async with self._lock:
                     del self.active_connections[peer]
             return
-        log.info("keep peer %s:%i", peer.address, peer.tcp_port)
+        log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
 
     def _update_requests(self):
         self.new_peer_event.clear()
@@ -77,9 +77,9 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
             if peer not in self.requested_from[self.current_blob.blob_hash] and peer not in to_add:
                 to_add.append(peer)
         if to_add or self.running_download_requests:
-            log.info("adding download probes for %i peers to %i already active",
-                     min(len(to_add), 8 - len(self.running_download_requests)),
-                     len(self.running_download_requests))
+            log.debug("adding download probes for %i peers to %i already active",
+                      min(len(to_add), 8 - len(self.running_download_requests)),
+                      len(self.running_download_requests))
         else:
             log.info("downloader idle...")
         for peer in to_add:
@@ -159,10 +159,8 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
 
         if self.fixed_peers:
             def check_added_peers():
-                if not added_peers.is_set():
-                    self._add_peer_protocols(self.fixed_peers)
-                    log.info("no dht peers for download yet, adding fixed peer")
-                    added_peers.set()
+                self._add_peer_protocols(self.fixed_peers)
+                log.info("adding fixed peer %s:%i", self.fixed_peers[0].address, self.fixed_peers[0].tcp_port)
 
             add_fixed_peers_timer = self.loop.call_later(2, check_added_peers)
 
@@ -178,9 +176,7 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
         try:
             async with node.stream_peer_search_junction(blob_queue) as search_junction:
                 async for peers in search_junction:
-                    if not isinstance(peers, list):  # TODO: what's up with this?
-                        log.error("not a list: %s %s", peers, str(type(peers)))
-                    else:
+                    if peers:
                         self._add_peer_protocols(peers)
                         if not added_peers.is_set():
                             added_peers.set()

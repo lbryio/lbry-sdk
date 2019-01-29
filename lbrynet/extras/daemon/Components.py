@@ -615,7 +615,9 @@ class UPnPComponent(Component):
         else:
             log.error("failed to setup upnp")
         if self.component_manager.analytics_manager:
-            self.component_manager.analytics_manager.send_upnp_setup_success_fail(success, await self.get_status())
+            await self.component_manager.analytics_manager.send_upnp_setup_success_fail(
+                success, await self.get_status()
+            )
         self._maintain_redirects_task = asyncio.create_task(self._repeatedly_maintain_redirects(now=False))
 
     async def stop(self):

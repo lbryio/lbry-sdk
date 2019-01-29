@@ -141,11 +141,7 @@ class StreamManager:
         blob_hashes = [stream.sd_hash]
         for blob_info in stream.descriptor.blobs[:-1]:
             blob_hashes.append(blob_info.blob_hash)
-        for blob_hash in blob_hashes:
-            blob = self.blob_manager.get_blob(blob_hash)
-            if blob.get_is_verified():
-                await blob.delete()
-
+        await self.blob_manager.delete_blobs(blob_hashes)
         if delete_file:
             path = os.path.join(stream.download_directory, stream.file_name)
             if os.path.isfile(path):

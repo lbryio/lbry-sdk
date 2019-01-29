@@ -30,7 +30,6 @@ class ManagedStream:
         self.stream_hash = descriptor.stream_hash
         self.stream_claim_info = claim
         self._status = status
-        self._store_after_finished: asyncio.Task = None
         self.fully_reflected = asyncio.Event(loop=self.loop)
 
     @property
