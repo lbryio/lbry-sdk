@@ -232,10 +232,7 @@ class Node:
         async with self.peer_search_junction(self.protocol.node_id, max_results=max_results,
                                              bottom_out_limit=bottom_out_limit) as junction:
             async for peers in junction:
-                log.info("peer search: %s", peers)
                 accumulated.extend(peers)
-            log.info("junction done")
-        log.info("context done")
         distance = Distance(node_id)
         accumulated.sort(key=lambda peer: distance(peer.node_id))
         return accumulated[:count]
