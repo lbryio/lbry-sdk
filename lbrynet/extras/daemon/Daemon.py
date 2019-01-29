@@ -2815,7 +2815,7 @@ class Daemon(metaclass=JSONRPCServerType):
         try:
             result = await peer.ping()
             return result.decode()
-        except TimeoutError:
+        except asyncio.TimeoutError:
             return {'error': 'ping timeout'}
 
     @requires(DHT_COMPONENT)

@@ -218,7 +218,7 @@ class PingQueue:
                     await self._protocol.add_peer(p)
                     return
                 await self._protocol.get_rpc_peer(p).ping()
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 pass
 
         while True:

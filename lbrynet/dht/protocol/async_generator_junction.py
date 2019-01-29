@@ -100,6 +100,6 @@ class AsyncGeneratorJunction:
             pass
         finally:
             if exc_type:
-                if exc_type not in (asyncio.CancelledError, asyncio.TimeoutError, StopAsyncIteration):
+                if exc_type not in (asyncio.CancelledError, asyncio.TimeoutError, StopAsyncIteration, GeneratorExit):
                     err = traceback.format_exception(exc_type, exc, tb)
                     log.error(err)
