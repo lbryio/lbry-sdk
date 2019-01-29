@@ -134,16 +134,9 @@ class HierarchicalDeterministic(AddressManager):
     async def _generate_keys(self, start: int, end: int) -> List[str]:
         if not self.address_generator_lock.locked():
             raise RuntimeError('Should not be called outside of address_generator_lock.')
-        keys_batch, final_keys = [], []
-        for index in range(start, end+1):
-            keys_batch.append((index, self.public_key.child(index)))
-            if index % 180 == 0 or index == end:
-                await self.account.ledger.db.add_keys(
-                    self.account, self.chain_number, keys_batch
-                )
-                final_keys.extend(keys_batch)
-                keys_batch.clear()
-        return [key[1].address for key in final_keys]
+        keys = [(index, self.public_key.child(index)) for index in range(start, end+1)]
+        await self.account.ledger.db.add_keys(self.account, self.chain_number, keys)
+        return [key[1].address for key in keys]
 
     def get_address_records(self, only_usable: bool = False, **constraints):
         if only_usable:
