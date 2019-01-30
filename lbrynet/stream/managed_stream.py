@@ -176,6 +176,9 @@ class ManagedStream:
             sent_sd, needed = await protocol.send_descriptor()
             if sent_sd:
                 sent.append(self.sd_hash)
+            if not sent_sd and not needed:
+                if not self.fully_reflected.is_set():
+                    self.fully_reflected.set()
         except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
             if protocol.transport:
                 protocol.transport.close()
