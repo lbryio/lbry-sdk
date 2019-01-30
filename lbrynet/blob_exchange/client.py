@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import typing
+import binascii
 from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import BlobFile
@@ -25,7 +26,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self._request_lock = asyncio.Lock(loop=self.loop)
 
     def data_received(self, data: bytes):
-        if self.transport.is_closing():  # TODO: is this needed?
+        if not self.transport or self.transport.is_closing():
+            log.warning("transport closing, but got more bytes from %s:%i\n%s", self.peer_address, self.peer_port,
+                        binascii.hexlify(data))
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
             return

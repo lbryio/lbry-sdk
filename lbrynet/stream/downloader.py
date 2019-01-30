@@ -29,7 +29,6 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
         self.peer_timeout = peer_timeout
         self.peer_connect_timeout = peer_connect_timeout
         self.current_blob: 'BlobFile' = None
-
         self.download_task: asyncio.Task = None
         self.accumulate_connections_task: asyncio.Task = None
         self.new_peer_event = asyncio.Event(loop=self.loop)
@@ -106,13 +105,16 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
                            loop=self.loop)
         if got_new_peer and not got_new_peer.done():
             got_new_peer.cancel()
+
         async with self._lock:
             if self.current_blob.get_is_verified():
+                # a download attempt finished
                 if got_new_peer and not got_new_peer.done():
                     got_new_peer.cancel()
                 drain_tasks(download_tasks)
                 return self.current_blob
             else:
+                # we got a new peer, re add the other pending download attempts
                 for task in download_tasks:
                     if task and not task.done():
                         self.running_download_requests.append(task)
@@ -147,14 +149,13 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
                 added += 1
         if added:
             if not self.new_peer_event.is_set():
-                log.info("added %i new peers", len(peers))
+                log.debug("added %i new peers", len(peers))
                 self.new_peer_event.set()
 
     async def _accumulate_connections(self, node: 'Node'):
         blob_queue = asyncio.Queue(loop=self.loop)
         blob_queue.put_nowait(self.sd_hash)
         task = asyncio.create_task(self.got_descriptor.wait())
-        added_peers = asyncio.Event(loop=self.loop)
         add_fixed_peers_timer: typing.Optional[asyncio.Handle] = None
 
         if self.fixed_peers:
@@ -178,8 +179,6 @@ class StreamDownloader(StreamAssembler):  # TODO: reduce duplication, refactor t
                 async for peers in search_junction:
                     if peers:
                         self._add_peer_protocols(peers)
-                        if not added_peers.is_set():
-                            added_peers.set()
             return
         except asyncio.CancelledError:
             pass
