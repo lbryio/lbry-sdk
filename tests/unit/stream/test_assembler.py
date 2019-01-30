@@ -7,8 +7,8 @@ from lbrynet.conf import Config
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.assembler import StreamAssembler
+from lbrynet.stream.descriptor import StreamDescriptor
 
 
 class TestStreamAssembler(AsyncioTestCase):

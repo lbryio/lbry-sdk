@@ -81,9 +81,9 @@ class StreamDownloader(StreamAssembler):
                 KademliaPeer(self.loop, address=(await resolve_host(self.loop, url)), tcp_port=port + 1)
                 for url, port in self.config.reflector_servers
             ])
-
-        self.fixed_peers_handle = self.loop.call_later(self.config.fixed_peer_delay, self.loop.create_task,
-                                                       _add_fixed_peers())
+        if self.config.reflector_servers:
+            self.fixed_peers_handle = self.loop.call_later(self.config.fixed_peer_delay, self.loop.create_task,
+                                                           _add_fixed_peers())
 
     def download(self, node: typing.Optional['Node'] = None):
         self.node = node

@@ -32,12 +32,15 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.server_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.client_dir)
         self.addCleanup(shutil.rmtree, self.server_dir)
-
-        self.server_storage = SQLiteStorage(Config(), os.path.join(self.server_dir, "lbrynet.sqlite"))
+        self.server_config = Config(data_dir=self.server_dir, download_dir=self.server_dir, wallet=self.server_dir,
+                                    reflector_servers=[])
+        self.server_storage = SQLiteStorage(self.server_config, os.path.join(self.server_dir, "lbrynet.sqlite"))
         self.server_blob_manager = BlobFileManager(self.loop, self.server_dir, self.server_storage)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
 
-        self.client_storage = SQLiteStorage(Config(), os.path.join(self.client_dir, "lbrynet.sqlite"))
+        self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir, wallet=self.client_dir,
+                                    reflector_servers=[])
+        self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobFileManager(self.loop, self.client_dir, self.client_storage)
         self.client_peer_manager = PeerManager(self.loop)
         self.server_from_client = KademliaPeer(self.loop, "127.0.0.1", b'1' * 48, tcp_port=33333)
