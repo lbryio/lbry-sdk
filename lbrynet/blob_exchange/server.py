@@ -72,7 +72,7 @@ class BlobServerProtocol(asyncio.Protocol):
                 self.buf += data
                 return
             try:
-                request = BlobRequest.deserialize(data)
+                request = BlobRequest.deserialize(self.buf + data)
                 self.buf = remainder
             except JSONDecodeError:
                 addr = self.transport.get_extra_info('peername')
