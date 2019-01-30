@@ -58,7 +58,10 @@ class BlobServerProtocol(asyncio.Protocol):
                 responses.append(BlobDownloadResponse(incoming_blob=incoming_blob))
                 self.send_response(responses)
                 log.info("send %s to %s:%i", blob.blob_hash[:8], peer_address, peer_port)
-                sent = await blob.sendfile(self)
+                try:
+                    sent = await blob.sendfile(self)
+                except ConnectionResetError:
+                    return
                 log.info("sent %s (%i bytes) to %s:%i", blob.blob_hash[:8], sent, peer_address, peer_port)
         if responses:
             self.send_response(responses)
