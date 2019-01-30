@@ -98,22 +98,25 @@ class StreamManager:
             log.info("resuming %i downloads", resumed)
 
     async def reflect_streams(self):
-        streams: typing.List = list(self.streams)
-        batch: typing.List = []
-        server: typing.Any = random.choice(self.reflector_servers)  # host, port
+        streams: typing.List[ManagedStream] = list(self.streams)
+        batch: typing.List[typing.Coroutine] = []
         while streams:
             stream = streams.pop()
             if not stream.fully_reflected.is_set():
-                batch.append(stream.upload_to_reflector(*server))
+                host, port = random.choice(self.reflector_servers)
+                batch.append(stream.upload_to_reflector(host, port))
             if len(batch) >= 10:
                 try:
-                    await asyncio.gather(*batch)  # failed upload
+                    await asyncio.gather(*batch)
                 except (ConnectionError, Exception) as exc:
-                    await self.loop.get_exception_handler(exc)
+                    batch.extend(exc)
+                    continue
                 finally:
-                    batch.extend(await self.storage.get_streams_to_re_reflect())
+                    streams.extend(await self.storage.get_streams_to_re_reflect())
+                    assert len(batch) == 0, await self.loop.get_exception_handler()
+                    batch.clear()
         if batch:
-            await asyncio.gather(*batch)
+            return await asyncio.gather(*batch)
 
     async def start(self):
         await self.load_streams_from_database()
