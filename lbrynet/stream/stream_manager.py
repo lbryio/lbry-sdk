@@ -4,7 +4,6 @@ import typing
 import binascii
 import logging
 import random
-from lbrynet import conf
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
