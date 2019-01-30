@@ -80,7 +80,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if (not blob_response or blob_response.error) and\
                     (not availability_response or not availability_response.available_blobs):
                 log.warning("blob not in availability response from %s:%i", self.peer_address, self.peer_port)
-                return False, True
+                log.warning(response.to_dict())
+                return False, False
             elif availability_response.available_blobs and \
                     availability_response.available_blobs != [self.blob.blob_hash]:
                 log.warning("blob availability response doesn't match our request from %s:%i",
@@ -160,11 +161,13 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.loop.create_task(self.close())
 
 
-async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', protocol: 'BlobExchangeClientProtocol',
-                       address: str, tcp_port: int, peer_connect_timeout: float) -> typing.Tuple[bool, bool]:
+async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: str, tcp_port: int,
+                       peer_connect_timeout: float, blob_download_timeout: float) -> typing.Tuple[bool, bool]:
     """
     Returns [<downloaded blob>, <keep connection>]
     """
+
+    protocol = BlobExchangeClientProtocol(loop, blob_download_timeout)
     if blob.get_is_verified():
         return False, True
     try:
@@ -173,3 +176,5 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', protocol: 
         return await protocol.download_blob(blob)
     except (asyncio.TimeoutError, asyncio.CancelledError, ConnectionRefusedError, ConnectionAbortedError, OSError):
         return False, False
+    finally:
+        await protocol.close()

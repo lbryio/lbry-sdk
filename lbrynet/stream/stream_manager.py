@@ -46,23 +46,18 @@ comparison_operators = {
 
 
 class StreamManager:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', wallet: 'LbryWalletManager',
-                 storage: 'SQLiteStorage', node: typing.Optional['Node'], peer_timeout: float,
-                 peer_connect_timeout: float, fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None,
-                 reflector_servers: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
+    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobFileManager',
+                 wallet: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node']):
         self.loop = loop
+        self.config = config
         self.blob_manager = blob_manager
         self.wallet = wallet
         self.storage = storage
         self.node = node
-        self.peer_timeout = peer_timeout
-        self.peer_connect_timeout = peer_connect_timeout
         self.streams: typing.Set[ManagedStream] = set()
         self.starting_streams: typing.Dict[str, asyncio.Future] = {}
         self.resume_downloading_task: asyncio.Task = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
-        self.fixed_peers = fixed_peers
-        self.reflector_servers = reflector_servers
 
     async def load_streams_from_database(self):
         infos = await self.storage.get_all_lbry_files()
@@ -71,9 +66,9 @@ class StreamManager:
             if sd_blob.get_is_verified():
                 descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
                 downloader = StreamDownloader(
-                    self.loop, self.blob_manager, descriptor.sd_hash, self.peer_timeout,
-                    self.peer_connect_timeout, binascii.unhexlify(file_info['download_directory']).decode(),
-                    binascii.unhexlify(file_info['file_name']).decode(), self.fixed_peers
+                    self.loop, self.config, self.blob_manager, descriptor.sd_hash,
+                    binascii.unhexlify(file_info['download_directory']).decode(),
+                    binascii.unhexlify(file_info['file_name']).decode()
                 )
                 stream = ManagedStream(
                     self.loop, self.blob_manager, descriptor,
@@ -128,8 +123,8 @@ class StreamManager:
                             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
         stream = await ManagedStream.create(self.loop, self.blob_manager, file_path, key, iv_generator)
         self.streams.add(stream)
-        if self.reflector_servers:
-            host, port = random.choice(self.reflector_servers)
+        if self.config.reflector_servers:
+            host, port = random.choice(self.config.reflector_servers)
             self.loop.create_task(stream.upload_to_reflector(host, port))
         return stream
 
@@ -166,8 +161,8 @@ class StreamManager:
                                           file_name: typing.Optional[str] = None) -> typing.Optional[ManagedStream]:
 
         claim = ClaimDict.load_dict(claim_info['value'])
-        downloader = StreamDownloader(self.loop, self.blob_manager, claim.source_hash.decode(), self.peer_timeout,
-                                      self.peer_connect_timeout, download_directory, file_name, self.fixed_peers)
+        downloader = StreamDownloader(self.loop, self.config, self.blob_manager, claim.source_hash.decode(),
+                                      download_directory, file_name)
         try:
             downloader.download(node)
             await downloader.got_descriptor.wait()
@@ -205,7 +200,7 @@ class StreamManager:
         except asyncio.CancelledError:
             await downloader.stop()
 
-    async def download_stream_from_claim(self, node: 'Node', config: 'Config', claim_info: typing.Dict,
+    async def download_stream_from_claim(self, node: 'Node', claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
                                          timeout: typing.Optional[float] = 60,
                                          fee_amount: typing.Optional[float] = 0.0,
@@ -224,10 +219,10 @@ class StreamManager:
 
         self.starting_streams[sd_hash] = asyncio.Future(loop=self.loop)
         stream_task = self.loop.create_task(
-            self._download_stream_from_claim(node, config.download_dir, claim_info, file_name)
+            self._download_stream_from_claim(node, self.config.download_dir, claim_info, file_name)
         )
         try:
-            await asyncio.wait_for(stream_task, timeout or config.download_timeout)
+            await asyncio.wait_for(stream_task, timeout or self.config.download_timeout)
             stream = await stream_task
             self.starting_streams[sd_hash].set_result(stream)
             if fee_address and fee_amount:

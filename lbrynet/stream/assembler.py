@@ -48,6 +48,8 @@ class StreamAssembler:
         def _decrypt_and_write():
             if self.stream_handle.closed:
                 return False
+            if not blob:
+                return False
             self.stream_handle.seek(offset)
             _decrypted = blob.decrypt(
                 binascii.unhexlify(key), binascii.unhexlify(blob_info.iv.encode())
@@ -62,15 +64,26 @@ class StreamAssembler:
             log.debug("decrypted %s", blob.blob_hash[:8])
         return
 
+    async def setup(self):
+        pass
+
+    async def after_got_descriptor(self):
+        pass
+
+    async def after_finished(self):
+        pass
+
     async def assemble_decrypted_stream(self, output_dir: str, output_file_name: typing.Optional[str] = None):
         if not os.path.isdir(output_dir):
             raise OSError(f"output directory does not exist: '{output_dir}' '{output_file_name}'")
+        await self.setup()
         self.sd_blob = await self.get_blob(self.sd_hash)
         await self.blob_manager.blob_completed(self.sd_blob)
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_manager.blob_dir,
                                                                              self.sd_blob)
         if not self.got_descriptor.is_set():
             self.got_descriptor.set()
+        await self.after_got_descriptor()
         self.output_path = await get_next_available_file_name(self.loop, output_dir,
                                                               output_file_name or self.descriptor.suggested_file_name)
 
@@ -85,17 +98,16 @@ class StreamAssembler:
                         blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
                         await self._decrypt_blob(blob, blob_info, self.descriptor.key)
                         break
-                    except ValueError as err:
+                    except (ValueError, IOError, OSError) as err:
                         log.error("failed to decrypt blob %s for stream %s - %s", blob_info.blob_hash,
                                   self.descriptor.sd_hash, str(err))
                         continue
                 if not self.wrote_bytes_event.is_set():
                     self.wrote_bytes_event.set()
             self.stream_finished_event.set()
+            await self.after_finished()
         finally:
             self.stream_handle.close()
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
-        f = asyncio.Future(loop=self.loop)
-        f.set_result(self.blob_manager.get_blob(blob_hash, length))
-        return await f
+        return self.blob_manager.get_blob(blob_hash, length)
