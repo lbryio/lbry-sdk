@@ -97,9 +97,9 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    async def reflect_streams(self):
-        streams: typing.List[ManagedStream] = list(self.streams)
-        batch: typing.List[typing.Coroutine] = []
+    async def reflect_streams(self) -> typing.Any[typing.NoReturn, None, typing.Awaitable]:
+        streams: typing.List[typing.Any[ManagedStream, None]] = list(self.streams)
+        batch: typing.List[typing.Any[typing.Coroutine, None]] = []
         while streams:
             stream = streams.pop()
             if not stream.fully_reflected.is_set():
@@ -116,7 +116,8 @@ class StreamManager:
                     assert len(batch) == 0, await self.loop.get_exception_handler()
                     batch.clear()
         if batch:
-            return await asyncio.gather(*batch)
+            await asyncio.gather(*batch)
+        return
 
     async def start(self):
         await self.load_streams_from_database()
