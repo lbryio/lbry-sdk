@@ -240,7 +240,7 @@ class Node:
     async def _accumulate_search_junction(self, search_queue: asyncio.Queue,
                                           result_queue: asyncio.Queue):
         try:
-            async with self.stream_peer_search_junction(search_queue) as search_junction:
+            async with self.stream_peer_search_junction(search_queue) as search_junction:  # pylint: disable=E1701
                 async for peers in search_junction:
                     if peers:
                         result_queue.put_nowait(peers)
