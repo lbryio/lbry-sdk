@@ -6,6 +6,7 @@ import inspect
 import typing
 import aiohttp
 import base58
+import random
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -2788,7 +2789,15 @@ class Daemon(metaclass=JSONRPCServerType):
             (list) list of blobs reflected
         """
 
-        raise NotImplementedError()
+        server, port = kwargs.get('server'), kwargs.get('port')
+        if server and port:
+            port = int(port)
+        else:
+            server, port = random.choice(self.conf.reflector_servers)
+        return await asyncio.gather(*[
+            stream.upload_to_reflector(server, port)
+            for stream in self.stream_manager.get_filtered_streams(**kwargs)
+        ])
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):
