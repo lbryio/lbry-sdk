@@ -97,7 +97,7 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    async def reflect_streams(self) -> typing.Any[typing.NoReturn, None, typing.Awaitable]:
+    async def reflect_streams(self) -> typing.Any[typing.NoReturn, None]:
         streams: typing.List[typing.Any[ManagedStream, None]] = list(self.streams)
         batch: typing.List[typing.Any[typing.Coroutine, None]] = []
         while streams:
