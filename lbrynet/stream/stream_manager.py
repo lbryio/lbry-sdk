@@ -97,8 +97,8 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    async def reflect_streams(self):
-        streams = list(self.streams)
+    async def reflect_streams(self, auto_reflector: bool = False):
+        streams = list(self.streams) if not auto_reflector else self.storage.get_streams_to_re_reflect()
         batch = []
         while streams:
             stream = streams.pop()
@@ -282,13 +282,8 @@ class StreamManager:
                 streams.reverse()
         return streams
 
-    async def _auto_reflector(self) -> typing.AwaitableGenerator:
-        # TODO: set flag in StreamManager?
-        # TODO: find appropriate place to call this
-        host, port = self.reflector_servers
-        async for index, stream in self.storage.get_streams_to_re_reflect():
-            loop = asyncio.new_event_loop()
-            await loop.create_task(stream.upload_to_reflector(stream, host, port))
-            while divmod(index, 10):
-                await loop.run_in_executor(self.storage, self.reflect_streams)
-        return self.loop.call_at(Config.auto_re_reflect_interval, callback=self._auto_reflector)
+    async def auto_reflector(self) -> typing.NoReturn:
+        loop = asyncio.get_event_loop()
+        interval = await loop.create_task(asyncio.sleep(Config.auto_re_reflect_interval))
+        async with await loop.run_until_complete(interval):
+            await self.loop.create_task(self.reflect_streams(auto_reflector=True))
