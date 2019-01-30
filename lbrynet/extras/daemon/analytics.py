@@ -5,8 +5,11 @@ import logging
 import aiohttp
 
 from lbrynet import utils
-from lbrynet.conf import Config, ANALYTICS_ENDPOINT, ANALYTICS_TOKEN
+from lbrynet.conf import Config
 from lbrynet.extras import system_info
+
+ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
+ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
 
 # Things We Track
 SERVER_STARTUP = 'Server Startup'

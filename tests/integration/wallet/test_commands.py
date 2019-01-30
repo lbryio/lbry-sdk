@@ -41,7 +41,7 @@ class CommandTestCase(IntegrationTestCase):
         conf.download_dir = self.wallet_node.data_path
         conf.share_usage_data = False
         conf.use_upnp = False
-        conf.reflect_uploads = False
+        conf.reflect_streams = False
         conf.blockchain_name = 'lbrycrd_regtest'
         conf.lbryum_servers = [('localhost', 50001)]
         conf.known_dht_nodes = []

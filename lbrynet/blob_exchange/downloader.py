@@ -31,9 +31,9 @@ class BlobDownloader:  # TODO: refactor to be the base class used by StreamDownl
         self.blob: 'BlobFile' = None
         self.blob_queue = asyncio.Queue(loop=self.loop)
 
-        self.blob_download_timeout = config.get('blob_download_timeout')
-        self.peer_connect_timeout = config.get('peer_connect_timeout')
-        self.max_connections = config.get('max_connections_per_stream')
+        self.blob_download_timeout = config.blob_download_timeout
+        self.peer_connect_timeout = config.peer_connect_timeout
+        self.max_connections = config.max_connections_per_download
 
     async def _request_blob(self, peer: 'KademliaPeer'):
         if self.blob.get_is_verified():

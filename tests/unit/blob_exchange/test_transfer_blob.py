@@ -1,12 +1,16 @@
 import asyncio
 import tempfile
+from io import BytesIO
+
 import shutil
 import os
+
+from lbrynet.blob_exchange.serialization import BlobRequest
 from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_manager import BlobFileManager
-from lbrynet.blob_exchange.server import BlobServer
+from lbrynet.blob_exchange.server import BlobServer, BlobServerProtocol
 from lbrynet.blob_exchange.client import BlobExchangeClientProtocol, request_blob
 from lbrynet.dht.peer import KademliaPeer, PeerManager
 
@@ -136,3 +140,16 @@ class TestBlobExchange(BlobExchangeTestBase):
         )
         await protocol.close()
         self.assertEqual(second_client_blob.get_is_verified(), True)
+
+    async def test_server_chunked_request(self):
+        blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
+        server_protocol = BlobServerProtocol(self.loop, self.server_blob_manager, self.server.lbrycrd_address)
+        transport = asyncio.Transport(extra={'peername': ('ip', 90)})
+        received_data = BytesIO()
+        transport.write = received_data.write
+        server_protocol.connection_made(transport)
+        blob_request = BlobRequest.make_request_for_blob_hash(blob_hash).serialize()
+        for byte in blob_request:
+            server_protocol.data_received(bytes([byte]))
+        await asyncio.sleep(0.1)  # yield execution
+        self.assertTrue(len(received_data.getvalue()) > 0)

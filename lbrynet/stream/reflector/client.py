@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 class StreamReflectorClient(asyncio.Protocol):
     def __init__(self, blob_manager: 'BlobFileManager', descriptor: 'StreamDescriptor'):
+        self.loop = asyncio.get_event_loop()
         self.transport: asyncio.StreamWriter = None
         self.blob_manager = blob_manager
         self.descriptor = descriptor
@@ -45,7 +46,7 @@ class StreamReflectorClient(asyncio.Protocol):
         msg = json.dumps(request_dict)
         self.transport.write(msg.encode())
         try:
-            self.pending_request = asyncio.get_event_loop().create_task(self.response_queue.get())
+            self.pending_request = self.loop.create_task(self.response_queue.get())
             return await self.pending_request
         finally:
             self.pending_request = None
