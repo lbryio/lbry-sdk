@@ -100,16 +100,19 @@ class StreamManager:
     async def reflect_streams(self):
         streams: typing.List = list(self.streams)
         batch: typing.List = []
+        server: typing.Any = random.choice(self.reflector_servers)  # host, port
         while streams:
             stream = streams.pop()
             if not stream.fully_reflected.is_set():
-                host, port = random.choice(self.reflector_servers)
-                batch.append(stream.upload_to_reflector(host, port))
+                batch.append(stream.upload_to_reflector(*server))
             if len(batch) >= 10:
-                await asyncio.gather(*batch)
-                batch = []
+                try:
+                    await asyncio.gather(*batch)  # failed upload
+                except (ConnectionError, Exception) as exc:
+                    await self.loop.get_exception_handler(exc)
+                finally:
+                    batch.extend(await self.storage.get_streams_to_re_reflect())
         if batch:
-            await batch.extend(self.storage.get_streams_to_re_reflect())
             await asyncio.gather(*batch)
 
     async def start(self):
