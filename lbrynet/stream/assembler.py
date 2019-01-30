@@ -59,7 +59,7 @@ class StreamAssembler:
 
         decrypted = await self.loop.run_in_executor(None, _decrypt_and_write)
         if decrypted:
-            log.info("decrypted %s", blob.blob_hash[:8])
+            log.debug("decrypted %s", blob.blob_hash[:8])
         return
 
     async def assemble_decrypted_stream(self, output_dir: str, output_file_name: typing.Optional[str] = None):

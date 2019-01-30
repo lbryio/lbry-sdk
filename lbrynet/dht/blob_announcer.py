@@ -19,6 +19,8 @@ class BlobAnnouncer:
         self.announce_queue: typing.List[str] = []
 
     async def _announce(self, batch_size: typing.Optional[int] = 10):
+        if not batch_size:
+            return
         if not self.node.joined.is_set():
             await self.node.joined.wait()
         blob_hashes = await self.storage.get_blobs_to_announce()

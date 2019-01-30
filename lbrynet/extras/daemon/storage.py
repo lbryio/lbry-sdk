@@ -275,7 +275,7 @@ class SQLiteStorage(SQLiteMixin):
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
             timestamp = self.loop.time()
-            if self.conf.announce_head_blobs_only:
+            if self.conf.announce_head_and_sd_only:
                 r = transaction.execute(
                     "select blob_hash from blob "
                     "where blob_hash is not null and "
@@ -693,5 +693,5 @@ class SQLiteStorage(SQLiteMixin):
             "select s.sd_hash from stream s "
             "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
             "where r.timestamp is null or r.timestamp < ?",
-            self.loop.time() - self.conf.auto_re_reflect_interval
+            self.loop.time() - 86400
         )

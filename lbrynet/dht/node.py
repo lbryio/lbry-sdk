@@ -20,10 +20,10 @@ log = logging.getLogger(__name__)
 
 class Node:
     def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
-                 internal_udp_port: int, peer_port: int, external_ip: str):
+                 internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: typing.Optional[float] = 5.0):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
-        self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port)
+        self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout)
         self.listening_port: asyncio.DatagramTransport = None
         self.joined = asyncio.Event(loop=self.loop)
         self._join_task: asyncio.Task = None
@@ -123,7 +123,10 @@ class Node:
         self.protocol.ping_queue.start()
         self._refresh_task = self.loop.create_task(self.refresh_node())
 
+        # resolve the known node urls
         known_node_addresses = known_node_addresses or []
+        url_to_addr = {}
+
         if known_node_urls:
             for host, port in known_node_urls:
                 info = await self.loop.getaddrinfo(
@@ -132,23 +135,35 @@ class Node:
                 )
                 if (info[0][4][0], port) not in known_node_addresses:
                     known_node_addresses.append((info[0][4][0], port))
-        futs = []
-        for address, port in known_node_addresses:
-            peer = self.protocol.get_rpc_peer(KademliaPeer(self.loop, address, udp_port=port))
-            futs.append(peer.ping())
-        if futs:
-            await asyncio.wait(futs, loop=self.loop)
+                    url_to_addr[info[0][4][0]] = host
 
-        async with self.peer_search_junction(self.protocol.node_id, max_results=16) as junction:
-            async for peers in junction:
-                for peer in peers:
+        if known_node_addresses:
+            while not self.protocol.routing_table.get_peers():
+                success = False
+                # ping the seed nodes, this will set their node ids (since we don't know them ahead of time)
+                for address, port in known_node_addresses:
+                    peer = self.protocol.get_rpc_peer(KademliaPeer(self.loop, address, udp_port=port))
                     try:
-                        await self.protocol.get_rpc_peer(peer).ping()
-                    except (asyncio.TimeoutError, RemoteException):
-                        pass
-        self.joined.set()
+                        await peer.ping()
+                        success = True
+                    except asyncio.TimeoutError:
+                        log.warning("seed node (%s:%i) timed out in %s", url_to_addr.get(address, address), port,
+                                    round(self.protocol.rpc_timeout, 2))
+                if success:
+                    break
+            # now that we have the seed nodes in routing, to an iterative lookup of our own id to populate the buckets
+            # in the routing table with good peers who are near us
+            async with self.peer_search_junction(self.protocol.node_id, max_results=16) as junction:
+                async for peers in junction:
+                    for peer in peers:
+                        try:
+                            await self.protocol.get_rpc_peer(peer).ping()
+                        except (asyncio.TimeoutError, RemoteException):
+                            pass
+
         log.info("Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
                  self.protocol.routing_table.buckets_with_contacts())
+        self.joined.set()
 
     def start(self, interface: str, known_node_urls: typing.List[typing.Tuple[str, int]]):
         self._join_task = self.loop.create_task(
@@ -217,10 +232,7 @@ class Node:
         async with self.peer_search_junction(self.protocol.node_id, max_results=max_results,
                                              bottom_out_limit=bottom_out_limit) as junction:
             async for peers in junction:
-                log.info("peer search: %s", peers)
                 accumulated.extend(peers)
-            log.info("junction done")
-        log.info("context done")
         distance = Distance(node_id)
         accumulated.sort(key=lambda peer: distance(peer.node_id))
         return accumulated[:count]

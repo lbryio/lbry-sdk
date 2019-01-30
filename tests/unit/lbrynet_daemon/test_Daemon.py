@@ -84,29 +84,12 @@ class TestCostEst(unittest.TestCase):
         result = yield f2d(daemon.get_est_cost("test", size))
         self.assertEqual(result, correct_result)
 
-    def test_fee_and_ungenerous_data(self):
-        conf = Config(is_generous_host=False)
-        size = 10000000
-        fake_fee_amount = 4.5
-        correct_result = size / 10 ** 6 * conf.data_rate + fake_fee_amount
-        daemon = get_test_daemon(conf, with_fee=True)
-        result = yield f2d(daemon.get_est_cost("test", size))
-        self.assertEqual(result, round(correct_result, 1))
-
     def test_generous_data_and_no_fee(self):
         size = 10000000
         correct_result = 0.0
         daemon = get_test_daemon(Config(is_generous_host=True))
         result = yield f2d(daemon.get_est_cost("test", size))
         self.assertEqual(result, correct_result)
-
-    def test_ungenerous_data_and_no_fee(self):
-        conf = Config(is_generous_host=False)
-        size = 10000000
-        correct_result = size / 10 ** 6 * conf.data_rate
-        daemon = get_test_daemon(conf)
-        result = yield f2d(daemon.get_est_cost("test", size))
-        self.assertEqual(result, round(correct_result, 1))
 
 
 @unittest.SkipTest
