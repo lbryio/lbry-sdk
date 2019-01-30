@@ -4,13 +4,12 @@ import typing
 import binascii
 import logging
 import random
+from lbrynet import conf
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.extras.daemon.storage import StoredStreamClaim, lbc_to_dewies
-from lbrynet.conf import Config
 if typing.TYPE_CHECKING:
-    from lbrynet.conf import Config
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.peer import KademliaPeer
     from lbrynet.dht.node import Node
@@ -98,20 +97,21 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    async def reflect_streams(self, auto_reflector: bool = False):
-        streams = list(self.streams) if not auto_reflector else self.storage.get_streams_to_re_reflect()
-        batch = []
-        while streams:
+    async def reflect_streams(self):
+        streams = list(self.streams)
+        batch: typing.List = []
+        async with streams:
             stream = streams.pop()
             if not stream.fully_reflected.is_set():
                 host, port = random.choice(self.reflector_servers)
                 batch.append(stream.upload_to_reflector(host, port))
             if len(batch) >= 10:
                 await asyncio.gather(*batch)
-                batch = []
+                batch = await self.storage.get_streams_to_re_reflect() or []
         if batch:
-            await asyncio.gather(*batch)
-
+            async with batch:
+                await asyncio.gather(*batch)
+                
     async def start(self):
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
@@ -276,9 +276,3 @@ class StreamManager:
             if reverse:
                 streams.reverse()
         return streams
-
-    async def auto_reflector(self) -> typing.NoReturn:
-        loop = asyncio.get_event_loop()
-        interval = await loop.create_task(asyncio.sleep(Config.auto_re_reflect_interval))
-        async with await loop.run_until_complete(interval):
-            await self.loop.create_task(self.reflect_streams(auto_reflector=True))
