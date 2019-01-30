@@ -492,6 +492,10 @@ class Config(CLIConfig):
         "Maximum number of peers to connect to while downloading a blob", 5,
         previous_names=['max_connections_per_stream']
     )
+    fixed_peer_delay = Float(
+        "Amount of seconds before adding the reflector servers as potential peers to download from in case dht"
+        "peers are not found or are slow", 2.0
+    )
     max_key_fee = MaxKeyFee(
         "Don't download streams with fees exceeding this amount", {'currency': 'USD', 'amount': 50.0}
     )  # TODO: use this
