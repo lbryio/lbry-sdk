@@ -98,20 +98,20 @@ class StreamManager:
             log.info("resuming %i downloads", resumed)
 
     async def reflect_streams(self):
-        streams = list(self.streams)
+        streams: typing.List = list(self.streams)
         batch: typing.List = []
-        async with streams:
+        while streams:
             stream = streams.pop()
             if not stream.fully_reflected.is_set():
                 host, port = random.choice(self.reflector_servers)
                 batch.append(stream.upload_to_reflector(host, port))
             if len(batch) >= 10:
                 await asyncio.gather(*batch)
-                batch = await self.storage.get_streams_to_re_reflect() or []
+                batch = []
         if batch:
-            async with batch:
-                await asyncio.gather(*batch)
-                
+            await batch.extend(self.storage.get_streams_to_re_reflect())
+            await asyncio.gather(*batch)
+
     async def start(self):
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
