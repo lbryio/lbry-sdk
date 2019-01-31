@@ -57,31 +57,29 @@ def variance(times):
     return round(sum(((i - mean) ** 2.0 for i in times)) / (len(times) - 1), 3)
 
 
-async def wait_for_done(api, uri):
+async def wait_for_done(conf, uri):
     name = uri.split("#")[0]
     last_complete = 0
     hang_count = 0
     while True:
-        files = await api.file_list(claim_name=name)
+        files = await daemon_rpc(conf, "file_list", claim_name=name)
         file = files[0]
         if file['status'] in ['finished', 'stopped']:
             return True, f"{file['blobs_completed']}/{file['blobs_in_stream']}", int(file['blobs_completed'])
         if last_complete < int(file['blobs_completed']):
-            print(f"{file['blobs_completed']}/{file['blobs_in_stream']}...")
             hang_count = 0
             last_complete = int(file['blobs_completed'])
         else:
             hang_count += 1
             await asyncio.sleep(1.0)
-        if hang_count > 30:
+        if hang_count > 10:
             return False, f"{file['blobs_completed']}/{file['blobs_in_stream']}", int(file['blobs_completed'])
 
 
-async def main(start_daemon=True, uris=None):
+async def main(uris=None):
     if not uris:
         uris = await get_frontpage_uris()
     conf = Config()
-    daemon = None
     try:
         await daemon_rpc(conf, 'status')
     except (ClientConnectorError, ConnectionError):
@@ -113,12 +111,12 @@ async def main(start_daemon=True, uris=None):
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
-            # downloaded, msg, blobs_in_stream = await wait_for_done(api, uri)
+            # downloaded, msg, blobs_in_stream = await wait_for_done(conf, uri)
             # if downloaded:
             #     downloaded_times.append((time.time()-start) / downloaded)
-            #     print(f"{i + 1}/{len(uris)} - downloaded @ {(time.time()-start) / blobs_in_stream}, {msg} {uri}")
+            #     print(f"\tdownloaded {uri} @ {(time.time()-start) / blobs_in_stream} seconds per blob")
             # else:
-            #     print(f"failed to downlload {uri}, got {msg}")
+            #     print(f"\tfailed to download {uri}, got {msg}")
             #     download_failures.append(uri)
         except:
             print(f"{i + 1}/{len(uris)} -  timeout in {time.time() - start} {uri}")
@@ -136,8 +134,7 @@ async def main(start_daemon=True, uris=None):
         nt = '\n\t'
         result += f"\nFailures:\n\t{nt.join([f for f in failures])}"
     print(result)
-    if daemon:
-        await daemon.shutdown()
+
     # webhook = os.environ.get('TTFB_SLACK_TOKEN', None)
     # if webhook:
     #     await report_to_slack(result, webhook)
