@@ -2061,6 +2061,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.storage.save_content_claim(
             stream_hash, tx.outputs[0].id
         )
+
         await self.analytics_manager.send_claim_action('publish')
         nout = 0
         txo = tx.outputs[nout]
@@ -2794,10 +2795,14 @@ class Daemon(metaclass=JSONRPCServerType):
             port = int(port)
         else:
             server, port = random.choice(self.conf.reflector_servers)
-        return await asyncio.gather(*[
+        reflected = await asyncio.gather(*[
             stream.upload_to_reflector(server, port)
             for stream in self.stream_manager.get_filtered_streams(**kwargs)
         ])
+        total = []
+        for reflected_for_stream in reflected:
+            total.extend(reflected_for_stream)
+        return total
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):

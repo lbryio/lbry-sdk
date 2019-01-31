@@ -179,6 +179,8 @@ class ManagedStream:
             if not sent_sd and not needed:
                 if not self.fully_reflected.is_set():
                     self.fully_reflected.set()
+                    await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
+                    return []
         except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
             if protocol.transport:
                 protocol.transport.close()
@@ -195,4 +197,5 @@ class ManagedStream:
             protocol.transport.close()
         if not self.fully_reflected.is_set():
             self.fully_reflected.set()
+            await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
         return sent
