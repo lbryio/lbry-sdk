@@ -243,6 +243,8 @@ def main(argv=None):
             handler = logging.StreamHandler()
             handler.setFormatter(default_formatter)
             log.addHandler(handler)
+            logging.getLogger('torba').addHandler(handler)
+            logging.getLogger('torba').setLevel(logging.INFO)
 
         logging.getLogger('aioupnp').setLevel(logging.WARNING)
         logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
