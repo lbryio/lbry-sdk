@@ -18,6 +18,12 @@ from lbrynet.dht.peer import KademliaPeer, PeerManager
 # logging.getLogger("lbrynet").setLevel(logging.DEBUG)
 
 
+def mock_config():
+    config = Config()
+    config.fixed_peer_delay = 10000
+    return config
+
+
 class BlobExchangeTestBase(AsyncioTestCase):
     async def asyncSetUp(self):
         self.loop = asyncio.get_event_loop()
@@ -26,12 +32,15 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.server_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.client_dir)
         self.addCleanup(shutil.rmtree, self.server_dir)
-
-        self.server_storage = SQLiteStorage(Config(), os.path.join(self.server_dir, "lbrynet.sqlite"))
+        self.server_config = Config(data_dir=self.server_dir, download_dir=self.server_dir, wallet=self.server_dir,
+                                    reflector_servers=[])
+        self.server_storage = SQLiteStorage(self.server_config, os.path.join(self.server_dir, "lbrynet.sqlite"))
         self.server_blob_manager = BlobFileManager(self.loop, self.server_dir, self.server_storage)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
 
-        self.client_storage = SQLiteStorage(Config(), os.path.join(self.client_dir, "lbrynet.sqlite"))
+        self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir, wallet=self.client_dir,
+                                    reflector_servers=[])
+        self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobFileManager(self.loop, self.client_dir, self.client_storage)
         self.client_peer_manager = PeerManager(self.loop)
         self.server_from_client = KademliaPeer(self.loop, "127.0.0.1", b'1' * 48, tcp_port=33333)
@@ -57,12 +66,10 @@ class TestBlobExchange(BlobExchangeTestBase):
 
     async def _test_transfer_blob(self, blob_hash: str):
         client_blob = self.client_blob_manager.get_blob(blob_hash)
-        protocol = BlobExchangeClientProtocol(self.loop, 2)
 
         # download the blob
-        downloaded = await request_blob(self.loop, client_blob, protocol, self.server_from_client.address,
-                                        self.server_from_client.tcp_port, 2)
-        await protocol.close()
+        downloaded = await request_blob(self.loop, client_blob, self.server_from_client.address,
+                                        self.server_from_client.tcp_port, 2, 3)
         self.assertEqual(client_blob.get_is_verified(), True)
         self.assertTrue(downloaded)
 
@@ -95,17 +102,15 @@ class TestBlobExchange(BlobExchangeTestBase):
         await self._add_blob_to_server(blob_hash, mock_blob_bytes)
 
         second_client_blob = self.client_blob_manager.get_blob(blob_hash)
-        protocol = BlobExchangeClientProtocol(self.loop, 2)
 
         # download the blob
         await asyncio.gather(
             request_blob(
-                self.loop, second_client_blob, protocol, server_from_second_client.address,
-                server_from_second_client.tcp_port, 2
+                self.loop, second_client_blob, server_from_second_client.address,
+                server_from_second_client.tcp_port, 2, 3
             ),
             self._test_transfer_blob(blob_hash)
         )
-        await protocol.close()
         self.assertEqual(second_client_blob.get_is_verified(), True)
 
     async def test_host_different_blobs_to_multiple_peers_at_once(self):
@@ -129,16 +134,14 @@ class TestBlobExchange(BlobExchangeTestBase):
         await self._add_blob_to_server(sd_hash, mock_sd_blob_bytes)
 
         second_client_blob = self.client_blob_manager.get_blob(blob_hash)
-        protocol = BlobExchangeClientProtocol(self.loop, 2)
 
         await asyncio.gather(
             request_blob(
-                self.loop, second_client_blob, protocol, server_from_second_client.address,
-                server_from_second_client.tcp_port, 2
+                self.loop, second_client_blob, server_from_second_client.address,
+                server_from_second_client.tcp_port, 2, 3
             ),
             self._test_transfer_blob(sd_hash)
         )
-        await protocol.close()
         self.assertEqual(second_client_blob.get_is_verified(), True)
 
     async def test_server_chunked_request(self):

@@ -44,6 +44,7 @@ class CommandTestCase(IntegrationTestCase):
         conf.reflect_streams = False
         conf.blockchain_name = 'lbrycrd_regtest'
         conf.lbryum_servers = [('localhost', 50001)]
+        conf.reflector_servers = []
         conf.known_dht_nodes = []
 
         await self.account.ensure_address_gap()

@@ -1,9 +1,9 @@
 import logging
 import asyncio
 import typing
-import socket
 import binascii
 import contextlib
+from lbrynet.utils import resolve_host
 from lbrynet.dht import constants
 from lbrynet.dht.error import RemoteException
 from lbrynet.dht.protocol.async_generator_junction import AsyncGeneratorJunction
@@ -116,26 +116,22 @@ class Node:
             log.warning("Already bound to port %s", self.listening_port)
 
     async def join_network(self, interface: typing.Optional[str] = '',
-                           known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
-                           known_node_addresses: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
+                           known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
         if not self.listening_port:
             await self.start_listening(interface)
         self.protocol.ping_queue.start()
         self._refresh_task = self.loop.create_task(self.refresh_node())
 
         # resolve the known node urls
-        known_node_addresses = known_node_addresses or []
+        known_node_addresses = []
         url_to_addr = {}
 
         if known_node_urls:
             for host, port in known_node_urls:
-                info = await self.loop.getaddrinfo(
-                    host, 'https',
-                    proto=socket.IPPROTO_TCP,
-                )
-                if (info[0][4][0], port) not in known_node_addresses:
-                    known_node_addresses.append((info[0][4][0], port))
-                    url_to_addr[info[0][4][0]] = host
+                address = await resolve_host(host)
+                if (address, port) not in known_node_addresses:
+                    known_node_addresses.append((address, port))
+                    url_to_addr[address] = host
 
         if known_node_addresses:
             while not self.protocol.routing_table.get_peers():
@@ -236,3 +232,19 @@ class Node:
         distance = Distance(node_id)
         accumulated.sort(key=lambda peer: distance(peer.node_id))
         return accumulated[:count]
+
+    async def _accumulate_search_junction(self, search_queue: asyncio.Queue,
+                                          result_queue: asyncio.Queue):
+        try:
+            async with self.stream_peer_search_junction(search_queue) as search_junction:  # pylint: disable=E1701
+                async for peers in search_junction:
+                    if peers:
+                        result_queue.put_nowait(peers)
+        except asyncio.CancelledError:
+            return
+
+    def accumulate_peers(self, search_queue: asyncio.Queue,
+                         peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[
+                         asyncio.Queue, asyncio.Task]:
+        q = peer_queue or asyncio.Queue()
+        return q, asyncio.create_task(self._accumulate_search_junction(search_queue, q))

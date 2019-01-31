@@ -6,6 +6,7 @@ import inspect
 import typing
 import aiohttp
 import base58
+import random
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -18,7 +19,7 @@ from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 from lbrynet import __version__, utils
 from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
 from lbrynet.blob.blob_file import is_valid_blobhash
-from lbrynet.blob_exchange.downloader import BlobDownloader
+from lbrynet.blob_exchange.downloader import download_blob
 from lbrynet.error import InsufficientFundsError, DownloadSDTimeout, ComponentsNotStarted
 from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
 from lbrynet.extras import system_info
@@ -1582,7 +1583,7 @@ class Daemon(metaclass=JSONRPCServerType):
             stream = existing[0]
         else:
             stream = await self.stream_manager.download_stream_from_claim(
-                self.dht_node, self.conf, resolved, file_name, timeout, fee_amount, fee_address
+                self.dht_node, resolved, file_name, timeout, fee_amount, fee_address
             )
         if stream:
             return stream.as_dict()
@@ -2060,6 +2061,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.storage.save_content_claim(
             stream_hash, tx.outputs[0].id
         )
+
         await self.analytics_manager.send_claim_action('publish')
         nout = 0
         txo = tx.outputs[nout]
@@ -2567,8 +2569,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (str) Success/Fail message or (dict) decoded data
         """
 
-        downloader = BlobDownloader(asyncio.get_event_loop(), self.blob_manager, self.conf)
-        blob = await downloader.get_blob(blob_hash, self.dht_node)
+        blob = await download_blob(asyncio.get_event_loop(), self.conf, self.blob_manager, self.dht_node, blob_hash)
         if read:
             with open(blob.file_path, 'rb') as handle:
                 return handle.read().decode()
@@ -2789,7 +2790,19 @@ class Daemon(metaclass=JSONRPCServerType):
             (list) list of blobs reflected
         """
 
-        raise NotImplementedError()
+        server, port = kwargs.get('server'), kwargs.get('port')
+        if server and port:
+            port = int(port)
+        else:
+            server, port = random.choice(self.conf.reflector_servers)
+        reflected = await asyncio.gather(*[
+            stream.upload_to_reflector(server, port)
+            for stream in self.stream_manager.get_filtered_streams(**kwargs)
+        ])
+        total = []
+        for reflected_for_stream in reflected:
+            total.extend(reflected_for_stream)
+        return total
 
     @requires(DHT_COMPONENT)
     async def jsonrpc_peer_ping(self, node_id, address, port):

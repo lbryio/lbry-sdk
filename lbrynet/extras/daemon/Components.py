@@ -5,7 +5,6 @@ import logging
 import math
 import binascii
 import typing
-import socket
 from hashlib import sha256
 from types import SimpleNamespace
 import base58
@@ -18,7 +17,6 @@ import lbrynet.schema
 from lbrynet import utils
 from lbrynet.conf import HEADERS_FILE_SHA256_CHECKSUM
 from lbrynet.dht.node import Node
-from lbrynet.dht.peer import KademliaPeer
 from lbrynet.dht.blob_announcer import BlobAnnouncer
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob_exchange.server import BlobServer
@@ -63,14 +61,6 @@ async def get_external_ip():  # used if upnp is disabled or non-functioning
                     return response['data']['ip']
     except Exception as e:
         pass
-
-
-async def resolve_host(loop: asyncio.BaseEventLoop, url: str):
-    info = await loop.getaddrinfo(
-        url, 'https',
-        proto=socket.IPPROTO_TCP,
-    )
-    return info[0][4][0]
 
 
 class DatabaseComponent(Component):
@@ -463,11 +453,7 @@ class StreamManagerComponent(Component):
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
         self.stream_manager = StreamManager(
-            loop, blob_manager, wallet, storage, node, self.conf.blob_download_timeout,
-            self.conf.peer_connect_timeout, [
-                KademliaPeer(loop, address=(await resolve_host(loop, url)), tcp_port=port + 1)
-                for url, port in self.conf.reflector_servers
-            ], self.conf.reflector_servers
+            loop, self.conf, blob_manager, wallet, storage, node,
         )
         await self.stream_manager.start()
         log.info('Done setting up file manager')

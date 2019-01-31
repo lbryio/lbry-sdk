@@ -3,6 +3,7 @@ import sqlite3
 import typing
 import asyncio
 import binascii
+import time
 from torba.client.basedatabase import SQLiteMixin
 from lbrynet.conf import Config
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
@@ -399,16 +400,15 @@ class SQLiteStorage(SQLiteMixin):
 
     def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         return self.save_published_file(
-            stream_hash, binascii.hexlify(file_name.encode()).decode(),
-            binascii.hexlify(download_directory.encode()).decode(), data_payment_rate,
-            status="running"
+            stream_hash, file_name, download_directory, data_payment_rate, status="running"
         )
 
     def save_published_file(self, stream_hash: str, file_name: str, download_directory: str, data_payment_rate: float,
                             status="finished"):
         return self.db.execute(
             "insert into file values (?, ?, ?, ?, ?)",
-            (stream_hash, file_name, download_directory, data_payment_rate, status)
+            (stream_hash, binascii.hexlify(file_name.encode()).decode(),
+             binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
         )
 
     async def get_all_lbry_files(self) -> typing.List[typing.Dict]:
@@ -682,7 +682,7 @@ class SQLiteStorage(SQLiteMixin):
         if success:
             return self.db.execute(
                 "insert or replace into reflected_stream values (?, ?, ?)",
-                (sd_hash, reflector_address, self.loop.time())
+                (sd_hash, reflector_address, time.time())
             )
         return self.db.execute(
             "delete from reflected_stream where sd_hash=? and reflector_address=?",

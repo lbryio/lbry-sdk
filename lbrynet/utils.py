@@ -8,6 +8,7 @@ import json
 import typing
 import asyncio
 import logging
+import ipaddress
 import pkg_resources
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.cryptoutils import get_lbry_hash_obj
@@ -136,3 +137,16 @@ def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
 def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
     while tasks:
         cancel_task(tasks.pop())
+
+
+async def resolve_host(url: str) -> str:
+    try:
+        if ipaddress.ip_address(url):
+            return url
+    except ValueError:
+        pass
+    loop = asyncio.get_running_loop()
+    return (await loop.getaddrinfo(
+        url, 'https',
+        proto=socket.IPPROTO_TCP,
+    ))[0][4][0]

@@ -7,7 +7,8 @@ import random
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.extras.daemon.storage import StoredStreamClaim, lbc_to_dewies
+from lbrynet.schema.decode import smart_decode
+from lbrynet.extras.daemon.storage import lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.blob.blob_manager import BlobFileManager
@@ -46,23 +47,22 @@ comparison_operators = {
 
 
 class StreamManager:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', wallet: 'LbryWalletManager',
-                 storage: 'SQLiteStorage', node: typing.Optional['Node'], peer_timeout: float,
-                 peer_connect_timeout: float, fixed_peers: typing.Optional[typing.List['KademliaPeer']] = None,
-                 reflector_servers: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
+    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobFileManager',
+                 wallet: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node']):
         self.loop = loop
+        self.config = config
         self.blob_manager = blob_manager
         self.wallet = wallet
         self.storage = storage
         self.node = node
-        self.peer_timeout = peer_timeout
-        self.peer_connect_timeout = peer_connect_timeout
         self.streams: typing.Set[ManagedStream] = set()
         self.starting_streams: typing.Dict[str, asyncio.Future] = {}
         self.resume_downloading_task: asyncio.Task = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
-        self.fixed_peers = fixed_peers
-        self.reflector_servers = reflector_servers
+
+    async def _update_content_claim(self, stream: ManagedStream):
+        claim_info = await self.storage.get_content_claim(stream.stream_hash)
+        stream.set_claim(claim_info, smart_decode(claim_info['value']))
 
     async def load_streams_from_database(self):
         infos = await self.storage.get_all_lbry_files()
@@ -71,9 +71,9 @@ class StreamManager:
             if sd_blob.get_is_verified():
                 descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
                 downloader = StreamDownloader(
-                    self.loop, self.blob_manager, descriptor.sd_hash, self.peer_timeout,
-                    self.peer_connect_timeout, binascii.unhexlify(file_info['download_directory']).decode(),
-                    binascii.unhexlify(file_info['file_name']).decode(), self.fixed_peers
+                    self.loop, self.config, self.blob_manager, descriptor.sd_hash,
+                    binascii.unhexlify(file_info['download_directory']).decode(),
+                    binascii.unhexlify(file_info['file_name']).decode()
                 )
                 stream = ManagedStream(
                     self.loop, self.blob_manager, descriptor,
@@ -82,6 +82,7 @@ class StreamManager:
                     downloader, file_info['status'], file_info['claim']
                 )
                 self.streams.add(stream)
+                self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
     async def resume(self):
         if not self.node:
@@ -128,8 +129,9 @@ class StreamManager:
                             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
         stream = await ManagedStream.create(self.loop, self.blob_manager, file_path, key, iv_generator)
         self.streams.add(stream)
-        if self.reflector_servers:
-            host, port = random.choice(self.reflector_servers)
+        self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
+        if self.config.reflector_servers:
+            host, port = random.choice(self.config.reflector_servers)
             self.loop.create_task(stream.upload_to_reflector(host, port))
         return stream
 
@@ -165,9 +167,9 @@ class StreamManager:
     async def _download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
                                           file_name: typing.Optional[str] = None) -> typing.Optional[ManagedStream]:
 
-        claim = ClaimDict.load_dict(claim_info['value'])
-        downloader = StreamDownloader(self.loop, self.blob_manager, claim.source_hash.decode(), self.peer_timeout,
-                                      self.peer_connect_timeout, download_directory, file_name, self.fixed_peers)
+        claim = smart_decode(claim_info['value'])
+        downloader = StreamDownloader(self.loop, self.config, self.blob_manager, claim.source_hash.decode(),
+                                      download_directory, file_name)
         try:
             downloader.download(node)
             await downloader.got_descriptor.wait()
@@ -187,16 +189,9 @@ class StreamManager:
         await self.blob_manager.storage.save_content_claim(
             downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}"
         )
-
-        stored_claim = StoredStreamClaim(
-            downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
-            claim_info['name'], claim_info['amount'], claim_info['height'], claim_info['hex'],
-            claim.certificate_id, claim_info['address'], claim_info['claim_sequence'],
-            claim_info.get('channel_name')
-        )
         stream = ManagedStream(self.loop, self.blob_manager, downloader.descriptor, download_directory,
-                               os.path.basename(downloader.output_path), downloader, ManagedStream.STATUS_RUNNING,
-                               stored_claim)
+                               os.path.basename(downloader.output_path), downloader, ManagedStream.STATUS_RUNNING)
+        stream.set_claim(claim_info, claim)
         self.streams.add(stream)
         try:
             await stream.downloader.wrote_bytes_event.wait()
@@ -205,7 +200,7 @@ class StreamManager:
         except asyncio.CancelledError:
             await downloader.stop()
 
-    async def download_stream_from_claim(self, node: 'Node', config: 'Config', claim_info: typing.Dict,
+    async def download_stream_from_claim(self, node: 'Node', claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
                                          timeout: typing.Optional[float] = 60,
                                          fee_amount: typing.Optional[float] = 0.0,
@@ -224,10 +219,10 @@ class StreamManager:
 
         self.starting_streams[sd_hash] = asyncio.Future(loop=self.loop)
         stream_task = self.loop.create_task(
-            self._download_stream_from_claim(node, config.download_dir, claim_info, file_name)
+            self._download_stream_from_claim(node, self.config.download_dir, claim_info, file_name)
         )
         try:
-            await asyncio.wait_for(stream_task, timeout or config.download_timeout)
+            await asyncio.wait_for(stream_task, timeout or self.config.download_timeout)
             stream = await stream_task
             self.starting_streams[sd_hash].set_result(stream)
             if fee_address and fee_amount:

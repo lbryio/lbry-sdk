@@ -2,12 +2,14 @@ import os
 import asyncio
 import typing
 import logging
+import binascii
 from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.reflector.client import StreamReflectorClient
+from lbrynet.extras.daemon.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
-    from lbrynet.extras.daemon.storage import StoredStreamClaim
+    from lbrynet.schema.claim import ClaimDict
     from lbrynet.blob.blob_manager import BlobFileManager
 
 log = logging.getLogger(__name__)
@@ -20,7 +22,7 @@ class ManagedStream:
 
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', descriptor: 'StreamDescriptor',
                  download_directory: str, file_name: str, downloader: typing.Optional[StreamDownloader] = None,
-                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional['StoredStreamClaim'] = None):
+                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.download_directory = download_directory
@@ -99,11 +101,11 @@ class ManagedStream:
 
     def as_dict(self) -> typing.Dict:
         full_path = os.path.join(self.download_directory, self.file_name)
-        if not os.path.exists(full_path):
+        if not os.path.isfile(full_path):
             full_path = None
         mime_type = guess_media_type(os.path.basename(self.file_name))
 
-        if self.downloader:
+        if self.downloader and self.downloader.written_bytes:
             written_bytes = self.downloader.written_bytes
         elif full_path:
             written_bytes = os.stat(full_path).st_size
@@ -176,6 +178,11 @@ class ManagedStream:
             sent_sd, needed = await protocol.send_descriptor()
             if sent_sd:
                 sent.append(self.sd_hash)
+            if not sent_sd and not needed:
+                if not self.fully_reflected.is_set():
+                    self.fully_reflected.set()
+                    await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
+                    return []
         except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
             if protocol.transport:
                 protocol.transport.close()
@@ -192,4 +199,13 @@ class ManagedStream:
             protocol.transport.close()
         if not self.fully_reflected.is_set():
             self.fully_reflected.set()
+            await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
         return sent
+
+    def set_claim(self, claim_info: typing.Dict, claim: 'ClaimDict'):
+        self.stream_claim_info = StoredStreamClaim(
+            self.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
+            claim_info['name'], claim_info['amount'], claim_info['height'],
+            binascii.hexlify(claim.serialized).decode(), claim.certificate_id, claim_info['address'],
+            claim_info['claim_sequence'], claim_info.get('channel_name')
+        )
