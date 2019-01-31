@@ -25,7 +25,7 @@ class BlobDownloader:
         self.config = config
         self.blob_manager = blob_manager
         self.peer_queue = peer_queue
-        self.active_connections: typing.Dict[str, asyncio.Task] = {}  # active request_blob calls
+        self.active_connections: typing.Dict['KademliaPeer', asyncio.Task] = {}  # active request_blob calls
         self.ignored: typing.Set['KademliaPeer'] = set()
         self.scores: typing.Dict['KademliaPeer', int] = {}
 
@@ -70,9 +70,9 @@ class BlobDownloader:
                 for peer in batch:
                     if len(self.active_connections) >= self.config.max_connections_per_download:
                         break
-                    if peer.address not in self.active_connections and peer not in self.ignored:
+                    if peer not in self.active_connections and peer not in self.ignored:
                         log.debug("request %s from %s:%i", blob_hash[:8], peer.address, peer.tcp_port)
-                        self.active_connections[peer.address] = self.request_blob_from_peer(blob, peer)
+                        self.active_connections[peer] = self.request_blob_from_peer(blob, peer)
                 await self.new_peer_or_finished(blob)
                 to_re_add = list(set(filter(lambda peer: peer not in self.ignored, batch)))
                 to_re_add.sort(key=lambda peer: self.scores.get(peer, 0), reverse=True)
