@@ -489,7 +489,7 @@ class Config(CLIConfig):
         previous_names=['concurrent_announcers']
     )
     max_connections_per_download = Integer(
-        "Maximum number of peers to connect to while downloading a blob", 5,
+        "Maximum number of peers to connect to while downloading a blob", 8,
         previous_names=['max_connections_per_stream']
     )
     fixed_peer_delay = Float(
