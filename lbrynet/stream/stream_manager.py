@@ -4,6 +4,7 @@ import typing
 import binascii
 import logging
 import random
+from lbrynet import conf
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -96,27 +97,55 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    async def reflect_streams(self) -> typing.Any[typing.NoReturn, None]:
-        streams: typing.List[typing.Any[ManagedStream, None]] = list(self.streams)
-        batch: typing.List[typing.Any[typing.Coroutine, None]] = []
-        while streams:
-            stream = streams.pop()
+    async def reflect_streams(self, batch: typing.List) -> typing.Any[typing.List, None]:
+        streams = list(self.streams.copy())
+        interval = conf.settings['auto_re_reflect_interval']
+        loop = asyncio.get_event_loop()
+        batch.extend(self.storage.get_streams_to_re_reflect())
+        queue = asyncio.Queue(maxsize=len(streams))
+        server = random.choice(self.reflector_servers)
+        for stream in streams:
             if not stream.fully_reflected.is_set():
-                host, port = random.choice(self.reflector_servers)
-                batch.append(stream.upload_to_reflector(host, port))
-            if len(batch) >= 10:
-                try:
-                    await asyncio.gather(*batch)
-                except (ConnectionError, Exception) as exc:
-                    batch.extend(exc)
-                    continue
-                finally:
-                    streams.extend(await self.storage.get_streams_to_re_reflect())
-                    assert len(batch) == 0, await self.loop.get_exception_handler()
-                    batch.clear()
-        if batch:
-            await asyncio.gather(*batch)
-        return
+                await queue.put(stream)
+                if queue.qsize() >= 10:
+                    interval -= loop.time()
+                    assert interval > 0, TimeoutError
+                    batch.extend(map(loop.create_task, *queue.get()))
+                elif queue.qsize() >= 1:
+                    batch.append(queue.get())
+            else:
+                streams.pop()
+        while batch:
+            try:
+                stream = batch.pop()
+                task = await loop.create_task(stream)
+                loop.run_until_complete(task)
+                task.add_done_callback(queue.task_done)
+                interval -= loop.time()
+                assert interval > 0, TimeoutError
+            except ConnectionRefusedError:
+                stream = await queue.get()
+                server = random.choice(self.reflector_servers)
+                asyncio.run(log.exception('%s upload failed.' % stream.sd_hash))
+                assert await loop.getaddrinfo(*server), ConnectionAbortedError
+                loop.call_later(3.0, stream.upload_to_reflector(*server))
+            except ConnectionAbortedError:
+                server |= server if not server else self.reflector_servers[0]
+                asyncio.run(log.fatal('%s is down. Check internet connection.' % str(server)))
+                stream = await queue.get()
+                await stream.upload_to_reflector(*server)
+            except TimeoutError:
+                asyncio.run(log.fatal('Not enough time to complete cycle. Took: %s' % str(loop.time)))
+                await loop.shutdown_asyncgens()
+                loop.close()
+            finally:
+                for seq, stream in streams:
+                    if stream.fully_reflected.is_set():
+                        streams.pop(seq)
+                loop.close()
+            break
+        if streams:
+            return streams
 
     async def start(self):
         await self.load_streams_from_database()
