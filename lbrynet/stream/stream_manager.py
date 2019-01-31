@@ -97,55 +97,56 @@ class StreamManager:
         if resumed:
             log.info("resuming %i downloads", resumed)
 
-    async def reflect_streams(self, batch: typing.List) -> typing.Any[typing.List, None]:
+    async def reflect_streams(self, batch: typing.List) -> typing.NoReturn:
         streams = list(self.streams.copy())
         interval = conf.settings['auto_re_reflect_interval']
         loop = asyncio.get_event_loop()
-        batch.extend(self.storage.get_streams_to_re_reflect())
+        streams.extend(*self.storage.get_streams_to_re_reflect())
         queue = asyncio.Queue(maxsize=len(streams))
         server = random.choice(self.reflector_servers)
-        for stream in streams:
-            if not stream.fully_reflected.is_set():
+        for _, stream in streams:
+            if stream.fully_reflected.is_set():
+                streams.pop(_)
+            else:
                 await queue.put(stream)
-                if queue.qsize() >= 10:
+                await batch.append(stream.upload_to_reflector(*server))
+        while batch:
+            yield repr(queue.qsize())
+            await queue.join()
+            stream = batch.pop()
+            try:
+                task = await loop.create_task(await stream)
+                await loop.run_until_complete(task)
+                await task.add_done_callback(queue.task_done)
+                if task.done():
                     interval -= loop.time()
                     assert interval > 0, TimeoutError
-                    batch.extend(map(loop.create_task, *queue.get()))
-                elif queue.qsize() >= 1:
-                    batch.append(queue.get())
-            else:
-                streams.pop()
-        while batch:
-            try:
-                stream = batch.pop()
-                task = await loop.create_task(stream)
-                loop.run_until_complete(task)
-                task.add_done_callback(queue.task_done)
-                interval -= loop.time()
-                assert interval > 0, TimeoutError
+                    continue
             except ConnectionRefusedError:
-                stream = await queue.get()
                 server = random.choice(self.reflector_servers)
                 asyncio.run(log.exception('%s upload failed.' % stream.sd_hash))
                 assert await loop.getaddrinfo(*server), ConnectionAbortedError
                 loop.call_later(3.0, stream.upload_to_reflector(*server))
+                continue
             except ConnectionAbortedError:
                 server |= server if not server else self.reflector_servers[0]
                 asyncio.run(log.fatal('%s is down. Check internet connection.' % str(server)))
-                stream = await queue.get()
-                await stream.upload_to_reflector(*server)
+                if not await stream.upload_to_reflector(*server):
+                    loop.close()
+                    break
+                continue
             except TimeoutError:
-                asyncio.run(log.fatal('Not enough time to complete cycle. Took: %s' % str(loop.time)))
+                asyncio.run(log.fatal('Not enough time to complete cycle. Took %s (sec)' % str(loop.time)))
                 await loop.shutdown_asyncgens()
                 loop.close()
-            finally:
-                for seq, stream in streams:
-                    if stream.fully_reflected.is_set():
-                        streams.pop(seq)
-                loop.close()
-            break
+                break
+        for seq, stream in streams:
+            if stream.fully_reflected.is_set():
+                streams.pop(seq)
         if streams:
-            return streams
+            asyncio.run(log.error('%(len(streams)) streams failed to send: %(*streams)'))
+            del streams
+        loop.close()
 
     async def start(self):
         await self.load_streams_from_database()
