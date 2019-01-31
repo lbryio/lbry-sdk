@@ -5,8 +5,8 @@ LBRY is a decentralized peer-to-peer network providing distribution, discovery, 
 LBRY SDK for Python is currently the most full featured implementation of the LBRY Network protocols and includes many useful components and tools for building decentralized applications. Primary features and components:
 
  * Built on Python 3.7+ and `asyncio`.
- * DHT (Distributed Hash Table) implementation for finding peers ([lbrynet.dht](https://github.com/lbryio/lbry/tree/master/lbrynet/dht)).
- * Blob exchange protocol for downloading content and negotiating payments ([lbrynet.blob_exchange](https://github.com/lbryio/lbry/tree/master/lbrynet/blob_exchange)).
+ * Kademlia DHT (Distributed Hash Table) implementation for finding peers to download from and announcing to peers what we have to host ([lbrynet.dht](https://github.com/lbryio/lbry/tree/master/lbrynet/dht)).
+ * Blob exchange protocol for transferring encrypted blobs of content and negotiating payments ([lbrynet.blob_exchange](https://github.com/lbryio/lbry/tree/master/lbrynet/blob_exchange)).
  * Protobuf schema for encoding and decoding metadata stored on the blockchain ([lbrynet.schema](https://github.com/lbryio/lbry/tree/master/lbrynet/schema)).
  * Wallet implementation for the LBRY blockchain ([lbrynet.extras.wallet](https://github.com/lbryio/lbry/tree/master/lbrynet/extras/wallet)).
  * Daemon with a JSON-RPC API to ease building end user applications in any language and for automating various tasks ([lbrynet.extras.daemon](https://github.com/lbryio/lbry/tree/master/lbrynet/extras/daemon)). 
