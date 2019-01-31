@@ -120,8 +120,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self._response_fut.cancel()
         if self.writer and not self.writer.closed():
             self.writer.close_handle()
-        if self.blob:
-            await self.blob.close()
         self._response_fut = None
         self.writer = None
         self.blob = None

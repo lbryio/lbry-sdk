@@ -82,6 +82,7 @@ class BlobDownloader:
                 peer, task = self.active_connections.popitem()
                 if task and not task.done():
                     task.cancel()
+            await blob.close()
             return blob
         except asyncio.CancelledError:
             while self.active_connections:
