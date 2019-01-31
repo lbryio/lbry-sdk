@@ -7,7 +7,7 @@ import random
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.extras.daemon.storage import StoredStreamClaim, lbc_to_dewies
+from lbrynet.extras.daemon.storage import lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.blob.blob_manager import BlobFileManager
