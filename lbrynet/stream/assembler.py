@@ -98,10 +98,14 @@ class StreamAssembler:
                         blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
                         await self._decrypt_blob(blob, blob_info, self.descriptor.key)
                         break
-                    except (ValueError, IOError, OSError) as err:
-                        log.error("failed to decrypt blob %s for stream %s - %s", blob_info.blob_hash,
-                                  self.descriptor.sd_hash, str(err))
+                    except FileNotFoundError:
+                        log.debug("stream assembler stopped")
+                        return
+                    except (ValueError, IOError, OSError):
+                        log.warning("failed to decrypt blob %s for stream %s", blob_info.blob_hash,
+                                    self.descriptor.sd_hash)
                         continue
+
                 if not self.wrote_bytes_event.is_set():
                     self.wrote_bytes_event.set()
             self.stream_finished_event.set()
