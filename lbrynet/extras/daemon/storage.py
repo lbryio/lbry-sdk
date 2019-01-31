@@ -400,16 +400,15 @@ class SQLiteStorage(SQLiteMixin):
 
     def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         return self.save_published_file(
-            stream_hash, binascii.hexlify(file_name.encode()).decode(),
-            binascii.hexlify(download_directory.encode()).decode(), data_payment_rate,
-            status="running"
+            stream_hash, file_name, download_directory, data_payment_rate, status="running"
         )
 
     def save_published_file(self, stream_hash: str, file_name: str, download_directory: str, data_payment_rate: float,
                             status="finished"):
         return self.db.execute(
             "insert into file values (?, ?, ?, ?, ?)",
-            (stream_hash, file_name, download_directory, data_payment_rate, status)
+            (stream_hash, binascii.hexlify(file_name.encode()).decode(),
+             binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
         )
 
     async def get_all_lbry_files(self) -> typing.List[typing.Dict]:

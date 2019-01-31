@@ -6,6 +6,7 @@ from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.reflector.client import StreamReflectorClient
+from lbrynet.schema.claim import ClaimDict
 if typing.TYPE_CHECKING:
     from lbrynet.extras.daemon.storage import StoredStreamClaim
     from lbrynet.blob.blob_manager import BlobFileManager
@@ -99,11 +100,11 @@ class ManagedStream:
 
     def as_dict(self) -> typing.Dict:
         full_path = os.path.join(self.download_directory, self.file_name)
-        if not os.path.exists(full_path):
+        if not os.path.isfile(full_path):
             full_path = None
         mime_type = guess_media_type(os.path.basename(self.file_name))
 
-        if self.downloader:
+        if self.downloader and self.downloader.written_bytes:
             written_bytes = self.downloader.written_bytes
         elif full_path:
             written_bytes = os.stat(full_path).st_size
@@ -199,3 +200,11 @@ class ManagedStream:
             self.fully_reflected.set()
             await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
         return sent
+
+    def set_claim(self, claim_info: typing.Dict, claim: ClaimDict):
+        self.stream_claim_info = StoredStreamClaim(
+            self.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
+            claim_info['name'], claim_info['amount'], claim_info['height'], claim_info['hex'],
+            claim.certificate_id, claim_info['address'], claim_info['claim_sequence'],
+            claim_info.get('channel_name')
+        )
