@@ -82,7 +82,7 @@ class Node:
             log.info("Store to %i peers", len(peers))
             log.info(peers)
             for peer in peers:
-                log.info("store to %s %s %s", peer.address, peer.udp_port, peer.tcp_port)
+                log.debug("store to %s %s %s", peer.address, peer.udp_port, peer.tcp_port)
             stored_to_tup = await asyncio.gather(
                 *(self.protocol.store_to_peer(hash_value, peer) for peer in peers), loop=self.loop
             )
@@ -229,7 +229,7 @@ class Node:
     async def peer_search(self, node_id: bytes, count=constants.k, max_results=constants.k*2,
                           bottom_out_limit=20) -> typing.List['KademliaPeer']:
         accumulated: typing.List['KademliaPeer'] = []
-        async with self.peer_search_junction(self.protocol.node_id, max_results=max_results,
+        async with self.peer_search_junction(node_id, max_results=max_results,
                                              bottom_out_limit=bottom_out_limit) as junction:
             async for peers in junction:
                 accumulated.extend(peers)

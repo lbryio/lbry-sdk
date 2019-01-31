@@ -274,7 +274,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
-            timestamp = self.loop.time()
+            timestamp = int(self.loop.time())
             if self.conf.announce_head_and_sd_only:
                 r = transaction.execute(
                     "select blob_hash from blob "
