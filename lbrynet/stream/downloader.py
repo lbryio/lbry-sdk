@@ -1,7 +1,7 @@
 import asyncio
 import typing
-import socket
 import logging
+from lbrynet.utils import resolve_host
 from lbrynet.stream.assembler import StreamAssembler
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.blob_exchange.downloader import BlobDownloader
@@ -18,14 +18,6 @@ log = logging.getLogger(__name__)
 def drain_into(a: list, b: list):
     while a:
         b.append(a.pop())
-
-
-async def resolve_host(loop: asyncio.BaseEventLoop, url: str):
-    info = await loop.getaddrinfo(
-        url, 'https',
-        proto=socket.IPPROTO_TCP,
-    )
-    return info[0][4][0]
 
 
 class StreamDownloader(StreamAssembler):
@@ -78,7 +70,7 @@ class StreamDownloader(StreamAssembler):
     def add_fixed_peers(self):
         async def _add_fixed_peers():
             self.peer_queue.put_nowait([
-                KademliaPeer(self.loop, address=(await resolve_host(self.loop, url)), tcp_port=port + 1)
+                KademliaPeer(self.loop, address=(await resolve_host(url)), tcp_port=port + 1)
                 for url, port in self.config.reflector_servers
             ])
         if self.config.reflector_servers:
