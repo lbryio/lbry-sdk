@@ -7,6 +7,7 @@ import random
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.decode import smart_decode
 from lbrynet.extras.daemon.storage import lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
@@ -61,7 +62,7 @@ class StreamManager:
 
     async def _update_content_claim(self, stream: ManagedStream):
         claim_info = await self.storage.get_content_claim(stream.stream_hash)
-        stream.set_claim(claim_info, ClaimDict.load_dict(claim_info['value']))
+        stream.set_claim(claim_info, smart_decode(claim_info['value']))
 
     async def load_streams_from_database(self):
         infos = await self.storage.get_all_lbry_files()
@@ -166,7 +167,7 @@ class StreamManager:
     async def _download_stream_from_claim(self, node: 'Node', download_directory: str, claim_info: typing.Dict,
                                           file_name: typing.Optional[str] = None) -> typing.Optional[ManagedStream]:
 
-        claim = ClaimDict.load_dict(claim_info['value'])
+        claim = smart_decode(claim_info['value'])
         downloader = StreamDownloader(self.loop, self.config, self.blob_manager, claim.source_hash.decode(),
                                       download_directory, file_name)
         try:
