@@ -82,8 +82,10 @@ class StreamDownloader(StreamAssembler):
                 for url, port in self.config.reflector_servers
             ])
         if self.config.reflector_servers:
-            self.fixed_peers_handle = self.loop.call_later(self.config.fixed_peer_delay, self.loop.create_task,
-                                                           _add_fixed_peers())
+            self.fixed_peers_handle = self.loop.call_later(
+                self.config.fixed_peer_delay if 'dht' not in self.config.components_to_skip else 0.0,
+                self.loop.create_task, _add_fixed_peers()
+            )
 
     def download(self, node: typing.Optional['Node'] = None):
         self.node = node
