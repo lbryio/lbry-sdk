@@ -25,32 +25,27 @@ class BlobDownloader:
         self.config = config
         self.blob_manager = blob_manager
         self.peer_queue = peer_queue
-        self.active_connections: typing.Dict['KademliaPeer', asyncio.Task] = {}  # active request_blob calls
+        self.active_connections: typing.Dict[str, asyncio.Task] = {}  # active request_blob calls
         self.ignored: typing.Set['KademliaPeer'] = set()
-
-    @property
-    def blob_download_timeout(self):
-        return self.config.blob_download_timeout
-
-    @property
-    def peer_connect_timeout(self):
-        return self.config.peer_connect_timeout
-
-    @property
-    def max_connections(self):
-        return self.config.max_connections_per_download
+        self.scores: typing.Dict['KademliaPeer', int] = {}
 
     def request_blob_from_peer(self, blob: 'BlobFile', peer: 'KademliaPeer'):
         async def _request_blob():
             if blob.get_is_verified():
                 return
-            success, keep_connection = await request_blob(self.loop, blob, peer.address, peer.tcp_port,
-                                                          self.peer_connect_timeout, self.blob_download_timeout)
+            success, keep_connection = await request_blob(
+                self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
+                self.config.blob_download_timeout
+            )
             if not keep_connection and peer not in self.ignored:
                 self.ignored.add(peer)
                 log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
             elif keep_connection:
                 log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
+            if success:
+                self.scores[peer] = self.scores.get(peer, 0) + 2
+            else:
+                self.scores[peer] = self.scores.get(peer, 0) - 1
         return self.loop.create_task(_request_blob())
 
     async def new_peer_or_finished(self, blob: 'BlobFile'):
@@ -73,15 +68,16 @@ class BlobDownloader:
                 while not self.peer_queue.empty():
                     batch.extend(await self.peer_queue.get())
                 for peer in batch:
-                    if peer not in self.active_connections and peer not in self.ignored:
-                        log.info("add request %s", blob_hash[:8])
-                        self.active_connections[peer] = self.request_blob_from_peer(blob, peer)
+                    if len(self.active_connections) >= self.config.max_connections_per_download:
+                        break
+                    if peer.address not in self.active_connections and peer not in self.ignored:
+                        log.debug("request %s from %s:%i", blob_hash[:8], peer.address, peer.tcp_port)
+                        self.active_connections[peer.address] = self.request_blob_from_peer(blob, peer)
                 await self.new_peer_or_finished(blob)
-                log.info("new peer or finished %s", blob_hash[:8])
                 to_re_add = list(set(filter(lambda peer: peer not in self.ignored, batch)))
+                to_re_add.sort(key=lambda peer: self.scores.get(peer, 0), reverse=True)
                 if to_re_add:
                     self.peer_queue.put_nowait(to_re_add)
-            log.info("finished %s", blob_hash[:8])
             while self.active_connections:
                 peer, task = self.active_connections.popitem()
                 if task and not task.done():
@@ -97,7 +93,7 @@ class BlobDownloader:
 
 async def download_blob(loop, config: 'Config', blob_manager: 'BlobFileManager', node: 'Node',
                         blob_hash: str) -> 'BlobFile':
-    search_queue = asyncio.Queue(loop=loop)
+    search_queue = asyncio.Queue(loop=loop, maxsize=config.max_connections_per_download)
     search_queue.put_nowait(blob_hash)
     peer_queue, accumulate_task = node.accumulate_peers(search_queue)
     downloader = BlobDownloader(loop, config, blob_manager, peer_queue)

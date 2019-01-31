@@ -79,7 +79,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             blob_response = response.get_blob_response()
             if (not blob_response or blob_response.error) and\
                     (not availability_response or not availability_response.available_blobs):
-                log.warning("blob not in availability response from %s:%i", self.peer_address, self.peer_port)
+                log.warning("%s not in availability response from %s:%i", self.blob.blob_hash, self.peer_address,
+                            self.peer_port)
                 log.warning(response.to_dict())
                 return False, False
             elif availability_response.available_blobs and \
