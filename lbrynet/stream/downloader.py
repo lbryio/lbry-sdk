@@ -83,7 +83,11 @@ class StreamDownloader(StreamAssembler):
             ])
         if self.config.reflector_servers:
             self.fixed_peers_handle = self.loop.call_later(
-                self.config.fixed_peer_delay if 'dht' not in self.config.components_to_skip else 0.0,
+                self.config.fixed_peer_delay if (
+                        'dht' not in self.config.components_to_skip
+                        and self.node
+                        and len(self.node.protocol.routing_table.get_peers())
+                ) else 0.0,
                 self.loop.create_task, _add_fixed_peers()
             )
 
