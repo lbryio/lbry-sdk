@@ -79,8 +79,7 @@ class Node:
 
             if not self.protocol.external_ip:
                 raise Exception("Cannot determine external IP")
-            log.info("Store to %i peers", len(peers))
-            log.info(peers)
+            log.debug("Store to %i peers", len(peers))
             for peer in peers:
                 log.debug("store to %s %s %s", peer.address, peer.udp_port, peer.tcp_port)
             stored_to_tup = await asyncio.gather(

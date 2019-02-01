@@ -57,7 +57,7 @@ class BlobServerProtocol(asyncio.Protocol):
                 incoming_blob = {'blob_hash': blob.blob_hash, 'length': blob.length}
                 responses.append(BlobDownloadResponse(incoming_blob=incoming_blob))
                 self.send_response(responses)
-                log.info("send %s to %s:%i", blob.blob_hash[:8], peer_address, peer_port)
+                log.debug("send %s to %s:%i", blob.blob_hash[:8], peer_address, peer_port)
                 try:
                     sent = await blob.sendfile(self)
                 except (ConnectionResetError, BrokenPipeError, RuntimeError, OSError):

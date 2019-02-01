@@ -288,7 +288,7 @@ class IterativeNodeFinder(IterativeFinder):
         found = response.found and self.key != self.protocol.node_id
 
         if found:
-            log.info("found")
+            log.debug("found")
             return self.put_result(self.shortlist, finish=True)
         if self.prev_closest_peer and self.closest_peer and not self._is_closer(self.prev_closest_peer):
             # log.info("improving, %i %i %i %i %i", len(self.shortlist), len(self.active), len(self.contacted),
@@ -302,7 +302,7 @@ class IterativeNodeFinder(IterativeFinder):
             log.info("limit hit")
             self.put_result(self.active, True)
         elif self.max_results and len(self.active) - len(self.yielded_peers) >= self.max_results:
-            log.info("max results")
+            log.debug("max results")
             self.put_result(self.active, True)
 
 
