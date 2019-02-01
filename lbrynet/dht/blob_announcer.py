@@ -1,6 +1,7 @@
 import asyncio
 import typing
 import logging
+import time
 if typing.TYPE_CHECKING:
     from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -9,7 +10,8 @@ log = logging.getLogger(__name__)
 
 
 class BlobAnnouncer:
-    def __init__(self, loop: asyncio.BaseEventLoop, node: 'Node', storage: 'SQLiteStorage'):
+    def __init__(self, loop: asyncio.BaseEventLoop, node: 'Node', storage: 'SQLiteStorage',
+                 time_getter: typing.Callable[[], float] = time.time):
         self.loop = loop
         self.node = node
         self.storage = storage
@@ -17,6 +19,7 @@ class BlobAnnouncer:
         self.announce_task: asyncio.Task = None
         self.running = False
         self.announce_queue: typing.List[str] = []
+        self.time_getter = time_getter
 
     async def _announce(self, batch_size: typing.Optional[int] = 10):
         if not batch_size:
@@ -41,7 +44,7 @@ class BlobAnnouncer:
                 to_await.append(batch.pop())
             if to_await:
                 await asyncio.gather(*tuple(to_await), loop=self.loop)
-                await self.storage.update_last_announced_blobs(announced, self.loop.time())
+                await self.storage.update_last_announced_blobs(announced, self.time_getter())
                 log.info("announced %i blobs", len(announced))
         if self.running:
             self.pending_call = self.loop.call_later(60, self.announce, batch_size)
