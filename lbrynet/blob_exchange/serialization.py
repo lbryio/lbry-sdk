@@ -146,32 +146,26 @@ def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[ty
     #   <blob bytes>
     #   <json><blob bytes>
 
-    extra_data = b''
-    response = None
     curr_pos = 0
     while True:
         next_close_paren = response_msg.find(b'}', curr_pos)
         if next_close_paren == -1:
-            break
+            return None, response_msg
         curr_pos = next_close_paren + 1
         try:
             response = json.loads(response_msg[:curr_pos])
-            if not isinstance(response, dict):
-                raise ValueError()
-            for key in response.keys():
-                if key not in [
-                        BlobPaymentAddressResponse.key,
-                        BlobAvailabilityResponse.key,
-                        BlobPriceResponse.key,
-                        BlobDownloadResponse.key]:
-                    raise ValueError()
-            extra_data = response_msg[curr_pos:]
-            break
         except ValueError:
-            response = None
-    if response is None:
-        extra_data = response_msg
-    return response, extra_data
+            continue
+        possible_response_keys = {
+                    BlobPaymentAddressResponse.key,
+                    BlobAvailabilityResponse.key,
+                    BlobPriceResponse.key,
+                    BlobDownloadResponse.key
+        }
+        if isinstance(response, dict) and response.keys():
+            if set(response.keys()).issubset(possible_response_keys):
+                return response, response_msg[curr_pos:]
+        return None, response_msg
 
 
 class BlobRequest:
