@@ -180,7 +180,7 @@ class RemoteKademliaRPC:
         response = await self.protocol.send_request(
             self.peer, RequestDatagram.make_find_value(self.protocol.node_id, key)
         )
-        await self.peer_tracker.update_token(self.peer.node_id, response.response[b'token'])
+        self.peer_tracker.update_token(self.peer.node_id, response.response[b'token'])
         return response.response
 
 
@@ -415,8 +415,8 @@ class KademliaProtocol(DatagramProtocol):
 
     async def handle_request_datagram(self, address, request_datagram: RequestDatagram):
         # This is an RPC method request
-        await self.peer_manager.report_last_requested(address[0], address[1])
-        await self.peer_manager.update_contact_triple(request_datagram.node_id, address[0], address[1])
+        self.peer_manager.report_last_requested(address[0], address[1])
+        self.peer_manager.update_contact_triple(request_datagram.node_id, address[0], address[1])
         # only add a requesting contact to the routing table if it has replied to one of our requests
         peer = self.peer_manager.get_kademlia_peer(request_datagram.node_id, address[0], address[1])
         try:
@@ -457,8 +457,8 @@ class KademliaProtocol(DatagramProtocol):
             elif response_datagram.node_id == self.node_id:
                 df.set_exception(RemoteException("incoming message is from our node id"))
                 return
-            await self.peer_manager.report_last_replied(address[0], address[1])
-            await self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
+            self.peer_manager.report_last_replied(address[0], address[1])
+            self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():
                 df.set_result(response_datagram)
                 await self.add_peer(peer)
@@ -505,7 +505,7 @@ class KademliaProtocol(DatagramProtocol):
         try:
             message = decode_datagram(datagram)
         except (ValueError, TypeError):
-            self.loop.create_task(self.peer_manager.report_failure(address[0], address[1]))
+            self.peer_manager.report_failure(address[0], address[1])
             log.warning("Couldn't decode dht datagram from %s: %s", address, binascii.hexlify(datagram).decode())
             return
 
@@ -522,10 +522,10 @@ class KademliaProtocol(DatagramProtocol):
         response_fut = self.sent_messages[request.rpc_id][1]
         try:
             response = await asyncio.wait_for(response_fut, self.rpc_timeout)
-            await self.peer_manager.report_last_replied(peer.address, peer.udp_port)
+            self.peer_manager.report_last_replied(peer.address, peer.udp_port)
             return response
         except (asyncio.TimeoutError, RemoteException):
-            await self.peer_manager.report_failure(peer.address, peer.udp_port)
+            self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
                 self.routing_table.remove_peer(peer)
             raise
@@ -575,9 +575,9 @@ class KademliaProtocol(DatagramProtocol):
                 else:
                     raise err
         if isinstance(message, RequestDatagram):
-            await self.peer_manager.report_last_sent(peer.address, peer.udp_port)
+            self.peer_manager.report_last_sent(peer.address, peer.udp_port)
         elif isinstance(message, ErrorDatagram):
-            await self.peer_manager.report_failure(peer.address, peer.udp_port)
+            self.peer_manager.report_failure(peer.address, peer.udp_port)
 
     def change_token(self):
         self.old_token_secret = self.token_secret
@@ -609,7 +609,7 @@ class KademliaProtocol(DatagramProtocol):
             log.error("Unexpected response: %s" % err)
         except Exception as err:
             if 'Invalid token' in str(err):
-                await self.peer_manager.clear_token(peer.node_id)
+                self.peer_manager.clear_token(peer.node_id)
             else:
                 log.exception("Unexpected error while storing blob_hash")
         return peer.node_id, False
