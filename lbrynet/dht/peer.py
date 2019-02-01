@@ -30,37 +30,30 @@ class PeerManager:
         self._node_id_reverse_mapping: typing.Dict[bytes, typing.Tuple[str, int]] = {}
         self._node_tokens: typing.Dict[bytes, (float, bytes)] = {}
         self._kademlia_peers: typing.Dict[typing.Tuple[bytes, str, int], 'KademliaPeer']
-        self._lock = asyncio.Lock(loop=loop)
 
-    async def report_failure(self, address: str, udp_port: int):
+    def report_failure(self, address: str, udp_port: int):
         now = self._loop.time()
-        async with self._lock:
-            _, previous = self._rpc_failures.pop((address, udp_port), (None, None))
-            self._rpc_failures[(address, udp_port)] = (previous, now)
+        _, previous = self._rpc_failures.pop((address, udp_port), (None, None))
+        self._rpc_failures[(address, udp_port)] = (previous, now)
 
-    async def report_last_sent(self, address: str, udp_port: int):
+    def report_last_sent(self, address: str, udp_port: int):
         now = self._loop.time()
-        async with self._lock:
-            self._last_sent[(address, udp_port)] = now
+        self._last_sent[(address, udp_port)] = now
 
-    async def report_last_replied(self, address: str, udp_port: int):
+    def report_last_replied(self, address: str, udp_port: int):
         now = self._loop.time()
-        async with self._lock:
-            self._last_replied[(address, udp_port)] = now
+        self._last_replied[(address, udp_port)] = now
 
-    async def report_last_requested(self, address: str, udp_port: int):
+    def report_last_requested(self, address: str, udp_port: int):
         now = self._loop.time()
-        async with self._lock:
-            self._last_requested[(address, udp_port)] = now
+        self._last_requested[(address, udp_port)] = now
 
-    async def clear_token(self, node_id: bytes):
-        async with self._lock:
-            self._node_tokens.pop(node_id, None)
+    def clear_token(self, node_id: bytes):
+        self._node_tokens.pop(node_id, None)
 
-    async def update_token(self, node_id: bytes, token: bytes):
+    def update_token(self, node_id: bytes, token: bytes):
         now = self._loop.time()
-        async with self._lock:
-            self._node_tokens[node_id] = (now, token)
+        self._node_tokens[node_id] = (now, token)
 
     def get_node_token(self, node_id: bytes) -> typing.Optional[bytes]:
         ts, token = self._node_tokens.get(node_id, (None, None))
@@ -70,50 +63,36 @@ class PeerManager:
     def get_last_replied(self, address: str, udp_port: int) -> typing.Optional[float]:
         return self._last_replied.get((address, udp_port))
 
-    def get_node_id(self, address: str, udp_port: int) -> typing.Optional[bytes]:
-        return self._node_id_mapping.get((address, udp_port))
-
-    def get_node_address(self, node_id: bytes) -> typing.Optional[typing.Tuple[str, int]]:
-        return self._node_id_reverse_mapping.get(node_id)
-
-    async def get_node_address_and_port(self, node_id: bytes) -> typing.Optional[typing.Tuple[str, int]]:
-        async with self._lock:
-            addr_tuple = self._node_id_reverse_mapping.get(node_id)
-            if addr_tuple and addr_tuple in self._node_id_mapping:
-                return addr_tuple
-
-    async def update_contact_triple(self, node_id: bytes, address: str, udp_port: int):
+    def update_contact_triple(self, node_id: bytes, address: str, udp_port: int):
         """
         Update the mapping of node_id -> address tuple and that of address tuple -> node_id
         This is to handle peers changing addresses and ids while assuring that the we only ever have
         one node id / address tuple mapped to each other
         """
-        async with self._lock:
-            if (address, udp_port) in self._node_id_mapping:
-                self._node_id_reverse_mapping.pop(self._node_id_mapping.pop((address, udp_port)))
-            if node_id in self._node_id_reverse_mapping:
-                self._node_id_mapping.pop(self._node_id_reverse_mapping.pop(node_id))
-            self._node_id_mapping[(address, udp_port)] = node_id
-            self._node_id_reverse_mapping[node_id] = (address, udp_port)
+        if (address, udp_port) in self._node_id_mapping:
+            self._node_id_reverse_mapping.pop(self._node_id_mapping.pop((address, udp_port)))
+        if node_id in self._node_id_reverse_mapping:
+            self._node_id_mapping.pop(self._node_id_reverse_mapping.pop(node_id))
+        self._node_id_mapping[(address, udp_port)] = node_id
+        self._node_id_reverse_mapping[node_id] = (address, udp_port)
 
     def get_kademlia_peer(self, node_id: bytes, address: str, udp_port: int) -> 'KademliaPeer':
         return KademliaPeer(self._loop, address, node_id, udp_port)
 
-    async def prune(self):
+    def prune(self):  # TODO: periodically call this
         now = self._loop.time()
-        async with self._lock:
-            to_pop = []
-            for (address, udp_port), (_, last_failure) in self._rpc_failures.items():
-                if last_failure and last_failure < now - constants.rpc_attempts_pruning_window:
-                    to_pop.append((address, udp_port))
-            while to_pop:
-                del self._rpc_failures[to_pop.pop()]
-            to_pop = []
-            for node_id, (age, token) in self._node_tokens.items():
-                if age < now - constants.token_secret_refresh_interval:
-                    to_pop.append(node_id)
-            while to_pop:
-                del self._node_tokens[to_pop.pop()]
+        to_pop = []
+        for (address, udp_port), (_, last_failure) in self._rpc_failures.items():
+            if last_failure and last_failure < now - constants.rpc_attempts_pruning_window:
+                to_pop.append((address, udp_port))
+        while to_pop:
+            del self._rpc_failures[to_pop.pop()]
+        to_pop = []
+        for node_id, (age, token) in self._node_tokens.items():
+            if age < now - constants.token_secret_refresh_interval:
+                to_pop.append(node_id)
+        while to_pop:
+            del self._node_tokens[to_pop.pop()]
 
     def contact_triple_is_good(self, node_id: bytes, address: str, udp_port: int):
         """
