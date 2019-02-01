@@ -57,6 +57,7 @@ class BlobDownloader:
             await asyncio.wait(tasks, loop=self.loop, return_when='FIRST_COMPLETED')
         except asyncio.CancelledError:
             drain_tasks(tasks)
+            raise
 
     async def download_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         blob = self.blob_manager.get_blob(blob_hash, length)
