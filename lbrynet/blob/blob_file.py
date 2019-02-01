@@ -96,7 +96,7 @@ class BlobFile:
                 raise error
         return callback
 
-    async def save_verified_blob(self, writer, verified_bytes):
+    async def save_verified_blob(self, writer, verified_bytes: bytes):
         def _save_verified():
             # log.debug(f"write blob file {self.blob_hash[:8]} from {writer.peer.address}")
             if not self.saved_verified_blob and not os.path.isfile(self.file_path):
