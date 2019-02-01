@@ -10,7 +10,6 @@ import random
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
-from copy import deepcopy
 from traceback import format_exc
 from aiohttp import web
 from functools import wraps
@@ -30,6 +29,7 @@ from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UP
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
+from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.extras.daemon.undecorated import undecorated
 from lbrynet.extras.wallet.account import Account as LBCAccount
 from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
@@ -1828,7 +1828,7 @@ class Daemon(metaclass=JSONRPCServerType):
     async def jsonrpc_publish(
             self, name, bid, metadata=None, file_path=None, fee=None, title=None,
             description=None, author=None, language=None, license=None,
-            license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
+            license_url=None, thumbnail=None, preview=None, nsfw=None,
             channel_name=None, channel_id=None, channel_account_id=None, account_id=None,
             claim_address=None, change_address=None):
         """
@@ -1852,7 +1852,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--file_path=<file_path>] [--fee=<fee>] [--title=<title>]
                     [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail=<thumbnail>]
-                    [--preview=<preview>] [--nsfw=<nsfw>] [--sources=<sources>]
+                    [--preview=<preview>] [--nsfw=<nsfw>]
                     [--channel_name=<channel_name>] [--channel_id=<channel_id>]
                     [--channel_account_id=<channel_account_id>...] [--account_id=<account_id>]
                     [--claim_address=<claim_address>] [--change_address=<change_address>]
@@ -1888,7 +1888,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --thumbnail=<thumbnail>        : (str) thumbnail url
             --preview=<preview>            : (str) preview url
             --nsfw=<nsfw>                  : (bool) whether the content is nsfw
-            --sources=<sources>            : (str) {'lbry_sd_hash': sd_hash} specifies sd hash of file
             --channel_name=<channel_name>  : (str) name of the publisher channel name in the wallet
             --channel_id=<channel_id>      : (str) claim id of the publisher channel, does not check
                                              for channel claim being in the wallet. This allows
@@ -1912,7 +1911,9 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         try:
-            parse_lbry_uri(name)
+            parsed = parse_lbry_uri(name)
+            if parsed.name != name:
+                raise Exception("Name given to publish has invalid characters")
         except (TypeError, URIParseError):
             raise Exception("Invalid name given to publish")
 
@@ -1928,9 +1929,10 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
 
         available = await account.get_balance()
-        existing_claims = []
+        existing_claims = await account.get_claims(claim_name=name)
+        if len(existing_claims) > 1:
+            log.warning("found %i claims for the name %s", len(existing_claims), name)
         if amount >= available:
-            existing_claims = await account.get_claims(claim_name=name)
             if len(existing_claims) == 1:
                 available += existing_claims[0].get_estimator(self.ledger).effective_amount
             if amount >= available:
@@ -1989,39 +1991,64 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         }
 
-        # this will be used to verify the format with lbrynet.schema
-        claim_copy = deepcopy(claim_dict)
-        if sources is not None:
-            claim_dict['stream']['source'] = sources
-            claim_copy['stream']['source'] = sources
-        elif file_path is not None:
+        sd_to_delete = None
+
+        if file_path:
             if not os.path.isfile(file_path):
                 raise Exception("invalid file path to publish")
+            if os.path.getsize(file_path) == 0:
+                raise Exception(f"Cannot publish empty file {file_path}")
+            if existing_claims:
+                sd_to_delete = existing_claims[-1].claim_dict['stream']['source']['source']
+
             # since the file hasn't yet been made into a stream, we don't have
             # a valid Source for the claim when validating the format, we'll use a fake one
-            claim_copy['stream']['source'] = {
+            claim_dict['stream']['source'] = {
                 'version': '_0_0_1',
                 'sourceType': 'lbry_sd_hash',
                 'source': '0' * 96,
                 'contentType': ''
             }
+        elif not existing_claims:
+            raise Exception("no previous stream to update")
         else:
-            # there is no existing source to use, and a file was not provided to make a new one
-            raise Exception("no source provided to publish")
+            claim_dict['stream']['source'] = existing_claims[-1].claim_dict['stream']['source']
         try:
-            ClaimDict.load_dict(claim_copy)
+            claim_dict = ClaimDict.load_dict(claim_dict).claim_dict
             # the metadata to use in the claim can be serialized by lbrynet.schema
         except DecodeError as err:
             # there was a problem with a metadata field, raise an error here rather than
             # waiting to find out when we go to publish the claim (after having made the stream)
             raise Exception(f"invalid publish metadata: {err}")
-
         certificate = None
         if channel_id or channel_name:
             certificate = await self.get_channel_or_error(
                 self.get_accounts_or_all(channel_account_id), channel_id, channel_name
             )
 
+        if file_path:
+            stream = await self.stream_manager.create_stream(file_path)
+            await self.storage.save_published_file(stream.stream_hash, os.path.basename(file_path),
+                                                   os.path.dirname(file_path), 0)
+            claim_dict['stream']['source']['source'] = stream.sd_hash
+            claim_dict['stream']['source']['contentType'] = guess_media_type(file_path)
+
+            if sd_to_delete:
+                stream_hash_to_delete = await self.storage.get_stream_hash_for_sd_hash(sd_to_delete)
+                stream_to_delete = self.stream_manager.get_stream_by_stream_hash(stream_hash_to_delete)
+                if stream_to_delete:
+                    await self.stream_manager.delete_stream(stream_to_delete, delete_file=False)
+                    log.info("updating claim to stream generated from %s, deleted previous stream %s",
+                             sd_to_delete[:8], file_path)
+                else:
+                    log.info("previous stream %s from claim was not saved locally, nothing to delete",
+                             sd_to_delete[:8])
+            else:
+                log.info("generated stream from %s for claim", file_path)
+        else:
+            log.info("updating claim with stream %s from previous", claim_dict['stream']['source']['source'][:8])
+
+        sd_hash = claim_dict['stream']['source']['source']
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
@@ -2032,36 +2059,14 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_id': channel_id,
             'channel_name': channel_name
         })
-
-        from lbrynet.extras.daemon.mime_types import guess_media_type
-
-        if file_path:
-            if not os.path.isfile(file_path):
-                raise Exception(f"File {file_path} not found")
-            if os.path.getsize(file_path) == 0:
-                raise Exception(f"Cannot publish empty file {file_path}")
-            claim_dict['stream']['source'] = {}
-
-            stream = await self.stream_manager.create_stream(file_path)
-            stream_hash = stream.stream_hash
-            await self.storage.save_published_file(stream_hash, os.path.basename(file_path),
-                                                   os.path.dirname(file_path), 0)
-            claim_dict['stream']['source']['source'] = stream.sd_hash
-            claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
-            claim_dict['stream']['source']['contentType'] = guess_media_type(file_path)
-            claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
-        else:
-            if 'source' not in claim_dict['stream'] and not existing_claims:
-                raise Exception("no previous stream to update")
-            claim_dict['stream']['source'] = existing_claims[-1].claim_dict['stream']['source']
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
         tx = await self.wallet_manager.claim_name(
             account, name, amount, claim_dict, certificate, claim_address
         )
-        await self.storage.save_content_claim(
-            stream_hash, tx.outputs[0].id
-        )
-
+        stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
+        if stream_hash:
+            await self.storage.save_content_claim(
+                stream_hash, tx.outputs[0].id
+            )
         await self.analytics_manager.send_claim_action('publish')
         nout = 0
         txo = tx.outputs[nout]
@@ -2289,7 +2294,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         claims = await self.wallet_manager.get_claims_for_name(name)  # type: dict
-        sort_claim_results(claims['claims'])
+        claims['claims'] = sort_claim_results(claims['claims'])
         return claims
 
     @requires(WALLET_COMPONENT)
