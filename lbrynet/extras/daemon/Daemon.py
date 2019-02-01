@@ -2051,7 +2051,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_dict['stream']['source']['contentType'] = guess_media_type(file_path)
             claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
         else:
-            if not ('source' not in claim_dict['stream'] and existing_claims):
+            if 'source' not in claim_dict['stream'] and not existing_claims:
                 raise Exception("no previous stream to update")
             claim_dict['stream']['source'] = existing_claims[-1].claim_dict['stream']['source']
             stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
