@@ -63,15 +63,35 @@ class StreamManager:
         claim_info = await self.storage.get_content_claim(stream.stream_hash)
         stream.set_claim(claim_info, smart_decode(claim_info['value']))
 
+    async def start_stream(self, stream: ManagedStream):
+        path = os.path.join(stream.download_directory, stream.file_name)
+
+        if not stream.running or not os.path.isfile(path):
+            if stream.downloader:
+                stream.downloader.stop()
+                stream.downloader = None
+            if not os.path.isfile(path) and not os.path.isfile(
+                    os.path.join(self.config.download_dir, stream.file_name)):
+                await self.storage.change_file_download_dir(stream.stream_hash, self.config.download_dir)
+                stream.download_directory = self.config.download_dir
+            stream.downloader = self.make_downloader(
+                stream.sd_hash, stream.download_directory, stream.file_name
+            )
+            stream.start_download(self.node)
+            await self.storage.change_file_status(stream.stream_hash, 'running')
+            stream.update_status('running')
+            self.wait_for_stream_finished(stream)
+
+    def make_downloader(self, sd_hash: str, download_directory: str, file_name: str):
+        return StreamDownloader(
+            self.loop, self.config, self.blob_manager, sd_hash, download_directory, file_name
+        )
+
     async def add_stream(self, sd_hash: str, file_name: str, download_directory: str, status: str, claim):
         sd_blob = self.blob_manager.get_blob(sd_hash)
         if sd_blob.get_is_verified():
             descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
-            downloader = StreamDownloader(
-                self.loop, self.config, self.blob_manager, descriptor.sd_hash,
-                download_directory,
-                file_name
-            )
+            downloader = self.make_downloader(descriptor.sd_hash, download_directory, file_name)
             stream = ManagedStream(
                 self.loop, self.blob_manager, descriptor,
                 download_directory,
@@ -96,13 +116,10 @@ class StreamManager:
             return
         await self.node.joined.wait()
         resumed = 0
-        for stream in self.streams:
-            if stream.status == ManagedStream.STATUS_RUNNING:
-                resumed += 1
-                stream.downloader.download(self.node)
-                self.wait_for_stream_finished(stream)
+        t = [self.start_stream(stream) for stream in self.streams if stream.status == ManagedStream.STATUS_RUNNING]
         if resumed:
-            log.info("resuming %i downloads", resumed)
+            log.info("resuming %i downloads", t)
+        await asyncio.gather(*t, loop=self.loop)
 
     async def reflect_streams(self):
         streams = list(self.streams)

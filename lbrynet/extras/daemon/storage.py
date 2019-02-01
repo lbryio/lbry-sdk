@@ -447,6 +447,12 @@ class SQLiteStorage(SQLiteMixin):
         log.info("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute("update file set status=? where stream_hash=?", (new_status, stream_hash))
 
+    def change_file_download_dir(self, stream_hash: str, download_dir: str):
+        log.info("update file status %s -> %s", stream_hash, download_dir)
+        return self.db.execute("update file set download_directory=? where stream_hash=?", (
+            binascii.hexlify(download_dir.encode()).decode(), stream_hash
+        ))
+
     def get_all_stream_hashes(self):
         return self.run_and_return_list("select stream_hash from stream")
 

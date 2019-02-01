@@ -11,6 +11,7 @@ from lbrynet.extras.daemon.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
     from lbrynet.schema.claim import ClaimDict
     from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.dht.node import Node
 
 log = logging.getLogger(__name__)
 
@@ -154,6 +155,10 @@ class ManagedStream:
         )
         return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
+
+    def start_download(self, node: typing.Optional['Node']):
+        self.downloader.download(node)
+        self.update_status(self.STATUS_RUNNING)
 
     def stop_download(self):
         if self.downloader:

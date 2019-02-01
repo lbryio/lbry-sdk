@@ -1581,6 +1581,9 @@ class Daemon(metaclass=JSONRPCServerType):
         if existing:
             log.info("already have matching stream for %s", uri)
             stream = existing[0]
+            if not stream.running:
+                log.info("resuming download")
+                await self.stream_manager.start_stream(stream)
         else:
             stream = await self.stream_manager.download_stream_from_claim(
                 self.dht_node, resolved, file_name, timeout, fee_amount, fee_address
@@ -1618,7 +1621,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running and not stream.finished:
-            stream.downloader.download(self.dht_node)
+            await self.stream_manager.start_stream(stream)
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
             stream.stop_download()
