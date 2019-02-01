@@ -43,13 +43,11 @@ class StreamAssembler:
         self.written_bytes: int = 0
 
     async def _decrypt_blob(self, blob: 'BlobFile', blob_info: 'BlobInfo', key: str):
-        offset = blob_info.blob_num * (MAX_BLOB_SIZE - 1)
+        if not blob or self.stream_handle.closed:
+            return False
 
         def _decrypt_and_write():
-            if self.stream_handle.closed:
-                return False
-            if not blob:
-                return False
+            offset = blob_info.blob_num * (MAX_BLOB_SIZE - 1)
             self.stream_handle.seek(offset)
             _decrypted = blob.decrypt(
                 binascii.unhexlify(key), binascii.unhexlify(blob_info.iv.encode())
@@ -57,12 +55,10 @@ class StreamAssembler:
             self.stream_handle.write(_decrypted)
             self.stream_handle.flush()
             self.written_bytes += len(_decrypted)
-            return True
-
-        decrypted = await self.loop.run_in_executor(None, _decrypt_and_write)
-        if decrypted:
             log.debug("decrypted %s", blob.blob_hash[:8])
-        return
+            self.wrote_bytes_event.set()
+
+        await self.loop.run_in_executor(None, _decrypt_and_write)
 
     async def setup(self):
         pass
@@ -106,8 +102,6 @@ class StreamAssembler:
                                     self.descriptor.sd_hash)
                         continue
 
-                if not self.wrote_bytes_event.is_set():
-                    self.wrote_bytes_event.set()
             self.stream_finished_event.set()
             await self.after_finished()
         finally:

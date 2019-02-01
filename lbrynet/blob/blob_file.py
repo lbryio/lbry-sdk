@@ -77,7 +77,7 @@ class BlobFile:
     def writer_finished(self, writer: HashBlobWriter):
         def callback(finished: asyncio.Future):
             try:
-                error = finished.result()
+                error = finished.exception()
             except Exception as err:
                 error = err
             if writer in self.writers:  # remove this download attempt
@@ -86,7 +86,7 @@ class BlobFile:
                 while self.writers:
                     other = self.writers.pop()
                     other.finished.cancel()
-                t = self.loop.create_task(self.save_verified_blob(writer))
+                t = self.loop.create_task(self.save_verified_blob(writer, finished.result()))
                 t.add_done_callback(lambda *_: self.finished_writing.set())
                 return
             if isinstance(error, (InvalidBlobHashError, InvalidDataError)):
@@ -96,24 +96,24 @@ class BlobFile:
                 raise error
         return callback
 
-    async def save_verified_blob(self, writer):
+    async def save_verified_blob(self, writer, verified_bytes: bytes):
         def _save_verified():
             # log.debug(f"write blob file {self.blob_hash[:8]} from {writer.peer.address}")
             if not self.saved_verified_blob and not os.path.isfile(self.file_path):
-                if self.get_length() == len(writer.verified_bytes):
+                if self.get_length() == len(verified_bytes):
                     with open(self.file_path, 'wb') as write_handle:
-                        write_handle.write(writer.verified_bytes)
+                        write_handle.write(verified_bytes)
                     self.saved_verified_blob = True
                 else:
                     raise Exception("length mismatch")
 
-        if self.verified.is_set():
-            return
         async with self.blob_write_lock:
+            if self.verified.is_set():
+                return
             await self.loop.run_in_executor(None, _save_verified)
+            self.verified.set()
             if self.blob_completed_callback:
                 await self.blob_completed_callback(self)
-            self.verified.set()
 
     def open_for_writing(self) -> HashBlobWriter:
         if os.path.exists(self.file_path):

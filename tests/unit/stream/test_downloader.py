@@ -40,10 +40,12 @@ class TestStreamDownloader(BlobExchangeTestBase):
 
         self.downloader.download(mock_node)
         await self.downloader.stream_finished_event.wait()
-        await self.downloader.stop()
+        self.downloader.stop()
         self.assertTrue(os.path.isfile(self.downloader.output_path))
         with open(self.downloader.output_path, 'rb') as f:
             self.assertEqual(f.read(), self.stream_bytes)
+        await asyncio.sleep(0.01)
+        self.assertTrue(self.downloader.stream_handle.closed)
 
     async def test_transfer_stream(self):
         await self._test_transfer_stream(10)

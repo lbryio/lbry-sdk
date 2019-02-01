@@ -1621,7 +1621,7 @@ class Daemon(metaclass=JSONRPCServerType):
             stream.downloader.download(self.dht_node)
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
-            await stream.stop_download()
+            stream.stop_download()
             msg = "Stopped download"
         else:
             msg = (

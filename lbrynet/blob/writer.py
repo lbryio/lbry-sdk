@@ -18,7 +18,6 @@ class HashBlobWriter:
         self.finished.add_done_callback(lambda *_: self.close_handle())
         self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
-        self.verified_bytes = b''
 
     def __del__(self):
         if self.buffer is not None:
@@ -46,7 +45,7 @@ class HashBlobWriter:
         self.len_so_far += len(data)
         if self.len_so_far > expected_length:
             self.close_handle()
-            self.finished.set_result(InvalidDataError(
+            self.finished.set_exception(InvalidDataError(
                 f'Length so far is greater than the expected length. {self.len_so_far} to {expected_length}'
             ))
             return
@@ -55,15 +54,12 @@ class HashBlobWriter:
             blob_hash = self.calculate_blob_hash()
             if blob_hash != self.expected_blob_hash:
                 self.close_handle()
-                self.finished.set_result(InvalidBlobHashError(
+                self.finished.set_exception(InvalidBlobHashError(
                     f"blob hash is {blob_hash} vs expected {self.expected_blob_hash}"
                 ))
-                return
-            self.buffer.seek(0)
-            self.verified_bytes = self.buffer.read()
+            elif self.finished and not (self.finished.done() or self.finished.cancelled()):
+                self.finished.set_result(self.buffer.getvalue())
             self.close_handle()
-            if self.finished and not (self.finished.done() or self.finished.cancelled()):
-                self.finished.set_result(None)
 
     def close_handle(self):
         if self.buffer is not None:
