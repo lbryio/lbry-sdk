@@ -23,7 +23,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
         self._blob_bytes_received = 0
         self._response_fut: asyncio.Future = None
-        self._request_lock = asyncio.Lock(loop=self.loop)
 
     def data_received(self, data: bytes):
         if not self.transport or self.transport.is_closing():
@@ -130,23 +129,22 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
     async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[bool, bool]:
         if blob.get_is_verified():
             return False, True
-        async with self._request_lock:
-            try:
-                self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
-                self._response_fut = asyncio.Future(loop=self.loop)
-                return await self._download_blob()
-            except OSError:
-                log.error("race happened downloading from %s:%i", self.peer_address, self.peer_port)
-                # i'm not sure how to fix this race condition - jack
-                return False, True
-            except asyncio.TimeoutError:
-                if self._response_fut and not self._response_fut.done():
-                    self._response_fut.cancel()
-                return False, False
-            except asyncio.CancelledError:
-                if self._response_fut and not self._response_fut.done():
-                    self._response_fut.cancel()
-                return False, True
+        try:
+            self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
+            self._response_fut = asyncio.Future(loop=self.loop)
+            return await self._download_blob()
+        except OSError:
+            log.error("race happened downloading from %s:%i", self.peer_address, self.peer_port)
+            # i'm not sure how to fix this race condition - jack
+            return False, True
+        except asyncio.TimeoutError:
+            if self._response_fut and not self._response_fut.done():
+                self._response_fut.cancel()
+            return False, False
+        except asyncio.CancelledError:
+            if self._response_fut and not self._response_fut.done():
+                self._response_fut.cancel()
+            return False, True
 
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
