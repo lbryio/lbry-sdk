@@ -235,6 +235,11 @@ class StreamManager:
                 del self.starting_streams[sd_hash]
             log.info("returned from get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
 
+    def get_stream_by_stream_hash(self, stream_hash: str) -> typing.Optional[ManagedStream]:
+        streams = tuple(filter(lambda stream: stream.stream_hash == stream_hash, self.streams))
+        if streams:
+            return streams[0]
+
     def get_filtered_streams(self, sort_by: typing.Optional[str] = None, reverse: typing.Optional[bool] = False,
                              comparison: typing.Optional[str] = None,
                              **search_by) -> typing.List[ManagedStream]:
