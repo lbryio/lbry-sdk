@@ -52,11 +52,11 @@ class StreamDownloader(StreamAssembler):
         log.info("downloaded stream %s -> %s", self.sd_hash, self.output_path)
         await self.blob_manager.storage.change_file_status(self.descriptor.stream_hash, 'finished')
 
-    async def stop(self):
-        if self.accumulate_task and not self.accumulate_task.done():
+    def stop(self):
+        if self.accumulate_task:
             self.accumulate_task.cancel()
             self.accumulate_task = None
-        if self.assemble_task and not self.assemble_task.done():
+        if self.assemble_task:
             self.assemble_task.cancel()
             self.assemble_task = None
         if self.fixed_peers_handle:
@@ -80,7 +80,7 @@ class StreamDownloader(StreamAssembler):
                         and self.node
                         and len(self.node.protocol.routing_table.get_peers())
                 ) else 0.0,
-                self.loop.create_task, _add_fixed_peers()
+                lambda: self.loop.create_task(_add_fixed_peers())
             )
 
     def download(self, node: typing.Optional['Node'] = None):

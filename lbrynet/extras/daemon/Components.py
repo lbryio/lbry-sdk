@@ -459,7 +459,7 @@ class StreamManagerComponent(Component):
         log.info('Done setting up file manager')
 
     async def stop(self):
-        await self.stream_manager.stop()
+        self.stream_manager.stop()
 
 
 class PeerProtocolServerComponent(Component):

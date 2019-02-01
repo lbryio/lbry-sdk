@@ -155,9 +155,9 @@ class ManagedStream:
         return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
 
-    async def stop_download(self):
+    def stop_download(self):
         if self.downloader:
-            await self.downloader.stop()
+            self.downloader.stop()
         if not self.finished:
             self.update_status(self.STATUS_STOPPED)
 

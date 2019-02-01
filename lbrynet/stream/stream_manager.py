@@ -122,12 +122,12 @@ class StreamManager:
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
 
-    async def stop(self):
+    def stop(self):
         if self.resume_downloading_task and not self.resume_downloading_task.done():
             self.resume_downloading_task.cancel()
         while self.streams:
             stream = self.streams.pop()
-            await stream.stop_download()
+            stream.stop_download()
         while self.update_stream_finished_futs:
             self.update_stream_finished_futs.pop().cancel()
 
@@ -142,7 +142,7 @@ class StreamManager:
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
-        await stream.stop_download()
+        stream.stop_download()
         self.streams.remove(stream)
         await self.storage.delete_stream(stream.descriptor)
 
@@ -182,7 +182,7 @@ class StreamManager:
             log.info("got descriptor %s for %s", claim.source_hash.decode(), claim_info['name'])
         except (asyncio.TimeoutError, asyncio.CancelledError):
             log.info("stream timeout")
-            await downloader.stop()
+            downloader.stop()
             log.info("stopped stream")
             return
         if not await self.blob_manager.storage.stream_exists(downloader.sd_hash):
@@ -204,7 +204,8 @@ class StreamManager:
             self.wait_for_stream_finished(stream)
             return stream
         except asyncio.CancelledError:
-            await downloader.stop()
+            downloader.stop()
+            log.info("stopped stream")
 
     async def download_stream_from_claim(self, node: 'Node', claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
