@@ -32,7 +32,9 @@ filter_fields = [
     'nout',
     'channel_claim_id',
     'channel_name',
-    'full_status'
+    'full_status',  # TODO: remove
+    'blobs_remaining',
+    'blobs_in_stream'
 ]
 
 comparison_operators = {
@@ -66,7 +68,7 @@ class StreamManager:
     async def start_stream(self, stream: ManagedStream):
         path = os.path.join(stream.download_directory, stream.file_name)
 
-        if not stream.running or not os.path.isfile(path):
+        if not stream.running and not os.path.isfile(path):
             if stream.downloader:
                 stream.downloader.stop()
                 stream.downloader = None

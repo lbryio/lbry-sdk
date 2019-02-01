@@ -1308,8 +1308,9 @@ class Daemon(metaclass=JSONRPCServerType):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--sort=<sort_by>] [--reverse] [--comparison=<comparison>]
-                      [--full_status=<full_status>]
+                      [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
+                      [--blobs_remaining=<blobs_remaining>] [--sort=<sort_by>]
+                      [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1322,11 +1323,12 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>                          : (str) get file with matching claim txid
             --nout=<nout>                          : (int) get file with matching claim nout
             --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id
-            --channel_name=<channel_name>  : (str) get file with matching channel name
+            --channel_name=<channel_name>          : (str) get file with matching channel name
             --claim_name=<claim_name>              : (str) get file with matching claim name
-            --sort=<sort_method>                   : (str) sort by any property, like 'file_name'
-                                                     or 'metadata.author'; to specify direction
-                                                     append ',asc' or ',desc'
+            --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
+            --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
+            --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
+            --comparison=<comparison>              : (str) logical comparision, (eq | ne | g | ge | l | le)
 
         Returns:
             (list) List of files
@@ -1345,21 +1347,24 @@ class Daemon(metaclass=JSONRPCServerType):
                     'download_path': (str) download path of file,
                     'mime_type': (str) mime type of file,
                     'key': (str) key attached to file,
-                    'total_bytes': (int) file size in bytes,
+                    'total_bytes_lower_bound': (int) lower bound file size in bytes,
+                    'total_bytes': (int) file upper bound size in bytes,
                     'written_bytes': (int) written size in bytes,
                     'blobs_completed': (int) number of fully downloaded blobs,
                     'blobs_in_stream': (int) total blobs on stream,
+                    'blobs_remaining': (int) total blobs remaining to download,
                     'status': (str) downloader status
                     'claim_id': (str) None if claim is not found else the claim id,
-                    'outpoint': (str) None if claim is not found else the tx and output,
                     'txid': (str) None if claim is not found else the transaction id,
                     'nout': (int) None if claim is not found else the transaction output index,
+                    'outpoint': (str) None if claim is not found else the tx and output,
                     'metadata': (dict) None if claim is not found else the claim metadata,
                     'channel_claim_id': (str) None if claim is not found or not signed,
                     'channel_name': (str) None if claim is not found or not signed,
                     'claim_name': (str) None if claim is not found else the claim name
                 },
             ]
+        }
         """
         sort = sort or 'status'
         comparison = comparison or 'eq'
@@ -1582,8 +1587,10 @@ class Daemon(metaclass=JSONRPCServerType):
             log.info("already have matching stream for %s", uri)
             stream = existing[0]
             if not stream.running:
-                log.info("resuming download")
-                await self.stream_manager.start_stream(stream)
+                full_path = os.path.join(stream.download_directory, stream.file_name)
+                if not os.path.isfile(full_path):
+                    log.info("resuming download")
+                    await self.stream_manager.start_stream(stream)
         else:
             stream = await self.stream_manager.download_stream_from_claim(
                 self.dht_node, resolved, file_name, timeout, fee_amount, fee_address
@@ -1620,7 +1627,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if not streams:
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
-        if status == 'start' and not stream.running and not stream.finished:
+        if status == 'start' and not stream.running:
             await self.stream_manager.start_stream(stream)
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
