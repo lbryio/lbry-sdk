@@ -601,7 +601,7 @@ class KademliaProtocol(DatagramProtocol):
             res = await self.get_rpc_peer(peer).store(hash_value)
             if res != b"OK":
                 raise ValueError(res)
-            log.info("Stored %s to %s", binascii.hexlify(hash_value).decode()[:8], peer)
+            log.debug("Stored %s to %s", binascii.hexlify(hash_value).decode()[:8], peer)
             return peer.node_id, True
         except asyncio.TimeoutError:
             log.debug("Timeout while storing blob_hash %s at %s", binascii.hexlify(hash_value).decode()[:8], peer)

@@ -11,6 +11,7 @@ from lbrynet.extras.daemon.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
     from lbrynet.schema.claim import ClaimDict
     from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.dht.node import Node
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +100,10 @@ class ManagedStream:
     def sd_hash(self):
         return self.descriptor.sd_hash
 
+    @property
+    def blobs_remaining(self) -> int:
+        return self.blobs_in_stream - self.blobs_completed
+
     def as_dict(self) -> typing.Dict:
         full_path = os.path.join(self.download_directory, self.file_name)
         if not os.path.isfile(full_path):
@@ -129,6 +134,7 @@ class ManagedStream:
             'written_bytes': written_bytes,
             'blobs_completed': self.blobs_completed,
             'blobs_in_stream': self.blobs_in_stream,
+            'blobs_remaining': self.blobs_remaining,
             'status': self.status,
             'claim_id': self.claim_id,
             'txid': self.txid,
@@ -154,6 +160,10 @@ class ManagedStream:
         )
         return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
+
+    def start_download(self, node: typing.Optional['Node']):
+        self.downloader.download(node)
+        self.update_status(self.STATUS_RUNNING)
 
     def stop_download(self):
         if self.downloader:
