@@ -62,6 +62,7 @@ class StreamManager:
         self.streams: typing.Set[ManagedStream] = set()
         self.starting_streams: typing.Dict[str, asyncio.Future] = {}
         self.resume_downloading_task: asyncio.Task = None
+        self.re_reflect_task: asyncio.Task = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
 
     async def _update_content_claim(self, stream: ManagedStream):
@@ -147,26 +148,36 @@ class StreamManager:
         await asyncio.gather(*t, loop=self.loop)
 
     async def reflect_streams(self):
-        streams = list(self.streams)
-        batch = []
-        while streams:
-            stream = streams.pop()
-            if not stream.fully_reflected.is_set():
-                host, port = random.choice(self.reflector_servers)
-                batch.append(stream.upload_to_reflector(host, port))
-            if len(batch) >= 10:
-                await asyncio.gather(*batch)
+        while True:
+            if self.config.reflector_servers:
+                sd_hashes = await self.storage.get_streams_to_re_reflect()
+                streams = list(filter(lambda s: s.sd_hash in sd_hashes, self.streams))
                 batch = []
-        if batch:
-            await asyncio.gather(*batch)
+                total = len(streams)
+                while streams:
+                    stream = streams.pop()
+                    if not stream.fully_reflected.is_set():
+                        host, port = random.choice(self.config.reflector_servers)
+                        batch.append(stream.upload_to_reflector(host, port))
+                    if len(batch) >= self.config.concurrent_reflector_uploads:
+                        await asyncio.gather(*batch)
+                        batch = []
+                if batch:
+                    await asyncio.gather(*batch)
+                if total:
+                    log.info("uploaded %i streams to reflector", total)
+            await asyncio.sleep(300, loop=self.loop)
 
     async def start(self):
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
+        self.re_reflect_task = self.loop.create_task(self.reflect_streams())
 
     def stop(self):
         if self.resume_downloading_task and not self.resume_downloading_task.done():
             self.resume_downloading_task.cancel()
+        if self.re_reflect_task and not self.re_reflect_task.done():
+            self.re_reflect_task.cancel()
         while self.streams:
             stream = self.streams.pop()
             stream.stop_download()
