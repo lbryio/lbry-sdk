@@ -1,4 +1,6 @@
+import os
 import sys
+import pathlib
 import json
 import asyncio
 import argparse
@@ -216,12 +218,19 @@ def get_argument_parser():
     return main
 
 
+def ensure_directory_exists(path: str):
+    if not os.path.isdir(path):
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
     args, command_args = parser.parse_known_args(argv)
 
     conf = Config.create_from_arguments(args)
+    for directory in (conf.data_dir, conf.download_dir, conf.wallet_dir):
+        ensure_directory_exists(directory)
 
     if args.cli_version:
         print(f"{lbrynet_name} {lbrynet_version}")
