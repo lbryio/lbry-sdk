@@ -2798,18 +2798,14 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         peer = None
         if node_id and address and port:
-            peer = self.component_manager.peer_manager.get_peer(address, unhexlify(node_id), udp_port=int(port))
-            if not peer:
-                peer = self.component_manager.peer_manager.make_peer(
-                    address, unhexlify(node_id), udp_port=int(port)
-                )
+            peer = self.component_manager.peer_manager.get_kademlia_peer(unhexlify(node_id), address,
+                                                                         udp_port=int(port))
+            try:
+                return await self.dht_node.protocol.get_rpc_peer(peer).ping()
+            except asyncio.TimeoutError:
+                return {'error': 'timeout'}
         if not peer:
             return {'error': 'peer not found'}
-        try:
-            result = await peer.ping()
-            return result.decode()
-        except asyncio.TimeoutError:
-            return {'error': 'ping timeout'}
 
     @requires(DHT_COMPONENT)
     def jsonrpc_routing_table_get(self):
