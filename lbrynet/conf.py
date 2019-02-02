@@ -505,6 +505,9 @@ class Config(CLIConfig):
         "Upload completed streams (published and downloaded) reflector in order to re-host them", True,
         previous_names=['reflect_uploads']
     )
+    concurrent_reflector_uploads = Integer(
+        "Maximum number of streams to upload to a reflector server at a time", 10
+    )
 
     # servers
     reflector_servers = Servers("Reflector re-hosting servers", [

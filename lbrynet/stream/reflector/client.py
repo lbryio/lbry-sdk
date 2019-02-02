@@ -27,7 +27,7 @@ class StreamReflectorClient(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        log.info("Connected to reflector")
+        log.debug("Connected to reflector")
         self.connected.set()
 
     def connection_lost(self, exc: typing.Optional[Exception]):
