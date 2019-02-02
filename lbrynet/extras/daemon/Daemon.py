@@ -20,7 +20,7 @@ from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.blob_exchange.downloader import download_blob
 from lbrynet.error import InsufficientFundsError, DownloadSDTimeout, ComponentsNotStarted
-from lbrynet.error import NullFundsError, NegativeFundsError, ResolveError, ComponentStartConditionNotMet
+from lbrynet.error import NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
 from lbrynet.extras import system_info
 from lbrynet.extras.daemon import analytics
 from lbrynet.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
@@ -1557,47 +1557,12 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        parsed_uri = parse_lbry_uri(uri)
-        if parsed_uri.is_channel:
-            raise Exception("cannot download a channel claim, specify a /path")
-
-        resolved = (await self.wallet_manager.resolve(uri)).get(uri, {})
-        resolved = resolved if 'value' in resolved else resolved.get('claim')
-
-        if not resolved:
-            raise ResolveError(
-                "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
-            )
-        if 'error' in resolved:
-            raise ResolveError(f"error resolving stream: {resolved['error']}")
-
-        claim = ClaimDict.load_dict(resolved['value'])
-        fee_amount, fee_address = None, None
-        if claim.has_fee:
-            fee_amount = round(self.exchange_rate_manager.convert_currency(
-                    claim.source_fee.currency, "LBC", claim.source_fee.amount
-                ), 5)
-            fee_address = claim.source_fee.address
-        outpoint = f"{resolved['txid']}:{resolved['nout']}"
-        existing = self.stream_manager.get_filtered_streams(outpoint=outpoint)
-        if not existing:
-            existing.extend(self.stream_manager.get_filtered_streams(claim_id=resolved['claim_id'],
-                                                                     sd_hash=claim.source_hash))
-        if existing:
-            log.info("already have matching stream for %s", uri)
-            stream = existing[0]
-            if not stream.running:
-                full_path = os.path.join(stream.download_directory, stream.file_name)
-                if not os.path.isfile(full_path):
-                    log.info("resuming download")
-                    await self.stream_manager.start_stream(stream)
-        else:
-            stream = await self.stream_manager.download_stream_from_claim(
-                self.dht_node, resolved, file_name, timeout, fee_amount, fee_address
-            )
+        stream = await self.stream_manager.download_stream_from_uri(
+            uri, self.exchange_rate_manager, file_name, timeout
+        )
         if stream:
             return stream.as_dict()
-        raise DownloadSDTimeout(resolved['value']['stream']['source']['source'])
+        raise DownloadSDTimeout(uri)
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
