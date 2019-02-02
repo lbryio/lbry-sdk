@@ -349,7 +349,7 @@ class DHTComponent(Component):
 
     async def get_status(self):
         return {
-            'node_id': binascii.hexlify(self.dht_node.protocol.node_id),
+            'node_id': None if not self.dht_node else binascii.hexlify(self.dht_node.protocol.node_id),
             'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.protocol.routing_table.get_peers())
         }
 
