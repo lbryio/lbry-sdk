@@ -351,7 +351,7 @@ class StreamManager:
             fee_amount = round(exchange_rate_manager.convert_currency(
                     claim.source_fee.currency, "LBC", claim.source_fee.amount
                 ), 5)
-            fee_address = claim.source_fee.address
+            fee_address = claim.source_fee.address.decode()
         outpoint = f"{resolved['txid']}:{resolved['nout']}"
         existing = self.get_filtered_streams(outpoint=outpoint)
 
