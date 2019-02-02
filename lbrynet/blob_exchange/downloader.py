@@ -33,10 +33,14 @@ class BlobDownloader:
         async def _request_blob():
             if blob.get_is_verified():
                 return
-            success, keep_connection = await request_blob(
-                self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
-                self.config.blob_download_timeout
-            )
+            try:
+                success, keep_connection = await request_blob(
+                    self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
+                    self.config.blob_download_timeout
+                )
+            finally:
+                if peer in self.active_connections:
+                    self.active_connections.pop(peer)
             if not keep_connection and peer not in self.ignored:
                 self.ignored.add(peer)
                 log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
