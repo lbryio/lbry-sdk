@@ -185,11 +185,12 @@ class SQLiteStorage(SQLiteMixin):
             );
     """
 
-    def __init__(self, conf: Config, path, loop=None):
+    def __init__(self, conf: Config, path, loop=None, time_getter: typing.Optional[typing.Callable[[], float]] = None):
         super().__init__(path)
         self.conf = conf
         self.content_claim_callbacks = {}
         self.loop = loop or asyncio.get_event_loop()
+        self.time_getter = time_getter or time.time
 
     async def run_and_return_one_or_none(self, query, *args):
         for row in await self.db.execute_fetchall(query, args):
@@ -248,8 +249,9 @@ class SQLiteStorage(SQLiteMixin):
             "select count(*) from blob where status='finished'"
         )
 
-    def update_last_announced_blobs(self, blob_hashes: typing.List[str], last_announced: float):
+    def update_last_announced_blobs(self, blob_hashes: typing.List[str]):
         def _update_last_announced_blobs(transaction: sqlite3.Connection):
+            last_announced = self.time_getter()
             return transaction.executemany(
                 "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 "
                 "where blob_hash=?",
@@ -260,7 +262,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def should_single_announce_blobs(self, blob_hashes, immediate=False):
         def set_single_announce(transaction):
-            now = self.loop.time()
+            now = int(self.time_getter())
             for blob_hash in blob_hashes:
                 if immediate:
                     transaction.execute(
@@ -275,7 +277,7 @@ class SQLiteStorage(SQLiteMixin):
 
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
-            timestamp = int(self.loop.time())
+            timestamp = int(self.time_getter())
             if self.conf.announce_head_and_sd_only:
                 r = transaction.execute(
                     "select blob_hash from blob "
@@ -700,5 +702,5 @@ class SQLiteStorage(SQLiteMixin):
             "select s.sd_hash from stream s "
             "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
             "where r.timestamp is null or r.timestamp < ?",
-            self.loop.time() - 86400
+            int(self.time_getter()) - 86400
         )
