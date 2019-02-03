@@ -256,6 +256,7 @@ class Daemon(metaclass=JSONRPCServerType):
             skip_components=conf.components_to_skip or []
         )
         self.component_startup_task = None
+        self._connection_status: typing.Tuple[float, bool] = [self.component_manager.loop.time(), False]
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         app = web.Application()
@@ -367,6 +368,18 @@ class Daemon(metaclass=JSONRPCServerType):
     def ensure_download_dir(self):
         if not os.path.isdir(self.conf.download_dir):
             os.makedirs(self.conf.download_dir)
+
+    async def update_connection_status(self):
+        connected = await utils.async_check_connection()
+        self._connection_status = (self.component_manager.loop.time(), connected)
+
+    async def get_connection_status(self) -> str:
+        if self._connection_status[0] + 300 > self.component_manager.loop.time():
+            if not self._connection_status[1]:
+                await self.update_connection_status()
+        else:
+            await self.update_connection_status()
+        return CONNECTION_STATUS_CONNECTED if self._connection_status[1] else CONNECTION_STATUS_NETWORK
 
     async def start(self):
         log.info("Starting LBRYNet Daemon")
@@ -665,7 +678,8 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        connection_code = CONNECTION_STATUS_NETWORK
+        connection_code = await self.get_connection_status()
+
         response = {
             'installation_id': self.installation_id,
             'is_running': all(self.component_manager.get_components_status().values()),
