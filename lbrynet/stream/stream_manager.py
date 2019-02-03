@@ -135,6 +135,7 @@ class StreamManager:
                 binascii.unhexlify(file_info['download_directory']).decode(), file_info['status'], file_info['claim']
             ) for file_info in file_infos
         ])
+        log.info("Started stream manager with %i files", len(file_infos))
 
     async def resume(self):
         if not self.node:
@@ -153,7 +154,6 @@ class StreamManager:
                 sd_hashes = await self.storage.get_streams_to_re_reflect()
                 streams = list(filter(lambda s: s.sd_hash in sd_hashes, self.streams))
                 batch = []
-                total = len(streams)
                 while streams:
                     stream = streams.pop()
                     if not stream.fully_reflected.is_set():
@@ -164,8 +164,6 @@ class StreamManager:
                         batch = []
                 if batch:
                     await asyncio.gather(*batch)
-                if total:
-                    log.info("uploaded %i streams to reflector", total)
             await asyncio.sleep(300, loop=self.loop)
 
     async def start(self):
