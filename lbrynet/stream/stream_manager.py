@@ -193,6 +193,10 @@ class StreamManager:
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
+        stream_finished = False if not stream.finished and stream.downloader\
+            else (stream.downloader and stream.downloader.stream_finished_event.is_set())
+        if not stream_finished:
+            delete_file = True
         stream.stop_download()
         self.streams.remove(stream)
         await self.storage.delete_stream(stream.descriptor)
