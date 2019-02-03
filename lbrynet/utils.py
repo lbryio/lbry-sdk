@@ -69,13 +69,12 @@ def obfuscate(plain):
     return rot13(base64.b64encode(plain).decode())
 
 
-def check_connection(server="lbry.io", port=80, timeout=5):
+def check_connection(server="lbry.io", port=80, timeout=5) -> bool:
     """Attempts to open a socket to server:port and returns True if successful."""
     log.debug('Checking connection to %s:%s', server, port)
     try:
         server = socket.gethostbyname(server)
-        conn = socket.create_connection((server, port), timeout)
-        conn.close()
+        socket.create_connection((server, port), timeout).close()
         log.debug('Connection successful')
         return True
     except (socket.gaierror, socket.herror) as ex:
@@ -84,17 +83,21 @@ def check_connection(server="lbry.io", port=80, timeout=5):
         try:
             server = "8.8.8.8"
             port = 53
-            socket.create_connection((server, port), timeout)
+            socket.create_connection((server, port), timeout).close()
             log.debug('Connection successful')
             return True
-        except Exception as ex:
+        except Exception:
             log.error("Failed to connect to %s:%s. Maybe the internet connection is not working",
                       server, port)
             return False
-    except Exception as ex:
+    except Exception:
         log.error("Failed to connect to %s:%s. Maybe the internet connection is not working",
-                      server, port)
+                  server, port)
         return False
+
+
+async def async_check_connection(server="lbry.io", port=80, timeout=5) -> bool:
+    return await asyncio.get_event_loop().run_in_executor(None, check_connection, server, port, timeout)
 
 
 def random_string(length=10, chars=string.ascii_lowercase):
