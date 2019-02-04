@@ -130,7 +130,7 @@ class BlobFile:
         """
 
         with open(self.file_path, 'rb') as handle:
-            return await self.loop.sendfile(writer.transport, handle)
+            return await self.loop.sendfile(writer.transport, handle, count=self.get_length())
 
     async def close(self):
         while self.writers:
