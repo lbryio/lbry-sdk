@@ -183,8 +183,6 @@ class TreeRoutingTable:
         exclude = [self._parent_node_id]
         if sender_node_id:
             exclude.append(sender_node_id)
-        if key in exclude:
-            exclude.remove(key)
         count = count or constants.k
         distance = Distance(key)
         contacts = self.get_peers()

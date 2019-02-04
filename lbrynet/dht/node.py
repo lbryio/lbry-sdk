@@ -238,7 +238,13 @@ class Node:
             async with self.stream_peer_search_junction(search_queue) as search_junction:  # pylint: disable=E1701
                 async for peers in search_junction:
                     if peers:
-                        result_queue.put_nowait(peers)
+                        result_queue.put_nowait([
+                            peer for peer in peers
+                            if not (
+                                    peer.address == self.protocol.external_ip
+                                    and peer.tcp_port == self.protocol.peer_port
+                            )
+                        ])
         except asyncio.CancelledError:
             return
 
