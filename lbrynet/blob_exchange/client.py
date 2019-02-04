@@ -2,6 +2,7 @@ import asyncio
 import logging
 import typing
 import binascii
+from lbrynet.error import InvalidBlobHashError, InvalidDataError
 from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import BlobFile
@@ -104,12 +105,15 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             log.debug(msg)
             msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}"
             await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
-            await self.blob.finished_writing.wait()
             log.info(msg)
+            await self.blob.finished_writing.wait()
             return True, True
         except asyncio.CancelledError:
             return False, True
         except asyncio.TimeoutError:
+            return False, False
+        except (InvalidBlobHashError, InvalidDataError):
+            log.warning("invalid blob from %s:%i", self.peer_address, self.peer_port)
             return False, False
         finally:
             await self.close()
