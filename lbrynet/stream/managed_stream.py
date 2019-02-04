@@ -176,15 +176,7 @@ class ManagedStream:
         protocol = StreamReflectorClient(self.blob_manager, self.descriptor)
         try:
             await self.loop.create_connection(lambda: protocol, host, port)
-        except ConnectionRefusedError:
-            return sent
-        try:
             await protocol.send_handshake()
-        except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
-            if protocol.transport:
-                protocol.transport.close()
-            return sent
-        try:
             sent_sd, needed = await protocol.send_descriptor()
             if sent_sd:
                 sent.append(self.sd_hash)
@@ -193,20 +185,16 @@ class ManagedStream:
                     self.fully_reflected.set()
                     await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
                     return []
-        except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
-            if protocol.transport:
-                protocol.transport.close()
-            return sent
-        for blob_hash in needed:
-            try:
+            for blob_hash in needed:
                 await protocol.send_blob(blob_hash)
                 sent.append(blob_hash)
-            except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
-                if protocol.transport:
-                    protocol.transport.close()
-                return sent
-        if protocol.transport:
-            protocol.transport.close()
+        except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
+            return sent
+        except ConnectionRefusedError:
+            return sent
+        finally:
+            if protocol.transport:
+                protocol.transport.close()
         if not self.fully_reflected.is_set():
             self.fully_reflected.set()
             await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
