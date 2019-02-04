@@ -81,8 +81,9 @@ class TestProtocol(AsyncioTestCase):
             self.assertListEqual([peer2_from_peer1], peer1.data_store.get_storing_contacts())
             peer1.data_store.completed_blobs.add(binascii.hexlify(b'2' * 48).decode())
             find_value_response = peer1.node_rpc.find_value(peer3, b'2' * 48)
+            self.assertEqual(len(find_value_response[b'contacts']), 0)
             self.assertSetEqual(
-                {b'2' * 48, b'token', b'protocolVersion'}, set(find_value_response.keys())
+                {b'2' * 48, b'token', b'protocolVersion', b'contacts'}, set(find_value_response.keys())
             )
             self.assertEqual(2, len(find_value_response[b'2' * 48]))
             self.assertEqual(find_value_response[b'2' * 48][0], peer2_from_peer1.compact_address_tcp())

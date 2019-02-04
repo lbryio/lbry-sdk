@@ -77,6 +77,7 @@ class KademliaRPC:
 
         response = {
             b'token': self.make_token(rpc_contact.compact_ip()),
+            b'contacts': self.find_node(rpc_contact, key)
         }
 
         if self.protocol.protocol_version:
@@ -93,8 +94,6 @@ class KademliaRPC:
             peers.append(self.compact_address())
         if peers:
             response[key] = peers
-        else:
-            response[b'contacts'] = self.find_node(rpc_contact, key)
         return response
 
     def refresh_token(self):  # TODO: this needs to be called periodically
