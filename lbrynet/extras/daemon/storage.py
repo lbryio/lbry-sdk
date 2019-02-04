@@ -208,10 +208,10 @@ class SQLiteStorage(SQLiteMixin):
         log.debug("Adding a completed blob. blob_hash=%s", blob_hash)
         return self.db.execute("update blob set status='finished' where blob.blob_hash=?", (blob_hash, ))
 
-    def set_should_announce(self, blob_hash: str, next_announce_time: int, should_announce: int):
+    def set_should_announce(self, blob_hash: str, should_announce: int):
         return self.db.execute(
             "update blob set next_announce_time=?, should_announce=? where blob_hash=?",
-            (next_announce_time or 0, int(bool(should_announce)), blob_hash)
+            (int(self.time_getter()), should_announce, blob_hash)
         )
 
     def get_blob_status(self, blob_hash: str):
