@@ -690,7 +690,7 @@ class SQLiteStorage(SQLiteMixin):
         if success:
             return self.db.execute(
                 "insert or replace into reflected_stream values (?, ?, ?)",
-                (sd_hash, reflector_address, time.time())
+                (sd_hash, reflector_address, self.time_getter())
             )
         return self.db.execute(
             "delete from reflected_stream where sd_hash=? and reflector_address=?",
