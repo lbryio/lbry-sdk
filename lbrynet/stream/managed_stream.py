@@ -154,10 +154,14 @@ class ManagedStream:
             loop, blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator
         )
         sd_blob = blob_manager.get_blob(descriptor.sd_hash)
-        await blob_manager.blob_completed(sd_blob)
         await blob_manager.storage.store_stream(
             blob_manager.get_blob(descriptor.sd_hash), descriptor
         )
+        await blob_manager.blob_completed(sd_blob)
+        for blob in descriptor.blobs[:-1]:
+            await blob_manager.blob_completed(blob_manager.get_blob(blob.blob_hash, blob.length))
+        await blob_manager.set_should_announce(sd_blob.blob_hash, 1)
+        await blob_manager.set_should_announce(descriptor.blobs[0].blob_hash, 1)
         return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
 
@@ -185,7 +189,8 @@ class ManagedStream:
                     self.fully_reflected.set()
                     await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
                     return []
-            for blob_hash in needed:
+            we_have = [blob_hash for blob_hash in needed if blob_hash in self.blob_manager.completed_blob_hashes]
+            for blob_hash in we_have:
                 await protocol.send_blob(blob_hash)
                 sent.append(blob_hash)
         except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):

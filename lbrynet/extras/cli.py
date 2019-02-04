@@ -247,6 +247,7 @@ def main(argv=None):
         )
         file_handler.setFormatter(default_formatter)
         log.addHandler(file_handler)
+        logging.getLogger('torba').addHandler(file_handler)
 
         if not args.quiet:
             handler = logging.StreamHandler()

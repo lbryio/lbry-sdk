@@ -59,9 +59,8 @@ class BlobFileManager:
         blobs = [self.get_blob(b) for b in blob_hashes]
         return [blob.blob_hash for blob in blobs if blob.get_is_verified()]
 
-    async def set_should_announce(self, blob_hash: str, should_announce: bool):
-        now = self.loop.time()
-        return await self.storage.set_should_announce(blob_hash, now, should_announce)
+    async def set_should_announce(self, blob_hash: str, should_announce: int):
+        return await self.storage.set_should_announce(blob_hash, should_announce)
 
     async def get_all_verified_blobs(self) -> typing.List[str]:
         blob_hashes = await self.storage.get_all_blob_hashes()
