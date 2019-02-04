@@ -51,9 +51,14 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if response.blob_data and self.writer and not self.writer.closed():
             log.debug("got %i blob bytes from %s:%i", len(response.blob_data), self.peer_address, self.peer_port)
             # write blob bytes if we're writing a blob and have blob bytes to write
-            self._blob_bytes_received += len(response.blob_data)
+            if len(response.blob_data) > (self.blob.get_length() - self._blob_bytes_received):
+                data = response.blob_data[:(self.blob.get_length() - self._blob_bytes_received)]
+                log.warning("got more than asked from %s:%d, probable sendfile bug", self.peer_address, self.peer_port)
+            else:
+                data = response.blob_data
+            self._blob_bytes_received += len(data)
             try:
-                self.writer.write(response.blob_data)
+                self.writer.write(data)
                 return
             except IOError as err:
                 log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
