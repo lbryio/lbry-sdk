@@ -255,7 +255,6 @@ class IterativeFinder:
         self.delayed_calls.clear()
 
 
-
 class IterativeNodeFinder(IterativeFinder):
     def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,

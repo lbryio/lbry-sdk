@@ -83,11 +83,11 @@ class KademliaRPC:
             response[b'protocolVersion'] = self.protocol.protocol_version
 
         # get peers we have stored for this blob_exchange
-        has_other_peers = self.protocol.data_store.has_peers_for_blob(key)
-        peers = []
-        if has_other_peers:
-            peers.extend([peer.compact_address_tcp() for peer in self.protocol.data_store.get_peers_for_blob(key)])
-
+        peers = [
+            peer.compact_address_tcp()
+            for peer in self.protocol.data_store.get_peers_for_blob(key)
+            if not rpc_contact.tcp_port or peer.compact_address_tcp() != rpc_contact.compact_address_tcp()
+        ]
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
         if len(peers) < constants.k and binascii.hexlify(key).decode() in self.protocol.data_store.completed_blobs:
             peers.append(self.compact_address())
