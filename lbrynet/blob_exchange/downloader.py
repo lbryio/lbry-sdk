@@ -87,7 +87,7 @@ class BlobDownloader:
                 if task and not task.done():
                     task.cancel()
             await blob.close()
-            log.info("downloaded %s", blob_hash[:8])
+            log.debug("downloaded %s", blob_hash[:8])
             return blob
         except asyncio.CancelledError:
             while self.active_connections:
