@@ -33,6 +33,8 @@ class StreamReflectorClient(asyncio.Protocol):
     def connection_lost(self, exc: typing.Optional[Exception]):
         self.transport = None
         self.connected.clear()
+        if self.reflected_blobs:
+            log.info("Finished sending reflector %i blobs", len(self.reflected_blobs))
 
     def data_received(self, data):
         try:
@@ -81,8 +83,11 @@ class StreamReflectorClient(asyncio.Protocol):
                         if self.blob_manager.get_blob(blob.blob_hash, blob.length).get_is_verified():
                             needed.append(blob.blob_hash)
                 log.info("Sent reflector descriptor %s", sd_blob.blob_hash[:8])
+                self.reflected_blobs.append(sd_blob.blob_hash)
             else:
                 log.warning("Reflector failed to receive descriptor %s", sd_blob.blob_hash[:8])
+        if needed:
+            log.info("Reflector needs %i blobs for %s", len(needed), sd_blob.blob_hash[:8])
         return sent_sd, needed
 
     async def send_blob(self, blob_hash: str):
