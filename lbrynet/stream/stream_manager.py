@@ -142,11 +142,12 @@ class StreamManager:
             log.warning("no DHT node given, cannot resume downloads")
             return
         await self.node.joined.wait()
-        resumed = 0
-        t = [self.start_stream(stream) for stream in self.streams if stream.status == ManagedStream.STATUS_RUNNING]
-        if resumed:
-            log.info("resuming %i downloads", t)
-        await asyncio.gather(*t, loop=self.loop)
+        t = [
+            stream.start_download(self.node)
+            for stream in self.streams if stream.status == ManagedStream.STATUS_RUNNING
+        ]
+        if t:
+            log.info("resuming %i downloads", len(t))
 
     async def reflect_streams(self):
         while True:

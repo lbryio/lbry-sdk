@@ -82,11 +82,11 @@ class StreamAssembler:
         if not self.got_descriptor.is_set():
             self.got_descriptor.set()
         await self.after_got_descriptor()
-        self.stream_handle = open(self.output_path, 'wb')
         await self.blob_manager.storage.store_stream(
             self.sd_blob, self.descriptor
         )
-        try:
+        with open(self.output_path, 'wb') as stream_handle:
+            self.stream_handle = stream_handle
             for blob_info in self.descriptor.blobs[:-1]:
                 while True:
                     try:
@@ -101,10 +101,8 @@ class StreamAssembler:
                                     self.descriptor.sd_hash)
                         continue
 
-            self.stream_finished_event.set()
-            await self.after_finished()
-        finally:
-            self.stream_handle.close()
+        self.stream_finished_event.set()
+        await self.after_finished()
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         return self.blob_manager.get_blob(blob_hash, length)
