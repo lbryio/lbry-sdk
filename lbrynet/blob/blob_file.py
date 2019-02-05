@@ -111,9 +111,9 @@ class BlobFile:
             if self.verified.is_set():
                 return
             await self.loop.run_in_executor(None, _save_verified)
-            self.verified.set()
             if self.blob_completed_callback:
                 await self.blob_completed_callback(self)
+            self.verified.set()
 
     def open_for_writing(self) -> HashBlobWriter:
         if os.path.exists(self.file_path):
