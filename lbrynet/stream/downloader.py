@@ -47,11 +47,9 @@ class StreamDownloader(StreamAssembler):
     async def after_got_descriptor(self):
         self.search_queue.put_nowait(self.descriptor.blobs[0].blob_hash)
         log.info("added head blob to search")
-        await self.blob_manager.set_should_announce(self.sd_hash, 1)
 
     async def after_finished(self):
         log.info("downloaded stream %s -> %s", self.sd_hash, self.output_path)
-        await self.blob_manager.set_should_announce(self.descriptor.blobs[0].blob_hash, 1)
         await self.blob_manager.storage.change_file_status(self.descriptor.stream_hash, 'finished')
 
     def stop(self):
