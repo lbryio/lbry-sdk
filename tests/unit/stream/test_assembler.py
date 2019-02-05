@@ -4,9 +4,9 @@ import tempfile
 import shutil
 from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
-from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.stream.assembler import StreamAssembler
 from lbrynet.stream.descriptor import StreamDescriptor
 
@@ -55,6 +55,11 @@ class TestStreamAssembler(AsyncioTestCase):
             decrypted = f.read()
         self.assertEqual(decrypted, self.cleartext)
         self.assertEqual(True, self.blob_manager.get_blob(sd_hash).get_is_verified())
+        self.assertEqual(True, self.blob_manager.get_blob(descriptor.blobs[0].blob_hash).get_is_verified())
+        self.assertEqual(2, len(await downloader_storage.get_all_finished_blobs()))
+        self.assertEqual(
+            [descriptor.sd_hash, descriptor.blobs[0].blob_hash], await downloader_storage.get_blobs_to_announce()
+        )
 
         await downloader_storage.close()
         await self.storage.close()
