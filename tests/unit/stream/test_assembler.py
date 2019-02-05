@@ -22,7 +22,7 @@ class TestStreamAssembler(AsyncioTestCase):
     async def test_create_and_decrypt_one_blob_stream(self):
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-        self.storage = SQLiteStorage(Config(), os.path.join(tmp_dir, "lbrynet.sqlite"))
+        self.storage = SQLiteStorage(Config(), ":memory:")
         await self.storage.open()
         self.blob_manager = BlobFileManager(self.loop, tmp_dir, self.storage)
 
@@ -58,7 +58,8 @@ class TestStreamAssembler(AsyncioTestCase):
         self.assertEqual(decrypted, self.cleartext)
         self.assertEqual(True, self.blob_manager.get_blob(sd_hash).get_is_verified())
         self.assertEqual(True, self.blob_manager.get_blob(descriptor.blobs[0].blob_hash).get_is_verified())
-        self.assertEqual(2, len(await downloader_storage.get_all_finished_blobs()))
+        # its all blobs + sd blob - last blob, which is the same size as descriptor.blobs
+        self.assertEqual(len(descriptor.blobs), len(await downloader_storage.get_all_finished_blobs()))
         self.assertEqual(
             [descriptor.sd_hash, descriptor.blobs[0].blob_hash], await downloader_storage.get_blobs_to_announce()
         )
