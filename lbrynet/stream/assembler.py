@@ -89,12 +89,12 @@ class StreamAssembler:
         with open(self.output_path, 'wb') as stream_handle:
             self.stream_handle = stream_handle
             for blob_info in self.descriptor.blobs[:-1]:
-                while True:
+                while not stream_handle.closed:
                     try:
                         blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
                         if await self._decrypt_blob(blob, blob_info, self.descriptor.key):
                             await self.blob_manager.blob_completed(blob)
-                        break
+                            break
                     except FileNotFoundError:
                         log.debug("stream assembler stopped")
                         return
