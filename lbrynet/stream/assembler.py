@@ -59,6 +59,7 @@ class StreamAssembler:
             self.wrote_bytes_event.set()
 
         await self.loop.run_in_executor(None, _decrypt_and_write)
+        return True
 
     async def setup(self):
         pass
@@ -74,25 +75,26 @@ class StreamAssembler:
             raise OSError(f"output directory does not exist: '{output_dir}' '{output_file_name}'")
         await self.setup()
         self.sd_blob = await self.get_blob(self.sd_hash)
-        await self.blob_manager.blob_completed(self.sd_blob)
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_manager.blob_dir,
                                                                              self.sd_blob)
+        await self.after_got_descriptor()
         self.output_path = await get_next_available_file_name(self.loop, output_dir,
                                                               output_file_name or self.descriptor.suggested_file_name)
         if not self.got_descriptor.is_set():
             self.got_descriptor.set()
-        await self.after_got_descriptor()
         await self.blob_manager.storage.store_stream(
             self.sd_blob, self.descriptor
         )
+        await self.blob_manager.blob_completed(self.sd_blob)
         with open(self.output_path, 'wb') as stream_handle:
             self.stream_handle = stream_handle
             for blob_info in self.descriptor.blobs[:-1]:
-                while True:
+                while not stream_handle.closed:
                     try:
                         blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
-                        await self._decrypt_blob(blob, blob_info, self.descriptor.key)
-                        break
+                        if await self._decrypt_blob(blob, blob_info, self.descriptor.key):
+                            await self.blob_manager.blob_completed(blob)
+                            break
                     except FileNotFoundError:
                         log.debug("stream assembler stopped")
                         return

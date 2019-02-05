@@ -160,8 +160,6 @@ class ManagedStream:
         await blob_manager.blob_completed(sd_blob)
         for blob in descriptor.blobs[:-1]:
             await blob_manager.blob_completed(blob_manager.get_blob(blob.blob_hash, blob.length))
-        await blob_manager.set_should_announce(sd_blob.blob_hash, 1)
-        await blob_manager.set_should_announce(descriptor.blobs[0].blob_hash, 1)
         return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
 
