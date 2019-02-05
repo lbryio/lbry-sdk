@@ -70,7 +70,7 @@ class StreamDownloader(StreamAssembler):
     def add_fixed_peers(self):
         async def _add_fixed_peers():
             self.peer_queue.put_nowait([
-                KademliaPeer(self.loop, address=(await resolve_host(url)), tcp_port=port + 1)
+                KademliaPeer(self.loop, address=(await resolve_host(url, port + 1, proto='tcp')), tcp_port=port + 1)
                 for url, port in self.config.reflector_servers
             ])
         if self.config.reflector_servers:

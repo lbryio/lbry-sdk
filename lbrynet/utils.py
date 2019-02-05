@@ -142,7 +142,9 @@ def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
         cancel_task(tasks.pop())
 
 
-async def resolve_host(url: str) -> str:
+async def resolve_host(url: str, port: int, proto: str) -> str:
+    if proto not in ['udp', 'tcp']:
+        raise Exception("invalid protocol")
     try:
         if ipaddress.ip_address(url):
             return url
@@ -150,6 +152,7 @@ async def resolve_host(url: str) -> str:
         pass
     loop = asyncio.get_running_loop()
     return (await loop.getaddrinfo(
-        url, 'https',
-        proto=socket.IPPROTO_TCP,
+        url, port,
+        proto=socket.IPPROTO_TCP if proto == 'tcp' else socket.SOCK_DGRAM,
+        type=socket.SOCK_STREAM
     ))[0][4][0]
