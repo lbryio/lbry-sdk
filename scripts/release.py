@@ -29,16 +29,20 @@ def get_github():
         with open(config_path, 'r') as config_file:
             config = json.load(config_file)
             return github3.login(token=config['token'])
-    print('GitHub Credentials')
-    username = input('username: ')
-    password = getpass('password: ')
-    gh = github3.authorize(
-        username, password, ['repo'], 'lbry release tool',
-        two_factor_callback=lambda: input('Enter 2FA: ')
-    )
-    with open(config_path, 'w') as config_file:
-        json.dump({'token': gh.token}, config_file)
-    return github3.login(token=gh.token)
+
+    token = os.environ.get("GH_TOKEN")
+    if not token:
+        print('GitHub Credentials')
+        username = input('username: ')
+        password = getpass('password: ')
+        gh = github3.authorize(
+            username, password, ['repo'], 'lbry release tool',
+            two_factor_callback=lambda: input('Enter 2FA: ')
+        )
+        with open(config_path, 'w') as config_file:
+            json.dump({'token': gh.token}, config_file)
+        token = gh.token
+    return github3.login(token=token)
 
 
 def get_labels(pr, prefix):
@@ -54,12 +58,19 @@ def get_label(pr, prefix):
 
 
 BACKWARDS_INCOMPATIBLE = 'backwards-incompatible:'
+RELEASE_TEXT = "release-text:"
 
 
 def get_backwards_incompatible(desc: str):
     for line in desc.splitlines():
         if line.startswith(BACKWARDS_INCOMPATIBLE):
             yield line[len(BACKWARDS_INCOMPATIBLE):]
+
+
+def get_release_text(desc: str):
+    for line in desc.splitlines():
+        if line.startswith(RELEASE_TEXT):
+            yield line[len(RELEASE_TEXT):]
 
 
 def get_previous_final(repo, current_release):
@@ -139,6 +150,7 @@ def release(args):
         previous_release = repo.release_from_tag(current_version.tag)
 
     incompats = []
+    release_texts = []
     areas = {}
     for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry"):
         for area_name in get_labels(pr, 'area'):
@@ -146,6 +158,8 @@ def release(args):
             type_label = get_label(pr, "type")
             for incompat in get_backwards_incompatible(pr.body):
                 incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
+            for incompat in get_release_text(pr.body):
+                release_texts.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
             if not (args.action == '*-rc' and type_label == 'fixup'):
                 area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
 
@@ -156,6 +170,11 @@ def release(args):
     w = lambda s: body.write(s+'\n')
 
     w(f'## [{new_version}] - {date.today().isoformat()}')
+    if release_texts:
+        w('')
+        for release_text in release_texts:
+            w(release_text)
+            w('')
     if incompats:
         w('')
         w(f'### Backwards Incompatible Changes')
