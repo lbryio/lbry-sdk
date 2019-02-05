@@ -170,6 +170,10 @@ class ManagedStream:
     def stop_download(self):
         if self.downloader:
             self.downloader.stop()
+            if not self.downloader.stream_finished_event.is_set() and self.downloader.wrote_bytes_event.is_set():
+                path = os.path.join(self.download_directory, self.file_name)
+                if os.path.isfile(path):
+                    os.remove(path)
         if not self.finished:
             self.update_status(self.STATUS_STOPPED)
 
