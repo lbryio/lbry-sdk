@@ -102,6 +102,8 @@ class StreamDescriptor:
             raise InvalidStreamDescriptorError("Contains zero-length data blob")
         if 'blob_hash' in decoded['blobs'][-1]:
             raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
+        if any([i != blob_info['blob_num'] for i, blob_info in enumerate(decoded['blobs'])]):
+            raise InvalidStreamDescriptorError("Stream contains out of order or skipped blobs")
         descriptor = cls(
             loop, blob_dir,
             binascii.unhexlify(decoded['stream_name']).decode(),

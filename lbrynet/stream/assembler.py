@@ -88,7 +88,10 @@ class StreamAssembler:
         await self.blob_manager.blob_completed(self.sd_blob)
         with open(self.output_path, 'wb') as stream_handle:
             self.stream_handle = stream_handle
-            for blob_info in self.descriptor.blobs[:-1]:
+            for i, blob_info in enumerate(self.descriptor.blobs[:-1]):
+                if blob_info.blob_num != i:
+                    log.error("sd blob %s is invalid, cannot assemble stream", self.descriptor.sd_hash)
+                    return
                 while not stream_handle.closed:
                     try:
                         blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
