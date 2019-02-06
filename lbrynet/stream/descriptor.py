@@ -58,6 +58,10 @@ class StreamDescriptor:
         self.stream_hash = stream_hash or self.get_stream_hash()
         self.sd_hash = sd_hash
 
+    @property
+    def length(self):
+        return len(self.as_json())
+
     def get_stream_hash(self) -> str:
         return self.calculate_stream_hash(
             binascii.hexlify(self.stream_name.encode()), self.key.encode(),

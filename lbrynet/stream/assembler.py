@@ -96,6 +96,10 @@ class StreamAssembler:
                     while self.stream_handle and not self.stream_handle.closed:
                         try:
                             blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
+                            if blob and blob.length != blob_info.length:
+                                log.warning("Found incomplete, deleting: %s", blob_info.blob_hash)
+                                await self.blob_manager.delete_blobs([blob_info.blob_hash])
+                                continue
                             if await self._decrypt_blob(blob, blob_info, self.descriptor.key):
                                 await self.blob_manager.blob_completed(blob)
                                 written_blobs = i
