@@ -279,7 +279,6 @@ class StreamManager:
                                          fee_amount: typing.Optional[float] = 0.0,
                                          fee_address: typing.Optional[str] = None,
                                          should_pay: typing.Optional[bool] = True) -> typing.Optional[ManagedStream]:
-        log.info("get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
         claim = ClaimDict.load_dict(claim_info['value'])
         sd_hash = claim.source_hash.decode()
         if sd_hash in self.starting_streams:
@@ -306,7 +305,6 @@ class StreamManager:
         finally:
             if sd_hash in self.starting_streams:
                 del self.starting_streams[sd_hash]
-            log.info("returned from get lbry://%s#%s", claim_info['name'], claim_info['claim_id'])
 
     def get_stream_by_stream_hash(self, stream_hash: str) -> typing.Optional[ManagedStream]:
         streams = tuple(filter(lambda stream: stream.stream_hash == stream_hash, self.streams))
