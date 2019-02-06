@@ -323,7 +323,7 @@ class BlobComponent(Component):
     async def stop(self):
         while self.blob_manager and self.blob_manager.blobs:
             _, blob = self.blob_manager.blobs.popitem()
-            await blob.close()
+            blob.close()
 
     async def get_status(self):
         count = 0

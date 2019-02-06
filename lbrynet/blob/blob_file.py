@@ -132,16 +132,18 @@ class BlobFile:
         with open(self.file_path, 'rb') as handle:
             return await self.loop.sendfile(writer.transport, handle, count=self.get_length())
 
-    async def close(self):
+    def close(self):
         while self.writers:
             self.writers.pop().finished.cancel()
 
     async def delete(self):
-        await self.close()
+        self.close()
         async with self.blob_write_lock:
             self.saved_verified_blob = False
             if os.path.isfile(self.file_path):
                 os.remove(self.file_path)
+            self.verified.clear()
+            self.finished_writing.clear()
 
     def decrypt(self, key: bytes, iv: bytes) -> bytes:
         """
