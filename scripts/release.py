@@ -158,8 +158,8 @@ def release(args):
             type_label = get_label(pr, "type")
             for incompat in get_backwards_incompatible(pr.body):
                 incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
-            for incompat in get_release_text(pr.body):
-                release_texts.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
+            for release_text in get_release_text(pr.body):
+                release_texts.append(f'{release_text.strip()} ({pr.html_url})')
             if not (args.action == '*-rc' and type_label == 'fixup'):
                 area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
 
