@@ -19,7 +19,8 @@ except ImportError:
 
 
 AREA_RENAME = {
-    'api': 'API'
+    'api': 'API',
+    'dht': 'DHT'
 }
 
 
@@ -151,17 +152,22 @@ def release(args):
 
     incompats = []
     release_texts = []
+    unlabeled = []
     areas = {}
     for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry"):
-        for area_name in get_labels(pr, 'area'):
-            area = areas.setdefault(area_name, [])
-            type_label = get_label(pr, "type")
-            for incompat in get_backwards_incompatible(pr.body):
-                incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
-            for release_text in get_release_text(pr.body):
-                release_texts.append(f'{release_text.strip()} ({pr.html_url})')
-            if not (args.action == '*-rc' and type_label == 'fixup'):
-                area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
+        area_labels = list(get_labels(pr, 'area'))
+        type_label = get_label(pr, 'type')
+        if area_labels and type_label:
+            for area_name in area_labels:
+                for incompat in get_backwards_incompatible(pr.body):
+                    incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
+                for release_text in get_release_text(pr.body):
+                    release_texts.append(f'{release_text.strip()} ({pr.html_url})')
+                if not (args.action == '*-rc' and type_label == 'fixup'):
+                    area = areas.setdefault(area_name, [])
+                    area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
+        else:
+            unlabeled.append(f'  * {pr.title} ({pr.html_url}) by {pr.user["login"]}')
 
     area_names = list(areas.keys())
     area_names.sort()
@@ -182,13 +188,18 @@ def release(args):
             w(incompat)
     for area in area_names:
         prs = areas[area]
-        area = AREA_RENAME.get(area, area.capitalize())
+        area = AREA_RENAME.get(area.lower(), area.capitalize())
         w('')
         w(f'### {area}')
         for pr in prs:
             w(pr)
 
     print(body.getvalue())
+
+    if unlabeled:
+        print('The following PRs were skipped and not included in changelog:')
+        for skipped in unlabeled:
+            print(skipped)
 
     if not args.dry_run:
 
