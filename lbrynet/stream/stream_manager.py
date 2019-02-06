@@ -4,7 +4,7 @@ import typing
 import binascii
 import logging
 import random
-from lbrynet.error import ResolveError
+from lbrynet.error import ResolveError, InvalidStreamDescriptorError
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -97,8 +97,9 @@ class StreamManager:
                 await asyncio.wait_for(self.loop.create_task(stream.downloader.got_descriptor.wait()),
                                        self.config.download_timeout)
             except asyncio.TimeoutError:
-                stream.stop_download()
-                stream.downloader = None
+                await self.stop_stream(stream)
+                if stream in self.streams:
+                    self.streams.remove(stream)
                 return False
             file_name = os.path.basename(stream.downloader.output_path)
             await self.storage.change_file_download_dir_and_file_name(
@@ -108,6 +109,18 @@ class StreamManager:
             return True
         return True
 
+    async def stop_stream(self, stream: ManagedStream):
+        stream.stop_download()
+        if not stream.finished and os.path.isfile(stream.full_path):
+            try:
+                os.remove(stream.full_path)
+            except OSError as err:
+                log.warning("Failed to delete partial download %s from downloads directory: %s", stream.full_path,
+                            str(err))
+        if stream.running:
+            stream.update_status(ManagedStream.STATUS_STOPPED)
+            await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_STOPPED)
+
     def make_downloader(self, sd_hash: str, download_directory: str, file_name: str):
         return StreamDownloader(
             self.loop, self.config, self.blob_manager, sd_hash, download_directory, file_name
@@ -116,13 +129,15 @@ class StreamManager:
     async def add_stream(self, sd_hash: str, file_name: str, download_directory: str, status: str, claim):
         sd_blob = self.blob_manager.get_blob(sd_hash)
         if sd_blob.get_is_verified():
-            descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
+            try:
+                descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
+            except InvalidStreamDescriptorError as err:
+                log.warning("Failed to start stream for sd %s - %s", sd_hash, str(err))
+                return
+
             downloader = self.make_downloader(descriptor.sd_hash, download_directory, file_name)
             stream = ManagedStream(
-                self.loop, self.blob_manager, descriptor,
-                download_directory,
-                file_name,
-                downloader, status, claim
+                self.loop, self.blob_manager, descriptor, download_directory, file_name, downloader, status, claim
             )
             self.streams.add(stream)
             self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
@@ -194,18 +209,14 @@ class StreamManager:
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
-        stream.stop_download()
-        self.streams.remove(stream)
+        await self.stop_stream(stream)
+        if stream in self.streams:
+            self.streams.remove(stream)
+        blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
+        await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
         await self.storage.delete_stream(stream.descriptor)
-
-        blob_hashes = [stream.sd_hash]
-        for blob_info in stream.descriptor.blobs[:-1]:
-            blob_hashes.append(blob_info.blob_hash)
-        await self.blob_manager.delete_blobs(blob_hashes)
-        if delete_file:
-            path = os.path.join(stream.download_directory, stream.file_name)
-            if os.path.isfile(path):
-                os.remove(path)
+        if delete_file and os.path.isfile(stream.full_path):
+            os.remove(stream.full_path)
 
     def wait_for_stream_finished(self, stream: ManagedStream):
         async def _wait_for_stream_finished():
@@ -213,6 +224,7 @@ class StreamManager:
                 try:
                     await stream.downloader.stream_finished_event.wait()
                     stream.update_status(ManagedStream.STATUS_FINISHED)
+                    await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_FINISHED)
                 except asyncio.CancelledError:
                     pass
         task = self.loop.create_task(_wait_for_stream_finished())

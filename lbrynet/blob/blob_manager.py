@@ -63,23 +63,23 @@ class BlobFileManager:
         blob_hashes = await self.storage.get_all_blob_hashes()
         return self.check_completed_blobs(blob_hashes)
 
-    async def delete_blobs(self, blob_hashes: typing.List[str]):
-        bh_to_delete_from_db = []
-        for blob_hash in blob_hashes:
-            if not blob_hash:
-                continue
-            try:
-                blob = self.get_blob(blob_hash)
-                await blob.delete()
-                bh_to_delete_from_db.append(blob_hash)
-            except Exception as e:
-                log.warning("Failed to delete blob file. Reason: %s", e)
-            if blob_hash in self.completed_blob_hashes:
-                self.completed_blob_hashes.remove(blob_hash)
-            if blob_hash in self.blobs:
-                del self.blobs[blob_hash]
+    async def delete_blob(self, blob_hash: str):
         try:
-            await self.storage.delete_blobs_from_db(bh_to_delete_from_db)
-        except IntegrityError as err:
-            if str(err) != "FOREIGN KEY constraint failed":
-                raise err
+            blob = self.get_blob(blob_hash)
+            await blob.delete()
+        except Exception as e:
+            log.warning("Failed to delete blob file. Reason: %s", e)
+        if blob_hash in self.completed_blob_hashes:
+            self.completed_blob_hashes.remove(blob_hash)
+        if blob_hash in self.blobs:
+            del self.blobs[blob_hash]
+
+    async def delete_blobs(self, blob_hashes: typing.List[str], delete_from_db: typing.Optional[bool] = True):
+        bh_to_delete_from_db = []
+        await asyncio.gather(*map(self.delete_blob, blob_hashes), loop=self.loop)
+        if delete_from_db:
+            try:
+                await self.storage.delete_blobs_from_db(bh_to_delete_from_db)
+            except IntegrityError as err:
+                if str(err) != "FOREIGN KEY constraint failed":
+                    raise err
