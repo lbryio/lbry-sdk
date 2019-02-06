@@ -474,7 +474,12 @@ class KademliaProtocol(DatagramProtocol):
         remote_exception = RemoteException(f"{error_datagram.exception_type}({error_datagram.response})")
         if error_datagram.rpc_id in self.sent_messages:
             peer, df, request = self.sent_messages.pop(error_datagram.rpc_id)
-
+            if (peer.address, peer.udp_port) != address:
+                df.set_exception(RemoteException(
+                    f"response from {address[0]}:{address[1]}, "
+                    f"expected {peer.address}:{peer.udp_port}")
+                )
+                return
             error_msg = f"" \
                 f"Error sending '{request.method}' to {peer.address}:{peer.udp_port}\n" \
                 f"Args: {request.args}\n" \
@@ -484,11 +489,6 @@ class KademliaProtocol(DatagramProtocol):
             else:
                 log.warning("known dht protocol backwards compatibility error with %s:%i (lbrynet v%s)",
                             peer.address, peer.udp_port, old_protocol_errors[error_datagram.response])
-
-            # reject replies coming from a different address than what we sent our request to
-            if (peer.address, peer.udp_port) != address:
-                log.error("node id mismatch in reply")
-                remote_exception = TimeoutError(peer.node_id)
             df.set_exception(remote_exception)
             return
         else:

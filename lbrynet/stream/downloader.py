@@ -63,6 +63,10 @@ class StreamDownloader(StreamAssembler):
             self.fixed_peers_handle.cancel()
             self.fixed_peers_handle = None
         self.blob_downloader = None
+        if self.stream_handle:
+            if not self.stream_handle.closed:
+                self.stream_handle.close()
+            self.stream_handle = None
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         return await self.blob_downloader.download_blob(blob_hash, length)

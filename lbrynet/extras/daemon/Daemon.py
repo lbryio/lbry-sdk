@@ -1614,7 +1614,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.stream_manager.start_stream(stream)
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
-            stream.stop_download()
+            await self.stream_manager.stop_stream(stream)
             msg = "Stopped download"
         else:
             msg = (

@@ -104,8 +104,12 @@ class ManagedStream:
     def blobs_remaining(self) -> int:
         return self.blobs_in_stream - self.blobs_completed
 
+    @property
+    def full_path(self) -> str:
+        return os.path.join(self.download_directory, os.path.basename(self.file_name))
+
     def as_dict(self) -> typing.Dict:
-        full_path = os.path.join(self.download_directory, self.file_name)
+        full_path = self.full_path
         if not os.path.isfile(full_path):
             full_path = None
         mime_type = guess_media_type(os.path.basename(self.file_name))
@@ -170,12 +174,7 @@ class ManagedStream:
     def stop_download(self):
         if self.downloader:
             self.downloader.stop()
-            if not self.downloader.stream_finished_event.is_set() and self.downloader.wrote_bytes_event.is_set():
-                path = os.path.join(self.download_directory, self.file_name)
-                if os.path.isfile(path):
-                    os.remove(path)
-        if not self.finished:
-            self.update_status(self.STATUS_STOPPED)
+        self.downloader = None
 
     async def upload_to_reflector(self, host: str, port: int) -> typing.List[str]:
         sent = []

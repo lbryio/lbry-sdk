@@ -43,7 +43,7 @@ class StreamAssembler:
         self.written_bytes: int = 0
 
     async def _decrypt_blob(self, blob: 'BlobFile', blob_info: 'BlobInfo', key: str):
-        if not blob or self.stream_handle.closed:
+        if not blob or not self.stream_handle or self.stream_handle.closed:
             return False
 
         def _decrypt_and_write():
@@ -56,7 +56,6 @@ class StreamAssembler:
             self.stream_handle.flush()
             self.written_bytes += len(_decrypted)
             log.debug("decrypted %s", blob.blob_hash[:8])
-            self.wrote_bytes_event.set()
 
         await self.loop.run_in_executor(None, _decrypt_and_write)
         return True
@@ -86,28 +85,39 @@ class StreamAssembler:
             self.sd_blob, self.descriptor
         )
         await self.blob_manager.blob_completed(self.sd_blob)
-        with open(self.output_path, 'wb') as stream_handle:
-            self.stream_handle = stream_handle
-            for i, blob_info in enumerate(self.descriptor.blobs[:-1]):
-                if blob_info.blob_num != i:
-                    log.error("sd blob %s is invalid, cannot assemble stream", self.descriptor.sd_hash)
-                    return
-                while not stream_handle.closed:
-                    try:
-                        blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
-                        if await self._decrypt_blob(blob, blob_info, self.descriptor.key):
-                            await self.blob_manager.blob_completed(blob)
-                            break
-                    except FileNotFoundError:
-                        log.debug("stream assembler stopped")
+        written_blobs = None
+        try:
+            with open(self.output_path, 'wb') as stream_handle:
+                self.stream_handle = stream_handle
+                for i, blob_info in enumerate(self.descriptor.blobs[:-1]):
+                    if blob_info.blob_num != i:
+                        log.error("sd blob %s is invalid, cannot assemble stream", self.descriptor.sd_hash)
                         return
-                    except (ValueError, IOError, OSError):
-                        log.warning("failed to decrypt blob %s for stream %s", blob_info.blob_hash,
-                                    self.descriptor.sd_hash)
-                        continue
-
-        self.stream_finished_event.set()
-        await self.after_finished()
+                    while self.stream_handle and not self.stream_handle.closed:
+                        try:
+                            blob = await self.get_blob(blob_info.blob_hash, blob_info.length)
+                            if await self._decrypt_blob(blob, blob_info, self.descriptor.key):
+                                await self.blob_manager.blob_completed(blob)
+                                written_blobs = i
+                                if not self.wrote_bytes_event.is_set():
+                                    self.wrote_bytes_event.set()
+                                log.debug("written %i/%i", written_blobs, len(self.descriptor.blobs) - 2)
+                                break
+                        except FileNotFoundError:
+                            log.debug("stream assembler stopped")
+                            return
+                        except (ValueError, IOError, OSError):
+                            log.warning("failed to decrypt blob %s for stream %s", blob_info.blob_hash,
+                                        self.descriptor.sd_hash)
+                            continue
+        finally:
+            if written_blobs == len(self.descriptor.blobs) - 2:
+                log.debug("finished decrypting and assembling stream")
+                await self.after_finished()
+                self.stream_finished_event.set()
+            else:
+                log.debug("stream decryption and assembly did not finish (%i/%i blobs are done)", written_blobs or 0,
+                          len(self.descriptor.blobs) - 2)
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         return self.blob_manager.get_blob(blob_hash, length)

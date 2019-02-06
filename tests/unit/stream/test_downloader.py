@@ -37,15 +37,16 @@ class TestStreamDownloader(BlobExchangeTestBase):
             return q2, self.loop.create_task(_task())
 
         mock_node.accumulate_peers = mock_accumulate_peers or _mock_accumulate_peers
-
         self.downloader.download(mock_node)
         await self.downloader.stream_finished_event.wait()
+        self.assertTrue(self.downloader.stream_handle.closed)
+        self.assertTrue(os.path.isfile(self.downloader.output_path))
         self.downloader.stop()
+        self.assertIs(self.downloader.stream_handle, None)
         self.assertTrue(os.path.isfile(self.downloader.output_path))
         with open(self.downloader.output_path, 'rb') as f:
             self.assertEqual(f.read(), self.stream_bytes)
         await asyncio.sleep(0.01)
-        self.assertTrue(self.downloader.stream_handle.closed)
 
     async def test_transfer_stream(self):
         await self._test_transfer_stream(10)

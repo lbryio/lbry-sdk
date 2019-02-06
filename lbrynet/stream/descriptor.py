@@ -86,7 +86,7 @@ class StreamDescriptor:
             writer = sd_blob.open_for_writing()
             writer.write(sd_data)
         await sd_blob.verified.wait()
-        await sd_blob.close()
+        sd_blob.close()
         return sd_blob
 
     @classmethod
