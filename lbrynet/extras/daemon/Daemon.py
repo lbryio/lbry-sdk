@@ -1571,12 +1571,16 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        stream = await self.stream_manager.download_stream_from_uri(
-            uri, self.exchange_rate_manager, file_name, timeout
-        )
-        if stream:
+        try:
+            stream = await self.stream_manager.download_stream_from_uri(
+                uri, self.exchange_rate_manager, file_name, timeout
+            )
+            if not stream:
+                raise DownloadSDTimeout(uri)
+        except Exception as e:
+            return {"error": str(e)}
+        else:
             return stream.as_dict()
-        raise DownloadSDTimeout(uri)
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
