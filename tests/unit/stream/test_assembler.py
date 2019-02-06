@@ -19,7 +19,7 @@ class TestStreamAssembler(AsyncioTestCase):
         self.key = b'deadbeef' * 4
         self.cleartext = b'test'
 
-    async def test_create_and_decrypt_one_blob_stream(self):
+    async def test_create_and_decrypt_one_blob_stream(self, corrupt=False):
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         self.storage = SQLiteStorage(Config(), ":memory:")
@@ -42,6 +42,11 @@ class TestStreamAssembler(AsyncioTestCase):
         for blob_info in sd.blobs:
             if blob_info.blob_hash:
                 shutil.copy(os.path.join(tmp_dir, blob_info.blob_hash), os.path.join(download_dir, blob_info.blob_hash))
+                if corrupt and blob_info.length == MAX_BLOB_SIZE:
+                    with open(os.path.join(download_dir, blob_info.blob_hash), "rb+") as handle:
+                        handle.truncate()
+                        handle.flush()
+
         downloader_storage = SQLiteStorage(Config(), os.path.join(download_dir, "lbrynet.sqlite"))
         await downloader_storage.open()
 
@@ -55,6 +60,8 @@ class TestStreamAssembler(AsyncioTestCase):
 
         with open(os.path.join(download_dir, "test_file"), "rb") as f:
             decrypted = f.read()
+        if corrupt:
+            return decrypted
         self.assertEqual(decrypted, self.cleartext)
         self.assertEqual(True, self.blob_manager.get_blob(sd_hash).get_is_verified())
         self.assertEqual(True, self.blob_manager.get_blob(descriptor.blobs[0].blob_hash).get_is_verified())
@@ -103,3 +110,9 @@ class TestStreamAssembler(AsyncioTestCase):
         self.assertEqual(
             [stream.sd_hash, stream.descriptor.blobs[0].blob_hash],
             await storage.get_blobs_to_announce())
+
+    async def test_create_truncate_and_handle_stream(self):
+        self.cleartext = b'potato' * 1337 * 5279
+        decrypted = await self.test_create_and_decrypt_one_blob_stream(corrupt=True)
+        # The purpose of this test is just to make sure it can finish even if a blob is corrupt/truncated
+        self.assertFalse(decrypted)

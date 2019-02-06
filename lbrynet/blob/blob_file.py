@@ -67,7 +67,7 @@ class BlobFile:
         self.finished_writing = asyncio.Event(loop=loop)
         self.blob_write_lock = asyncio.Lock(loop=loop)
         if os.path.isfile(os.path.join(blob_dir, blob_hash)):
-            length = length or int(os.stat(os.path.join(blob_dir, blob_hash)).st_size)
+            length = int(os.stat(os.path.join(blob_dir, blob_hash)).st_size)
             self.length = length
             self.verified.set()
             self.finished_writing.set()
