@@ -109,12 +109,13 @@ class StreamAssembler:
                                         self.descriptor.sd_hash)
                             continue
         finally:
-            if written_blobs == len(self.descriptor.blobs) - 1:
+            if written_blobs == len(self.descriptor.blobs) - 2:
                 log.debug("finished decrypting and assembling stream")
                 self.stream_finished_event.set()
                 await self.after_finished()
             else:
-                log.debug("stream decryption and assembly did not finish")
+                log.debug("stream decryption and assembly did not finish (%i/%i blobs are done)", written_blobs,
+                          len(self.descriptor.blobs) - 2)
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         return self.blob_manager.get_blob(blob_hash, length)
