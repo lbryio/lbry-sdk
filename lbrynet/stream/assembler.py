@@ -113,8 +113,8 @@ class StreamAssembler:
         finally:
             if written_blobs == len(self.descriptor.blobs) - 2:
                 log.debug("finished decrypting and assembling stream")
-                self.stream_finished_event.set()
                 await self.after_finished()
+                self.stream_finished_event.set()
             else:
                 log.debug("stream decryption and assembly did not finish (%i/%i blobs are done)", written_blobs or 0,
                           len(self.descriptor.blobs) - 2)

@@ -224,7 +224,6 @@ class StreamManager:
                 try:
                     await stream.downloader.stream_finished_event.wait()
                     stream.update_status(ManagedStream.STATUS_FINISHED)
-                    await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_FINISHED)
                 except asyncio.CancelledError:
                     pass
         task = self.loop.create_task(_wait_for_stream_finished())

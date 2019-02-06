@@ -96,11 +96,44 @@ class TestStreamManager(BlobExchangeTestBase):
                                             self.client_storage, get_mock_node(self.server_from_client))
         self.exchange_rate_manager = get_dummy_exchange_rate_manager(time)
 
-    async def test_download_from_uri(self):
+    async def test_download_stop_resume_delete(self):
         self.assertSetEqual(self.stream_manager.streams, set())
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        stream_hash = stream.stream_hash
+        self.assertSetEqual(self.stream_manager.streams, {stream})
         self.assertTrue(stream.running)
         self.assertFalse(stream.finished)
+        self.assertTrue(os.path.isfile(os.path.join(self.client_dir, "test_file")))
+        stored_status = await self.client_storage.run_and_return_one_or_none(
+            "select status from file where stream_hash=?", stream_hash
+        )
+        self.assertEqual(stored_status, "running")
+
+        await self.stream_manager.stop_stream(stream)
+
+        self.assertFalse(stream.finished)
+        self.assertFalse(stream.running)
+        self.assertFalse(os.path.isfile(os.path.join(self.client_dir, "test_file")))
+        stored_status = await self.client_storage.run_and_return_one_or_none(
+            "select status from file where stream_hash=?", stream_hash
+        )
+        self.assertEqual(stored_status, "stopped")
+
+        await self.stream_manager.start_stream(stream)
         await stream.downloader.stream_finished_event.wait()
+        await asyncio.sleep(0.01)
         self.assertTrue(stream.finished)
         self.assertFalse(stream.running)
+        self.assertTrue(os.path.isfile(os.path.join(self.client_dir, "test_file")))
+        stored_status = await self.client_storage.run_and_return_one_or_none(
+            "select status from file where stream_hash=?", stream_hash
+        )
+        self.assertEqual(stored_status, "finished")
+
+        await self.stream_manager.delete_stream(stream, True)
+        self.assertSetEqual(self.stream_manager.streams, set())
+        self.assertFalse(os.path.isfile(os.path.join(self.client_dir, "test_file")))
+        stored_status = await self.client_storage.run_and_return_one_or_none(
+            "select status from file where stream_hash=?", stream_hash
+        )
+        self.assertEqual(stored_status, None)
