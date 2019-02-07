@@ -32,6 +32,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
             return
+        if self._blob_bytes_received and not self.writer.closed():
+            return self._write(data)
 
         response = BlobResponse.deserialize(data)
 
@@ -51,23 +53,27 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if response.blob_data and self.writer and not self.writer.closed():
             log.debug("got %i blob bytes from %s:%i", len(response.blob_data), self.peer_address, self.peer_port)
             # write blob bytes if we're writing a blob and have blob bytes to write
-            if len(response.blob_data) > (self.blob.get_length() - self._blob_bytes_received):
-                data = response.blob_data[:(self.blob.get_length() - self._blob_bytes_received)]
-                log.warning("got more than asked from %s:%d, probable sendfile bug", self.peer_address, self.peer_port)
-            else:
-                data = response.blob_data
-            self._blob_bytes_received += len(data)
-            try:
-                self.writer.write(data)
-                return
-            except IOError as err:
-                log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
-                if self._response_fut and not self._response_fut.done():
-                    self._response_fut.set_exception(err)
-            except (asyncio.CancelledError, asyncio.TimeoutError) as err:  # TODO: is this needed?
-                log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
-                if self._response_fut and not self._response_fut.done():
-                    self._response_fut.set_exception(err)
+            self._write(response.blob_data)
+
+
+    def _write(self, data):
+        if len(data) > (self.blob.get_length() - self._blob_bytes_received):
+            data = data[:(self.blob.get_length() - self._blob_bytes_received)]
+            log.warning("got more than asked from %s:%d, probable sendfile bug", self.peer_address, self.peer_port)
+        else:
+            data = data
+        self._blob_bytes_received += len(data)
+        try:
+            self.writer.write(data)
+            return
+        except IOError as err:
+            log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
+            if self._response_fut and not self._response_fut.done():
+                self._response_fut.set_exception(err)
+        except (asyncio.CancelledError, asyncio.TimeoutError) as err:  # TODO: is this needed?
+            log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
+            if self._response_fut and not self._response_fut.done():
+                self._response_fut.set_exception(err)
 
     async def _download_blob(self) -> typing.Tuple[bool, bool]:
         """
