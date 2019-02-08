@@ -65,12 +65,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self._blob_bytes_received += len(data)
         try:
             self.writer.write(data)
-            return
         except IOError as err:
             log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
-        except (asyncio.CancelledError, asyncio.TimeoutError) as err:  # TODO: is this needed?
+        except (asyncio.TimeoutError) as err:  # TODO: is this needed?
             log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
@@ -119,8 +118,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             log.info(msg)
             await self.blob.finished_writing.wait()
             return True, True
-        except asyncio.CancelledError:
-            return False, True
         except asyncio.TimeoutError:
             return False, False
         except (InvalidBlobHashError, InvalidDataError):
@@ -159,7 +156,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         except asyncio.CancelledError:
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
-            return False, True
+            raise
 
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
@@ -186,7 +183,7 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: s
         await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
                                peer_connect_timeout, loop=loop)
         return await protocol.download_blob(blob)
-    except (asyncio.TimeoutError, asyncio.CancelledError, ConnectionRefusedError, ConnectionAbortedError, OSError):
+    except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
         return False, False
     finally:
         await protocol.close()
