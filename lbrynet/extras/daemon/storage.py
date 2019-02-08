@@ -308,16 +308,18 @@ class SQLiteStorage(SQLiteMixin):
                 r = transaction.execute(
                     "select blob_hash from blob "
                     "where blob_hash is not null and "
-                    "(should_announce=1 or single_announce=1) and next_announce_time<? and status='finished'",
-                    (timestamp,)
+                    "(should_announce=1 or single_announce=1) and next_announce_time<? and status='finished' "
+                    "order by next_announce_time asc limit ?",
+                    (timestamp, int(self.conf.concurrent_blob_announcers * 10))
                 )
             else:
                 r = transaction.execute(
                     "select blob_hash from blob where blob_hash is not null "
-                    "and next_announce_time<? and status='finished'", (timestamp,)
+                    "and next_announce_time<? and status='finished' "
+                    "order by next_announce_time asc limit ?",
+                    (timestamp, int(self.conf.concurrent_blob_announcers * 10))
                 )
-            blobs = [b[0] for b in r.fetchall()]
-            return blobs
+            return [b[0] for b in r.fetchall()]
         return self.db.run(get_and_update)
 
     def delete_blobs_from_db(self, blob_hashes):
