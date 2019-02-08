@@ -86,6 +86,7 @@ class StreamAssembler:
         )
         await self.blob_manager.blob_completed(self.sd_blob)
         written_blobs = None
+        save_tasks = []
         try:
             with open(self.output_path, 'wb') as stream_handle:
                 self.stream_handle = stream_handle
@@ -101,7 +102,7 @@ class StreamAssembler:
                                 await self.blob_manager.delete_blobs([blob_info.blob_hash])
                                 continue
                             if await self._decrypt_blob(blob, blob_info, self.descriptor.key):
-                                await self.blob_manager.blob_completed(blob)
+                                save_tasks.append(asyncio.ensure_future(self.blob_manager.blob_completed(blob)))
                                 written_blobs = i
                                 if not self.wrote_bytes_event.is_set():
                                     self.wrote_bytes_event.set()
@@ -115,6 +116,8 @@ class StreamAssembler:
                                         self.descriptor.sd_hash)
                             continue
         finally:
+            if save_tasks:
+                await asyncio.wait(save_tasks)
             if written_blobs == len(self.descriptor.blobs) - 2:
                 log.debug("finished decrypting and assembling stream")
                 await self.after_finished()
