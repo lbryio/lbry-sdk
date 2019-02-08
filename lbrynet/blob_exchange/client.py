@@ -137,7 +137,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.transport = None
 
     async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
-        if blob.get_is_verified() or blob.file_exists:
+        if blob.get_is_verified() or blob.file_exists or blob.blob_write_lock.locked():
             return 0, self.transport
         try:
             self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
