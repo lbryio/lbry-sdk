@@ -24,14 +24,15 @@ class BlobDownloader:
         self.ignored: typing.Set['KademliaPeer'] = set()
         self.scores: typing.Dict['KademliaPeer', int] = {}
         self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
+        self.rounds_won: typing.Dict['KademliaPeer', int] = {}
 
     def should_race_continue(self):
         if len(self.active_connections) >= self.config.max_connections_per_download:
             return False
-        # if a peer won 2 or more blob races and is active as a downloader, stop the race so bandwidth improves
+        # if a peer won 3 or more blob races and is active as a downloader, stop the race so bandwidth improves
         # the safe net side is that any failure will reset the peer score, triggering the race back
         for peer, task in self.active_connections.items():
-            if self.scores.get(peer, 0) >= 2 and not task.done():
+            if self.scores.get(peer, 0) >= 0 and self.rounds_won.get(peer, 0) >= 3 and not task.done():
                 return False
         return True
 
@@ -40,10 +41,13 @@ class BlobDownloader:
             return
         self.scores[peer] = self.scores.get(peer, 0) - 1  # starts losing score, to account for cancelled ones
         transport = self.connections.get(peer)
-        success, transport = await request_blob(
+        start = self.loop.time()
+        bytes_received, transport = await request_blob(
             self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
             self.config.blob_download_timeout, connected_transport=transport
         )
+        if bytes_received == blob.get_length():
+            self.rounds_won[peer] = self.rounds_won.get(peer, 0) + 1
         if not transport and peer not in self.ignored:
             self.ignored.add(peer)
             log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
@@ -52,7 +56,8 @@ class BlobDownloader:
         elif transport:
             log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
             self.connections[peer] = transport
-        self.scores[peer] = (self.scores.get(peer, 0) + 2) if success else 0
+        rough_speed = (bytes_received / (self.loop.time() - start)) if bytes_received else 0
+        self.scores[peer] = rough_speed
 
     async def new_peer_or_finished(self, blob: 'BlobFile'):
         async def get_and_re_add_peers():
@@ -113,8 +118,8 @@ class BlobDownloader:
             raise e
 
     def close(self):
-            for transport in self.connections.values():
-                transport.close()
+        for transport in self.connections.values():
+            transport.close()
 
 
 async def download_blob(loop, config: 'Config', blob_manager: 'BlobFileManager', node: 'Node',

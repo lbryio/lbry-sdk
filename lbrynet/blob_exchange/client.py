@@ -74,7 +74,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
 
-    async def _download_blob(self) -> typing.Tuple[bool, typing.Optional[asyncio.Transport]]:
+    async def _download_blob(self) -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
         """
         :return: download success (bool), keep connection (bool)
         """
@@ -92,24 +92,24 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 log.warning("%s not in availability response from %s:%i", self.blob.blob_hash, self.peer_address,
                             self.peer_port)
                 log.warning(response.to_dict())
-                return False, self.close()
+                return self._blob_bytes_received, self.close()
             elif availability_response.available_blobs and \
                     availability_response.available_blobs != [self.blob.blob_hash]:
                 log.warning("blob availability response doesn't match our request from %s:%i",
                             self.peer_address, self.peer_port)
-                return False, self.close()
+                return self._blob_bytes_received, self.close()
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':
                 log.warning("data rate rejected by %s:%i", self.peer_address, self.peer_port)
-                return False, self.close()
+                return self._blob_bytes_received, self.close()
             if not blob_response or blob_response.error:
                 log.warning("blob cant be downloaded from %s:%i", self.peer_address, self.peer_port)
-                return False, self.transport
+                return self._blob_bytes_received, self.transport
             if not blob_response.error and blob_response.blob_hash != self.blob.blob_hash:
                 log.warning("incoming blob hash mismatch from %s:%i", self.peer_address, self.peer_port)
-                return False, self.close()
+                return self._blob_bytes_received, self.close()
             if self.blob.length is not None and self.blob.length != blob_response.length:
                 log.warning("incoming blob unexpected length from %s:%i", self.peer_address, self.peer_port)
-                return False, self.close()
+                return self._blob_bytes_received, self.close()
             msg = f"downloading {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}," \
                 f" timeout in {self.peer_timeout}"
             log.debug(msg)
@@ -117,12 +117,12 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
             log.info(msg)
             await self.blob.finished_writing.wait()
-            return True, self.transport
+            return self._blob_bytes_received, self.transport
         except asyncio.TimeoutError:
-            return False, self.close()
+            return self._blob_bytes_received, self.close()
         except (InvalidBlobHashError, InvalidDataError):
             log.warning("invalid blob from %s:%i", self.peer_address, self.peer_port)
-            return False, self.close()
+            return self._blob_bytes_received, self.close()
 
     def close(self):
         if self._response_fut and not self._response_fut.done():
@@ -136,9 +136,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self.transport.close()
         self.transport = None
 
-    async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[bool, typing.Optional[asyncio.Transport]]:
+    async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
         if blob.get_is_verified() or blob.file_exists:
-            return False, self.transport
+            return 0, self.transport
         try:
             self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
             self._response_fut = asyncio.Future(loop=self.loop)
@@ -146,12 +146,12 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         except OSError:
             log.error("race happened downloading from %s:%i", self.peer_address, self.peer_port)
             # i'm not sure how to fix this race condition - jack
-            return False, self.transport
+            return self._blob_bytes_received, self.transport
         except asyncio.TimeoutError:
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
             self.close()
-            return False, None
+            return self._blob_bytes_received, None
         except asyncio.CancelledError:
             self.close()
             raise
@@ -170,14 +170,14 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: str, tcp_port: int,
                        peer_connect_timeout: float, blob_download_timeout: float,
                        connected_transport: asyncio.Transport = None)\
-        -> typing.Tuple[bool, typing.Optional[asyncio.Transport]]:
+        -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
     """
     Returns [<downloaded blob>, <keep connection>]
     """
 
     if blob.get_is_verified() or blob.file_exists:
         # file exists but not verified means someone is writing right now, give it time, come back later
-        return False, connected_transport
+        return 0, connected_transport
     protocol = BlobExchangeClientProtocol(loop, blob_download_timeout)
     if connected_transport and not connected_transport.is_closing():
         connected_transport.set_protocol(protocol)
@@ -190,4 +190,4 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: s
                                    peer_connect_timeout, loop=loop)
         return await protocol.download_blob(blob)
     except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
-        return False, None
+        return 0, None
