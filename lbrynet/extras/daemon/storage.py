@@ -145,9 +145,6 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
     ]
 
 
-
-
-
 class SQLiteStorage(SQLiteMixin):
     CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;
