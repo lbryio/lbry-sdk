@@ -31,9 +31,10 @@ class BlobDownloader:
             return False
         # if a peer won 3 or more blob races and is active as a downloader, stop the race so bandwidth improves
         # the safe net side is that any failure will reset the peer score, triggering the race back
-        for peer, task in self.active_connections.items():
-            if self.scores.get(peer, 0) >= 0 and self.rounds_won.get(peer, 0) >= 3 and not task.done():
-                return False
+        # TODO: this is a good idea for low bandwidth, but doesnt play nice on high bandwidth
+        # for peer, task in self.active_connections.items():
+        #   if self.scores.get(peer, 0) >= 0 and self.rounds_won.get(peer, 0) >= 3 and not task.done():
+        #       return False
         return True
 
     async def request_blob_from_peer(self, blob: 'BlobFile', peer: 'KademliaPeer'):
