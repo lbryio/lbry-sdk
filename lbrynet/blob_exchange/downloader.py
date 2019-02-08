@@ -24,6 +24,16 @@ class BlobDownloader:
         self.ignored: typing.Set['KademliaPeer'] = set()
         self.scores: typing.Dict['KademliaPeer', int] = {}
 
+    def should_race_continue(self):
+        if len(self.active_connections) >= self.config.max_connections_per_download:
+            return False
+        # if a peer won 2 or more blob races and is active as a downloader, stop the race so bandwidth improves
+        # the safe net side is that any failure will reset the peer score, triggering the race back
+        for peer, task in self.active_connections.items():
+            if self.scores.get(peer, 0) >= 2 and not task.done():
+                return False
+        return True
+
     async def request_blob_from_peer(self, blob: 'BlobFile', peer: 'KademliaPeer'):
         if blob.get_is_verified():
             return
@@ -37,7 +47,7 @@ class BlobDownloader:
             log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
         elif keep_connection:
             log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
-        self.scores[peer] = self.scores.get(peer, 0) + 2 if success else 0
+        self.scores[peer] = (self.scores.get(peer, 0) + 2) if success else 0
 
     async def new_peer_or_finished(self, blob: 'BlobFile'):
         async def get_and_re_add_peers():
@@ -70,7 +80,7 @@ class BlobDownloader:
                     len(batch), len(self.ignored), len(self.active_connections)
                 )
                 for peer in batch:
-                    if len(self.active_connections) >= self.config.max_connections_per_download:
+                    if not self.should_race_continue():
                         break
                     if peer not in self.active_connections and peer not in self.ignored:
                         log.debug("request %s from %s:%i", blob_hash[:8], peer.address, peer.tcp_port)
