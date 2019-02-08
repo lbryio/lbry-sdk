@@ -32,6 +32,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
             return
+        if self._blob_bytes_received and not self.writer.closed():
+            return self._write(data)
 
         response = BlobResponse.deserialize(data)
 
@@ -51,25 +53,28 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if response.blob_data and self.writer and not self.writer.closed():
             log.debug("got %i blob bytes from %s:%i", len(response.blob_data), self.peer_address, self.peer_port)
             # write blob bytes if we're writing a blob and have blob bytes to write
-            if len(response.blob_data) > (self.blob.get_length() - self._blob_bytes_received):
-                data = response.blob_data[:(self.blob.get_length() - self._blob_bytes_received)]
-                log.warning("got more than asked from %s:%d, probable sendfile bug", self.peer_address, self.peer_port)
-            else:
-                data = response.blob_data
-            self._blob_bytes_received += len(data)
-            try:
-                self.writer.write(data)
-                return
-            except IOError as err:
-                log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
-                if self._response_fut and not self._response_fut.done():
-                    self._response_fut.set_exception(err)
-            except (asyncio.CancelledError, asyncio.TimeoutError) as err:  # TODO: is this needed?
-                log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
-                if self._response_fut and not self._response_fut.done():
-                    self._response_fut.set_exception(err)
+            self._write(response.blob_data)
 
-    async def _download_blob(self) -> typing.Tuple[bool, bool]:
+
+    def _write(self, data):
+        if len(data) > (self.blob.get_length() - self._blob_bytes_received):
+            data = data[:(self.blob.get_length() - self._blob_bytes_received)]
+            log.warning("got more than asked from %s:%d, probable sendfile bug", self.peer_address, self.peer_port)
+        else:
+            data = data
+        self._blob_bytes_received += len(data)
+        try:
+            self.writer.write(data)
+        except IOError as err:
+            log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
+            if self._response_fut and not self._response_fut.done():
+                self._response_fut.set_exception(err)
+        except (asyncio.TimeoutError) as err:  # TODO: is this needed?
+            log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
+            if self._response_fut and not self._response_fut.done():
+                self._response_fut.set_exception(err)
+
+    async def _download_blob(self) -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
         """
         :return: download success (bool), keep connection (bool)
         """
@@ -87,43 +92,39 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 log.warning("%s not in availability response from %s:%i", self.blob.blob_hash, self.peer_address,
                             self.peer_port)
                 log.warning(response.to_dict())
-                return False, False
+                return self._blob_bytes_received, self.close()
             elif availability_response.available_blobs and \
                     availability_response.available_blobs != [self.blob.blob_hash]:
                 log.warning("blob availability response doesn't match our request from %s:%i",
                             self.peer_address, self.peer_port)
-                return False, False
+                return self._blob_bytes_received, self.close()
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':
                 log.warning("data rate rejected by %s:%i", self.peer_address, self.peer_port)
-                return False, False
+                return self._blob_bytes_received, self.close()
             if not blob_response or blob_response.error:
                 log.warning("blob cant be downloaded from %s:%i", self.peer_address, self.peer_port)
-                return False, True
+                return self._blob_bytes_received, self.transport
             if not blob_response.error and blob_response.blob_hash != self.blob.blob_hash:
                 log.warning("incoming blob hash mismatch from %s:%i", self.peer_address, self.peer_port)
-                return False, False
+                return self._blob_bytes_received, self.close()
             if self.blob.length is not None and self.blob.length != blob_response.length:
                 log.warning("incoming blob unexpected length from %s:%i", self.peer_address, self.peer_port)
-                return False, False
+                return self._blob_bytes_received, self.close()
             msg = f"downloading {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}," \
                 f" timeout in {self.peer_timeout}"
             log.debug(msg)
             msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}"
             await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
             log.info(msg)
-            await self.blob.finished_writing.wait()
-            return True, True
-        except asyncio.CancelledError:
-            return False, True
+            # await self.blob.finished_writing.wait()  not necessary, but a dangerous change. TODO: is it needed?
+            return self._blob_bytes_received, self.transport
         except asyncio.TimeoutError:
-            return False, False
+            return self._blob_bytes_received, self.close()
         except (InvalidBlobHashError, InvalidDataError):
             log.warning("invalid blob from %s:%i", self.peer_address, self.peer_port)
-            return False, False
-        finally:
-            await self.close()
+            return self._blob_bytes_received, self.close()
 
-    async def close(self):
+    def close(self):
         if self._response_fut and not self._response_fut.done():
             self._response_fut.cancel()
         if self.writer and not self.writer.closed():
@@ -135,25 +136,26 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self.transport.close()
         self.transport = None
 
-    async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[bool, bool]:
-        if blob.get_is_verified():
-            return False, True
+    async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
+        if blob.get_is_verified() or blob.file_exists or blob.blob_write_lock.locked():
+            return 0, self.transport
         try:
             self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
             self._response_fut = asyncio.Future(loop=self.loop)
             return await self._download_blob()
-        except OSError:
+        except OSError as e:
             log.error("race happened downloading from %s:%i", self.peer_address, self.peer_port)
             # i'm not sure how to fix this race condition - jack
-            return False, True
+            log.exception(e)
+            return self._blob_bytes_received, self.transport
         except asyncio.TimeoutError:
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
-            return False, False
+            self.close()
+            return self._blob_bytes_received, None
         except asyncio.CancelledError:
-            if self._response_fut and not self._response_fut.done():
-                self._response_fut.cancel()
-            return False, True
+            self.close()
+            raise
 
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
@@ -163,24 +165,31 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
     def connection_lost(self, reason):
         log.debug("connection lost to %s:%i (reason: %s, %s)", self.peer_address, self.peer_port, str(reason),
                   str(type(reason)))
-        self.transport = None
-        self.loop.create_task(self.close())
+        self.close()
 
 
 async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: str, tcp_port: int,
-                       peer_connect_timeout: float, blob_download_timeout: float) -> typing.Tuple[bool, bool]:
+                       peer_connect_timeout: float, blob_download_timeout: float,
+                       connected_transport: asyncio.Transport = None)\
+        -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
     """
     Returns [<downloaded blob>, <keep connection>]
     """
 
+    if blob.get_is_verified() or blob.file_exists:
+        # file exists but not verified means someone is writing right now, give it time, come back later
+        return 0, connected_transport
     protocol = BlobExchangeClientProtocol(loop, blob_download_timeout)
-    if blob.get_is_verified():
-        return False, True
+    if connected_transport and not connected_transport.is_closing():
+        connected_transport.set_protocol(protocol)
+        protocol.connection_made(connected_transport)
+        log.debug("reusing connection for %s:%d", address, tcp_port)
+    else:
+        connected_transport = None
     try:
-        await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
-                               peer_connect_timeout, loop=loop)
+        if not connected_transport:
+            await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
+                                   peer_connect_timeout, loop=loop)
         return await protocol.download_blob(blob)
-    except (asyncio.TimeoutError, asyncio.CancelledError, ConnectionRefusedError, ConnectionAbortedError, OSError):
-        return False, False
-    finally:
-        await protocol.close()
+    except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
+        return 0, None

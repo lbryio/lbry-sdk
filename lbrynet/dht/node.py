@@ -64,7 +64,7 @@ class Node:
             # ping the set of peers; upon success/failure the routing able and last replied/failed time will be updated
             to_ping = [peer for peer in set(total_peers) if self.protocol.peer_manager.peer_is_good(peer) is not True]
             if to_ping:
-                await self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
+                self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
 
             fut = asyncio.Future(loop=self.loop)
             self.loop.call_later(constants.refresh_interval, fut.set_result, None)

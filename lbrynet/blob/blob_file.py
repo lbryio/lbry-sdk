@@ -66,13 +66,17 @@ class BlobFile:
         self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
         self.finished_writing = asyncio.Event(loop=loop)
         self.blob_write_lock = asyncio.Lock(loop=loop)
-        if os.path.isfile(os.path.join(blob_dir, blob_hash)):
+        if self.file_exists:
             length = int(os.stat(os.path.join(blob_dir, blob_hash)).st_size)
             self.length = length
             self.verified.set()
             self.finished_writing.set()
         self.saved_verified_blob = False
         self.blob_completed_callback = blob_completed_callback
+
+    @property
+    def file_exists(self):
+        return os.path.isfile(self.file_path)
 
     def writer_finished(self, writer: HashBlobWriter):
         def callback(finished: asyncio.Future):
@@ -116,7 +120,7 @@ class BlobFile:
             self.verified.set()
 
     def open_for_writing(self) -> HashBlobWriter:
-        if os.path.exists(self.file_path):
+        if self.file_exists:
             raise OSError(f"File already exists '{self.file_path}'")
         fut = asyncio.Future(loop=self.loop)
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
