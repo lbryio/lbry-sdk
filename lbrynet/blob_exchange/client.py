@@ -137,7 +137,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.transport = None
 
     async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[bool, typing.Optional[asyncio.Transport]]:
-        if blob.get_is_verified():
+        if blob.get_is_verified() or blob.file_exists:
             return False, self.transport
         try:
             self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
@@ -175,7 +175,8 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: s
     Returns [<downloaded blob>, <keep connection>]
     """
 
-    if blob.get_is_verified():
+    if blob.get_is_verified() or blob.file_exists:
+        # file exists but not verified means someone is writing right now, give it time, come back later
         return False, connected_transport
     protocol = BlobExchangeClientProtocol(loop, blob_download_timeout)
     if connected_transport and not connected_transport.is_closing():
