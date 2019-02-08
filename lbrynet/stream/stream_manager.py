@@ -143,7 +143,9 @@ class StreamManager:
             self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
     async def load_streams_from_database(self):
+        log.info("Initializing stream manager from %s", self.storage._db_path)
         file_infos = await self.storage.get_all_lbry_files()
+        log.info("Initializing %i files", len(file_infos))
         await asyncio.gather(*[
             self.add_stream(
                 file_info['sd_hash'], binascii.unhexlify(file_info['file_name']).decode(),
