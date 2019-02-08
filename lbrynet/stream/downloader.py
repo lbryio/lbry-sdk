@@ -51,6 +51,7 @@ class StreamDownloader(StreamAssembler):
     async def after_finished(self):
         log.info("downloaded stream %s -> %s", self.sd_hash, self.output_path)
         await self.blob_manager.storage.change_file_status(self.descriptor.stream_hash, 'finished')
+        self.blob_downloader.close()
 
     def stop(self):
         if self.accumulate_task:

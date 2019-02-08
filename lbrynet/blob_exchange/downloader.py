@@ -23,6 +23,7 @@ class BlobDownloader:
         self.active_connections: typing.Dict['KademliaPeer', asyncio.Task] = {}  # active request_blob calls
         self.ignored: typing.Set['KademliaPeer'] = set()
         self.scores: typing.Dict['KademliaPeer', int] = {}
+        self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
 
     def should_race_continue(self):
         if len(self.active_connections) >= self.config.max_connections_per_download:
@@ -38,15 +39,19 @@ class BlobDownloader:
         if blob.get_is_verified():
             return
         self.scores[peer] = self.scores.get(peer, 0) - 1  # starts losing score, to account for cancelled ones
-        success, keep_connection = await request_blob(
+        transport = self.connections.get(peer)
+        success, transport = await request_blob(
             self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
-            self.config.blob_download_timeout
+            self.config.blob_download_timeout, connected_transport=transport
         )
-        if not keep_connection and peer not in self.ignored:
+        if not transport and peer not in self.ignored:
             self.ignored.add(peer)
             log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
-        elif keep_connection:
+            if peer in self.connections:
+                del self.connections[peer]
+        elif transport:
             log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
+            self.connections[peer] = transport
         self.scores[peer] = (self.scores.get(peer, 0) + 2) if success else 0
 
     async def new_peer_or_finished(self, blob: 'BlobFile'):
@@ -107,6 +112,10 @@ class BlobDownloader:
             log.exception(e)
             raise e
 
+    def close(self):
+            for transport in self.connections.values():
+                transport.close()
+
 
 async def download_blob(loop, config: 'Config', blob_manager: 'BlobFileManager', node: 'Node',
                         blob_hash: str) -> 'BlobFile':
@@ -119,3 +128,4 @@ async def download_blob(loop, config: 'Config', blob_manager: 'BlobFileManager',
     finally:
         if accumulate_task and not accumulate_task.done():
             accumulate_task.cancel()
+        downloader.close()
