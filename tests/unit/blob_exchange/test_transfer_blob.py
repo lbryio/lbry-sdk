@@ -70,6 +70,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         # download the blob
         downloaded = await request_blob(self.loop, client_blob, self.server_from_client.address,
                                         self.server_from_client.tcp_port, 2, 3)
+        await client_blob.finished_writing.wait()
         self.assertEqual(client_blob.get_is_verified(), True)
         self.assertTrue(downloaded)
 
@@ -111,6 +112,7 @@ class TestBlobExchange(BlobExchangeTestBase):
             ),
             self._test_transfer_blob(blob_hash)
         )
+        await second_client_blob.finished_writing.wait()
         self.assertEqual(second_client_blob.get_is_verified(), True)
 
     async def test_host_different_blobs_to_multiple_peers_at_once(self):
@@ -140,7 +142,8 @@ class TestBlobExchange(BlobExchangeTestBase):
                 self.loop, second_client_blob, server_from_second_client.address,
                 server_from_second_client.tcp_port, 2, 3
             ),
-            self._test_transfer_blob(sd_hash)
+            self._test_transfer_blob(sd_hash),
+            second_client_blob.finished_writing.wait()
         )
         self.assertEqual(second_client_blob.get_is_verified(), True)
 
