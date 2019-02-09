@@ -259,8 +259,11 @@ def main(argv=None):
         logging.getLogger('aioupnp').setLevel(logging.WARNING)
         logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 
+        loop = asyncio.get_event_loop()
+
         if args.verbose:
             log.setLevel(logging.DEBUG)
+            loop.set_debug(True)
         else:
             log.setLevel(logging.INFO)
         if conf.share_usage_data:
@@ -269,7 +272,6 @@ def main(argv=None):
             log.addHandler(loggly_handler)
 
         daemon = Daemon(conf)
-        loop = asyncio.get_event_loop()
         try:
             loop.run_until_complete(daemon.start())
             loop.run_forever()

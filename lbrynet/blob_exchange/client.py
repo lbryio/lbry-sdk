@@ -51,7 +51,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             # fire the Future with the response to our request
             self._response_fut.set_result(response)
         if response.blob_data and self.writer and not self.writer.closed():
-            log.debug("got %i blob bytes from %s:%i", len(response.blob_data), self.peer_address, self.peer_port)
+            # log.debug("got %i blob bytes from %s:%i", len(response.blob_data), self.peer_address, self.peer_port)
             # write blob bytes if we're writing a blob and have blob bytes to write
             self._write(response.blob_data)
 

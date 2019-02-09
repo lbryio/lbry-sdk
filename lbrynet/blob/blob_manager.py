@@ -1,9 +1,10 @@
+import os
 import typing
 import asyncio
 import logging
 from sqlite3 import IntegrityError
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_file import BlobFile
+from lbrynet.blob.blob_file import BlobFile, is_valid_blobhash
 from lbrynet.stream.descriptor import StreamDescriptor
 
 if typing.TYPE_CHECKING:
@@ -30,8 +31,11 @@ class BlobFileManager:
         self.blobs: typing.Dict[str, BlobFile] = {}
 
     async def setup(self) -> bool:
-        raw_blob_hashes = await self.get_all_verified_blobs()
-        self.completed_blob_hashes.update(raw_blob_hashes)
+        def initialize_blob_hashes():
+            self.completed_blob_hashes.update(
+                item.name for item in os.scandir(self.blob_dir) if is_valid_blobhash(item.name)
+            )
+        await self.loop.run_in_executor(None, initialize_blob_hashes)
         return True
 
     def get_blob(self, blob_hash, length: typing.Optional[int] = None):
@@ -58,10 +62,6 @@ class BlobFileManager:
         """Returns of the blobhashes_to_check, which are valid"""
         blobs = [self.get_blob(b) for b in blob_hashes]
         return [blob.blob_hash for blob in blobs if blob.get_is_verified()]
-
-    async def get_all_verified_blobs(self) -> typing.List[str]:
-        blob_hashes = await self.storage.get_all_blob_hashes()
-        return self.check_completed_blobs(blob_hashes)
 
     async def delete_blob(self, blob_hash: str):
         try:
