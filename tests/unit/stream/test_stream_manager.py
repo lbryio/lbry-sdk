@@ -5,7 +5,7 @@ import asyncio
 import time
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
-
+from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.extras.wallet.manager import LbryWalletManager
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.stream.descriptor import StreamDescriptor
@@ -26,7 +26,7 @@ def get_mock_node(peer):
     return mock_node
 
 
-def get_mock_wallet(sd_hash, storage):
+def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
     claim = {
         "address": "bYFeMtSL7ARuG1iMpjFyrnTe4oJHSAVNXF",
         "amount": "0.1",
@@ -69,6 +69,8 @@ def get_mock_wallet(sd_hash, storage):
             "version": "_0_0_1"
         }
     }
+    if fee:
+        claim['value']['stream']['metadata']['fee'] = fee
     claim_dict = ClaimDict.load_dict(claim['value'])
     claim['hex'] = binascii.hexlify(claim_dict.serialized).decode()
 
@@ -80,6 +82,11 @@ def get_mock_wallet(sd_hash, storage):
 
     mock_wallet = mock.Mock(spec=LbryWalletManager)
     mock_wallet.resolve = mock_resolve
+
+    async def get_balance(*_):
+        return balance
+
+    mock_wallet.default_account.get_balance = get_balance
     return mock_wallet, claim['permanent_url']
 
 
@@ -91,12 +98,15 @@ class TestStreamManager(BlobExchangeTestBase):
             f.write(os.urandom(20000000))
         descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager.blob_dir, file_path)
         self.sd_hash = descriptor.calculate_sd_hash()
-        self.mock_wallet, self.uri = get_mock_wallet(self.sd_hash, self.client_storage)
+
+    async def setup_stream_manager(self, balance=10.0, fee=None):
+        self.mock_wallet, self.uri = get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
         self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
                                             self.client_storage, get_mock_node(self.server_from_client))
         self.exchange_rate_manager = get_dummy_exchange_rate_manager(time)
 
     async def test_download_stop_resume_delete(self):
+        await self.setup_stream_manager()
         self.assertSetEqual(self.stream_manager.streams, set())
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
         stream_hash = stream.stream_hash
@@ -137,3 +147,25 @@ class TestStreamManager(BlobExchangeTestBase):
             "select status from file where stream_hash=?", stream_hash
         )
         self.assertEqual(stored_status, None)
+
+    async def test_insufficient_funds(self):
+        fee = {
+            'currency': 'LBC',
+            'amount': 11.0,
+            'address': 'bYFeMtSL7ARuG1iMpjFyrnTe4oJHSAVNXF',
+            'version': '_0_0_1'
+        }
+        await self.setup_stream_manager(10.0, fee)
+        with self.assertRaises(InsufficientFundsError):
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+
+    async def test_fee_above_max_allowed(self):
+        fee = {
+            'currency': 'USD',
+            'amount': 51.0,
+            'address': 'bYFeMtSL7ARuG1iMpjFyrnTe4oJHSAVNXF',
+            'version': '_0_0_1'
+        }
+        await self.setup_stream_manager(1000000.0, fee)
+        with self.assertRaises(KeyFeeAboveMaxAllowed):
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)

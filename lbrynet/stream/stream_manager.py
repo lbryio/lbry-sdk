@@ -4,7 +4,7 @@ import typing
 import binascii
 import logging
 import random
-from lbrynet.error import ResolveError, InvalidStreamDescriptorError
+from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -287,9 +287,6 @@ class StreamManager:
         already_started = tuple(filter(lambda s: s.descriptor.sd_hash == sd_hash, self.streams))
         if already_started:
             return already_started[0]
-        if should_pay and fee_address and fee_amount and fee_amount > await self.wallet.default_account.get_balance():
-            raise Exception("not enough funds")
-
         self.starting_streams[sd_hash] = asyncio.Future(loop=self.loop)
         stream_task = self.loop.create_task(
             self._download_stream_from_claim(node, self.config.download_dir, claim_info, file_name)
@@ -354,7 +351,7 @@ class StreamManager:
         timeout = timeout or self.config.download_timeout
         parsed_uri = parse_lbry_uri(uri)
         if parsed_uri.is_channel:
-            raise Exception("cannot download a channel claim, specify a /path")
+            raise ResolveError("cannot download a channel claim, specify a /path")
 
         resolved = (await self.wallet.resolve(uri)).get(uri, {})
         resolved = resolved if 'value' in resolved else resolved.get('claim')
@@ -372,6 +369,19 @@ class StreamManager:
             fee_amount = round(exchange_rate_manager.convert_currency(
                     claim.source_fee.currency, "LBC", claim.source_fee.amount
                 ), 5)
+            max_fee_amount = round(exchange_rate_manager.convert_currency(
+                self.config.max_key_fee['currency'], "LBC", self.config.max_key_fee['amount']
+            ), 5)
+            if fee_amount > max_fee_amount:
+                msg = f"fee of {fee_amount} exceeds max configured to allow of {max_fee_amount}"
+                log.warning(msg)
+                raise KeyFeeAboveMaxAllowed(msg)
+            else:
+                balance = await self.wallet.default_account.get_balance()
+                if fee_amount > balance:
+                    msg = f"fee of {fee_amount} exceeds max available balance"
+                    log.warning(msg)
+                    raise InsufficientFundsError(msg)
             fee_address = claim.source_fee.address.decode()
         outpoint = f"{resolved['txid']}:{resolved['nout']}"
         existing = self.get_filtered_streams(outpoint=outpoint)

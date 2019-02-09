@@ -498,7 +498,7 @@ class Config(CLIConfig):
     )
     max_key_fee = MaxKeyFee(
         "Don't download streams with fees exceeding this amount", {'currency': 'USD', 'amount': 50.0}
-    )  # TODO: use this
+    )
 
     # reflector settings
     reflect_streams = Toggle(

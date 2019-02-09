@@ -40,7 +40,7 @@ def get_dummy_exchange_rate_manager(time):
         'BTCLBC': {'spot': 3.0, 'ts': time.time() + 1},
         'USDBTC': {'spot': 2.0, 'ts': time.time() + 2}
     }
-    return DummyExchangeRateManager([BTCLBCFeed()], rates)
+    return DummyExchangeRateManager([BTCLBCFeed(), USDBTCFeed()], rates)
 
 
 class FeeFormatTest(unittest.TestCase):
