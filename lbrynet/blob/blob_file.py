@@ -18,11 +18,11 @@ from lbrynet.blob.writer import HashBlobWriter
 log = logging.getLogger(__name__)
 
 
-def is_valid_hashcharacter(char: str) -> bool:
-    return char in "0123456789abcdef"
-
-
 _hexmatch = re.compile("^[a-f,0-9]+$")
+
+
+def is_valid_hashcharacter(char: str) -> bool:
+    return len(char) == 1 and _hexmatch.match(char)
 
 
 def is_valid_blobhash(blobhash: str) -> bool:
@@ -34,6 +34,7 @@ def is_valid_blobhash(blobhash: str) -> bool:
     @return: True/False
     """
     return len(blobhash) == blobhash_length and _hexmatch.match(blobhash)
+
 
 def encrypt_blob_bytes(key: bytes, iv: bytes, unencrypted: bytes) -> typing.Tuple[bytes, str]:
     cipher = Cipher(AES(key), modes.CBC(iv), backend=backend)
