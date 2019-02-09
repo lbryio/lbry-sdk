@@ -168,7 +168,7 @@ class StreamManager:
 
     async def reflect_streams(self):
         while True:
-            if self.config.reflector_servers:
+            if self.config.reflect_streams and self.config.reflector_servers:
                 sd_hashes = await self.storage.get_streams_to_re_reflect()
                 streams = list(filter(lambda s: s.sd_hash in sd_hashes, self.streams))
                 batch = []
@@ -205,7 +205,7 @@ class StreamManager:
         stream = await ManagedStream.create(self.loop, self.blob_manager, file_path, key, iv_generator)
         self.streams.add(stream)
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
-        if self.config.reflector_servers:
+        if self.config.reflect_streams and self.config.reflector_servers:
             host, port = random.choice(self.config.reflector_servers)
             self.loop.create_task(stream.upload_to_reflector(host, port))
         return stream
