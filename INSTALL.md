@@ -17,11 +17,6 @@ After installing python 3, you'll need to install some additional libraries depe
 
 Once python 3 is installed run `python3 -m pip install virtualenv` to install virtualenv.
 
-### Windows
-
-Windows users will need to install `Visual C++ Build Tools`, which can be installed by [Microsoft Build Tools](Microsoft Build Tools 2015)
-
-
 ### macOS
 
 macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
@@ -52,8 +47,13 @@ To install:
  git clone https://github.com/lbryio/lbry.git
  cd lbry
 
+ Linux/Mac:
  virtualenv lbry-venv --python=python3.7
  source lbry-venv/bin/activate
+ 
+ Windows:
+ virtualenv lbry-venv --python=python
+ lbry-venv\Scripts\activate
 
  python --version # Python 2 is not supported. Make sure you're on Python 3.7
 
