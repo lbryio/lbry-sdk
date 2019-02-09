@@ -7,6 +7,7 @@ import time
 
 from aiohttp import ClientConnectorError
 from lbrynet import __version__
+from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from lbrynet.conf import Config
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.extras.daemon.client import daemon_rpc
@@ -65,7 +66,7 @@ async def wait_for_done(conf, uri):
         files = await daemon_rpc(conf, "file_list", claim_name=name)
         file = files[0]
         if file['status'] in ['finished', 'stopped']:
-            return True, f"{file['blobs_completed']}/{file['blobs_in_stream']}", int(file['blobs_completed'])
+            return True, file['blobs_completed'], file['blobs_in_stream']
         if last_complete < int(file['blobs_completed']):
             hang_count = 0
             last_complete = int(file['blobs_completed'])
@@ -73,7 +74,7 @@ async def wait_for_done(conf, uri):
             hang_count += 1
             await asyncio.sleep(1.0)
         if hang_count > 10:
-            return False, f"{file['blobs_completed']}/{file['blobs_in_stream']}", int(file['blobs_completed'])
+            return False, file['blobs_completed'], file['blobs_in_stream']
 
 
 async def main(uris=None):
@@ -111,21 +112,24 @@ async def main(uris=None):
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
-            # downloaded, msg, blobs_in_stream = await wait_for_done(conf, uri)
-            # if downloaded:
-            #     downloaded_times.append((time.time()-start) / downloaded)
-            #     print(f"\tdownloaded {uri} @ {(time.time()-start) / blobs_in_stream} seconds per blob")
-            # else:
-            #     print(f"\tfailed to download {uri}, got {msg}")
-            #     download_failures.append(uri)
+            downloaded, amount_downloaded, blobs_in_stream = await wait_for_done(conf, uri)
+            if downloaded:
+                downloaded_times.append((time.time() - start) / downloaded)
+            else:
+                download_failures.append(uri)
+            print(f"downloaded {amount_downloaded}/{blobs_in_stream} blobs for {uri} at "
+                  f"{round((blobs_in_stream * (MAX_BLOB_SIZE - 1)) / (time.time() - start) / 1000000, 2)}mb/s\n")
         except:
-            print(f"{i + 1}/{len(uris)} -  timeout in {time.time() - start} {uri}")
+            print(f"{i + 1}/{len(uris)} - failed to start {uri}")
             failures.append(uri)
-        await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
+            return
+        # await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
         await asyncio.sleep(0.1)
 
     print("**********************************************")
     result = f"Tried to start downloading {len(resolvable)} streams from the front page\n" \
+             f"Worst first byte time: {round(max(first_byte_times), 2)}\n" \
+             f"Best first byte time: {round(min(first_byte_times), 2)}\n" \
              f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}\n" \
              f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}\n" \
              f"Variance: {variance(first_byte_times)}\n" \
