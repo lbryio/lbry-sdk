@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import json
+import time
 import inspect
 import typing
 import aiohttp
@@ -14,6 +15,7 @@ from traceback import format_exc
 from aiohttp import web
 from functools import wraps
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
+from torba.client.hash import aes_encrypt, sha256
 
 from lbrynet import __version__, utils
 from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
@@ -1248,6 +1250,45 @@ class Daemon(metaclass=JSONRPCServerType):
         result = await account.send_to_addresses(amount, addresses, broadcast)
         await self.analytics_manager.send_credits_sent()
         return result
+
+    @requires("wallet")
+    def jsonrpc_account_manifest(self, password, account_ids=None):
+        """
+        Generate a manifest for all of the accounts or only for limited set of accounts.
+
+        Usage:
+            account manifest <password> [<account_ids>...]
+
+        Options:
+            --password=<password>         : (str) password to use for encrypting values
+            --account-ids=<account_ids>   : (list) list of accounts ids to limit manifest
+
+        Returns:
+            (map) manifest
+
+        """
+        init_vector = b'!\tT\xef\x0c\x85j\x9elp\xf1\xa6\xe0\xe8\x188'
+        accounts = self.get_accounts_or_all(account_ids)
+        manifest = []
+        status = []
+        for account in accounts:
+            encrypted_data = aes_encrypt(password, json.dumps(account.to_dict(False)), init_vector).encode()
+            manifest.append({
+                'account_id': account.id,
+                'timestamp': time.time(),
+                'hash-data': hexlify(sha256(encrypted_data)),
+                'hash-certificates': [
+                    aes_encrypt(password, cert, init_vector).encode() for cert in account.certificates.keys()
+                ]
+            })
+            status.append(manifest[-1]['hash-data'])
+            status.extend(manifest[-1]['hash-certificates'])
+        return {
+            'type': 'manifest',
+            'generated': time.time(),
+            'status': hexlify(sha256(b''.join(status))),
+            'accounts': manifest
+        }
 
     ADDRESS_DOC = """
     Address management.
