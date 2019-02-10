@@ -176,9 +176,10 @@ class Account(BaseAccount):
         account.certificates = d.get('certificates', {})
         return account
 
-    def to_dict(self):
+    def to_dict(self, with_certificates=True):
         d = super().to_dict()
-        d['certificates'] = self.certificates
+        if with_certificates:
+            d['certificates'] = self.certificates
         return d
 
     async def get_details(self, **kwargs):
