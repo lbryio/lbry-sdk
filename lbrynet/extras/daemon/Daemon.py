@@ -1437,17 +1437,15 @@ class Daemon(metaclass=JSONRPCServerType):
         return claim_results
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_resolve(self, force=False, uri=None, uris=None):
+    async def jsonrpc_resolve(self, url):
         """
         Get the claim that a URL refers to.
 
         Usage:
-            resolve [--force] (<uri> | --uri=<uri>) [<uris>...]
+            resolve <url>...
 
         Options:
-            --force  : (bool) force refresh and ignore cache
-            --uri=<uri>    : (str) uri to resolve
-            --uris=<uris>   : (list) uris to resolve
+            --url=<url>   : (str) one or more urls to resolve
 
         Returns:
             Dictionary of results, keyed by uri
@@ -1505,23 +1503,23 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        uris = tuple(uris or [])
-        if uri is not None:
-            uris += (uri,)
+        urls = [url] if isinstance(url, str) else url
 
         results = {}
 
-        valid_uris = tuple()
-        for u in uris:
+        valid_urls = set()
+        for u in urls:
             try:
                 parse_lbry_uri(u)
-                valid_uris += (u,)
+                valid_urls.add(u)
             except URIParseError:
-                results[u] = {"error": "%s is not a valid uri" % u}
+                results[u] = {"error": "%s is not a valid url" % u}
 
-        resolved = await self.wallet_manager.resolve(*valid_uris, check_cache=not force)
+        resolved = await self.wallet_manager.resolve(*tuple(valid_urls))
+
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri]
+
         return results
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
