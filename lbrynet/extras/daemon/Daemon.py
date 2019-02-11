@@ -1439,7 +1439,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT)
     async def jsonrpc_resolve(self, force=False, uri=None, uris=None):
         """
-        Resolve given LBRY URIs
+        Get the claim that a URL refers to.
 
         Usage:
             resolve [--force] (<uri> | --uri=<uri>) [<uris>...]
