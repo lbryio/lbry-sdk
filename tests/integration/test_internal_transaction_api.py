@@ -8,6 +8,7 @@ from lbrynet.schema.signature import Signature, NAMED_SECP256K1
 from lbrynet.schema.signer import get_signer
 from torba.testcase import IntegrationTestCase
 from lbrynet.schema.claim import ClaimDict
+import lbrynet.extras.wallet
 from lbrynet.extras.wallet.transaction import Transaction
 from lbrynet.extras.wallet.account import generate_certificate
 from lbrynet.extras.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
@@ -45,7 +46,7 @@ example_claim_dict = {
 
 class BasicTransactionTest(IntegrationTestCase):
 
-    VERBOSITY = logging.WARN
+    LEDGER = lbrynet.extras.wallet
 
     async def test_creating_updating_and_abandoning_claim_with_channel(self):
 
