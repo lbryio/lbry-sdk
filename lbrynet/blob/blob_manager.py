@@ -64,15 +64,21 @@ class BlobFileManager:
         return [blob.blob_hash for blob in blobs if blob.get_is_verified()]
 
     async def delete_blob(self, blob_hash: str):
-        try:
-            blob = self.get_blob(blob_hash)
-            await blob.delete()
-        except Exception as e:
-            log.warning("Failed to delete blob file. Reason: %s", e)
+        if not is_valid_blobhash(blob_hash):
+            raise Exception("invalid blob hash to delete")
+        if blob_hash not in self.blobs:
+            if os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
+                os.remove(os.path.join(self.blob_dir, blob_hash))
+        else:
+            try:
+                blob = self.get_blob(blob_hash)
+                await blob.delete()
+            except Exception as e:
+                log.warning("Failed to delete blob file. Reason: %s", e)
+            if blob_hash in self.blobs:
+                del self.blobs[blob_hash]
         if blob_hash in self.completed_blob_hashes:
             self.completed_blob_hashes.remove(blob_hash)
-        if blob_hash in self.blobs:
-            del self.blobs[blob_hash]
 
     async def delete_blobs(self, blob_hashes: typing.List[str], delete_from_db: typing.Optional[bool] = True):
         bh_to_delete_from_db = []
