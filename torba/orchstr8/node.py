@@ -237,12 +237,12 @@ class BlockchainProcess(asyncio.SubprocessProtocol):
     def pipe_data_received(self, fd, data):
         if self.log and not any(ignore in data for ignore in self.IGNORE_OUTPUT):
             if b'Error:' in data:
-                self.log.error(data.decode('ascii'))
+                self.log.error(data.decode())
             else:
-                self.log.info(data.decode('ascii'))
+                self.log.info(data.decode())
         if b'Error:' in data:
             self.ready.set()
-            raise SystemError(data.decode('ascii'))
+            raise SystemError(data.decode())
         elif b'Done loading' in data:
             self.ready.set()
 
