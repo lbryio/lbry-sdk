@@ -147,7 +147,7 @@ class WalletNode:
         self.data_path: Optional[str] = None
         self.port = port
 
-    async def start(self, spv_node: 'SPVNode', seed=None):
+    async def start(self, spv_node: 'SPVNode', seed=None, connect=True):
         self.data_path = tempfile.mkdtemp()
         wallet_file_name = os.path.join(self.data_path, 'my_wallet.json')
         with open(wallet_file_name, 'w') as wallet_file:
@@ -173,7 +173,8 @@ class WalletNode:
         else:
             raise ValueError('Wallet is required.')
         self.account = self.wallet.default_account
-        await self.manager.start()
+        if connect:
+            await self.manager.start()
 
     async def stop(self, cleanup=True):
         try:
