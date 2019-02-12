@@ -629,7 +629,7 @@ class ExchangeRateManagerComponent(Component):
     component_name = EXCHANGE_RATE_MANAGER_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.exchange_rate_manager = ExchangeRateManager()
 
     @property
