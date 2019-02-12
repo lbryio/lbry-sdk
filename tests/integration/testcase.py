@@ -24,6 +24,7 @@ from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.stream.reflector.server import ReflectorServer
+from lbrynet.blob_exchange.server import BlobServer
 
 
 class ExchangeRateManager:
@@ -113,6 +114,9 @@ class CommandTestCase(IntegrationTestCase):
         self.server_storage = SQLiteStorage(Config(), ':memory:')
         await self.server_storage.open()
         self.server_blob_manager = BlobFileManager(self.loop, server_tmp_dir, self.server_storage)
+        self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
+        self.server.start_server(5567, '127.0.0.1')
+        await self.server.started_listening.wait()
 
         self.reflector = ReflectorServer(self.server_blob_manager)
         self.reflector.start_server(5566, '127.0.0.1')
