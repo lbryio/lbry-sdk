@@ -106,7 +106,7 @@ class DatabaseComponent(Component):
             from lbrynet.extras.daemon.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
             await asyncio.get_event_loop().run_in_executor(
-                None, dbmigrator.migrate_db, self.conf.data_dir, old_revision, self.get_current_db_revision()
+                None, dbmigrator.migrate_db, self.conf, old_revision, self.get_current_db_revision()
             )
             self._write_db_revision_file(self.get_current_db_revision())
             log.info("Finished upgrading the databases.")
