@@ -38,9 +38,9 @@ class ClientSession(BaseClientSession):
                 await self.send_request('server.banner')
             await asyncio.sleep(self.max_seconds_idle//3)
 
-    async def create_connection(self):
+    async def create_connection(self, timeout=6):
         connector = Connector(lambda: self, *self.server)
-        await connector.create_connection()
+        await asyncio.wait_for(connector.create_connection(), timeout=timeout)
         self.ping_task = asyncio.create_task(self.ping_forever())
 
     async def handle_request(self, request):
@@ -78,11 +78,12 @@ class BaseNetwork:
     async def start(self):
         self.running = True
         delay = 0.0
+        connect_timeout = self.config.get('connect_timeout', 6)
         for server in cycle(self.config['default_servers']):
             self.client = ClientSession(network=self, server=server)
             connection_string = '{}:{}'.format(*server)
             try:
-                await self.client.create_connection()
+                await self.client.create_connection(connect_timeout)
                 await self.ensure_server_version()
                 log.info("Successfully connected to SPV wallet server: %s", connection_string)
                 self._on_connected_controller.add(True)
@@ -90,6 +91,8 @@ class BaseNetwork:
                 await self.client.on_disconnected.first
             except CancelledError:
                 self.running = False
+            except asyncio.TimeoutError:
+                log.warning("Timed out connecting to: %s", connection_string)
             except Exception:  # pylint: disable=broad-except
                 log.exception("Connecting to %s raised an exception:", connection_string)
             if not self.running:
