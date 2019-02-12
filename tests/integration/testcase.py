@@ -1,11 +1,10 @@
 import json
+import shutil
 import tempfile
 import logging
 from binascii import unhexlify
 
 import lbrynet.extras.wallet
-from lbrynet.extras.wallet.transaction import Transaction
-from lbrynet.error import InsufficientFundsError
 from lbrynet.schema.claim import ClaimDict
 
 from torba.testcase import IntegrationTestCase
@@ -16,12 +15,48 @@ lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
 from lbrynet.extras.wallet import LbryWalletManager
-from lbrynet.extras.daemon.Components import WalletComponent
+from lbrynet.extras.daemon.Components import Component, WalletComponent
 from lbrynet.extras.daemon.Components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.stream.reflector.server import ReflectorServer
+
+
+class ExchangeRateManager:
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def convert_currency(self, from_currency, to_currency, amount):
+        return amount
+
+    def fee_dict(self):
+        return {}
+
+
+class ExchangeRateManagerComponent(Component):
+    component_name = EXCHANGE_RATE_MANAGER_COMPONENT
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.exchange_rate_manager = ExchangeRateManager()
+
+    @property
+    def component(self) -> ExchangeRateManager:
+        return self.exchange_rate_manager
+
+    async def start(self):
+        self.exchange_rate_manager.start()
+
+    async def stop(self):
+        self.exchange_rate_manager.stop()
 
 
 class CommandTestCase(IntegrationTestCase):
@@ -36,6 +71,7 @@ class CommandTestCase(IntegrationTestCase):
 
         logging.getLogger('lbrynet.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
+        logging.getLogger('lbrynet.stream').setLevel(self.VERBOSITY)
 
         conf = Config()
         conf.data_dir = self.wallet_node.data_path
@@ -43,10 +79,10 @@ class CommandTestCase(IntegrationTestCase):
         conf.download_dir = self.wallet_node.data_path
         conf.share_usage_data = False
         conf.use_upnp = False
-        conf.reflect_streams = False
+        conf.reflect_streams = True
         conf.blockchain_name = 'lbrycrd_regtest'
-        conf.lbryum_servers = [('localhost', 50001)]
-        conf.reflector_servers = []
+        conf.lbryum_servers = [('127.0.0.1', 50001)]
+        conf.reflector_servers = [('127.0.0.1', 5566)]
         conf.known_dht_nodes = []
 
         await self.account.ensure_address_gap()
@@ -63,13 +99,25 @@ class CommandTestCase(IntegrationTestCase):
 
         conf.components_to_skip = [
             DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+            PEER_PROTOCOL_SERVER_COMPONENT
         ]
         self.daemon = Daemon(conf, ComponentManager(
-            conf, skip_components=conf.components_to_skip, wallet=wallet_maker
+            conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
+            exchange_rate_manager=ExchangeRateManagerComponent
         ))
         await self.daemon.initialize()
         self.manager.old_db = self.daemon.storage
+
+        server_tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, server_tmp_dir)
+        self.server_storage = SQLiteStorage(Config(), ':memory:')
+        await self.server_storage.open()
+        self.server_blob_manager = BlobFileManager(self.loop, server_tmp_dir, self.server_storage)
+
+        self.reflector = ReflectorServer(self.server_blob_manager)
+        self.reflector.start_server(5566, '127.0.0.1')
+        await self.reflector.started_listening.wait()
+        self.addCleanup(self.reflector.stop_server)
 
     async def asyncTearDown(self):
         await super().asyncTearDown()
