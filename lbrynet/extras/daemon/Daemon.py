@@ -1576,6 +1576,7 @@ class Daemon(metaclass=JSONRPCServerType):
             if not stream:
                 raise DownloadSDTimeout(uri)
         except Exception as e:
+            log.warning("Error downloading %s: %s", uri, str(e))
             return {"error": str(e)}
         else:
             return stream.as_dict()

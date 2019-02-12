@@ -4,7 +4,8 @@ import typing
 import binascii
 import logging
 import random
-from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError
+from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError, \
+    DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -249,7 +250,7 @@ class StreamManager:
             log.info("stream timeout")
             downloader.stop()
             log.info("stopped stream")
-            return
+            raise DownloadSDTimeout(downloader.sd_hash)
         file_name = os.path.basename(downloader.output_path)
         download_directory = os.path.dirname(downloader.output_path)
         if not await self.blob_manager.storage.stream_exists(downloader.sd_hash):
@@ -273,6 +274,7 @@ class StreamManager:
         except asyncio.CancelledError:
             downloader.stop()
             log.debug("stopped stream")
+        raise DownloadDataTimeout(downloader.sd_hash)
 
     async def download_stream_from_claim(self, node: 'Node', claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
@@ -298,7 +300,9 @@ class StreamManager:
             if should_pay and fee_address and fee_amount:
                 await self.wallet.send_amount_to_address(lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1'))
             return stream
-        except (asyncio.TimeoutError, asyncio.CancelledError):
+        except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+            if stream_task.exception():
+                raise stream_task.exception()
             return
         finally:
             if sd_hash in self.starting_streams:
