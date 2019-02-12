@@ -1,5 +1,5 @@
 import logging
-from asyncio import CancelledError
+import asyncio
 
 from torba.testcase import IntegrationTestCase
 
@@ -21,7 +21,7 @@ class ReconnectTests(IntegrationTestCase):
         d = self.ledger.network.get_transaction(sendtxid)
         # what's that smoke on my ethernet cable? oh no!
         self.ledger.network.client.connection_lost(Exception())
-        with self.assertRaises(CancelledError):
+        with self.assertRaises(asyncio.CancelledError):
            await d
         # rich but offline? no way, no water, let's retry
         with self.assertRaisesRegex(ConnectionError, 'connection is not available'):
@@ -31,3 +31,11 @@ class ReconnectTests(IntegrationTestCase):
         await self.blockchain.generate(1)
         # omg, the burned cable still works! torba is fire proof!
         await self.ledger.network.get_transaction(sendtxid)
+
+    async def test_timeout_then_reconnect(self):
+        await self.ledger.stop()
+        conf = self.ledger.config
+        self.ledger.config['connect_timeout'] = 1
+        self.ledger.config['default_servers'] = [('10.0.0.1', 12)] + list(conf['default_servers'])
+        await self.ledger.start()
+        self.assertTrue(self.ledger.network.is_connected)
