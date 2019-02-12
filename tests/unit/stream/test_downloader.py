@@ -1,7 +1,11 @@
 import os
+import time
 import unittest
 from unittest import mock
 import asyncio
+
+from lbrynet.blob_exchange.serialization import BlobResponse
+from lbrynet.blob_exchange.server import BlobServerProtocol
 from lbrynet.conf import Config
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.downloader import StreamDownloader
@@ -80,3 +84,17 @@ class TestStreamDownloader(BlobExchangeTestBase):
             self.assertEqual(f.read(), self.stream_bytes)
         # self.assertIs(self.server_from_client.tcp_last_down, None)
         # self.assertIsNot(bad_peer.tcp_last_down, None)
+
+    async def test_client_chunked_response(self):
+        self.server.stop_server()
+        class ChunkedServerProtocol(BlobServerProtocol):
+
+            def send_response(self, responses):
+                to_send = []
+                while responses:
+                    to_send.append(responses.pop())
+                for byte in BlobResponse(to_send).serialize():
+                    self.transport.write(bytes([byte]))
+        self.server.server_protocol_class = ChunkedServerProtocol
+        self.server.start_server(33333, '127.0.0.1')
+        await self._test_transfer_stream(10)
