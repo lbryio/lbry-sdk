@@ -100,6 +100,7 @@ class BlobServer:
         self.server_task: asyncio.Task = None
         self.started_listening = asyncio.Event(loop=self.loop)
         self.lbrycrd_address = lbrycrd_address
+        self.server_protocol_class = BlobServerProtocol
 
     def start_server(self, port: int, interface: typing.Optional[str] = '0.0.0.0'):
         if self.server_task is not None:
@@ -107,7 +108,7 @@ class BlobServer:
 
         async def _start_server():
             server = await self.loop.create_server(
-                lambda: BlobServerProtocol(self.loop, self.blob_manager, self.lbrycrd_address),
+                lambda: self.server_protocol_class(self.loop, self.blob_manager, self.lbrycrd_address),
                 interface, port
             )
             self.started_listening.set()
