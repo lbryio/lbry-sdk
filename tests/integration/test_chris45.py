@@ -1,5 +1,5 @@
 import tempfile
-from .testcase import CommandTestCase
+from integration.testcase import CommandTestCase
 
 
 class EpicAdventuresOfChris45(CommandTestCase):
@@ -41,7 +41,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertEqual(result, '8.989893')
 
         # And is the channel resolvable and empty?
-        response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam'))
+        response = await self.out(self.daemon.jsonrpc_resolve('lbry://@spam'))
         self.assertIn('lbry://@spam', response)
         self.assertIn('certificate', response['lbry://@spam'])
 
@@ -71,7 +71,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # Also checks that his new story can be found on the blockchain before
         # giving the link to all his friends.
-        response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
+        response = await self.out(self.daemon.jsonrpc_resolve('lbry://@spam/hovercraft'))
         self.assertIn('lbry://@spam/hovercraft', response)
         self.assertIn('claim', response['lbry://@spam/hovercraft'])
 
@@ -103,7 +103,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.confirm_tx(abandon['tx']['txid'])
 
         # And now checks that the claim doesn't resolve anymore.
-        response = await self.out(self.daemon.jsonrpc_resolve(uri='lbry://@spam/hovercraft'))
+        response = await self.out(self.daemon.jsonrpc_resolve('lbry://@spam/hovercraft'))
         self.assertNotIn('claim', response['lbry://@spam/hovercraft'])
 
         # After abandoning he just waits for his LBCs to be returned to his account
@@ -159,7 +159,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.confirm_tx(tx['txid'])
 
         # And check if his support showed up
-        resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri))
         # It obviously did! Because, blockchain baby \O/
         self.assertEqual(resolve_result[uri]['claim']['amount'], '1.0')
         self.assertEqual(resolve_result[uri]['claim']['effective_amount'], '1.2')
@@ -174,7 +174,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.confirm_tx(tx['txid'])
 
         # And again checks if it went to the just right place
-        resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri))
         # Which it obviously did. Because....?????
         self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], '0.3')
         self.assertEqual(resolve_result[uri]['claim']['supports'][1]['txid'], tx['txid'])
@@ -185,7 +185,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.confirm_tx(tx['txid'])
 
         # And check if his support showed up
-        resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri))
         # It did!
         self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], '0.4')
         self.assertEqual(resolve_result[uri]['claim']['supports'][2]['txid'], tx['txid'])
@@ -220,5 +220,5 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.confirm_tx(abandon['tx']['txid'])
 
         # He them checks that the claim doesn't resolve anymore.
-        response = await self.out(self.daemon.jsonrpc_resolve(uri=uri))
+        response = await self.out(self.daemon.jsonrpc_resolve(uri))
         self.assertNotIn('claim', response[uri])

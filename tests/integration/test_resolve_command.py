@@ -1,4 +1,4 @@
-from .testcase import CommandTestCase
+from integration.testcase import CommandTestCase
 
 
 class ResolveCommand(CommandTestCase):
@@ -43,6 +43,17 @@ class ResolveCommand(CommandTestCase):
         self.assertIn('certificate', claim)
         self.assertIn('claim', claim)
         self.assertEqual(claim['claim']['name'], 'foo')
+        self.assertEqual(claim['claim']['channel_name'], '@abc')
+        self.assertEqual(claim['certificate']['name'], '@abc')
+        self.assertEqual(claim['claims_in_channel'], 0)
+
+        # resolving multiple at once
+        response = await self.resolve(['lbry://foo', 'lbry://foo2'])
+        self.assertSetEqual({'lbry://foo', 'lbry://foo2'}, set(response))
+        claim = response['lbry://foo2']
+        self.assertIn('certificate', claim)
+        self.assertIn('claim', claim)
+        self.assertEqual(claim['claim']['name'], 'foo2')
         self.assertEqual(claim['claim']['channel_name'], '@abc')
         self.assertEqual(claim['certificate']['name'], '@abc')
         self.assertEqual(claim['claims_in_channel'], 0)

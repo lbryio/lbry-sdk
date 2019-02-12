@@ -1,4 +1,4 @@
-from .testcase import CommandTestCase
+from integration.testcase import CommandTestCase
 
 
 class AccountManagement(CommandTestCase):
