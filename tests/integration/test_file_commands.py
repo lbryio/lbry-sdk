@@ -10,7 +10,7 @@ class FileCommands(CommandTestCase):
         await self.make_claim('foo', '0.01')
         await self.make_claim('foo2', '0.01')
 
-        file1, file2 = self.daemon.jsonrpc_file_list()
+        file1, file2 = self.daemon.jsonrpc_file_list('claim_name')
         self.assertEqual(file1['claim_name'], 'foo')
         self.assertEqual(file2['claim_name'], 'foo2')
 
