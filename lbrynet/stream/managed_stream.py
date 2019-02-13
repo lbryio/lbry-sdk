@@ -27,13 +27,17 @@ class ManagedStream:
         self.loop = loop
         self.blob_manager = blob_manager
         self.download_directory = download_directory
-        self.file_name = file_name
+        self._file_name = file_name
         self.descriptor = descriptor
         self.downloader = downloader
         self.stream_hash = descriptor.stream_hash
         self.stream_claim_info = claim
         self._status = status
         self.fully_reflected = asyncio.Event(loop=self.loop)
+
+    @property
+    def file_name(self):
+        return self.downloader.output_file_name if self.downloader else self._file_name
 
     @property
     def status(self) -> str:
