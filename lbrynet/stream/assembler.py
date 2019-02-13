@@ -21,7 +21,7 @@ def _get_next_available_file_name(download_directory: str, file_name: str) -> st
         i += 1
         file_name = "%s_%i%s" % (base_name, i, ext)
 
-    return os.path.join(download_directory, file_name)
+    return file_name
 
 
 async def get_next_available_file_name(loop: asyncio.BaseEventLoop, download_directory: str, file_name: str) -> str:
@@ -29,7 +29,9 @@ async def get_next_available_file_name(loop: asyncio.BaseEventLoop, download_dir
 
 
 class StreamAssembler:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str,
+                 output_file_name: typing.Optional[str]):
+        self.output_file_name = output_file_name
         self.loop = loop
         self.blob_manager = blob_manager
         self.sd_hash = sd_hash
@@ -77,8 +79,9 @@ class StreamAssembler:
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_manager.blob_dir,
                                                                              self.sd_blob)
         await self.after_got_descriptor()
-        self.output_path = await get_next_available_file_name(self.loop, output_dir,
-                                                              output_file_name or self.descriptor.suggested_file_name)
+        self.output_file_name = output_file_name or self.descriptor.suggested_file_name
+        self.output_file_name = await get_next_available_file_name(self.loop, output_dir, self.output_file_name)
+        self.output_path = os.path.join(output_dir, self.output_file_name)
         if not self.got_descriptor.is_set():
             self.got_descriptor.set()
         await self.blob_manager.storage.store_stream(

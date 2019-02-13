@@ -23,7 +23,7 @@ def drain_into(a: list, b: list):
 class StreamDownloader(StreamAssembler):
     def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobFileManager', sd_hash: str,
                  output_dir: typing.Optional[str] = None, output_file_name: typing.Optional[str] = None):
-        super().__init__(loop, blob_manager, sd_hash)
+        super().__init__(loop, blob_manager, sd_hash, output_file_name)
         self.config = config
         self.output_dir = output_dir or self.config.download_dir
         self.output_file_name = output_file_name
