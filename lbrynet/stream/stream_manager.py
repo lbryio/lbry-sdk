@@ -156,10 +156,10 @@ class StreamManager:
         log.info("Started stream manager with %i files", len(file_infos))
 
     async def resume(self):
-        if not self.node:
-            log.warning("no DHT node given, cannot resume downloads")
-            return
-        await self.node.joined.wait()
+        if self.node:
+           await self.node.joined.wait()
+        else:
+            log.warning("no DHT node given, resuming downloads trusting that we can contact reflector")
         t = [
             stream.start_download(self.node)
             for stream in self.streams if stream.status == ManagedStream.STATUS_RUNNING
