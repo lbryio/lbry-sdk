@@ -97,4 +97,6 @@ class TestStreamDownloader(BlobExchangeTestBase):
                     self.transport.write(bytes([byte]))
         self.server.server_protocol_class = ChunkedServerProtocol
         self.server.start_server(33333, '127.0.0.1')
+        self.assertEqual(0, len(self.client_blob_manager.completed_blob_hashes))
         await self._test_transfer_stream(10)
+        self.assertEqual(11, len(self.client_blob_manager.completed_blob_hashes))
