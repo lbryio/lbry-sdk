@@ -257,6 +257,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         self.component_startup_task = None
         self._connection_status: typing.Tuple[float, bool] = [self.component_manager.loop.time(), False]
+        self.stop_event = asyncio.Event()
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         app = web.Application()
@@ -604,6 +605,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (string) Shutdown message
         """
         log.info("Shutting down lbrynet daemon")
+        self.stop_event.set()
         return "Shutting down"
 
     async def jsonrpc_status(self):
