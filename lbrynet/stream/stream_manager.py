@@ -157,7 +157,7 @@ class StreamManager:
 
     async def resume(self):
         if self.node:
-           await self.node.joined.wait()
+            await self.node.joined.wait()
         else:
             log.warning("no DHT node given, resuming downloads trusting that we can contact reflector")
         t = [
