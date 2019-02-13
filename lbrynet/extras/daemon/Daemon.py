@@ -1437,23 +1437,23 @@ class Daemon(metaclass=JSONRPCServerType):
         return claim_results
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_resolve(self, url):
+    async def jsonrpc_resolve(self, urls: typing.Union[str, list]):
         """
         Get the claim that a URL refers to.
 
         Usage:
-            resolve <url>...
+            resolve <urls>...
 
         Options:
-            --url=<url>   : (str) one or more urls to resolve
+            --urls=<urls>   : (str, list) one or more urls to resolve
 
         Returns:
-            Dictionary of results, keyed by uri
-            '<uri>': {
+            Dictionary of results, keyed by url
+            '<url>': {
                     If a resolution error occurs:
                     'error': Error message
 
-                    If the uri resolves to a channel or a claim in a channel:
+                    If the url resolves to a channel or a claim in a channel:
                     'certificate': {
                         'address': (str) claim address,
                         'amount': (float) claim amount,
@@ -1475,10 +1475,10 @@ class Daemon(metaclass=JSONRPCServerType):
                         'value': ClaimDict if decoded, otherwise hex string
                     }
 
-                    If the uri resolves to a channel:
+                    If the url resolves to a channel:
                     'claims_in_channel': (int) number of claims in the channel,
 
-                    If the uri resolves to a claim:
+                    If the url resolves to a claim:
                     'claim': {
                         'address': (str) claim address,
                         'amount': (float) claim amount,
@@ -1503,7 +1503,8 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        urls = [url] if isinstance(url, str) else url
+        if isinstance(urls, str):
+            urls = [urls]
 
         results = {}
 
