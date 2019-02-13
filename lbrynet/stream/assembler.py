@@ -30,7 +30,7 @@ async def get_next_available_file_name(loop: asyncio.BaseEventLoop, download_dir
 
 class StreamAssembler:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', sd_hash: str,
-                 output_file_name: typing.Optional[str]):
+                 output_file_name: typing.Optional[str] = None):
         self.output_file_name = output_file_name
         self.loop = loop
         self.blob_manager = blob_manager
