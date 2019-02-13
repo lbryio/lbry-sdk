@@ -274,7 +274,7 @@ def main(argv=None):
         daemon = Daemon(conf)
         try:
             loop.run_until_complete(daemon.start())
-            loop.run_forever()
+            loop.run_until_complete(daemon.stop_event.wait())
         except (GracefulExit, KeyboardInterrupt):
             pass
         finally:
