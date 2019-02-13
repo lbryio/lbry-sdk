@@ -161,7 +161,7 @@ class StreamManager:
         else:
             log.warning("no DHT node given, resuming downloads trusting that we can contact reflector")
         t = [
-            stream.start_download(self.node)
+            (stream.start_download(self.node), self.wait_for_stream_finished(stream))
             for stream in self.streams if stream.status == ManagedStream.STATUS_RUNNING
         ]
         if t:
