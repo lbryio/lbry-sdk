@@ -37,7 +37,7 @@ class FileCommands(CommandTestCase):
         self.assertIn('error', resp)
         self.assertEquals('Failed to download data blobs for sd hash %s within timeout' % sd_hash, resp['error'])
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
-        await self.server.blob_manager.delete_blob(sd_hash)
+        await self.server.blob_manager.delete_blobs([sd_hash])
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
         self.assertIn('error', resp)
         self.assertEquals('Failed to download sd blob %s within timeout' % sd_hash, resp['error'])
