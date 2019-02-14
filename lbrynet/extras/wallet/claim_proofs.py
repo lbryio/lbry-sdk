@@ -74,9 +74,10 @@ def verify_proof(proof, root_hash, name):
     if 'txhash' in proof and 'nOut' in proof:
         if not verified_value:
             raise InvalidProofError("mismatch between proof claim and outcome")
+    target = reverse_computed_name[::-1].encode('ISO-8859-1').decode()
     if 'txhash' in proof and 'nOut' in proof:
-        if name != reverse_computed_name[::-1]:
+        if name != target:
             raise InvalidProofError("name did not match proof")
-    if not name.startswith(reverse_computed_name[::-1]):
+    if not name.startswith(target):
         raise InvalidProofError("name fragment does not match proof")
     return True

@@ -80,7 +80,6 @@ class LBRYBlockProcessor(BlockProcessor):
         if claim_info.cert_id:
             self.db.put_claim_id_signed_by_cert_id(claim_info.cert_id, claim_id)
         self.db.put_claim_info(claim_id, claim_info)
-        self.db.put_claim_for_name(claim_info.name, claim_id)
         self.db.put_claim_id_for_outpoint(txid, nout, claim_id)
         return claim_id, None
 
@@ -116,7 +115,6 @@ class LBRYBlockProcessor(BlockProcessor):
             if undo_claim_info.cert_id:
                 cert_id = self._checksig(undo_claim_info.name, undo_claim_info.value, undo_claim_info.address)
                 self.db.put_claim_id_signed_by_cert_id(cert_id, claim_id)
-            self.db.put_claim_for_name(undo_claim_info.name, claim_id)
             self.db.put_claim_id_for_outpoint(undo_claim_info.txid, undo_claim_info.nout, claim_id)
 
     def backup_txs(self, txs):

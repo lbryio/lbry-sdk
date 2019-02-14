@@ -1,4 +1,5 @@
 import math
+import unicodedata as uda
 from binascii import unhexlify, hexlify
 
 from torba.rpc.jsonrpc import RPCError
@@ -6,7 +7,7 @@ from torba.server.hash import hash_to_hex_str
 from torba.server.session import ElectrumX
 from torba.server import util
 
-from lbrynet.schema.uri import parse_lbry_uri
+from lbrynet.schema.uri import parse_lbry_uri, CLAIM_ID_MAX_LENGTH
 from lbrynet.schema.error import URIParseError
 from lbrynet.extras.wallet.server.block_processor import LBRYBlockProcessor
 from lbrynet.extras.wallet.server.db import LBRYDB
@@ -131,22 +132,29 @@ class LBRYElectrumX(ElectrumX):
         claim_ids = self.get_claim_ids_signed_by(certificate_id)
         return await self.batched_formatted_claims_from_daemon(claim_ids)
 
+    def claimtrie_getclaimssignedbyidminimal(self, certificate_id):
+        claim_ids = self.get_claim_ids_signed_by(certificate_id)
+        ret = []
+        for claim_id in claim_ids:
+            raw_claim_id = unhexlify(claim_id)[::-1]
+            info = self.db.get_claim_info(raw_claim_id)
+            if info:
+                ret.append({
+                    'claim_id': claim_id,
+                    'height': info.height,
+                    'name': info.name.decode()
+                })
+        return ret
+
     def get_claim_ids_signed_by(self, certificate_id):
         raw_certificate_id = unhexlify(certificate_id)[::-1]
         raw_claim_ids = self.db.get_signed_claim_ids_by_cert_id(raw_certificate_id)
         return list(map(hash_to_hex_str, raw_claim_ids))
 
-    def get_signed_claims_with_name_for_channel(self, channel_id, name):
-        claim_ids_for_name = list(self.db.get_claims_for_name(name.encode('ISO-8859-1')).keys())
-        claim_ids_for_name = set(map(hash_to_hex_str, claim_ids_for_name))
-        channel_claim_ids = set(self.get_claim_ids_signed_by(channel_id))
-        return claim_ids_for_name.intersection(channel_claim_ids)
-
     async def claimtrie_getclaimssignedbynthtoname(self, name, n):
-        n = int(n)
-        for claim_id, sequence in self.db.get_claims_for_name(name.encode('ISO-8859-1')).items():
-            if n == sequence:
-                return await self.claimtrie_getclaimssignedbyid(hash_to_hex_str(claim_id))
+        claim = self.claimtrie_getnthclaimforname(name, n)
+        if claim and 'claim_id' in claim:
+            return await self.claimtrie_getclaimssignedbyid(hash_to_hex_str(claim['claim_id']))
 
     async def claimtrie_getclaimsintx(self, txid):
         # TODO: this needs further discussion.
@@ -161,28 +169,27 @@ class LBRYElectrumX(ElectrumX):
         if proof_has_winning_claim(proof):
             tx_hash, nout = proof['txhash'], int(proof['nOut'])
             transaction_info = await self.daemon.getrawtransaction(tx_hash, True)
-            result['transaction'] = transaction_info['hex']
-            result['height'] = (self.db.db_height - transaction_info['confirmations']) + 1
+            result['transaction'] = transaction_info['hex']  # should have never included this (or the call to get it)
             raw_claim_id = self.db.get_claim_id_from_outpoint(unhexlify(tx_hash)[::-1], nout)
-            sequence = self.db.get_claims_for_name(name.encode('ISO-8859-1')).get(raw_claim_id)
-            if sequence:
-                claim_id = hexlify(raw_claim_id[::-1]).decode()
-                claim_info = await self.daemon.getclaimbyid(claim_id)
-                if not claim_info or not claim_info.get('value'):
-                    claim_info = await self.slow_get_claim_by_id_using_name(claim_id)
-                result['claim_sequence'] = sequence
-                result['claim_id'] = claim_id
-                supports = self.format_supports_from_daemon(claim_info.get('supports', []))  # fixme: lbrycrd#124
-                result['supports'] = supports
-            else:
-                self.logger.warning('tx has no claims in db: %s %s', tx_hash, nout)
+            claim_id = hexlify(raw_claim_id[::-1]).decode()
+            claim = await self.claimtrie_getclaimbyid(claim_id)
+            result.update(claim)
+
         return result
 
     async def claimtrie_getnthclaimforname(self, name, n):
         n = int(n)
-        for claim_id, sequence in self.db.get_claims_for_name(name.encode('ISO-8859-1')).items():
-            if n == sequence:
-                return await self.claimtrie_getclaimbyid(hash_to_hex_str(claim_id))
+        result = await self.claimtrie_getclaimsforname(name)
+        if 'claims' in result and len(result['claims']) > n >= 0:
+            # TODO: revist this after lbrycrd_#209 to see if we can sort by claim_sequence at this point
+            result['claims'].sort(key=lambda c: (int(c['height']), int(c['nout'])))
+            result['claims'][n]['claim_sequence'] = n
+            return result['claims'][n]
+
+    async def claimtrie_getpartialmatch(self, name, part):
+        result = await self.claimtrie_getclaimsforname(name)
+        if 'claims' in result:
+            return next(filter(lambda x: x['claim_id'].starts_with(part), result['claims']), None)
 
     async def claimtrie_getclaimsforname(self, name):
         claims = await self.daemon.getclaimsforname(name)
@@ -198,37 +205,38 @@ class LBRYElectrumX(ElectrumX):
     async def batched_formatted_claims_from_daemon(self, claim_ids):
         claims = await self.daemon.getclaimsbyids(claim_ids)
         result = []
-        for claim, claim_id in zip(claims, claim_ids):
+        for claim in claims:
             if claim and claim.get('value'):
                 result.append(self.format_claim_from_daemon(claim))
-            else:
-                recovered_claim = await self.slow_get_claim_by_id_using_name(claim_id)
-                if recovered_claim:
-                    result.append(self.format_claim_from_daemon(recovered_claim))
         return result
 
     def format_claim_from_daemon(self, claim, name=None):
-        '''Changes the returned claim data to the format expected by lbrynet and adds missing fields.'''
+        """Changes the returned claim data to the format expected by lbrynet and adds missing fields."""
+
         if not claim:
             return {}
-        name = name or claim['name']
+
+        # this ISO-8859 nonsense stems from a nasty form of encoding extended characters in lbrycrd
+        # it will be fixed after the lbrycrd upstream merge to v17 is done
+        # it originated as a fear of terminals not supporting unicode. alas, they all do
+
+        if 'name' in claim:
+            name = claim['name'].encode('ISO-8859-1').decode()
         claim_id = claim['claimId']
         raw_claim_id = unhexlify(claim_id)[::-1]
-        if not self.db.get_claim_info(raw_claim_id):
-            #raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
+        info = self.db.get_claim_info(raw_claim_id)
+        if not info:
+            #  raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
             return {}
-        address = self.db.get_claim_info(raw_claim_id).address.decode()
-        sequence = self.db.get_claims_for_name(name.encode('ISO-8859-1')).get(raw_claim_id)
-        if not sequence:
-            return {}
-        supports = self.format_supports_from_daemon(claim.get('supports', []))  # fixme: lbrycrd#124
+        address = info.address.decode()
+        supports = self.format_supports_from_daemon(claim.get('supports', []))
 
         amount = get_from_possible_keys(claim, 'amount', 'nAmount')
         height = get_from_possible_keys(claim, 'height', 'nHeight')
         effective_amount = get_from_possible_keys(claim, 'effective amount', 'nEffectiveAmount')
         valid_at_height = get_from_possible_keys(claim, 'valid at height', 'nValidAtHeight')
 
-        return {
+        result = {
             "name": name,
             "claim_id": claim['claimId'],
             "txid": claim['txid'],
@@ -237,12 +245,19 @@ class LBRYElectrumX(ElectrumX):
             "depth": self.db.db_height - height,
             "height": height,
             "value": hexlify(claim['value'].encode('ISO-8859-1')).decode(),
-            "claim_sequence": sequence,  # from index
             "address": address,  # from index
-            "supports": supports, # fixme: to be included in lbrycrd#124
+            "supports": supports,
             "effective_amount": effective_amount,
-            "valid_at_height": valid_at_height  # TODO PR lbrycrd to include it
+            "valid_at_height": valid_at_height
         }
+        if 'claim_sequence' in claim:
+            # TODO: ensure that lbrycrd #209 fills in this value
+            result['claim_sequence'] = claim['claim_sequence']
+        else:
+            result['claim_sequence'] = -1
+        if 'normalized_name' in claim:
+            result['normalized_name'] = claim['normalized_name'].encode('ISO-8859-1').decode()
+        return result
 
     def format_supports_from_daemon(self, supports):
         return [[support['txid'], support['n'], get_from_possible_keys(support, 'amount', 'nAmount')] for
@@ -251,8 +266,6 @@ class LBRYElectrumX(ElectrumX):
     async def claimtrie_getclaimbyid(self, claim_id):
         self.assert_claim_id(claim_id)
         claim = await self.daemon.getclaimbyid(claim_id)
-        if not claim or not claim.get('value'):
-            claim = await self.slow_get_claim_by_id_using_name(claim_id)
         return self.format_claim_from_daemon(claim)
 
     async def claimtrie_getclaimsbyids(self, *claim_ids):
@@ -279,20 +292,16 @@ class LBRYElectrumX(ElectrumX):
             pass
         raise RPCError(1, f'{value} should be a claim id hash')
 
-    async def slow_get_claim_by_id_using_name(self, claim_id):
-        # TODO: temporary workaround for a lbrycrd bug on indexing. Should be removed when it gets stable
-        raw_claim_id = unhexlify(claim_id)[::-1]
-        claim = self.db.get_claim_info(raw_claim_id)
-        if claim:
-            name = claim.name.decode('ISO-8859-1')
-            claims = await self.daemon.getclaimsforname(name)
-            for claim in claims['claims']:
-                if claim['claimId'] == claim_id:
-                    claim['name'] = name
-                    self.logger.warning(
-                        'Recovered a claim missing from lbrycrd index: %s %s', name, claim_id
-                    )
-                    return claim
+    def normalize_name(self, name):
+        # this is designed to match lbrycrd; change it here if it changes there
+        return uda.normalize('NFD', name).casefold()
+
+    def claim_matches_name(self, claim, name):
+        if not name:
+            return False
+        if 'normalized_name' in claim:
+            return self.normalize_name(name) == claim['normalized_name']
+        return name == claim['name']
 
     async def claimtrie_getvalueforuri(self, block_hash, uri, known_certificates=None):
         # TODO: this thing is huge, refactor
@@ -312,8 +321,11 @@ class LBRYElectrumX(ElectrumX):
 
             # TODO: this is also done on the else, refactor
             if parsed_uri.claim_id:
-                certificate_info = await self.claimtrie_getclaimbyid(parsed_uri.claim_id)
-                if certificate_info and certificate_info['name'] == parsed_uri.name:
+                if len(parsed_uri.claim_id) < CLAIM_ID_MAX_LENGTH:
+                    certificate_info = self.claimtrie_getpartialmatch(parsed_uri.name, parsed_uri.claim_id)
+                else:
+                    certificate_info = await self.claimtrie_getclaimbyid(parsed_uri.claim_id)
+                if certificate_info and self.claim_matches_name(certificate_info, parsed_uri.name):
                     certificate = {'resolution_type': CLAIM_ID, 'result': certificate_info}
             elif parsed_uri.claim_sequence:
                 certificate_info = await self.claimtrie_getnthclaimforname(parsed_uri.name, parsed_uri.claim_sequence)
@@ -327,26 +339,28 @@ class LBRYElectrumX(ElectrumX):
             if certificate and 'claim_id' not in certificate['result']:
                 return result
 
-            if certificate and not parsed_uri.path:
+            if certificate:
                 result['certificate'] = certificate
                 channel_id = certificate['result']['claim_id']
-                claims_in_channel = await self.claimtrie_getclaimssignedbyid(channel_id)
-                result['unverified_claims_in_channel'] = {claim['claim_id']: (claim['name'], claim['height'])
-                                                          for claim in claims_in_channel if claim}
-            elif certificate:
-                result['certificate'] = certificate
-                channel_id = certificate['result']['claim_id']
-                claim_ids_matching_name = self.get_signed_claims_with_name_for_channel(channel_id, parsed_uri.path)
-                claims = await self.batched_formatted_claims_from_daemon(claim_ids_matching_name)
+                claims_in_channel = self.claimtrie_getclaimssignedbyidminimal(channel_id)
+                if not parsed_uri.path:
+                    result['unverified_claims_in_channel'] = {claim['claim_id']: (claim['name'], claim['height'])
+                                                              for claim in claims_in_channel}
+                else:
+                    # making an assumption that there aren't case conflicts on an existing channel
+                    norm_path = self.normalize_name(parsed_uri.path)
+                    result['unverified_claims_for_name'] = {claim['claim_id']: (claim['name'], claim['height'])
+                                                            for claim in claims_in_channel
+                                                            if self.normalize_name(claim['name']) == norm_path}
 
-                claims_in_channel = {claim['claim_id']: (claim['name'], claim['height'])
-                                     for claim in claims}
-                result['unverified_claims_for_name'] = claims_in_channel
         else:
             claim = None
             if parsed_uri.claim_id:
-                claim_info = await self.claimtrie_getclaimbyid(parsed_uri.claim_id)
-                if claim_info and claim_info['name'] == parsed_uri.name:
+                if len(parsed_uri.claim_id) < CLAIM_ID_MAX_LENGTH:
+                    claim_info = self.claimtrie_getpartialmatch(parsed_uri.name, parsed_uri.claim_id)
+                else:
+                    claim_info = await self.claimtrie_getclaimbyid(parsed_uri.claim_id)
+                if claim_info and self.claim_matches_name(claim_info, parsed_uri.name):
                     claim = {'resolution_type': CLAIM_ID, 'result': claim_info}
             elif parsed_uri.claim_sequence:
                 claim_info = await self.claimtrie_getnthclaimforname(parsed_uri.name, parsed_uri.claim_sequence)
@@ -369,6 +383,7 @@ class LBRYElectrumX(ElectrumX):
                                        'result': certificate}
                         result['certificate'] = certificate
                 result['claim'] = claim
+
         return result
 
     async def claimtrie_getvalueforuris(self, block_hash, *uris):
