@@ -30,12 +30,20 @@ class BlobFileManager:
         self.blobs: typing.Dict[str, BlobFile] = {}
 
     async def setup(self) -> bool:
-        def initialize_blob_hashes():
-            self.completed_blob_hashes.update(
+        def get_files_in_blob_dir() -> typing.Set[str]:
+            return {
                 item.name for item in os.scandir(self.blob_dir) if is_valid_blobhash(item.name)
-            )
-        await self.loop.run_in_executor(None, initialize_blob_hashes)
+            }
+
+        in_blobfiles_dir = await self.loop.run_in_executor(None, get_files_in_blob_dir)
+        self.completed_blob_hashes.update(await self.storage.sync_missing_blobs(in_blobfiles_dir))
         return True
+
+    def stop(self):
+        while self.blobs:
+            _, blob = self.blobs.popitem()
+            blob.close()
+        self.completed_blob_hashes.clear()
 
     def get_blob(self, blob_hash, length: typing.Optional[int] = None):
         if blob_hash in self.blobs:
@@ -55,7 +63,7 @@ class BlobFileManager:
             raise Exception("Blob has a length of 0")
         if blob.blob_hash not in self.completed_blob_hashes:
             self.completed_blob_hashes.add(blob.blob_hash)
-        await self.storage.add_completed_blob(blob.blob_hash)
+        await self.storage.add_completed_blob(blob.blob_hash, blob.length)
 
     def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
         """Returns of the blobhashes_to_check, which are valid"""

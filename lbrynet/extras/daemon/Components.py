@@ -321,9 +321,7 @@ class BlobComponent(Component):
         return await self.blob_manager.setup()
 
     async def stop(self):
-        while self.blob_manager and self.blob_manager.blobs:
-            _, blob = self.blob_manager.blobs.popitem()
-            blob.close()
+        self.blob_manager.stop()
 
     async def get_status(self):
         count = 0

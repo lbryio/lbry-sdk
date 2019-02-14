@@ -255,9 +255,16 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # blob functions # # # # # # # # #
 
-    def add_completed_blob(self, blob_hash: str):
-        log.debug("Adding a completed blob. blob_hash=%s", blob_hash)
-        return self.db.execute("update blob set status='finished' where blob.blob_hash=?", (blob_hash, ))
+    def add_completed_blob(self, blob_hash: str, length: int):
+        def _add_blob(transaction: sqlite3.Connection):
+            transaction.execute(
+                "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+                (blob_hash, length, 0, 0, "pending", 0, 0)
+            )
+            transaction.execute(
+                "update blob set status='finished' where blob.blob_hash=?", (blob_hash, )
+            )
+        return self.db.run(_add_blob)
 
     def get_blob_status(self, blob_hash: str):
         return self.run_and_return_one_or_none(
@@ -350,6 +357,26 @@ class SQLiteStorage(SQLiteMixin):
 
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
+
+    def sync_missing_blobs(self, blob_files: typing.Set[str]) -> typing.Awaitable[typing.Set[str]]:
+        def _sync_blobs(transaction: sqlite3.Connection) -> typing.Set[str]:
+            to_update = [
+                (blob_hash, )
+                for (blob_hash, ) in transaction.execute("select blob_hash from blob where status='finished'")
+                if blob_hash not in blob_files
+            ]
+            transaction.executemany(
+                "update blob set status='pending' where blob_hash=?",
+                to_update
+            )
+            return {
+                blob_hash
+                for blob_hash, in _batched_select(
+                    transaction, "select blob_hash from blob where status='finished' and blob_hash in {}",
+                    list(blob_files)
+                )
+            }
+        return self.db.run(_sync_blobs)
 
     # # # # # # # # # stream functions # # # # # # # # #
 
