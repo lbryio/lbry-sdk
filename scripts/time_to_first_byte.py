@@ -91,7 +91,7 @@ async def main(uris=None):
 
     resolvable = []
     for name in uris:
-        resolved = await daemon_rpc(conf, 'resolve', uri=name)
+        resolved = await daemon_rpc(conf, 'resolve', name)
         if 'error' not in resolved.get(name, {}):
             resolvable.append(name)
 
