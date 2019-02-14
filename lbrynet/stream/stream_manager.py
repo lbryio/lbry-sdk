@@ -65,6 +65,7 @@ class StreamManager:
         self.resume_downloading_task: asyncio.Task = None
         self.re_reflect_task: asyncio.Task = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
+        self.running_reflector_uploads: typing.List[asyncio.Task] = []
 
     async def _update_content_claim(self, stream: ManagedStream):
         claim_info = await self.storage.get_content_claim(stream.stream_hash)
@@ -200,6 +201,8 @@ class StreamManager:
             stream.stop_download()
         while self.update_stream_finished_futs:
             self.update_stream_finished_futs.pop().cancel()
+        while self.running_reflector_uploads:
+            self.running_reflector_uploads.pop().cancel()
 
     async def create_stream(self, file_path: str, key: typing.Optional[bytes] = None,
                             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
@@ -208,7 +211,12 @@ class StreamManager:
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
         if self.config.reflect_streams and self.config.reflector_servers:
             host, port = random.choice(self.config.reflector_servers)
-            self.loop.create_task(stream.upload_to_reflector(host, port))
+            task = self.loop.create_task(stream.upload_to_reflector(host, port))
+            self.running_reflector_uploads.append(task)
+            task.add_done_callback(
+                lambda _: None
+                if task not in self.running_reflector_uploads else self.running_reflector_uploads.remove(task)
+            )
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):

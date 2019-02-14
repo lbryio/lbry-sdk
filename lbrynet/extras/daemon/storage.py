@@ -353,7 +353,7 @@ class SQLiteStorage(SQLiteMixin):
             transaction.executemany(
                 "delete from blob where blob_hash=?;", [(blob_hash,) for blob_hash in blob_hashes]
             )
-        return self.db.run(delete_blobs)
+        return self.db.run_with_foreign_keys_disabled(delete_blobs)
 
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
