@@ -13,10 +13,6 @@ Running `lbrynet` from source requires Python 3.6 or higher (3.7 is preferred). 
 
 After installing python 3, you'll need to install some additional libraries depending on your operating system.
 
-### Virtualenv
-
-Once python 3 is installed run `python3 -m pip install virtualenv` to install virtualenv.
-
 ### macOS
 
 macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
@@ -32,7 +28,7 @@ brew install python3 protobuf
 On Ubuntu (we recommend 18.04), install the following:
 
 ```
-sudo apt-get install build-essential python3.7 python3.7-dev git python-virtualenv libssl-dev python-protobuf
+sudo apt-get install build-essential python3.7 python3.7-dev git python3-venv libssl-dev python-protobuf
 ```
 
 On Raspbian, you will also need to install `python-pyparsing`.
@@ -47,12 +43,13 @@ To install:
  git clone https://github.com/lbryio/lbry.git
  cd lbry
 
- Linux/Mac:
- virtualenv lbry-venv --python=python3.7
+ Creating venv:
+ python3 -m venv lbry-venv
+ 
+ Activating lbry-venv on Linux/Mac:
  source lbry-venv/bin/activate
  
- Windows:
- virtualenv lbry-venv --python=python
+ Activating lbry-venv on Windows: 
  lbry-venv\Scripts\activate
 
  python --version # Python 2 is not supported. Make sure you're on Python 3.7
