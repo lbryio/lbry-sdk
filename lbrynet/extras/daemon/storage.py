@@ -154,6 +154,16 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
     return files
 
 
+def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor'):
+    blob_hashes = [(blob.blob_hash, ) for blob in descriptor.blobs[:-1]]
+    blob_hashes.append((descriptor.sd_hash, ))
+    transaction.execute("delete from content_claim where stream_hash=? ", (descriptor.stream_hash,))
+    transaction.execute("delete from file where stream_hash=? ", (descriptor.stream_hash,))
+    transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash,))
+    transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash,))
+    transaction.executemany("delete from blob where blob_hash=?", blob_hashes)
+
+
 class SQLiteStorage(SQLiteMixin):
     CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;
@@ -336,7 +346,7 @@ class SQLiteStorage(SQLiteMixin):
             transaction.executemany(
                 "delete from blob where blob_hash=?;", [(blob_hash,) for blob_hash in blob_hashes]
             )
-        return self.db.run(delete_blobs)
+        return self.db.run_with_foreign_keys_disabled(delete_blobs)
 
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
@@ -425,15 +435,7 @@ class SQLiteStorage(SQLiteMixin):
         )
 
     def delete_stream(self, descriptor: 'StreamDescriptor'):
-        def _delete_stream(transaction: sqlite3.Connection):
-            transaction.execute("delete from content_claim where stream_hash=? ", (descriptor.stream_hash,))
-            transaction.execute("delete from file where stream_hash=? ", (descriptor.stream_hash, ))
-            transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash, ))
-            transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash, ))
-            transaction.execute("delete from blob where blob_hash=?", (descriptor.sd_hash, ))
-            transaction.executemany("delete from blob where blob_hash=?",
-                                    [(blob.blob_hash, ) for blob in descriptor.blobs[:-1]])
-        return self.db.run(_delete_stream)
+        return self.db.run_with_foreign_keys_disabled(delete_stream, descriptor)
 
     # # # # # # # # # file stuff # # # # # # # # #
 

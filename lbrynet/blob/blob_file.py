@@ -144,14 +144,13 @@ class BlobFile:
         while self.writers:
             self.writers.pop().finished.cancel()
 
-    async def delete(self):
+    def delete(self):
         self.close()
-        async with self.blob_write_lock:
-            self.saved_verified_blob = False
-            if os.path.isfile(self.file_path):
-                os.remove(self.file_path)
-            self.verified.clear()
-            self.finished_writing.clear()
+        self.saved_verified_blob = False
+        if os.path.isfile(self.file_path):
+            os.remove(self.file_path)
+        self.verified.clear()
+        self.finished_writing.clear()
 
     def decrypt(self, key: bytes, iv: bytes) -> bytes:
         """

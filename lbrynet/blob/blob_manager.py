@@ -2,7 +2,6 @@ import os
 import typing
 import asyncio
 import logging
-from sqlite3 import IntegrityError
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_file import BlobFile, is_valid_blobhash
 from lbrynet.stream.descriptor import StreamDescriptor
@@ -63,23 +62,21 @@ class BlobFileManager:
         blobs = [self.get_blob(b) for b in blob_hashes]
         return [blob.blob_hash for blob in blobs if blob.get_is_verified()]
 
-    async def delete_blob(self, blob_hash: str):
-        try:
-            blob = self.get_blob(blob_hash)
-            await blob.delete()
-        except Exception as e:
-            log.warning("Failed to delete blob file. Reason: %s", e)
-        if blob_hash in self.completed_blob_hashes:
-            self.completed_blob_hashes.remove(blob_hash)
-        if blob_hash in self.blobs:
-            del self.blobs[blob_hash]
+    def delete_blob(self, blob_hash: str):
+        if not is_valid_blobhash(blob_hash):
+            raise Exception("invalid blob hash to delete")
+
+        if blob_hash not in self.blobs:
+            if os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
+                os.remove(os.path.join(self.blob_dir, blob_hash))
+        else:
+            self.blobs.pop(blob_hash).delete()
+            if blob_hash in self.completed_blob_hashes:
+                self.completed_blob_hashes.remove(blob_hash)
 
     async def delete_blobs(self, blob_hashes: typing.List[str], delete_from_db: typing.Optional[bool] = True):
-        bh_to_delete_from_db = []
-        await asyncio.gather(*map(self.delete_blob, blob_hashes), loop=self.loop)
+        for blob_hash in blob_hashes:
+            self.delete_blob(blob_hash)
+
         if delete_from_db:
-            try:
-                await self.storage.delete_blobs_from_db(bh_to_delete_from_db)
-            except IntegrityError as err:
-                if str(err) != "FOREIGN KEY constraint failed":
-                    raise err
+            await self.storage.delete_blobs_from_db(blob_hashes)
