@@ -57,11 +57,11 @@ class TestStreamAssembler(AsyncioTestCase):
         # assemble the decrypted file
         assembler = StreamAssembler(self.loop, downloader_blob_manager, descriptor.sd_hash)
         await assembler.assemble_decrypted_stream(download_dir)
+        if corrupt:
+            return self.assertFalse(os.path.isfile(os.path.join(download_dir, "test_file")))
 
         with open(os.path.join(download_dir, "test_file"), "rb") as f:
             decrypted = f.read()
-        if corrupt:
-            return decrypted
         self.assertEqual(decrypted, self.cleartext)
         self.assertEqual(True, self.blob_manager.get_blob(sd_hash).get_is_verified())
         self.assertEqual(True, self.blob_manager.get_blob(descriptor.blobs[0].blob_hash).get_is_verified())
@@ -113,6 +113,5 @@ class TestStreamAssembler(AsyncioTestCase):
 
     async def test_create_truncate_and_handle_stream(self):
         self.cleartext = b'potato' * 1337 * 5279
-        decrypted = await self.test_create_and_decrypt_one_blob_stream(corrupt=True)
         # The purpose of this test is just to make sure it can finish even if a blob is corrupt/truncated
-        self.assertFalse(decrypted)
+        await asyncio.wait_for(self.test_create_and_decrypt_one_blob_stream(corrupt=True), timeout=5)

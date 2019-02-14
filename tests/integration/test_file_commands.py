@@ -66,3 +66,19 @@ class FileCommands(CommandTestCase):
         # if you got here refactoring just change above, but ensure what gets set internally gets reflected externally!
         self.assertTrue(downloader.output_path.endswith(downloader.output_file_name))
         # this used to be inconsistent, if it becomes again it would create weird bugs, so worth checking
+
+    async def test_incomplete_downloads_erases_output_file_on_stop(self):
+        claim = await self.make_claim('foo', '0.01')
+        sd_hash = claim['output']['value']['stream']['source']['source']
+        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        all_except_sd = [
+            blob_hash for blob_hash in self.server.blob_manager.completed_blob_hashes if blob_hash != sd_hash
+        ]
+        await self.server.blob_manager.delete_blobs(all_except_sd)
+
+        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
+        self.assertIn('error', resp)
+        file_info = self.daemon.jsonrpc_file_list()[0]
+        self.assertTrue(os.path.isfile(os.path.join(file_info['download_path'])))
+        await self.daemon.jsonrpc_file_set_status('stop', sd_hash=sd_hash)
+        self.assertFalse(os.path.isfile(os.path.join(file_info['download_path'])))
