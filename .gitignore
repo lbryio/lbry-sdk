@@ -3,6 +3,7 @@
 /.tox
 /.idea
 /.coverage
+/lbry-venv
 
 lbrynet.egg-info
 __pycache__

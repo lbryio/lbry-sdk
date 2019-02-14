@@ -72,7 +72,6 @@ parsed_uri_raises = [
     ("lbry://test:1:1:1", URIParseError),
     ("whatever/lbry://test", URIParseError),
     ("lbry://lbry://test", URIParseError),
-    ("lbry://❀", URIParseError),
     ("lbry://@/what", URIParseError),
     ("lbry://abc:0x123", URIParseError),
     ("lbry://abc:0x123/page", URIParseError),

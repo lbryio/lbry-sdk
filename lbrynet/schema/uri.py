@@ -139,7 +139,7 @@ def get_schema_regex():
     protocol = _named("protocol", re.escape(PROTOCOL))
 
     # Define basic building blocks
-    valid_name_char = "[a-zA-Z0-9\-]"  # these characters are the only valid name characters
+    valid_name_char = "[^=&#:$@%?/]"  # from the grammar section of https://spec.lbry.io/
     name_content = valid_name_char + '+'
     name_min_channel_length = valid_name_char + '{' + str(CHANNEL_NAME_MIN_LENGTH) + ',}'
 
