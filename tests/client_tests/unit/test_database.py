@@ -1,13 +1,54 @@
 import unittest
+import sqlite3
 
 from torba.client.wallet import Wallet
 from torba.client.constants import COIN
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
-from torba.client.basedatabase import query, constraints_to_sql
+from torba.client.basedatabase import query, constraints_to_sql, AIOSQLite
 
 from torba.testcase import AsyncioTestCase
 
 from client_tests.unit.test_transaction import get_output, NULL_HASH
+
+
+class TestAIOSQLite(AsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await AIOSQLite.connect(':memory:')
+        await self.db.executescript("""
+        pragma foreign_keys=on;
+        create table parent (id integer primary key, name);
+        create table child  (id integer primary key, parent_id references parent);
+        """)
+        await self.db.execute("insert into parent values (1, 'test')")
+        await self.db.execute("insert into child values (2, 1)")
+
+    @staticmethod
+    def delete_item(transaction):
+        transaction.execute('delete from parent where id=1')
+
+    async def test_foreign_keys_integrity_error(self):
+        self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            await self.db.run(self.delete_item)
+        self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
+
+        await self.db.executescript("pragma foreign_keys=off;")
+
+        await self.db.run(self.delete_item)
+        self.assertListEqual([], await self.db.execute_fetchall("select * from parent"))
+
+    async def test_run_without_foreign_keys(self):
+        self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
+        await self.db.run_with_foreign_keys_disabled(self.delete_item)
+        self.assertListEqual([], await self.db.execute_fetchall("select * from parent"))
+
+    async def test_integrity_error_when_foreign_keys_disabled_and_skipped(self):
+        await self.db.executescript("pragma foreign_keys=off;")
+        self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            await self.db.run_with_foreign_keys_disabled(self.delete_item)
+        self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
 
 
 class TestQueryBuilder(unittest.TestCase):

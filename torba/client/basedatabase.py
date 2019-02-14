@@ -67,21 +67,20 @@ class AIOSQLite:
             self.connection.rollback()
             raise
 
-    def run_nofk(self, fun, *args, **kwargs) -> Awaitable:
-        return wrap_future(self.executor.submit(self.__run_transaction_no_fk, fun, *args, **kwargs))
+    def run_with_foreign_keys_disabled(self, fun, *args, **kwargs) -> Awaitable:
+        return wrap_future(
+            self.executor.submit(self.__run_transaction_with_foreign_keys_disabled, fun, *args, **kwargs)
+        )
 
-    def __run_transaction_no_fk(self, fun: Callable[[sqlite3.Connection, Any, Any], Any], *args, **kwargs):
+    def __run_transaction_with_foreign_keys_disabled(self, fun: Callable[[sqlite3.Connection, Any, Any], Any], *args,
+                                                     **kwargs):
+        foreign_keys_enabled, = self.connection.execute("pragma foreign_keys").fetchone()
+        if not foreign_keys_enabled:
+            raise sqlite3.IntegrityError("foreign keys are disabled, use `AIOSQLite.run` instead")
         try:
             self.connection.execute('pragma foreign_keys=off')
             self.connection.commit()
-            try:
-                self.connection.execute('begin')
-                result = fun(self.connection, *args, **kwargs)  # type: ignore
-                self.connection.commit()
-                return result
-            except (Exception, OSError): # as e:
-                self.connection.rollback()
-                raise
+            return self.__run_transaction(fun, *args, **kwargs)
         finally:
             self.connection.execute('pragma foreign_keys=on')
             self.connection.commit()
