@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 
-from .testcase import CommandTestCase
+from integration.testcase import CommandTestCase
 
 
 class FileCommands(CommandTestCase):
@@ -44,7 +44,6 @@ class FileCommands(CommandTestCase):
 
     async def wait_files_to_complete(self):
         while self.daemon.jsonrpc_file_list(status='running'):
-            print(self.daemon.jsonrpc_file_list())
             await asyncio.sleep(0.01)
 
     async def test_filename_conflicts_management_on_resume_download(self):
