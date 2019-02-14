@@ -114,7 +114,3 @@ class FileCommands(CommandTestCase):
         self.assertNotIn('error', resp)
         file_info = self.daemon.jsonrpc_file_list()[0]
         self.assertEqual(file_info['blobs_completed'], file_info['blobs_in_stream'])
-
-    async def wait_files_to_complete(self):
-        while self.daemon.jsonrpc_file_list(status='running'):
-            await asyncio.sleep(0.01)
