@@ -6,6 +6,7 @@ import logging
 import random
 from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError, \
     DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import ClaimDict
@@ -16,12 +17,11 @@ if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.node import Node
-    from lbrynet.extras.daemon.storage import SQLiteStorage
+    from lbrynet.extras.daemon.storage import SQLiteStorage, StoredStreamClaim
     from lbrynet.extras.wallet import LbryWalletManager
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 log = logging.getLogger(__name__)
-
 
 filter_fields = [
     'status',
@@ -128,33 +128,75 @@ class StreamManager:
             self.loop, self.config, self.blob_manager, sd_hash, download_directory, file_name
         )
 
-    async def add_stream(self, sd_hash: str, file_name: str, download_directory: str, status: str, claim):
-        sd_blob = self.blob_manager.get_blob(sd_hash)
-        if sd_blob.get_is_verified():
-            try:
-                descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
-            except InvalidStreamDescriptorError as err:
-                log.warning("Failed to start stream for sd %s - %s", sd_hash, str(err))
-                return
+    async def recover_streams(self, file_infos: typing.List[typing.Dict]):
+        to_restore = []
 
-            downloader = self.make_downloader(descriptor.sd_hash, download_directory, file_name)
-            stream = ManagedStream(
-                self.loop, self.blob_manager, descriptor, download_directory, file_name, downloader, status, claim
+        async def recover_stream(sd_hash: str, stream_hash: str, stream_name: str,
+                                 suggested_file_name: str, key: str) -> typing.Optional[StreamDescriptor]:
+            sd_blob = self.blob_manager.get_blob(sd_hash)
+            blobs = await self.storage.get_blobs_for_stream(stream_hash)
+            descriptor = await StreamDescriptor.recover(
+                self.blob_manager.blob_dir, sd_blob, stream_hash, stream_name, suggested_file_name, key, blobs
             )
-            self.streams.add(stream)
-            self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
+            if not descriptor:
+                return
+            to_restore.append((descriptor, sd_blob))
+
+        await asyncio.gather(*[
+            recover_stream(
+                file_info['sd_hash'], file_info['stream_hash'], binascii.unhexlify(file_info['stream_name']).decode(),
+                binascii.unhexlify(file_info['suggested_file_name']).decode(), file_info['key']
+            ) for file_info in file_infos
+        ])
+
+        if to_restore:
+            await self.storage.recover_streams(to_restore, self.config.download_dir)
+        log.info("Recovered %i/%i attempted streams", len(to_restore), len(file_infos))
+
+    async def add_stream(self, sd_hash: str, file_name: str, download_directory: str, status: str,
+                         claim: typing.Optional['StoredStreamClaim']):
+        sd_blob = self.blob_manager.get_blob(sd_hash)
+        if not sd_blob.get_is_verified():
+            return
+        try:
+            descriptor = await self.blob_manager.get_stream_descriptor(sd_blob.blob_hash)
+        except InvalidStreamDescriptorError as err:
+            log.warning("Failed to start stream for sd %s - %s", sd_hash, str(err))
+            return
+        if status == ManagedStream.STATUS_RUNNING:
+            downloader = self.make_downloader(descriptor.sd_hash, download_directory, file_name)
+        else:
+            downloader = None
+        stream = ManagedStream(
+            self.loop, self.blob_manager, descriptor, download_directory, file_name, downloader, status, claim
+        )
+        self.streams.add(stream)
+        self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
     async def load_streams_from_database(self):
-        log.info("Initializing stream manager from %s", self.storage._db_path)
-        file_infos = await self.storage.get_all_lbry_files()
-        log.info("Initializing %i files", len(file_infos))
+        to_recover = []
+        for file_info in await self.storage.get_all_lbry_files():
+            if not self.blob_manager.get_blob(file_info['sd_hash']).get_is_verified():
+                to_recover.append(file_info)
+
+        if to_recover:
+            log.info("Attempting to recover %i streams", len(to_recover))
+            await self.recover_streams(to_recover)
+
+        to_start = []
+        for file_info in await self.storage.get_all_lbry_files():
+            if self.blob_manager.get_blob(file_info['sd_hash']).get_is_verified():
+                to_start.append(file_info)
+        log.info("Initializing %i files", len(to_start))
+
         await asyncio.gather(*[
             self.add_stream(
                 file_info['sd_hash'], binascii.unhexlify(file_info['file_name']).decode(),
-                binascii.unhexlify(file_info['download_directory']).decode(), file_info['status'], file_info['claim']
-            ) for file_info in file_infos
+                binascii.unhexlify(file_info['download_directory']).decode(), file_info['status'],
+                file_info['claim']
+            ) for file_info in to_start
         ])
-        log.info("Started stream manager with %i files", len(file_infos))
+        log.info("Started stream manager with %i files", len(self.streams))
 
     async def resume(self):
         if self.node:
@@ -337,6 +379,8 @@ class StreamManager:
             raise ValueError(f"'{sort_by}' is not a valid field to sort by")
         if comparison and comparison not in comparison_operators:
             raise ValueError(f"'{comparison}' is not a valid comparison")
+        if 'full_status' in search_by:
+            del search_by['full_status']
         for search in search_by.keys():
             if search not in filter_fields:
                 raise ValueError(f"'{search}' is not a valid search operation")
@@ -345,8 +389,6 @@ class StreamManager:
             streams = []
             for stream in self.streams:
                 for search, val in search_by.items():
-                    if search == 'full_status':
-                        continue
                     if comparison_operators[comparison](getattr(stream, search), val):
                         streams.append(stream)
                         break

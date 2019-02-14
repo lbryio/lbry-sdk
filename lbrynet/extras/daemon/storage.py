@@ -1,3 +1,4 @@
+import os
 import logging
 import sqlite3
 import typing
@@ -499,6 +500,31 @@ class SQLiteStorage(SQLiteMixin):
             binascii.hexlify(download_dir.encode()).decode(), binascii.hexlify(file_name.encode()).decode(),
             stream_hash
         ))
+
+    async def recover_streams(self, descriptors_and_sds: typing.List[typing.Tuple['StreamDescriptor', 'BlobFile']],
+                              download_directory: str):
+        def _recover(transaction: sqlite3.Connection):
+            stream_hashes = [d.stream_hash for d, s in descriptors_and_sds]
+            for descriptor, sd_blob in descriptors_and_sds:
+                content_claim = transaction.execute(
+                    "select * from content_claim where stream_hash=?", (descriptor.stream_hash, )
+                ).fetchone()
+                delete_stream(transaction, descriptor)  # this will also delete the content claim
+                store_stream(transaction, sd_blob, descriptor)
+                store_file(transaction, descriptor.stream_hash, os.path.basename(descriptor.suggested_file_name),
+                           download_directory, 0.0, 'stopped')
+                if content_claim:
+                    transaction.execute("insert or ignore into content_claim values (?, ?)", content_claim)
+            transaction.executemany(
+                "update file set status='stopped' where stream_hash=?",
+                [(stream_hash, ) for stream_hash in stream_hashes]
+            )
+            download_dir = binascii.hexlify(self.conf.download_dir.encode()).decode()
+            transaction.executemany(
+                f"update file set download_directory=? where stream_hash=?",
+                [(download_dir, stream_hash) for stream_hash in stream_hashes]
+            )
+        await self.db.run_with_foreign_keys_disabled(_recover)
 
     def get_all_stream_hashes(self):
         return self.run_and_return_list("select stream_hash from stream")

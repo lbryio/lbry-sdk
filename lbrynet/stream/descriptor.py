@@ -4,6 +4,7 @@ import binascii
 import logging
 import typing
 import asyncio
+from collections import OrderedDict
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbrynet.blob import MAX_BLOB_SIZE
 from lbrynet.blob.blob_info import BlobInfo
@@ -82,10 +83,41 @@ class StreamDescriptor:
                            [blob_info.as_dict() for blob_info in self.blobs]), sort_keys=True
         ).encode()
 
-    async def make_sd_blob(self):
-        sd_hash = self.calculate_sd_hash()
-        sd_data = self.as_json()
-        sd_blob = BlobFile(self.loop, self.blob_dir, sd_hash, len(sd_data))
+    def old_sort_json(self) -> bytes:
+        blobs = []
+        for b in self.blobs:
+            blobs.append(OrderedDict(
+                [('length', b.length), ('blob_num', b.blob_num), ('iv', b.iv)] if not b.blob_hash else
+                [('length', b.length), ('blob_num', b.blob_num), ('blob_hash', b.blob_hash), ('iv', b.iv)]
+            ))
+            if not b.blob_hash:
+                break
+        return json.dumps(
+            OrderedDict([
+                ('stream_name', binascii.hexlify(self.stream_name.encode()).decode()),
+                ('blobs', blobs),
+                ('stream_type', 'lbryfile'),
+                ('key', self.key),
+                ('suggested_file_name', binascii.hexlify(self.suggested_file_name.encode()).decode()),
+                ('stream_hash', self.stream_hash),
+            ])
+        ).encode()
+
+    def calculate_old_sort_sd_hash(self):
+        h = get_lbry_hash_obj()
+        h.update(self.old_sort_json())
+        return h.hexdigest()
+
+    async def make_sd_blob(self, blob_file_obj: typing.Optional[BlobFile] = None,
+                           old_sort: typing.Optional[bool] = False):
+        sd_hash = self.calculate_sd_hash() if not old_sort else self.calculate_old_sort_sd_hash()
+        if not old_sort:
+            sd_data = self.as_json()
+        else:
+            sd_data = self.old_sort_json()
+        sd_blob = blob_file_obj or BlobFile(self.loop, self.blob_dir, sd_hash, len(sd_data))
+        if blob_file_obj:
+            blob_file_obj.set_length(len(sd_data))
         if not sd_blob.get_is_verified():
             writer = sd_blob.open_for_writing()
             writer.write(sd_data)
@@ -160,8 +192,8 @@ class StreamDescriptor:
     @classmethod
     async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
                             file_path: str, key: typing.Optional[bytes] = None,
-                            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None
-                            ) -> 'StreamDescriptor':
+                            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
+                            old_sort: bool = False) -> 'StreamDescriptor':
 
         blobs: typing.List[BlobInfo] = []
 
@@ -180,7 +212,7 @@ class StreamDescriptor:
             loop, blob_dir, os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path),
             blobs
         )
-        sd_blob = await descriptor.make_sd_blob()
+        sd_blob = await descriptor.make_sd_blob(old_sort=old_sort)
         descriptor.sd_hash = sd_blob.blob_hash
         return descriptor
 
@@ -190,3 +222,19 @@ class StreamDescriptor:
 
     def upper_bound_decrypted_length(self) -> int:
         return self.lower_bound_decrypted_length() + (AES.block_size // 8)
+
+    @classmethod
+    async def recover(cls, blob_dir: str, sd_blob: 'BlobFile', stream_hash: str, stream_name: str,
+                      suggested_file_name: str, key: str,
+                      blobs: typing.List['BlobInfo']) -> typing.Optional['StreamDescriptor']:
+        descriptor = cls(asyncio.get_event_loop(), blob_dir, stream_name, key, suggested_file_name,
+                         blobs, stream_hash, sd_blob.blob_hash)
+
+        if descriptor.calculate_sd_hash() == sd_blob.blob_hash:  # first check for a normal valid sd
+            old_sort = False
+        elif descriptor.calculate_old_sort_sd_hash() == sd_blob.blob_hash:  # check if old field sorting works
+            old_sort = True
+        else:
+            return
+        await descriptor.make_sd_blob(sd_blob, old_sort)
+        return descriptor
