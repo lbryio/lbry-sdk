@@ -119,16 +119,16 @@ class StreamAssembler:
                                         self.descriptor.sd_hash)
                             continue
         finally:
-            if save_tasks:
-                await asyncio.wait(save_tasks)
             if written_blobs == len(self.descriptor.blobs) - 2:
                 log.debug("finished decrypting and assembling stream")
+                if save_tasks:
+                    await asyncio.wait(save_tasks)
                 await self.after_finished()
                 self.stream_finished_event.set()
             else:
                 log.debug("stream decryption and assembly did not finish (%i/%i blobs are done)", written_blobs or 0,
                           len(self.descriptor.blobs) - 2)
-                if self.stream_handle is not None and self.output_path is not None:
+                if self.output_path and os.path.isfile(self.output_path):
                     log.debug("erasing incomplete file assembly: %s", self.output_path)
                     os.unlink(self.output_path)
 
