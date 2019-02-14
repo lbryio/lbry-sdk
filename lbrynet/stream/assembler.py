@@ -128,6 +128,9 @@ class StreamAssembler:
             else:
                 log.debug("stream decryption and assembly did not finish (%i/%i blobs are done)", written_blobs or 0,
                           len(self.descriptor.blobs) - 2)
+                if self.stream_handle is not None and self.output_path is not None:
+                    log.debug("erasing incomplete file assembly: %s", self.output_path)
+                    os.unlink(self.output_path)
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         return self.blob_manager.get_blob(blob_hash, length)
