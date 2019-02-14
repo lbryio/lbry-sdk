@@ -421,11 +421,12 @@ class SQLiteStorage(SQLiteMixin):
 
         return self.db.run(_store_stream)
 
-    def get_blobs_for_stream(self, stream_hash, only_completed=False):
+    def get_blobs_for_stream(self, stream_hash, only_completed=False) -> typing.Awaitable[typing.List[BlobInfo]]:
         def _get_blobs_for_stream(transaction):
             crypt_blob_infos = []
             stream_blobs = transaction.execute(
-                "select blob_hash, position, iv from stream_blob where stream_hash=?", (stream_hash, )
+                "select blob_hash, position, iv from stream_blob where stream_hash=? "
+                "order by position asc", (stream_hash, )
             ).fetchall()
             if only_completed:
                 lengths = transaction.execute(
@@ -447,7 +448,8 @@ class SQLiteStorage(SQLiteMixin):
             for blob_hash, position, iv in stream_blobs:
                 blob_length = blob_length_dict.get(blob_hash, 0)
                 crypt_blob_infos.append(BlobInfo(position, blob_length, iv, blob_hash))
-            crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
+                if not blob_hash:
+                    break
             return crypt_blob_infos
         return self.db.run(_get_blobs_for_stream)
 
