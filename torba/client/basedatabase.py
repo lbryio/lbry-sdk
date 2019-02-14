@@ -79,11 +79,9 @@ class AIOSQLite:
             raise sqlite3.IntegrityError("foreign keys are disabled, use `AIOSQLite.run` instead")
         try:
             self.connection.execute('pragma foreign_keys=off')
-            self.connection.commit()
             return self.__run_transaction(fun, *args, **kwargs)
         finally:
             self.connection.execute('pragma foreign_keys=on')
-            self.connection.commit()
 
 
 def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
