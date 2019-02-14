@@ -105,6 +105,13 @@ def get_content_claim_from_outpoint(transaction: sqlite3.Connection,
         return StoredStreamClaim(*claim_fields)
 
 
+def batched_operation(transaction, query, parameters, batch_size=900):
+    for start_index in range(0, len(parameters), batch_size):
+        current_batch = parameters[start_index:start_index+batch_size]
+        bind = "({})".format(','.join(['?'] * len(current_batch)))
+        transaction.execute(query.format(bind), current_batch)
+
+
 def _batched_select(transaction, query, parameters, batch_size=900):
     for start_index in range(0, len(parameters), batch_size):
         current_batch = parameters[start_index:start_index+batch_size]
@@ -152,6 +159,16 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
             for claim in signed_claims[claim_id]:
                 claim.channel_name = channel_name[0]
     return files
+
+
+def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor'):
+    blob_hashes = [blob.blob_hash for blob in descriptor.blobs[:-1]]
+    blob_hashes.append(descriptor.sd_hash)
+    transaction.execute("delete from content_claim where stream_hash=? ", (descriptor.stream_hash,))
+    transaction.execute("delete from file where stream_hash=? ", (descriptor.stream_hash,))
+    transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash,))
+    transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash,))
+    batched_operation(transaction, "delete from blob where blob_hash in {}", blob_hashes)
 
 
 class SQLiteStorage(SQLiteMixin):
@@ -425,15 +442,7 @@ class SQLiteStorage(SQLiteMixin):
         )
 
     def delete_stream(self, descriptor: 'StreamDescriptor'):
-        def _delete_stream(transaction: sqlite3.Connection):
-            transaction.execute("delete from content_claim where stream_hash=? ", (descriptor.stream_hash,))
-            transaction.execute("delete from file where stream_hash=? ", (descriptor.stream_hash, ))
-            transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash, ))
-            transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash, ))
-            transaction.execute("delete from blob where blob_hash=?", (descriptor.sd_hash, ))
-            transaction.executemany("delete from blob where blob_hash=?",
-                                    [(blob.blob_hash, ) for blob in descriptor.blobs[:-1]])
-        return self.db.run(_delete_stream)
+        return self.db.run_with_foreign_keys_disabled(delete_stream, descriptor)
 
     # # # # # # # # # file stuff # # # # # # # # #
 
