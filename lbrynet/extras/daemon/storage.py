@@ -154,6 +154,35 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
     return files
 
 
+def store_stream(transaction: sqlite3.Connection, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
+    # add the head blob and set it to be announced
+    transaction.execute(
+        "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?),  (?, ?, ?, ?, ?, ?, ?)",
+        (
+            sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0,
+            descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0
+        )
+    )
+    # add the rest of the blobs with announcement off
+    if len(descriptor.blobs) > 2:
+        transaction.executemany(
+            "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+            [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
+             for blob in descriptor.blobs[1:-1]]
+        )
+    # associate the blobs to the stream
+    transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?)",
+                        (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
+                         binascii.hexlify(descriptor.stream_name.encode()).decode(),
+                         binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
+    # add the stream
+    transaction.executemany(
+        "insert or ignore into stream_blob values (?, ?, ?, ?)",
+        [(descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv)
+         for blob in descriptor.blobs]
+    )
+
+
 def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor'):
     blob_hashes = [(blob.blob_hash, ) for blob in descriptor.blobs[:-1]]
     blob_hashes.append((descriptor.sd_hash, ))
@@ -162,6 +191,15 @@ def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor
     transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash,))
     transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash,))
     transaction.executemany("delete from blob where blob_hash=?", blob_hashes)
+
+
+def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: str, download_directory: str,
+               data_payment_rate: float, status: str):
+    transaction.execute(
+        "insert or replace into file values (?, ?, ?, ?, ?)",
+        (stream_hash, binascii.hexlify(file_name.encode()).decode(),
+         binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
+    )
 
 
 class SQLiteStorage(SQLiteMixin):
@@ -391,35 +429,7 @@ class SQLiteStorage(SQLiteMixin):
         return streams is not None
 
     def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
-        def _store_stream(transaction: sqlite3.Connection):
-            # add the head blob and set it to be announced
-            transaction.execute(
-                "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?),  (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0,
-                    descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0
-                )
-            )
-            # add the rest of the blobs with announcement off
-            if len(descriptor.blobs) > 2:
-                transaction.executemany(
-                    "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-                    [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
-                     for blob in descriptor.blobs[1:-1]]
-                )
-            # associate the blobs to the stream
-            transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?)",
-                                (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
-                                 binascii.hexlify(descriptor.stream_name.encode()).decode(),
-                                 binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
-            # add the stream
-            transaction.executemany(
-                "insert or ignore into stream_blob values (?, ?, ?, ?)",
-                [(descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv)
-                 for blob in descriptor.blobs]
-            )
-
-        return self.db.run(_store_stream)
+        return self.db.run(store_stream, sd_blob, descriptor)
 
     def get_blobs_for_stream(self, stream_hash, only_completed=False) -> typing.Awaitable[typing.List[BlobInfo]]:
         def _get_blobs_for_stream(transaction):
@@ -475,17 +485,13 @@ class SQLiteStorage(SQLiteMixin):
 
     def save_published_file(self, stream_hash: str, file_name: str, download_directory: str, data_payment_rate: float,
                             status="finished"):
-        return self.db.execute(
-            "insert into file values (?, ?, ?, ?, ?)",
-            (stream_hash, binascii.hexlify(file_name.encode()).decode(),
-             binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
-        )
+        return self.db.run(store_file, stream_hash, file_name, download_directory, data_payment_rate, status)
 
     def get_all_lbry_files(self) -> typing.Awaitable[typing.List[typing.Dict]]:
         return self.db.run(get_all_lbry_files)
 
     def change_file_status(self, stream_hash: str, new_status: str):
-        log.info("update file status %s -> %s", stream_hash, new_status)
+        log.debug("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute("update file set status=? where stream_hash=?", (new_status, stream_hash))
 
     def change_file_download_dir_and_file_name(self, stream_hash: str, download_dir: str, file_name: str):
