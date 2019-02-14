@@ -274,6 +274,7 @@ class StreamManager:
         except asyncio.CancelledError:
             downloader.stop()
             log.debug("stopped stream")
+        await self.stop_stream(stream)
         raise DownloadDataTimeout(downloader.sd_hash)
 
     async def download_stream_from_claim(self, node: 'Node', claim_info: typing.Dict,
