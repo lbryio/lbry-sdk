@@ -104,9 +104,12 @@ class StreamManager:
                     self.streams.remove(stream)
                 return False
             file_name = os.path.basename(stream.downloader.output_path)
+            output_dir = os.path.dirname(stream.downloader.output_path)
             await self.storage.change_file_download_dir_and_file_name(
-                stream.stream_hash, self.config.download_dir, file_name
+                stream.stream_hash, output_dir, file_name
             )
+            stream._file_name = file_name
+            stream.download_directory = output_dir
             self.wait_for_stream_finished(stream)
             return True
         return True
