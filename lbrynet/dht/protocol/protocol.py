@@ -480,7 +480,9 @@ class KademliaProtocol(DatagramProtocol):
                 f"Error sending '{request.method}' to {peer.address}:{peer.udp_port}\n" \
                 f"Args: {request.args}\n" \
                 f"Raised: {str(remote_exception)}"
-            if error_datagram.response not in old_protocol_errors:
+            if 'Invalid token' in error_msg:
+                log.debug(error_msg)
+            elif error_datagram.response not in old_protocol_errors:
                 log.warning(error_msg)
             else:
                 log.warning("known dht protocol backwards compatibility error with %s:%i (lbrynet v%s)",
