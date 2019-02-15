@@ -154,5 +154,5 @@ types_map = {
 
 def guess_media_type(path):
     _, ext = os.path.splitext(path)
-    default = 'application/octet-stream' if not ext else f'application/x-ext-{ext[1:].strip().lower()}'
+    default = 'application/octet-stream' if not (ext and ext[1:].strip()) else f'application/x-ext-{ext[1:].strip().lower()}'
     return types_map.get(ext, default)
