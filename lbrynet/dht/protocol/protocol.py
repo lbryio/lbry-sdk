@@ -423,7 +423,15 @@ class KademliaProtocol(DatagramProtocol):
                 self.ping_queue.enqueue_maybe_ping(peer)
             elif is_good is True:
                 await self.add_peer(peer)
-
+        except ValueError as err:
+            log.debug("error raised handling %s request from %s:%i - %s(%s)",
+                      request_datagram.method, peer.address, peer.udp_port, str(type(err)),
+                      str(err))
+            await self.send_error(
+                peer,
+                ErrorDatagram(ERROR_TYPE, request_datagram.rpc_id, self.node_id, str(type(err)).encode(),
+                              str(err).encode())
+            )
         except Exception as err:
             log.warning("error raised handling %s request from %s:%i - %s(%s)",
                         request_datagram.method, peer.address, peer.udp_port, str(type(err)),
