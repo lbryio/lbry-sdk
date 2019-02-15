@@ -23,6 +23,8 @@ def get_mock_node(peer):
 
     mock_node = mock.Mock(spec=Node)
     mock_node.accumulate_peers = mock_accumulate_peers
+    mock_node.joined = asyncio.Event()
+    mock_node.joined.set()
     return mock_node
 
 
@@ -91,15 +93,13 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
 
 
 class TestStreamManager(BlobExchangeTestBase):
-    async def asyncSetUp(self):
-        await super().asyncSetUp()
+    async def setup_stream_manager(self, balance=10.0, fee=None, old_sort=False):
         file_path = os.path.join(self.server_dir, "test_file")
         with open(file_path, 'wb') as f:
             f.write(os.urandom(20000000))
-        descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager.blob_dir, file_path)
-        self.sd_hash = descriptor.calculate_sd_hash()
-
-    async def setup_stream_manager(self, balance=10.0, fee=None):
+        descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager.blob_dir, file_path,
+                                                          old_sort=old_sort)
+        self.sd_hash = descriptor.sd_hash
         self.mock_wallet, self.uri = get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
         self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
                                             self.client_storage, get_mock_node(self.server_from_client))
@@ -169,3 +169,26 @@ class TestStreamManager(BlobExchangeTestBase):
         await self.setup_stream_manager(1000000.0, fee)
         with self.assertRaises(KeyFeeAboveMaxAllowed):
             await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+
+    async def test_download_then_recover_stream_on_startup(self, old_sort=False):
+        await self.setup_stream_manager(old_sort=old_sort)
+        self.assertSetEqual(self.stream_manager.streams, set())
+        stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await stream.downloader.stream_finished_event.wait()
+        self.stream_manager.stop()
+        self.client_blob_manager.stop()
+        os.remove(os.path.join(self.client_blob_manager.blob_dir, stream.sd_hash))
+        for blob in stream.descriptor.blobs[:-1]:
+            os.remove(os.path.join(self.client_blob_manager.blob_dir, blob.blob_hash))
+        await self.client_blob_manager.setup()
+        await self.stream_manager.start()
+        self.assertEqual(1, len(self.stream_manager.streams))
+        self.assertEqual(stream.sd_hash, list(self.stream_manager.streams)[0].sd_hash)
+        self.assertEqual('stopped', list(self.stream_manager.streams)[0].status)
+
+        sd_blob = self.client_blob_manager.get_blob(stream.sd_hash)
+        self.assertTrue(sd_blob.file_exists)
+        self.assertTrue(sd_blob.get_is_verified())
+
+    def test_download_then_recover_old_sort_stream_on_startup(self):
+        return self.test_download_then_recover_stream_on_startup(old_sort=True)

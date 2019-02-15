@@ -21,11 +21,13 @@ class ManagedStream:
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', descriptor: 'StreamDescriptor',
-                 download_directory: str, file_name: str, downloader: typing.Optional[StreamDownloader] = None,
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', rowid: int,
+                 descriptor: 'StreamDescriptor', download_directory: str, file_name: str,
+                 downloader: typing.Optional[StreamDownloader] = None,
                  status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None):
         self.loop = loop
         self.blob_manager = blob_manager
+        self.rowid = rowid
         self.download_directory = download_directory
         self._file_name = file_name
         self.descriptor = descriptor
@@ -168,7 +170,9 @@ class ManagedStream:
         await blob_manager.blob_completed(sd_blob)
         for blob in descriptor.blobs[:-1]:
             await blob_manager.blob_completed(blob_manager.get_blob(blob.blob_hash, blob.length))
-        return cls(loop, blob_manager, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
+        row_id = await blob_manager.storage.save_published_file(descriptor.stream_hash, os.path.basename(file_path),
+                                                                os.path.dirname(file_path), 0)
+        return cls(loop, blob_manager, row_id, descriptor, os.path.dirname(file_path), os.path.basename(file_path),
                    status=cls.STATUS_FINISHED)
 
     def start_download(self, node: typing.Optional['Node']):

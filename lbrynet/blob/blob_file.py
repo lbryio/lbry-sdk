@@ -98,7 +98,7 @@ class BlobFile:
                 t.add_done_callback(lambda *_: self.finished_writing.set())
                 return
             if isinstance(error, (InvalidBlobHashError, InvalidDataError)):
-                log.error("writer error downloading %s: %s", self.blob_hash[:8], str(error))
+                log.debug("writer error downloading %s: %s", self.blob_hash[:8], str(error))
             elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
                 log.exception("something else")
                 raise error

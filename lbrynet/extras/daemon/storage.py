@@ -1,3 +1,4 @@
+import os
 import logging
 import sqlite3
 import typing
@@ -133,7 +134,7 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
             signed_claims[claim.channel_claim_id].append(claim)
         files.append(
             {
-                "row_id": rowid,
+                "rowid": rowid,
                 "stream_hash": stream_hash,
                 "file_name": file_name,                      # hex
                 "download_directory": download_dir,          # hex
@@ -154,6 +155,35 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
     return files
 
 
+def store_stream(transaction: sqlite3.Connection, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
+    # add the head blob and set it to be announced
+    transaction.execute(
+        "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?),  (?, ?, ?, ?, ?, ?, ?)",
+        (
+            sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0,
+            descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0
+        )
+    )
+    # add the rest of the blobs with announcement off
+    if len(descriptor.blobs) > 2:
+        transaction.executemany(
+            "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+            [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
+             for blob in descriptor.blobs[1:-1]]
+        )
+    # associate the blobs to the stream
+    transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?)",
+                        (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
+                         binascii.hexlify(descriptor.stream_name.encode()).decode(),
+                         binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
+    # add the stream
+    transaction.executemany(
+        "insert or ignore into stream_blob values (?, ?, ?, ?)",
+        [(descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv)
+         for blob in descriptor.blobs]
+    )
+
+
 def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor'):
     blob_hashes = [(blob.blob_hash, ) for blob in descriptor.blobs[:-1]]
     blob_hashes.append((descriptor.sd_hash, ))
@@ -162,6 +192,16 @@ def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor
     transaction.execute("delete from stream_blob where stream_hash=?", (descriptor.stream_hash,))
     transaction.execute("delete from stream where stream_hash=? ", (descriptor.stream_hash,))
     transaction.executemany("delete from blob where blob_hash=?", blob_hashes)
+
+
+def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: str, download_directory: str,
+               data_payment_rate: float, status: str) -> int:
+    transaction.execute(
+        "insert or replace into file values (?, ?, ?, ?, ?)",
+        (stream_hash, binascii.hexlify(file_name.encode()).decode(),
+         binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
+    )
+    return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
 
 
 class SQLiteStorage(SQLiteMixin):
@@ -255,9 +295,16 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # blob functions # # # # # # # # #
 
-    def add_completed_blob(self, blob_hash: str):
-        log.debug("Adding a completed blob. blob_hash=%s", blob_hash)
-        return self.db.execute("update blob set status='finished' where blob.blob_hash=?", (blob_hash, ))
+    def add_completed_blob(self, blob_hash: str, length: int):
+        def _add_blob(transaction: sqlite3.Connection):
+            transaction.execute(
+                "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+                (blob_hash, length, 0, 0, "pending", 0, 0)
+            )
+            transaction.execute(
+                "update blob set status='finished' where blob.blob_hash=?", (blob_hash, )
+            )
+        return self.db.run(_add_blob)
 
     def get_blob_status(self, blob_hash: str):
         return self.run_and_return_one_or_none(
@@ -351,6 +398,26 @@ class SQLiteStorage(SQLiteMixin):
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
 
+    def sync_missing_blobs(self, blob_files: typing.Set[str]) -> typing.Awaitable[typing.Set[str]]:
+        def _sync_blobs(transaction: sqlite3.Connection) -> typing.Set[str]:
+            to_update = [
+                (blob_hash, )
+                for (blob_hash, ) in transaction.execute("select blob_hash from blob where status='finished'")
+                if blob_hash not in blob_files
+            ]
+            transaction.executemany(
+                "update blob set status='pending' where blob_hash=?",
+                to_update
+            )
+            return {
+                blob_hash
+                for blob_hash, in _batched_select(
+                    transaction, "select blob_hash from blob where status='finished' and blob_hash in {}",
+                    list(blob_files)
+                )
+            }
+        return self.db.run(_sync_blobs)
+
     # # # # # # # # # stream functions # # # # # # # # #
 
     async def stream_exists(self, sd_hash: str) -> bool:
@@ -363,42 +430,20 @@ class SQLiteStorage(SQLiteMixin):
                                                         "s.stream_hash=f.stream_hash and s.sd_hash=?", sd_hash)
         return streams is not None
 
+    def rowid_for_stream(self, stream_hash: str) -> typing.Awaitable[typing.Optional[int]]:
+        return self.run_and_return_one_or_none(
+            "select rowid from file where stream_hash=?", stream_hash
+        )
+
     def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
-        def _store_stream(transaction: sqlite3.Connection):
-            # add the head blob and set it to be announced
-            transaction.execute(
-                "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?),  (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0,
-                    descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0
-                )
-            )
-            # add the rest of the blobs with announcement off
-            if len(descriptor.blobs) > 2:
-                transaction.executemany(
-                    "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-                    [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
-                     for blob in descriptor.blobs[1:-1]]
-                )
-            # associate the blobs to the stream
-            transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?)",
-                                (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
-                                 binascii.hexlify(descriptor.stream_name.encode()).decode(),
-                                 binascii.hexlify(descriptor.suggested_file_name.encode()).decode()))
-            # add the stream
-            transaction.executemany(
-                "insert or ignore into stream_blob values (?, ?, ?, ?)",
-                [(descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv)
-                 for blob in descriptor.blobs]
-            )
+        return self.db.run(store_stream, sd_blob, descriptor)
 
-        return self.db.run(_store_stream)
-
-    def get_blobs_for_stream(self, stream_hash, only_completed=False):
+    def get_blobs_for_stream(self, stream_hash, only_completed=False) -> typing.Awaitable[typing.List[BlobInfo]]:
         def _get_blobs_for_stream(transaction):
             crypt_blob_infos = []
             stream_blobs = transaction.execute(
-                "select blob_hash, position, iv from stream_blob where stream_hash=?", (stream_hash, )
+                "select blob_hash, position, iv from stream_blob where stream_hash=? "
+                "order by position asc", (stream_hash, )
             ).fetchall()
             if only_completed:
                 lengths = transaction.execute(
@@ -420,7 +465,8 @@ class SQLiteStorage(SQLiteMixin):
             for blob_hash, position, iv in stream_blobs:
                 blob_length = blob_length_dict.get(blob_hash, 0)
                 crypt_blob_infos.append(BlobInfo(position, blob_length, iv, blob_hash))
-            crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
+                if not blob_hash:
+                    break
             return crypt_blob_infos
         return self.db.run(_get_blobs_for_stream)
 
@@ -439,24 +485,21 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # file stuff # # # # # # # # #
 
-    def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
+    def save_downloaded_file(self, stream_hash, file_name, download_directory,
+                             data_payment_rate) -> typing.Awaitable[int]:
         return self.save_published_file(
             stream_hash, file_name, download_directory, data_payment_rate, status="running"
         )
 
     def save_published_file(self, stream_hash: str, file_name: str, download_directory: str, data_payment_rate: float,
-                            status="finished"):
-        return self.db.execute(
-            "insert into file values (?, ?, ?, ?, ?)",
-            (stream_hash, binascii.hexlify(file_name.encode()).decode(),
-             binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
-        )
+                            status="finished") -> typing.Awaitable[int]:
+        return self.db.run(store_file, stream_hash, file_name, download_directory, data_payment_rate, status)
 
     def get_all_lbry_files(self) -> typing.Awaitable[typing.List[typing.Dict]]:
         return self.db.run(get_all_lbry_files)
 
     def change_file_status(self, stream_hash: str, new_status: str):
-        log.info("update file status %s -> %s", stream_hash, new_status)
+        log.debug("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute("update file set status=? where stream_hash=?", (new_status, stream_hash))
 
     def change_file_download_dir_and_file_name(self, stream_hash: str, download_dir: str, file_name: str):
@@ -464,6 +507,31 @@ class SQLiteStorage(SQLiteMixin):
             binascii.hexlify(download_dir.encode()).decode(), binascii.hexlify(file_name.encode()).decode(),
             stream_hash
         ))
+
+    async def recover_streams(self, descriptors_and_sds: typing.List[typing.Tuple['StreamDescriptor', 'BlobFile']],
+                              download_directory: str):
+        def _recover(transaction: sqlite3.Connection):
+            stream_hashes = [d.stream_hash for d, s in descriptors_and_sds]
+            for descriptor, sd_blob in descriptors_and_sds:
+                content_claim = transaction.execute(
+                    "select * from content_claim where stream_hash=?", (descriptor.stream_hash, )
+                ).fetchone()
+                delete_stream(transaction, descriptor)  # this will also delete the content claim
+                store_stream(transaction, sd_blob, descriptor)
+                store_file(transaction, descriptor.stream_hash, os.path.basename(descriptor.suggested_file_name),
+                           download_directory, 0.0, 'stopped')
+                if content_claim:
+                    transaction.execute("insert or ignore into content_claim values (?, ?)", content_claim)
+            transaction.executemany(
+                "update file set status='stopped' where stream_hash=?",
+                [(stream_hash, ) for stream_hash in stream_hashes]
+            )
+            download_dir = binascii.hexlify(self.conf.download_dir.encode()).decode()
+            transaction.executemany(
+                f"update file set download_directory=? where stream_hash=?",
+                [(download_dir, stream_hash) for stream_hash in stream_hashes]
+            )
+        await self.db.run_with_foreign_keys_disabled(_recover)
 
     def get_all_stream_hashes(self):
         return self.run_and_return_list("select stream_hash from stream")

@@ -75,3 +75,35 @@ class TestStreamDescriptor(AsyncioTestCase):
     async def test_zero_length_blob(self):
         self.sd_dict['blobs'][-2]['length'] = 0
         await self._test_invalid_sd()
+
+
+class TestRecoverOldStreamDescriptors(AsyncioTestCase):
+    async def test_old_key_sort_sd_blob(self):
+        loop = asyncio.get_event_loop()
+        tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
+        storage = SQLiteStorage(Config(), ":memory:")
+        await storage.open()
+        blob_manager = BlobFileManager(loop, tmp_dir, storage)
+
+        sd_bytes = b'{"stream_name": "4f62616d6120446f6e6b65792d322e73746c", "blobs": [{"length": 1153488, "blob_num' \
+                   b'": 0, "blob_hash": "9fa32a249ce3f2d4e46b78599800f368b72f2a7f22b81df443c7f6bdbef496bd61b4c0079c7' \
+                   b'3d79c8bb9be9a6bf86592", "iv": "0bf348867244019c9e22196339016ea6"}, {"length": 0, "blob_num": 1,' \
+                   b' "iv": "9f36abae16955463919b07ed530a3d18"}], "stream_type": "lbryfile", "key": "a03742b87628aa7' \
+                   b'228e48f1dcd207e48", "suggested_file_name": "4f62616d6120446f6e6b65792d322e73746c", "stream_hash' \
+                   b'": "b43f4b1379780caf60d20aa06ac38fb144df61e514ebfa97537018ba73bce8fe37ae712f473ff0ba0be0eef44e1' \
+                   b'60207"}'
+        sd_hash = '9313d1807551186126acc3662e74d9de29cede78d4f133349ace846273ef116b9bb86be86c54509eb84840e4b032f6b2'
+        stream_hash = 'b43f4b1379780caf60d20aa06ac38fb144df61e514ebfa97537018ba73bce8fe37ae712f473ff0ba0be0eef44e160207'
+
+        blob = blob_manager.get_blob(sd_hash)
+        blob.set_length(len(sd_bytes))
+        writer = blob.open_for_writing()
+        writer.write(sd_bytes)
+        await blob.verified.wait()
+        descriptor = await StreamDescriptor.from_stream_descriptor_blob(
+            loop, blob_manager.blob_dir, blob
+        )
+        self.assertEqual(stream_hash, descriptor.get_stream_hash())
+        self.assertEqual(sd_hash, descriptor.calculate_old_sort_sd_hash())
+        self.assertNotEqual(sd_hash, descriptor.calculate_sd_hash())
