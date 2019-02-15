@@ -539,7 +539,10 @@ class UPnPComponent(Component):
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         self.external_ip = external_ip
-        assert self.external_ip is not None   # TODO: handle going/starting offline
+
+        if self.external_ip is None:        # TODO: handle going/starting offline
+            log.info("unable to get external ip even from lbry.io fallback")
+            return
 
         if not self.upnp_redirects and self.upnp:  # setup missing redirects
             try:
@@ -593,7 +596,7 @@ class UPnPComponent(Component):
         if self.upnp:
             if not self.upnp_redirects and not all([x in self.component_manager.skip_components for x in
                                                     (DHT_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT)]):
-                log.error("failed to setup upnp, debugging infomation: %s", self.upnp.zipped_debugging_info)
+                log.error("failed to setup upnp, debugging information: %s", self.upnp.zipped_debugging_info)
             else:
                 success = True
                 if self.upnp_redirects:
