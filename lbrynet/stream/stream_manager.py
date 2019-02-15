@@ -24,6 +24,7 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 filter_fields = [
+    'rowid',
     'status',
     'file_name',
     'sd_hash',
@@ -156,7 +157,7 @@ class StreamManager:
             await self.storage.recover_streams(to_restore, self.config.download_dir)
         log.info("Recovered %i/%i attempted streams", len(to_restore), len(file_infos))
 
-    async def add_stream(self, sd_hash: str, file_name: str, download_directory: str, status: str,
+    async def add_stream(self, rowid: int, sd_hash: str, file_name: str, download_directory: str, status: str,
                          claim: typing.Optional['StoredStreamClaim']):
         sd_blob = self.blob_manager.get_blob(sd_hash)
         if not sd_blob.get_is_verified():
@@ -171,7 +172,7 @@ class StreamManager:
         else:
             downloader = None
         stream = ManagedStream(
-            self.loop, self.blob_manager, descriptor, download_directory, file_name, downloader, status, claim
+            self.loop, self.blob_manager, rowid, descriptor, download_directory, file_name, downloader, status, claim
         )
         self.streams.add(stream)
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
@@ -194,7 +195,7 @@ class StreamManager:
 
         await asyncio.gather(*[
             self.add_stream(
-                file_info['sd_hash'], binascii.unhexlify(file_info['file_name']).decode(),
+                file_info['rowid'], file_info['sd_hash'], binascii.unhexlify(file_info['file_name']).decode(),
                 binascii.unhexlify(file_info['download_directory']).decode(), file_info['status'],
                 file_info['claim']
             ) for file_info in to_start
@@ -309,14 +310,16 @@ class StreamManager:
         if not await self.blob_manager.storage.stream_exists(downloader.sd_hash):
             await self.blob_manager.storage.store_stream(downloader.sd_blob, downloader.descriptor)
         if not await self.blob_manager.storage.file_exists(downloader.sd_hash):
-            await self.blob_manager.storage.save_downloaded_file(
+            rowid = await self.blob_manager.storage.save_downloaded_file(
                 downloader.descriptor.stream_hash, file_name, download_directory,
                 0.0
             )
+        else:
+            rowid = self.blob_manager.storage.rowid_for_stream(downloader.descriptor.stream_hash)
         await self.blob_manager.storage.save_content_claim(
             downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}"
         )
-        stream = ManagedStream(self.loop, self.blob_manager, downloader.descriptor, download_directory,
+        stream = ManagedStream(self.loop, self.blob_manager, rowid, downloader.descriptor, download_directory,
                                file_name, downloader, ManagedStream.STATUS_RUNNING)
         stream.set_claim(claim_info, claim)
         self.streams.add(stream)

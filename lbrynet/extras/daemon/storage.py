@@ -134,7 +134,7 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
             signed_claims[claim.channel_claim_id].append(claim)
         files.append(
             {
-                "row_id": rowid,
+                "rowid": rowid,
                 "stream_hash": stream_hash,
                 "file_name": file_name,                      # hex
                 "download_directory": download_dir,          # hex
@@ -195,12 +195,13 @@ def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor
 
 
 def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: str, download_directory: str,
-               data_payment_rate: float, status: str):
+               data_payment_rate: float, status: str) -> int:
     transaction.execute(
         "insert or replace into file values (?, ?, ?, ?, ?)",
         (stream_hash, binascii.hexlify(file_name.encode()).decode(),
          binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
     )
+    return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
 
 
 class SQLiteStorage(SQLiteMixin):
@@ -429,6 +430,11 @@ class SQLiteStorage(SQLiteMixin):
                                                         "s.stream_hash=f.stream_hash and s.sd_hash=?", sd_hash)
         return streams is not None
 
+    def rowid_for_stream(self, stream_hash: str) -> typing.Awaitable[typing.Optional[int]]:
+        return self.run_and_return_one_or_none(
+            "select rowid from file where stream_hash=?", stream_hash
+        )
+
     def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
         return self.db.run(store_stream, sd_blob, descriptor)
 
@@ -479,13 +485,14 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # file stuff # # # # # # # # #
 
-    def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
+    def save_downloaded_file(self, stream_hash, file_name, download_directory,
+                             data_payment_rate) -> typing.Awaitable[int]:
         return self.save_published_file(
             stream_hash, file_name, download_directory, data_payment_rate, status="running"
         )
 
     def save_published_file(self, stream_hash: str, file_name: str, download_directory: str, data_payment_rate: float,
-                            status="finished"):
+                            status="finished") -> typing.Awaitable[int]:
         return self.db.run(store_file, stream_hash, file_name, download_directory, data_payment_rate, status)
 
     def get_all_lbry_files(self) -> typing.Awaitable[typing.List[typing.Dict]]:

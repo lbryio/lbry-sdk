@@ -1382,7 +1382,7 @@ class Daemon(metaclass=JSONRPCServerType):
             ]
         }
         """
-        sort = sort or 'status'
+        sort = sort or 'rowid'
         comparison = comparison or 'eq'
         return [
             stream.as_dict() for stream in self.stream_manager.get_filtered_streams(
@@ -2023,8 +2023,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if file_path:
             stream = await self.stream_manager.create_stream(file_path)
-            await self.storage.save_published_file(stream.stream_hash, os.path.basename(file_path),
-                                                   os.path.dirname(file_path), 0)
             claim_dict['stream']['source']['source'] = stream.sd_hash
             claim_dict['stream']['source']['contentType'] = guess_media_type(file_path)
 
