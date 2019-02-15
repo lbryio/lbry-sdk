@@ -404,18 +404,3 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(c2['claim_id'], r4c)
         self.assertEqual(r3c, r4c)
         self.assertEqual(r3n, r4n)
-
-
-# for debugging the full stack:
-# class RunFullStackForLiveTesting(CommandTestCase):
-#
-#     VERBOSITY = logging.INFO
-#
-#     async def asyncDaemonStart(self):
-#         await self.daemon.start()
-#
-#     async def test_full_stack(self):
-#         self.assertEqual('10.0', await self.daemon.jsonrpc_account_balance())
-#         print("Running: do your testing now.")
-#         while True:
-#             await asyncio.sleep(0.1)

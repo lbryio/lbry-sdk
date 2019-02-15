@@ -67,9 +67,6 @@ class CommandTestCase(IntegrationTestCase):
     MANAGER = LbryWalletManager
     VERBOSITY = logging.WARN
 
-    async def asyncDaemonStart(self):
-        await self.daemon.initialize()
-
     async def asyncSetUp(self):
         await super().asyncSetUp()
 
@@ -81,7 +78,6 @@ class CommandTestCase(IntegrationTestCase):
         conf.data_dir = self.wallet_node.data_path
         conf.wallet_dir = self.wallet_node.data_path
         conf.download_dir = self.wallet_node.data_path
-        print("WALLET_DIR =", self.wallet_node.data_path)
         conf.share_usage_data = False
         conf.use_upnp = False
         conf.reflect_streams = True
@@ -110,7 +106,7 @@ class CommandTestCase(IntegrationTestCase):
             conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
             exchange_rate_manager=ExchangeRateManagerComponent
         ))
-        await self.asyncDaemonStart()
+        await self.daemon.initialize()
         self.manager.old_db = self.daemon.storage
 
         server_tmp_dir = tempfile.mkdtemp()
