@@ -26,7 +26,7 @@ class BlobDownloader:
         self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
         self.rounds_won: typing.Dict['KademliaPeer', int] = {}
 
-    def should_race_continue(self):
+    def should_race_continue(self, blob: 'BlobFile'):
         if len(self.active_connections) >= self.config.max_connections_per_download:
             return False
         # if a peer won 3 or more blob races and is active as a downloader, stop the race so bandwidth improves
@@ -35,7 +35,7 @@ class BlobDownloader:
         # for peer, task in self.active_connections.items():
         #   if self.scores.get(peer, 0) >= 0 and self.rounds_won.get(peer, 0) >= 3 and not task.done():
         #       return False
-        return True
+        return not (blob.get_is_verified() or blob.file_exists)
 
     async def request_blob_from_peer(self, blob: 'BlobFile', peer: 'KademliaPeer'):
         if blob.get_is_verified():
@@ -91,7 +91,7 @@ class BlobDownloader:
                     len(batch), len(self.ignored), len(self.active_connections)
                 )
                 for peer in batch:
-                    if not self.should_race_continue():
+                    if not self.should_race_continue(blob):
                         break
                     if peer not in self.active_connections and peer not in self.ignored:
                         log.debug("request %s from %s:%i", blob_hash[:8], peer.address, peer.tcp_port)

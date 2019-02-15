@@ -185,9 +185,6 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: s
     Returns [<downloaded blob>, <keep connection>]
     """
 
-    if blob.get_is_verified() or blob.file_exists:
-        # file exists but not verified means someone is writing right now, give it time, come back later
-        return 0, connected_transport
     protocol = BlobExchangeClientProtocol(loop, blob_download_timeout)
     if connected_transport and not connected_transport.is_closing():
         connected_transport.set_protocol(protocol)
@@ -199,6 +196,9 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: s
         if not connected_transport:
             await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
                                    peer_connect_timeout, loop=loop)
+        if blob.get_is_verified() or blob.file_exists:
+            # file exists but not verified means someone is writing right now, give it time, come back later
+            return 0, connected_transport
         return await protocol.download_blob(blob)
     except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
         return 0, None
