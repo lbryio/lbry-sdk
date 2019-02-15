@@ -15,6 +15,7 @@ from aioupnp.fault import UPnPError
 
 import lbrynet.schema
 from lbrynet import utils
+from lbrynet.utils import get_external_ip
 from lbrynet.conf import HEADERS_FILE_SHA256_CHECKSUM
 from lbrynet.dht.node import Node
 from lbrynet.dht.blob_announcer import BlobAnnouncer
@@ -50,17 +51,6 @@ async def gather_dict(tasks: dict):
     return dict(await asyncio.gather(*(
         wait_value(*kv) for kv in tasks.items()
     )))
-
-
-async def get_external_ip():  # used if upnp is disabled or non-functioning
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.lbry.io/ip") as resp:
-                response = await resp.json()
-                if response['success']:
-                    return response['data']['ip']
-    except Exception as e:
-        pass
 
 
 class DatabaseComponent(Component):

@@ -1,6 +1,7 @@
 import base64
 import codecs
 import datetime
+import functools
 import random
 import socket
 import string
@@ -9,6 +10,8 @@ import typing
 import asyncio
 import logging
 import ipaddress
+
+import aiohttp
 import pkg_resources
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.cryptoutils import get_lbry_hash_obj
@@ -156,3 +159,25 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
         proto=socket.IPPROTO_TCP if proto == 'tcp' else socket.IPPROTO_UDP,
         type=socket.SOCK_STREAM if proto == 'tcp' else socket.SOCK_DGRAM
     ))[0][4][0]
+
+
+async def get_external_ip():  # used if upnp is disabled or non-functioning
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.lbry.io/ip") as resp:
+                response = await resp.json()
+                if response['success']:
+                    return response['data']['ip']
+    except Exception as e:
+        pass
+
+
+def async_looping_call(period):
+    def inner(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            while True:
+                await func(*args, **kwargs)
+                await asyncio.sleep(period)
+        return wrapper
+    return inner

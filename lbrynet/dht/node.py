@@ -3,7 +3,8 @@ import asyncio
 import typing
 import binascii
 import contextlib
-from lbrynet.utils import resolve_host
+
+from lbrynet.utils import resolve_host, async_looping_call, get_external_ip
 from lbrynet.dht import constants
 from lbrynet.dht.error import RemoteException
 from lbrynet.dht.protocol.async_generator_junction import AsyncGeneratorJunction
@@ -23,7 +24,13 @@ class Node:
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: typing.Optional[float] = 5.0):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
-        self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout)
+        self.external_ip_set = asyncio.Event(loop=self.loop)
+        self.external_ip = external_ip or None
+        if self.external_ip is None:
+            self.external_ip_set.clear()
+            asyncio.create_task(self.get_external_ip())
+        self.protocol = KademliaProtocol(loop, peer_manager, node_id, self.external_ip, udp_port, peer_port,
+                                         rpc_timeout)
         self.listening_port: asyncio.DatagramTransport = None
         self.joined = asyncio.Event(loop=self.loop)
         self._join_task: asyncio.Task = None
@@ -253,3 +260,16 @@ class Node:
                          asyncio.Queue, asyncio.Task]:
         q = peer_queue or asyncio.Queue()
         return q, asyncio.create_task(self._accumulate_search_junction(search_queue, q))
+
+    @async_looping_call(5*60)
+    async def get_external_ip(self):
+        log.debug("attempting to get/check external ip from lbry.io")
+        self.external_ip = await get_external_ip()
+        if self.external_ip is not None:
+            log.debug("got ip %s", self.external_ip)
+            self.external_ip_set.set()
+            self.protocol.external_ip = self.external_ip
+        else:
+            log.debug("unable to get external ip from lbry.io")
+            self.external_ip_set.clear()
+            self.protocol.external_ip = None

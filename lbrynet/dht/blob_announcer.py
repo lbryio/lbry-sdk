@@ -23,6 +23,9 @@ class BlobAnnouncer:
             return
         if not self.node.joined.is_set():
             await self.node.joined.wait()
+        if not self.node.external_ip_set.is_set():
+            await self.node.external_ip_set.wait()
+
         blob_hashes = await self.storage.get_blobs_to_announce()
         if blob_hashes:
             self.announce_queue.extend(blob_hashes)
