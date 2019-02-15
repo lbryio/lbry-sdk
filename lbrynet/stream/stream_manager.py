@@ -97,7 +97,7 @@ class StreamManager:
                 stream.update_status('running')
             stream.start_download(self.node)
             try:
-                await asyncio.wait_for(self.loop.create_task(stream.downloader.got_descriptor.wait()),
+                await asyncio.wait_for(self.loop.create_task(stream.downloader.wrote_bytes_event.wait()),
                                        self.config.download_timeout)
             except asyncio.TimeoutError:
                 await self.stop_stream(stream)
