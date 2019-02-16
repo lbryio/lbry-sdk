@@ -477,7 +477,7 @@ class PeerProtocolServerComponent(Component):
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
         wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
-        peer_port = upnp.upnp_redirects.get("TCP", self.conf.tcp_port)
+        peer_port = self.conf.tcp_port
         address = await wallet.get_unused_address()
         self.blob_server = BlobServer(asyncio.get_event_loop(), blob_manager, address)
         self.blob_server.start_server(peer_port, interface=self.conf.network_interface)
