@@ -2588,7 +2588,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) Success/fail message
         """
-
+        if not blob_hash or not is_valid_blobhash(blob_hash):
+            return f"Invalid blob hash to delete '{blob_hash}'"
         streams = self.stream_manager.get_filtered_streams(sd_hash=blob_hash)
         if streams:
             await self.stream_manager.delete_stream(streams[0])
