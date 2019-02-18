@@ -111,7 +111,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 return self._blob_bytes_received, self.close()
             if not blob_response or blob_response.error:
                 log.warning("blob cant be downloaded from %s:%i", self.peer_address, self.peer_port)
-                return self._blob_bytes_received, self.transport
+                return self._blob_bytes_received, self.close()
             if not blob_response.error and blob_response.blob_hash != self.blob.blob_hash:
                 log.warning("incoming blob hash mismatch from %s:%i", self.peer_address, self.peer_port)
                 return self._blob_bytes_received, self.close()
