@@ -2718,7 +2718,7 @@ class Daemon(metaclass=JSONRPCServerType):
             else:
                 blobs = []
             if stream_hash:
-                blobs.extend([b.blob_hash for b in await self.storage.get_blobs_for_stream(stream_hash)])
+                blobs.extend([b.blob_hash for b in (await self.storage.get_blobs_for_stream(stream_hash))[:-1]])
         else:
             blobs = list(self.blob_manager.completed_blob_hashes)
         if needed:
