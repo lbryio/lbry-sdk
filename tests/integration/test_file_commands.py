@@ -4,6 +4,7 @@ import os
 
 from integration.testcase import CommandTestCase
 from lbrynet.blob_exchange.downloader import BlobDownloader
+from lbrynet.error import InsufficientFundsError
 
 
 class FileCommands(CommandTestCase):
@@ -133,4 +134,25 @@ class FileCommands(CommandTestCase):
         os.rename(missing_blob.file_path + '__', missing_blob.file_path)
         self.server_blob_manager.blobs.clear()
         await self.server_blob_manager.blob_completed(missing_blob)
+        await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
+
+    async def test_paid_download(self):
+        fee = {'currency': 'LBC', 'amount': 11.0}
+        above_max_key_fee = {'currency': 'LBC', 'amount': 111.0}
+        icanpay_fee = {'currency': 'LBC', 'amount': 1.0}
+        await self.make_claim('expensive', '0.01', data=b'pay me if you can', fee=fee)
+        await self.make_claim('maxkey', '0.01', data=b'no pay me, no', fee=above_max_key_fee)
+        await self.make_claim('icanpay', '0.01', data=b'I got the power!', fee=icanpay_fee)
+        await self.daemon.jsonrpc_file_delete(claim_name='expensive')
+        await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
+        await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
+        response = await self.daemon.jsonrpc_get('lbry://expensive')
+        self.assertEqual(response['error'], 'fee of 11.0 exceeds max available balance')
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
+        response = await self.daemon.jsonrpc_get('lbry://maxkey')
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
+        self.assertEqual(response['error'], 'fee of 111.0 exceeds max configured to allow of 50.0')
+        response = await self.daemon.jsonrpc_get('lbry://icanpay')
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
+        self.assertFalse(response.get('error'))
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
