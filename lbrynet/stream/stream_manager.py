@@ -439,7 +439,7 @@ class StreamManager:
                 raise KeyFeeAboveMaxAllowed(msg)
             else:
                 balance = await self.wallet.default_account.get_balance()
-                if fee_amount > balance:
+                if lbc_to_dewies(str(fee_amount)) > balance:
                     msg = f"fee of {fee_amount} exceeds max available balance"
                     log.warning(msg)
                     raise InsufficientFundsError(msg)
