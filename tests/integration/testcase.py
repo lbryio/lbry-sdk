@@ -159,12 +159,13 @@ class CommandTestCase(IntegrationTestCase):
         return json.loads(jsonrpc_dumps_pretty(await awaitable, ledger=self.ledger))['result']
 
     async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!',
-                         channel_name=None, confirm=True, account_id=None):
+                         channel_name=None, confirm=True, account_id=None, fee=None):
         with tempfile.NamedTemporaryFile() as file:
             file.write(data)
             file.flush()
             claim = await self.out(self.daemon.jsonrpc_publish(
-                name, amount, file_path=file.name, channel_name=channel_name, account_id=account_id
+                name, amount, file_path=file.name, channel_name=channel_name, account_id=account_id,
+                fee=fee
             ))
             self.assertTrue(claim['success'])
             if confirm:
