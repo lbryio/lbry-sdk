@@ -3,6 +3,7 @@ import logging
 import os
 
 from integration.testcase import CommandTestCase
+from lbrynet.blob_exchange.downloader import BlobDownloader
 
 
 class FileCommands(CommandTestCase):
@@ -114,3 +115,22 @@ class FileCommands(CommandTestCase):
         self.assertNotIn('error', resp)
         file_info = self.daemon.jsonrpc_file_list()[0]
         self.assertEqual(file_info['blobs_completed'], file_info['blobs_in_stream'])
+
+    async def test_unban_recovers_stream(self):
+        BlobDownloader.BAN_TIME = .5  # fixme: temporary field, will move to connection manager or a conf
+        claim = await self.make_claim('foo', '0.01', data=bytes([0]*(1<<23)))
+        sd_hash = claim['output']['value']['stream']['source']['source']
+        missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))[-2]
+        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        # backup blob
+        missing_blob = self.server_blob_manager.get_blob(missing_blob_hash)
+        os.rename(missing_blob.file_path, missing_blob.file_path + '__')
+        self.server_blob_manager.delete_blob(missing_blob_hash)
+        await self.daemon.jsonrpc_get('lbry://foo')
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
+        # restore blob
+        os.rename(missing_blob.file_path + '__', missing_blob.file_path)
+        self.server_blob_manager.blobs.clear()
+        await self.server_blob_manager.blob_completed(missing_blob)
+        await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
