@@ -31,9 +31,9 @@ def get_test_daemon(conf: Config, with_fee=False):
     component_manager = ComponentManager(
         conf, skip_components=[
             DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, UPNP_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-            EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
-            HEADERS_COMPONENT, RATE_LIMITER_COMPONENT],
+            PEER_PROTOCOL_SERVER_COMPONENT, HASH_ANNOUNCER_COMPONENT,
+            EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT,
+            RATE_LIMITER_COMPONENT],
         file_manager=FakeFileManager
     )
     daemon = LBRYDaemon(conf, component_manager=component_manager)
