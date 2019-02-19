@@ -138,30 +138,43 @@ class FileCommands(CommandTestCase):
 
     async def test_paid_download(self):
         target_address = await self.blockchain.get_raw_change_address()
-        fee = {'currency': 'LBC', 'amount': 11.0, 'address': target_address}
-        above_max_key_fee = {'currency': 'LBC', 'amount': 111.0, 'address': target_address}
-        icanpay_fee = {'currency': 'LBC', 'amount': 1.0, 'address': target_address}
-        await self.make_claim('expensive', '0.01', data=b'pay me if you can', fee=fee)
-        await self.make_claim('maxkey', '0.01', data=b'no pay me, no', fee=above_max_key_fee)
-        await self.make_claim('icanpay', '0.01', data=b'I got the power!', fee=icanpay_fee)
+
+        # FAIL: beyond available balance
+        await self.make_claim(
+            'expensive', '0.01', data=b'pay me if you can',
+            fee={'currency': 'LBC', 'amount': 11.0, 'address': target_address})
         await self.daemon.jsonrpc_file_delete(claim_name='expensive')
-        await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
-        await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
         response = await self.daemon.jsonrpc_get('lbry://expensive')
         self.assertEqual(response['error'], 'fee of 11.0 exceeds max available balance')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
-        await self.assertBalance(self.account, '9.925679')
+
+        # FAIL: beyond maximum key fee
+        await self.make_claim(
+            'maxkey', '0.01', data=b'no pay me, no',
+            fee={'currency': 'LBC', 'amount': 111.0, 'address': target_address})
+        await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
         response = await self.daemon.jsonrpc_get('lbry://maxkey')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
         self.assertEqual(response['error'], 'fee of 111.0 exceeds max configured to allow of 50.0')
+
+        # PASS: purchase is successful
+        await self.make_claim(
+            'icanpay', '0.01', data=b'I got the power!',
+            fee={'currency': 'LBC', 'amount': 1.0, 'address': target_address})
+        await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
         await self.assertBalance(self.account, '9.925679')
         response = await self.daemon.jsonrpc_get('lbry://icanpay')
+        self.assertNotIn('error', response)
+        await self.ledger.wait(response['tx'])
+        await self.assertBalance(self.account, '8.925555')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
-        self.assertFalse(response.get('error'))
+
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
 
-        target_account_original_balance = await self.blockchain.get_balance()
+        # check that the fee was received
+        starting_balance = await self.blockchain.get_balance()
         await self.generate(1)
-        target_account_final_balance = await self.blockchain.get_balance()
-        block_reward, profit = 1.0, icanpay_fee['amount']
-        self.assertEqual(target_account_final_balance - target_account_original_balance, profit + block_reward)
+        block_reward_and_claim_fee = 2.0
+        self.assertEqual(
+            await self.blockchain.get_balance(), starting_balance + block_reward_and_claim_fee
+        )
