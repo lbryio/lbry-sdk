@@ -36,6 +36,7 @@ class ManagedStream:
         self.stream_claim_info = claim
         self._status = status
         self.fully_reflected = asyncio.Event(loop=self.loop)
+        self.tx = None
 
     @property
     def file_name(self):
@@ -131,6 +132,7 @@ class ManagedStream:
             'file_name': self.file_name,
             'download_directory': self.download_directory,
             'points_paid': 0.0,
+            'tx': self.tx,
             'stopped': not self.running,
             'stream_hash': self.stream_hash,
             'stream_name': self.descriptor.stream_name,

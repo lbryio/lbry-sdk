@@ -355,7 +355,8 @@ class StreamManager:
             stream = await stream_task
             self.starting_streams[sd_hash].set_result(stream)
             if should_pay and fee_address and fee_amount:
-                await self.wallet.send_amount_to_address(lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1'))
+                stream.tx = await self.wallet.send_amount_to_address(
+                    lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1'))
             return stream
         except (asyncio.TimeoutError, asyncio.CancelledError) as e:
             if stream_task.exception():
