@@ -6,6 +6,29 @@ from lbrynet.dht.node import Node
 from lbrynet.dht.peer import PeerManager
 
 
+expected_ranges = [
+    (
+        0,
+        2462625387274654950767440006258975862817483704404090416746768337765357610718575663213391640930307227550414249394176
+    ),
+    (
+        2462625387274654950767440006258975862817483704404090416746768337765357610718575663213391640930307227550414249394176,
+        4925250774549309901534880012517951725634967408808180833493536675530715221437151326426783281860614455100828498788352
+    ),
+    (
+        4925250774549309901534880012517951725634967408808180833493536675530715221437151326426783281860614455100828498788352,
+        9850501549098619803069760025035903451269934817616361666987073351061430442874302652853566563721228910201656997576704
+    ),
+    (
+        9850501549098619803069760025035903451269934817616361666987073351061430442874302652853566563721228910201656997576704,
+        19701003098197239606139520050071806902539869635232723333974146702122860885748605305707133127442457820403313995153408
+    ),
+    (
+        19701003098197239606139520050071806902539869635232723333974146702122860885748605305707133127442457820403313995153408,
+        39402006196394479212279040100143613805079739270465446667948293404245721771497210611414266254884915640806627990306816
+    )
+]
+
 class TestRouting(AsyncioTestCase):
     async def test_fill_one_bucket(self):
         loop = asyncio.get_event_loop()
@@ -42,6 +65,42 @@ class TestRouting(AsyncioTestCase):
             self.assertEqual(node_1.protocol.routing_table.buckets_with_contacts(), 1)
             for node in nodes.values():
                 node.protocol.stop()
+
+    async def test_split_buckets(self):
+        loop = asyncio.get_event_loop()
+        peer_addresses = [
+            (constants.generate_id(1), '1.2.3.1'),
+        ]
+        for i in range(2, 200):
+            peer_addresses.append((constants.generate_id(i), f'1.2.3.{i}'))
+        with dht_mocks.mock_network_loop(loop):
+            nodes = {
+                i: Node(loop, PeerManager(loop), node_id, 4444, 4444, 3333, address)
+                for i, (node_id, address) in enumerate(peer_addresses)
+            }
+            node_1 = nodes[0]
+            for i in range(1, len(peer_addresses)):
+                node = nodes[i]
+                peer = node_1.protocol.peer_manager.get_kademlia_peer(
+                    node.protocol.node_id, node.protocol.external_ip,
+                    udp_port=node.protocol.udp_port
+                )
+                # set all of the peers to good (as to not attempt pinging stale ones during split)
+                node_1.protocol.peer_manager.report_last_replied(peer.address, peer.udp_port)
+                node_1.protocol.peer_manager.report_last_replied(peer.address, peer.udp_port)
+                await node_1.protocol.add_peer(peer)
+                # check that bucket 0 is always the one covering the local node id
+                self.assertEqual(True, node_1.protocol.routing_table.buckets[0].key_in_range(node_1.protocol.node_id))
+            self.assertEqual(40, len(node_1.protocol.routing_table.get_peers()))
+            self.assertEqual(len(expected_ranges), len(node_1.protocol.routing_table.buckets))
+            covered = 0
+            for (expected_min, expected_max), bucket in zip(expected_ranges, node_1.protocol.routing_table.buckets):
+                self.assertEqual(expected_min, bucket.range_min)
+                self.assertEqual(expected_max, bucket.range_max)
+                covered += bucket.range_max - bucket.range_min
+            self.assertEqual(2**384, covered)
+            for node in nodes.values():
+                node.stop()
 
 
 # from binascii import hexlify, unhexlify

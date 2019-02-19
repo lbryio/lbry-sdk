@@ -29,6 +29,7 @@ class KBucket:
         self.range_max = range_max
         self.peers: typing.List['KademliaPeer'] = []
         self._node_id = node_id
+        self._distance_to_self = Distance(node_id)
 
     def add_peer(self, peer: 'KademliaPeer') -> bool:
         """ Add contact to _contact list in the right order. This will move the
@@ -130,7 +131,7 @@ class KBucket:
                  if not.
         @rtype: bool
         """
-        return self.range_min <= int.from_bytes(key, 'big') < self.range_max
+        return self.range_min <= self._distance_to_self(key) < self.range_max
 
     def __len__(self) -> int:
         return len(self.peers)
@@ -170,7 +171,7 @@ class TreeRoutingTable:
 
     def should_split(self, bucket_index: int, to_add: bytes) -> bool:
         #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
-        if self.buckets[bucket_index].key_in_range(self._parent_node_id):
+        if not bucket_index:
             return True
         contacts = self.get_peers()
         distance = Distance(self._parent_node_id)
@@ -236,11 +237,15 @@ class TreeRoutingTable:
 
     def random_id_in_bucket_range(self, bucket_index: int) -> bytes:
         random_id = int(random.randrange(self.buckets[bucket_index].range_min, self.buckets[bucket_index].range_max))
-        return random_id.to_bytes(constants.hash_length, 'big')
+        return Distance(
+            self._parent_node_id
+        )(random_id.to_bytes(constants.hash_length, 'big')).to_bytes(constants.hash_length, 'big')
 
     def midpoint_id_in_bucket_range(self, bucket_index: int) -> bytes:
         half = int((self.buckets[bucket_index].range_max - self.buckets[bucket_index].range_min) // 2)
-        return int(self.buckets[bucket_index].range_min + half).to_bytes(constants.hash_length, 'big')
+        return Distance(self._parent_node_id)(
+            int(self.buckets[bucket_index].range_min + half).to_bytes(constants.hash_length, 'big')
+        ).to_bytes(constants.hash_length, 'big')
 
     def split_bucket(self, old_bucket_index: int) -> None:
         """ Splits the specified k-bucket into two new buckets which together
