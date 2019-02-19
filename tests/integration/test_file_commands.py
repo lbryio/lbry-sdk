@@ -8,7 +8,7 @@ from lbrynet.blob_exchange.downloader import BlobDownloader
 
 class FileCommands(CommandTestCase):
 
-    VERBOSITY = logging.INFO
+    VERBOSITY = logging.WARN
 
     async def test_file_management(self):
         await self.make_claim('foo', '0.01')
