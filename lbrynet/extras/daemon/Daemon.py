@@ -625,19 +625,16 @@ class Daemon(metaclass=JSONRPCServerType):
                 'is_running': (bool),
                 'skipped_components': (list) [names of skipped components (str)],
                 'startup_status': { Does not include components which have been skipped
-                    'database': (bool),
-                    'wallet': (bool),
-                    'session': (bool),
-                    'dht': (bool),
-                    'hash_announcer': (bool),
-                    'stream_identifier': (bool),
-                    'file_manager': (bool),
                     'blob_manager': (bool),
                     'blockchain_headers': (bool),
-                    'peer_protocol_server': (bool),
-                    'reflector': (bool),
-                    'upnp': (bool),
+                    'database': (bool),
+                    'dht': (bool),
                     'exchange_rate_manager': (bool),
+                    'hash_announcer': (bool),
+                    'peer_protocol_server': (bool),
+                    'stream_manager': (bool),
+                    'upnp': (bool),
+                    'wallet': (bool),
                 },
                 'connection_status': {
                     'code': (str) connection status code,
@@ -664,8 +661,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 'hash_announcer': {
                     'announce_queue_size': (int) number of blobs currently queued to be announced
                 },
-                'file_manager': {
-                    'managed_files': (int) count of files in the file manager,
+                'stream_manager': {
+                    'managed_files': (int) count of files in the stream manager,
                 },
                 'upnp': {
                     'aioupnp_version': (str),
@@ -778,7 +775,10 @@ class Daemon(metaclass=JSONRPCServerType):
         Set daemon settings
 
         Usage:
-            settings_set <key> <value>
+            settings_set (<key>) (<value>)
+
+        Options:
+            None
 
         Returns:
             (dict) Updated dictionary of daemon settings
@@ -2811,6 +2811,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             peer_ping (<node_id> | --node_id=<node_id>) (<address> | --address=<address>) (<port> | --port=<port>)
+
+        Options:
+            None
 
         Returns:
             (str) pong, or {'error': <error message>} if an error is encountered
