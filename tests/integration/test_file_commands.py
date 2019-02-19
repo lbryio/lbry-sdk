@@ -137,9 +137,10 @@ class FileCommands(CommandTestCase):
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
 
     async def test_paid_download(self):
-        fee = {'currency': 'LBC', 'amount': 11.0}
-        above_max_key_fee = {'currency': 'LBC', 'amount': 111.0}
-        icanpay_fee = {'currency': 'LBC', 'amount': 1.0}
+        target_address = await self.blockchain.get_raw_change_address()
+        fee = {'currency': 'LBC', 'amount': 11.0, 'address': target_address}
+        above_max_key_fee = {'currency': 'LBC', 'amount': 111.0, 'address': target_address}
+        icanpay_fee = {'currency': 'LBC', 'amount': 1.0, 'address': target_address}
         await self.make_claim('expensive', '0.01', data=b'pay me if you can', fee=fee)
         await self.make_claim('maxkey', '0.01', data=b'no pay me, no', fee=above_max_key_fee)
         await self.make_claim('icanpay', '0.01', data=b'I got the power!', fee=icanpay_fee)
@@ -149,10 +150,18 @@ class FileCommands(CommandTestCase):
         response = await self.daemon.jsonrpc_get('lbry://expensive')
         self.assertEqual(response['error'], 'fee of 11.0 exceeds max available balance')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
+        await self.assertBalance(self.account, '9.925679')
         response = await self.daemon.jsonrpc_get('lbry://maxkey')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
         self.assertEqual(response['error'], 'fee of 111.0 exceeds max configured to allow of 50.0')
+        await self.assertBalance(self.account, '9.925679')
         response = await self.daemon.jsonrpc_get('lbry://icanpay')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
         self.assertFalse(response.get('error'))
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
+
+        target_account_original_balance = await self.blockchain.get_balance()
+        await self.generate(1)
+        target_account_final_balance = await self.blockchain.get_balance()
+        block_reward, profit = 1.0, icanpay_fee['amount']
+        self.assertEqual(target_account_final_balance - target_account_original_balance, profit + block_reward)
