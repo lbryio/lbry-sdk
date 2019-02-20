@@ -46,11 +46,11 @@ async def report_to_slack(output, webhook):
         pass
 
 
-def confidence(times, z):
+def confidence(times, z, plus_err=True):
     mean = sum(times) / len(times)
     standard_dev = (sum(((t - sum(times) / len(times)) ** 2.0 for t in times)) / len(times)) ** 0.5
     err = (z * standard_dev) / (len(times) ** 0.5)
-    return f"{round(mean + err, 3)}s"
+    return f"{round((mean + err) if plus_err else (mean - err), 3)}"
 
 
 def variance(times):
@@ -134,18 +134,17 @@ async def main(uris=None, allow_fees=False):
         await asyncio.sleep(0.1)
 
     print("**********************************************")
-    result = f"Tried to start downloading {len(resolvable)} streams from the front page\n" \
+    result = f"Started {len(first_byte_times)} of {len(resolvable)} attempted front page streams\n" \
              f"Worst first byte time: {round(max(first_byte_times), 2)}\n" \
              f"Best first byte time: {round(min(first_byte_times), 2)}\n" \
-             f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}\n" \
-             f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}" \
+             f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}s\n" \
+             f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}s\n" \
              f"Variance: {variance(first_byte_times)}\n" \
-             f"Started {len(first_byte_times)}/{len(resolvable)} streams\n" \
              f"Downloaded {len(download_successes)}/{len(resolvable)}\n" \
-             f"Best stream download speed: {round(max(download_speeds), 2)}\n" \
-             f"Worst stream download speed: {round(min(download_speeds), 2)}\n" \
-             f"95% confidence download speed: {confidence(download_speeds, 1.984)}\n" \
-             f"99% confidence download speed:  {confidence(download_speeds, 2.626)}\n"
+             f"Best stream download speed: {round(max(download_speeds), 2)}mb/s\n" \
+             f"Worst stream download speed: {round(min(download_speeds), 2)}mb/s\n" \
+             f"95% confidence download speed: {confidence(download_speeds, 1.984, False)}mb/s\n" \
+             f"99% confidence download speed:  {confidence(download_speeds, 2.626, False)}mb/s\n"
 
     if failed_to_start:
         result += "\nFailed to start:" + "\n".join([f for f in failed_to_start])
