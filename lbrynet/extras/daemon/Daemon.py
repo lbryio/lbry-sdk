@@ -1673,8 +1673,9 @@ class Daemon(metaclass=JSONRPCServerType):
             return False
         else:
             for stream in streams:
+                message = f"Deleted file {stream.file_name}"
                 await self.stream_manager.delete_stream(stream, delete_file=delete_from_download_dir)
-                log.info("Deleted file: %s", stream.file_name)
+                log.info(message)
             result = True
         return result
 
