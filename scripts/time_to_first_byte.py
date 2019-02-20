@@ -50,7 +50,7 @@ def confidence(times, z):
     mean = sum(times) / len(times)
     standard_dev = (sum(((t - sum(times) / len(times)) ** 2.0 for t in times)) / len(times)) ** 0.5
     err = (z * standard_dev) / (len(times) ** 0.5)
-    return f"{round(mean, 3) + round(err, 3)}s"
+    return f"{round(mean + err, 3)}s"
 
 
 def variance(times):
@@ -77,7 +77,7 @@ async def wait_for_done(conf, uri):
             return False, file['blobs_completed'], file['blobs_in_stream']
 
 
-async def main(uris=None):
+async def main(uris=None, allow_fees=False):
     if not uris:
         uris = await get_frontpage_uris()
     conf = Config()
@@ -93,13 +93,18 @@ async def main(uris=None):
     for name in uris:
         resolved = await daemon_rpc(conf, 'resolve', name)
         if 'error' not in resolved.get(name, {}):
-            resolvable.append(name)
-
-    print(f"{len(resolvable)}/{len(uris)} are resolvable")
+            if ("fee" not in resolved[name]['claim']['value']['stream']['metadata']) or allow_fees:
+                resolvable.append(name)
+            else:
+                print(f"{name} has a fee, skipping it")
+        else:
+            print(f"failed to resolve {name}: {resolved[name]['error']}")
+    print(f"attempting to download {len(resolvable)}/{len(uris)} frontpage streams")
 
     first_byte_times = []
-    downloaded_times = []
-    failures = []
+    download_speeds = []
+    download_successes = []
+    failed_to_start = []
     download_failures = []
 
     for uri in resolvable:
@@ -114,14 +119,16 @@ async def main(uris=None):
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
             downloaded, amount_downloaded, blobs_in_stream = await wait_for_done(conf, uri)
             if downloaded:
-                downloaded_times.append((time.time() - start) / downloaded)
+                download_successes.append(uri)
             else:
                 download_failures.append(uri)
+            mbs = round((blobs_in_stream * (MAX_BLOB_SIZE - 1)) / (time.time() - start) / 1000000, 2)
+            download_speeds.append(mbs)
             print(f"downloaded {amount_downloaded}/{blobs_in_stream} blobs for {uri} at "
-                  f"{round((blobs_in_stream * (MAX_BLOB_SIZE - 1)) / (time.time() - start) / 1000000, 2)}mb/s\n")
+                  f"{mbs}mb/s")
         except:
             print(f"{i + 1}/{len(uris)} - failed to start {uri}")
-            failures.append(uri)
+            failed_to_start.append(uri)
             return
         # await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
         await asyncio.sleep(0.1)
@@ -133,15 +140,22 @@ async def main(uris=None):
              f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}\n" \
              f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}\n" \
              f"Variance: {variance(first_byte_times)}\n" \
-             f"Started {len(first_byte_times)}/{len(resolvable)} streams"
-    if failures:
-        nt = '\n\t'
-        result += f"\nFailures:\n\t{nt.join([f for f in failures])}"
+             f"Started {len(first_byte_times)}/{len(resolvable)} streams\n" \
+             f"Downloaded {len(download_successes)}/{len(resolvable)}\n" \
+             f"Best stream download speed: {round(max(download_speeds), 2)}\n" \
+             f"Worst stream download speed: {round(min(download_speeds), 2)}\n" \
+             f"95% confidence download speed: {confidence(download_speeds, 1.984)}\n" \
+             f"99% confidence download speed:  {confidence(download_speeds, 2.626)}\n"
+
+    if failed_to_start:
+        result += "\nFailed to start:" + "\n".join([f for f in failed_to_start])
+    if download_failures:
+        result += "\nFailed to finish:" + "\n".join([f for f in download_failures])
     print(result)
 
-    # webhook = os.environ.get('TTFB_SLACK_TOKEN', None)
-    # if webhook:
-    #     await report_to_slack(result, webhook)
+    webhook = os.environ.get('TTFB_SLACK_TOKEN', None)
+    if webhook:
+        await report_to_slack(result, webhook)
 
 
 if __name__ == "__main__":
@@ -149,5 +163,6 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir")
     parser.add_argument("--wallet_dir")
     parser.add_argument("--download_directory")
+    parser.add_argument("--allow_fees", action='store_true')
     args = parser.parse_args()
-    asyncio.run(main())
+    asyncio.run(main(allow_fees=args.allow_fees))
