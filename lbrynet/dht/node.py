@@ -130,7 +130,7 @@ class Node:
         if known_node_urls:
             for host, port in known_node_urls:
                 address = await resolve_host(host, port, proto='udp')
-                if (address, port) not in known_node_addresses:
+                if (address, port) not in known_node_addresses and address != self.protocol.external_ip:
                     known_node_addresses.append((address, port))
                     url_to_addr[address] = host
 
