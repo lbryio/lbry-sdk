@@ -76,10 +76,7 @@ class StreamManager:
         """
         Resume or rebuild a partial or completed stream
         """
-
-        path = os.path.join(stream.download_directory, stream.file_name)
-
-        if not stream.running and not os.path.isfile(path):
+        if not stream.running and not stream.output_file_exists:
             if stream.downloader:
                 stream.downloader.stop()
                 stream.downloader = None
@@ -117,7 +114,7 @@ class StreamManager:
 
     async def stop_stream(self, stream: ManagedStream):
         stream.stop_download()
-        if not stream.finished and os.path.isfile(stream.full_path):
+        if not stream.finished and stream.output_file_exists:
             try:
                 os.remove(stream.full_path)
             except OSError as err:
@@ -272,7 +269,7 @@ class StreamManager:
         blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
         await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
         await self.storage.delete_stream(stream.descriptor)
-        if delete_file and os.path.isfile(stream.full_path):
+        if delete_file and stream.output_file_exists:
             os.remove(stream.full_path)
 
     def wait_for_stream_finished(self, stream: ManagedStream):
@@ -305,18 +302,8 @@ class StreamManager:
             downloader.stop()
             log.info("stopped stream")
             raise DownloadSDTimeout(downloader.sd_hash)
-        file_name = os.path.basename(downloader.output_path)
-        download_directory = os.path.dirname(downloader.output_path)
-        if not await self.blob_manager.storage.stream_exists(downloader.sd_hash):
-            await self.blob_manager.storage.store_stream(downloader.sd_blob, downloader.descriptor)
-        if not await self.blob_manager.storage.file_exists(downloader.sd_hash):
-            rowid = await self.blob_manager.storage.save_downloaded_file(
-                downloader.descriptor.stream_hash, file_name, download_directory,
-                0.0
-            )
-        else:
-            rowid = self.blob_manager.storage.rowid_for_stream(downloader.descriptor.stream_hash)
-        await self.blob_manager.storage.save_content_claim(
+        rowid = await self._store_stream(downloader)
+        await self.storage.save_content_claim(
             downloader.descriptor.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}"
         )
         stream = ManagedStream(self.loop, self.blob_manager, rowid, downloader.descriptor, download_directory,
@@ -332,6 +319,19 @@ class StreamManager:
             log.debug("stopped stream")
         await self.stop_stream(stream)
         raise DownloadDataTimeout(downloader.sd_hash)
+
+    async def _store_stream(self, downloader: StreamDownloader) -> int:
+        file_name = os.path.basename(downloader.output_path)
+        download_directory = os.path.dirname(downloader.output_path)
+        if not await self.storage.stream_exists(downloader.sd_hash):
+            await self.storage.store_stream(downloader.sd_blob, downloader.descriptor)
+        if not await self.storage.file_exists(downloader.sd_hash):
+            return await self.storage.save_downloaded_file(
+                downloader.descriptor.stream_hash, file_name, download_directory,
+                0.0
+            )
+        else:
+            return await self.storage.rowid_for_stream(downloader.descriptor.stream_hash)
 
     async def download_stream_from_claim(self, node: 'Node', claim_info: typing.Dict,
                                          file_name: typing.Optional[str] = None,
