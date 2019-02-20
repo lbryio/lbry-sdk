@@ -138,7 +138,7 @@ async def main(uris=None, allow_fees=False):
              f"Worst first byte time: {round(max(first_byte_times), 2)}\n" \
              f"Best first byte time: {round(min(first_byte_times), 2)}\n" \
              f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}\n" \
-             f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}\n" \
+             f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}" \
              f"Variance: {variance(first_byte_times)}\n" \
              f"Started {len(first_byte_times)}/{len(resolvable)} streams\n" \
              f"Downloaded {len(download_successes)}/{len(resolvable)}\n" \
