@@ -6,6 +6,7 @@ hash_length = hash_class().digest_size
 hash_bits = hash_length * 8
 alpha = 5
 k = 8
+split_buckets_under_index = 1
 replacement_cache_size = 8
 rpc_timeout = 5.0
 rpc_attempts = 5

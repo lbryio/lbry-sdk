@@ -260,7 +260,8 @@ class PingQueue:
 
 class KademliaProtocol(DatagramProtocol):
     def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager', node_id: bytes, external_ip: str,
-                 udp_port: int, peer_port: int, rpc_timeout: float = 5.0):
+                 udp_port: int, peer_port: int, rpc_timeout: float = constants.rpc_timeout,
+                 split_buckets_under_index: int = constants.split_buckets_under_index):
         self.peer_manager = peer_manager
         self.loop = loop
         self.node_id = node_id
@@ -275,7 +276,7 @@ class KademliaProtocol(DatagramProtocol):
         self.transport: DatagramTransport = None
         self.old_token_secret = constants.generate_id()
         self.token_secret = constants.generate_id()
-        self.routing_table = TreeRoutingTable(self.loop, self.peer_manager, self.node_id)
+        self.routing_table = TreeRoutingTable(self.loop, self.peer_manager, self.node_id, split_buckets_under_index)
         self.data_store = DictDataStore(self.loop, self.peer_manager)
         self.ping_queue = PingQueue(self.loop, self)
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)

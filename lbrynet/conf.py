@@ -473,6 +473,14 @@ class Config(CLIConfig):
     tcp_port = Integer("TCP port to listen for incoming blob requests", 3333, previous_names=['peer_port'])
     network_interface = String("Interface to use for the DHT and blob exchange", '0.0.0.0')
 
+    # routing table
+    split_buckets_under_index = Integer(
+        "Routing table bucket index below which we always split the bucket if given a new key to add to it and "
+        "the bucket is full. As this value is raised the depth of the routing table (and number of peers in it) "
+        "will increase. This setting is used by seed nodes, you probably don't want to change it during normal "
+        "use.", 1
+    )
+
     # protocol timeouts
     download_timeout = Float("Cumulative timeout for a stream to begin downloading before giving up", 30.0)
     blob_download_timeout = Float("Timeout to download a blob from a peer", 30.0)
