@@ -372,7 +372,8 @@ class DHTComponent(Component):
             udp_port=self.external_udp_port,
             external_ip=external_ip,
             peer_port=self.external_peer_port,
-            rpc_timeout=self.conf.node_rpc_timeout
+            rpc_timeout=self.conf.node_rpc_timeout,
+            split_at=self.conf.dht_split_threshold
         )
         self.dht_node.start(
             interface=self.conf.network_interface, known_node_urls=self.conf.known_dht_nodes

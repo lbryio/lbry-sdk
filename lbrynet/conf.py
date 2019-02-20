@@ -523,6 +523,7 @@ class Config(CLIConfig):
         ('lbrynet3.lbry.io', 4444),  # EU
         ('lbrynet4.lbry.io', 4444)  # ASIA
     ])
+    dht_split_threshold = Integer("Point to allow buckets split on DHT routing table", 0)
 
     # blockchain
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')

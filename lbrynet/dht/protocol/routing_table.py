@@ -156,10 +156,12 @@ class TreeRoutingTable:
     that paper.
     """
 
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager', parent_node_id: bytes):
+    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
+                 parent_node_id: bytes, split_at: int=0):
         self._loop = loop
         self._peer_manager = peer_manager
         self._parent_node_id = parent_node_id
+        self.split_at = split_at
         self.buckets: typing.List[KBucket] = [
             KBucket(
                 self._peer_manager, range_min=0, range_max=2 ** constants.hash_bits, node_id=self._parent_node_id
@@ -171,7 +173,7 @@ class TreeRoutingTable:
 
     def should_split(self, bucket_index: int, to_add: bytes) -> bool:
         #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
-        if not bucket_index:
+        if bucket_index <= self.split_at:
             return True
         contacts = self.get_peers()
         distance = Distance(self._parent_node_id)
