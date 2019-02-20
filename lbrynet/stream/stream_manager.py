@@ -76,10 +76,7 @@ class StreamManager:
         """
         Resume or rebuild a partial or completed stream
         """
-
-        path = os.path.join(stream.download_directory, stream.file_name)
-
-        if not stream.running and not os.path.isfile(path):
+        if not stream.running and not stream.output_file_exists:
             if stream.downloader:
                 stream.downloader.stop()
                 stream.downloader = None
@@ -117,7 +114,7 @@ class StreamManager:
 
     async def stop_stream(self, stream: ManagedStream):
         stream.stop_download()
-        if not stream.finished and os.path.isfile(stream.full_path):
+        if not stream.finished and stream.output_file_exists:
             try:
                 os.remove(stream.full_path)
             except OSError as err:
@@ -272,7 +269,7 @@ class StreamManager:
         blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
         await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
         await self.storage.delete_stream(stream.descriptor)
-        if delete_file and os.path.isfile(stream.full_path):
+        if delete_file and stream.output_file_exists:
             os.remove(stream.full_path)
 
     def wait_for_stream_finished(self, stream: ManagedStream):

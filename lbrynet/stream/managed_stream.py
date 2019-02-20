@@ -22,7 +22,7 @@ class ManagedStream:
     STATUS_FINISHED = "finished"
 
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', rowid: int,
-                 descriptor: 'StreamDescriptor', download_directory: str, file_name: str,
+                 descriptor: 'StreamDescriptor', download_directory: str, file_name: typing.Optional[str],
                  downloader: typing.Optional[StreamDownloader] = None,
                  status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None):
         self.loop = loop
@@ -39,7 +39,7 @@ class ManagedStream:
         self.tx = None
 
     @property
-    def file_name(self):
+    def file_name(self) -> typing.Optional[str]:
         return self.downloader.output_file_name if self.downloader else self._file_name
 
     @property
@@ -112,14 +112,16 @@ class ManagedStream:
         return self.blobs_in_stream - self.blobs_completed
 
     @property
-    def full_path(self) -> str:
-        return os.path.join(self.download_directory, os.path.basename(self.file_name))
+    def full_path(self) -> typing.Optional[str]:
+        return os.path.join(self.download_directory, os.path.basename(self.file_name)) if self.file_name else None
+
+    @property
+    def output_file_exists(self):
+        return os.path.isfile(self.full_path) if self.full_path else False
 
     def as_dict(self) -> typing.Dict:
-        full_path = self.full_path
-        if not os.path.isfile(full_path):
-            full_path = None
-        mime_type = guess_media_type(os.path.basename(self.file_name))
+        full_path = self.full_path if self.output_file_exists else None
+        mime_type = guess_media_type(os.path.basename(self.descriptor.suggested_file_name))
 
         if self.downloader and self.downloader.written_bytes:
             written_bytes = self.downloader.written_bytes
