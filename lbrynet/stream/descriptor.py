@@ -134,6 +134,7 @@ class StreamDescriptor:
         try:
             decoded = json.loads(json_bytes.decode())
         except json.JSONDecodeError:
+            blob.delete()
             raise InvalidStreamDescriptorError("Does not decode as valid JSON")
         if decoded['blobs'][-1]['length'] != 0:
             raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
