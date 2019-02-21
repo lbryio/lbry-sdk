@@ -413,12 +413,13 @@ class KademliaProtocol(DatagramProtocol):
             sender_contact, ResponseDatagram(RESPONSE_TYPE, message.rpc_id, self.node_id, result),
         )
 
-    async def handle_request_datagram(self, address, request_datagram: RequestDatagram):
+    async def handle_request_datagram(self, address: typing.Tuple[str, int], request_datagram: RequestDatagram):
         # This is an RPC method request
         self.peer_manager.report_last_requested(address[0], address[1])
-        self.peer_manager.update_contact_triple(request_datagram.node_id, address[0], address[1])
-        # only add a requesting contact to the routing table if it has replied to one of our requests
-        peer = self.peer_manager.get_kademlia_peer(request_datagram.node_id, address[0], address[1])
+        try:
+            peer = self.routing_table.get_peer(request_datagram.node_id)
+        except IndexError:
+            peer = self.peer_manager.get_kademlia_peer(request_datagram.node_id, address[0], address[1])
         try:
             await self._handle_rpc(peer, request_datagram)
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
@@ -426,6 +427,7 @@ class KademliaProtocol(DatagramProtocol):
             is_good = self.peer_manager.peer_is_good(peer)
             if is_good is None:
                 self.ping_queue.enqueue_maybe_ping(peer)
+            # only add a requesting contact to the routing table if it has replied to one of our requests
             elif is_good is True:
                 await self.add_peer(peer)
         except ValueError as err:
@@ -453,11 +455,10 @@ class KademliaProtocol(DatagramProtocol):
             peer, df, request = self.sent_messages[response_datagram.rpc_id]
             if peer.address != address[0]:
                 df.set_exception(RemoteException(
-                    f"response from {address[0]}:{address[1]}, "
-                    f"expected {peer.address}:{peer.udp_port}")
+                    f"response from {address[0]}, expected {peer.address}")
                 )
                 return
-            peer.set_id(response_datagram.node_id)
+
             # We got a result from the RPC
             if peer.node_id == self.node_id:
                 df.set_exception(RemoteException("node has our node id"))
@@ -465,6 +466,8 @@ class KademliaProtocol(DatagramProtocol):
             elif response_datagram.node_id == self.node_id:
                 df.set_exception(RemoteException("incoming message is from our node id"))
                 return
+            peer.set_id(response_datagram.node_id)
+            peer.update_udp_port(address[1])
             self.peer_manager.report_last_replied(address[0], address[1])
             self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():
