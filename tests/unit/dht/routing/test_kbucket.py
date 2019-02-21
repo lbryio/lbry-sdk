@@ -2,7 +2,7 @@ import struct
 import asyncio
 from lbrynet.utils import generate_id
 from lbrynet.dht.protocol.routing_table import KBucket
-from lbrynet.dht.peer import PeerManager
+from lbrynet.dht.peer import PeerManager, KademliaPeer
 from lbrynet.dht import constants
 from torba.testcase import AsyncioTestCase
 
@@ -29,6 +29,33 @@ class TestKBucket(AsyncioTestCase):
         self.kbucket = KBucket(self.peer_manager, 0, 2**constants.hash_bits, generate_id())
 
     def test_add_peer(self):
+        peer = KademliaPeer(None, '1.2.3.4', constants.generate_id(2), udp_port=4444)
+        peer_update2 = KademliaPeer(None, '1.2.3.4', constants.generate_id(2), udp_port=4445)
+
+        self.assertListEqual([], self.kbucket.peers)
+
+        # add the peer
+        self.kbucket.add_peer(peer)
+        self.assertListEqual([peer], self.kbucket.peers)
+
+        # re-add it
+        self.kbucket.add_peer(peer)
+        self.assertListEqual([peer], self.kbucket.peers)
+        self.assertEqual(self.kbucket.peers[0].udp_port, 4444)
+
+        # add a new peer object with the same id and address but a different port
+        self.kbucket.add_peer(peer_update2)
+        self.assertListEqual([peer_update2], self.kbucket.peers)
+        self.assertEqual(self.kbucket.peers[0].udp_port, 4445)
+
+        # modify the peer object to have a different port
+        peer_update2.udp_port = 4444
+        self.kbucket.add_peer(peer_update2)
+        self.assertListEqual([peer_update2], self.kbucket.peers)
+        self.assertEqual(self.kbucket.peers[0].udp_port, 4444)
+
+        self.kbucket.peers.clear()
+
         # Test if contacts can be added to empty list
         # Add k contacts to bucket
         for i in range(constants.k):
