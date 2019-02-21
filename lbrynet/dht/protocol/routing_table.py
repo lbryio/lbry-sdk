@@ -49,7 +49,14 @@ class KBucket:
             self.peers.remove(peer)
             self.peers.append(peer)
             return True
-        elif len(self.peers) < constants.k:
+        else:
+            for i in range(len(self.peers)):
+                p = self.peers[i]
+                if p.node_id == peer.node_id:
+                    self.peers.remove(p)
+                    self.peers.append(peer)
+                    return True
+        if len(self.peers) < constants.k:
             self.peers.append(peer)
             return True
         else:

@@ -313,9 +313,13 @@ class KademliaProtocol(DatagramProtocol):
         return args, {}
 
     async def _add_peer(self, peer: 'KademliaPeer'):
+        for p in self.routing_table.get_peers():
+            if (p.address, p.udp_port) == (peer.address, peer.udp_port) and p.node_id != peer.node_id:
+                self.routing_table.remove_peer(p)
         bucket_index = self.routing_table.kbucket_index(peer.node_id)
         if self.routing_table.buckets[bucket_index].add_peer(peer):
             return True
+
         # The bucket is full; see if it can be split (by checking if its range includes the host node's node_id)
         if self.routing_table.should_split(bucket_index, peer.node_id):
             self.routing_table.split_bucket(bucket_index)
