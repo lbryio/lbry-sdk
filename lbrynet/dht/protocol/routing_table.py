@@ -281,6 +281,8 @@ class TreeRoutingTable:
             old_bucket.remove_peer(contact)
 
     def join_buckets(self):
+        if len(self.buckets) == 1:
+            return
         to_pop = [i for i, bucket in enumerate(self.buckets) if not len(bucket)]
         if not to_pop:
             return
