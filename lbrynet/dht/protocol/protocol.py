@@ -190,7 +190,7 @@ class PingQueue:
         self._pending_contacts: typing.Dict['KademliaPeer', float] = {}
         self._process_task: asyncio.Task = None
         self._running = False
-        self._running_pings: typing.List[asyncio.Task] = []
+        self._running_pings: typing.Set[asyncio.Task] = set()
 
     @property
     def running(self):
@@ -215,7 +215,7 @@ class PingQueue:
 
         task = self._loop.create_task(ping_task())
         task.add_done_callback(lambda _: None if task not in self._running_pings else self._running_pings.remove(task))
-        self._running_pings.append(task)
+        self._running_pings.add(task)
 
     async def _process(self):  # send up to 1 ping per second
         while True:
@@ -241,7 +241,7 @@ class PingQueue:
             self._process_task.cancel()
             self._process_task = None
         while self._running_pings:
-            self._running_pings[0].cancel()
+            self._running_pings.pop().cancel()
 
 
 class KademliaProtocol(DatagramProtocol):
