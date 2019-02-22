@@ -489,6 +489,9 @@ class Daemon(metaclass=JSONRPCServerType):
             if asyncio.iscoroutine(result):
                 result = await result
             return result
+        except asyncio.CancelledError:
+            log.info("cancelled API call for: %s", function_name)
+            raise
         except Exception as e:  # pylint: disable=broad-except
             log.exception("error handling api request")
             return JSONRPCError(
