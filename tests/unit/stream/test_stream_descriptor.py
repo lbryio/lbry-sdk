@@ -118,8 +118,11 @@ class TestRecoverOldStreamDescriptors(AsyncioTestCase):
             handle.write(b'doesnt work')
         blob = BlobFile(loop, tmp_dir, sd_hash)
         self.assertTrue(blob.file_exists)
+        self.assertIsNotNone(blob.length)
         with self.assertRaises(InvalidStreamDescriptorError):
             await StreamDescriptor.from_stream_descriptor_blob(
-                loop, tmp_dir, BlobFile(loop, tmp_dir, sd_hash)
+                loop, tmp_dir, blob
             )
         self.assertFalse(blob.file_exists)
+        # fixme: this is an emergency PR, plase move this to blob_file tests later
+        self.assertIsNone(blob.length)
