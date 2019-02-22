@@ -206,7 +206,7 @@ class ManagedStream:
             for blob_hash in we_have:
                 await protocol.send_blob(blob_hash)
                 sent.append(blob_hash)
-        except (asyncio.CancelledError, asyncio.TimeoutError, ValueError):
+        except (asyncio.TimeoutError, ValueError):
             return sent
         except ConnectionRefusedError:
             return sent

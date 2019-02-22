@@ -275,11 +275,8 @@ class StreamManager:
     def wait_for_stream_finished(self, stream: ManagedStream):
         async def _wait_for_stream_finished():
             if stream.downloader and stream.running:
-                try:
-                    await stream.downloader.stream_finished_event.wait()
-                    stream.update_status(ManagedStream.STATUS_FINISHED)
-                except asyncio.CancelledError:
-                    pass
+                await stream.downloader.stream_finished_event.wait()
+                stream.update_status(ManagedStream.STATUS_FINISHED)
         task = self.loop.create_task(_wait_for_stream_finished())
         self.update_stream_finished_futs.append(task)
         task.add_done_callback(
@@ -358,10 +355,9 @@ class StreamManager:
                 stream.tx = await self.wallet.send_amount_to_address(
                     lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1'))
             return stream
-        except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+        except asyncio.TimeoutError as e:
             if stream_task.exception():
                 raise stream_task.exception()
-            return
         finally:
             if sd_hash in self.starting_streams:
                 del self.starting_streams[sd_hash]
