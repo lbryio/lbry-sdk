@@ -131,7 +131,11 @@ class StreamDescriptor:
         assert os.path.isfile(blob.file_path)
         with open(blob.file_path, 'rb') as f:
             json_bytes = f.read()
-        decoded = json.loads(json_bytes.decode())
+        try:
+            decoded = json.loads(json_bytes.decode())
+        except json.JSONDecodeError:
+            blob.delete()
+            raise InvalidStreamDescriptorError("Does not decode as valid JSON")
         if decoded['blobs'][-1]['length'] != 0:
             raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
         if any([blob_info['length'] == 0 for blob_info in decoded['blobs'][:-1]]):

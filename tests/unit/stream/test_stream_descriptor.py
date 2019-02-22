@@ -4,6 +4,7 @@ import tempfile
 import shutil
 import json
 
+from lbrynet.blob.blob_file import BlobFile
 from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.error import InvalidStreamDescriptorError
@@ -107,3 +108,21 @@ class TestRecoverOldStreamDescriptors(AsyncioTestCase):
         self.assertEqual(stream_hash, descriptor.get_stream_hash())
         self.assertEqual(sd_hash, descriptor.calculate_old_sort_sd_hash())
         self.assertNotEqual(sd_hash, descriptor.calculate_sd_hash())
+
+    async def test_decode_corrupt_blob_raises_proper_exception_and_deletes_corrupt_file(self):
+        loop = asyncio.get_event_loop()
+        tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
+        sd_hash = '9313d1807551186126acc3662e74d9de29cede78d4f133349ace846273ef116b9bb86be86c54509eb84840e4b032f6b2'
+        with open(os.path.join(tmp_dir, sd_hash), 'wb') as handle:
+            handle.write(b'doesnt work')
+        blob = BlobFile(loop, tmp_dir, sd_hash)
+        self.assertTrue(blob.file_exists)
+        self.assertIsNotNone(blob.length)
+        with self.assertRaises(InvalidStreamDescriptorError):
+            await StreamDescriptor.from_stream_descriptor_blob(
+                loop, tmp_dir, blob
+            )
+        self.assertFalse(blob.file_exists)
+        # fixme: this is an emergency PR, plase move this to blob_file tests later
+        self.assertIsNone(blob.length)
