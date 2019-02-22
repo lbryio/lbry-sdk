@@ -108,7 +108,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 try:
                     await asyncio.wait_for(blob.finished_writing.wait(), 30, loop=self.loop)
                     self.send_response({"received_blob": True})
-                except (asyncio.TimeoutError):
+                except asyncio.TimeoutError:
                     self.send_response({"received_blob": False})
                 self.incoming.clear()
                 self.writer.close_handle()
