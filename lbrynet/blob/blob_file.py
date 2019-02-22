@@ -151,6 +151,7 @@ class BlobFile:
             os.remove(self.file_path)
         self.verified.clear()
         self.finished_writing.clear()
+        self.length = None
 
     def decrypt(self, key: bytes, iv: bytes) -> bytes:
         """
