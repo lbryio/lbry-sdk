@@ -14,11 +14,10 @@ REQUIRES = [
     'pbkdf2',
     'cryptography',
     'attrs',
-    'plyvel',
     'pylru'
 ]
-if sys.platform.startswith('win32'):
-    REQUIRES.remove('plyvel')
+if sys.platform.startswith('linux'):
+    REQUIRES.append('plyvel')
 
 
 setup(
