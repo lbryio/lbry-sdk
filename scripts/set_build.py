@@ -18,12 +18,15 @@ def get_build():
     try:
         tag = subprocess.check_output(['git', 'describe', '--exact-match', '--all']).strip()
         if re.match('tags\/v\d+\.\d+\.\d+rc\d+$', tag.decode()):
+            print('Build: rc')
             return 'rc'
         elif re.match('tags\/v\d+\.\d+\.\d+$', tag.decode()):
+            print('Build: release')
             return 'release'
+        print('Build: qa')
         return 'qa'
     except subprocess.CalledProcessError:
-        # if the build doesn't have a tag
+        print("Couldn't determine build type, defaulting to qa.")
         return 'qa'
 
 
