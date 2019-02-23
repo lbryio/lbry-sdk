@@ -5,10 +5,8 @@ rm -rf /tmp/.wine-*
 apt-get -qq update
 apt-get -qq install -y git
 
-git clone https://github.com/lbryio/torba.git --depth 1
-
 pip install setuptools_scm
-cd torba && pip install -e . && cd ..
+pip install git+https://github.com/lbryio/torba.git
 
 cd lbry
 

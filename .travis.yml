@@ -106,16 +106,6 @@ jobs:
       before_install:
         - brew upgrade python || true
         - brew upgrade python || true
-      install:
-        - python3 --version
-        - pip3 --version
-        - pip3 install pyinstaller
-        - git clone https://github.com/lbryio/torba.git --depth 1
-        - sed -i -e "s/'plyvel',//" torba/setup.py
-        - cd torba && pip3 install -e . && cd ..
-        - python3 scripts/set_build.py
-        - pip3 install -e .
-
     - if: tag IS present
       stage: build
       name: "Wallet Server Docker Image - Tagged Release"
