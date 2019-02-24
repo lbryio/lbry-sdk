@@ -16,7 +16,7 @@ from functools import wraps
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbrynet import __version__, utils
-from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
+from lbrynet.conf import Config, Setting, SLACK_WEBHOOK, PIPE_NAME
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.blob_exchange.downloader import download_blob
 from lbrynet.error import InsufficientFundsError, DownloadSDTimeout, ComponentsNotStarted
@@ -40,6 +40,7 @@ from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.address import decode_address
 
 if typing.TYPE_CHECKING:
+    from asyncio import transports
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.Components import UPnPComponent
@@ -128,6 +129,29 @@ def sort_claim_results(claims):
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
 WALLET_IS_UNLOCKED = "wallet_is_unlocked"
+
+
+class NamedPipeServer(asyncio.Protocol):
+    def __init__(self, request_handler: 'asyncio.coroutine'):
+        self.transport = None
+        self.request_handler = request_handler
+
+    async def handle_pipe_request(self, data):
+        log.info("received data from client %s", str(data))
+        json_response = await self.request_handler(data)
+        self.transport.write(json_response.encode())
+
+    def connection_made(self, transport: 'transports.BaseTransport'):
+        self.transport = transport
+
+    def connection_lost(self, exc: 'Optional[Exception]'):
+        pass
+
+    def data_received(self, data: bytes):
+        asyncio.create_task(self.handle_pipe_request(data))
+
+    def eof_received(self):
+        pass
 
 
 class DHTHasContacts(RequiredCondition):
@@ -390,6 +414,13 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.runner.setup()
 
         try:
+            loop = asyncio.get_event_loop()
+            await loop.start_serving_pipe(lambda : NamedPipeServer(self.handle_pipe_request), PIPE_NAME)
+            log.info('lbrynet API listening on pipe %s', PIPE_NAME)
+        except Exception as e:
+            log.error(str(e))
+
+        try:
             site = web.TCPSite(self.runner, self.conf.api_host, self.conf.api_port)
             await site.start()
             log.info('lbrynet API listening on TCP %s:%i', *site._server.sockets[0].getsockname()[:2])
@@ -429,6 +460,15 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.runner.cleanup()
         if self.analytics_manager.is_started:
             self.analytics_manager.stop()
+
+    async def handle_pipe_request(self, data):
+        data = json.loads(data)
+        ledger = None
+        if 'wallet' in self.component_manager.get_components_status():
+            # self.ledger only available if wallet component is not skipped
+            ledger = self.ledger
+        result = await self._process_rpc_call(data)
+        return jsonrpc_dumps_pretty(result, ledger=ledger)
 
     async def handle_old_jsonrpc(self, request):
         data = await request.json()

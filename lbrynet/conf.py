@@ -29,6 +29,10 @@ HEADERS_FILE_SHA256_CHECKSUM = (
     366295, 'b0c8197153a33ccbc52fb81a279588b6015b68b7726f73f6a2b81f7e25bfe4b9'
 )
 
+if sys.platform == "win32":
+    PIPE_NAME = r'\\.\pipe\lbrypipe'
+else:
+    PIPE_NAME = './lbrypipe'
 
 class Setting(typing.Generic[T]):
 
