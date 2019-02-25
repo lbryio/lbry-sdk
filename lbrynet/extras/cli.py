@@ -25,7 +25,8 @@ def display(data):
 
 
 async def execute_command(conf, method, params):
-    async with aiohttp.ClientSession() as session:
+    conn = aiohttp.NamedPipeConnector(path=r'\\.\pipe\lbrypipe')
+    async with aiohttp.ClientSession(connector=conn) as session:
         try:
             message = {'method': method, 'params': params}
             async with session.get(conf.api_connection_url, json=message) as resp:

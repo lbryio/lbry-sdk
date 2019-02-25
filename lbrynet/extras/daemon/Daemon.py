@@ -286,6 +286,7 @@ class Daemon(metaclass=JSONRPCServerType):
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         app = web.Application()
         app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
+        app.router.add_get('/', self.handle_old_jsonrpc)
         app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
         app.router.add_post('/', self.handle_old_jsonrpc)
         self.runner = web.AppRunner(app)
@@ -414,9 +415,11 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.runner.setup()
 
         try:
-            loop = asyncio.get_event_loop()
-            await loop.start_serving_pipe(lambda : NamedPipeServer(self.handle_pipe_request), PIPE_NAME)
-            log.info('lbrynet API listening on pipe %s', PIPE_NAME)
+            site = web.NamedPipeSite(self.runner, PIPE_NAME)
+            await site.start()
+            # loop = asyncio.get_event_loop()
+            # await loop.start_serving_pipe(lambda : NamedPipeServer(self.handle_pipe_request), PIPE_NAME)
+            log.info('lbrynet API listening on pipe %s', site.name)
         except Exception as e:
             log.error(str(e))
 
