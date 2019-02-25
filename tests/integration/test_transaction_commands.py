@@ -1,4 +1,4 @@
-from integration.testcase import CommandTestCase
+from lbrynet.testcase import CommandTestCase
 
 
 class TransactionCommandsTestCase(CommandTestCase):

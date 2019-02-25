@@ -8,7 +8,7 @@ from lbrynet.wallet.transaction import Transaction, Output
 from torba.client.errors import InsufficientFundsError
 from lbrynet.schema.compat import OldClaimMessage
 
-from integration.testcase import CommandTestCase
+from lbrynet.testcase import CommandTestCase
 from torba.client.hash import sha256, Base58
 
 
