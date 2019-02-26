@@ -9,15 +9,16 @@ with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
     long_description = fh.read()
 
 REQUIRES = [
-    'aiohttp',
-    'coincurve',
-    'pbkdf2',
-    'cryptography',
-    'attrs',
-    'pylru'
+    'aiohttp==3.4.4',
+    'cffi==1.12.1', # TODO: 1.12.2 fails on travis in wine
+    'coincurve==11.0.0',
+    'pbkdf2==1.3',
+    'cryptography==2.5',
+    'attrs==18.2.0',
+    'pylru==1.1.0'
 ]
 if sys.platform.startswith('linux'):
-    REQUIRES.append('plyvel')
+    REQUIRES.append('plyvel==1.0.5')
 
 
 setup(
