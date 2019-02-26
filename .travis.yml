@@ -9,9 +9,7 @@ jobs:
     - stage: code quality
       name: "pylint lbrynet"
       install:
-        - pip install astroid==2.0.4 aiohttp==3.4.4
-        # newer astroid and aiohttp fails in pylint so we pre-install older version
-        - pip install pylint
+        - pip install astroid==2.0.4 pylint
         - pip install git+https://github.com/lbryio/torba.git#egg=torba
         - pip install -e .
       script: pylint lbrynet
