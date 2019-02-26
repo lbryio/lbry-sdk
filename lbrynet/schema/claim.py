@@ -6,7 +6,7 @@ from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: dis
 from collections import OrderedDict
 
 from lbrynet.schema.schema.claim import Claim
-from lbrynet.schema.proto import claim_pb2
+from lbrynet.schema.proto2 import claim_pb2
 from lbrynet.schema.signature import Signature
 from lbrynet.schema.validator import get_validator
 from lbrynet.schema.signer import get_signer

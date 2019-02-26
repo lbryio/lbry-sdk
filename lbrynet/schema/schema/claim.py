@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from lbrynet.schema.proto import claim_pb2 as claim_pb
+from lbrynet.schema.proto2 import claim_pb2 as claim_pb
 from lbrynet.schema.schema import VERSION_MAP
 from lbrynet.schema.schema.signature import Signature
 from lbrynet.schema.schema.certificate import Certificate
