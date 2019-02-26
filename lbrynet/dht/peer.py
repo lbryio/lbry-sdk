@@ -3,6 +3,8 @@ import asyncio
 import logging
 import ipaddress
 from binascii import hexlify
+from functools import lru_cache
+
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
 
@@ -76,6 +78,7 @@ class PeerManager:
         self._node_id_mapping[(address, udp_port)] = node_id
         self._node_id_reverse_mapping[node_id] = (address, udp_port)
 
+    @lru_cache(maxsize=400)
     def get_kademlia_peer(self, node_id: bytes, address: str, udp_port: int) -> 'KademliaPeer':
         return KademliaPeer(self._loop, address, node_id, udp_port)
 
