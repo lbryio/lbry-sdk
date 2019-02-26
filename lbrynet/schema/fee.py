@@ -3,7 +3,7 @@ from collections import OrderedDict
 from lbrynet.schema.address import encode_address, decode_address
 from lbrynet.schema.schema import CURRENCY_NAMES, CURRENCY_MAP
 from lbrynet.schema.schema.fee import Fee as FeeHelper
-from lbrynet.schema.proto import fee_pb2
+from lbrynet.schema.proto2 import fee_pb2
 
 
 def migrate(fee):
