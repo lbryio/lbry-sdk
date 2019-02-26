@@ -32,7 +32,7 @@ setup(
         'cryptography',
         'protobuf==3.6.1',
         'msgpack',
-        'jsonschema',
+        'jsonschema==2.6.0',
         'ecdsa',
         'torba',
         'pyyaml',
