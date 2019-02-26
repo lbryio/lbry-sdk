@@ -9,7 +9,7 @@ with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
     long_description = fh.read()
 
 REQUIRES = [
-    'aiohttp==3.4.4',
+    'aiohttp',#==3.4.4',
     'cffi==1.12.1', # TODO: 1.12.2 fails on travis in wine
     'coincurve==11.0.0',
     'pbkdf2==1.3',
