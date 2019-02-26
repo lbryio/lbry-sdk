@@ -5,7 +5,7 @@ rm -rf /tmp/.wine-*
 apt-get -qq update
 apt-get -qq install -y git
 
-pip install setuptools_scm cffi==1.12.1
+pip install setuptools_scm
 git clone https://github.com/lbryio/torba.git --depth 1
 cd torba && pip install -e . && cd ..
 
