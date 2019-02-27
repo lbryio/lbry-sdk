@@ -71,17 +71,14 @@ class ReflectorServerProtocol(asyncio.Protocol):
                     self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(
                         self.loop, self.blob_manager.blob_dir, self.sd_blob
                     )
-                    self.incoming.clear()
-                    self.writer.close_handle()
-                    self.writer = None
                     self.send_response({"received_sd_blob": True})
-                except (asyncio.TimeoutError, asyncio.CancelledError):
+                except asyncio.TimeoutError:
+                    self.send_response({"received_sd_blob": False})
+                    self.transport.close()
+                finally:
                     self.incoming.clear()
                     self.writer.close_handle()
                     self.writer = None
-                    self.transport.close()
-                    self.send_response({"received_sd_blob": False})
-                    return
             else:
                 self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(
                     self.loop, self.blob_manager.blob_dir, self.sd_blob
@@ -111,7 +108,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 try:
                     await asyncio.wait_for(blob.finished_writing.wait(), 30, loop=self.loop)
                     self.send_response({"received_blob": True})
-                except (asyncio.TimeoutError, asyncio.CancelledError):
+                except asyncio.TimeoutError:
                     self.send_response({"received_blob": False})
                 self.incoming.clear()
                 self.writer.close_handle()

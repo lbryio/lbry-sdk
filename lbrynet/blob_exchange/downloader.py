@@ -116,22 +116,12 @@ class BlobDownloader:
                     self.peer_queue.put_nowait(set(batch).difference(self.ignored))
                 else:
                     self.clearbanned()
-            while self.active_connections:
-                peer, task = self.active_connections.popitem()
-                if task and not task.done():
-                    task.cancel()
             blob.close()
             log.debug("downloaded %s", blob_hash[:8])
             return blob
-        except asyncio.CancelledError:
+        finally:
             while self.active_connections:
-                peer, task = self.active_connections.popitem()
-                if task and not task.done():
-                    task.cancel()
-            raise
-        except (OSError, Exception) as e:
-            log.exception(e)
-            raise e
+                self.active_connections.popitem()[1].cancel()
 
     def close(self):
         self.scores.clear()

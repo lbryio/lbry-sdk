@@ -162,8 +162,6 @@ class IterativeFinder:
     async def _send_probe(self, peer: 'KademliaPeer'):
         try:
             response = await self.send_probe(peer)
-        except asyncio.CancelledError:
-            return
         except asyncio.TimeoutError:
             self.active.discard(peer)
             return
