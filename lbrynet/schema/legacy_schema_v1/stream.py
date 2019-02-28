@@ -1,10 +1,10 @@
 from copy import deepcopy
 
-from lbrynet.schema.schema.source import Source
 from lbrynet.schema.proto2 import stream_pb2 as stream_pb
-from lbrynet.schema.schema import VERSION_MAP
-from lbrynet.schema.schema.metadata import Metadata
-from lbrynet.schema.schema.schema import Schema
+from lbrynet.schema.legacy_schema_v1.source import Source
+from lbrynet.schema.legacy_schema_v1 import VERSION_MAP
+from lbrynet.schema.legacy_schema_v1.metadata import Metadata
+from lbrynet.schema.legacy_schema_v1.schema import Schema
 
 
 class Stream(Schema):

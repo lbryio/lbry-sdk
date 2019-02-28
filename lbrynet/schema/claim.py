@@ -5,12 +5,12 @@ from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: dis
 
 from collections import OrderedDict
 
-from lbrynet.schema.schema.claim import Claim
 from lbrynet.schema.proto2 import claim_pb2
 from lbrynet.schema.signature import Signature
 from lbrynet.schema.validator import get_validator
 from lbrynet.schema.signer import get_signer
-from lbrynet.schema.schema import CURVE_NAMES, CLAIM_TYPE_NAMES, SECP256k1
+from lbrynet.schema.legacy_schema_v1.claim import Claim
+from lbrynet.schema.legacy_schema_v1 import CURVE_NAMES, CLAIM_TYPE_NAMES, SECP256k1
 from lbrynet.schema.encoding import decode_fields, decode_b64_fields, encode_fields
 from lbrynet.schema.error import DecodeError
 from lbrynet.schema.fee import Fee

@@ -1,8 +1,8 @@
 from copy import deepcopy
 
 from lbrynet.schema.proto2 import certificate_pb2 as cert_pb
-from lbrynet.schema.schema.schema import Schema
-from lbrynet.schema.schema import VERSION_MAP, V_0_0_1, ECDSA_CURVES, CURVE_NAMES
+from lbrynet.schema.legacy_schema_v1.schema import Schema
+from lbrynet.schema.legacy_schema_v1 import VERSION_MAP, V_0_0_1, ECDSA_CURVES, CURVE_NAMES
 from lbrynet.schema.validator import get_key_type_from_dem
 
 
