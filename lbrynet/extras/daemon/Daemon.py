@@ -843,12 +843,12 @@ class Daemon(metaclass=JSONRPCServerType):
         amount = self.get_dewies_or_error("amount", amount)
         if not amount:
             raise NullFundsError
-        elif amount < 0:
+        if amount < 0:
             raise NegativeFundsError()
 
         if address and claim_id:
             raise Exception("Given both an address and a claim id")
-        elif not address and not claim_id:
+        if not address and not claim_id:
             raise Exception("Not given an address or a claim id")
 
         if address:
@@ -1238,7 +1238,7 @@ class Daemon(metaclass=JSONRPCServerType):
         amount = self.get_dewies_or_error("amount", amount)
         if not amount:
             raise NullFundsError
-        elif amount < 0:
+        if amount < 0:
             raise NegativeFundsError()
 
         for address in addresses:

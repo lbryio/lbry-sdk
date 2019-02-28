@@ -434,12 +434,11 @@ class StreamManager:
                 msg = f"fee of {fee_amount} exceeds max configured to allow of {max_fee_amount}"
                 log.warning(msg)
                 raise KeyFeeAboveMaxAllowed(msg)
-            else:
-                balance = await self.wallet.default_account.get_balance()
-                if lbc_to_dewies(str(fee_amount)) > balance:
-                    msg = f"fee of {fee_amount} exceeds max available balance"
-                    log.warning(msg)
-                    raise InsufficientFundsError(msg)
+            balance = await self.wallet.default_account.get_balance()
+            if lbc_to_dewies(str(fee_amount)) > balance:
+                msg = f"fee of {fee_amount} exceeds max available balance"
+                log.warning(msg)
+                raise InsufficientFundsError(msg)
             fee_address = claim.source_fee.address.decode()
         outpoint = f"{resolved['txid']}:{resolved['nout']}"
         existing = self.get_filtered_streams(outpoint=outpoint)
@@ -449,8 +448,7 @@ class StreamManager:
             if existing and existing[0].claim_id != resolved['claim_id']:
                 raise Exception(f"stream for {existing[0].claim_id} collides with existing "
                                 f"download {resolved['claim_id']}")
-            elif not existing:
-                existing.extend(self.get_filtered_streams(claim_id=resolved['claim_id']))
+            existing.extend(self.get_filtered_streams(claim_id=resolved['claim_id']))
             if existing and existing[0].sd_hash != claim.source_hash.decode():
                 log.info("claim contains an update to a stream we have, downloading it")
                 stream = await self.download_stream_from_claim(

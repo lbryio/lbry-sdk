@@ -445,11 +445,11 @@ def _handle_claim_result(results):
         if results['error'] in ['name is not claimed', 'claim not found']:
             if 'claim_id' in results:
                 raise UnknownClaimID(results['claim_id'])
-            elif 'name' in results:
+            if 'name' in results:
                 raise UnknownNameError(results['name'])
-            elif 'uri' in results:
+            if 'uri' in results:
                 raise UnknownURI(results['uri'])
-            elif 'outpoint' in results:
+            if 'outpoint' in results:
                 raise UnknownOutpoint(results['outpoint'])
         raise Exception(results['error'])
 

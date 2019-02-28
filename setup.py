@@ -23,7 +23,7 @@ setup(
         'console_scripts': 'lbrynet=lbrynet.extras.cli:main'
     },
     install_requires=[
-        'aiohttp==3.4.4',
+        'aiohttp==3.5.4',
         'aioupnp',
         'appdirs==1.4.3',
         'colorama==0.3.7',
