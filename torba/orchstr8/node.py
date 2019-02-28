@@ -243,7 +243,7 @@ class BlockchainProcess(asyncio.SubprocessProtocol):
         if b'Error:' in data:
             self.ready.set()
             raise SystemError(data.decode())
-        elif b'Done loading' in data:
+        if b'Done loading' in data:
             self.ready.set()
 
     def process_exited(self):

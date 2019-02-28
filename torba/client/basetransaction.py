@@ -350,7 +350,7 @@ class BaseTransaction:
                     "Cannot access net_account_balance if inputs/outputs do not "
                     "have is_my_account set properly."
                 )
-            elif txi.is_my_account:
+            if txi.is_my_account:
                 balance -= txi.amount
         for txo in self.outputs:
             if txo.is_my_account is None:
@@ -358,7 +358,7 @@ class BaseTransaction:
                     "Cannot access net_account_balance if inputs/outputs do not "
                     "have is_my_account set properly."
                 )
-            elif txo.is_my_account:
+            if txo.is_my_account:
                 balance += txo.amount
         return balance
 
