@@ -26,6 +26,7 @@ setup(
         'aiohttp==3.5.4',
         'aioupnp',
         'appdirs==1.4.3',
+        'certifi>=2018.11.29',
         'colorama==0.3.7',
         'distro==1.4.0',
         'base58==1.0.0',

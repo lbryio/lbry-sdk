@@ -1,6 +1,5 @@
 import os
 import asyncio
-import aiohttp
 import logging
 import math
 import binascii
@@ -54,11 +53,10 @@ async def gather_dict(tasks: dict):
 
 async def get_external_ip():  # used if upnp is disabled or non-functioning
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.lbry.io/ip") as resp:
-                response = await resp.json()
-                if response['success']:
-                    return response['data']['ip']
+        async with utils.aiohttp_request("get", "https://api.lbry.io/ip") as resp:
+            response = await resp.json()
+            if response['success']:
+                return response['data']['ip']
     except Exception as e:
         pass
 
@@ -149,7 +147,7 @@ class HeadersComponent(Component):
     async def fetch_headers_from_s3(self):
         local_header_size = self.local_header_file_size()
         resume_header = {"Range": f"bytes={local_header_size}-"}
-        async with aiohttp.request('get', HEADERS_URL, headers=resume_header) as response:
+        async with utils.aiohttp_request('get', HEADERS_URL, headers=resume_header) as response:
             if response.status == 406 or response.content_length < HEADER_SIZE:  # our file is bigger
                 log.warning("s3 is more out of date than we are")
                 return

@@ -1,10 +1,10 @@
 import asyncio
-import aiohttp
 import time
 import logging
 import json
 
 from lbrynet.error import InvalidExchangeRateResponse, CurrencyConversionError
+from lbrynet.utils import aiohttp_request
 
 log = logging.getLogger(__name__)
 
@@ -52,8 +52,8 @@ class MarketFeed:
     def is_online(self):
         return self._online
 
-    async def _make_request(self):
-        async with aiohttp.request('get', self.url, params=self.params) as response:
+    async def _make_request(self) -> str:
+        async with aiohttp_request('get', self.url, params=self.params) as response:
             return (await response.read()).decode()
 
     def _handle_response(self, response):
