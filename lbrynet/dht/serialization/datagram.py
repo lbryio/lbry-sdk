@@ -67,8 +67,7 @@ class RequestDatagram(KademliaDatagramBase):
     def make_ping(cls, from_node_id: bytes, rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
         if rpc_id and len(rpc_id) != constants.rpc_id_length:
             raise ValueError("invalid rpc id length")
-        elif not rpc_id:
-            rpc_id = constants.generate_id()[:constants.rpc_id_length]
+        rpc_id = rpc_id or constants.generate_id()[:constants.rpc_id_length]
         if len(from_node_id) != constants.hash_bits // 8:
             raise ValueError("invalid node id")
         return cls(REQUEST_TYPE, rpc_id, from_node_id, b'ping')
