@@ -1,4 +1,4 @@
-from lbrynet.schema.legacy_schema_v1 import ADDRESS_CHECKSUM_LENGTH
+from lbrynet.schema.constants import ADDRESS_CHECKSUM_LENGTH
 from lbrynet.schema.hashing import double_sha256
 from lbrynet.schema.error import InvalidAddress
 

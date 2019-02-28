@@ -8,7 +8,7 @@ from lbrynet.schema.validator import validate_claim_id
 from lbrynet.schema.legacy_schema_v1.certificate import Certificate
 from lbrynet.schema.legacy_schema_v1.claim import Claim
 from lbrynet.schema.legacy_schema_v1 import V_0_0_1, CLAIM_TYPE, CLAIM_TYPES, CERTIFICATE_TYPE, VERSION
-from lbrynet.schema.legacy_schema_v1 import NIST256p, NIST384p, SECP256k1, SHA256, SHA384
+from lbrynet.schema.constants import NIST256p, NIST384p, SECP256k1, SHA256, SHA384
 
 
 class NIST_ECDSASigner(object):

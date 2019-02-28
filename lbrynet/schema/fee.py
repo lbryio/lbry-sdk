@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 from lbrynet.schema.address import encode_address, decode_address
-from lbrynet.schema.legacy_schema_v1 import CURRENCY_NAMES, CURRENCY_MAP
+from lbrynet.schema.constants import CURRENCY_NAMES, CURRENCY_MAP
 from lbrynet.schema.legacy_schema_v1.fee import Fee as FeeHelper
 from lbrynet.schema.proto2 import fee_pb2
 

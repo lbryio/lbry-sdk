@@ -6,7 +6,7 @@ from binascii import unhexlify
 from datetime import datetime
 from typing import Optional
 
-from lbrynet.schema.legacy_schema_v1 import SECP256k1
+from lbrynet.schema.constants import SECP256k1
 from torba.client.basemanager import BaseWalletManager
 from torba.rpc.jsonrpc import CodeMessageError
 
