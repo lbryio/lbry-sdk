@@ -2,7 +2,7 @@ import lbrynet.schema
 from lbrynet.schema.base import b58encode, b58decode, validate_b58_checksum
 from lbrynet.schema.hashing import double_sha256, hash160
 from lbrynet.schema.error import InvalidAddress
-from lbrynet.schema.legacy_schema_v1 import ADDRESS_LENGTH, ADDRESS_PREFIXES, PUBKEY_ADDRESS, SCRIPT_ADDRESS
+from lbrynet.schema.constants import ADDRESS_LENGTH, ADDRESS_PREFIXES, PUBKEY_ADDRESS, SCRIPT_ADDRESS
 
 
 def validate_address_length(addr_bytes):
