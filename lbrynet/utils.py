@@ -7,9 +7,13 @@ import string
 import json
 import typing
 import asyncio
+import ssl
 import logging
 import ipaddress
 import pkg_resources
+import contextlib
+import certifi
+import aiohttp
 from lbrynet.schema.claim import ClaimDict
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
@@ -156,3 +160,16 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
         proto=socket.IPPROTO_TCP if proto == 'tcp' else socket.IPPROTO_UDP,
         type=socket.SOCK_STREAM if proto == 'tcp' else socket.SOCK_DGRAM
     ))[0][4][0]
+
+
+def get_ssl_context() -> ssl.SSLContext:
+    return ssl.create_default_context(
+        purpose=ssl.Purpose.CLIENT_AUTH, capath=certifi.where()
+    )
+
+
+@contextlib.asynccontextmanager
+async def aiohttp_request(method, url, **kwargs) -> typing.AsyncContextManager[aiohttp.ClientResponse]:
+    async with aiohttp.ClientSession() as session:
+        async with session.request(method, url, ssl=get_ssl_context(), **kwargs) as response:
+            yield response

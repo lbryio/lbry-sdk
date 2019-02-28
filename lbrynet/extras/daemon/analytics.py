@@ -81,7 +81,7 @@ class Manager:
             'cookies': self.cookies
         }
         try:
-            async with aiohttp.request(**request_kwargs) as response:
+            async with utils.aiohttp_request(**request_kwargs) as response:
                 self.cookies.update(response.cookies)
         except Exception as e:
             log.exception('Encountered an exception while POSTing to %s: ', self.url + endpoint, exc_info=e)

@@ -1,5 +1,4 @@
 import asyncio
-import aiohttp
 import json
 import logging.handlers
 import traceback
@@ -51,7 +50,7 @@ class HTTPSLogglyHandler(logging.Handler):
 
     async def _emit(self, record):
         payload = self.format(record)
-        async with aiohttp.request('post', self.url, data=payload.encode(), cookies=self.cookies) as response:
+        async with utils.aiohttp_request('post', self.url, data=payload.encode(), cookies=self.cookies) as response:
             self.cookies.update(response.cookies)
 
     def emit(self, record):
