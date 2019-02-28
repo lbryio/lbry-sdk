@@ -9,8 +9,6 @@ jobs:
     - stage: code quality
       name: "pylint & mypy"
       install:
-        - pip install astroid==2.0.4
-        # newer astroid and aiohttp fails in pylint so we pre-install older version
         - pip install pylint mypy
         - pip install -e .
       script:
