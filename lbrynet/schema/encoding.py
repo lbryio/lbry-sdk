@@ -1,8 +1,8 @@
 import base64, binascii
 from copy import deepcopy
 from lbrynet.schema.address import decode_address, encode_address
-from lbrynet.schema.schema import CLAIM_TYPES, CLAIM_TYPE, STREAM_TYPE, CERTIFICATE_TYPE
-from lbrynet.schema.schema import SIGNATURE
+from lbrynet.schema.legacy_schema_v1 import CLAIM_TYPES, CLAIM_TYPE, STREAM_TYPE, CERTIFICATE_TYPE
+from lbrynet.schema.legacy_schema_v1 import SIGNATURE
 from lbrynet.schema.error import DecodeError, InvalidAddress
 from lbrynet.schema.signature import Signature
 

@@ -16,7 +16,7 @@ from .test_data import secp256k1_private_key, claim_010_signed_secp256k1, secp25
 from .test_data import hex_encoded_003, decoded_hex_encoded_003, malformed_secp256k1_cert
 from lbrynet import schema
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.schema.schema import NIST256p, NIST384p, SECP256k1
+from lbrynet.schema.legacy_schema_v1 import NIST256p, NIST384p, SECP256k1
 from lbrynet.schema.legacy.migrate import migrate
 from lbrynet.schema.signer import get_signer
 from lbrynet.schema.uri import URI, URIParseError

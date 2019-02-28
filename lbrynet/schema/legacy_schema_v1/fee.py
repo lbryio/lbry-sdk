@@ -1,8 +1,8 @@
 from copy import deepcopy
 
-from lbrynet.schema.schema.schema import Schema
 from lbrynet.schema.proto2 import fee_pb2 as fee_pb
-from lbrynet.schema.schema import VERSION_MAP, CURRENCY_MAP
+from lbrynet.schema.legacy_schema_v1.schema import Schema
+from lbrynet.schema.legacy_schema_v1 import VERSION_MAP, CURRENCY_MAP
 
 
 class Fee(Schema):

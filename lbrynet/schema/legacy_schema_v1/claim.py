@@ -1,11 +1,11 @@
 from copy import deepcopy
 
 from lbrynet.schema.proto2 import claim_pb2 as claim_pb
-from lbrynet.schema.schema import VERSION_MAP
-from lbrynet.schema.schema.signature import Signature
-from lbrynet.schema.schema.certificate import Certificate
-from lbrynet.schema.schema.schema import Schema
-from lbrynet.schema.schema.stream import Stream
+from lbrynet.schema.legacy_schema_v1 import VERSION_MAP
+from lbrynet.schema.legacy_schema_v1.signature import Signature
+from lbrynet.schema.legacy_schema_v1.certificate import Certificate
+from lbrynet.schema.legacy_schema_v1.schema import Schema
+from lbrynet.schema.legacy_schema_v1.stream import Stream
 
 
 class Claim(Schema):

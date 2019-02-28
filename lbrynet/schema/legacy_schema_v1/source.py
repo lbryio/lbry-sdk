@@ -1,7 +1,7 @@
 from copy import deepcopy
 from lbrynet.schema.proto2 import source_pb2 as source_pb
-from lbrynet.schema.schema import SOURCE_TYPES, LBRY_SD_HASH_LENGTH, VERSION_MAP
-from lbrynet.schema.schema.schema import Schema
+from lbrynet.schema.legacy_schema_v1 import SOURCE_TYPES, LBRY_SD_HASH_LENGTH, VERSION_MAP
+from lbrynet.schema.legacy_schema_v1.schema import Schema
 from lbrynet.schema.error import InvalidSourceHashLength
 
 
