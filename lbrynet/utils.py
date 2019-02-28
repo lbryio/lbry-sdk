@@ -1,4 +1,3 @@
-import sys
 import base64
 import codecs
 import datetime
@@ -165,7 +164,7 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
 
 def get_ssl_context() -> ssl.SSLContext:
     return ssl.create_default_context(
-        purpose=ssl.Purpose.CLIENT_AUTH, capath=None if 'darwin' not in sys.platform else certifi.where()
+        purpose=ssl.Purpose.CLIENT_AUTH, capath=certifi.where()
     )
 
 
