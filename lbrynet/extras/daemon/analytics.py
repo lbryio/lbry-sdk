@@ -116,7 +116,7 @@ class AnalyticsManager:
     async def track(self, event: typing.Dict):
         """Send a single tracking event"""
         if self._enabled:
-            log.info('Sending track event: %s', event)
+            log.debug('Sending track event: %s', event)
             await self._post(event)
 
     async def send_upnp_setup_success_fail(self, success, status):
