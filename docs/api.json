@@ -35,15 +35,7 @@
             }
         ],
         "returns": "(map) added account details",
-        "examples": [
-            {
-                "title": "performing account_add operation",
-                "curl": "curl -d'{\"method\": \"account_add\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_add --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_add\"}).json()",
-                "output": "(map) added account details"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_balance",
@@ -63,15 +55,7 @@
             }
         ],
         "returns": "(decimal) amount of lbry credits in wallet",
-        "examples": [
-            {
-                "title": "performing account_balance operation",
-                "curl": "curl -d'{\"method\": \"account_balance\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_balance --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_balance\"}).json()",
-                "output": "(decimal) amount of lbry credits in wallet"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_create",
@@ -91,15 +75,7 @@
             }
         ],
         "returns": "(map) new account details",
-        "examples": [
-            {
-                "title": "performing account_create operation",
-                "curl": "curl -d'{\"method\": \"account_create\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_create --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_create\"}).json()",
-                "output": "(map) new account details"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_decrypt",
@@ -113,15 +89,7 @@
             }
         ],
         "returns": "(bool) true if wallet is decrypted, otherwise false",
-        "examples": [
-            {
-                "title": "performing account_decrypt operation",
-                "curl": "curl -d'{\"method\": \"account_decrypt\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_decrypt --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_decrypt\"}).json()",
-                "output": "(bool) true if wallet is decrypted, otherwise false"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_encrypt",
@@ -135,15 +103,7 @@
             }
         ],
         "returns": "(bool) true if wallet is decrypted, otherwise false",
-        "examples": [
-            {
-                "title": "performing account_encrypt operation",
-                "curl": "curl -d'{\"method\": \"account_encrypt\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_encrypt --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_encrypt\"}).json()",
-                "output": "(bool) true if wallet is decrypted, otherwise false"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_fund",
@@ -187,15 +147,7 @@
             }
         ],
         "returns": "(map) transaction performing requested action",
-        "examples": [
-            {
-                "title": "performing account_fund operation",
-                "curl": "curl -d'{\"method\": \"account_fund\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_fund --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_fund\"}).json()",
-                "output": "(map) transaction performing requested action"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_list",
@@ -229,11 +181,11 @@
         "returns": "(map) balance of account(s)",
         "examples": [
             {
-                "title": "performing account_list operation",
-                "curl": "curl -d'{\"method\": \"account_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_list\"}).json()",
-                "output": "(map) balance of account(s)"
+                "title": "List your accounts.",
+                "curl": "curl -d'{\"method\": \"account_list\", \"params\": {\"include_claims\": false, \"show_seed\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet account list",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_list\", \"params\": {\"include_claims\": false, \"show_seed\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"lbc_regtest\": [\n      {\n        \"address_generator\": {\n          \"change\": {\n            \"gap\": 6,\n            \"maximum_uses_per_address\": 1\n          },\n          \"name\": \"deterministic-chain\",\n          \"receiving\": {\n            \"gap\": 20,\n            \"maximum_uses_per_address\": 1\n          }\n        },\n        \"certificates\": 0,\n        \"coins\": 10.0,\n        \"encrypted\": false,\n        \"id\": \"mxTNUVArNCbhBJAbY3WMLV7Hu3jebTR9En\",\n        \"is_default_account\": true,\n        \"name\": \"Account #mxTNUVArNCbhBJAbY3WMLV7Hu3jebTR9En\",\n        \"public_key\": \"tpubD6NzVbkrYhZ4XwPmJUjsb9aVZzCSjH5Jm66SGbY5Krk5BkUZz4RNgNcKnf4narAht6jT7786XXM4em7cu7rs6ELmUEje755V5jTja2ubFn4\",\n        \"satoshis\": 1000000000\n      }\n    ]\n  }\n}"
             }
         ]
     },
@@ -249,15 +201,7 @@
             }
         ],
         "returns": "(bool) true if account is locked, otherwise false",
-        "examples": [
-            {
-                "title": "performing account_lock operation",
-                "curl": "curl -d'{\"method\": \"account_lock\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_lock --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_lock\"}).json()",
-                "output": "(bool) true if account is locked, otherwise false"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_max_address_gap",
@@ -271,15 +215,7 @@
             }
         ],
         "returns": "(map) maximum gap for change and receiving addresses",
-        "examples": [
-            {
-                "title": "performing account_max_address_gap operation",
-                "curl": "curl -d'{\"method\": \"account_max_address_gap\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_max_address_gap --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_max_address_gap\"}).json()",
-                "output": "(map) maximum gap for change and receiving addresses"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_remove",
@@ -293,15 +229,7 @@
             }
         ],
         "returns": "(map) details of removed account",
-        "examples": [
-            {
-                "title": "performing account_remove operation",
-                "curl": "curl -d'{\"method\": \"account_remove\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_remove --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_remove\"}).json()",
-                "output": "(map) details of removed account"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_send",
@@ -321,15 +249,7 @@
             }
         ],
         "returns": "",
-        "examples": [
-            {
-                "title": "performing account_send operation",
-                "curl": "curl -d'{\"method\": \"account_send\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_send --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_send\"}).json()",
-                "output": ""
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_set",
@@ -379,15 +299,7 @@
             }
         ],
         "returns": "(map) updated account details",
-        "examples": [
-            {
-                "title": "performing account_set operation",
-                "curl": "curl -d'{\"method\": \"account_set\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_set --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_set\"}).json()",
-                "output": "(map) updated account details"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "account_unlock",
@@ -401,15 +313,7 @@
             }
         ],
         "returns": "(bool) true if account is unlocked, otherwise false",
-        "examples": [
-            {
-                "title": "performing account_unlock operation",
-                "curl": "curl -d'{\"method\": \"account_unlock\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  account_unlock --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_unlock\"}).json()",
-                "output": "(bool) true if account is unlocked, otherwise false"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "address_is_mine",
@@ -429,15 +333,7 @@
             }
         ],
         "returns": "(bool) true, if address is associated with current wallet",
-        "examples": [
-            {
-                "title": "performing address_is_mine operation",
-                "curl": "curl -d'{\"method\": \"address_is_mine\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  address_is_mine --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"address_is_mine\"}).json()",
-                "output": "(bool) true, if address is associated with current wallet"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "address_list",
@@ -463,15 +359,7 @@
             }
         ],
         "returns": "List of wallet addresses",
-        "examples": [
-            {
-                "title": "performing address_list operation",
-                "curl": "curl -d'{\"method\": \"address_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  address_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"address_list\"}).json()",
-                "output": "List of wallet addresses"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "address_unused",
@@ -485,15 +373,7 @@
             }
         ],
         "returns": "(str) Unused wallet address in base58",
-        "examples": [
-            {
-                "title": "performing address_unused operation",
-                "curl": "curl -d'{\"method\": \"address_unused\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  address_unused --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"address_unused\"}).json()",
-                "output": "(str) Unused wallet address in base58"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "blob_announce",
@@ -519,49 +399,7 @@
             }
         ],
         "returns": "(bool) true if successful",
-        "examples": [
-            {
-                "title": "performing blob_announce operation",
-                "curl": "curl -d'{\"method\": \"blob_announce\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  blob_announce --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"blob_announce\"}).json()",
-                "output": "(bool) true if successful"
-            }
-        ]
-    },
-    {
-        "name": "blob_availability",
-        "description": "Get blob availability",
-        "arguments": [
-            {
-                "name": "blob_hash",
-                "type": "str",
-                "description": "check availability for this blob hash",
-                "is_required": true
-            },
-            {
-                "name": "search_timeout",
-                "type": "int",
-                "description": "how long to search for peers for the blob in the dht",
-                "is_required": false
-            },
-            {
-                "name": "blob_timeout",
-                "type": "int",
-                "description": "how long to try downloading from a peer",
-                "is_required": false
-            }
-        ],
-        "returns": "(dict) {\n        \"is_available\": <bool, true if blob is available from a peer from peer list>\n        \"reachable_peers\": [\"<ip>:<port>\"],\n        \"unreachable_peers\": [\"<ip>:<port>\"]\n    }",
-        "examples": [
-            {
-                "title": "performing blob_availability operation",
-                "curl": "curl -d'{\"method\": \"blob_availability\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  blob_availability --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"blob_availability\"}).json()",
-                "output": "(dict) {\n        \"is_available\": <bool, true if blob is available from a peer from peer list>\n        \"reachable_peers\": [\"<ip>:<port>\"],\n        \"unreachable_peers\": [\"<ip>:<port>\"]\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "blob_delete",
@@ -575,15 +413,7 @@
             }
         ],
         "returns": "(str) Success/fail message",
-        "examples": [
-            {
-                "title": "performing blob_delete operation",
-                "curl": "curl -d'{\"method\": \"blob_delete\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  blob_delete --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"blob_delete\"}).json()",
-                "output": "(str) Success/fail message"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "blob_get",
@@ -600,30 +430,10 @@
                 "type": "int",
                 "description": "timeout in number of seconds",
                 "is_required": false
-            },
-            {
-                "name": "encoding",
-                "type": "str",
-                "description": "by default no attempt at decoding is made, can be set to one of the following decoders: 'json'",
-                "is_required": false
-            },
-            {
-                "name": "payment_rate_manager",
-                "type": "str",
-                "description": "if not given the default payment rate manager will be used. supported alternative rate managers: 'only-free'",
-                "is_required": false
             }
         ],
         "returns": "(str) Success/Fail message or (dict) decoded data",
-        "examples": [
-            {
-                "title": "performing blob_get operation",
-                "curl": "curl -d'{\"method\": \"blob_get\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  blob_get --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"blob_get\"}).json()",
-                "output": "(str) Success/Fail message or (dict) decoded data"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "blob_list",
@@ -673,15 +483,7 @@
             }
         ],
         "returns": "(list) List of blob hashes",
-        "examples": [
-            {
-                "title": "performing blob_list operation",
-                "curl": "curl -d'{\"method\": \"blob_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  blob_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"blob_list\"}).json()",
-                "output": "(list) List of blob hashes"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "blob_reflect",
@@ -695,30 +497,14 @@
             }
         ],
         "returns": "(list) reflected blob hashes",
-        "examples": [
-            {
-                "title": "performing blob_reflect operation",
-                "curl": "curl -d'{\"method\": \"blob_reflect\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  blob_reflect --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"blob_reflect\"}).json()",
-                "output": "(list) reflected blob hashes"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "blob_reflect_all",
         "description": "Reflects all saved blobs",
         "arguments": [],
         "returns": "(bool) true if successful",
-        "examples": [
-            {
-                "title": "performing blob_reflect_all operation",
-                "curl": "curl -d'{\"method\": \"blob_reflect_all\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  blob_reflect_all --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"blob_reflect_all\"}).json()",
-                "output": "(bool) true if successful"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "block_show",
@@ -738,15 +524,7 @@
             }
         ],
         "returns": "(dict) Requested block",
-        "examples": [
-            {
-                "title": "performing block_show operation",
-                "curl": "curl -d'{\"method\": \"block_show\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  block_show --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"block_show\"}).json()",
-                "output": "(dict) Requested block"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "channel_export",
@@ -760,15 +538,7 @@
             }
         ],
         "returns": "(str) Serialized certificate information",
-        "examples": [
-            {
-                "title": "performing channel_export operation",
-                "curl": "curl -d'{\"method\": \"channel_export\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  channel_export --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_export\"}).json()",
-                "output": "(str) Serialized certificate information"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "channel_import",
@@ -782,15 +552,7 @@
             }
         ],
         "returns": "(dict) Result dictionary",
-        "examples": [
-            {
-                "title": "performing channel_import operation",
-                "curl": "curl -d'{\"method\": \"channel_import\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  channel_import --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_import\"}).json()",
-                "output": "(dict) Result dictionary"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "channel_list",
@@ -816,15 +578,7 @@
             }
         ],
         "returns": "(list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim\n    is in the wallet.",
-        "examples": [
-            {
-                "title": "performing channel_list operation",
-                "curl": "curl -d'{\"method\": \"channel_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  channel_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_list\"}).json()",
-                "output": "(list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim\n    is in the wallet."
-            }
-        ]
+        "examples": []
     },
     {
         "name": "channel_new",
@@ -850,15 +604,7 @@
             }
         ],
         "returns": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (float) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }",
-        "examples": [
-            {
-                "title": "performing channel_new operation",
-                "curl": "curl -d'{\"method\": \"channel_new\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  channel_new --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_new\"}).json()",
-                "output": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (float) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "claim_abandon",
@@ -898,11 +644,11 @@
         "returns": "(dict) Dictionary containing result of the claim\n    {\n        success: (bool) True if txn is successful\n        txid : (str) txid of resulting transaction\n    }",
         "examples": [
             {
-                "title": "performing claim_abandon operation",
-                "curl": "curl -d'{\"method\": \"claim_abandon\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_abandon --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_abandon\"}).json()",
-                "output": "(dict) Dictionary containing result of the claim\n    {\n        success: (bool) True if txn is successful\n        txid : (str) txid of resulting transaction\n    }"
+                "title": "Abandon a published file.",
+                "curl": "curl -d'{\"method\": \"claim_abandon\", \"params\": {\"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\", \"blocking\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet claim abandon 434a7beefbbcdda93fd385c787f717fd8a9b4586",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_abandon\", \"params\": {\"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\", \"blocking\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"success\": true,\n    \"tx\": {\n      \"height\": -2,\n      \"hex\": \"010000000167d12f14d9dad5898cde562706ccc385b8b4fd3121e668e888694b0aed5829d3000000006a47304402206d2fcee353267584698ae14aea7ddc37ae5c76de1b4b2f127915890ca3ce1a9f022078c360472e1562cdd84912ee29e20a51f8833932d0a723dececf1e3c64bb25f50121029497c359b1aed344e09e9ba769f0fd56a0c8b799e476e01256b7cc5fcb031f92ffffffff0134b7f505000000001976a9146f96072dc6d71f34c4222c7cdfcaeb0b61cee77c88ac00000000\",\n      \"inputs\": [\n        {\n          \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n          \"amount\": \"1.0\",\n          \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"confirmations\": 1,\n          \"height\": 207,\n          \"is_change\": false,\n          \"is_mine\": true,\n          \"name\": \"aname\",\n          \"nout\": 0,\n          \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n          \"type\": \"claim\",\n          \"value\": {\n            \"claimType\": \"streamType\",\n            \"stream\": {\n              \"metadata\": {\n                \"author\": \"\",\n                \"description\": \"\",\n                \"language\": \"UNKNOWN_LANGUAGE\",\n                \"license\": \"\",\n                \"licenseUrl\": \"\",\n                \"nsfw\": false,\n                \"preview\": \"\",\n                \"thumbnail\": \"\",\n                \"title\": \"\",\n                \"version\": \"_0_1_0\"\n              },\n              \"source\": {\n                \"contentType\": \"application/octet-stream\",\n                \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n                \"sourceType\": \"lbry_sd_hash\",\n                \"version\": \"_0_0_1\"\n              },\n              \"version\": \"_0_0_1\"\n            },\n            \"version\": \"_0_0_1\"\n          }\n        }\n      ],\n      \"outputs\": [\n        {\n          \"address\": \"mqgy2UhKgRRnEZNGBPPoqwHPbpPubDYx2t\",\n          \"amount\": \"0.999893\",\n          \"confirmations\": -2,\n          \"height\": -2,\n          \"nout\": 0,\n          \"txid\": \"6dc508ed13b1e7dc0d823d3875d43a56f858f72a6a2b5ee3f3955ea14cf5aba2\"\n        }\n      ],\n      \"total_fee\": \"0.000107\",\n      \"total_input\": \"1.0\",\n      \"total_output\": \"0.999893\",\n      \"txid\": \"6dc508ed13b1e7dc0d823d3875d43a56f858f72a6a2b5ee3f3955ea14cf5aba2\"\n    }\n  }\n}"
             }
         ]
     },
@@ -918,15 +664,7 @@
             }
         ],
         "returns": "(dict) State of claims assigned for the name\n    {\n        'claims': (list) list of claims for the name\n        [\n            {\n            'amount': (float) amount assigned to the claim\n            'effective_amount': (float) total amount assigned to the claim,\n                                including supports\n            'claim_id': (str) claim ID of the claim\n            'height': (int) height of block containing the claim\n            'txid': (str) txid of the claim\n            'nout': (int) nout of the claim\n            'permanent_url': (str) permanent url of the claim,\n            'supports': (list) a list of supports attached to the claim\n            'value': (str) the value of the claim\n            },\n        ]\n        'supports_without_claims': (list) supports without any claims attached to them\n        'last_takeover_height': (int) the height of last takeover for the name\n    }",
-        "examples": [
-            {
-                "title": "performing claim_list operation",
-                "curl": "curl -d'{\"method\": \"claim_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_list\"}).json()",
-                "output": "(dict) State of claims assigned for the name\n    {\n        'claims': (list) list of claims for the name\n        [\n            {\n            'amount': (float) amount assigned to the claim\n            'effective_amount': (float) total amount assigned to the claim,\n                                including supports\n            'claim_id': (str) claim ID of the claim\n            'height': (int) height of block containing the claim\n            'txid': (str) txid of the claim\n            'nout': (int) nout of the claim\n            'permanent_url': (str) permanent url of the claim,\n            'supports': (list) a list of supports attached to the claim\n            'value': (str) the value of the claim\n            },\n        ]\n        'supports_without_claims': (list) supports without any claims attached to them\n        'last_takeover_height': (int) the height of last takeover for the name\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "claim_list_by_channel",
@@ -958,15 +696,7 @@
             }
         ],
         "returns": "{\n         resolved channel uri: {\n            If there was an error:\n            'error': (str) error message\n\n            'claims_in_channel': the total number of results for the channel,\n\n            If a page of results was requested:\n            'returned_page': page number returned,\n            'claims_in_channel': [\n                {\n                    'absolute_channel_position': (int) claim index number in sorted list of\n                                                 claims which assert to be part of the\n                                                 channel\n                    'address': (str) claim address,\n                    'amount': (float) claim amount,\n                    'effective_amount': (float) claim amount including supports,\n                    'claim_id': (str) claim id,\n                    'claim_sequence': (int) claim sequence number,\n                    'decoded_claim': (bool) whether or not the claim value was decoded,\n                    'height': (int) claim height,\n                    'depth': (int) claim depth,\n                    'has_signature': (bool) included if decoded_claim\n                    'name': (str) claim name,\n                    'supports: (list) list of supports [{'txid': (str) txid,\n                                                         'nout': (int) nout,\n                                                         'amount': (float) amount}],\n                    'txid': (str) claim txid,\n                    'nout': (str) claim nout,\n                    'signature_is_valid': (bool), included if has_signature,\n                    'value': ClaimDict if decoded, otherwise hex string\n                }\n            ],\n        }\n    }",
-        "examples": [
-            {
-                "title": "performing claim_list_by_channel operation",
-                "curl": "curl -d'{\"method\": \"claim_list_by_channel\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_list_by_channel --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_list_by_channel\"}).json()",
-                "output": "{\n         resolved channel uri: {\n            If there was an error:\n            'error': (str) error message\n\n            'claims_in_channel': the total number of results for the channel,\n\n            If a page of results was requested:\n            'returned_page': page number returned,\n            'claims_in_channel': [\n                {\n                    'absolute_channel_position': (int) claim index number in sorted list of\n                                                 claims which assert to be part of the\n                                                 channel\n                    'address': (str) claim address,\n                    'amount': (float) claim amount,\n                    'effective_amount': (float) claim amount including supports,\n                    'claim_id': (str) claim id,\n                    'claim_sequence': (int) claim sequence number,\n                    'decoded_claim': (bool) whether or not the claim value was decoded,\n                    'height': (int) claim height,\n                    'depth': (int) claim depth,\n                    'has_signature': (bool) included if decoded_claim\n                    'name': (str) claim name,\n                    'supports: (list) list of supports [{'txid': (str) txid,\n                                                         'nout': (int) nout,\n                                                         'amount': (float) amount}],\n                    'txid': (str) claim txid,\n                    'nout': (str) claim nout,\n                    'signature_is_valid': (bool), included if has_signature,\n                    'value': ClaimDict if decoded, otherwise hex string\n                }\n            ],\n        }\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "claim_list_mine",
@@ -994,11 +724,11 @@
         "returns": "(list) List of name claims owned by user\n    [\n        {\n            'address': (str) address that owns the claim\n            'amount': (float) amount assigned to the claim\n            'blocks_to_expiration': (int) number of blocks until it expires\n            'category': (str) \"claim\", \"update\" , or \"support\"\n            'claim_id': (str) claim ID of the claim\n            'confirmations': (int) number of blocks of confirmations for the claim\n            'expiration_height': (int) the block height which the claim will expire\n            'expired': (bool) true if expired, false otherwise\n            'height': (int) height of the block containing the claim\n            'is_spent': (bool) true if claim is abandoned, false otherwise\n            'name': (str) name of the claim\n            'permanent_url': (str) permanent url of the claim,\n            'txid': (str) txid of the claim\n            'nout': (int) nout of the claim\n            'value': (str) value of the claim\n        },\n   ]",
         "examples": [
             {
-                "title": "performing claim_list_mine operation",
-                "curl": "curl -d'{\"method\": \"claim_list_mine\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_list_mine --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_list_mine\"}).json()",
-                "output": "(list) List of name claims owned by user\n    [\n        {\n            'address': (str) address that owns the claim\n            'amount': (float) amount assigned to the claim\n            'blocks_to_expiration': (int) number of blocks until it expires\n            'category': (str) \"claim\", \"update\" , or \"support\"\n            'claim_id': (str) claim ID of the claim\n            'confirmations': (int) number of blocks of confirmations for the claim\n            'expiration_height': (int) the block height which the claim will expire\n            'expired': (bool) true if expired, false otherwise\n            'height': (int) height of the block containing the claim\n            'is_spent': (bool) true if claim is abandoned, false otherwise\n            'name': (str) name of the claim\n            'permanent_url': (str) permanent url of the claim,\n            'txid': (str) txid of the claim\n            'nout': (int) nout of the claim\n            'value': (str) value of the claim\n        },\n   ]"
+                "title": "List your claims.",
+                "curl": "curl -d'{\"method\": \"claim_list_mine\", \"params\": {}}' http://localhost:5279/",
+                "lbrynet": "lbrynet claim list_mine",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_list_mine\", \"params\": {}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": [\n    {\n      \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n      \"amount\": \"1.0\",\n      \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"confirmations\": 1,\n      \"height\": 207,\n      \"is_change\": false,\n      \"is_mine\": true,\n      \"name\": \"aname\",\n      \"nout\": 0,\n      \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n      \"type\": \"claim\",\n      \"value\": {\n        \"claimType\": \"streamType\",\n        \"stream\": {\n          \"metadata\": {\n            \"author\": \"\",\n            \"description\": \"\",\n            \"language\": \"UNKNOWN_LANGUAGE\",\n            \"license\": \"\",\n            \"licenseUrl\": \"\",\n            \"nsfw\": false,\n            \"preview\": \"\",\n            \"thumbnail\": \"\",\n            \"title\": \"\",\n            \"version\": \"_0_1_0\"\n          },\n          \"source\": {\n            \"contentType\": \"application/octet-stream\",\n            \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n            \"sourceType\": \"lbry_sd_hash\",\n            \"version\": \"_0_0_1\"\n          },\n          \"version\": \"_0_0_1\"\n        },\n        \"version\": \"_0_0_1\"\n      }\n    }\n  ]\n}"
             }
         ]
     },
@@ -1032,15 +762,7 @@
             }
         ],
         "returns": "(dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }",
-        "examples": [
-            {
-                "title": "performing claim_new_support operation",
-                "curl": "curl -d'{\"method\": \"claim_new_support\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_new_support --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_new_support\"}).json()",
-                "output": "(dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "claim_send_to_address",
@@ -1066,15 +788,7 @@
             }
         ],
         "returns": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (float) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }",
-        "examples": [
-            {
-                "title": "performing claim_send_to_address operation",
-                "curl": "curl -d'{\"method\": \"claim_send_to_address\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_send_to_address --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_send_to_address\"}).json()",
-                "output": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (float) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "claim_show",
@@ -1100,15 +814,7 @@
             }
         ],
         "returns": "(dict) Dictionary containing claim info as below,\n\n    {\n        'txid': (str) txid of claim\n        'nout': (int) nout of claim\n        'amount': (float) amount of claim\n        'value': (str) value of claim\n        'height' : (int) height of claim takeover\n        'claim_id': (str) claim ID of claim\n        'supports': (list) list of supports associated with claim\n    }\n\n    if claim cannot be resolved, dictionary as below will be returned\n\n    {\n        'error': (str) reason for error\n    }",
-        "examples": [
-            {
-                "title": "performing claim_show operation",
-                "curl": "curl -d'{\"method\": \"claim_show\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_show --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_show\"}).json()",
-                "output": "(dict) Dictionary containing claim info as below,\n\n    {\n        'txid': (str) txid of claim\n        'nout': (int) nout of claim\n        'amount': (float) amount of claim\n        'value': (str) value of claim\n        'height' : (int) height of claim takeover\n        'claim_id': (str) claim ID of claim\n        'supports': (list) list of supports associated with claim\n    }\n\n    if claim cannot be resolved, dictionary as below will be returned\n\n    {\n        'error': (str) reason for error\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "claim_tip",
@@ -1134,30 +840,7 @@
             }
         ],
         "returns": "(dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }",
-        "examples": [
-            {
-                "title": "performing claim_tip operation",
-                "curl": "curl -d'{\"method\": \"claim_tip\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  claim_tip --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_tip\"}).json()",
-                "output": "(dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }"
-            }
-        ]
-    },
-    {
-        "name": "commands",
-        "description": "Return a list of available commands",
-        "arguments": [],
-        "returns": "(list) list of available commands",
-        "examples": [
-            {
-                "title": "performing commands operation",
-                "curl": "curl -d'{\"method\": \"commands\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  commands --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"commands\"}).json()",
-                "output": "(list) list of available commands"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "file_delete",
@@ -1237,15 +920,7 @@
             }
         ],
         "returns": "(bool) true if deletion was successful",
-        "examples": [
-            {
-                "title": "performing file_delete operation",
-                "curl": "curl -d'{\"method\": \"file_delete\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  file_delete --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"file_delete\"}).json()",
-                "output": "(bool) true if deletion was successful"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "file_list",
@@ -1318,22 +993,32 @@
                 "is_required": false
             },
             {
+                "name": "blobs_in_stream<blobs_in_stream>",
+                "type": "int",
+                "description": "get file with matching blobs in stream",
+                "is_required": false
+            },
+            {
+                "name": "blobs_remaining",
+                "type": "int",
+                "description": "amount of remaining blobs to download",
+                "is_required": false
+            },
+            {
                 "name": "sort",
                 "type": "str",
-                "description": "sort by any property, like 'file_name' or 'metadata.author'; to specify direction append ',asc' or ',desc'",
+                "description": "field to sort by (one of the above filter fields)",
+                "is_required": false
+            },
+            {
+                "name": "comparison",
+                "type": "str",
+                "description": "logical comparision, (eq | ne | g | ge | l | le)",
                 "is_required": false
             }
         ],
-        "returns": "(list) List of files\n\n    [\n        {\n            'completed': (bool) true if download is completed,\n            'file_name': (str) name of file,\n            'download_directory': (str) download directory,\n            'points_paid': (float) credit paid to download file,\n            'stopped': (bool) true if download is stopped,\n            'stream_hash': (str) stream hash of file,\n            'stream_name': (str) stream name ,\n            'suggested_file_name': (str) suggested file name,\n            'sd_hash': (str) sd hash of file,\n            'download_path': (str) download path of file,\n            'mime_type': (str) mime type of file,\n            'key': (str) key attached to file,\n            'total_bytes': (int) file size in bytes,\n            'written_bytes': (int) written size in bytes,\n            'blobs_completed': (int) number of fully downloaded blobs,\n            'blobs_in_stream': (int) total blobs on stream,\n            'status': (str) downloader status\n            'claim_id': (str) None if claim is not found else the claim id,\n            'outpoint': (str) None if claim is not found else the tx and output,\n            'txid': (str) None if claim is not found else the transaction id,\n            'nout': (int) None if claim is not found else the transaction output index,\n            'metadata': (dict) None if claim is not found else the claim metadata,\n            'channel_claim_id': (str) None if claim is not found or not signed,\n            'channel_name': (str) None if claim is not found or not signed,\n            'claim_name': (str) None if claim is not found else the claim name\n        },\n    ]",
-        "examples": [
-            {
-                "title": "performing file_list operation",
-                "curl": "curl -d'{\"method\": \"file_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  file_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"file_list\"}).json()",
-                "output": "(list) List of files\n\n    [\n        {\n            'completed': (bool) true if download is completed,\n            'file_name': (str) name of file,\n            'download_directory': (str) download directory,\n            'points_paid': (float) credit paid to download file,\n            'stopped': (bool) true if download is stopped,\n            'stream_hash': (str) stream hash of file,\n            'stream_name': (str) stream name ,\n            'suggested_file_name': (str) suggested file name,\n            'sd_hash': (str) sd hash of file,\n            'download_path': (str) download path of file,\n            'mime_type': (str) mime type of file,\n            'key': (str) key attached to file,\n            'total_bytes': (int) file size in bytes,\n            'written_bytes': (int) written size in bytes,\n            'blobs_completed': (int) number of fully downloaded blobs,\n            'blobs_in_stream': (int) total blobs on stream,\n            'status': (str) downloader status\n            'claim_id': (str) None if claim is not found else the claim id,\n            'outpoint': (str) None if claim is not found else the tx and output,\n            'txid': (str) None if claim is not found else the transaction id,\n            'nout': (int) None if claim is not found else the transaction output index,\n            'metadata': (dict) None if claim is not found else the claim metadata,\n            'channel_claim_id': (str) None if claim is not found or not signed,\n            'channel_name': (str) None if claim is not found or not signed,\n            'claim_name': (str) None if claim is not found else the claim name\n        },\n    ]"
-            }
-        ]
+        "returns": "(list) List of files\n\n    [\n        {\n            'completed': (bool) true if download is completed,\n            'file_name': (str) name of file,\n            'download_directory': (str) download directory,\n            'points_paid': (float) credit paid to download file,\n            'stopped': (bool) true if download is stopped,\n            'stream_hash': (str) stream hash of file,\n            'stream_name': (str) stream name ,\n            'suggested_file_name': (str) suggested file name,\n            'sd_hash': (str) sd hash of file,\n            'download_path': (str) download path of file,\n            'mime_type': (str) mime type of file,\n            'key': (str) key attached to file,\n            'total_bytes_lower_bound': (int) lower bound file size in bytes,\n            'total_bytes': (int) file upper bound size in bytes,\n            'written_bytes': (int) written size in bytes,\n            'blobs_completed': (int) number of fully downloaded blobs,\n            'blobs_in_stream': (int) total blobs on stream,\n            'blobs_remaining': (int) total blobs remaining to download,\n            'status': (str) downloader status\n            'claim_id': (str) None if claim is not found else the claim id,\n            'txid': (str) None if claim is not found else the transaction id,\n            'nout': (int) None if claim is not found else the transaction output index,\n            'outpoint': (str) None if claim is not found else the tx and output,\n            'metadata': (dict) None if claim is not found else the claim metadata,\n            'channel_claim_id': (str) None if claim is not found or not signed,\n            'channel_name': (str) None if claim is not found or not signed,\n            'claim_name': (str) None if claim is not found else the claim name\n        },\n    ]\n}",
+        "examples": []
     },
     {
         "name": "file_reflect",
@@ -1371,15 +1056,7 @@
             }
         ],
         "returns": "(list) list of blobs reflected",
-        "examples": [
-            {
-                "title": "performing file_reflect operation",
-                "curl": "curl -d'{\"method\": \"file_reflect\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  file_reflect --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"file_reflect\"}).json()",
-                "output": "(list) list of blobs reflected"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "file_set_status",
@@ -1417,15 +1094,7 @@
             }
         ],
         "returns": "(str) Confirmation message",
-        "examples": [
-            {
-                "title": "performing file_set_status operation",
-                "curl": "curl -d'{\"method\": \"file_set_status\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  file_set_status --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"file_set_status\"}).json()",
-                "output": "(str) Confirmation message"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "get",
@@ -1451,37 +1120,7 @@
             }
         ],
         "returns": "(dict) Dictionary containing information about the stream\n    {\n        'completed': (bool) true if download is completed,\n        'file_name': (str) name of file,\n        'download_directory': (str) download directory,\n        'points_paid': (float) credit paid to download file,\n        'stopped': (bool) true if download is stopped,\n        'stream_hash': (str) stream hash of file,\n        'stream_name': (str) stream name ,\n        'suggested_file_name': (str) suggested file name,\n        'sd_hash': (str) sd hash of file,\n        'download_path': (str) download path of file,\n        'mime_type': (str) mime type of file,\n        'key': (str) key attached to file,\n        'total_bytes': (int) file size in bytes,\n        'written_bytes': (int) written size in bytes,\n        'blobs_completed': (int) number of fully downloaded blobs,\n        'blobs_in_stream': (int) total blobs on stream,\n        'status': (str) downloader status,\n        'claim_id': (str) claim id,\n        'outpoint': (str) claim outpoint string,\n        'txid': (str) claim txid,\n        'nout': (int) claim nout,\n        'metadata': (dict) claim metadata,\n        'channel_claim_id': (str) None if claim is not signed\n        'channel_name': (str) None if claim is not signed\n        'claim_name': (str) claim name\n    }",
-        "examples": [
-            {
-                "title": "performing get operation",
-                "curl": "curl -d'{\"method\": \"get\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  get --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"get\"}).json()",
-                "output": "(dict) Dictionary containing information about the stream\n    {\n        'completed': (bool) true if download is completed,\n        'file_name': (str) name of file,\n        'download_directory': (str) download directory,\n        'points_paid': (float) credit paid to download file,\n        'stopped': (bool) true if download is stopped,\n        'stream_hash': (str) stream hash of file,\n        'stream_name': (str) stream name ,\n        'suggested_file_name': (str) suggested file name,\n        'sd_hash': (str) sd hash of file,\n        'download_path': (str) download path of file,\n        'mime_type': (str) mime type of file,\n        'key': (str) key attached to file,\n        'total_bytes': (int) file size in bytes,\n        'written_bytes': (int) written size in bytes,\n        'blobs_completed': (int) number of fully downloaded blobs,\n        'blobs_in_stream': (int) total blobs on stream,\n        'status': (str) downloader status,\n        'claim_id': (str) claim id,\n        'outpoint': (str) claim outpoint string,\n        'txid': (str) claim txid,\n        'nout': (int) claim nout,\n        'metadata': (dict) claim metadata,\n        'channel_claim_id': (str) None if claim is not signed\n        'channel_name': (str) None if claim is not signed\n        'claim_name': (str) claim name\n    }"
-            }
-        ]
-    },
-    {
-        "name": "help",
-        "description": "Return a useful message for an API command",
-        "arguments": [
-            {
-                "name": "command",
-                "type": "str",
-                "description": "command to retrieve documentation for",
-                "is_required": false
-            }
-        ],
-        "returns": "(str) Help message",
-        "examples": [
-            {
-                "title": "performing help operation",
-                "curl": "curl -d'{\"method\": \"help\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  help --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"help\"}).json()",
-                "output": "(str) Help message"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "peer_list",
@@ -1494,50 +1133,21 @@
                 "is_required": true
             },
             {
-                "name": "timeout",
+                "name": "search_bottom_out_limit",
                 "type": "int",
-                "description": "peer search timeout in seconds",
+                "description": "the number of search probes in a row that don't find any new peers before giving up and returning",
                 "is_required": false
             }
         ],
-        "returns": "(list) List of contact dictionaries {'host': <peer ip>, 'port': <peer port>, 'node_id': <peer node id>}",
-        "examples": [
-            {
-                "title": "performing peer_list operation",
-                "curl": "curl -d'{\"method\": \"peer_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  peer_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"peer_list\"}).json()",
-                "output": "(list) List of contact dictionaries {'host': <peer ip>, 'port': <peer port>, 'node_id': <peer node id>}"
-            }
-        ]
+        "returns": "(list) List of contact dictionaries {'address': <peer ip>, 'udp_port': <dht port>, 'tcp_port': <peer port>,\n     'node_id': <peer node id>}",
+        "examples": []
     },
     {
         "name": "peer_ping",
         "description": "Send a kademlia ping to the specified peer. If address and port are provided the peer is directly pinged,\nif not provided the peer is located first.",
-        "arguments": [
-            {
-                "name": "address",
-                "type": "str",
-                "description": "ip address of the peer",
-                "is_required": false
-            },
-            {
-                "name": "port",
-                "type": "int",
-                "description": "udp port of the peer",
-                "is_required": false
-            }
-        ],
+        "arguments": [],
         "returns": "(str) pong, or {'error': <error message>} if an error is encountered",
-        "examples": [
-            {
-                "title": "performing peer_ping operation",
-                "curl": "curl -d'{\"method\": \"peer_ping\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  peer_ping --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"peer_ping\"}).json()",
-                "output": "(str) pong, or {'error': <error message>} if an error is encountered"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "publish",
@@ -1628,12 +1238,6 @@
                 "is_required": false
             },
             {
-                "name": "sources",
-                "type": "str",
-                "description": "{'lbry_sd_hash': sd_hash} specifies sd hash of file",
-                "is_required": false
-            },
-            {
                 "name": "channel_name",
                 "type": "str",
                 "description": "name of the publisher channel name in the wallet",
@@ -1667,11 +1271,11 @@
         "returns": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (decimal) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }",
         "examples": [
             {
-                "title": "performing publish operation",
-                "curl": "curl -d'{\"method\": \"publish\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  publish --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"publish\"}).json()",
-                "output": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (decimal) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }"
+                "title": "Publish a file.",
+                "curl": "curl -d'{\"method\": \"publish\", \"params\": {\"name\": \"aname\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpwq4kj5mj\", \"channel_account_id\": []}}' http://localhost:5279/",
+                "lbrynet": "lbrynet publish aname 1.0 --file_path=/tmp/tmpwq4kj5mj",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"publish\", \"params\": {\"name\": \"aname\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpwq4kj5mj\", \"channel_account_id\": []}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"claim_address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n    \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n    \"output\": {\n      \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n      \"amount\": \"1.0\",\n      \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"confirmations\": -2,\n      \"height\": -2,\n      \"name\": \"aname\",\n      \"nout\": 0,\n      \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n      \"type\": \"claim\",\n      \"value\": {\n        \"claimType\": \"streamType\",\n        \"stream\": {\n          \"metadata\": {\n            \"author\": \"\",\n            \"description\": \"\",\n            \"language\": \"UNKNOWN_LANGUAGE\",\n            \"license\": \"\",\n            \"licenseUrl\": \"\",\n            \"nsfw\": false,\n            \"preview\": \"\",\n            \"thumbnail\": \"\",\n            \"title\": \"\",\n            \"version\": \"_0_1_0\"\n          },\n          \"source\": {\n            \"contentType\": \"application/octet-stream\",\n            \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n            \"sourceType\": \"lbry_sd_hash\",\n            \"version\": \"_0_0_1\"\n          },\n          \"version\": \"_0_0_1\"\n        },\n        \"version\": \"_0_0_1\"\n      }\n    },\n    \"success\": true,\n    \"tx\": {\n      \"height\": -2,\n      \"hex\": \"0100000001f2f08ba213c41435ba862eac0e65101a43cca5ad57a331c5c5f425560c5e6cb6010000006b483045022100b58743ad6cf3778ecccf92fb3644741883c29fd9c1cd2a375d197e0f713311db02206e90f85f2c5c40a167868c5cb37db5427d3019c3fd078dd5bf16d272cc688535012102ca3bb54f0381e34b202c14d109290667120e52713958c0fd2b0a4b196e20d69cffffffff0200e1f5050000000094b505616e616d654c70080110011a6a08011214080410001a0022002a00320038004a0052005a001a50080110011a30f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa3522186170706c69636174696f6e2f6f637465742d73747265616d6d7576a914de1d82a0d9853c286e7615d2e296006c449738b888acf47c9535000000001976a914feda0f2fce4d40679a0d000dfedbf3c8d5447da388ac00000000\",\n      \"inputs\": [\n        {\n          \"address\": \"mtGNuVUELE6JiGzwL4R5K16AkxRYTKAxd9\",\n          \"amount\": \"10.0\",\n          \"confirmations\": 6,\n          \"height\": 201,\n          \"is_change\": false,\n          \"is_mine\": true,\n          \"nout\": 1,\n          \"txid\": \"b66c5e0c5625f4c5c531a357ada5cc431a10650eac2e86ba3514c413a28bf0f2\"\n        }\n      ],\n      \"outputs\": [\n        {\n          \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n          \"amount\": \"1.0\",\n          \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"confirmations\": -2,\n          \"height\": -2,\n          \"name\": \"aname\",\n          \"nout\": 0,\n          \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n          \"type\": \"claim\",\n          \"value\": {\n            \"claimType\": \"streamType\",\n            \"stream\": {\n              \"metadata\": {\n                \"author\": \"\",\n                \"description\": \"\",\n                \"language\": \"UNKNOWN_LANGUAGE\",\n                \"license\": \"\",\n                \"licenseUrl\": \"\",\n                \"nsfw\": false,\n                \"preview\": \"\",\n                \"thumbnail\": \"\",\n                \"title\": \"\",\n                \"version\": \"_0_1_0\"\n              },\n              \"source\": {\n                \"contentType\": \"application/octet-stream\",\n                \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n                \"sourceType\": \"lbry_sd_hash\",\n                \"version\": \"_0_0_1\"\n              },\n              \"version\": \"_0_0_1\"\n            },\n            \"version\": \"_0_0_1\"\n          }\n        },\n        {\n          \"address\": \"n4kV9oinBqCu8JVea4JrFDKdcFzojcqrXD\",\n          \"amount\": \"8.989893\",\n          \"confirmations\": -2,\n          \"height\": -2,\n          \"nout\": 1,\n          \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\"\n        }\n      ],\n      \"total_fee\": \"0.010107\",\n      \"total_input\": \"10.0\",\n      \"total_output\": \"9.989893\",\n      \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\"\n    }\n  }\n}"
             }
         ]
     },
@@ -1687,271 +1291,56 @@
             }
         ],
         "returns": "(bool) true if successful",
-        "examples": [
-            {
-                "title": "performing report_bug operation",
-                "curl": "curl -d'{\"method\": \"report_bug\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  report_bug --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"report_bug\"}).json()",
-                "output": "(bool) true if successful"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "resolve",
-        "description": "Resolve given LBRY URIs",
+        "description": "Get the claim that a URL refers to.",
         "arguments": [
             {
-                "name": "force",
-                "type": "bool",
-                "description": "force refresh and ignore cache",
-                "is_required": false
-            },
-            {
-                "name": "uri",
-                "type": "str",
-                "description": "uri to resolve",
-                "is_required": true
-            },
-            {
-                "name": "uris",
-                "type": "list",
-                "description": "uris to resolve",
+                "name": "urls",
+                "type": "str, list",
+                "description": "one or more urls to resolve",
                 "is_required": false
             }
         ],
-        "returns": "Dictionary of results, keyed by uri\n    '<uri>': {\n            If a resolution error occurs:\n            'error': Error message\n\n            If the uri resolves to a channel or a claim in a channel:\n            'certificate': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the certificate claim,\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}],\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n\n            If the uri resolves to a channel:\n            'claims_in_channel': (int) number of claims in the channel,\n\n            If the uri resolves to a claim:\n            'claim': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the claim,\n                'channel_name': (str) channel name if claim is in a channel\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}]\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n    }",
-        "examples": [
-            {
-                "title": "performing resolve operation",
-                "curl": "curl -d'{\"method\": \"resolve\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  resolve --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"resolve\"}).json()",
-                "output": "Dictionary of results, keyed by uri\n    '<uri>': {\n            If a resolution error occurs:\n            'error': Error message\n\n            If the uri resolves to a channel or a claim in a channel:\n            'certificate': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the certificate claim,\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}],\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n\n            If the uri resolves to a channel:\n            'claims_in_channel': (int) number of claims in the channel,\n\n            If the uri resolves to a claim:\n            'claim': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the claim,\n                'channel_name': (str) channel name if claim is in a channel\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}]\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n    }"
-            }
-        ]
-    },
-    {
-        "name": "resolve_name",
-        "description": "Resolve stream info from a LBRY name",
-        "arguments": [
-            {
-                "name": "name",
-                "type": "str",
-                "description": "the name to resolve",
-                "is_required": true
-            },
-            {
-                "name": "force",
-                "type": "bool",
-                "description": "force refresh and do not check cache",
-                "is_required": false
-            }
-        ],
-        "returns": "(dict) Metadata dictionary from name claim, None if the name is not\n            resolvable",
-        "examples": [
-            {
-                "title": "performing resolve_name operation",
-                "curl": "curl -d'{\"method\": \"resolve_name\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  resolve_name --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"resolve_name\"}).json()",
-                "output": "(dict) Metadata dictionary from name claim, None if the name is not\n            resolvable"
-            }
-        ]
+        "returns": "Dictionary of results, keyed by url\n    '<url>': {\n            If a resolution error occurs:\n            'error': Error message\n\n            If the url resolves to a channel or a claim in a channel:\n            'certificate': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the certificate claim,\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}],\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n\n            If the url resolves to a channel:\n            'claims_in_channel': (int) number of claims in the channel,\n\n            If the url resolves to a claim:\n            'claim': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the claim,\n                'channel_name': (str) channel name if claim is in a channel\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}]\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n    }",
+        "examples": []
     },
     {
         "name": "routing_table_get",
         "description": "Get DHT routing information",
         "arguments": [],
-        "returns": "(dict) dictionary containing routing and contact information\n    {\n        \"buckets\": {\n            <bucket index>: [\n                {\n                    \"address\": (str) peer address,\n                    \"port\": (int) peer udp port\n                    \"node_id\": (str) peer node id,\n                    \"blobs\": (list) blob hashes announced by peer\n                }\n            ]\n        },\n        \"contacts\": (list) contact node ids,\n        \"blob_hashes\": (list) all of the blob hashes stored by peers in the list of buckets,\n        \"node_id\": (str) the local dht node id\n    }",
-        "examples": [
-            {
-                "title": "performing routing_table_get operation",
-                "curl": "curl -d'{\"method\": \"routing_table_get\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  routing_table_get --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"routing_table_get\"}).json()",
-                "output": "(dict) dictionary containing routing and contact information\n    {\n        \"buckets\": {\n            <bucket index>: [\n                {\n                    \"address\": (str) peer address,\n                    \"port\": (int) peer udp port\n                    \"node_id\": (str) peer node id,\n                    \"blobs\": (list) blob hashes announced by peer\n                }\n            ]\n        },\n        \"contacts\": (list) contact node ids,\n        \"blob_hashes\": (list) all of the blob hashes stored by peers in the list of buckets,\n        \"node_id\": (str) the local dht node id\n    }"
-            }
-        ]
+        "returns": "(dict) dictionary containing routing and peer information\n    {\n        \"buckets\": {\n            <bucket index>: [\n                {\n                    \"address\": (str) peer address,\n                    \"udp_port\": (int) peer udp port,\n                    \"tcp_port\": (int) peer tcp port,\n                    \"node_id\": (str) peer node id,\n                }\n            ]\n        },\n        \"node_id\": (str) the local dht node id\n    }",
+        "examples": []
     },
     {
         "name": "settings_get",
         "description": "Get daemon settings",
         "arguments": [],
         "returns": "(dict) Dictionary of daemon settings\n    See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings",
-        "examples": [
-            {
-                "title": "performing settings_get operation",
-                "curl": "curl -d'{\"method\": \"settings_get\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  settings_get --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"settings_get\"}).json()",
-                "output": "(dict) Dictionary of daemon settings\n    See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "settings_set",
         "description": "Set daemon settings",
-        "arguments": [
-            {
-                "name": "download_directory",
-                "type": "str",
-                "description": "path of download directory",
-                "is_required": false
-            },
-            {
-                "name": "data_rate",
-                "type": "float",
-                "description": "0.0001",
-                "is_required": false
-            },
-            {
-                "name": "download_timeout",
-                "type": "int",
-                "description": "180",
-                "is_required": false
-            },
-            {
-                "name": "peer_port",
-                "type": "int",
-                "description": "3333",
-                "is_required": false
-            },
-            {
-                "name": "max_key_fee",
-                "type": "dict",
-                "description": "maximum key fee for downloads, in the format: { 'currency': <currency_symbol>, 'amount': <amount> }. In the CLI, it must be an escaped JSON string Supported currency symbols: LBC, USD, BTC",
-                "is_required": false
-            },
-            {
-                "name": "disable_max_key_fee",
-                "type": "bool",
-                "description": "False",
-                "is_required": false
-            },
-            {
-                "name": "use_upnp",
-                "type": "bool",
-                "description": "True",
-                "is_required": false
-            },
-            {
-                "name": "run_reflector_server",
-                "type": "bool",
-                "description": "False",
-                "is_required": false
-            },
-            {
-                "name": "cache_time",
-                "type": "int",
-                "description": "150",
-                "is_required": false
-            },
-            {
-                "name": "reflect_uploads",
-                "type": "bool",
-                "description": "True",
-                "is_required": false
-            },
-            {
-                "name": "share_usage_data",
-                "type": "bool",
-                "description": "True",
-                "is_required": false
-            },
-            {
-                "name": "peer_search_timeout",
-                "type": "int",
-                "description": "3",
-                "is_required": false
-            },
-            {
-                "name": "sd_download_timeout",
-                "type": "int",
-                "description": "3",
-                "is_required": false
-            },
-            {
-                "name": "auto_renew_claim_height_delta",
-                "type": "int",
-                "description": "0 claims set to expire within this many blocks will be automatically renewed after startup (if set to 0, renews will not be made automatically)",
-                "is_required": false
-            }
-        ],
+        "arguments": [],
         "returns": "(dict) Updated dictionary of daemon settings",
-        "examples": [
-            {
-                "title": "performing settings_set operation",
-                "curl": "curl -d'{\"method\": \"settings_set\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  settings_set --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"settings_set\"}).json()",
-                "output": "(dict) Updated dictionary of daemon settings"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "status",
         "description": "Get daemon status",
         "arguments": [],
-        "returns": "(dict) lbrynet-daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'is_first_run': bool,\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'database': (bool),\n            'wallet': (bool),\n            'session': (bool),\n            'dht': (bool),\n            'hash_announcer': (bool),\n            'stream_identifier': (bool),\n            'file_manager': (bool),\n            'blob_manager': (bool),\n            'blockchain_headers': (bool),\n            'peer_protocol_server': (bool),\n            'reflector': (bool),\n            'upnp': (bool),\n            'exchange_rate_manager': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_headers': {\n            'downloading_headers': (bool),\n            'download_progress': (float) 0-100.0\n        },\n        'wallet': {\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n            'is_encrypted': (bool),\n            'is_locked': (bool),\n        },\n        'dht': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'blob_manager': {\n            'finished_blobs': (int) number of finished blobs in the blob manager,\n        },\n        'hash_announcer': {\n            'announce_queue_size': (int) number of blobs currently queued to be announced\n        },\n        'file_manager': {\n            'managed_files': (int) count of files in the file manager,\n        },\n        'upnp': {\n            'aioupnp_version': (str),\n            'redirects': {\n                <TCP | UDP>: (int) external_port,\n            },\n            'gateway': (str) manufacturer and model,\n            'dht_redirect_set': (bool),\n            'peer_redirect_set': (bool),\n            'external_ip': (str) external ip address,\n        }\n    }",
-        "examples": [
-            {
-                "title": "performing status operation",
-                "curl": "curl -d'{\"method\": \"status\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  status --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"status\"}).json()",
-                "output": "(dict) lbrynet-daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'is_first_run': bool,\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'database': (bool),\n            'wallet': (bool),\n            'session': (bool),\n            'dht': (bool),\n            'hash_announcer': (bool),\n            'stream_identifier': (bool),\n            'file_manager': (bool),\n            'blob_manager': (bool),\n            'blockchain_headers': (bool),\n            'peer_protocol_server': (bool),\n            'reflector': (bool),\n            'upnp': (bool),\n            'exchange_rate_manager': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_headers': {\n            'downloading_headers': (bool),\n            'download_progress': (float) 0-100.0\n        },\n        'wallet': {\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n            'is_encrypted': (bool),\n            'is_locked': (bool),\n        },\n        'dht': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'blob_manager': {\n            'finished_blobs': (int) number of finished blobs in the blob manager,\n        },\n        'hash_announcer': {\n            'announce_queue_size': (int) number of blobs currently queued to be announced\n        },\n        'file_manager': {\n            'managed_files': (int) count of files in the file manager,\n        },\n        'upnp': {\n            'aioupnp_version': (str),\n            'redirects': {\n                <TCP | UDP>: (int) external_port,\n            },\n            'gateway': (str) manufacturer and model,\n            'dht_redirect_set': (bool),\n            'peer_redirect_set': (bool),\n            'external_ip': (str) external ip address,\n        }\n    }"
-            }
-        ]
+        "returns": "(dict) lbrynet-daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'blob_manager': (bool),\n            'blockchain_headers': (bool),\n            'database': (bool),\n            'dht': (bool),\n            'exchange_rate_manager': (bool),\n            'hash_announcer': (bool),\n            'peer_protocol_server': (bool),\n            'stream_manager': (bool),\n            'upnp': (bool),\n            'wallet': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_headers': {\n            'downloading_headers': (bool),\n            'download_progress': (float) 0-100.0\n        },\n        'wallet': {\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n            'is_encrypted': (bool),\n            'is_locked': (bool),\n        },\n        'dht': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'blob_manager': {\n            'finished_blobs': (int) number of finished blobs in the blob manager,\n        },\n        'hash_announcer': {\n            'announce_queue_size': (int) number of blobs currently queued to be announced\n        },\n        'stream_manager': {\n            'managed_files': (int) count of files in the stream manager,\n        },\n        'upnp': {\n            'aioupnp_version': (str),\n            'redirects': {\n                <TCP | UDP>: (int) external_port,\n            },\n            'gateway': (str) manufacturer and model,\n            'dht_redirect_set': (bool),\n            'peer_redirect_set': (bool),\n            'external_ip': (str) external ip address,\n        }\n    }",
+        "examples": []
     },
     {
         "name": "stop",
-        "description": "Stop lbrynet",
+        "description": "Stop lbrynet API server.",
         "arguments": [],
         "returns": "(string) Shutdown message",
-        "examples": [
-            {
-                "title": "performing stop operation",
-                "curl": "curl -d'{\"method\": \"stop\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  stop --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stop\"}).json()",
-                "output": "(string) Shutdown message"
-            }
-        ]
-    },
-    {
-        "name": "stream_availability",
-        "description": "Get stream availability for lbry uri",
-        "arguments": [
-            {
-                "name": "uri",
-                "type": "str",
-                "description": "check availability for this uri",
-                "is_required": true
-            },
-            {
-                "name": "search_timeout",
-                "type": "int",
-                "description": "how long to search for peers for the blob in the dht",
-                "is_required": false
-            },
-            {
-                "name": "blob_timeout",
-                "type": "int",
-                "description": "how long to try downloading from a peer",
-                "is_required": false
-            }
-        ],
-        "returns": "(dict) {\n        'is_available': <bool>,\n        'did_decode': <bool>,\n        'did_resolve': <bool>,\n        'is_stream': <bool>,\n        'num_blobs_in_stream': <int>,\n        'sd_hash': <str>,\n        'sd_blob_availability': <dict> see `blob_availability`,\n        'head_blob_hash': <str>,\n        'head_blob_availability': <dict> see `blob_availability`,\n        'use_upnp': <bool>,\n        'upnp_redirect_is_set': <bool>,\n        'error': <None> | <str> error message\n    }",
-        "examples": [
-            {
-                "title": "performing stream_availability operation",
-                "curl": "curl -d'{\"method\": \"stream_availability\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  stream_availability --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stream_availability\"}).json()",
-                "output": "(dict) {\n        'is_available': <bool>,\n        'did_decode': <bool>,\n        'did_resolve': <bool>,\n        'is_stream': <bool>,\n        'num_blobs_in_stream': <int>,\n        'sd_hash': <str>,\n        'sd_blob_availability': <dict> see `blob_availability`,\n        'head_blob_hash': <str>,\n        'head_blob_availability': <dict> see `blob_availability`,\n        'use_upnp': <bool>,\n        'upnp_redirect_is_set': <bool>,\n        'error': <None> | <str> error message\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "stream_cost_estimate",
@@ -1962,24 +1351,10 @@
                 "type": "str",
                 "description": "uri to use",
                 "is_required": true
-            },
-            {
-                "name": "size",
-                "type": "float",
-                "description": "stream size in bytes. if provided an sd blob won't be downloaded.",
-                "is_required": false
             }
         ],
         "returns": "(float) Estimated cost in lbry credits, returns None if uri is not\n        resolvable",
-        "examples": [
-            {
-                "title": "performing stream_cost_estimate operation",
-                "curl": "curl -d'{\"method\": \"stream_cost_estimate\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  stream_cost_estimate --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stream_cost_estimate\"}).json()",
-                "output": "(float) Estimated cost in lbry credits, returns None if uri is not\n        resolvable"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "transaction_list",
@@ -2005,15 +1380,7 @@
             }
         ],
         "returns": "(list) List of transactions\n\n    {\n        \"claim_info\": (list) claim info if in txn [{\n                                                \"address\": (str) address of claim,\n                                                \"balance_delta\": (float) bid amount,\n                                                \"amount\": (float) claim amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"abandon_info\": (list) abandon info if in txn [{\n                                                \"address\": (str) address of abandoned claim,\n                                                \"balance_delta\": (float) returned amount,\n                                                \"amount\": (float) claim amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"confirmations\": (int) number of confirmations for the txn,\n        \"date\": (str) date and time of txn,\n        \"fee\": (float) txn fee,\n        \"support_info\": (list) support info if in txn [{\n                                                \"address\": (str) address of support,\n                                                \"balance_delta\": (float) support amount,\n                                                \"amount\": (float) support amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"is_tip\": (bool),\n                                                \"nout\": (int) nout\n                                                }],\n        \"timestamp\": (int) timestamp,\n        \"txid\": (str) txn id,\n        \"update_info\": (list) update info if in txn [{\n                                                \"address\": (str) address of claim,\n                                                \"balance_delta\": (float) credited/debited\n                                                \"amount\": (float) absolute amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"value\": (float) value of txn\n    }",
-        "examples": [
-            {
-                "title": "performing transaction_list operation",
-                "curl": "curl -d'{\"method\": \"transaction_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  transaction_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"transaction_list\"}).json()",
-                "output": "(list) List of transactions\n\n    {\n        \"claim_info\": (list) claim info if in txn [{\n                                                \"address\": (str) address of claim,\n                                                \"balance_delta\": (float) bid amount,\n                                                \"amount\": (float) claim amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"abandon_info\": (list) abandon info if in txn [{\n                                                \"address\": (str) address of abandoned claim,\n                                                \"balance_delta\": (float) returned amount,\n                                                \"amount\": (float) claim amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"confirmations\": (int) number of confirmations for the txn,\n        \"date\": (str) date and time of txn,\n        \"fee\": (float) txn fee,\n        \"support_info\": (list) support info if in txn [{\n                                                \"address\": (str) address of support,\n                                                \"balance_delta\": (float) support amount,\n                                                \"amount\": (float) support amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"is_tip\": (bool),\n                                                \"nout\": (int) nout\n                                                }],\n        \"timestamp\": (int) timestamp,\n        \"txid\": (str) txn id,\n        \"update_info\": (list) update info if in txn [{\n                                                \"address\": (str) address of claim,\n                                                \"balance_delta\": (float) credited/debited\n                                                \"amount\": (float) absolute amount,\n                                                \"claim_id\": (str) claim id,\n                                                \"claim_name\": (str) claim name,\n                                                \"nout\": (int) nout\n                                                }],\n        \"value\": (float) value of txn\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "transaction_show",
@@ -2027,15 +1394,7 @@
             }
         ],
         "returns": "(dict) JSON formatted transaction",
-        "examples": [
-            {
-                "title": "performing transaction_show operation",
-                "curl": "curl -d'{\"method\": \"transaction_show\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  transaction_show --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"transaction_show\"}).json()",
-                "output": "(dict) JSON formatted transaction"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "utxo_list",
@@ -2061,15 +1420,7 @@
             }
         ],
         "returns": "(list) List of unspent transaction outputs (UTXOs)\n    [\n        {\n            \"address\": (str) the output address\n            \"amount\": (float) unspent amount\n            \"height\": (int) block height\n            \"is_claim\": (bool) is the tx a claim\n            \"is_coinbase\": (bool) is the tx a coinbase tx\n            \"is_support\": (bool) is the tx a support\n            \"is_update\": (bool) is the tx an update\n            \"nout\": (int) nout of the output\n            \"txid\": (str) txid of the output\n        },\n        ...\n    ]",
-        "examples": [
-            {
-                "title": "performing utxo_list operation",
-                "curl": "curl -d'{\"method\": \"utxo_list\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  utxo_list --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"utxo_list\"}).json()",
-                "output": "(list) List of unspent transaction outputs (UTXOs)\n    [\n        {\n            \"address\": (str) the output address\n            \"amount\": (float) unspent amount\n            \"height\": (int) block height\n            \"is_claim\": (bool) is the tx a claim\n            \"is_coinbase\": (bool) is the tx a coinbase tx\n            \"is_support\": (bool) is the tx a support\n            \"is_update\": (bool) is the tx an update\n            \"nout\": (int) nout of the output\n            \"txid\": (str) txid of the output\n        },\n        ...\n    ]"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "utxo_release",
@@ -2083,30 +1434,14 @@
             }
         ],
         "returns": "None",
-        "examples": [
-            {
-                "title": "performing utxo_release operation",
-                "curl": "curl -d'{\"method\": \"utxo_release\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  utxo_release --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"utxo_release\"}).json()",
-                "output": "None"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "version",
-        "description": "Get lbry version information",
+        "description": "Get lbrynet API server version information",
         "arguments": [],
         "returns": "(dict) Dictionary of lbry version information\n    {\n        'build': (str) build type (e.g. \"dev\", \"rc\", \"release\"),\n        'ip': (str) remote ip, if available,\n        'lbrynet_version': (str) lbrynet_version,\n        'lbryum_version': (str) lbryum_version,\n        'lbryschema_version': (str) lbryschema_version,\n        'os_release': (str) os release string\n        'os_system': (str) os name\n        'platform': (str) platform string\n        'processor': (str) processor type,\n        'python_version': (str) python version,\n    }",
-        "examples": [
-            {
-                "title": "performing version operation",
-                "curl": "curl -d'{\"method\": \"version\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  version --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"version\"}).json()",
-                "output": "(dict) Dictionary of lbry version information\n    {\n        'build': (str) build type (e.g. \"dev\", \"rc\", \"release\"),\n        'ip': (str) remote ip, if available,\n        'lbrynet_version': (str) lbrynet_version,\n        'lbryum_version': (str) lbryum_version,\n        'lbryschema_version': (str) lbryschema_version,\n        'os_release': (str) os release string\n        'os_system': (str) os name\n        'platform': (str) platform string\n        'processor': (str) processor type,\n        'python_version': (str) python version,\n    }"
-            }
-        ]
+        "examples": []
     },
     {
         "name": "wallet_send",
@@ -2138,14 +1473,6 @@
             }
         ],
         "returns": "If sending to an address:\n    (dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }\n\n    If sending a claim tip:\n    (dict) Dictionary containing the result of the support\n    {\n        txid : (str) txid of resulting support claim\n        nout : (int) nout of the resulting support claim\n        fee : (float) fee paid for the transaction\n    }",
-        "examples": [
-            {
-                "title": "performing wallet_send operation",
-                "curl": "curl -d'{\"method\": \"wallet_send\"}' http://localhost:5279/",
-                "lbrynet": "lbrynet  wallet_send --some-arg=foo",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"wallet_send\"}).json()",
-                "output": "If sending to an address:\n    (dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }\n\n    If sending a claim tip:\n    (dict) Dictionary containing the result of the support\n    {\n        txid : (str) txid of resulting support claim\n        nout : (int) nout of the resulting support claim\n        fee : (float) fee paid for the transaction\n    }"
-            }
-        ]
+        "examples": []
     }
 ]

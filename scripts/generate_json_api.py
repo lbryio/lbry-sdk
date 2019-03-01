@@ -2,7 +2,80 @@ import os
 import re
 import json
 import inspect
-from lbrynet.extras.daemon.Daemon import Daemon
+import tempfile
+from docopt import docopt
+from lbrynet.extras.cli import set_kwargs, get_argument_parser
+from lbrynet.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
+from lbrynet.testcase import CommandTestCase
+
+
+class ExampleRecorder:
+    def __init__(self, test):
+        self.test = test
+        self.examples = {}
+
+    async def __call__(self, title, *command):
+        parser = get_argument_parser()
+        args, command_args = parser.parse_known_args(command)
+
+        api_method_name = args.api_method_name
+        parsed = docopt(args.doc, command_args)
+        kwargs = set_kwargs(parsed)
+        params = json.dumps({"method": api_method_name, "params": kwargs})
+
+        method = getattr(self.test.daemon, f'jsonrpc_{api_method_name}')
+        output = jsonrpc_dumps_pretty(await method(**kwargs), ledger=self.test.daemon.ledger)
+        self.examples.setdefault(api_method_name, []).append({
+            'title': title,
+            'curl': f"curl -d'{params}' http://localhost:5279/",
+            'lbrynet': 'lbrynet ' + ' '.join(command),
+            'python': f'requests.post("http://localhost:5279", json={params}).json()',
+            'output': output.strip()
+        })
+        return json.loads(output)['result']
+
+
+class Examples(CommandTestCase):
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.recorder = ExampleRecorder(self)
+
+    async def play(self):
+        r = self.recorder
+
+        await r(
+            'List your accounts.',
+            'account', 'list'
+        )
+
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hello world')
+            file.flush()
+            claim = await r(
+                'Publish a file.',
+                'publish', 'aname', '1.0', f'--file_path={file.name}'
+            )
+            self.assertTrue(claim['success'])
+            await self.on_transaction_dict(claim['tx'])
+            await self.generate(1)
+            await self.on_transaction_dict(claim['tx'])
+
+        await r(
+            'List your claims.',
+            'claim', 'list_mine'
+        )
+
+        await r(
+            'Abandon a published file.',
+            'claim', 'abandon', claim['claim_id']
+        )
+
+
+def get_examples():
+    player = Examples('play')
+    player.run()
+    return player.recorder.examples
 
 
 SECTIONS = re.compile("(.*?)Usage:(.*?)Options:(.*?)Returns:(.*)", re.DOTALL)
@@ -11,7 +84,8 @@ ARGUMENT_NAME = re.compile("--([^=]+)")
 ARGUMENT_TYPE = re.compile("\s*\((.*?)\)(.*)")
 
 
-def get_api(obj):
+def get_api(name, examples):
+    obj = Daemon.callable_methods[name]
     docstr = inspect.getdoc(obj).strip()
 
     try:
@@ -44,27 +118,23 @@ def get_api(obj):
     for arg in arguments:
         arg['description'] = ' '.join(arg['description'])
 
-    name = obj.__name__[len('jsonrpc_'):]
-
     return {
         'name': name,
         'description': description.strip(),
         'arguments': arguments,
         'returns': returns.strip(),
-        'examples': [{
-            'title': f"performing {name} operation",
-            'curl': f"""curl -d'{{"method": "{name}"}}' http://localhost:5279/""",
-            'lbrynet': f'lbrynet  {name} --some-arg=foo',
-            'python': f'requests.post("http://localhost:5279", json={{"method": "{name}"}}).json()',
-            'output': returns.strip()
-        }]
+        'examples': examples
     }
 
 
 def write_api(f):
+    examples = get_examples()
     apis = []
     for method_name in sorted(Daemon.callable_methods.keys()):
-        apis.append(get_api(Daemon.callable_methods[method_name]))
+        apis.append(get_api(
+            method_name,
+            examples.get(method_name, [])
+        ))
     json.dump(apis, f, indent=4)
 
 
