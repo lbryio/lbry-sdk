@@ -281,9 +281,9 @@ class StreamManager:
                 await stream.downloader.stream_finished_event.wait()
                 stream.update_status(ManagedStream.STATUS_FINISHED)
                 if self.analytics_manager:
-                    await self.analytics_manager.send_download_finished(
+                    self.loop.create_task(self.analytics_manager.send_download_finished(
                         stream.download_id, stream.claim_name, stream.sd_hash
-                    )
+                    ))
 
         task = self.loop.create_task(_wait_for_stream_finished())
         self.update_stream_finished_futs.append(task)
@@ -464,9 +464,9 @@ class StreamManager:
                 )
                 log.info("started new stream, deleting old one")
                 if self.analytics_manager:
-                    await self.analytics_manager.send_download_started(
+                    self.loop.create_task(self.analytics_manager.send_download_started(
                         stream.download_id, parsed_uri.name, claim.source_hash.decode()
-                    )
+                    ))
                 await self.delete_stream(existing[0])
                 return stream
             elif existing:
@@ -483,9 +483,9 @@ class StreamManager:
             self.node, resolved, file_name, timeout, fee_amount, fee_address
         )
         if self.analytics_manager:
-            await self.analytics_manager.send_download_started(
+            self.loop.create_task(self.analytics_manager.send_download_started(
                 stream.download_id, parsed_uri.name, claim.source_hash.decode()
-            )
+            ))
         return stream
 
     async def download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
