@@ -3,10 +3,13 @@ import binascii
 from unittest import mock
 import asyncio
 import time
+import typing
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
-from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed
+from lbrynet.utils import generate_id
+from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout
 from lbrynet.extras.wallet.manager import LbryWalletManager
+from lbrynet.extras.daemon.analytics import AnalyticsManager
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.dht.node import Node
@@ -102,11 +105,22 @@ class TestStreamManager(BlobExchangeTestBase):
         self.sd_hash = descriptor.sd_hash
         self.mock_wallet, self.uri = get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
         self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
-                                            self.client_storage, get_mock_node(self.server_from_client))
+                                            self.client_storage, get_mock_node(self.server_from_client),
+                                            AnalyticsManager(self.client_config,
+                                                             binascii.hexlify(generate_id()).decode(),
+                                                             binascii.hexlify(generate_id()).decode()))
         self.exchange_rate_manager = get_dummy_exchange_rate_manager(time)
 
     async def test_download_stop_resume_delete(self):
         await self.setup_stream_manager()
+        received = []
+        expected_events = ['Download Started', 'Download Finished']
+
+        async def check_post(event):
+            received.append(event['event'])
+
+        self.stream_manager.analytics_manager._post = check_post
+
         self.assertSetEqual(self.stream_manager.streams, set())
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
         stream_hash = stream.stream_hash
@@ -147,6 +161,20 @@ class TestStreamManager(BlobExchangeTestBase):
             "select status from file where stream_hash=?", stream_hash
         )
         self.assertEqual(stored_status, None)
+        self.assertListEqual(expected_events, received)
+
+    async def _test_download_error(self, expected_error):
+        received = []
+
+        async def check_post(event):
+            self.assertEqual("Download Errored", event['event'])
+            received.append(event['properties']['error'])
+
+        self.stream_manager.analytics_manager._post = check_post
+
+        with self.assertRaises(expected_error):
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        self.assertListEqual([expected_error.__name__], received)
 
     async def test_insufficient_funds(self):
         fee = {
@@ -156,8 +184,7 @@ class TestStreamManager(BlobExchangeTestBase):
             'version': '_0_0_1'
         }
         await self.setup_stream_manager(10.0, fee)
-        with self.assertRaises(InsufficientFundsError):
-            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await self._test_download_error(InsufficientFundsError)
 
     async def test_fee_above_max_allowed(self):
         fee = {
@@ -167,11 +194,32 @@ class TestStreamManager(BlobExchangeTestBase):
             'version': '_0_0_1'
         }
         await self.setup_stream_manager(1000000.0, fee)
-        with self.assertRaises(KeyFeeAboveMaxAllowed):
-            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await self._test_download_error(KeyFeeAboveMaxAllowed)
+
+    async def test_resolve_error(self):
+        await self.setup_stream_manager()
+        self.uri = "fake"
+        await self._test_download_error(ResolveError)
+
+    async def test_download_timeout(self):
+        self.server.stop_server()
+        self.client_config.download_timeout = 1.0
+        await self.setup_stream_manager()
+        await self._test_download_error(DownloadSDTimeout)
 
     async def test_download_then_recover_stream_on_startup(self, old_sort=False):
+        expected_analytics_events = [
+            'Download Started',
+            'Download Finished'
+        ]
+        received_events = []
+
+        async def check_post(event):
+            received_events.append(event['event'])
+
         await self.setup_stream_manager(old_sort=old_sort)
+        self.stream_manager.analytics_manager._post = check_post
+
         self.assertSetEqual(self.stream_manager.streams, set())
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
         await stream.downloader.stream_finished_event.wait()
@@ -189,6 +237,7 @@ class TestStreamManager(BlobExchangeTestBase):
         sd_blob = self.client_blob_manager.get_blob(stream.sd_hash)
         self.assertTrue(sd_blob.file_exists)
         self.assertTrue(sd_blob.get_is_verified())
+        self.assertListEqual(expected_analytics_events, received_events)
 
     def test_download_then_recover_old_sort_stream_on_startup(self):
         return self.test_download_then_recover_stream_on_startup(old_sort=True)

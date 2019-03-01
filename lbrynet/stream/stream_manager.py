@@ -17,6 +17,7 @@ if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.node import Node
+    from lbrynet.extras.daemon.analytics import AnalyticsManager
     from lbrynet.extras.daemon.storage import SQLiteStorage, StoredStreamClaim
     from lbrynet.extras.wallet import LbryWalletManager
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
@@ -54,13 +55,15 @@ comparison_operators = {
 
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobFileManager',
-                 wallet: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node']):
+                 wallet: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node'],
+                 analytics_manager: typing.Optional['AnalyticsManager'] = None):
         self.loop = loop
         self.config = config
         self.blob_manager = blob_manager
         self.wallet = wallet
         self.storage = storage
         self.node = node
+        self.analytics_manager = analytics_manager
         self.streams: typing.Set[ManagedStream] = set()
         self.starting_streams: typing.Dict[str, asyncio.Future] = {}
         self.resume_downloading_task: asyncio.Task = None
@@ -277,6 +280,11 @@ class StreamManager:
             if stream.downloader and stream.running:
                 await stream.downloader.stream_finished_event.wait()
                 stream.update_status(ManagedStream.STATUS_FINISHED)
+                if self.analytics_manager:
+                    self.loop.create_task(self.analytics_manager.send_download_finished(
+                        stream.download_id, stream.claim_name, stream.sd_hash
+                    ))
+
         task = self.loop.create_task(_wait_for_stream_finished())
         self.update_stream_finished_futs.append(task)
         task.add_done_callback(
@@ -403,9 +411,9 @@ class StreamManager:
                 streams.reverse()
         return streams
 
-    async def download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
-                                       file_name: typing.Optional[str] = None,
-                                       timeout: typing.Optional[float] = None) -> typing.Optional[ManagedStream]:
+    async def _download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
+                                        file_name: typing.Optional[str] = None,
+                                        timeout: typing.Optional[float] = None) -> typing.Optional[ManagedStream]:
         timeout = timeout or self.config.download_timeout
         parsed_uri = parse_lbry_uri(uri)
         if parsed_uri.is_channel:
@@ -455,6 +463,10 @@ class StreamManager:
                     self.node, resolved, file_name, timeout, fee_amount, fee_address, False
                 )
                 log.info("started new stream, deleting old one")
+                if self.analytics_manager:
+                    self.loop.create_task(self.analytics_manager.send_download_started(
+                        stream.download_id, parsed_uri.name, claim.source_hash.decode()
+                    ))
                 await self.delete_stream(existing[0])
                 return stream
             elif existing:
@@ -467,6 +479,21 @@ class StreamManager:
             await self.start_stream(stream)
             return stream
         log.info("download stream from %s", uri)
-        return await self.download_stream_from_claim(
-                self.node, resolved, file_name, timeout, fee_amount, fee_address
+        stream = await self.download_stream_from_claim(
+            self.node, resolved, file_name, timeout, fee_amount, fee_address
         )
+        if self.analytics_manager:
+            self.loop.create_task(self.analytics_manager.send_download_started(
+                stream.download_id, parsed_uri.name, claim.source_hash.decode()
+            ))
+        return stream
+
+    async def download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
+                                       file_name: typing.Optional[str] = None,
+                                       timeout: typing.Optional[float] = None) -> typing.Optional[ManagedStream]:
+        try:
+            return await self._download_stream_from_uri(uri, exchange_rate_manager, file_name, timeout)
+        except Exception as e:
+            if self.analytics_manager:
+                await self.analytics_manager.send_download_errored(e, uri)
+            raise e

@@ -441,7 +441,7 @@ class StreamManagerComponent(Component):
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
         self.stream_manager = StreamManager(
-            loop, self.conf, blob_manager, wallet, storage, node,
+            loop, self.conf, blob_manager, wallet, storage, node, self.component_manager.analytics_manager
         )
         await self.stream_manager.start()
         log.info('Done setting up file manager')
