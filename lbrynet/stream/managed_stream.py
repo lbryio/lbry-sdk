@@ -3,6 +3,7 @@ import asyncio
 import typing
 import logging
 import binascii
+from lbrynet.utils import generate_id
 from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
@@ -35,8 +36,10 @@ class ManagedStream:
         self.stream_hash = descriptor.stream_hash
         self.stream_claim_info = claim
         self._status = status
+
         self.fully_reflected = asyncio.Event(loop=self.loop)
         self.tx = None
+        self.download_id = binascii.hexlify(generate_id()).decode()
 
     @property
     def file_name(self) -> typing.Optional[str]:

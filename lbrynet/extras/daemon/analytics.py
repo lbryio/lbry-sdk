@@ -1,9 +1,9 @@
 import asyncio
 import collections
 import logging
-
 import aiohttp
-
+import typing
+import binascii
 from lbrynet import utils
 from lbrynet.conf import Config
 from lbrynet.extras import system_info
@@ -22,7 +22,6 @@ HEARTBEAT = 'Heartbeat'
 CLAIM_ACTION = 'Claim Action'  # publish/create/update/abandon
 NEW_CHANNEL = 'New Channel'
 CREDITS_SENT = 'Credits Sent'
-NEW_DOWNLOAD_STAT = 'Download'
 UPNP_SETUP = "UPnP Setup"
 
 BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
@@ -30,7 +29,46 @@ BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 log = logging.getLogger(__name__)
 
 
-class Manager:
+def _event_properties(installation_id: str, session_id: str,
+                      event_properties: typing.Optional[typing.Dict]) -> typing.Dict:
+    properties = {
+        'lbry_id': installation_id,
+        'session_id': session_id,
+    }
+    properties.update(event_properties or {})
+    return properties
+
+
+def _download_properties(download_id: str, name: str, sd_hash: str) -> typing.Dict:
+    p = {
+        'download_id': download_id,
+        'name': name,
+        'stream_info': sd_hash
+    }
+    return p
+
+
+def _make_context(platform):
+    # see https://segment.com/docs/spec/common/#context
+    # they say they'll ignore fields outside the spec, but evidently they don't
+    context = {
+        'app': {
+            'version': platform['lbrynet_version'],
+            'build': platform['build'],
+        },
+        # TODO: expand os info to give linux/osx specific info
+        'os': {
+            'name': platform['os_system'],
+            'version': platform['os_release']
+        },
+    }
+    if 'desktop' in platform and 'distro' in platform:
+        context['os']['desktop'] = platform['desktop']
+        context['os']['distro'] = platform['distro']
+    return context
+
+
+class AnalyticsManager:
 
     def __init__(self, conf: Config, installation_id: str, session_id: str):
         self.cookies = {}
@@ -38,7 +76,7 @@ class Manager:
         self._write_key = utils.deobfuscate(ANALYTICS_TOKEN)
         self._enabled = conf.share_usage_data
         self._tracked_data = collections.defaultdict(list)
-        self.context = self._make_context(system_info.get_platform(), 'torba')
+        self.context = _make_context(system_info.get_platform())
         self.installation_id = installation_id
         self.session_id = session_id
         self.task: asyncio.Task = None
@@ -60,21 +98,10 @@ class Manager:
         if self.task is not None and not self.task.done():
             self.task.cancel()
 
-    async def _post(self, endpoint, data):
-        # there is an issue with a timing condition with keep-alive
-        # that is best explained here: https://github.com/mikem23/keepalive-race
-        #
-        #   If you make a request, wait just the right amount of time,
-        #   then make another request, the requests module may opt to
-        #   reuse the connection, but by the time the server gets it the
-        #   timeout will have expired.
-        #
-        # by forcing the connection to close, we will disable the keep-alive.
-
-        assert endpoint[0] == '/'
+    async def _post(self, data: typing.Dict):
         request_kwargs = {
             'method': 'POST',
-            'url': self.url + endpoint,
+            'url': self.url + '/track',
             'headers': {'Connection': 'Close'},
             'auth': aiohttp.BasicAuth(self._write_key, ''),
             'json': data,
@@ -84,40 +111,13 @@ class Manager:
             async with utils.aiohttp_request(**request_kwargs) as response:
                 self.cookies.update(response.cookies)
         except Exception as e:
-            log.exception('Encountered an exception while POSTing to %s: ', self.url + endpoint, exc_info=e)
+            log.exception('Encountered an exception while POSTing to %s: ', self.url + '/track', exc_info=e)
 
-    async def track(self, event):
+    async def track(self, event: typing.Dict):
         """Send a single tracking event"""
         if self._enabled:
-            log.debug('Sending track event: %s', event)
-            await self._post('/track', event)
-
-    async def send_new_download_start(self, download_id, name, claim_dict):
-        await self._send_new_download_stats("start", download_id, name, claim_dict)
-
-    async def send_new_download_success(self, download_id, name, claim_dict):
-        await self._send_new_download_stats("success", download_id, name, claim_dict)
-
-    async def send_new_download_fail(self, download_id, name, claim_dict, e):
-        await self._send_new_download_stats("failure", download_id, name, claim_dict, {
-            'name': type(e).__name__ if hasattr(type(e), "__name__") else str(type(e)),
-            'message': str(e),
-        })
-
-    async def _send_new_download_stats(self, action, download_id, name, claim_dict, e=None):
-        await self.track({
-            'userId': 'lbry',  # required, see https://segment.com/docs/sources/server/http/#track
-            'event': NEW_DOWNLOAD_STAT,
-            'properties': self._event_properties({
-                'download_id': download_id,
-                'name': name,
-                'sd_hash': None if not claim_dict else claim_dict.source_hash.decode(),
-                'action': action,
-                'error': e,
-            }),
-            'context': self.context,
-            'timestamp': utils.isonow(),
-        })
+            log.info('Sending track event: %s', event)
+            await self._post(event)
 
     async def send_upnp_setup_success_fail(self, success, status):
         await self.track(
@@ -136,19 +136,23 @@ class Manager:
     async def send_server_startup_error(self, message):
         await self.track(self._event(SERVER_STARTUP_ERROR, {'message': message}))
 
-    async def send_download_started(self, id_, name, claim_dict=None):
+    async def send_download_started(self, download_id, name, sd_hash):
         await self.track(
-            self._event(DOWNLOAD_STARTED, self._download_properties(id_, name, claim_dict))
+            self._event(DOWNLOAD_STARTED, _download_properties(download_id, name, sd_hash))
         )
 
-    async def send_download_errored(self, err, id_, name, claim_dict, report):
-        download_error_properties = self._download_error_properties(err, id_, name, claim_dict,
-                                                                    report)
-        await self.track(self._event(DOWNLOAD_ERRORED, download_error_properties))
+    async def send_download_finished(self, download_id, name, sd_hash):
+        await self.track(self._event(DOWNLOAD_FINISHED, _download_properties(download_id, name, sd_hash)))
 
-    async def send_download_finished(self, id_, name, report, claim_dict=None):
-        download_properties = self._download_properties(id_, name, claim_dict, report)
-        await self.track(self._event(DOWNLOAD_FINISHED, download_properties))
+    async def send_download_errored(self, error: Exception, name: str):
+        await self.track(self._event(DOWNLOAD_ERRORED, {
+            'download_id': binascii.hexlify(utils.generate_id()).decode(),
+            'name': name,
+            'stream_info': None,
+            'error': type(error).__name__,
+            'reason': str(error),
+            'report': None
+        }))
 
     async def send_claim_action(self, action):
         await self.track(self._event(CLAIM_ACTION, {'action': action}))
@@ -162,69 +166,11 @@ class Manager:
     async def _send_heartbeat(self):
         await self.track(self._event(HEARTBEAT))
 
-    def _event(self, event, event_properties=None):
+    def _event(self, event, properties: typing.Optional[typing.Dict] = None):
         return {
             'userId': 'lbry',
             'event': event,
-            'properties': self._event_properties(event_properties),
+            'properties': _event_properties(self.installation_id, self.session_id, properties),
             'context': self.context,
             'timestamp': utils.isonow()
         }
-
-    def _metric_event(self, metric_name, value):
-        return self._event(metric_name, {'value': value})
-
-    def _event_properties(self, event_properties=None):
-        properties = {
-            'lbry_id': self.installation_id,
-            'session_id': self.session_id,
-        }
-        properties.update(event_properties or {})
-        return properties
-
-    @staticmethod
-    def _download_properties(id_, name, claim_dict=None, report=None):
-        sd_hash = None if not claim_dict else claim_dict.source_hash.decode()
-        p = {
-            'download_id': id_,
-            'name': name,
-            'stream_info': sd_hash
-        }
-        if report:
-            p['report'] = report
-        return p
-
-    @staticmethod
-    def _download_error_properties(error, id_, name, claim_dict, report):
-        def error_name(err):
-            if not hasattr(type(err), "__name__"):
-                return str(type(err))
-            return type(err).__name__
-        return {
-            'download_id': id_,
-            'name': name,
-            'stream_info': claim_dict.source_hash.decode(),
-            'error': error_name(error),
-            'reason': str(error),
-            'report': report
-        }
-
-    @staticmethod
-    def _make_context(platform, wallet):
-        # see https://segment.com/docs/spec/common/#context
-        # they say they'll ignore fields outside the spec, but evidently they don't
-        context = {
-            'app': {
-                'version': platform['lbrynet_version'],
-                'build': platform['build'],
-            },
-            # TODO: expand os info to give linux/osx specific info
-            'os': {
-                'name': platform['os_system'],
-                'version': platform['os_release']
-            },
-        }
-        if 'desktop' in platform and 'distro' in platform:
-            context['os']['desktop'] = platform['desktop']
-            context['os']['distro'] = platform['distro']
-        return context
