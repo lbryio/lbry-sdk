@@ -7,6 +7,18 @@ from lbrynet.schema.legacy.migrate import migrate as schema_migrator
 from lbrynet.schema.claim import ClaimDict
 
 
+def migrate_legacy_protobuf(old_proto_bytes: bytes):
+    # TODO: where to put this?
+    from lbrynet.schema.proto2.legacy_claim_pb2 import Claim as OldClaimPB
+    from google.protobuf import json_format  # pylint: disable=no-name-in-module
+    from lbrynet.schema.encoding import decode_b64_fields
+    from lbrynet.schema.current_schema.claim import Claim as CurrentClaim
+    old_msg = OldClaimPB()
+    old_msg.ParseFromString(old_proto_bytes)
+    old_json = json.loads(json_format.MessageToJson(old_msg, True))
+    return CurrentClaim.load(decode_b64_fields(old_json))
+
+
 
 def migrate_json_claim_value(decoded_json):
     try:

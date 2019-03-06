@@ -17,10 +17,10 @@ from . import certificate_pb2 as certificate__pb2
 
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='signature.proto',
-  package='pb',
+  package='legacy_pb',
   syntax='proto2',
   serialized_options=None,
-  serialized_pb=_b('\n\x0fsignature.proto\x12\x02pb\x1a\x11\x63\x65rtificate.proto\"\xad\x01\n\tSignature\x12&\n\x07version\x18\x01 \x02(\x0e\x32\x15.pb.Signature.Version\x12\"\n\rsignatureType\x18\x02 \x02(\x0e\x32\x0b.pb.KeyType\x12\x11\n\tsignature\x18\x03 \x02(\x0c\x12\x15\n\rcertificateId\x18\x04 \x02(\x0c\"*\n\x07Version\x12\x13\n\x0fUNKNOWN_VERSION\x10\x00\x12\n\n\x06_0_0_1\x10\x01')
+  serialized_pb=_b('\n\x0fsignature.proto\x12\tlegacy_pb\x1a\x11\x63\x65rtificate.proto\"\xbb\x01\n\tSignature\x12-\n\x07version\x18\x01 \x02(\x0e\x32\x1c.legacy_pb.Signature.Version\x12)\n\rsignatureType\x18\x02 \x02(\x0e\x32\x12.legacy_pb.KeyType\x12\x11\n\tsignature\x18\x03 \x02(\x0c\x12\x15\n\rcertificateId\x18\x04 \x02(\x0c\"*\n\x07Version\x12\x13\n\x0fUNKNOWN_VERSION\x10\x00\x12\n\n\x06_0_0_1\x10\x01')
   ,
   dependencies=[certificate__pb2.DESCRIPTOR,])
 
@@ -28,7 +28,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 
 _SIGNATURE_VERSION = _descriptor.EnumDescriptor(
   name='Version',
-  full_name='pb.Signature.Version',
+  full_name='legacy_pb.Signature.Version',
   filename=None,
   file=DESCRIPTOR,
   values=[
@@ -43,42 +43,42 @@ _SIGNATURE_VERSION = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=174,
-  serialized_end=216,
+  serialized_start=195,
+  serialized_end=237,
 )
 _sym_db.RegisterEnumDescriptor(_SIGNATURE_VERSION)
 
 
 _SIGNATURE = _descriptor.Descriptor(
   name='Signature',
-  full_name='pb.Signature',
+  full_name='legacy_pb.Signature',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='version', full_name='pb.Signature.version', index=0,
+      name='version', full_name='legacy_pb.Signature.version', index=0,
       number=1, type=14, cpp_type=8, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='signatureType', full_name='pb.Signature.signatureType', index=1,
+      name='signatureType', full_name='legacy_pb.Signature.signatureType', index=1,
       number=2, type=14, cpp_type=8, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='signature', full_name='pb.Signature.signature', index=2,
+      name='signature', full_name='legacy_pb.Signature.signature', index=2,
       number=3, type=12, cpp_type=9, label=2,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='certificateId', full_name='pb.Signature.certificateId', index=3,
+      name='certificateId', full_name='legacy_pb.Signature.certificateId', index=3,
       number=4, type=12, cpp_type=9, label=2,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
@@ -97,8 +97,8 @@ _SIGNATURE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=43,
-  serialized_end=216,
+  serialized_start=50,
+  serialized_end=237,
 )
 
 _SIGNATURE.fields_by_name['version'].enum_type = _SIGNATURE_VERSION
@@ -110,7 +110,7 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 Signature = _reflection.GeneratedProtocolMessageType('Signature', (_message.Message,), dict(
   DESCRIPTOR = _SIGNATURE,
   __module__ = 'signature_pb2'
-  # @@protoc_insertion_point(class_scope:pb.Signature)
+  # @@protoc_insertion_point(class_scope:legacy_pb.Signature)
   ))
 _sym_db.RegisterMessage(Signature)
 

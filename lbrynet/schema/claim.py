@@ -5,7 +5,7 @@ from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: dis
 
 from collections import OrderedDict
 
-from lbrynet.schema.proto2 import claim_pb2
+from lbrynet.schema.proto2 import legacy_claim_pb2
 from lbrynet.schema.signature import Signature
 from lbrynet.schema.validator import get_validator
 from lbrynet.schema.signer import get_signer
@@ -19,7 +19,7 @@ from lbrynet.schema.fee import Fee
 
 class ClaimDict(OrderedDict):
     def __init__(self, claim_dict=None, detached_signature: Signature=None):
-        if isinstance(claim_dict, claim_pb2.Claim):
+        if isinstance(claim_dict, legacy_claim_pb2.Claim):
             raise Exception("To initialize %s with a Claim protobuf use %s.load_protobuf" %
                             (self.__class__.__name__, self.__class__.__name__))
         self.detached_signature = detached_signature
@@ -151,7 +151,7 @@ class ClaimDict(OrderedDict):
         """Load a ClaimDict from a serialized protobuf string"""
         detached_signature = Signature.flagged_parse(serialized)
 
-        temp_claim = claim_pb2.Claim()
+        temp_claim = legacy_claim_pb2.Claim()
         try:
             temp_claim.ParseFromString(detached_signature.payload)
         except DecodeError_pb:

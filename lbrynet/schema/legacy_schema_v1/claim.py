@@ -1,10 +1,10 @@
 from copy import deepcopy
 
-from lbrynet.schema.proto2 import claim_pb2 as claim_pb
+from lbrynet.schema.proto2 import legacy_claim_pb2 as claim_pb
 from lbrynet.schema.legacy_schema_v1 import VERSION_MAP
 from lbrynet.schema.legacy_schema_v1.signature import Signature
 from lbrynet.schema.legacy_schema_v1.certificate import Certificate
-from lbrynet.schema.legacy_schema_v1.schema import Schema
+from lbrynet.schema.baseschema import Schema
 from lbrynet.schema.legacy_schema_v1.stream import Stream
 
 

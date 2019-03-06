@@ -16,17 +16,17 @@ _sym_db = _symbol_database.Default()
 
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='fee.proto',
-  package='pb',
+  package='legacy_pb',
   syntax='proto2',
   serialized_options=None,
-  serialized_pb=_b('\n\tfee.proto\x12\x02pb\"\xd5\x01\n\x03\x46\x65\x65\x12 \n\x07version\x18\x01 \x02(\x0e\x32\x0f.pb.Fee.Version\x12\"\n\x08\x63urrency\x18\x02 \x02(\x0e\x32\x10.pb.Fee.Currency\x12\x0f\n\x07\x61\x64\x64ress\x18\x03 \x02(\x0c\x12\x0e\n\x06\x61mount\x18\x04 \x02(\x02\"*\n\x07Version\x12\x13\n\x0fUNKNOWN_VERSION\x10\x00\x12\n\n\x06_0_0_1\x10\x01\";\n\x08\x43urrency\x12\x14\n\x10UNKNOWN_CURRENCY\x10\x00\x12\x07\n\x03LBC\x10\x01\x12\x07\n\x03\x42TC\x10\x02\x12\x07\n\x03USD\x10\x03')
+  serialized_pb=_b('\n\tfee.proto\x12\tlegacy_pb\"\xe3\x01\n\x03\x46\x65\x65\x12\'\n\x07version\x18\x01 \x02(\x0e\x32\x16.legacy_pb.Fee.Version\x12)\n\x08\x63urrency\x18\x02 \x02(\x0e\x32\x17.legacy_pb.Fee.Currency\x12\x0f\n\x07\x61\x64\x64ress\x18\x03 \x02(\x0c\x12\x0e\n\x06\x61mount\x18\x04 \x02(\x02\"*\n\x07Version\x12\x13\n\x0fUNKNOWN_VERSION\x10\x00\x12\n\n\x06_0_0_1\x10\x01\";\n\x08\x43urrency\x12\x14\n\x10UNKNOWN_CURRENCY\x10\x00\x12\x07\n\x03LBC\x10\x01\x12\x07\n\x03\x42TC\x10\x02\x12\x07\n\x03USD\x10\x03')
 )
 
 
 
 _FEE_VERSION = _descriptor.EnumDescriptor(
   name='Version',
-  full_name='pb.Fee.Version',
+  full_name='legacy_pb.Fee.Version',
   filename=None,
   file=DESCRIPTOR,
   values=[
@@ -41,14 +41,14 @@ _FEE_VERSION = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=128,
-  serialized_end=170,
+  serialized_start=149,
+  serialized_end=191,
 )
 _sym_db.RegisterEnumDescriptor(_FEE_VERSION)
 
 _FEE_CURRENCY = _descriptor.EnumDescriptor(
   name='Currency',
-  full_name='pb.Fee.Currency',
+  full_name='legacy_pb.Fee.Currency',
   filename=None,
   file=DESCRIPTOR,
   values=[
@@ -71,42 +71,42 @@ _FEE_CURRENCY = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=172,
-  serialized_end=231,
+  serialized_start=193,
+  serialized_end=252,
 )
 _sym_db.RegisterEnumDescriptor(_FEE_CURRENCY)
 
 
 _FEE = _descriptor.Descriptor(
   name='Fee',
-  full_name='pb.Fee',
+  full_name='legacy_pb.Fee',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='version', full_name='pb.Fee.version', index=0,
+      name='version', full_name='legacy_pb.Fee.version', index=0,
       number=1, type=14, cpp_type=8, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='currency', full_name='pb.Fee.currency', index=1,
+      name='currency', full_name='legacy_pb.Fee.currency', index=1,
       number=2, type=14, cpp_type=8, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='address', full_name='pb.Fee.address', index=2,
+      name='address', full_name='legacy_pb.Fee.address', index=2,
       number=3, type=12, cpp_type=9, label=2,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='amount', full_name='pb.Fee.amount', index=3,
+      name='amount', full_name='legacy_pb.Fee.amount', index=3,
       number=4, type=2, cpp_type=6, label=2,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
@@ -126,8 +126,8 @@ _FEE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=18,
-  serialized_end=231,
+  serialized_start=25,
+  serialized_end=252,
 )
 
 _FEE.fields_by_name['version'].enum_type = _FEE_VERSION
@@ -140,7 +140,7 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 Fee = _reflection.GeneratedProtocolMessageType('Fee', (_message.Message,), dict(
   DESCRIPTOR = _FEE,
   __module__ = 'fee_pb2'
-  # @@protoc_insertion_point(class_scope:pb.Fee)
+  # @@protoc_insertion_point(class_scope:legacy_pb.Fee)
   ))
 _sym_db.RegisterMessage(Fee)
 
