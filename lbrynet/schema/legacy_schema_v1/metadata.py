@@ -1,7 +1,7 @@
 from copy import deepcopy
 from lbrynet.schema.proto2 import metadata_pb2 as metadata_pb
 from lbrynet.schema.legacy_schema_v1.fee import Fee
-from lbrynet.schema.legacy_schema_v1.schema import Schema
+from lbrynet.schema.baseschema import Schema
 from lbrynet.schema.legacy_schema_v1 import VERSION_MAP
 
 

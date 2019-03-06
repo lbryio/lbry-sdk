@@ -20,7 +20,7 @@ from lbrynet.schema.constants import NIST256p, NIST384p, SECP256k1
 from lbrynet.schema.legacy.migrate import migrate
 from lbrynet.schema.signer import get_signer
 from lbrynet.schema.uri import URI, URIParseError
-from lbrynet.schema.decode import smart_decode
+from lbrynet.schema.decode import smart_decode, migrate_legacy_protobuf
 from lbrynet.schema.error import DecodeError, InvalidAddress
 from lbrynet.schema.address import decode_address, encode_address
 
@@ -553,6 +553,14 @@ class TestValidatePrivateKey(UnitTest):
         cert_claim = ClaimDict.load_dict(secp256k1_cert)
         self.assertEqual(cert_claim.validate_private_key(nist256p_private_key, claim_id_1),
                          False)
+
+
+class TestMigrateLegacyProtobufToCurrentSchema(UnitTest):
+    def test_migrate_legacy_binary_certificate_to_proto3_certificate(self):
+        legacy_binary_cert = binary_claim
+        migrated_cert = migrate_legacy_protobuf(legacy_binary_cert)
+        self.assertEqual(binascii.hexlify(migrated_cert.channel.public_key).decode(),
+                         expected_binary_claim_decoded['certificate']['publicKey'])
 
 
 if __name__ == '__main__':

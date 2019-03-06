@@ -4,7 +4,7 @@ from lbrynet.schema.proto2 import stream_pb2 as stream_pb
 from lbrynet.schema.legacy_schema_v1.source import Source
 from lbrynet.schema.legacy_schema_v1 import VERSION_MAP
 from lbrynet.schema.legacy_schema_v1.metadata import Metadata
-from lbrynet.schema.legacy_schema_v1.schema import Schema
+from lbrynet.schema.baseschema import Schema
 
 
 class Stream(Schema):

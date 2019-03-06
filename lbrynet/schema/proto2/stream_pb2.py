@@ -18,10 +18,10 @@ from . import source_pb2 as source__pb2
 
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='stream.proto',
-  package='pb',
+  package='legacy_pb',
   syntax='proto2',
   serialized_options=None,
-  serialized_pb=_b('\n\x0cstream.proto\x12\x02pb\x1a\x0emetadata.proto\x1a\x0csource.proto\"\x95\x01\n\x06Stream\x12#\n\x07version\x18\x01 \x02(\x0e\x32\x12.pb.Stream.Version\x12\x1e\n\x08metadata\x18\x02 \x02(\x0b\x32\x0c.pb.Metadata\x12\x1a\n\x06source\x18\x03 \x02(\x0b\x32\n.pb.Source\"*\n\x07Version\x12\x13\n\x0fUNKNOWN_VERSION\x10\x00\x12\n\n\x06_0_0_1\x10\x01')
+  serialized_pb=_b('\n\x0cstream.proto\x12\tlegacy_pb\x1a\x0emetadata.proto\x1a\x0csource.proto\"\xaa\x01\n\x06Stream\x12*\n\x07version\x18\x01 \x02(\x0e\x32\x19.legacy_pb.Stream.Version\x12%\n\x08metadata\x18\x02 \x02(\x0b\x32\x13.legacy_pb.Metadata\x12!\n\x06source\x18\x03 \x02(\x0b\x32\x11.legacy_pb.Source\"*\n\x07Version\x12\x13\n\x0fUNKNOWN_VERSION\x10\x00\x12\n\n\x06_0_0_1\x10\x01')
   ,
   dependencies=[metadata__pb2.DESCRIPTOR,source__pb2.DESCRIPTOR,])
 
@@ -29,7 +29,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 
 _STREAM_VERSION = _descriptor.EnumDescriptor(
   name='Version',
-  full_name='pb.Stream.Version',
+  full_name='legacy_pb.Stream.Version',
   filename=None,
   file=DESCRIPTOR,
   values=[
@@ -44,35 +44,35 @@ _STREAM_VERSION = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=158,
-  serialized_end=200,
+  serialized_start=186,
+  serialized_end=228,
 )
 _sym_db.RegisterEnumDescriptor(_STREAM_VERSION)
 
 
 _STREAM = _descriptor.Descriptor(
   name='Stream',
-  full_name='pb.Stream',
+  full_name='legacy_pb.Stream',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='version', full_name='pb.Stream.version', index=0,
+      name='version', full_name='legacy_pb.Stream.version', index=0,
       number=1, type=14, cpp_type=8, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='metadata', full_name='pb.Stream.metadata', index=1,
+      name='metadata', full_name='legacy_pb.Stream.metadata', index=1,
       number=2, type=11, cpp_type=10, label=2,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='source', full_name='pb.Stream.source', index=2,
+      name='source', full_name='legacy_pb.Stream.source', index=2,
       number=3, type=11, cpp_type=10, label=2,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
@@ -91,8 +91,8 @@ _STREAM = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=51,
-  serialized_end=200,
+  serialized_start=58,
+  serialized_end=228,
 )
 
 _STREAM.fields_by_name['version'].enum_type = _STREAM_VERSION
@@ -105,7 +105,7 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 Stream = _reflection.GeneratedProtocolMessageType('Stream', (_message.Message,), dict(
   DESCRIPTOR = _STREAM,
   __module__ = 'stream_pb2'
-  # @@protoc_insertion_point(class_scope:pb.Stream)
+  # @@protoc_insertion_point(class_scope:legacy_pb.Stream)
   ))
 _sym_db.RegisterMessage(Stream)
 
