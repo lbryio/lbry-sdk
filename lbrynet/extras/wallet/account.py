@@ -1,6 +1,7 @@
 import json
 import logging
 import binascii
+from hashlib import sha256
 
 from lbrynet.schema.validator import validate_claim_id
 from torba.client.baseaccount import BaseAccount
@@ -23,6 +24,13 @@ class Account(BaseAccount):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.certificates = {}
+
+    @property
+    def hash(self) -> bytes:
+        h = sha256(json.dumps(self.to_dict(False)).encode())
+        for cert in sorted(self.certificates.keys()):
+            h.update(cert.encode())
+        return h.digest()
 
     def add_certificate_private_key(self, ref: TXORef, private_key):
         assert ref.id not in self.certificates, 'Trying to add a duplicate certificate.'
@@ -176,9 +184,9 @@ class Account(BaseAccount):
         account.certificates = d.get('certificates', {})
         return account
 
-    def to_dict(self, with_certificates=True):
+    def to_dict(self, include_certificates=True):
         d = super().to_dict()
-        if with_certificates:
+        if include_certificates:
             d['certificates'] = self.certificates
         return d
 
