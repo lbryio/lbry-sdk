@@ -1,3 +1,4 @@
+import json
 import asyncio
 import random
 import typing
@@ -5,7 +6,7 @@ from typing import Dict, Tuple, Type, Optional, Any, List
 
 from torba.client.mnemonic import Mnemonic
 from torba.client.bip32 import PrivateKey, PubKey, from_extended_key_string
-from torba.client.hash import aes_encrypt, aes_decrypt
+from torba.client.hash import aes_encrypt, aes_decrypt, sha256
 from torba.client.constants import COIN
 
 if typing.TYPE_CHECKING:
@@ -235,7 +236,8 @@ class BaseAccount:
         )
 
     @classmethod
-    def from_dict(cls, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet', d: dict):
+    def keys_from_dict(cls, ledger: 'baseledger.BaseLedger', d: dict) \
+            -> Tuple[str, Optional[PrivateKey], PubKey]:
         seed = d.get('seed', '')
         private_key_string = d.get('private_key', '')
         private_key = None
@@ -250,6 +252,11 @@ class BaseAccount:
                 public_key = private_key.public_key
         if public_key is None:
             public_key = from_extended_key_string(ledger, d['public_key'])
+        return seed, private_key, public_key
+
+    @classmethod
+    def from_dict(cls, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet', d: dict):
+        seed, private_key, public_key = cls.keys_from_dict(ledger, d)
         name = d.get('name')
         if not name:
             name = 'Account #{}'.format(public_key.address)
@@ -258,8 +265,8 @@ class BaseAccount:
             wallet=wallet,
             name=name,
             seed=seed,
-            private_key_string=private_key_string,
-            encrypted=encrypted,
+            private_key_string=d.get('private_key', ''),
+            encrypted=d.get('encrypted', False),
             private_key=private_key,
             public_key=public_key,
             address_generator=d.get('address_generator', {})
@@ -273,8 +280,8 @@ class BaseAccount:
             assert None not in [self.seed_encryption_init_vector, self.private_key_encryption_init_vector]
             private_key_string = aes_encrypt(
                 self.password, private_key_string, self.private_key_encryption_init_vector
-            )
-            seed = aes_encrypt(self.password, self.seed, self.seed_encryption_init_vector)
+            )[0]
+            seed = aes_encrypt(self.password, self.seed, self.seed_encryption_init_vector)[0]
         return {
             'ledger': self.ledger.get_id(),
             'name': self.name,
@@ -284,6 +291,10 @@ class BaseAccount:
             'public_key': self.public_key.extended_key_string(),
             'address_generator': self.address_generator.to_dict(self.receiving, self.change)
         }
+
+    @property
+    def hash(self) -> bytes:
+        return sha256(json.dumps(self.to_dict()).encode())
 
     async def get_details(self, show_seed=False, **kwargs):
         satoshis = await self.get_balance(**kwargs)
@@ -329,10 +340,10 @@ class BaseAccount:
         assert not self.encrypted, "Key is already encrypted."
         assert isinstance(self.private_key, PrivateKey)
 
-        self.seed = aes_encrypt(password, self.seed, self.seed_encryption_init_vector)
+        self.seed = aes_encrypt(password, self.seed, self.seed_encryption_init_vector)[0]
         self.private_key_string = aes_encrypt(
             password, self.private_key.extended_key_string(), self.private_key_encryption_init_vector
-        )
+        )[0]
         self.private_key = None
         self.password = None
         self.encrypted = True

@@ -121,7 +121,7 @@ def hex_str_to_hash(x):
     return reversed(unhexlify(x))
 
 
-def aes_encrypt(secret: str, value: str, init_vector: bytes = None) -> str:
+def aes_encrypt(secret: str, value: str, init_vector: bytes = None) -> typing.Tuple[str, bytes]:
     if init_vector is not None:
         assert len(init_vector) == 16
     else:
@@ -142,6 +142,25 @@ def aes_decrypt(secret: str, value: str) -> typing.Tuple[str, bytes]:
     unpadder = PKCS7(AES.block_size).unpadder()
     result = unpadder.update(decryptor.update(data)) + unpadder.finalize()
     return result.decode(), init_vector
+
+
+def better_aes_encrypt(secret: str, value: bytes) -> bytes:
+    init_vector = os.urandom(16)
+    key = double_sha256(secret.encode())
+    encryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).encryptor()
+    padder = PKCS7(AES.block_size).padder()
+    padded_data = padder.update(value) + padder.finalize()
+    encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
+    return base64.b64encode(init_vector + encrypted_data)
+
+
+def better_aes_decrypt(secret: str, value: bytes) -> bytes:
+    data = base64.b64decode(value)
+    key = double_sha256(secret.encode())
+    init_vector, data = data[:16], data[16:]
+    decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
+    unpadder = PKCS7(AES.block_size).unpadder()
+    return unpadder.update(decryptor.update(data)) + unpadder.finalize()
 
 
 class Base58Error(Exception):

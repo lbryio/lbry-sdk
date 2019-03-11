@@ -1,8 +1,12 @@
+import os
 import stat
 import json
-import os
+import zlib
 import typing
+from hashlib import sha256
 from typing import Sequence, MutableSequence
+from torba.client.hash import better_aes_encrypt, better_aes_decrypt
+from operator import attrgetter
 
 if typing.TYPE_CHECKING:
     from torba.client import basemanager, baseaccount, baseledger
@@ -54,6 +58,24 @@ class Wallet:
     def default_account(self):
         for account in self.accounts:
             return account
+
+    @property
+    def hash(self) -> str:
+        h = sha256()
+        for account in sorted(self.accounts, key=attrgetter('id')):
+            h.update(account.hash)
+        return h.digest()
+
+    def pack(self, password):
+        new_data = json.dumps(self.to_dict())
+        new_data_compressed = zlib.compress(new_data.encode())
+        return better_aes_encrypt(password, new_data_compressed)
+
+    @classmethod
+    def unpack(cls, password, encrypted):
+        decrypted = better_aes_decrypt(password, encrypted)
+        decompressed = zlib.decompress(decrypted)
+        return json.loads(decompressed)
 
 
 class WalletStorage:
