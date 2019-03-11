@@ -1,5 +1,6 @@
 import os
 import sys
+import signal
 import pathlib
 import json
 import asyncio
@@ -272,8 +273,20 @@ def main(argv=None):
             log.addHandler(loggly_handler)
 
         daemon = Daemon(conf)
+        started = False
+        def __exit():
+            if started:
+                daemon.stop_event.set()
+            else:
+                raise GracefulExit()
+        try:
+            loop.add_signal_handler(signal.SIGINT, __exit)
+            loop.add_signal_handler(signal.SIGTERM, __exit)
+        except NotImplementedError:
+            pass  # Not implemented on Windows
         try:
             loop.run_until_complete(daemon.start())
+            started = True
             loop.run_until_complete(daemon.stop_event.wait())
         except (GracefulExit, KeyboardInterrupt):
             pass
