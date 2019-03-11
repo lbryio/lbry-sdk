@@ -5,6 +5,7 @@ import google.protobuf.json_format as json_pb  # pylint: disable=no-name-in-modu
 from google.protobuf.message import Message  # pylint: disable=no-name-in-module,import-error
 
 from lbrynet.schema.proto3 import claim_pb2 as claim_pb
+from torba.client.constants import COIN
 
 
 class Schema(Message):
@@ -39,7 +40,33 @@ class Claim(Schema):
            _message_pb.type = Claim.CLAIM_TYPE_CERT
            _message_pb.channel = claim_pb.Channel(**_channel)
         elif "stream" in _claim:
-            pass  # fixme
+            _message_pb.type = Claim.CLAIM_TYPE_STREAM
+            _stream = _claim.pop("stream")
+            if "source" in _stream:
+                _source = _stream.pop("source")
+                _message_pb.stream.hash = _source.get("source", b'')  # fixme: fail if empty?
+                _message_pb.stream.media_type = _source.pop("contentType")
+            if "metadata" in _stream:
+                _metadata = _stream.pop("metadata")
+                _message_pb.stream.license = _metadata.get("license")
+                _message_pb.stream.description = _metadata.get("description")
+                _message_pb.stream.language = _metadata.get("language")
+                _message_pb.stream.title = _metadata.get("title")
+                _message_pb.stream.author = _metadata.get("author")
+                _message_pb.stream.license_url = _metadata.get("licenseUrl")
+                _message_pb.stream.thumbnail_url = _metadata.get("thumbnail")
+                if _metadata.get("nsfw"):
+                    _message_pb.stream.tags.append("nsfw")
+                if "fee" in _metadata:
+                    _message_pb.stream.fee.address = _metadata["fee"]["address"]
+                    _message_pb.stream.fee.currency = {
+                        "LBC": 0,
+                        "USD": 1
+                    }[_metadata["fee"]["currency"]]
+                    multiplier = COIN if _metadata["fee"]["currency"] == "LBC" else 100
+                    total = int(_metadata["fee"]["amount"]*multiplier)
+                    _message_pb.stream.fee.amount = total if total >= 0 else 0
+            _claim = {}
         else:
             raise AttributeError
 

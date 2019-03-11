@@ -7,6 +7,7 @@ from copy import deepcopy
 import unittest
 
 from lbrynet.schema.signature import Signature, NAMED_SECP256K1
+from torba.client.constants import COIN
 from .test_data import example_003, example_010, example_010_serialized
 from .test_data import claim_id_1, claim_address_1, claim_address_2
 from .test_data import binary_claim, expected_binary_claim_decoded
@@ -23,6 +24,7 @@ from lbrynet.schema.uri import URI, URIParseError
 from lbrynet.schema.decode import smart_decode, migrate_legacy_protobuf
 from lbrynet.schema.error import DecodeError, InvalidAddress
 from lbrynet.schema.address import decode_address, encode_address
+from lbrynet.schema.proto2 import legacy_claim_pb2
 
 
 parsed_uri_matches = [
@@ -561,6 +563,82 @@ class TestMigrateLegacyProtobufToCurrentSchema(UnitTest):
         migrated_cert = migrate_legacy_protobuf(legacy_binary_cert)
         self.assertEqual(binascii.hexlify(migrated_cert.channel.public_key).decode(),
                          expected_binary_claim_decoded['certificate']['publicKey'])
+        self.assertFalse(migrated_cert.HasField('stream'))
+
+    def test_unsigned_stream_claim_migration(self):
+        legacy_binary_unsigned_stream_claim = binascii.unhexlify(example_010_serialized)
+        migrated_claim = migrate_legacy_protobuf(legacy_binary_unsigned_stream_claim)
+        self.assertFalse(migrated_claim.HasField('channel'))
+        self.assertEqual(migrated_claim.stream.hash, binascii.unhexlify(example_010['stream']['source']['source']))
+        self.assertEqual(migrated_claim.stream.media_type, example_010['stream']['source']['contentType'])
+        self.assertEqual(migrated_claim.stream.license, example_010['stream']['metadata']['license'])
+        self.assertEqual(migrated_claim.stream.description, example_010['stream']['metadata']['description'])
+        self.assertEqual(migrated_claim.stream.language, example_010['stream']['metadata']['language'])
+        self.assertEqual(migrated_claim.stream.title, example_010['stream']['metadata']['title'])
+        self.assertEqual(migrated_claim.stream.author, example_010['stream']['metadata']['author'])
+        self.assertEqual(migrated_claim.stream.thumbnail_url, example_010['stream']['metadata']['thumbnail'])
+        self.assertEqual(len(migrated_claim.stream.tags[:]), 0)  # it would have if nsfw was True
+        self.assertEqual(migrated_claim.stream.license_url, "")
+
+    def test_nsfw_migrated_as_tag(self):
+        legacy_binary_unsigned_stream_claim = binascii.unhexlify(example_010_serialized)
+        claim = legacy_claim_pb2.Claim()
+        claim.ParseFromString(legacy_binary_unsigned_stream_claim)
+        claim.stream.metadata.nsfw = True
+        legacy_binary_unsigned_stream_claim = claim.SerializeToString()
+        migrated_claim = migrate_legacy_protobuf(legacy_binary_unsigned_stream_claim)
+        self.assertEqual(migrated_claim.stream.tags[:], ["nsfw"])
+
+    def test_license_url_migration(self):
+        legacy_binary_unsigned_stream_claim = binascii.unhexlify(example_010_serialized)
+        claim = legacy_claim_pb2.Claim()
+        claim.ParseFromString(legacy_binary_unsigned_stream_claim)
+        claim.stream.metadata.licenseUrl = "url/license"
+        legacy_binary_unsigned_stream_claim = claim.SerializeToString()
+        migrated_claim = migrate_legacy_protobuf(legacy_binary_unsigned_stream_claim)
+        self.assertEqual(migrated_claim.stream.license_url, "url/license")
+
+    def test_LBC_fee_migration(self):
+        legacy_binary_unsigned_stream_claim = binascii.unhexlify(example_010_serialized)
+        claim = legacy_claim_pb2.Claim()
+        claim.ParseFromString(legacy_binary_unsigned_stream_claim)
+        claim.stream.metadata.fee.currency = 1
+        claim.stream.metadata.fee.version = 0
+        claim.stream.metadata.fee.amount = 2.0
+        claim.stream.metadata.fee.address = b"bob"
+        legacy_binary_unsigned_stream_claim = claim.SerializeToString()
+        migrated_claim = migrate_legacy_protobuf(legacy_binary_unsigned_stream_claim)
+        self.assertEqual(migrated_claim.stream.fee.currency, 0)  # LBC was 1, migrates to 0
+        self.assertEqual(migrated_claim.stream.fee.amount, int(2.0*COIN))
+        self.assertEqual(migrated_claim.stream.fee.address, b"bob")
+
+    def test_USD_fee_migration(self):
+        legacy_binary_unsigned_stream_claim = binascii.unhexlify(example_010_serialized)
+        claim = legacy_claim_pb2.Claim()
+        claim.ParseFromString(legacy_binary_unsigned_stream_claim)
+        claim.stream.metadata.fee.currency = 3
+        claim.stream.metadata.fee.version = 0
+        claim.stream.metadata.fee.amount = 2.0
+        claim.stream.metadata.fee.address = b"bob"
+        legacy_binary_unsigned_stream_claim = claim.SerializeToString()
+        migrated_claim = migrate_legacy_protobuf(legacy_binary_unsigned_stream_claim)
+        self.assertEqual(migrated_claim.stream.fee.currency, 1)  # USD was 3, migrates to 1
+        self.assertEqual(migrated_claim.stream.fee.amount, int(200))
+        self.assertEqual(migrated_claim.stream.fee.address, b"bob")
+
+    def test_negative_fee_trolling_becomes_zero(self):
+        legacy_binary_unsigned_stream_claim = binascii.unhexlify(example_010_serialized)
+        claim = legacy_claim_pb2.Claim()
+        claim.ParseFromString(legacy_binary_unsigned_stream_claim)
+        claim.stream.metadata.fee.currency = 3
+        claim.stream.metadata.fee.version = 0
+        claim.stream.metadata.fee.amount = -2.0
+        claim.stream.metadata.fee.address = b"bob"
+        legacy_binary_unsigned_stream_claim = claim.SerializeToString()
+        migrated_claim = migrate_legacy_protobuf(legacy_binary_unsigned_stream_claim)
+        self.assertEqual(migrated_claim.stream.fee.currency, 1)  # USD was 3, migrates to 1
+        self.assertEqual(migrated_claim.stream.fee.amount, int(0))
+        self.assertEqual(migrated_claim.stream.fee.address, b"bob")
 
 
 if __name__ == '__main__':
