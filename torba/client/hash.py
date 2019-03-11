@@ -121,7 +121,7 @@ def hex_str_to_hash(x):
     return reversed(unhexlify(x))
 
 
-def aes_encrypt(secret: str, value: str, init_vector: bytes = None) -> typing.Tuple[str, bytes]:
+def aes_encrypt(secret: str, value: str, init_vector: bytes = None) -> str:
     if init_vector is not None:
         assert len(init_vector) == 16
     else:
