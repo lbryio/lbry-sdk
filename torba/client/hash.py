@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import typing
 from binascii import hexlify, unhexlify
+from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -146,21 +147,27 @@ def aes_decrypt(secret: str, value: str) -> typing.Tuple[str, bytes]:
 
 def better_aes_encrypt(secret: str, value: bytes) -> bytes:
     init_vector = os.urandom(16)
-    key = double_sha256(secret.encode())
+    key = scrypt(secret.encode(), salt=init_vector)
     encryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).encryptor()
     padder = PKCS7(AES.block_size).padder()
     padded_data = padder.update(value) + padder.finalize()
     encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
-    return base64.b64encode(init_vector + encrypted_data)
+    return base64.b64encode(b's:8192:16:1:' + init_vector + encrypted_data)
 
 
 def better_aes_decrypt(secret: str, value: bytes) -> bytes:
     data = base64.b64decode(value)
-    key = double_sha256(secret.encode())
+    type, n, r, p, data = data.split(b':', maxsplit=4)
     init_vector, data = data[:16], data[16:]
+    key = scrypt(secret.encode(), salt=init_vector, n=int(n), r=int(r), p=int(p))
     decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
     unpadder = PKCS7(AES.block_size).unpadder()
     return unpadder.update(decryptor.update(data)) + unpadder.finalize()
+
+
+def scrypt(passphrase, salt, n=1<<13, r=16, p=1):
+    kdf = Scrypt(salt, length=32, n=n, r=r, p=p, backend=default_backend())
+    return kdf.derive(passphrase)
 
 
 class Base58Error(Exception):

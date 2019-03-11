@@ -1,5 +1,5 @@
 from unittest import TestCase, mock
-from torba.client.hash import aes_decrypt, aes_encrypt
+from torba.client.hash import aes_decrypt, aes_encrypt, better_aes_decrypt, better_aes_encrypt
 
 
 class TestAESEncryptDecrypt(TestCase):
@@ -33,3 +33,10 @@ class TestAESEncryptDecrypt(TestCase):
             aes_decrypt('bubblegum', aes_encrypt('bubblegum', self.message))[0],
             self.message
         )
+
+    def test_better_encrypt_decrypt(self):
+        self.assertEqual(
+            b'valuable value',
+            better_aes_decrypt(
+                'super secret',
+                better_aes_encrypt('super secret', b'valuable value')))
