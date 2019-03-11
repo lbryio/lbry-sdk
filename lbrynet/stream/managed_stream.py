@@ -25,7 +25,8 @@ class ManagedStream:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', rowid: int,
                  descriptor: 'StreamDescriptor', download_directory: str, file_name: typing.Optional[str],
                  downloader: typing.Optional[StreamDownloader] = None,
-                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None):
+                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None,
+                 download_id: typing.Optional[str] = None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.rowid = rowid
@@ -39,7 +40,7 @@ class ManagedStream:
 
         self.fully_reflected = asyncio.Event(loop=self.loop)
         self.tx = None
-        self.download_id = binascii.hexlify(generate_id()).decode()
+        self.download_id = download_id or binascii.hexlify(generate_id()).decode()
 
     @property
     def file_name(self) -> typing.Optional[str]:

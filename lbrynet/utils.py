@@ -173,3 +173,13 @@ async def aiohttp_request(method, url, **kwargs) -> typing.AsyncContextManager[a
     async with aiohttp.ClientSession() as session:
         async with session.request(method, url, ssl=get_ssl_context(), **kwargs) as response:
             yield response
+
+
+async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled or non-functioning
+    try:
+        async with aiohttp_request("get", "https://api.lbry.io/ip") as resp:
+            response = await resp.json()
+            if response['success']:
+                return response['data']['ip']
+    except Exception as e:
+        return

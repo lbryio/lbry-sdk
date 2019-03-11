@@ -416,7 +416,7 @@ class Daemon(metaclass=JSONRPCServerType):
         self.ensure_wallet_dir()
         self.ensure_download_dir()
         if not self.analytics_manager.is_started:
-            self.analytics_manager.start()
+            await self.analytics_manager.start()
         self.component_startup_task = asyncio.create_task(self.component_manager.start())
         await self.component_startup_task
 

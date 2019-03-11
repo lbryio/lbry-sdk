@@ -3,11 +3,12 @@ import binascii
 from unittest import mock
 import asyncio
 import time
-import typing
+import json
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
 from lbrynet.utils import generate_id
-from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout
+from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout, \
+    DownloadDataTimeout
 from lbrynet.extras.wallet.manager import LbryWalletManager
 from lbrynet.extras.daemon.analytics import AnalyticsManager
 from lbrynet.stream.stream_manager import StreamManager
@@ -100,8 +101,9 @@ class TestStreamManager(BlobExchangeTestBase):
         file_path = os.path.join(self.server_dir, "test_file")
         with open(file_path, 'wb') as f:
             f.write(os.urandom(20000000))
-        descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager.blob_dir, file_path,
-                                                          old_sort=old_sort)
+        descriptor = await StreamDescriptor.create_stream(
+            self.loop, self.server_blob_manager.blob_dir, file_path, old_sort=old_sort
+        )
         self.sd_hash = descriptor.sd_hash
         self.mock_wallet, self.uri = get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
         self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
@@ -114,7 +116,7 @@ class TestStreamManager(BlobExchangeTestBase):
     async def test_download_stop_resume_delete(self):
         await self.setup_stream_manager()
         received = []
-        expected_events = ['Download Started', 'Download Finished']
+        expected_events = ['Time To First Bytes', 'Download Finished']
 
         async def check_post(event):
             received.append(event['event'])
@@ -145,7 +147,7 @@ class TestStreamManager(BlobExchangeTestBase):
 
         await self.stream_manager.start_stream(stream)
         await stream.downloader.stream_finished_event.wait()
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0, loop=self.loop)
         self.assertTrue(stream.finished)
         self.assertFalse(stream.running)
         self.assertTrue(os.path.isfile(os.path.join(self.client_dir, "test_file")))
@@ -163,17 +165,20 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertEqual(stored_status, None)
         self.assertListEqual(expected_events, received)
 
-    async def _test_download_error(self, expected_error):
+    async def _test_download_error_on_start(self, expected_error, timeout=None):
+        with self.assertRaises(expected_error):
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager, timeout=timeout)
+
+    async def _test_download_error_analytics_on_start(self, expected_error, timeout=None):
         received = []
 
         async def check_post(event):
-            self.assertEqual("Download Errored", event['event'])
+            self.assertEqual("Time To First Bytes", event['event'])
             received.append(event['properties']['error'])
 
         self.stream_manager.analytics_manager._post = check_post
-
-        with self.assertRaises(expected_error):
-            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await self._test_download_error_on_start(expected_error, timeout)
+        await asyncio.sleep(0, loop=self.loop)
         self.assertListEqual([expected_error.__name__], received)
 
     async def test_insufficient_funds(self):
@@ -184,7 +189,7 @@ class TestStreamManager(BlobExchangeTestBase):
             'version': '_0_0_1'
         }
         await self.setup_stream_manager(10.0, fee)
-        await self._test_download_error(InsufficientFundsError)
+        await self._test_download_error_on_start(InsufficientFundsError)
 
     async def test_fee_above_max_allowed(self):
         fee = {
@@ -194,22 +199,28 @@ class TestStreamManager(BlobExchangeTestBase):
             'version': '_0_0_1'
         }
         await self.setup_stream_manager(1000000.0, fee)
-        await self._test_download_error(KeyFeeAboveMaxAllowed)
+        await self._test_download_error_on_start(KeyFeeAboveMaxAllowed)
 
     async def test_resolve_error(self):
         await self.setup_stream_manager()
         self.uri = "fake"
-        await self._test_download_error(ResolveError)
+        await self._test_download_error_on_start(ResolveError)
 
-    async def test_download_timeout(self):
+    async def test_download_sd_timeout(self):
         self.server.stop_server()
-        self.client_config.download_timeout = 1.0
         await self.setup_stream_manager()
-        await self._test_download_error(DownloadSDTimeout)
+        await self._test_download_error_analytics_on_start(DownloadSDTimeout, timeout=1)
+
+    async def test_download_data_timeout(self):
+        await self.setup_stream_manager()
+        with open(os.path.join(self.server_dir, self.sd_hash), 'r') as sdf:
+            head_blob_hash = json.loads(sdf.read())['blobs'][0]['blob_hash']
+        self.server_blob_manager.delete_blob(head_blob_hash)
+        await self._test_download_error_analytics_on_start(DownloadDataTimeout, timeout=1)
 
     async def test_download_then_recover_stream_on_startup(self, old_sort=False):
         expected_analytics_events = [
-            'Download Started',
+            'Time To First Bytes',
             'Download Finished'
         ]
         received_events = []
@@ -223,6 +234,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertSetEqual(self.stream_manager.streams, set())
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
         await stream.downloader.stream_finished_event.wait()
+        await asyncio.sleep(0, loop=self.loop)
         self.stream_manager.stop()
         self.client_blob_manager.stop()
         os.remove(os.path.join(self.client_blob_manager.blob_dir, stream.sd_hash))
