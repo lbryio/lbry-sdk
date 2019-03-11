@@ -28,7 +28,7 @@ class DownloadTimeoutError(Exception):
 
 class DownloadDataTimeout(Exception):
     def __init__(self, download):
-        super().__init__(f'Failed to download data blobs for sd hash {download} within timeout ')
+        super().__init__(f'Failed to download data blobs for sd hash {download} within timeout')
         self.download = download
 
 
