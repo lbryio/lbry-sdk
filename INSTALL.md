@@ -20,8 +20,10 @@ macOS users will need to install [xcode command line tools](https://developer.xa
 Remaining dependencies can then be installed by running:
 
 ```
-brew install python3 protobuf
+brew install python protobuf
 ```
+
+Assistance installing Python3: https://docs.python-guide.org/starting/install3/osx/
 
 ### Linux
 
@@ -44,7 +46,7 @@ To install:
  cd lbry
 
  Creating venv:
- python3 -m venv lbry-venv
+ python -m venv lbry-venv
  
  Activating lbry-venv on Linux/Mac:
  source lbry-venv/bin/activate
