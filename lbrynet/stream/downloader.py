@@ -1,3 +1,4 @@
+import os
 import asyncio
 import typing
 import logging
@@ -68,6 +69,9 @@ class StreamDownloader(StreamAssembler):
             if not self.stream_handle.closed:
                 self.stream_handle.close()
             self.stream_handle = None
+        if not self.stream_finished_event.is_set() and self.wrote_bytes_event.is_set() and \
+                self.output_path and os.path.isfile(self.output_path):
+            os.remove(self.output_path)
 
     async def get_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
         return await self.blob_downloader.download_blob(blob_hash, length)

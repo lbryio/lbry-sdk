@@ -465,13 +465,15 @@ class StreamManager:
         except asyncio.TimeoutError:
             if descriptor_time_fut.done():
                 time_to_descriptor = descriptor_time_fut.result()
-                error = DownloadDataTimeout(downloader.descriptor.blobs[0].blob_hash)
+                error = DownloadDataTimeout(downloader.sd_hash)
+                self.blob_manager.delete_blob(downloader.sd_hash)
+                await self.storage.delete_stream(downloader.descriptor)
             else:
                 descriptor_time_fut.cancel()
                 error = DownloadSDTimeout(downloader.sd_hash)
             if stream:
                 await self.stop_stream(stream)
-            elif downloader:
+            else:
                 downloader.stop()
         if error:
             log.warning(error)
