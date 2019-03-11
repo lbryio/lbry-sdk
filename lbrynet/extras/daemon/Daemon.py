@@ -14,8 +14,9 @@ from binascii import hexlify, unhexlify
 from traceback import format_exc
 from aiohttp import web
 from functools import wraps
+from torba.client.wallet import Wallet
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
-from torba.client.hash import aes_encrypt, sha256
+from torba.client.hash import sha256
 
 from lbrynet import __version__, utils
 from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
@@ -1252,42 +1253,61 @@ class Daemon(metaclass=JSONRPCServerType):
         return result
 
     @requires("wallet")
-    def jsonrpc_account_manifest(self, password, account_ids=None):
+    def jsonrpc_sync_hash(self):
         """
-        Generate a manifest for all of the accounts or only for limited set of accounts.
+        Deterministic hash of the wallet.
 
         Usage:
-            account manifest <password> [<account_ids>...]
+            sync hash
 
         Options:
-            --password=<password>         : (str) password to use for encrypting values
-            --account-ids=<account_ids>   : (list) list of accounts ids to limit manifest
 
         Returns:
-            (map) manifest
+            (str) sha256 hash of wallet
+        """
+        return hexlify(self.default_wallet.hash).decode()
+
+    @requires("wallet")
+    def jsonrpc_sync_apply(self, password, data=None, encrypt_password=None):
+        """
+        Apply incoming synchronization data, if provided, and then produce a sync hash and
+        an encrypted wallet.
+
+        Usage:
+            sync apply <password> [--data=<data>] [--encrypt-password=<encrypt_password>]
+
+        Options:
+            --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
+            --data=<data>                 : (str) incoming sync data, if any
+            --encrypt-password=<encrypt_password> : (str) password to encrypt outgoing data if different
+                                                    from the decrypt password, used during password changes
+
+        Returns:
+            (map) sync hash and data
 
         """
-        init_vector = b'!\tT\xef\x0c\x85j\x9elp\xf1\xa6\xe0\xe8\x188'
-        accounts = self.get_accounts_or_all(account_ids)
-        manifest = []
-        status = []
-        for account in accounts:
-            encrypted_data = aes_encrypt(password, json.dumps(account.to_dict(False)), init_vector).encode()
-            manifest.append({
-                'account_id': account.id,
-                'timestamp': time.time(),
-                'hash-data': hexlify(sha256(encrypted_data)),
-                'hash-certificates': [
-                    aes_encrypt(password, cert, init_vector).encode() for cert in account.certificates.keys()
-                ]
-            })
-            status.append(manifest[-1]['hash-data'])
-            status.extend(manifest[-1]['hash-certificates'])
+        if data is not None:
+            decrypted_data = Wallet.unpack(password, data)
+            for account_data in decrypted_data['accounts']:
+                _, _, pubkey = LBCAccount.keys_from_dict(self.ledger, account_data)
+                account_id = pubkey.address
+                local_match = None
+                for local_account in self.default_wallet.accounts:
+                    if account_id == local_account.id:
+                        local_match = local_account
+                        break
+                if local_match is not None:
+                    local_match.name = account_data.get('name', local_match.name)
+                    local_match.certificates.update(account_data.get('certificates', {}))
+                else:
+                    new_account = LBCAccount.from_dict(self.ledger, self.default_wallet, account_data)
+                    if self.ledger.network.is_connected:
+                        asyncio.create_task(self.ledger.subscribe_account(new_account))
+
+        encrypted = self.default_wallet.pack(encrypt_password or password)
         return {
-            'type': 'manifest',
-            'generated': time.time(),
-            'status': hexlify(sha256(b''.join(status))),
-            'accounts': manifest
+            'hash': self.jsonrpc_sync_hash(),
+            'data': encrypted.decode()
         }
 
     ADDRESS_DOC = """

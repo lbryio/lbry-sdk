@@ -62,18 +62,29 @@ class AccountSynchronization(AsyncioTestCase):
         await self.daemon.stop()
 
     @mock.patch('time.time', mock.Mock(return_value=12345))
-    def test_manifest(self):
-        self.account.certificates['abcdefg1234:0'] = '---PRIVATE KEY---'
-        self.assertEqual({
-            'type': 'manifest',
-            'generated': 12345,
-            'status': b'880fd3bef17c02d02710af94dcb69877407636432ad8cf17db2689be36fc52e4',
-            'accounts': [{
-                'account_id': 'n4ZRwP4QjKwsmXCfqUPqnx133i83Ha7GbW',
-                'timestamp': 12345,
-                'hash-data': b'c9a0e30c9cccd995e0c241a5d6e34308a291581dd858ffe51b307094fa621f8a',
-                'hash-certificates': [
-                    b'IQlU7wyFap5scPGm4OgYOBa5bXx9Fy0KJOfeX2QbTN4='
-                ]
-            }]
-        }, self.daemon.jsonrpc_account_manifest('password'))
+    def test_sync(self):
+        starting_hash = 'fcafbb9bd3943d8d425a4c00d3982a4c6aaff763d5289f7852296f8ea882214f'
+        self.assertEqual(self.daemon.jsonrpc_sync_hash(), starting_hash)
+        self.assertEqual(self.daemon.jsonrpc_sync_apply('password')['hash'], starting_hash)
+        self.assertFalse(self.account.certificates)
+
+        hash_w_cert = 'ef748d7777bb01ce9be6f87d3e46aeb31abbbe1648b1f2ddfa5aa9bcf0736a2d'
+        add_cert = (
+            '5sx5Q4ruPFDSftJ3+5l0rKDEacDE7npsee2Pz+jsYTiNSBtDXt/fbvpKELpn6BWYDM1rqDCHDgZoy6609KbTCu'
+            'TqlYnrtMVpSz8QXc/Gzry2zXgtuuG6CAAvhntfELfwiJW4r1wvKDq30+IDrX8HIM5TiErLsLqfvfhc4t9Qfn5Y'
+            'IgJk9pYxu+xC7rJh+kYra+zu6JtEI9hdq+peXX6uAnqEKlRQCTLDPA6Z9Pk9Hdbhl9QJ3TVTNeTkMQyCZZ49SJ'
+            'PtOghGXIA9Gtkp86nKvuzV7rKpVEJEe/mcUsBkQ/W9W/7bok3tOXBs7SCis0MMyYFbCQ1LVDy6RUD28UHp/P5O'
+            '4kbxptuRzGKrkrQX00QEqzPuQwbbxuOMarGWUBP4USX6GmtK0e3AL1bUJzdJEuy937DdcvbhrzfxT0Jphjal5s'
+            'BSDufxZaQcHLHOhjQ8DDnFscjbAChcjxCLgcYMtdxYGM0WmCU7vdKyWK7sULi+LSqPTf/75lYoW1FxXt3v/blX'
+            'I3nJF5owVEZPx/5dNy95WDVCpQyDNd/Zw9ke2P+4d6hyMXbsz9Oei0q4BlKDM3MNGHd+MNSiX23xZq+FtTQdbw'
+            'ZOBhRTcQRB8VoR9M27acQApcdd2AXj0ZKrj/T+p8O0tuM0kWYOOAt6P/WxbU16im+WoR+4OTPggxu8r8SFFsXZ'
+            'EXYXT3tUSNzpU32OH2jXzo7P4Wa69s8u+X8RgA=='
+        )
+        self.assertEqual(self.daemon.jsonrpc_sync_apply('password', data=add_cert)['hash'], hash_w_cert)
+        self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
+        self.assertEqual(self.account.certificates, {'abcdefg1234:0': '---PRIVATE KEY---'})
+
+        # applying the same diff is idempotent
+        self.assertEqual(self.daemon.jsonrpc_sync_apply('password', data=add_cert)['hash'], hash_w_cert)
+        self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
+        self.assertEqual(self.account.certificates, {'abcdefg1234:0': '---PRIVATE KEY---'})
