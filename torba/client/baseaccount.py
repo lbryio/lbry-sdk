@@ -280,8 +280,8 @@ class BaseAccount:
             assert None not in [self.seed_encryption_init_vector, self.private_key_encryption_init_vector]
             private_key_string = aes_encrypt(
                 self.password, private_key_string, self.private_key_encryption_init_vector
-            )[0]
-            seed = aes_encrypt(self.password, self.seed, self.seed_encryption_init_vector)[0]
+            )
+            seed = aes_encrypt(self.password, self.seed, self.seed_encryption_init_vector)
         return {
             'ledger': self.ledger.get_id(),
             'name': self.name,
@@ -340,10 +340,10 @@ class BaseAccount:
         assert not self.encrypted, "Key is already encrypted."
         assert isinstance(self.private_key, PrivateKey)
 
-        self.seed = aes_encrypt(password, self.seed, self.seed_encryption_init_vector)[0]
+        self.seed = aes_encrypt(password, self.seed, self.seed_encryption_init_vector)
         self.private_key_string = aes_encrypt(
             password, self.private_key.extended_key_string(), self.private_key_encryption_init_vector
-        )[0]
+        )
         self.private_key = None
         self.password = None
         self.encrypted = True
