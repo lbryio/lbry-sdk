@@ -60,7 +60,7 @@ class Wallet:
             return account
 
     @property
-    def hash(self) -> str:
+    def hash(self) -> bytes:
         h = sha256()
         for account in sorted(self.accounts, key=attrgetter('id')):
             h.update(account.hash)
