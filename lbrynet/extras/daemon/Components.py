@@ -51,16 +51,6 @@ async def gather_dict(tasks: dict):
     )))
 
 
-async def get_external_ip():  # used if upnp is disabled or non-functioning
-    try:
-        async with utils.aiohttp_request("get", "https://api.lbry.io/ip") as resp:
-            response = await resp.json()
-            if response['success']:
-                return response['data']['ip']
-    except Exception as e:
-        pass
-
-
 class DatabaseComponent(Component):
     component_name = DATABASE_COMPONENT
 
@@ -358,7 +348,7 @@ class DHTComponent(Component):
         external_ip = self.upnp_component.external_ip
         if not external_ip:
             log.warning("UPnP component failed to get external ip")
-            external_ip = await get_external_ip()
+            external_ip = await utils.get_external_ip()
             if not external_ip:
                 log.warning("failed to get external ip")
 
@@ -523,7 +513,7 @@ class UPnPComponent(Component):
 
         if external_ip == "0.0.0.0" or not external_ip:
             log.warning("unable to get external ip from UPnP, checking lbry.io fallback")
-            external_ip = await get_external_ip()
+            external_ip = await utils.get_external_ip()
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         self.external_ip = external_ip
@@ -574,7 +564,7 @@ class UPnPComponent(Component):
     async def start(self):
         log.info("detecting external ip")
         if not self.use_upnp:
-            self.external_ip = await get_external_ip()
+            self.external_ip = await utils.get_external_ip()
             return
         success = False
         await self._maintain_redirects()

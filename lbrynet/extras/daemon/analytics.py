@@ -3,7 +3,6 @@ import collections
 import logging
 import aiohttp
 import typing
-import binascii
 from lbrynet import utils
 from lbrynet.conf import Config
 from lbrynet.extras import system_info
@@ -26,6 +25,10 @@ UPNP_SETUP = "UPnP Setup"
 
 BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 
+
+TIME_TO_FIRST_BYTES = "Time To First Bytes"
+
+
 log = logging.getLogger(__name__)
 
 
@@ -39,13 +42,40 @@ def _event_properties(installation_id: str, session_id: str,
     return properties
 
 
-def _download_properties(download_id: str, name: str, sd_hash: str) -> typing.Dict:
-    p = {
-        'download_id': download_id,
+def _download_properties(conf: Config, external_ip: str, resolve_duration: float,
+                         total_duration: typing.Optional[float], download_id: str, name: str,
+                         outpoint: str, active_peer_count: int, tried_peers_count: int,
+                         sd_hash: str, sd_download_duration: typing.Optional[float] = None,
+                         head_blob_hash: typing.Optional[str] = None,
+                         head_blob_length: typing.Optional[int] = None,
+                         head_blob_download_duration: typing.Optional[float] = None,
+                         error: typing.Optional[str] = None) -> typing.Dict:
+    return {
+        "external_ip": external_ip,
+        "download_id": download_id,
+        "total_duration": round(total_duration, 4),
+        "resolve_duration": None if not resolve_duration else round(resolve_duration, 4),
+        "error": error,
         'name': name,
-        'stream_info': sd_hash
+        "outpoint": outpoint,
+
+        "node_rpc_timeout": conf.node_rpc_timeout,
+        "peer_connect_timeout": conf.peer_connect_timeout,
+        "blob_download_timeout": conf.blob_download_timeout,
+        "use_fixed_peers": len(conf.reflector_servers) > 0,
+        "fixed_peer_delay": conf.fixed_peer_delay,
+        "added_fixed_peers": (conf.fixed_peer_delay < total_duration) and len(conf.reflector_servers) > 0,
+
+        "active_peer_count": active_peer_count,
+        "tried_peers_count": tried_peers_count,
+
+        "sd_blob_hash": sd_hash,
+        "sd_blob_duration": None if not sd_download_duration else round(sd_download_duration, 4),
+
+        "head_blob_hash": head_blob_hash,
+        "head_blob_length": head_blob_length,
+        "head_blob_duration": None if not head_blob_download_duration else round(head_blob_download_duration, 4)
     }
-    return p
 
 
 def _make_context(platform):
@@ -71,6 +101,7 @@ def _make_context(platform):
 class AnalyticsManager:
 
     def __init__(self, conf: Config, installation_id: str, session_id: str):
+        self.conf = conf
         self.cookies = {}
         self.url = ANALYTICS_ENDPOINT
         self._write_key = utils.deobfuscate(ANALYTICS_TOKEN)
@@ -80,19 +111,22 @@ class AnalyticsManager:
         self.installation_id = installation_id
         self.session_id = session_id
         self.task: asyncio.Task = None
+        self.external_ip: typing.Optional[str] = None
 
     @property
     def is_started(self):
         return self.task is not None
 
-    def start(self):
+    async def start(self):
         if self._enabled and self.task is None:
+            self.external_ip = await utils.get_external_ip()
             self.task = asyncio.create_task(self.run())
 
     async def run(self):
         while True:
             await self._send_heartbeat()
             await asyncio.sleep(1800)
+            self.external_ip = await utils.get_external_ip()
 
     def stop(self):
         if self.task is not None and not self.task.done():
@@ -111,7 +145,7 @@ class AnalyticsManager:
             async with utils.aiohttp_request(**request_kwargs) as response:
                 self.cookies.update(response.cookies)
         except Exception as e:
-            log.exception('Encountered an exception while POSTing to %s: ', self.url + '/track', exc_info=e)
+            log.debug('Encountered an exception while POSTing to %s: ', self.url + '/track', exc_info=e)
 
     async def track(self, event: typing.Dict):
         """Send a single tracking event"""
@@ -136,23 +170,31 @@ class AnalyticsManager:
     async def send_server_startup_error(self, message):
         await self.track(self._event(SERVER_STARTUP_ERROR, {'message': message}))
 
-    async def send_download_started(self, download_id, name, sd_hash):
-        await self.track(
-            self._event(DOWNLOAD_STARTED, _download_properties(download_id, name, sd_hash))
-        )
+    async def send_time_to_first_bytes(self, resolve_duration: typing.Optional[float],
+                                       total_duration: typing.Optional[float], download_id: str,
+                                       name: str, outpoint: str, found_peers_count: int,
+                                       tried_peers_count: int, sd_hash: str,
+                                       sd_download_duration: typing.Optional[float] = None,
+                                       head_blob_hash: typing.Optional[str] = None,
+                                       head_blob_length: typing.Optional[int] = None,
+                                       head_blob_duration: typing.Optional[int] = None,
+                                       error: typing.Optional[str] = None):
+        await self.track(self._event(TIME_TO_FIRST_BYTES, _download_properties(
+            self.conf, self.external_ip, resolve_duration, total_duration, download_id, name, outpoint,
+            found_peers_count, tried_peers_count, sd_hash, sd_download_duration, head_blob_hash, head_blob_length,
+            head_blob_duration, error
+        )))
 
     async def send_download_finished(self, download_id, name, sd_hash):
-        await self.track(self._event(DOWNLOAD_FINISHED, _download_properties(download_id, name, sd_hash)))
-
-    async def send_download_errored(self, error: Exception, name: str):
-        await self.track(self._event(DOWNLOAD_ERRORED, {
-            'download_id': binascii.hexlify(utils.generate_id()).decode(),
-            'name': name,
-            'stream_info': None,
-            'error': type(error).__name__,
-            'reason': str(error),
-            'report': None
-        }))
+        await self.track(
+            self._event(
+                DOWNLOAD_FINISHED, {
+                    'download_id': download_id,
+                    'name': name,
+                    'stream_info': sd_hash
+                }
+            )
+        )
 
     async def send_claim_action(self, action):
         await self.track(self._event(CLAIM_ACTION, {'action': action}))
