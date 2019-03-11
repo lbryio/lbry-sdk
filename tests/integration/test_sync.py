@@ -70,15 +70,15 @@ class AccountSynchronization(AsyncioTestCase):
 
         hash_w_cert = 'ef748d7777bb01ce9be6f87d3e46aeb31abbbe1648b1f2ddfa5aa9bcf0736a2d'
         add_cert = (
-            '5sx5Q4ruPFDSftJ3+5l0rKDEacDE7npsee2Pz+jsYTiNSBtDXt/fbvpKELpn6BWYDM1rqDCHDgZoy6609KbTCu'
-            'TqlYnrtMVpSz8QXc/Gzry2zXgtuuG6CAAvhntfELfwiJW4r1wvKDq30+IDrX8HIM5TiErLsLqfvfhc4t9Qfn5Y'
-            'IgJk9pYxu+xC7rJh+kYra+zu6JtEI9hdq+peXX6uAnqEKlRQCTLDPA6Z9Pk9Hdbhl9QJ3TVTNeTkMQyCZZ49SJ'
-            'PtOghGXIA9Gtkp86nKvuzV7rKpVEJEe/mcUsBkQ/W9W/7bok3tOXBs7SCis0MMyYFbCQ1LVDy6RUD28UHp/P5O'
-            '4kbxptuRzGKrkrQX00QEqzPuQwbbxuOMarGWUBP4USX6GmtK0e3AL1bUJzdJEuy937DdcvbhrzfxT0Jphjal5s'
-            'BSDufxZaQcHLHOhjQ8DDnFscjbAChcjxCLgcYMtdxYGM0WmCU7vdKyWK7sULi+LSqPTf/75lYoW1FxXt3v/blX'
-            'I3nJF5owVEZPx/5dNy95WDVCpQyDNd/Zw9ke2P+4d6hyMXbsz9Oei0q4BlKDM3MNGHd+MNSiX23xZq+FtTQdbw'
-            'ZOBhRTcQRB8VoR9M27acQApcdd2AXj0ZKrj/T+p8O0tuM0kWYOOAt6P/WxbU16im+WoR+4OTPggxu8r8SFFsXZ'
-            'EXYXT3tUSNzpU32OH2jXzo7P4Wa69s8u+X8RgA=='
+            'czo4MTkyOjE2OjE6uZSVTe/9fjPSxqUDKRKNmVUh9RU3cJfYIrfQVHd2XoE8i79xEuBiPqDAtvmGudg1GswdPv17k3'
+            'MOMu0TeKSg1UibPxc6X2Hv/RHI1W0LPVD4wgm9J4p3WS7tPE4+ROpDtbyd8X6S2AMnjHRGvcSZHuV5/Xm6roljn+/d'
+            'TSkBSt4obzzmyMeglP2ZP933u4WGhcwODtEUKwbjlNpea5fwsrBcJRiQ5tOJlnFBdCNwcaqS217eP5IP6Opul/f+EF'
+            'MuoiaJYzv75hZJbqUOjwBWI5aSMPThct3NfZvSJElnXp8kGN6dfsE/ipTYolmMZPoEOg/Y41hW9NoLLqMa2zisbDtd'
+            'a1LagrOCvswmAifAYwfQ8b3KfgC9OXRGFjIoYk+kDb8w2NOoJ2rb72p35KqcpVbCDlLKsTl2JHMsb7LMpktu48Tg6v'
+            '86u3m8AFf4sbMnAZQNcvKNFo6lXK7Fuv7ql22t9cu08ehf2PF2/0an1YFmI4Yxg5qR3JQn3ubjfFQi9k6XcVHUkyGQ'
+            'rOnhetLpvORFuJ2ydTrUTW0U8zJ96pgugWWEOeEVBnhvjxJvbBZSrRf7YVhxzmxYIDttZj15FTlI0fukDA8323kEdh'
+            'TifEQL+Q3djzblJQ1MqAq1YBSD87Np4iQHINQztuLguA5fJHexWoHH60K037Th8HXco1d/qprlu2I/KyJERFHoq+r6'
+            'La9oRL/r9re7qOu6TkC36Q=='
         )
         self.assertEqual(self.daemon.jsonrpc_sync_apply('password', data=add_cert)['hash'], hash_w_cert)
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
