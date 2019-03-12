@@ -1301,13 +1301,12 @@ class Daemon(metaclass=JSONRPCServerType):
                         local_match = local_account
                         break
                 if local_match is not None:
-                    if account_data.get('modified_on', 0) > local_match.modified_on:
-                        local_match.name = account_data.get('name', local_match.name)
-                        local_match.certificates.update(account_data.get('certificates', {}))
+                    local_match.apply(account_data)
                 else:
                     new_account = LBCAccount.from_dict(self.ledger, self.default_wallet, account_data)
                     if self.ledger.network.is_connected:
                         asyncio.create_task(self.ledger.subscribe_account(new_account))
+            self.default_wallet.save()
 
         encrypted = self.default_wallet.pack(encrypt_password or password)
         return {
