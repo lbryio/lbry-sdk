@@ -1,4 +1,5 @@
 import json
+import time
 import asyncio
 import random
 import typing
@@ -198,12 +199,13 @@ class BaseAccount:
     def __init__(self, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet', name: str,
                  seed: str, private_key_string: str, encrypted: bool,
                  private_key: Optional[PrivateKey], public_key: PubKey,
-                 address_generator: dict) -> None:
+                 address_generator: dict, modified_on: float) -> None:
         self.ledger = ledger
         self.wallet = wallet
         self.id = public_key.address
         self.name = name
         self.seed = seed
+        self.modified_on = modified_on
         self.private_key_string = private_key_string
         self.password: Optional[str] = None
         self.private_key_encryption_init_vector: Optional[bytes] = None
@@ -269,7 +271,8 @@ class BaseAccount:
             encrypted=d.get('encrypted', False),
             private_key=private_key,
             public_key=public_key,
-            address_generator=d.get('address_generator', {})
+            address_generator=d.get('address_generator', {}),
+            modified_on=d.get('modified_on', time.time())
         )
 
     def to_dict(self):
@@ -289,7 +292,8 @@ class BaseAccount:
             'encrypted': self.serialize_encrypted,
             'private_key': private_key_string,
             'public_key': self.public_key.extended_key_string(),
-            'address_generator': self.address_generator.to_dict(self.receiving, self.change)
+            'address_generator': self.address_generator.to_dict(self.receiving, self.change),
+            'modified_on': self.modified_on
         }
 
     @property

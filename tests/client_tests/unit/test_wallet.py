@@ -1,4 +1,5 @@
 import tempfile
+from binascii import hexlify
 
 from torba.testcase import AsyncioTestCase
 
@@ -35,6 +36,7 @@ class TestWalletCreation(AsyncioTestCase):
                 {
                     'name': 'An Account',
                     'ledger': 'btc_mainnet',
+                    'modified_on': 123.456,
                     'seed':
                         "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                         "h absent",
@@ -57,11 +59,18 @@ class TestWalletCreation(AsyncioTestCase):
         storage = WalletStorage(default=wallet_dict)
         wallet = Wallet.from_storage(storage, self.manager)
         self.assertEqual(wallet.name, 'Main Wallet')
+        self.assertEqual(
+            hexlify(wallet.hash), b'9f462b8dd802eb8c913e54f09a09827ebc14abbc13f33baa90d8aec5ae920fc7'
+        )
         self.assertEqual(len(wallet.accounts), 1)
         account = wallet.default_account
         self.assertIsInstance(account, BTCLedger.account_class)
         self.maxDiff = None
         self.assertDictEqual(wallet_dict, wallet.to_dict())
+
+        encrypted = wallet.pack('password')
+        decrypted = Wallet.unpack('password', encrypted)
+        self.assertEqual(decrypted['accounts'][0]['name'], 'An Account')
 
     def test_read_write(self):
         manager = BaseWalletManager()

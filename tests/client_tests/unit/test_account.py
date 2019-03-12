@@ -143,6 +143,7 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
     async def test_load_and_save_account(self):
         account_data = {
             'name': 'My Account',
+            'modified_on': 123.456,
             'seed':
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
@@ -302,6 +303,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
     async def test_load_and_save_account(self):
         account_data = {
             'name': 'My Account',
+            'modified_on': 123.456,
             'seed':
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
