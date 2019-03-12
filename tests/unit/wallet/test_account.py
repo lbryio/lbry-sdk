@@ -73,6 +73,7 @@ class TestAccount(AsyncioTestCase):
     def test_load_and_save_account(self):
         account_data = {
             'name': 'Main Account',
+            'modified_on': 123.456,
             'seed':
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",

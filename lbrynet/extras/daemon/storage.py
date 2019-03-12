@@ -147,11 +147,11 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
                 "claim": claim
             }
         )
-    for claim_id in signed_claims.keys():
-        channel_name = transaction.execute("select claim_name from claim where claim_id=?", (claim_id, )).fetchone()
-        if channel_name:
-            for claim in signed_claims[claim_id]:
-                claim.channel_name = channel_name[0]
+    for claim_name, claim_id in _batched_select(
+            transaction, "select c.claim_name, c.claim_id from claim c where c.claim_id in {}",
+            list(signed_claims.keys())):
+        for claim in signed_claims[claim_id]:
+            claim.channel_name = claim_name
     return files
 
 
