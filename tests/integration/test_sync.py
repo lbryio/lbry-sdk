@@ -63,28 +63,29 @@ class AccountSynchronization(AsyncioTestCase):
 
     @mock.patch('time.time', mock.Mock(return_value=12345))
     def test_sync(self):
-        starting_hash = 'fcafbb9bd3943d8d425a4c00d3982a4c6aaff763d5289f7852296f8ea882214f'
+        starting_hash = '69afcd60a300f47933917d77ef011beeeb4decfafebbda91c144c84282c6814f'
+        self.account.modified_on = 123.456
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), starting_hash)
         self.assertEqual(self.daemon.jsonrpc_sync_apply('password')['hash'], starting_hash)
         self.assertFalse(self.account.certificates)
 
-        hash_w_cert = 'ef748d7777bb01ce9be6f87d3e46aeb31abbbe1648b1f2ddfa5aa9bcf0736a2d'
+        hash_w_cert = '974721f42dab42657b5911b7caf4af98ce4d3879eea6ac23d50c1d79bc5020ef'
         add_cert = (
-            '5sx5Q4ruPFDSftJ3+5l0rKDEacDE7npsee2Pz+jsYTiNSBtDXt/fbvpKELpn6BWYDM1rqDCHDgZoy6609KbTCu'
-            'TqlYnrtMVpSz8QXc/Gzry2zXgtuuG6CAAvhntfELfwiJW4r1wvKDq30+IDrX8HIM5TiErLsLqfvfhc4t9Qfn5Y'
-            'IgJk9pYxu+xC7rJh+kYra+zu6JtEI9hdq+peXX6uAnqEKlRQCTLDPA6Z9Pk9Hdbhl9QJ3TVTNeTkMQyCZZ49SJ'
-            'PtOghGXIA9Gtkp86nKvuzV7rKpVEJEe/mcUsBkQ/W9W/7bok3tOXBs7SCis0MMyYFbCQ1LVDy6RUD28UHp/P5O'
-            '4kbxptuRzGKrkrQX00QEqzPuQwbbxuOMarGWUBP4USX6GmtK0e3AL1bUJzdJEuy937DdcvbhrzfxT0Jphjal5s'
-            'BSDufxZaQcHLHOhjQ8DDnFscjbAChcjxCLgcYMtdxYGM0WmCU7vdKyWK7sULi+LSqPTf/75lYoW1FxXt3v/blX'
-            'I3nJF5owVEZPx/5dNy95WDVCpQyDNd/Zw9ke2P+4d6hyMXbsz9Oei0q4BlKDM3MNGHd+MNSiX23xZq+FtTQdbw'
-            'ZOBhRTcQRB8VoR9M27acQApcdd2AXj0ZKrj/T+p8O0tuM0kWYOOAt6P/WxbU16im+WoR+4OTPggxu8r8SFFsXZ'
-            'EXYXT3tUSNzpU32OH2jXzo7P4Wa69s8u+X8RgA=='
+            'czo4MTkyOjE2OjE6qs3JRvS/bhX8p1JD68sqyA2Qhx3EVTqskhqEAwtfAUfUsQqeJ1rtMdRf40vkGKnpt4NT0b'
+            'XEqb5O+lba4nkLF7vZENhc2zuOrjobCPVbiVHNwOfH56Ayrh1ts5LMcnl5+Mk1BUyGCwXcqEg2KiUkd3YZpiHQ'
+            'T7WfcODcU6l7IRivb8iawCebZJx9waVyQoqEDKwZUY1i5HA0VLC+s5cV7it1AWbewiyWOQtZdEPzNY44oXLJex'
+            'SirElQqDqNZyl3Hjy8YqacBbSYoejIRnmXpC9y25keP6hep3f9i1K2HDNwhwns1W1vhuzuO2Gy9+a0JlVm5mwc'
+            'N2pqO4tCZr6tE3aym2FaSAunOi7QYVFMI6arb9Gvn9P+T+WRiFYfzwDFVR+j5ZPmUDXxHisy5OF163jH61wbBY'
+            'pPienjlVtDOxoZmA8+AwWXKRdINsRcull9pu7EVCq5yQmrmxoPbLxNh5pRGrBB0JwCCOMIf+KPwS+7Z6dDbiwO'
+            '2NUpk8USJMTmXmFDCr2B0PJiG6Od2dD2oGN0F7aYZvUuKbqj8eDrJMe/zLbhq47jUjkJFCvtxUioo63ORk1pzH'
+            'S0/X4/6/95PRSMaXm4DcZ9BdyxR2E/AKc8UN6AL5rrn6quXkC6R3ZhKgN3Si2S9y6EGFsL7dgzX331U08ZviLj'
+            'NsrG0EKUnf+TGQ42MqnLQBOiO/ZoAwleOzNZnCYOQQ14Mm8y17xUpmdWRDiRKpAOJU22jKnxtqQ='
         )
-        self.assertEqual(self.daemon.jsonrpc_sync_apply('password', data=add_cert)['hash'], hash_w_cert)
+        self.daemon.jsonrpc_sync_apply('password', data=add_cert)
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
         self.assertEqual(self.account.certificates, {'abcdefg1234:0': '---PRIVATE KEY---'})
 
         # applying the same diff is idempotent
-        self.assertEqual(self.daemon.jsonrpc_sync_apply('password', data=add_cert)['hash'], hash_w_cert)
+        self.daemon.jsonrpc_sync_apply('password', data=add_cert)
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
         self.assertEqual(self.account.certificates, {'abcdefg1234:0': '---PRIVATE KEY---'})

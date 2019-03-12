@@ -32,6 +32,10 @@ class Account(BaseAccount):
             h.update(cert.encode())
         return h.digest()
 
+    def apply(self, d: dict):
+        super().apply(d)
+        self.certificates.update(d.get('certificates', {}))
+
     def add_certificate_private_key(self, ref: TXORef, private_key):
         assert ref.id not in self.certificates, 'Trying to add a duplicate certificate.'
         self.certificates[ref.id] = private_key
