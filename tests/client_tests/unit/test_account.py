@@ -174,6 +174,54 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         account_data['ledger'] = 'btc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())
 
+    def test_apply_diff(self):
+        account_data = {
+            'name': 'My Account',
+            'modified_on': 123.456,
+            'seed':
+                "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
+                "h absent",
+            'encrypted': False,
+            'private_key':
+                'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
+                '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
+            'public_key':
+                'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
+                'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
+            'address_generator': {
+                'name': 'deterministic-chain',
+                'receiving': {'gap': 5, 'maximum_uses_per_address': 2},
+                'change': {'gap': 5, 'maximum_uses_per_address': 2}
+            }
+        }
+        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
+
+        self.assertEqual(account.name, 'My Account')
+        self.assertEqual(account.modified_on, 123.456)
+        self.assertEqual(account.change.gap, 5)
+        self.assertEqual(account.change.maximum_uses_per_address, 2)
+        self.assertEqual(account.receiving.gap, 5)
+        self.assertEqual(account.receiving.maximum_uses_per_address, 2)
+
+        account_data['name'] = 'Changed Name'
+        account_data['address_generator']['change']['gap'] = 6
+        account_data['address_generator']['change']['maximum_uses_per_address'] = 7
+        account_data['address_generator']['receiving']['gap'] = 8
+        account_data['address_generator']['receiving']['maximum_uses_per_address'] = 9
+
+        account.apply(account_data)
+        # no change because modified_on is not newer
+        self.assertEqual(account.name, 'My Account')
+
+        account_data['modified_on'] = 200.00
+
+        account.apply(account_data)
+        self.assertEqual(account.name, 'Changed Name')
+        self.assertEqual(account.change.gap, 6)
+        self.assertEqual(account.change.maximum_uses_per_address, 7)
+        self.assertEqual(account.receiving.gap, 8)
+        self.assertEqual(account.receiving.maximum_uses_per_address, 9)
+
 
 class TestSingleKeyAccount(AsyncioTestCase):
 

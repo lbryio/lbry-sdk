@@ -42,6 +42,9 @@ class AddressManager:
             d['change'] = change_dict
         return d
 
+    def apply(self, d: dict):
+        raise NotImplementedError
+
     def to_dict_instance(self) -> Optional[dict]:
         raise NotImplementedError
 
@@ -94,6 +97,10 @@ class HierarchicalDeterministic(AddressManager):
             cls(account, 0, **d.get('receiving', {'gap': 20, 'maximum_uses_per_address': 1})),
             cls(account, 1, **d.get('change', {'gap': 6, 'maximum_uses_per_address': 1}))
         )
+
+    def apply(self, d: dict):
+        self.gap = d.get('gap', self.gap)
+        self.maximum_uses_per_address = d.get('maximum_uses_per_address', self.maximum_uses_per_address)
 
     def to_dict_instance(self):
         return {'gap': self.gap, 'maximum_uses_per_address': self.maximum_uses_per_address}
@@ -295,6 +302,16 @@ class BaseAccount:
             'address_generator': self.address_generator.to_dict(self.receiving, self.change),
             'modified_on': self.modified_on
         }
+
+    def apply(self, d: dict):
+        if d.get('modified_on', 0) > self.modified_on:
+            self.name = d['name']
+            self.modified_on = d.get('modified_on', time.time())
+            assert self.address_generator.name == d['address_generator']['name']
+            for chain_name in ('change', 'receiving'):
+                if chain_name in d['address_generator']:
+                    chain_object = getattr(self, chain_name)
+                    chain_object.apply(d['address_generator'][chain_name])
 
     @property
     def hash(self) -> bytes:
