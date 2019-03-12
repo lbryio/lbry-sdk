@@ -157,16 +157,16 @@ def better_aes_encrypt(secret: str, value: bytes) -> bytes:
 
 def better_aes_decrypt(secret: str, value: bytes) -> bytes:
     data = base64.b64decode(value)
-    type, n, r, p, data = data.split(b':', maxsplit=4)
+    _, scryp_n, scrypt_r, scrypt_p, data = data.split(b':', maxsplit=4)
     init_vector, data = data[:16], data[16:]
-    key = scrypt(secret.encode(), salt=init_vector, n=int(n), r=int(r), p=int(p))
+    key = scrypt(secret.encode(), init_vector, int(scryp_n), int(scrypt_r), int(scrypt_p))
     decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
     unpadder = PKCS7(AES.block_size).unpadder()
     return unpadder.update(decryptor.update(data)) + unpadder.finalize()
 
 
-def scrypt(passphrase, salt, n=1<<13, r=16, p=1):
-    kdf = Scrypt(salt, length=32, n=n, r=r, p=p, backend=default_backend())
+def scrypt(passphrase, salt, scrypt_n=1<<13, scrypt_r=16, scrypt_p=1):
+    kdf = Scrypt(salt, length=32, n=scrypt_n, r=scrypt_r, p=scrypt_p, backend=default_backend())
     return kdf.derive(passphrase)
 
 
