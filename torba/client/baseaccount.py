@@ -43,7 +43,7 @@ class AddressManager:
         return d
 
     def apply(self, d: dict):
-        raise NotImplementedError
+        pass
 
     def to_dict_instance(self) -> Optional[dict]:
         raise NotImplementedError
@@ -167,9 +167,6 @@ class SingleKey(AddressManager):
             -> Tuple[AddressManager, AddressManager]:
         same_address_manager = cls(account, account.public_key, 0)
         return same_address_manager, same_address_manager
-
-    def apply(self, d: dict):
-        pass
 
     def to_dict_instance(self):
         return None
