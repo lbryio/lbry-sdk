@@ -168,6 +168,9 @@ class SingleKey(AddressManager):
         same_address_manager = cls(account, account.public_key, 0)
         return same_address_manager, same_address_manager
 
+    def apply(self, d: dict):
+        pass
+
     def to_dict_instance(self):
         return None
 
