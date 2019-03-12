@@ -16,7 +16,6 @@ from aiohttp import web
 from functools import wraps
 from torba.client.wallet import Wallet
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
-from torba.client.hash import sha256
 
 from lbrynet import __version__, utils
 from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
@@ -1083,6 +1082,7 @@ class Daemon(metaclass=JSONRPCServerType):
             change_made = True
 
         if change_made:
+            account.modified_on = time.time()
             self.default_wallet.save()
 
         result = account.to_dict()
@@ -1252,6 +1252,10 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.analytics_manager.send_credits_sent()
         return result
 
+    SYNC_DOC = """
+    Wallet synchronization.
+    """
+
     @requires("wallet")
     def jsonrpc_sync_hash(self):
         """
@@ -1297,8 +1301,9 @@ class Daemon(metaclass=JSONRPCServerType):
                         local_match = local_account
                         break
                 if local_match is not None:
-                    local_match.name = account_data.get('name', local_match.name)
-                    local_match.certificates.update(account_data.get('certificates', {}))
+                    if account_data.get('modified_on', 0) > local_match.modified_on:
+                        local_match.name = account_data.get('name', local_match.name)
+                        local_match.certificates.update(account_data.get('certificates', {}))
                 else:
                     new_account = LBCAccount.from_dict(self.ledger, self.default_wallet, account_data)
                     if self.ledger.network.is_connected:
