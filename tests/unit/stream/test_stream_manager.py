@@ -113,6 +113,25 @@ class TestStreamManager(BlobExchangeTestBase):
                                                              binascii.hexlify(generate_id()).decode()))
         self.exchange_rate_manager = get_dummy_exchange_rate_manager(time)
 
+    async def test_time_to_first_bytes(self):
+        await self.setup_stream_manager()
+        checked_post = False
+
+        async def check_post(event):
+            self.assertEqual(event['event'], 'Time To First Bytes')
+            total_duration = event['properties']['total_duration']
+            resolve_duration = event['properties']['resolve_duration']
+            head_blob_duration = event['properties']['head_blob_duration']
+            sd_blob_duration = event['properties']['sd_blob_duration']
+            self.assertTrue(total_duration >= resolve_duration + head_blob_duration + sd_blob_duration)
+            nonlocal checked_post
+            checked_post = True
+
+        self.stream_manager.analytics_manager._post = check_post
+        await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await asyncio.sleep(0, loop=self.loop)
+        self.assertTrue(checked_post)
+
     async def test_download_stop_resume_delete(self):
         await self.setup_stream_manager()
         received = []

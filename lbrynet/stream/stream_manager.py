@@ -455,7 +455,7 @@ class StreamManager:
                 ), timeout
             )
             time_to_descriptor = await descriptor_time_fut
-            time_to_first_bytes = self.loop.time() - start_download_time
+            time_to_first_bytes = self.loop.time() - start_download_time - time_to_descriptor
             self.wait_for_stream_finished(stream)
             if fee_address and fee_amount and not to_replace:
                 stream.tx = await self.wallet.send_amount_to_address(
