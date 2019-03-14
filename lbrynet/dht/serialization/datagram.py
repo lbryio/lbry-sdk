@@ -65,45 +65,36 @@ class RequestDatagram(KademliaDatagramBase):
 
     @classmethod
     def make_ping(cls, from_node_id: bytes, rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
-        if rpc_id and len(rpc_id) != constants.rpc_id_length:
-            raise ValueError("invalid rpc id length")
         rpc_id = rpc_id or constants.generate_id()[:constants.rpc_id_length]
-        if len(from_node_id) != constants.hash_bits // 8:
-            raise ValueError("invalid node id")
         return cls(REQUEST_TYPE, rpc_id, from_node_id, b'ping')
 
     @classmethod
     def make_store(cls, from_node_id: bytes, blob_hash: bytes, token: bytes, port: int,
                    rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
-        if rpc_id and len(rpc_id) != constants.rpc_id_length:
-            raise ValueError("invalid rpc id length")
-        if not rpc_id:
-            rpc_id = constants.generate_id()[:constants.rpc_id_length]
-        if len(from_node_id) != constants.hash_bits // 8:
-            raise ValueError("invalid node id")
+        rpc_id = rpc_id or constants.generate_id()[:constants.rpc_id_length]
+        if len(blob_hash) != constants.hash_bits // 8:
+            raise ValueError(f"invalid blob hash length: {len(blob_hash)}")
+        if not 0 < port < 65536:
+            raise ValueError(f"invalid port: {port}")
+        if len(token) != constants.hash_bits // 8:
+            raise ValueError(f"invalid token length: {len(token)}")
         store_args = [blob_hash, token, port, from_node_id, 0]
         return cls(REQUEST_TYPE, rpc_id, from_node_id, b'store', store_args)
 
     @classmethod
     def make_find_node(cls, from_node_id: bytes, key: bytes,
                        rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
-        if rpc_id and len(rpc_id) != constants.rpc_id_length:
-            raise ValueError("invalid rpc id length")
-        if not rpc_id:
-            rpc_id = constants.generate_id()[:constants.rpc_id_length]
-        if len(from_node_id) != constants.hash_bits // 8:
-            raise ValueError("invalid node id")
+        rpc_id = rpc_id or constants.generate_id()[:constants.rpc_id_length]
+        if len(key) != constants.hash_bits // 8:
+            raise ValueError(f"invalid key length: {len(key)}")
         return cls(REQUEST_TYPE, rpc_id, from_node_id, b'findNode', [key])
 
     @classmethod
     def make_find_value(cls, from_node_id: bytes, key: bytes,
                         rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
-        if rpc_id and len(rpc_id) != constants.rpc_id_length:
-            raise ValueError("invalid rpc id length")
-        if not rpc_id:
-            rpc_id = constants.generate_id()[:constants.rpc_id_length]
-        if len(from_node_id) != constants.hash_bits // 8:
-            raise ValueError("invalid node id")
+        rpc_id = rpc_id or constants.generate_id()[:constants.rpc_id_length]
+        if len(key) != constants.hash_bits // 8:
+            raise ValueError(f"invalid key length: {len(key)}")
         return cls(REQUEST_TYPE, rpc_id, from_node_id, b'findValue', [key])
 
 
@@ -147,8 +138,6 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
     }
 
     primitive: typing.Dict = bdecode(datagram)
-    if not isinstance(primitive, dict):
-        raise ValueError("invalid datagram type")
     if primitive[0] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:  # pylint: disable=unsubscriptable-object
         datagram_type = primitive[0]  # pylint: disable=unsubscriptable-object
     else:
@@ -162,14 +151,19 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
     )
 
 
-def make_compact_ip(address: str):
-    return reduce(lambda buff, x: buff + bytearray([int(x)]), address.split('.'), bytearray())
+def make_compact_ip(address: str) -> bytearray:
+    compact_ip = reduce(lambda buff, x: buff + bytearray([int(x)]), address.split('.'), bytearray())
+    if len(compact_ip) != 4:
+        raise ValueError(f"invalid IPv4 length")
+    return compact_ip
 
 
 def make_compact_address(node_id: bytes, address: str, port: int) -> bytearray:
     compact_ip = make_compact_ip(address)
-    if not 0 <= port <= 65536:
+    if not 0 < port < 65536:
         raise ValueError(f'Invalid port: {port}')
+    if len(node_id) != constants.hash_bits // 8:
+        raise ValueError(f"invalid node node_id length")
     return compact_ip + port.to_bytes(2, 'big') + node_id
 
 
@@ -177,4 +171,8 @@ def decode_compact_address(compact_address: bytes) -> typing.Tuple[bytes, str, i
     address = "{}.{}.{}.{}".format(*compact_address[:4])
     port = int.from_bytes(compact_address[4:6], 'big')
     node_id = compact_address[6:]
+    if not 0 < port < 65536:
+        raise ValueError(f'Invalid port: {port}')
+    if len(node_id) != constants.hash_bits // 8:
+        raise ValueError(f"invalid node node_id length")
     return node_id, address, port

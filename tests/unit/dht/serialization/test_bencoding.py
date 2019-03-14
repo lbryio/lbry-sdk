@@ -62,3 +62,4 @@ class EncodeDecodeTest(unittest.TestCase):
     def test_decode_error(self):
         self.assertRaises(DecodeError, bdecode, b'abcdefghijklmnopqrstuvwxyz', True)
         self.assertRaises(DecodeError, bdecode, b'', True)
+        self.assertRaises(DecodeError, bdecode, b'l4:spami42ee')
