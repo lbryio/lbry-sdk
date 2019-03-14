@@ -225,6 +225,9 @@ def ensure_directory_exists(path: str):
 
 
 def main(argv=None):
+    if sys.platform == 'win32':
+        asyncio.set_event_loop(asyncio.ProactorEventLoop())
+
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
     args, command_args = parser.parse_known_args(argv)
@@ -310,7 +313,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    if sys.platform == 'win32':
-        asyncio.set_event_loop(asyncio.ProactorEventLoop())
-
     sys.exit(main())

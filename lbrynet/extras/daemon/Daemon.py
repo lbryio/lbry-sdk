@@ -407,6 +407,16 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.update_connection_status()
         return CONNECTION_STATUS_CONNECTED if self._connection_status[1] else CONNECTION_STATUS_NETWORK
 
+    # async def start_named_pipes(self):
+    #     asyncio.set_event_loop(asyncio.ProactorEventLoop())
+    #
+    #     try:
+    #         site = web.NamedPipeSite(self.runner, PIPE_NAME)
+    #         await site.start()
+    #         log.info('lbrynet API listening on pipe %s', site.name)
+    #     except Exception as e:
+    #         log.error(str(e))
+
     async def start(self):
         log.info("Starting LBRYNet Daemon")
         log.debug("Settings: %s", json.dumps(self.conf.settings_dict, indent=2))
@@ -415,13 +425,19 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.runner.setup()
 
         try:
+            print(asyncio.get_event_loop())
             site = web.NamedPipeSite(self.runner, PIPE_NAME)
             await site.start()
             # loop = asyncio.get_event_loop()
             # await loop.start_serving_pipe(lambda : NamedPipeServer(self.handle_pipe_request), PIPE_NAME)
             log.info('lbrynet API listening on pipe %s', site.name)
-        except Exception as e:
+        except (PermissionError, RuntimeError) as e:
+            log.error('lbrynet API failed to open Named Pipe %s for listening. Daemon is already running '
+                      'or this Named Pipe is being used by another application.', PIPE_NAME)
             log.error(str(e))
+            # await self.analytics_manager.send_server_startup_error(str(e))
+            raise SystemExit()
+
 
         try:
             site = web.TCPSite(self.runner, self.conf.api_host, self.conf.api_port)
