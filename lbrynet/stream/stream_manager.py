@@ -390,9 +390,8 @@ class StreamManager:
         self.streams.add(stream)
         return stream
 
-    async def _download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
-                                        file_name: typing.Optional[str] = None,
-                                        timeout: typing.Optional[float] = None) -> ManagedStream:
+    async def _download_stream_from_uri(self, uri, timeout: float, exchange_rate_manager: 'ExchangeRateManager',
+                                        file_name: typing.Optional[str] = None) -> ManagedStream:
         start_time = self.loop.time()
         parsed_uri = parse_lbry_uri(uri)
         if parsed_uri.is_channel:
@@ -483,6 +482,8 @@ class StreamManager:
                     resolved_time, self.loop.time() - start_time, download_id, parse_lbry_uri(uri).name, outpoint,
                     None if not stream else len(stream.downloader.blob_downloader.active_connections),
                     None if not stream else len(stream.downloader.blob_downloader.scores),
+                    False if not downloader else downloader.added_fixed_peers,
+                    self.config.fixed_peer_delay if not downloader else downloader.fixed_peers_delay,
                     claim.source_hash.decode(), time_to_descriptor,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].blob_hash,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,
@@ -496,14 +497,14 @@ class StreamManager:
     async def download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
                                        file_name: typing.Optional[str] = None,
                                        timeout: typing.Optional[float] = None) -> ManagedStream:
+        timeout = timeout or self.config.download_timeout
         if uri in self.starting_streams:
             return await self.starting_streams[uri]
         fut = asyncio.Future(loop=self.loop)
         self.starting_streams[uri] = fut
         try:
-            stream = await self._download_stream_from_uri(uri, exchange_rate_manager, file_name, timeout)
+            stream = await self._download_stream_from_uri(uri, timeout, exchange_rate_manager, file_name)
             fut.set_result(stream)
-            return stream
         except Exception as err:
             fut.set_exception(err)
         try:
