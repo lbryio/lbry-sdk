@@ -503,7 +503,6 @@ class StreamManager:
         try:
             stream = await self._download_stream_from_uri(uri, timeout, exchange_rate_manager, file_name)
             fut.set_result(stream)
-            return stream
         except Exception as err:
             fut.set_exception(err)
         try:
