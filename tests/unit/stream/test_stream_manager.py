@@ -17,12 +17,12 @@ from lbrynet.dht.node import Node
 from lbrynet.schema.claim import ClaimDict
 
 
-def get_mock_node(peer):
+def get_mock_node(peer=None):
     def mock_accumulate_peers(q1: asyncio.Queue, q2: asyncio.Queue):
         async def _task():
             pass
-
-        q2.put_nowait([peer])
+        if peer:
+            q2.put_nowait([peer])
         return q2, asyncio.create_task(_task())
 
     mock_node = mock.Mock(spec=Node)
@@ -130,6 +130,33 @@ class TestStreamManager(BlobExchangeTestBase):
         self.stream_manager.analytics_manager._post = check_post
         await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
         await asyncio.sleep(0, loop=self.loop)
+        self.assertTrue(checked_post)
+
+    async def test_no_peers_timeout(self):
+        self.server_from_client = None
+        self.client_config.fixed_peer_delay = 9001.0
+        self.client_config.download_timeout = 3.0
+        await self.setup_stream_manager()
+        checked_post = False
+
+        async def check_post(event):
+            self.assertEqual(event['event'], 'Time To First Bytes')
+            self.assertEqual(event['properties']['error'], 'DownloadSDTimeout')
+            self.assertEqual(event['properties']['tried_peers_count'], None)
+            self.assertEqual(event['properties']['active_peer_count'], None)
+            self.assertEqual(event['properties']['use_fixed_peers'], False)
+            self.assertEqual(event['properties']['added_fixed_peers'], False)
+            self.assertEqual(event['properties']['fixed_peer_delay'], 9001)
+            nonlocal checked_post
+            checked_post = True
+
+        self.stream_manager.analytics_manager._post = check_post
+        start = self.loop.time()
+        with self.assertRaises(DownloadSDTimeout):
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        duration = self.loop.time() - start
+        await asyncio.sleep(0, loop=self.loop)
+        self.assertTrue(4.0 >= duration >= 3.0)
         self.assertTrue(checked_post)
 
     async def test_download_stop_resume_delete(self):
