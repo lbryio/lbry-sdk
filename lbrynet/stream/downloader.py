@@ -36,6 +36,8 @@ class StreamDownloader(StreamAssembler):
         self.node: typing.Optional['Node'] = None
         self.assemble_task: typing.Optional[asyncio.Task] = None
         self.fixed_peers_handle: typing.Optional[asyncio.Handle] = None
+        self.fixed_peers_delay: typing.Optional[float] = None
+        self.added_fixed_peers = False
 
     async def setup(self):  # start the peer accumulator and initialize the downloader
         if self.blob_downloader:
@@ -82,17 +84,23 @@ class StreamDownloader(StreamAssembler):
                 (await resolve_host(url, port + 1, proto='tcp'), port)
                 for url, port in self.config.reflector_servers
             ]
-            delay = self.config.fixed_peer_delay if (
-                    'dht' not in self.config.components_to_skip
-                    and self.node and len(self.node.protocol.routing_table.get_peers())
-            ) else 0.0
-            self.loop.call_later(delay, lambda:
+
+            def _delayed_add_fixed_peers():
+                self.added_fixed_peers = True
                 self.peer_queue.put_nowait([
                     KademliaPeer(self.loop, address=address, tcp_port=port + 1)
                     for address, port in addresses
-            ]))
-        if self.config.reflector_servers:
-            self.loop.create_task(_add_fixed_peers())
+                ])
+
+            self.fixed_peers_handle = self.loop.call_later(self.fixed_peers_delay, _delayed_add_fixed_peers)
+        if not self.config.reflector_servers:
+            return
+        if 'dht' in self.config.components_to_skip or not self.node or not \
+                len(self.node.protocol.routing_table.get_peers()):
+            self.fixed_peers_delay = 0.0
+        else:
+            self.fixed_peers_delay = self.config.fixed_peer_delay
+        self.loop.create_task(_add_fixed_peers())
 
     def download(self, node: typing.Optional['Node'] = None):
         self.node = node

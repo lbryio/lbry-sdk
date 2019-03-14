@@ -482,6 +482,8 @@ class StreamManager:
                     resolved_time, self.loop.time() - start_time, download_id, parse_lbry_uri(uri).name, outpoint,
                     None if not stream else len(stream.downloader.blob_downloader.active_connections),
                     None if not stream else len(stream.downloader.blob_downloader.scores),
+                    False if not downloader else downloader.added_fixed_peers,
+                    self.config.fixed_peer_delay if not downloader else downloader.fixed_peers_delay,
                     claim.source_hash.decode(), time_to_descriptor,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].blob_hash,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,

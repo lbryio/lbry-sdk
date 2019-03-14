@@ -45,7 +45,8 @@ def _event_properties(installation_id: str, session_id: str,
 def _download_properties(conf: Config, external_ip: str, resolve_duration: float,
                          total_duration: typing.Optional[float], download_id: str, name: str,
                          outpoint: str, active_peer_count: int, tried_peers_count: int,
-                         sd_hash: str, sd_download_duration: typing.Optional[float] = None,
+                         added_fixed_peers: bool, fixed_peer_delay: float, sd_hash: str,
+                         sd_download_duration: typing.Optional[float] = None,
                          head_blob_hash: typing.Optional[str] = None,
                          head_blob_length: typing.Optional[int] = None,
                          head_blob_download_duration: typing.Optional[float] = None,
@@ -63,9 +64,8 @@ def _download_properties(conf: Config, external_ip: str, resolve_duration: float
         "peer_connect_timeout": conf.peer_connect_timeout,
         "blob_download_timeout": conf.blob_download_timeout,
         "use_fixed_peers": len(conf.reflector_servers) > 0,
-        "fixed_peer_delay": conf.fixed_peer_delay,
-        "added_fixed_peers": (conf.fixed_peer_delay < total_duration) and len(conf.reflector_servers) > 0,
-
+        "fixed_peer_delay": fixed_peer_delay,
+        "added_fixed_peers": added_fixed_peers,
         "active_peer_count": active_peer_count,
         "tried_peers_count": tried_peers_count,
 
@@ -173,7 +173,8 @@ class AnalyticsManager:
     async def send_time_to_first_bytes(self, resolve_duration: typing.Optional[float],
                                        total_duration: typing.Optional[float], download_id: str,
                                        name: str, outpoint: str, found_peers_count: int,
-                                       tried_peers_count: int, sd_hash: str,
+                                       tried_peers_count: int, added_fixed_peers: bool,
+                                       fixed_peers_delay: float, sd_hash: str,
                                        sd_download_duration: typing.Optional[float] = None,
                                        head_blob_hash: typing.Optional[str] = None,
                                        head_blob_length: typing.Optional[int] = None,
@@ -181,8 +182,8 @@ class AnalyticsManager:
                                        error: typing.Optional[str] = None):
         await self.track(self._event(TIME_TO_FIRST_BYTES, _download_properties(
             self.conf, self.external_ip, resolve_duration, total_duration, download_id, name, outpoint,
-            found_peers_count, tried_peers_count, sd_hash, sd_download_duration, head_blob_hash, head_blob_length,
-            head_blob_duration, error
+            found_peers_count, tried_peers_count, added_fixed_peers, fixed_peers_delay, sd_hash,
+            sd_download_duration, head_blob_hash, head_blob_length, head_blob_duration, error
         )))
 
     async def send_download_finished(self, download_id, name, sd_hash):

@@ -14,6 +14,8 @@ from lbrynet.extras.daemon.analytics import AnalyticsManager
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.dht.node import Node
+from lbrynet.dht.protocol.protocol import KademliaProtocol
+from lbrynet.dht.protocol.routing_table import TreeRoutingTable
 from lbrynet.schema.claim import ClaimDict
 
 
@@ -26,6 +28,9 @@ def get_mock_node(peer=None):
         return q2, asyncio.create_task(_task())
 
     mock_node = mock.Mock(spec=Node)
+    mock_node.protocol = mock.Mock(spec=KademliaProtocol)
+    mock_node.protocol.routing_table = mock.Mock(spec=TreeRoutingTable)
+    mock_node.protocol.routing_table.get_peers = lambda: []
     mock_node.accumulate_peers = mock_accumulate_peers
     mock_node.joined = asyncio.Event()
     mock_node.joined.set()
@@ -113,51 +118,106 @@ class TestStreamManager(BlobExchangeTestBase):
                                                              binascii.hexlify(generate_id()).decode()))
         self.exchange_rate_manager = get_dummy_exchange_rate_manager(time)
 
-    async def test_time_to_first_bytes(self):
+    async def _test_time_to_first_bytes(self, check_post, error=None, after_setup=None):
         await self.setup_stream_manager()
-        checked_post = False
+        if after_setup:
+            after_setup()
+        checked_analytics_event = False
 
-        async def check_post(event):
+        async def _check_post(event):
+            check_post(event)
+            nonlocal checked_analytics_event
+            checked_analytics_event = True
+
+        self.stream_manager.analytics_manager._post = _check_post
+        if error:
+            with self.assertRaises(error):
+                await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        else:
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await asyncio.sleep(0, loop=self.loop)
+        self.assertTrue(checked_analytics_event)
+
+    async def test_time_to_first_bytes(self):
+        def check_post(event):
             self.assertEqual(event['event'], 'Time To First Bytes')
             total_duration = event['properties']['total_duration']
             resolve_duration = event['properties']['resolve_duration']
             head_blob_duration = event['properties']['head_blob_duration']
             sd_blob_duration = event['properties']['sd_blob_duration']
+            self.assertFalse(event['properties']['added_fixed_peers'])
             self.assertTrue(total_duration >= resolve_duration + head_blob_duration + sd_blob_duration)
-            nonlocal checked_post
-            checked_post = True
 
-        self.stream_manager.analytics_manager._post = check_post
-        await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
-        await asyncio.sleep(0, loop=self.loop)
-        self.assertTrue(checked_post)
+        await self._test_time_to_first_bytes(check_post)
+
+    async def test_fixed_peer_delay_dht_peers_found(self):
+        self.client_config.reflector_servers = [(self.server_from_client.address, self.server_from_client.tcp_port - 1)]
+        server_from_client = None
+        self.server_from_client, server_from_client = server_from_client, self.server_from_client
+
+        def after_setup():
+            self.stream_manager.node.protocol.routing_table.get_peers = lambda: [server_from_client]
+
+        def check_post(event):
+            self.assertEqual(event['event'], 'Time To First Bytes')
+            total_duration = event['properties']['total_duration']
+            resolve_duration = event['properties']['resolve_duration']
+            head_blob_duration = event['properties']['head_blob_duration']
+            sd_blob_duration = event['properties']['sd_blob_duration']
+
+            self.assertEqual(event['event'], 'Time To First Bytes')
+            self.assertEqual(event['properties']['tried_peers_count'], 1)
+            self.assertEqual(event['properties']['active_peer_count'], 1)
+            self.assertEqual(event['properties']['use_fixed_peers'], True)
+            self.assertEqual(event['properties']['added_fixed_peers'], True)
+            self.assertEqual(event['properties']['fixed_peer_delay'], self.client_config.fixed_peer_delay)
+            self.assertGreaterEqual(total_duration, resolve_duration + head_blob_duration + sd_blob_duration)
+
+        await self._test_time_to_first_bytes(check_post, after_setup=after_setup)
+
+    async def test_override_fixed_peer_delay_dht_disabled(self):
+        self.client_config.reflector_servers = [(self.server_from_client.address, self.server_from_client.tcp_port - 1)]
+        self.client_config.components_to_skip = ['dht', 'hash_announcer']
+        self.client_config.fixed_peer_delay = 9001.0
+        self.server_from_client = None
+
+        def check_post(event):
+            total_duration = event['properties']['total_duration']
+            resolve_duration = event['properties']['resolve_duration']
+            head_blob_duration = event['properties']['head_blob_duration']
+            sd_blob_duration = event['properties']['sd_blob_duration']
+
+            self.assertEqual(event['event'], 'Time To First Bytes')
+            self.assertEqual(event['properties']['tried_peers_count'], 1)
+            self.assertEqual(event['properties']['active_peer_count'], 1)
+            self.assertEqual(event['properties']['use_fixed_peers'], True)
+            self.assertEqual(event['properties']['added_fixed_peers'], True)
+            self.assertEqual(event['properties']['fixed_peer_delay'], 0.0)
+            self.assertGreaterEqual(total_duration, resolve_duration + head_blob_duration + sd_blob_duration)
+
+        start = self.loop.time()
+        await self._test_time_to_first_bytes(check_post)
+        self.assertTrue(self.loop.time() - start < 3)
 
     async def test_no_peers_timeout(self):
+        # FIXME: the download should ideally fail right away if there are no peers
+        # to initialize the shortlist and fixed peers are disabled
         self.server_from_client = None
-        self.client_config.fixed_peer_delay = 9001.0
         self.client_config.download_timeout = 3.0
-        await self.setup_stream_manager()
-        checked_post = False
 
-        async def check_post(event):
+        def check_post(event):
             self.assertEqual(event['event'], 'Time To First Bytes')
             self.assertEqual(event['properties']['error'], 'DownloadSDTimeout')
             self.assertEqual(event['properties']['tried_peers_count'], None)
             self.assertEqual(event['properties']['active_peer_count'], None)
             self.assertEqual(event['properties']['use_fixed_peers'], False)
             self.assertEqual(event['properties']['added_fixed_peers'], False)
-            self.assertEqual(event['properties']['fixed_peer_delay'], 9001)
-            nonlocal checked_post
-            checked_post = True
+            self.assertEqual(event['properties']['fixed_peer_delay'], None)
 
-        self.stream_manager.analytics_manager._post = check_post
         start = self.loop.time()
-        with self.assertRaises(DownloadSDTimeout):
-            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await self._test_time_to_first_bytes(check_post, DownloadSDTimeout)
         duration = self.loop.time() - start
-        await asyncio.sleep(0, loop=self.loop)
         self.assertTrue(4.0 >= duration >= 3.0)
-        self.assertTrue(checked_post)
 
     async def test_download_stop_resume_delete(self):
         await self.setup_stream_manager()
