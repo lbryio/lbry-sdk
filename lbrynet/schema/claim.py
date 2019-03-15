@@ -351,6 +351,13 @@ class Fee:
         self._fee.address = address
 
     @property
+    def amount(self) -> Decimal:
+        if self.currency == 'LBC':
+            return self.lbc
+        if self.currency == 'USD':
+            return self.usd
+
+    @property
     def dewies(self) -> int:
         if self._fee.currency != FeeMessage.LBC:
             raise ValueError('Dewies can only be returned for LBC fees.')
