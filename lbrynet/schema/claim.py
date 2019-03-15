@@ -330,10 +330,6 @@ class Fee:
     def currency(self) -> str:
         return FeeMessage.Currency.Name(self._fee.currency)
 
-    @currency.setter
-    def currency(self, currency: str):
-        self._fee.currency = FeeMessage.Currency.Value(currency)
-
     @property
     def address(self) -> str:
         return b58encode(self._fee.address).decode()
@@ -357,6 +353,18 @@ class Fee:
         if self.currency == 'USD':
             return self.usd
 
+    DEWIES = Decimal(COIN)
+
+    @property
+    def lbc(self) -> Decimal:
+        if self._fee.currency != FeeMessage.LBC:
+            raise ValueError('LBC can only be returned for LBC fees.')
+        return Decimal(self._fee.amount / self.DEWIES)
+
+    @lbc.setter
+    def lbc(self, amount: Decimal):
+        self.dewies = int(amount * self.DEWIES)
+
     @property
     def dewies(self) -> int:
         if self._fee.currency != FeeMessage.LBC:
@@ -368,29 +376,27 @@ class Fee:
         self._fee.amount = amount
         self._fee.currency = FeeMessage.LBC
 
-    DEWEYS = Decimal(COIN)
-
-    @property
-    def lbc(self) -> Decimal:
-        if self._fee.currency != FeeMessage.LBC:
-            raise ValueError('LBC can only be returned for LBC fees.')
-        return Decimal(self._fee.amount / self.DEWEYS)
-
-    @lbc.setter
-    def lbc(self, amount: Decimal):
-        self.dewies = int(amount * self.DEWEYS)
-
-    USD = Decimal(100.0)
+    PENNIES = Decimal(100.0)
 
     @property
     def usd(self) -> Decimal:
         if self._fee.currency != FeeMessage.USD:
             raise ValueError('USD can only be returned for USD fees.')
-        return Decimal(self._fee.amount / self.USD)
+        return Decimal(self._fee.amount / self.PENNIES)
 
     @usd.setter
     def usd(self, amount: Decimal):
-        self._fee.amount = int(amount * self.USD)
+        self.pennies = int(amount * self.PENNIES)
+
+    @property
+    def pennies(self) -> int:
+        if self._fee.currency != FeeMessage.USD:
+            raise ValueError('Pennies can only be returned for USD fees.')
+        return self._fee.amount
+
+    @pennies.setter
+    def pennies(self, amount: int):
+        self._fee.amount = amount
         self._fee.currency = FeeMessage.USD
 
 
