@@ -10,11 +10,13 @@ class Distance:
 
     def __init__(self, key: bytes):
         if len(key) != constants.hash_length:
-            raise ValueError("invalid key length: %i" % len(key))
+            raise ValueError(f"invalid key length: {len(key)}")
         self.key = key
         self.val_key_one = int.from_bytes(key, 'big')
 
     def __call__(self, key_two: bytes) -> int:
+        if len(key_two) != constants.hash_length:
+            raise ValueError(f"invalid length of key to compare: {len(key_two)}")
         val_key_two = int.from_bytes(key_two, 'big')
         return self.val_key_one ^ val_key_two
 
