@@ -13,11 +13,6 @@ def cancel_task(task: typing.Optional[asyncio.Task]):
         task.cancel()
 
 
-def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
-    for task in tasks:
-        cancel_task(task)
-
-
 def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
     while tasks:
         cancel_task(tasks.pop())
