@@ -40,11 +40,22 @@ class TestFee(TestCase):
         self.assertEqual(stream.fee.lbc, Decimal('1.01'))
         self.assertEqual(stream.fee.dewies, 101000000)
         self.assertEqual(stream.fee.currency, 'LBC')
+        stream.fee.dewies = 203000000
+        self.assertEqual(stream.fee.lbc, Decimal('2.03'))
+        self.assertEqual(stream.fee.dewies, 203000000)
+        self.assertEqual(stream.fee.currency, 'LBC')
         with self.assertRaisesRegex(ValueError, 'USD can only be returned for USD fees.'):
             print(stream.fee.usd)
+        with self.assertRaisesRegex(ValueError, 'Pennies can only be returned for USD fees.'):
+            print(stream.fee.pennies)
 
         stream.fee.usd = Decimal('1.01')
         self.assertEqual(stream.fee.usd, Decimal('1.01'))
+        self.assertEqual(stream.fee.pennies, 101)
+        self.assertEqual(stream.fee.currency, 'USD')
+        stream.fee.pennies = 203
+        self.assertEqual(stream.fee.usd, Decimal('2.03'))
+        self.assertEqual(stream.fee.pennies, 203)
         self.assertEqual(stream.fee.currency, 'USD')
         with self.assertRaisesRegex(ValueError, 'LBC can only be returned for LBC fees.'):
             print(stream.fee.lbc)
