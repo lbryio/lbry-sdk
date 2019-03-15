@@ -34,7 +34,6 @@ setup(
         'cryptography==2.5',
         'protobuf==3.6.1',
         'msgpack==0.6.1',
-        'jsonschema==2.6.0',
         'ecdsa==0.13',
         'torba',
         'pyyaml==3.13',

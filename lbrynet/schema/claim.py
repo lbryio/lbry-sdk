@@ -1,26 +1,23 @@
 import json
-import binascii
-from copy import deepcopy
 from collections import OrderedDict
+from typing import List, Tuple
+from decimal import Decimal
+from binascii import hexlify, unhexlify
 
-import google.protobuf.json_format as json_pb  # pylint: disable=no-name-in-module
 from google.protobuf import json_format  # pylint: disable=no-name-in-module
 from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: disable=no-name-in-module,import-error
-from google.protobuf.message import Message  # pylint: disable=no-name-in-module,import-error
 
-from lbrynet.schema.types.v2 import claim_pb2 as claim_pb
 from torba.client.constants import COIN
 
-from lbrynet.schema.types.v1 import legacy_claim_pb2
 from lbrynet.schema.signature import Signature
 from lbrynet.schema.validator import get_validator
 from lbrynet.schema.signer import get_signer
-from lbrynet.schema.legacy_schema_v1.claim import Claim as LegacyClaim
-from lbrynet.schema.legacy_schema_v1 import CLAIM_TYPE_NAMES
 from lbrynet.schema.constants import CURVE_NAMES, SECP256k1
 from lbrynet.schema.encoding import decode_fields, decode_b64_fields, encode_fields
 from lbrynet.schema.error import DecodeError
-from lbrynet.schema.fee import Fee
+from lbrynet.schema.types.v2.claim_pb2 import Claim as ClaimMessage, Fee as FeeMessage
+from lbrynet.schema.base import b58decode, b58encode
+from lbrynet.schema import compat
 
 
 class ClaimDict(OrderedDict):
@@ -205,66 +202,400 @@ class ClaimDict(OrderedDict):
         return get_validator(curve).load_from_certificate(claim, certificate_id)
 
 
-class Schema(Message):
-    @classmethod
-    def load(cls, message):
-        raise NotImplementedError
+class Claim:
+
+    __slots__ = '_claim',
+
+    def __init__(self, claim_message=None):
+        self._claim = claim_message or ClaimMessage()
+
+    @property
+    def is_undetermined(self):
+        return self._claim.WhichOneof('type') is None
+
+    @property
+    def is_stream(self):
+        return self._claim.WhichOneof('type') == 'stream'
+
+    @property
+    def is_channel(self):
+        return self._claim.WhichOneof('type') == 'channel'
+
+    @property
+    def stream_message(self):
+        if self.is_undetermined:
+            self._claim.stream.SetInParent()
+        if not self.is_stream:
+            raise ValueError('Claim is not a stream.')
+        return self._claim.stream
+
+    @property
+    def stream(self) -> 'Stream':
+        return Stream(self)
+
+    @property
+    def channel_message(self):
+        if self.is_undetermined:
+            self._claim.channel.SetInParent()
+        if not self.is_channel:
+            raise ValueError('Claim is not a channel.')
+        return self._claim.channel
+
+    @property
+    def channel(self) -> 'Channel':
+        return Channel(self)
+
+    def to_bytes(self) -> bytes:
+        return self._claim.SerializeToString()
 
     @classmethod
-    def _load(cls, data, message):
-        if isinstance(data, dict):
-            data = json.dumps(data)
-        return json_pb.Parse(data, message)
-
-
-class Claim(Schema):
-    CLAIM_TYPE_STREAM = 0  #fixme: 0 is unset, should be fixed on proto file to be 1 and 2!
-    CLAIM_TYPE_CERT = 1
-
-    @classmethod
-    def load(cls, message: dict):
-        _claim = deepcopy(message)
-        _message_pb = claim_pb.Claim()
-
-        if "certificate" in _claim:  # old protobuf, migrate
-            _cert = _claim.pop("certificate")
-            assert isinstance(_cert, dict)
-            _message_pb.type = Claim.CLAIM_TYPE_CERT
-            _message_pb.channel.MergeFrom(claim_pb.Channel(public_key=_cert.pop("publicKey")))
-            _claim = {}  # so we dont need to know what other fields we ignored
-        elif "channel" in _claim:
-            _channel = _claim.pop("channel")
-            _message_pb.type = Claim.CLAIM_TYPE_CERT
-            _message_pb.channel = claim_pb.Channel(**_channel)
-        elif "stream" in _claim:
-            _message_pb.type = Claim.CLAIM_TYPE_STREAM
-            _stream = _claim.pop("stream")
-            if "source" in _stream:
-                _source = _stream.pop("source")
-                _message_pb.stream.hash = _source.get("source", b'')  # fixme: fail if empty?
-                _message_pb.stream.media_type = _source.pop("contentType")
-            if "metadata" in _stream:
-                _metadata = _stream.pop("metadata")
-                _message_pb.stream.license = _metadata.get("license")
-                _message_pb.stream.description = _metadata.get("description")
-                _message_pb.stream.language = _metadata.get("language")
-                _message_pb.stream.title = _metadata.get("title")
-                _message_pb.stream.author = _metadata.get("author")
-                _message_pb.stream.license_url = _metadata.get("licenseUrl")
-                _message_pb.stream.thumbnail_url = _metadata.get("thumbnail")
-                if _metadata.get("nsfw"):
-                    _message_pb.stream.tags.append("nsfw")
-                if "fee" in _metadata:
-                    _message_pb.stream.fee.address = _metadata["fee"]["address"]
-                    _message_pb.stream.fee.currency = {
-                        "LBC": 0,
-                        "USD": 1
-                    }[_metadata["fee"]["currency"]]
-                    multiplier = COIN if _metadata["fee"]["currency"] == "LBC" else 100
-                    total = int(_metadata["fee"]["amount"]*multiplier)
-                    _message_pb.stream.fee.amount = total if total >= 0 else 0
-            _claim = {}
+    def from_bytes(cls, data: bytes) -> 'Claim':
+        claim = ClaimMessage()
+        if data[0] == 0:
+            claim.ParseFromString(data[1:])
+            return cls(claim)
+        elif data[0] == 1:
+            claim.ParseFromString(data[85:])
+            return cls(claim).from_message(payload[1:21], payload[21:85])
+        elif data[0] == ord('{'):
+            return compat.from_old_json_schema(cls(claim), data)
         else:
-            raise AttributeError
+            return compat.from_types_v1(cls(claim), data)
 
-        return cls._load(_claim, _message_pb)
+
+class Video:
+
+    __slots__ = '_video',
+
+    def __init__(self, video_message):
+        self._video = video_message
+
+    @property
+    def width(self) -> int:
+        return self._video.width
+
+    @width.setter
+    def width(self, width: int):
+        self._video.width = width
+
+    @property
+    def height(self) -> int:
+        return self._video.height
+
+    @height.setter
+    def height(self, height: int):
+        self._video.height = height
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        return self.width, self.height
+
+    @dimensions.setter
+    def dimensions(self, dimensions: Tuple[int, int]):
+        self._video.width, self._video.height = dimensions
+
+
+class File:
+
+    __slots__ = '_file',
+
+    def __init__(self, file_message):
+        self._file = file_message
+
+    @property
+    def name(self) -> str:
+        return self._file.name
+
+    @name.setter
+    def name(self, name: str):
+        self._file.name = name
+
+    @property
+    def size(self) -> int:
+        return self._file.size
+
+    @size.setter
+    def size(self, size: int):
+        self._file.size = size
+
+
+class Fee:
+
+    __slots__ = '_fee',
+
+    def __init__(self, fee_message):
+        self._fee = fee_message
+
+    @property
+    def currency(self) -> str:
+        return FeeMessage.Currency.Name(self._fee.currency)
+
+    @currency.setter
+    def currency(self, currency: str):
+        self._fee.currency = FeeMessage.Currency.Value(currency)
+
+    @property
+    def address(self) -> str:
+        return b58encode(self._fee.address).decode()
+
+    @address.setter
+    def address(self, address: str):
+        self._fee.address = b58decode(address)
+
+    @property
+    def address_bytes(self) -> bytes:
+        return self._fee.address
+
+    @address_bytes.setter
+    def address_bytes(self, address: bytes):
+        self._fee.address = address
+
+    @property
+    def dewies(self) -> int:
+        if self._fee.currency != FeeMessage.LBC:
+            raise ValueError('Dewies can only be returned for LBC fees.')
+        return self._fee.amount
+
+    @dewies.setter
+    def dewies(self, amount: int):
+        self._fee.amount = amount
+        self._fee.currency = FeeMessage.LBC
+
+    DEWEYS = Decimal(COIN)
+
+    @property
+    def lbc(self) -> Decimal:
+        if self._fee.currency != FeeMessage.LBC:
+            raise ValueError('LBC can only be returned for LBC fees.')
+        return Decimal(self._fee.amount / self.DEWEYS)
+
+    @lbc.setter
+    def lbc(self, amount: Decimal):
+        self.dewies = int(amount * self.DEWEYS)
+
+    USD = Decimal(100.0)
+
+    @property
+    def usd(self) -> Decimal:
+        if self._fee.currency != FeeMessage.USD:
+            raise ValueError('USD can only be returned for USD fees.')
+        return Decimal(self._fee.amount / self.USD)
+
+    @usd.setter
+    def usd(self, amount: Decimal):
+        self._fee.amount = int(amount * self.USD)
+        self._fee.currency = FeeMessage.USD
+
+
+class Stream:
+
+    __slots__ = '_claim', '_stream'
+
+    def __init__(self, claim: Claim = None):
+        self._claim = claim or Claim()
+        self._stream = self._claim.stream_message
+
+    @property
+    def claim(self) -> Claim:
+        return self._claim
+
+    @property
+    def video(self) -> Video:
+        return Video(self._stream.video)
+
+    @property
+    def file(self) -> File:
+        return File(self._stream.file)
+
+    @property
+    def fee(self) -> Fee:
+        return Fee(self._stream.fee)
+
+    @property
+    def tags(self) -> List:
+        return self._stream.tags
+
+    @property
+    def hash(self) -> str:
+        return hexlify(self._stream.hash).decode()
+
+    @hash.setter
+    def hash(self, sd_hash: str):
+        self._stream.hash = unhexlify(sd_hash.encode())
+
+    @property
+    def hash_bytes(self) -> bytes:
+        return self._stream.hash
+
+    @hash_bytes.setter
+    def hash_bytes(self, hash: bytes):
+        self._stream.hash = hash
+
+    @property
+    def language(self) -> str:
+        return self._stream.language
+
+    @language.setter
+    def language(self, language: str):
+        self._stream.language = language
+
+    @property
+    def title(self) -> str:
+        return self._stream.title
+
+    @title.setter
+    def title(self, title: str):
+        self._stream.title = title
+
+    @property
+    def author(self) -> str:
+        return self._stream.author
+
+    @author.setter
+    def author(self, author: str):
+        self._stream.author = author
+
+    @property
+    def description(self) -> str:
+        return self._stream.description
+
+    @description.setter
+    def description(self, description: str):
+        self._stream.description = description
+
+    @property
+    def media_type(self) -> str:
+        return self._stream.media_type
+
+    @media_type.setter
+    def media_type(self, media_type: str):
+        self._stream.media_type = media_type
+
+    @property
+    def license(self) -> str:
+        return self._stream.license
+
+    @license.setter
+    def license(self, license: str):
+        self._stream.license = license
+
+    @property
+    def license_url(self) -> str:
+        return self._stream.license_url
+
+    @license_url.setter
+    def license_url(self, license_url: str):
+        self._stream.license_url = license_url
+
+    @property
+    def thumbnail_url(self) -> str:
+        return self._stream.thumbnail_url
+
+    @thumbnail_url.setter
+    def thumbnail_url(self, thumbnail_url: str):
+        self._stream.thumbnail_url = thumbnail_url
+
+    @property
+    def duration(self) -> int:
+        return self._stream.duration
+
+    @duration.setter
+    def duration(self, duration: int):
+        self._stream.duration = duration
+
+    @property
+    def release_time(self) -> int:
+        return self._stream.release_time
+
+    @release_time.setter
+    def release_time(self, release_time: int):
+        self._stream.release_time = release_time
+
+
+class Channel:
+
+    __slots__ = '_claim', '_channel'
+
+    def __init__(self, claim: Claim = None):
+        self._claim = claim or Claim()
+        self._channel = self._claim.channel_message
+
+    @property
+    def claim(self) -> Claim:
+        return self._claim
+
+    @property
+    def tags(self) -> List:
+        return self._channel.tags
+
+    @property
+    def public_key(self) -> str:
+        return hexlify(self._channel.public_key).decode()
+
+    @public_key.setter
+    def public_key(self, sd_public_key: str):
+        self._channel.public_key = unhexlify(sd_public_key.encode())
+
+    @property
+    def public_key_bytes(self) -> bytes:
+        return self._channel.public_key
+
+    @public_key_bytes.setter
+    def public_key_bytes(self, public_key: bytes):
+        self._channel.public_key = public_key
+
+    @property
+    def language(self) -> str:
+        return self._channel.language
+
+    @language.setter
+    def language(self, language: str):
+        self._channel.language = language
+
+    @property
+    def title(self) -> str:
+        return self._channel.title
+
+    @title.setter
+    def title(self, title: str):
+        self._channel.title = title
+
+    @property
+    def description(self) -> str:
+        return self._channel.description
+
+    @description.setter
+    def description(self, description: str):
+        self._channel.description = description
+
+    @property
+    def contact_email(self) -> str:
+        return self._channel.contact_email
+
+    @contact_email.setter
+    def contact_email(self, contact_email: str):
+        self._channel.contact_email = contact_email
+
+    @property
+    def homepage_url(self) -> str:
+        return self._channel.homepage_url
+
+    @homepage_url.setter
+    def homepage_url(self, homepage_url: str):
+        self._channel.homepage_url = homepage_url
+
+    @property
+    def thumbnail_url(self) -> str:
+        return self._channel.thumbnail_url
+
+    @thumbnail_url.setter
+    def thumbnail_url(self, thumbnail_url: str):
+        self._channel.thumbnail_url = thumbnail_url
+
+    @property
+    def cover_url(self) -> str:
+        return self._channel.cover_url
+
+    @cover_url.setter
+    def cover_url(self, cover_url: str):
+        self._channel.cover_url = cover_url
