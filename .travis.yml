@@ -112,7 +112,7 @@ jobs:
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
           - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f scripts/Dockerfile.wallet_server .
           - docker push lbry/wallet-server:$TRAVIS_TAG
-    - if: tag IS blank AND branch = master
+    - if: tag IS blank AND branch = master AND NOT type IN (pull_request)
       stage: build
       name: "Wallet Server Docker Image - Master"
       script:
