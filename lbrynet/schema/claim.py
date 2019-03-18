@@ -3,15 +3,6 @@ from collections import OrderedDict
 from typing import List, Tuple
 from decimal import Decimal
 from binascii import hexlify, unhexlify
-from hashlib import sha256
-
-import ecdsa
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.serialization import load_der_public_key
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from ecdsa.util import sigencode_der
 
 from google.protobuf import json_format  # pylint: disable=no-name-in-module
 from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: disable=no-name-in-module,import-error
@@ -19,10 +10,7 @@ from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: dis
 from torba.client.constants import COIN
 
 from lbrynet.schema.signature import Signature
-from lbrynet.schema.validator import get_validator
-from lbrynet.schema.signer import get_signer
 from lbrynet.schema.constants import CURVE_NAMES, SECP256k1
-from lbrynet.schema.encoding import decode_fields, decode_b64_fields, encode_fields
 from lbrynet.schema.error import DecodeError
 from lbrynet.schema.types.v2.claim_pb2 import Claim as ClaimMessage, Fee as FeeMessage
 from lbrynet.schema.base import b58decode, b58encode
@@ -238,35 +226,6 @@ class Claim:
     def is_signed(self):
         return self.signature is not None
 
-    def is_signed_by(self, channel: 'Channel', claim_address):
-        if self.unsigned_payload:
-            digest = sha256(b''.join([
-                claim_address, self.unsigned_payload, self.certificate_id
-            ])).digest()
-            public_key = load_der_public_key(channel.public_key_bytes, default_backend())
-            hash = hashes.SHA256()
-            signature = hexlify(self.signature)
-            r = int(signature[:int(len(signature)/2)], 16)
-            s = int(signature[int(len(signature)/2):], 16)
-            encoded_sig = sigencode_der(r, s, len(signature)*4)
-            public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
-            return True
-        else:
-            digest = sha256(b''.join([
-                self.certificate_id.encode(),
-                first_input_txid_nout.encode(),
-                self.to_bytes()
-            ])).digest()
-
-    def sign(self, certificate_id: str, private_key_text: str, first_input_txid_nout):
-        digest = sha256(b''.join([
-            certificate_id.encode(),
-            first_input_txid_nout.encode(),
-            self.to_bytes()
-        ])).digest()
-        private_key = ecdsa.SigningKey.from_pem(private_key_text, hashfunc="sha256")
-        self.signature = private_key.sign_digest_deterministic(digest, hashfunc="sha256")
-        self.certificate_id = certificate_id
 
     @property
     def stream_message(self):

@@ -2,8 +2,16 @@ import struct
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional
 
+import ecdsa
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import load_der_public_key
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
+from ecdsa.util import sigencode_der
+
 from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput
-from torba.client.hash import hash160
+from torba.client.hash import hash160, sha256, Base58
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.account import Account
 from lbrynet.wallet.script import InputScript, OutputScript
@@ -82,28 +90,65 @@ class Output(BaseOutput):
     def has_private_key(self):
         return self.private_key is not None
 
+    def is_signed_by(self, channel: 'Output', ledger):
+        if self.claim.unsigned_payload:
+            digest = sha256(b''.join([
+                Base58.decode(self.get_address(ledger)),
+                self.claim.unsigned_payload,
+                self.claim.certificate_id
+            ]))
+            public_key = load_der_public_key(channel.claim.channel.public_key_bytes, default_backend())
+            hash = hashes.SHA256()
+            signature = hexlify(self.claim.signature)
+            r = int(signature[:int(len(signature)/2)], 16)
+            s = int(signature[int(len(signature)/2):], 16)
+            encoded_sig = sigencode_der(r, s, len(signature)*4)
+            public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
+            return True
+        else:
+            digest = sha256(b''.join([
+                self.certificate_id.encode(),
+                first_input_txid_nout.encode(),
+                self.to_bytes()
+            ])).digest()
+
+    def sign(self, channel: 'Output'):
+        digest = sha256(b''.join([
+            certificate_id.encode(),
+            first_input_txid_nout.encode(),
+            self.to_bytes()
+        ])).digest()
+        private_key = ecdsa.SigningKey.from_pem(private_key_text, hashfunc="sha256")
+        self.signature = private_key.sign_digest_deterministic(digest, hashfunc="sha256")
+        self.certificate_id = certificate_id
+        self.script.values['claim'] = self._claim.to_bytes()
+
     @classmethod
     def pay_claim_name_pubkey_hash(
-            cls, amount: int, claim_name: str, claim: bytes, pubkey_hash: bytes) -> 'Output':
+            cls, amount: int, claim_name: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
         script = cls.script_class.pay_claim_name_pubkey_hash(
-            claim_name.encode(), claim, pubkey_hash)
+            claim_name.encode(), claim.to_bytes(), pubkey_hash)
+        txo = cls(amount, script)
+        txo._claim = claim
+        return txo
+
+    @classmethod
+    def pay_update_claim_pubkey_hash(
+            cls, amount: int, claim_name: str, claim_id: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.pay_update_claim_pubkey_hash(
+            claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
+        txo = cls(amount, script)
+        txo._claim = claim
+        return txo
+
+    @classmethod
+    def pay_support_pubkey_hash(cls, amount: int, claim_name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.pay_support_pubkey_hash(claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash)
         return cls(amount, script)
 
     @classmethod
     def purchase_claim_pubkey_hash(cls, amount: int, claim_id: str, pubkey_hash: bytes) -> 'Output':
         script = cls.script_class.purchase_claim_pubkey_hash(unhexlify(claim_id)[::-1], pubkey_hash)
-        return cls(amount, script)
-
-    @classmethod
-    def pay_update_claim_pubkey_hash(
-            cls, amount: int, claim_name: str, claim_id: str, claim: bytes, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_update_claim_pubkey_hash(
-            claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
-        return cls(amount, script)
-
-    @classmethod
-    def pay_support_pubkey_hash(cls, amount: int, claim_name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_support_pubkey_hash(claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash)
         return cls(amount, script)
 
 
@@ -119,11 +164,11 @@ class Transaction(BaseTransaction):
         return cls.create([], [output], funding_accounts, change_account)
 
     @classmethod
-    def claim(cls, name: str, meta: Claim, amount: int, holding_address: bytes,
+    def claim(cls, name: str, claim: Claim, amount: int, holding_address: bytes,
               funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
-            amount, name, meta.to_bytes(), ledger.address_to_hash160(holding_address)
+            amount, name, claim, ledger.address_to_hash160(holding_address)
         )
         return cls.create([], [claim_output], funding_accounts, change_account)
 
@@ -137,12 +182,12 @@ class Transaction(BaseTransaction):
         return cls.create([], [claim_output], funding_accounts, change_account)
 
     @classmethod
-    def update(cls, previous_claim: Output, meta: Claim, amount: int, holding_address: bytes,
+    def update(cls, previous_claim: Output, claim: Claim, amount: int, holding_address: bytes,
                funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
-            meta.to_bytes(), ledger.address_to_hash160(holding_address)
+            claim, ledger.address_to_hash160(holding_address)
         )
         return cls.create([Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account)
 

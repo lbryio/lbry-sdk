@@ -2,13 +2,12 @@ import asyncio
 import logging
 from binascii import unhexlify
 
-from lbrynet.schema.validator import validate_claim_id
 from torba.client.baseledger import BaseLedger
 from lbrynet.schema.error import URIParseError
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.wallet.resolve import Resolver
-from lbrynet.wallet.account import Account
+from lbrynet.wallet.account import Account, validate_claim_id
 from lbrynet.wallet.network import Network
 from lbrynet.wallet.database import WalletDatabase
 from lbrynet.wallet.transaction import Transaction
