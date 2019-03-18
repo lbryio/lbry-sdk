@@ -2,16 +2,25 @@ import json
 import logging
 import binascii
 from hashlib import sha256
+from string import hexdigits
 
-from lbrynet.schema.validator import validate_claim_id
 from torba.client.baseaccount import BaseAccount
 from torba.client.basetransaction import TXORef
 
 from lbrynet.schema.claim import ClaimDict
-from lbrynet.schema.signer import SECP256k1, get_signer
+#from lbrynet.schema.signer import SECP256k1, get_signer
 
 
 log = logging.getLogger(__name__)
+
+
+def validate_claim_id(claim_id):
+    if not len(claim_id) == 40:
+        raise Exception("Incorrect claimid length: %i" % len(claim_id))
+    if isinstance(claim_id, bytes):
+        claim_id = claim_id.decode('utf-8')
+    if set(claim_id).difference(hexdigits):
+        raise Exception("Claim id is not hex encoded")
 
 
 def generate_certificate():
