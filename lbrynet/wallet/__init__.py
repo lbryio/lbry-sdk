@@ -6,6 +6,5 @@ __node_url__ = (
 )
 __spvserver__ = 'lbrynet.extras.wallet.server.coin.LBCRegTest'
 
-from lbrynet.extras.wallet.ledger import MainNetLedger, RegTestLedger
-from lbrynet.extras.wallet.manager import LbryWalletManager
+from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.extras.wallet.network import Network

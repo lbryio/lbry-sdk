@@ -6,7 +6,7 @@ from torba.server.hash import hash_to_hex_str
 
 from torba.server.db import DB
 
-from lbrynet.extras.wallet.server.model import ClaimInfo
+from lbrynet.wallet.server.model import ClaimInfo
 
 
 class LBRYDB(DB):
