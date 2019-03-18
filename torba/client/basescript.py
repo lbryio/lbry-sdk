@@ -158,6 +158,8 @@ class Parser:
         while self.token_index < len(self.tokens) and self.opcode_index < len(self.opcodes):
             token = self.tokens[self.token_index]
             opcode = self.opcodes[self.opcode_index]
+            if token.value == 0 and isinstance(opcode, PUSH_SINGLE):
+                token = DataToken(b'')
             if isinstance(token, DataToken):
                 if isinstance(opcode, (PUSH_SINGLE, PUSH_INTEGER, PUSH_SUBSCRIPT)):
                     self.push_single(opcode, token.value)
