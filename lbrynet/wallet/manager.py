@@ -12,11 +12,11 @@ from torba.rpc.jsonrpc import CodeMessageError
 
 from lbrynet.schema.claim import ClaimDict
 
-from lbrynet.extras.wallet.ledger import MainNetLedger
-from lbrynet.extras.wallet.account import BaseAccount, generate_certificate
-from lbrynet.extras.wallet.transaction import Transaction
-from lbrynet.extras.wallet.database import WalletDatabase
-from lbrynet.extras.wallet.dewies import dewies_to_lbc
+from lbrynet.wallet.ledger import MainNetLedger
+from lbrynet.wallet.account import BaseAccount, generate_certificate
+from lbrynet.wallet.transaction import Transaction
+from lbrynet.wallet.database import WalletDatabase
+from lbrynet.wallet.dewies import dewies_to_lbc
 
 
 log = logging.getLogger(__name__)
