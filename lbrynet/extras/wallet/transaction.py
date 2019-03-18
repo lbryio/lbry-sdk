@@ -4,8 +4,7 @@ from typing import List, Iterable, Optional
 
 from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput
 from torba.client.hash import hash160
-from lbrynet.schema.decode import smart_decode
-from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.claim import Claim
 from lbrynet.extras.wallet.account import Account
 from lbrynet.extras.wallet.script import InputScript, OutputScript
 
@@ -19,12 +18,12 @@ class Output(BaseOutput):
     script: OutputScript
     script_class = OutputScript
 
-    __slots__ = '_claim_dict', 'channel', 'private_key'
+    __slots__ = '_claim', 'channel', 'private_key'
 
     def __init__(self, *args, channel: Optional['Output'] = None,
                  private_key: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._claim_dict = None
+        self._claim = None
         self.channel = channel
         self.private_key = private_key
 
@@ -60,16 +59,12 @@ class Output(BaseOutput):
         raise ValueError('No claim_name associated.')
 
     @property
-    def claim(self) -> ClaimDict:
+    def claim(self) -> Claim:
         if self.is_claim:
-            return smart_decode(self.script.values['claim'])
+            if self._claim is None:
+                self._claim = Claim.from_bytes(self.script.values['claim'])
+            return self._claim
         raise ValueError('Only claim name and claim update have the claim payload.')
-
-    @property
-    def claim_dict(self) -> dict:
-        if self._claim_dict is None:
-            self._claim_dict = self.claim.claim_dict
-        return self._claim_dict
 
     @property
     def permanent_url(self) -> str:
@@ -124,11 +119,11 @@ class Transaction(BaseTransaction):
         return cls.create([], [output], funding_accounts, change_account)
 
     @classmethod
-    def claim(cls, name: str, meta: ClaimDict, amount: int, holding_address: bytes,
+    def claim(cls, name: str, meta: Claim, amount: int, holding_address: bytes,
               funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
-            amount, name, meta.serialized, ledger.address_to_hash160(holding_address)
+            amount, name, meta.to_bytes(), ledger.address_to_hash160(holding_address)
         )
         return cls.create([], [claim_output], funding_accounts, change_account)
 
@@ -142,12 +137,12 @@ class Transaction(BaseTransaction):
         return cls.create([], [claim_output], funding_accounts, change_account)
 
     @classmethod
-    def update(cls, previous_claim: Output, meta: ClaimDict, amount: int, holding_address: bytes,
+    def update(cls, previous_claim: Output, meta: Claim, amount: int, holding_address: bytes,
                funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
-            meta.serialized, ledger.address_to_hash160(holding_address)
+            meta.to_bytes(), ledger.address_to_hash160(holding_address)
         )
         return cls.create([Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account)
 

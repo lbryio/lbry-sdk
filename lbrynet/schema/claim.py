@@ -3,6 +3,15 @@ from collections import OrderedDict
 from typing import List, Tuple
 from decimal import Decimal
 from binascii import hexlify, unhexlify
+from hashlib import sha256
+
+import ecdsa
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import load_der_public_key
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
+from ecdsa.util import sigencode_der
 
 from google.protobuf import json_format  # pylint: disable=no-name-in-module
 from google.protobuf.message import DecodeError as DecodeError_pb  # pylint: disable=no-name-in-module,import-error
@@ -204,10 +213,14 @@ class ClaimDict(OrderedDict):
 
 class Claim:
 
-    __slots__ = '_claim',
+    __slots__ = '_claim', 'signature', 'certificate_id', 'signature_type', 'unsigned_payload'
 
     def __init__(self, claim_message=None):
         self._claim = claim_message or ClaimMessage()
+        self.signature = None
+        self.signature_type = 'SECP256k1'
+        self.certificate_id = None
+        self.unsigned_payload = None
 
     @property
     def is_undetermined(self):
@@ -220,6 +233,40 @@ class Claim:
     @property
     def is_channel(self):
         return self._claim.WhichOneof('type') == 'channel'
+
+    @property
+    def is_signed(self):
+        return self.signature is not None
+
+    def is_signed_by(self, channel: 'Channel', claim_address):
+        if self.unsigned_payload:
+            digest = sha256(b''.join([
+                claim_address, self.unsigned_payload, self.certificate_id
+            ])).digest()
+            public_key = load_der_public_key(channel.public_key_bytes, default_backend())
+            hash = hashes.SHA256()
+            signature = hexlify(self.signature)
+            r = int(signature[:int(len(signature)/2)], 16)
+            s = int(signature[int(len(signature)/2):], 16)
+            encoded_sig = sigencode_der(r, s, len(signature)*4)
+            public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
+            return True
+        else:
+            digest = sha256(b''.join([
+                self.certificate_id.encode(),
+                first_input_txid_nout.encode(),
+                self.to_bytes()
+            ])).digest()
+
+    def sign(self, certificate_id: str, private_key_text: str, first_input_txid_nout):
+        digest = sha256(b''.join([
+            certificate_id.encode(),
+            first_input_txid_nout.encode(),
+            self.to_bytes()
+        ])).digest()
+        private_key = ecdsa.SigningKey.from_pem(private_key_text, hashfunc="sha256")
+        self.signature = private_key.sign_digest_deterministic(digest, hashfunc="sha256")
+        self.certificate_id = certificate_id
 
     @property
     def stream_message(self):
@@ -400,6 +447,95 @@ class Fee:
         self._fee.currency = FeeMessage.USD
 
 
+class Channel:
+
+    __slots__ = '_claim', '_channel'
+
+    def __init__(self, claim: Claim = None):
+        self._claim = claim or Claim()
+        self._channel = self._claim.channel_message
+
+    @property
+    def claim(self) -> Claim:
+        return self._claim
+
+    @property
+    def tags(self) -> List:
+        return self._channel.tags
+
+    @property
+    def public_key(self) -> str:
+        return hexlify(self._channel.public_key).decode()
+
+    @public_key.setter
+    def public_key(self, sd_public_key: str):
+        self._channel.public_key = unhexlify(sd_public_key.encode())
+
+    @property
+    def public_key_bytes(self) -> bytes:
+        return self._channel.public_key
+
+    @public_key_bytes.setter
+    def public_key_bytes(self, public_key: bytes):
+        self._channel.public_key = public_key
+
+    @property
+    def language(self) -> str:
+        return self._channel.language
+
+    @language.setter
+    def language(self, language: str):
+        self._channel.language = language
+
+    @property
+    def title(self) -> str:
+        return self._channel.title
+
+    @title.setter
+    def title(self, title: str):
+        self._channel.title = title
+
+    @property
+    def description(self) -> str:
+        return self._channel.description
+
+    @description.setter
+    def description(self, description: str):
+        self._channel.description = description
+
+    @property
+    def contact_email(self) -> str:
+        return self._channel.contact_email
+
+    @contact_email.setter
+    def contact_email(self, contact_email: str):
+        self._channel.contact_email = contact_email
+
+    @property
+    def homepage_url(self) -> str:
+        return self._channel.homepage_url
+
+    @homepage_url.setter
+    def homepage_url(self, homepage_url: str):
+        self._channel.homepage_url = homepage_url
+
+    @property
+    def thumbnail_url(self) -> str:
+        return self._channel.thumbnail_url
+
+    @thumbnail_url.setter
+    def thumbnail_url(self, thumbnail_url: str):
+        self._channel.thumbnail_url = thumbnail_url
+
+    @property
+    def cover_url(self) -> str:
+        return self._channel.cover_url
+
+    @cover_url.setter
+    def cover_url(self, cover_url: str):
+        self._channel.cover_url = cover_url
+
+
 class Stream:
 
     __slots__ = '_claim', '_stream'
@@ -523,92 +659,3 @@ class Stream:
     @release_time.setter
     def release_time(self, release_time: int):
         self._stream.release_time = release_time
-
-
-class Channel:
-
-    __slots__ = '_claim', '_channel'
-
-    def __init__(self, claim: Claim = None):
-        self._claim = claim or Claim()
-        self._channel = self._claim.channel_message
-
-    @property
-    def claim(self) -> Claim:
-        return self._claim
-
-    @property
-    def tags(self) -> List:
-        return self._channel.tags
-
-    @property
-    def public_key(self) -> str:
-        return hexlify(self._channel.public_key).decode()
-
-    @public_key.setter
-    def public_key(self, sd_public_key: str):
-        self._channel.public_key = unhexlify(sd_public_key.encode())
-
-    @property
-    def public_key_bytes(self) -> bytes:
-        return self._channel.public_key
-
-    @public_key_bytes.setter
-    def public_key_bytes(self, public_key: bytes):
-        self._channel.public_key = public_key
-
-    @property
-    def language(self) -> str:
-        return self._channel.language
-
-    @language.setter
-    def language(self, language: str):
-        self._channel.language = language
-
-    @property
-    def title(self) -> str:
-        return self._channel.title
-
-    @title.setter
-    def title(self, title: str):
-        self._channel.title = title
-
-    @property
-    def description(self) -> str:
-        return self._channel.description
-
-    @description.setter
-    def description(self, description: str):
-        self._channel.description = description
-
-    @property
-    def contact_email(self) -> str:
-        return self._channel.contact_email
-
-    @contact_email.setter
-    def contact_email(self, contact_email: str):
-        self._channel.contact_email = contact_email
-
-    @property
-    def homepage_url(self) -> str:
-        return self._channel.homepage_url
-
-    @homepage_url.setter
-    def homepage_url(self, homepage_url: str):
-        self._channel.homepage_url = homepage_url
-
-    @property
-    def thumbnail_url(self) -> str:
-        return self._channel.thumbnail_url
-
-    @thumbnail_url.setter
-    def thumbnail_url(self, thumbnail_url: str):
-        self._channel.thumbnail_url = thumbnail_url
-
-    @property
-    def cover_url(self) -> str:
-        return self._channel.cover_url
-
-    @cover_url.setter
-    def cover_url(self, cover_url: str):
-        self._channel.cover_url = cover_url
