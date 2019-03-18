@@ -2,14 +2,12 @@ import logging
 
 from ecdsa import BadSignatureError
 from binascii import unhexlify, hexlify
-from lbrynet.extras.wallet.dewies import dewies_to_lbc
+from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
-from lbrynet.schema.address import is_address
-from lbrynet.schema.claim import ClaimDict
-from lbrynet.schema.decode import smart_decode
+from lbrynet.schema.claim import Claim
 from lbrynet.schema.error import DecodeError
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.extras.wallet.claim_proofs import verify_proof, InvalidProofError
+from lbrynet.wallet.claim_proofs import verify_proof, InvalidProofError
 log = logging.getLogger(__name__)
 
 

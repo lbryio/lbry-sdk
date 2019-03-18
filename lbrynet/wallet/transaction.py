@@ -5,8 +5,8 @@ from typing import List, Iterable, Optional
 from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput
 from torba.client.hash import hash160
 from lbrynet.schema.claim import Claim
-from lbrynet.extras.wallet.account import Account
-from lbrynet.extras.wallet.script import InputScript, OutputScript
+from lbrynet.wallet.account import Account
+from lbrynet.wallet.script import InputScript, OutputScript
 
 
 class Input(BaseInput):

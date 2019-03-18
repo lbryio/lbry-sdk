@@ -6,13 +6,13 @@ from lbrynet.schema.validator import validate_claim_id
 from torba.client.baseledger import BaseLedger
 from lbrynet.schema.error import URIParseError
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.extras.wallet.dewies import dewies_to_lbc
-from lbrynet.extras.wallet.resolve import Resolver
-from lbrynet.extras.wallet.account import Account
-from lbrynet.extras.wallet.network import Network
-from lbrynet.extras.wallet.database import WalletDatabase
-from lbrynet.extras.wallet.transaction import Transaction
-from lbrynet.extras.wallet.header import Headers, UnvalidatedHeaders
+from lbrynet.wallet.dewies import dewies_to_lbc
+from lbrynet.wallet.resolve import Resolver
+from lbrynet.wallet.account import Account
+from lbrynet.wallet.network import Network
+from lbrynet.wallet.database import WalletDatabase
+from lbrynet.wallet.transaction import Transaction
+from lbrynet.wallet.header import Headers, UnvalidatedHeaders
 
 
 log = logging.getLogger(__name__)
