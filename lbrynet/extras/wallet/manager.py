@@ -6,7 +6,7 @@ from binascii import unhexlify
 from datetime import datetime
 from typing import Optional
 
-from lbrynet.schema.constants import SECP256k1
+from lbrynet.schema.claim import Claim
 from torba.client.basemanager import BaseWalletManager
 from torba.rpc.jsonrpc import CodeMessageError
 
@@ -394,15 +394,11 @@ class LbryWalletManager(BaseWalletManager):
     def get_utxos(account: BaseAccount):
         return account.get_utxos()
 
-    async def claim_name(self, account, name, amount, claim_dict, certificate=None, claim_address=None):
-        claim = ClaimDict.load_dict(claim_dict)
+    async def claim_name(self, account, name, amount, claim: Claim, certificate=None, claim_address=None):
         if not claim_address:
             claim_address = await account.receiving.get_or_create_usable_address()
         if certificate:
-            claim = claim.sign(
-                certificate.private_key, claim_address, certificate.claim_id, curve=SECP256k1, name=name,
-                force_detached=False  # TODO: delete it and make True default everywhere when its out
-            )
+            claim = claim.sign(certificate.claim_id, certificate.private_key)
         existing_claims = await account.get_claims(
             claim_name_type__any={'is_claim': 1, 'is_update': 1},  # exclude is_supports
             claim_name=name
@@ -417,9 +413,12 @@ class LbryWalletManager(BaseWalletManager):
             )
         else:
             raise NameError(f"More than one other claim exists with the name '{name}'.")
+        if certificate:
+            claim.sign(certificate.claim_id, certificate.private_key, tx.inputs[0].txo_ref.id.encode())
+            tx._reset()
         await account.ledger.broadcast(tx)
         await self.old_db.save_claims([self._old_get_temp_claim_info(
-            tx, tx.outputs[0], claim_address, claim_dict, name, dewies_to_lbc(amount)
+            tx, tx.outputs[0], claim_address, claim, name, dewies_to_lbc(amount)
         )])
         # TODO: release reserved tx outputs in case anything fails by this point
         return tx

@@ -1,9 +1,9 @@
 import json
 from decimal import Decimal
 
-from lbrynet.schema.address import decode_address, encode_address
 from lbrynet.schema.types.v1.legacy_claim_pb2 import Claim as OldClaimMessage
 from lbrynet.schema.types.v1.metadata_pb2 import Metadata as MetadataMessage
+from lbrynet.schema.types.v1.certificate_pb2 import KeyType
 from lbrynet.schema.types.v1.fee_pb2 import Fee as FeeMessage
 
 
@@ -60,6 +60,13 @@ def from_types_v1(claim, payload: bytes):
                 stream.fee.usd = Decimal(fee.amount)
             else:
                 raise ValueError(f'Unsupported currency: {currency}')
+        if old.HasField('publisherSignature'):
+            sig = old.publisherSignature
+            claim.signature = sig.signature
+            claim.signature_type = KeyType.Name(sig.signatureType)
+            claim.certificate_id = sig.certificateId
+            old.ClearField("publisherSignature")
+            claim.unsigned_payload = old.SerializeToString()
     elif old.claimType == 2:
         channel = claim.channel
         channel.public_key_bytes = old.certificate.publicKey
