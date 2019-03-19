@@ -284,18 +284,29 @@ class Template:
 
 class Script:
 
-    __slots__ = 'source', 'template', 'values'
+    __slots__ = 'source', '_template', '_values', '_template_hint'
 
     templates: List[Template] = []
 
     def __init__(self, source=None, template=None, values=None, template_hint=None):
         self.source = source
-        self.template = template
-        self.values = values
-        if source:
-            self.parse(template_hint)
-        elif template and values:
+        self._template = template
+        self._values = values
+        self._template_hint = template_hint
+        if source is None and template and values:
             self.generate()
+
+    @property
+    def template(self):
+        if self._template is None:
+            self.parse(self._template_hint)
+        return self._template
+
+    @property
+    def values(self):
+        if self._values is None:
+            self.parse(self._template_hint)
+        return self._values
 
     @property
     def tokens(self):
@@ -311,15 +322,15 @@ class Script:
             if not template:
                 continue
             try:
-                self.values = template.parse(tokens)
-                self.template = template
+                self._values = template.parse(tokens)
+                self._template = template
                 return
             except ParseError:
                 continue
         raise ValueError('No matching templates for source: {}'.format(hexlify(self.source)))
 
     def generate(self):
-        self.source = self.template.generate(self.values)
+        self.source = self.template.generate(self._values)
 
 
 class BaseInputScript(Script):
