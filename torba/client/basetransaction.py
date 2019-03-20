@@ -54,6 +54,10 @@ class TXORef:
         self.position = position
 
     @property
+    def hash(self):
+        return self.tx_ref.hash
+
+    @property
     def id(self):
         return '{}:{}'.format(self.tx_ref.id, self.position)
 
