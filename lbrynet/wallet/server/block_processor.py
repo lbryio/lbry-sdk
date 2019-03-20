@@ -56,7 +56,7 @@ class LBRYBlockProcessor(BlockProcessor):
                         self.logger.error("REJECTED: {} updating {}".format(*info))
             for txin in tx.inputs:
                 if txin not in update_inputs:
-                    abandoned_claim_id = self.db.abandon_spent(txin.txo_ref.hash, txin.txo_ref.position)
+                    abandoned_claim_id = self.db.abandon_spent(txin.txo_ref.tx_ref.hash, txin.txo_ref.position)
                     if abandoned_claim_id:
                         add_undo((abandoned_claim_id, self.db.get_claim_info(abandoned_claim_id)))
         return undo_info
