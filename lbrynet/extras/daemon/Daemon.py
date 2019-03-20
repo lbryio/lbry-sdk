@@ -8,6 +8,7 @@ import typing
 import aiohttp
 import base58
 import random
+from decimal import Decimal
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -2023,19 +2024,14 @@ class Daemon(metaclass=JSONRPCServerType):
         # check for original deprecated format {'currency':{'address','amount'}}
         # add address, version to fee if unspecified
         if fee is not None:
-            if len(metadata['fee'].keys()) == 1 and isinstance(metadata['fee'].values()[0], dict):
-                raise Exception('Old format for fee no longer supported. '
-                                'Fee must be specified as {"currency":,"address":,"amount":}')
-
-            if 'amount' in metadata['fee'] and 'currency' in metadata['fee']:
-                if not metadata['fee']['amount']:
-                    log.warning("Stripping empty fee from published metadata")
-                    del metadata['fee']
-                elif 'address' not in metadata['fee']:
-                    address = await account.receiving.get_or_create_usable_address()
-                    metadata['fee']['address'] = address
-            if 'fee' in metadata and 'version' not in metadata['fee']:
-                metadata['fee']['version'] = '_0_0_1'
+            if fee['currency'] == 'LBC':
+                stream.fee.lbc = Decimal(fee['amount'])
+            elif fee['currency'] == 'USD':
+                stream.fee.usd = Decimal(fee['amount'])
+            if 'address' in fee:
+                stream.fee.address = fee['address']
+            else:
+                stream.fee.address = await account.receiving.get_or_create_usable_address()
 
         sd_to_delete = None
 
@@ -2079,7 +2075,7 @@ class Daemon(metaclass=JSONRPCServerType):
             else:
                 log.info("generated stream from %s for claim", file_path)
         else:
-            log.info("updating claim with stream %s from previous", claim_dict['stream']['source']['source'][:8])
+            log.info("updating claim with stream %s from previous", claim.stream.hash[:8])
 
         sd_hash = claim.stream.hash
         log.info("Publish: %s", {

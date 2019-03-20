@@ -3,7 +3,7 @@ import os
 import json
 import logging
 from binascii import hexlify
-from lbrynet.schema.decode import smart_decode
+from lbrynet.schema.claim import Claim
 
 log = logging.getLogger(__name__)
 
@@ -260,7 +260,7 @@ def do_migration(conf):
                 (
                     "%s:%i" % (claim_arg_tup[0], claim_arg_tup[1]), claim_arg_tup[2], claim_arg_tup[3],
                     claim_arg_tup[7], claim_arg_tup[6], claim_arg_tup[8],
-                    smart_decode(claim_arg_tup[8]).certificate_id, claim_arg_tup[5], claim_arg_tup[4]
+                    Claim.from_bytes(claim_arg_tup[8]).signing_channel_id, claim_arg_tup[5], claim_arg_tup[4]
                 )
                 for sd_hash, claim_arg_tup in claim_queries.items() if claim_arg_tup
             ]     # sd_hash,  (txid, nout, claim_id, name, sequence, address, height, amount, serialized)
