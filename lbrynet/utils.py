@@ -14,7 +14,7 @@ import pkg_resources
 import contextlib
 import certifi
 import aiohttp
-from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.claim import Claim
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
 
@@ -115,8 +115,8 @@ def short_hash(hash_str):
 def get_sd_hash(stream_info):
     if not stream_info:
         return None
-    if isinstance(stream_info, ClaimDict):
-        return stream_info.source_hash
+    if isinstance(stream_info, Claim):
+        return stream_info.stream.hash
     result = stream_info.get('claim', {}).\
         get('value', {}).\
         get('stream', {}).\

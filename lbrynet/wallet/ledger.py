@@ -3,8 +3,7 @@ import logging
 from binascii import unhexlify
 
 from torba.client.baseledger import BaseLedger
-from lbrynet.schema.error import URIParseError
-from lbrynet.schema.uri import parse_lbry_uri
+from lbrynet.schema.uri import parse_lbry_uri, URIParseError
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.wallet.resolve import Resolver
 from lbrynet.wallet.account import Account, validate_claim_id

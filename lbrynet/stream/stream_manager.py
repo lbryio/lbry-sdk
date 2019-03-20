@@ -4,15 +4,15 @@ import typing
 import binascii
 import logging
 import random
+from decimal import Decimal
 from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError, \
     DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.utils import generate_id
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.managed_stream import ManagedStream
-from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.claim import Claim
 from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.schema.decode import smart_decode
 from lbrynet.extras.daemon.storage import lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
@@ -74,7 +74,7 @@ class StreamManager:
 
     async def _update_content_claim(self, stream: ManagedStream):
         claim_info = await self.storage.get_content_claim(stream.stream_hash)
-        stream.set_claim(claim_info, smart_decode(claim_info['value']))
+        stream.set_claim(claim_info, claim_info['value'])
 
     async def start_stream(self, stream: ManagedStream) -> bool:
         """
@@ -406,7 +406,7 @@ class StreamManager:
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
 
-        claim = ClaimDict.load_dict(resolved['value'])
+        claim = Claim.from_bytes(binascii.unhexlify(resolved['hex']))
         outpoint = f"{resolved['txid']}:{resolved['nout']}"
         resolved_time = self.loop.time() - start_time
 
@@ -417,12 +417,12 @@ class StreamManager:
 
         # check that the fee is payable
         fee_amount, fee_address = None, None
-        if claim.has_fee:
+        if claim.stream.has_fee:
             fee_amount = round(exchange_rate_manager.convert_currency(
-                claim.source_fee.currency, "LBC", claim.source_fee.amount
+                claim.stream.fee.currency, "LBC", claim.stream.fee.amount
             ), 5)
             max_fee_amount = round(exchange_rate_manager.convert_currency(
-                self.config.max_key_fee['currency'], "LBC", self.config.max_key_fee['amount']
+                self.config.max_key_fee['currency'], "LBC", Decimal(self.config.max_key_fee['amount'])
             ), 5)
             if fee_amount > max_fee_amount:
                 msg = f"fee of {fee_amount} exceeds max configured to allow of {max_fee_amount}"
@@ -433,11 +433,11 @@ class StreamManager:
                 msg = f"fee of {fee_amount} exceeds max available balance"
                 log.warning(msg)
                 raise InsufficientFundsError(msg)
-            fee_address = claim.source_fee.address.decode()
+            fee_address = claim.stream.fee.address
 
         # download the stream
         download_id = binascii.hexlify(generate_id()).decode()
-        downloader = StreamDownloader(self.loop, self.config, self.blob_manager, claim.source_hash.decode(),
+        downloader = StreamDownloader(self.loop, self.config, self.blob_manager, claim.stream.hash,
                                       self.config.download_dir, file_name)
 
         stream = None
@@ -484,7 +484,7 @@ class StreamManager:
                     None if not stream else len(stream.downloader.blob_downloader.scores),
                     False if not downloader else downloader.added_fixed_peers,
                     self.config.fixed_peer_delay if not downloader else downloader.fixed_peers_delay,
-                    claim.source_hash.decode(), time_to_descriptor,
+                    claim.stream.hash, time_to_descriptor,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].blob_hash,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,
                     time_to_first_bytes, None if not error else error.__class__.__name__

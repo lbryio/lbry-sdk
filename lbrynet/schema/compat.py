@@ -20,7 +20,7 @@ def from_old_json_schema(claim, payload: bytes):
     stream.language = value.get('language', '')
     stream.hash = value['sources']['lbry_sd_hash']
     if value.get('nsfw', False):
-        stream.tags.append('nsfw')
+        stream.tags.append('mature')
     if "fee" in value:
         fee = value["fee"]
         currency = list(fee.keys())[0]
@@ -49,7 +49,7 @@ def from_types_v1(claim, payload: bytes):
         stream.media_type = old.stream.source.contentType
         stream.hash_bytes = old.stream.source.source
         if old.stream.metadata.nsfw:
-            stream.tags.append('nsfw')
+            stream.tags.append('mature')
         if old.stream.metadata.HasField('fee'):
             fee = old.stream.metadata.fee
             stream.fee.address_bytes = fee.address
@@ -64,7 +64,7 @@ def from_types_v1(claim, payload: bytes):
             sig = old.publisherSignature
             claim.signature = sig.signature
             claim.signature_type = KeyType.Name(sig.signatureType)
-            claim.certificate_id = sig.certificateId
+            claim.signing_channel_id = sig.certificateId
             old.ClearField("publisherSignature")
             claim.unsigned_payload = old.SerializeToString()
     elif old.claimType == 2:

@@ -226,6 +226,6 @@ class ManagedStream:
         self.stream_claim_info = StoredStreamClaim(
             self.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
             claim_info['name'], claim_info['amount'], claim_info['height'],
-            binascii.hexlify(claim.serialized).decode(), claim.certificate_id, claim_info['address'],
+            binascii.hexlify(claim.to_bytes()).decode(), claim.signing_channel_id, claim_info['address'],
             claim_info['claim_sequence'], claim_info.get('channel_name')
         )

@@ -1,5 +1,5 @@
 from torba.server.tx import Deserializer
-from lbrynet.extras.wallet.server.opcodes import decode_claim_script
+from lbrynet.wallet.server.opcodes import decode_claim_script
 from lbrynet.wallet.server.model import TxClaimOutput, LBRYTx
 
 

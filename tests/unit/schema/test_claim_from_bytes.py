@@ -2,7 +2,6 @@ from unittest import TestCase
 from binascii import unhexlify
 
 from lbrynet.schema import Claim
-from lbrynet.schema.base import b58decode
 
 
 class TestOldJSONSchemaCompatibility(TestCase):
@@ -143,8 +142,6 @@ class TestTypesV1Compatibility(TestCase):
             'd2214c040fd2e530463ffe66098eca14fc70b50ff3aefd106049a815f595ed5a13eda7419ad78d9ed7ae47'
             '3f17'
         )
-
-        self.assertTrue(stream.is_signed_by(channel, b58decode('bb4UAfujhmvTgyx7ufoEa4aevum6hKSW36')))
 
     def test_unsigned_with_fee(self):
         claim = Claim.from_bytes(unhexlify(

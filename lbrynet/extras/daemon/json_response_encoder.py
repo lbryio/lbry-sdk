@@ -4,9 +4,9 @@ from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
 from ecdsa import BadSignatureError
-from lbrynet.extras.wallet import MainNetLedger
-from lbrynet.extras.wallet.transaction import Transaction, Output
-from lbrynet.extras.wallet.dewies import dewies_to_lbc
+from lbrynet.wallet.ledger import MainNetLedger
+from lbrynet.wallet.transaction import Transaction, Output
+from lbrynet.wallet.dewies import dewies_to_lbc
 
 
 log = logging.getLogger(__name__)
@@ -68,15 +68,13 @@ class JSONResponseEncoder(JSONEncoder):
 
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 claim = txo.claim
-                output['value'] = claim.claim_dict
-                if claim.has_signature:
+                output['value'] = claim.to_dict()
+                if claim.is_signed:
                     output['valid_signature'] = None
                     if txo.channel is not None:
                         output['channel_name'] = txo.channel.claim_name
                         try:
-                            output['valid_signature'] = claim.validate_signature(
-                                txo.get_address(self.ledger), txo.channel.claim, name=txo.claim_name
-                            )
+                            output['valid_signature'] = txo.is_signed_by(txo.channel, self.ledger)
                         except BadSignatureError:
                             output['valid_signature'] = False
                         except ValueError:

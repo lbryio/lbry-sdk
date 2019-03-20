@@ -1,4 +1,5 @@
 import struct
+import hashlib
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional
 
@@ -26,12 +27,11 @@ class Output(BaseOutput):
     script: OutputScript
     script_class = OutputScript
 
-    __slots__ = '_claim', 'channel', 'private_key'
+    __slots__ = 'channel', 'private_key'
 
     def __init__(self, *args, channel: Optional['Output'] = None,
                  private_key: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._claim = None
         self.channel = channel
         self.private_key = private_key
 
@@ -69,9 +69,9 @@ class Output(BaseOutput):
     @property
     def claim(self) -> Claim:
         if self.is_claim:
-            if self._claim is None:
-                self._claim = Claim.from_bytes(self.script.values['claim'])
-            return self._claim
+            if not isinstance(self.script.values['claim'], Claim):
+                self.script.values['claim'] = Claim.from_bytes(self.script.values['claim'])
+            return self.script.values['claim']
         raise ValueError('Only claim name and claim update have the claim payload.')
 
     @property
@@ -90,46 +90,55 @@ class Output(BaseOutput):
     def has_private_key(self):
         return self.private_key is not None
 
-    def is_signed_by(self, channel: 'Output', ledger):
+    def is_signed_by(self, channel: 'Output', ledger=None):
         if self.claim.unsigned_payload:
-            digest = sha256(b''.join([
+            pieces = [
                 Base58.decode(self.get_address(ledger)),
                 self.claim.unsigned_payload,
-                self.claim.certificate_id
-            ]))
-            public_key = load_der_public_key(channel.claim.channel.public_key_bytes, default_backend())
-            hash = hashes.SHA256()
-            signature = hexlify(self.claim.signature)
-            r = int(signature[:int(len(signature)/2)], 16)
-            s = int(signature[int(len(signature)/2):], 16)
-            encoded_sig = sigencode_der(r, s, len(signature)*4)
-            public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
-            return True
+                self.claim.signing_channel_id
+            ]
         else:
-            digest = sha256(b''.join([
-                self.certificate_id.encode(),
-                first_input_txid_nout.encode(),
-                self.to_bytes()
-            ])).digest()
+            pieces = [
+                self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
+                self.claim.signing_channel_id,
+                self.claim.to_message_bytes()
+            ]
+        digest = sha256(b''.join(pieces))
+        public_key = load_der_public_key(channel.claim.channel.public_key_bytes, default_backend())
+        hash = hashes.SHA256()
+        signature = hexlify(self.claim.signature)
+        r = int(signature[:int(len(signature)/2)], 16)
+        s = int(signature[int(len(signature)/2):], 16)
+        encoded_sig = sigencode_der(r, s, len(signature)*4)
+        public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
+        return True
 
-    def sign(self, channel: 'Output'):
+    def sign(self, channel: 'Output', first_input_id=None):
+        self.claim.signing_channel_id = unhexlify(channel.claim_id)
         digest = sha256(b''.join([
-            certificate_id.encode(),
-            first_input_txid_nout.encode(),
-            self.to_bytes()
-        ])).digest()
-        private_key = ecdsa.SigningKey.from_pem(private_key_text, hashfunc="sha256")
-        self.signature = private_key.sign_digest_deterministic(digest, hashfunc="sha256")
-        self.certificate_id = certificate_id
-        self.script.values['claim'] = self._claim.to_bytes()
+            first_input_id or self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
+            self.claim.signing_channel_id,
+            self.claim.to_message_bytes()
+        ]))
+        private_key = ecdsa.SigningKey.from_pem(channel.private_key, hashfunc=hashlib.sha256)
+        self.claim.signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+
+    def generate_channel_private_key(self):
+        private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+        self.private_key = private_key.to_pem()
+        self.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
+        return self.private_key
+
+    def is_channel_private_key(self, private_key_pem):
+        private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=hashlib.sha256)
+        return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()
 
     @classmethod
     def pay_claim_name_pubkey_hash(
             cls, amount: int, claim_name: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
         script = cls.script_class.pay_claim_name_pubkey_hash(
-            claim_name.encode(), claim.to_bytes(), pubkey_hash)
+            claim_name.encode(), claim, pubkey_hash)
         txo = cls(amount, script)
-        txo._claim = claim
         return txo
 
     @classmethod
@@ -138,7 +147,6 @@ class Output(BaseOutput):
         script = cls.script_class.pay_update_claim_pubkey_hash(
             claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
         txo = cls(amount, script)
-        txo._claim = claim
         return txo
 
     @classmethod

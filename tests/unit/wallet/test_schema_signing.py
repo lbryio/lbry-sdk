@@ -1,11 +1,76 @@
-from unittest import TestCase
 from binascii import unhexlify
 
+from cryptography.exceptions import InvalidSignature
+
+from torba.testcase import AsyncioTestCase
+from torba.client.constants import CENT, NULL_HASH32
+
 from lbrynet.wallet.ledger import MainNetLedger
-from lbrynet.wallet.transaction import Transaction
+from lbrynet.wallet.transaction import Transaction, Input, Output
+
+from lbrynet.schema.claim import Claim
 
 
-class TestValidatingOldSignatures(TestCase):
+def get_output(amount=CENT, pubkey_hash=NULL_HASH32):
+    return Transaction() \
+        .add_outputs([Output.pay_pubkey_hash(amount, pubkey_hash)]) \
+        .outputs[0]
+
+
+def get_input():
+    return Input.spend(get_output())
+
+
+def get_tx():
+    return Transaction().add_inputs([get_input()])
+
+
+class TestSigningAndValidatingClaim(AsyncioTestCase):
+
+    @staticmethod
+    def get_channel():
+        channel_txo = Output.pay_claim_name_pubkey_hash(CENT, '@foo', Claim(), b'abc')
+        channel_txo.generate_channel_private_key()
+        get_tx().add_outputs([channel_txo])
+        return channel_txo
+
+    @staticmethod
+    def get_stream():
+        stream_txo = Output.pay_claim_name_pubkey_hash(CENT, 'foo', Claim(), b'abc')
+        get_tx().add_outputs([stream_txo])
+        return stream_txo
+
+    def test_successful_create_sign_and_validate(self):
+        channel = self.get_channel()
+        stream = self.get_stream()
+        stream.sign(channel)
+        self.assertTrue(stream.is_signed_by(channel))
+
+    def test_fail_to_validate_on_wrong_channel(self):
+        stream = self.get_stream()
+        stream.sign(self.get_channel())
+        with self.assertRaises(InvalidSignature):
+            self.assertTrue(stream.is_signed_by(self.get_channel()))
+
+    def test_fail_to_validate_altered_claim(self):
+        channel = self.get_channel()
+        stream = self.get_stream()
+        stream.sign(channel)
+        self.assertTrue(stream.is_signed_by(channel))
+        stream.claim.stream.title = 'hello'
+        with self.assertRaises(InvalidSignature):
+            self.assertTrue(stream.is_signed_by(channel))
+
+    def test_valid_private_key_for_cert(self):
+        channel = self.get_channel()
+        self.assertTrue(channel.is_channel_private_key(channel.private_key))
+
+    def test_fail_to_load_wrong_private_key_for_cert(self):
+        channel = self.get_channel()
+        self.assertFalse(channel.is_channel_private_key(self.get_channel().private_key))
+
+
+class TestValidatingOldSignatures(AsyncioTestCase):
 
     def test_signed_claim_made_by_ytsync(self):
         stream_tx = Transaction(unhexlify(

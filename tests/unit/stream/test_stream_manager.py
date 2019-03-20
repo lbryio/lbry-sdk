@@ -16,7 +16,7 @@ from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.dht.node import Node
 from lbrynet.dht.protocol.protocol import KademliaProtocol
 from lbrynet.dht.protocol.routing_table import TreeRoutingTable
-from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.claim import Claim
 
 
 def get_mock_node(peer=None):
@@ -54,36 +54,19 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
         "permanent_url": "33rpm#c49566d631226492317d06ad7fdbe1ed32925124",
         "supports": [],
         "txid": "81ac52662af926fdf639d56920069e0f63449d4cde074c61717cb99ddde40e3c",
-        "value": {
-            "claimType": "streamType",
-            "stream": {
-                "metadata": {
-                    "author": "",
-                    "description": "",
-                    "language": "en",
-                    "license": "None",
-                    "licenseUrl": "",
-                    "nsfw": False,
-                    "preview": "",
-                    "thumbnail": "",
-                    "title": "33rpm",
-                    "version": "_0_1_0"
-                },
-                "source": {
-                    "contentType": "image/png",
-                    "source": sd_hash,
-                    "sourceType": "lbry_sd_hash",
-                    "version": "_0_0_1"
-                },
-                "version": "_0_0_1"
-            },
-            "version": "_0_0_1"
-        }
     }
+    claim_obj = Claim()
     if fee:
-        claim['value']['stream']['metadata']['fee'] = fee
-    claim_dict = ClaimDict.load_dict(claim['value'])
-    claim['hex'] = binascii.hexlify(claim_dict.serialized).decode()
+        if fee['currency'] == 'LBC':
+            claim_obj.stream.fee.lbc = Decimal(fee['amount'])
+        elif fee['currency'] == 'USD':
+            claim_obj.stream.fee.usd = Decimal(fee['amount'])
+    claim_obj.stream.title = "33rpm"
+    claim_obj.stream.language = "en"
+    claim_obj.stream.hash = sd_hash
+    claim_obj.stream.media_type = "image/png"
+    claim['value'] = claim_obj
+    claim['hex'] = binascii.hexlify(claim_obj.to_bytes()).decode()
 
     async def mock_resolve(*args):
         await storage.save_claims([claim])

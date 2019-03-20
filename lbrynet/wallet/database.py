@@ -56,8 +56,8 @@ class WalletDatabase(BaseDatabase):
         channel_ids = set()
         for txo in txos:
             if txo.script.is_claim_name or txo.script.is_update_claim:
-                if 'publisherSignature' in txo.claim_dict:
-                    channel_ids.add(txo.claim_dict['publisherSignature']['certificateId'])
+                if txo.claim.is_signed:
+                    channel_ids.add(txo.claim.signing_channel_id)
                 if txo.claim_name.startswith('@') and my_account is not None:
                     txo.private_key = my_account.get_certificate_private_key(txo.ref)
 

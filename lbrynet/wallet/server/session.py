@@ -7,10 +7,9 @@ from torba.server.hash import hash_to_hex_str
 from torba.server.session import ElectrumX
 from torba.server import util
 
-from lbrynet.schema.uri import parse_lbry_uri, CLAIM_ID_MAX_LENGTH
-from lbrynet.schema.error import URIParseError
-from lbrynet.extras.wallet.server.block_processor import LBRYBlockProcessor
-from lbrynet.extras.wallet.server.db import LBRYDB
+from lbrynet.schema.uri import parse_lbry_uri, CLAIM_ID_MAX_LENGTH, URIParseError
+from lbrynet.wallet.server.block_processor import LBRYBlockProcessor
+from lbrynet.wallet.server.db import LBRYDB
 
 
 class LBRYElectrumX(ElectrumX):

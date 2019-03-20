@@ -2,6 +2,7 @@ import asyncio
 import time
 import logging
 import json
+from decimal import Decimal
 
 from lbrynet.error import InvalidExchangeRateResponse, CurrencyConversionError
 from lbrynet.utils import aiohttp_request
@@ -226,12 +227,12 @@ class ExchangeRateManager:
         for market in self.market_feeds:
             if (market.rate_is_initialized() and market.is_online() and
                     market.rate.currency_pair == (from_currency, to_currency)):
-                return amount * market.rate.spot
+                return amount * Decimal(market.rate.spot)
         for market in self.market_feeds:
             if (market.rate_is_initialized() and market.is_online() and
                     market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
-                    market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
+                    market.rate.currency_pair[1], to_currency, amount * Decimal(market.rate.spot))
         raise CurrencyConversionError(
             f'Unable to convert {amount} from {from_currency} to {to_currency}')
 
