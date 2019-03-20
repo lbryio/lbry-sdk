@@ -154,6 +154,11 @@ class BaseLedger(metaclass=LedgerRegistry):
         return Base58.decode(address)[1:21]
 
     @classmethod
+    def is_valid_address(cls, address):
+        decoded = Base58.decode(address)
+        return decoded[0] == cls.pubkey_address_prefix
+
+    @classmethod
     def public_key_to_address(cls, public_key):
         return cls.hash160_to_address(hash160(public_key))
 

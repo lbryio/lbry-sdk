@@ -61,6 +61,8 @@ class AsyncioTestCase(unittest.TestCase):
     # Implementation inspired by discussion:
     #  https://bugs.python.org/issue32972
 
+    maxDiff = None
+
     async def asyncSetUp(self):  # pylint: disable=C0103
         pass
 

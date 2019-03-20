@@ -64,7 +64,7 @@ def push_data(data):
     else:
         yield BCDataStream.uint8.pack(OP_PUSHDATA4)
         yield BCDataStream.uint32.pack(size)
-    yield data
+    yield bytes(data)
 
 
 def read_data(token, stream):
