@@ -167,7 +167,7 @@ class Resolver:
         if not raw:
             claim_value = claim_result['value']
             try:
-                decoded = claim_result['value'] = Claim.from_bytes(claim_value)
+                decoded = claim_result['value'] = Claim.from_bytes(unhexlify(claim_value))
                 claim_result['decoded_claim'] = True
             except DecodeError:
                 pass
@@ -427,7 +427,8 @@ def _decode_claim_result(claim):
         claim['error'] = "Failed to parse: missing value." + backend_message
         return claim
     try:
-        claim['value'] = Claim.from_bytes(claim['value'])
+        if not isinstance(claim['value'], Claim):
+            claim['value'] = Claim.from_bytes(claim['value'])
         claim['hex'] = hexlify(claim['value'].to_bytes())
     except DecodeError:
         claim['hex'] = claim['value']

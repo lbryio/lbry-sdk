@@ -122,6 +122,7 @@ class Output(BaseOutput):
         ]))
         private_key = ecdsa.SigningKey.from_pem(channel.private_key, hashfunc=hashlib.sha256)
         self.claim.signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        self.script.generate()
 
     def generate_channel_private_key(self):
         private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
