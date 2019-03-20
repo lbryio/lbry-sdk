@@ -2,6 +2,8 @@ import hashlib
 import struct
 
 import msgpack
+
+from lbrynet.extras.wallet.transaction import Transaction, Output
 from torba.server.hash import hash_to_hex_str
 
 from torba.server.block_processor import BlockProcessor
@@ -36,32 +38,31 @@ class LBRYBlockProcessor(BlockProcessor):
         undo_info = []
         add_undo = undo_info.append
         update_inputs = set()
-        for tx, txid in txs:
+        for etx, txid in txs:
             update_inputs.clear()
-            if tx.has_claims:
-                for index, output in enumerate(tx.outputs):
-                    claim = output.claim
-                    if isinstance(claim, NameClaim):
-                        add_undo(self.advance_claim_name_transaction(output, height, txid, index))
-                    elif isinstance(claim, ClaimUpdate):
-                        update_input = self.db.get_update_input(claim, tx.inputs)
-                        if update_input:
-                            update_inputs.add(update_input)
-                            add_undo(self.advance_update_claim(output, height, txid, index))
-                        else:
-                            info = (hash_to_hex_str(txid), hash_to_hex_str(claim.claim_id),)
-                            self.logger.error("REJECTED: {} updating {}".format(*info))
-                    elif isinstance(claim, ClaimSupport):
-                        self.advance_support(claim, txid, index, height, output.value)
+            tx = Transaction(etx.serialize())
+            for index, output in enumerate(tx.outputs):
+                if not output.is_claim:
+                    continue
+                if output.script.is_claim_name:
+                    add_undo(self.advance_claim_name_transaction(output, height, txid, index))
+                elif output.script.is_update_claim:
+                    update_input = self.db.get_update_input(unhexlify(output.claim_id)[::-1], tx.inputs)
+                    if update_input:
+                        update_inputs.add(update_input)
+                        add_undo(self.advance_update_claim(output, height, txid, index))
+                    else:
+                        info = (hash_to_hex_str(txid), output.claim_id,)
+                        self.logger.error("REJECTED: {} updating {}".format(*info))
             for txin in tx.inputs:
                 if txin not in update_inputs:
-                    abandoned_claim_id = self.db.abandon_spent(txin.prev_hash, txin.prev_idx)
+                    abandoned_claim_id = self.db.abandon_spent(txin.txo_ref.hash, txin.txo_ref.position)
                     if abandoned_claim_id:
                         add_undo((abandoned_claim_id, self.db.get_claim_info(abandoned_claim_id)))
         return undo_info
 
-    def advance_update_claim(self, output, height, txid, nout):
-        claim_id = output.claim.claim_id
+    def advance_update_claim(self, output: Output, height, txid, nout):
+        claim_id = unhexlify(output.claim_id)[::-1]
         claim_info = self.claim_info_from_output(output, txid, nout, height)
         old_claim_info = self.db.get_claim_info(claim_id)
         self.db.put_claim_id_for_outpoint(old_claim_info.txid, old_claim_info.nout, None)
@@ -73,8 +74,8 @@ class LBRYBlockProcessor(BlockProcessor):
         self.db.put_claim_id_for_outpoint(txid, nout, claim_id)
         return claim_id, old_claim_info
 
-    def advance_claim_name_transaction(self, output, height, txid, nout):
-        claim_id = claim_id_hash(txid, nout)
+    def advance_claim_name_transaction(self, output: Output, height, txid, nout):
+        claim_id = unhexlify(output.claim_id)[::-1]
         claim_info = self.claim_info_from_output(output, txid, nout, height)
         if claim_info.cert_id:
             self.db.put_claim_id_signed_by_cert_id(claim_info.cert_id, claim_id)
@@ -132,17 +133,12 @@ class LBRYBlockProcessor(BlockProcessor):
         self.db.batched_flush_claims()
         return await super().flush(flush_utxos)
 
-    def advance_support(self, claim_support, txid, nout, height, amount):
-        # TODO: check for more controller claim rules, like takeover or ordering
-        pass
-
-    def claim_info_from_output(self, output, txid, nout, height):
-        amount = output.value
-        address = self.coin.address_from_script(output.pk_script)
-        name, value, cert_id = output.claim.name, output.claim.value, None
+    def claim_info_from_output(self, output: Output, txid, nout, height):
+        address = self.coin.address_from_script(output.script.source)
+        name, value, cert_id = output.script.values['claim_name'], output.raw_claim, None
         assert txid and address
         cert_id = self._checksig(name, value, address)
-        return ClaimInfo(name, value, txid, nout, amount, address, height, cert_id)
+        return ClaimInfo(name, value, txid, nout, output.amount, address, height, cert_id)
 
     def _checksig(self, name, value, address):
         try:
