@@ -1,25 +1,22 @@
 import struct
 
-from torba.server.script import ScriptPubKey, _match_ops, OpCodes
+from lbrynet.extras.wallet.script import OutputScript
+from torba.server.script import ScriptPubKey, OpCodes
 from torba.server.util import cachedproperty
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
 from hashlib import sha256
 from torba.server.coins import Coin, CoinError
 
-from lbrynet.wallet.server.opcodes import decode_claim_script, opcodes as lbry_opcodes
-
 
 class LBC(Coin):
     from .session import LBRYElectrumX
     from .block_processor import LBRYBlockProcessor
-    from .tx import LBRYDeserializer
     from .daemon import LBCDaemon
     from .db import LBRYDB
     DAEMON = LBCDaemon
     SESSIONCLS = LBRYElectrumX
     BLOCK_PROCESSOR = LBRYBlockProcessor
     DB = LBRYDB
-    DESERIALIZER = LBRYDeserializer
     NAME = "LBRY"
     SHORTNAME = "LBC"
     NET = "mainnet"
@@ -88,28 +85,14 @@ class LBC(Coin):
     def claim_address_handler(cls, script):
         '''Parse a claim script, returns the address
         '''
-        decoded = decode_claim_script(script)
-        if not decoded:
-            return None
-        ops = []
-        for op, data, _ in decoded[1]:
-            if not data:
-                ops.append(op)
-            else:
-                ops.append((op, data,))
-        match = _match_ops
-        TO_ADDRESS_OPS = [OpCodes.OP_DUP, OpCodes.OP_HASH160, -1,
-                          OpCodes.OP_EQUALVERIFY, OpCodes.OP_CHECKSIG]
-        TO_P2SH_OPS = [OpCodes.OP_HASH160, -1, OpCodes.OP_EQUAL]
-        TO_PUBKEY_OPS = [-1, OpCodes.OP_CHECKSIG]
-
-        if match(ops, TO_ADDRESS_OPS):
-            return cls.P2PKH_address_from_hash160(ops[2][-1])
-        if match(ops, TO_P2SH_OPS):
-            return cls.P2SH_address_from_hash160(ops[1][-1])
-        if match(ops, TO_PUBKEY_OPS):
-            return cls.P2PKH_address_from_pubkey(ops[0][-1])
-        if ops and ops[0] == OpCodes.OP_RETURN:
+        output = OutputScript(script)
+        if output.is_pay_pubkey_hash:
+            return cls.P2PKH_address_from_hash160(output.values['pubkey_hash'])
+        if output.is_pay_script_hash:
+            return cls.P2SH_address_from_hash160(output.values['script_hash'])
+        if output.is_pay_pubkey:
+            return cls.P2PKH_address_from_pubkey(output.values['pubkey'])
+        if output.is_return_data:
             return None
         return None
 
@@ -121,9 +104,9 @@ class LBC(Coin):
         if script and script[0] == OpCodes.OP_RETURN:
             return None
         if script[0] in [
-            lbry_opcodes.OP_CLAIM_NAME,
-            lbry_opcodes.OP_SUPPORT_CLAIM,
-            lbry_opcodes.OP_UPDATE_CLAIM
+            OutputScript.OP_CLAIM_NAME,
+            OutputScript.OP_UPDATE_CLAIM,
+            OutputScript.OP_SUPPORT_CLAIM,
         ]:
             return cls.address_to_hashX(cls.claim_address_handler(script))
         else:
