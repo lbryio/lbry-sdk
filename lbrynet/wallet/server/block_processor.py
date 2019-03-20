@@ -10,7 +10,7 @@ from torba.server.block_processor import BlockProcessor
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.claim import Claim
 
-from lbrynet.wallet.server.model import NameClaim, ClaimInfo, ClaimUpdate, ClaimSupport
+from lbrynet.extras.wallet.server.model import ClaimInfo
 
 
 class LBRYBlockProcessor(BlockProcessor):
