@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
     from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.analytics import AnalyticsManager
     from lbrynet.extras.daemon.storage import SQLiteStorage, StoredStreamClaim
-    from lbrynet.extras.wallet import LbryWalletManager
+    from lbrynet.wallet import LbryWalletManager
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 log = logging.getLogger(__name__)

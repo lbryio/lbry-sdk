@@ -151,7 +151,7 @@ class Resolver:
         if not claim_result or 'value' not in claim_result:
             return claim_result
         certificate = None
-        certificate_id = smart_decode(claim_result['value']).certificate_id
+        certificate_id = Claim.from_bytes(claim_result['value']).signing_channel_id
         if certificate_id:
             certificate = await self.network.get_claims_by_ids(certificate_id)
             certificate = certificate.pop(certificate_id) if certificate else None
@@ -167,20 +167,19 @@ class Resolver:
         if not raw:
             claim_value = claim_result['value']
             try:
-                decoded = smart_decode(claim_value)
-                claim_result['value'] = decoded.claim_dict
+                decoded = claim_result['value'] = Claim.from_bytes(claim_value)
                 claim_result['decoded_claim'] = True
             except DecodeError:
                 pass
 
         if decoded:
             claim_result['has_signature'] = False
-            if decoded.has_signature:
+            if decoded.is_signed:
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
-                    certificate = await self.network.get_claims_by_ids(decoded.certificate_id)
+                    certificate = await self.network.get_claims_by_ids(decoded.signing_channel_id)
                     if not certificate:
-                        log.warning('Certificate %s not found', decoded.certificate_id)
+                        log.warning('Certificate %s not found', decoded.signing_channel_id)
                 claim_result['has_signature'] = True
                 claim_result['signature_is_valid'] = False
                 validated, channel_name = validate_claim_signature_and_get_channel_name(
@@ -195,7 +194,8 @@ class Resolver:
         if 'amount' in claim_result:
             claim_result = format_amount_value(claim_result)
 
-        claim_result['permanent_url'] = _get_permanent_url(claim_result, decoded.certificate_id if decoded else None)
+        claim_result['permanent_url'] = _get_permanent_url(
+            claim_result, decoded.signing_channel_id if decoded else None)
 
         return claim_result
 
@@ -389,8 +389,8 @@ def validate_claim_signature_and_get_channel_name(claim, certificate_claim,
     if 'value' not in certificate_claim:
         log.warning('Got an invalid claim while parsing certificates, please report: %s', certificate_claim)
         return False, None
-    certificate = decoded_certificate or smart_decode(certificate_claim['value'])
-    if not isinstance(certificate, ClaimDict):
+    certificate = decoded_certificate or Claim.from_bytes(certificate_claim['value'])
+    if not isinstance(certificate, Claim):
         raise TypeError("Certificate is not a ClaimDict: %s" % str(type(certificate)))
     if _validate_signed_claim(claim, claim_address, name, certificate):
         return True, certificate_claim['name']
@@ -400,8 +400,6 @@ def validate_claim_signature_and_get_channel_name(claim, certificate_claim,
 def _validate_signed_claim(claim, claim_address, name, certificate):
     if not claim.has_signature:
         raise Exception("Claim is not signed")
-    if not is_address(claim_address):
-        raise Exception("Not given a valid claim address")
     try:
         if claim.validate_signature(claim_address, certificate.protobuf, name):
             return True
@@ -429,10 +427,8 @@ def _decode_claim_result(claim):
         claim['error'] = "Failed to parse: missing value." + backend_message
         return claim
     try:
-        decoded = smart_decode(claim['value'])
-        claim_dict = decoded.claim_dict
-        claim['value'] = claim_dict
-        claim['hex'] = hexlify(decoded.serialized)
+        claim['value'] = Claim.from_bytes(claim['value'])
+        claim['hex'] = hexlify(claim['value'].to_bytes())
     except DecodeError:
         claim['hex'] = claim['value']
         claim['value'] = None

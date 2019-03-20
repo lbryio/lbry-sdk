@@ -10,7 +10,7 @@ from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.reflector.client import StreamReflectorClient
 from lbrynet.extras.daemon.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
-    from lbrynet.schema.claim import ClaimDict
+    from lbrynet.schema.claim import Claim
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.node import Node
 
@@ -222,7 +222,7 @@ class ManagedStream:
             await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
         return sent
 
-    def set_claim(self, claim_info: typing.Dict, claim: 'ClaimDict'):
+    def set_claim(self, claim_info: typing.Dict, claim: 'Claim'):
         self.stream_claim_info = StoredStreamClaim(
             self.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
             claim_info['name'], claim_info['amount'], claim_info['height'],
