@@ -166,7 +166,7 @@ class LBRYDB(DB):
         if not claim_info:
             return False
         for input in inputs:
-            if input.txo_ref.hash == claim_info.txid and input.txo_ref.position == claim_info.nout:
+            if (input.txo_ref.tx_ref.hash, input.txo_ref.position) == (claim_info.txid, claim_info.nout):
                 return input
         return False
 
