@@ -4,6 +4,7 @@ from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
 from ecdsa import BadSignatureError
+from lbrynet.schema.claim import Claim
 from lbrynet.wallet.ledger import MainNetLedger
 from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.dewies import dewies_to_lbc
@@ -23,6 +24,8 @@ class JSONResponseEncoder(JSONEncoder):
             return self.encode_transaction(obj)
         if isinstance(obj, Output):
             return self.encode_output(obj)
+        if isinstance(obj, Claim):
+            return obj.to_dict()
         if isinstance(obj, datetime):
             return obj.strftime("%Y%m%dT%H:%M:%S")
         if isinstance(obj, Decimal):
