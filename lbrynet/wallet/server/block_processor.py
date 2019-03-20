@@ -153,12 +153,5 @@ class LBRYBlockProcessor(BlockProcessor):
                     certificate = Claim.from_bytes(cert_claim.value)
                     claim_dict.validate_signature(address, certificate)
                     return cert_id
-        except Exception as e:
+        except Exception:
             pass
-
-def claim_id_hash(txid, n):
-    # TODO: This should be in lbryschema
-    packed = txid + struct.pack('>I', n)
-    md = hashlib.new('ripemd160')
-    md.update(hashlib.sha256(packed).digest())
-    return md.digest()
