@@ -161,13 +161,12 @@ class LBRYDB(DB):
         self.logger.info("[+] Adding claim info for: {}".format(hash_to_hex_str(claim_id)))
         self.claim_cache[claim_id] = claim_info.serialized
 
-    def get_update_input(self, claim, inputs):
-        claim_id = claim.claim_id
+    def get_update_input(self, claim_id, inputs):
         claim_info = self.get_claim_info(claim_id)
         if not claim_info:
             return False
         for input in inputs:
-            if input.prev_hash == claim_info.txid and input.prev_idx == claim_info.nout:
+            if input.txo_ref.hash == claim_info.txid and input.txo_ref.position == claim_info.nout:
                 return input
         return False
 
