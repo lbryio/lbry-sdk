@@ -23,8 +23,8 @@ from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.extras.daemon.Component import Component
 from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.extras.wallet import LbryWalletManager
-from lbrynet.extras.wallet import Network
+from lbrynet.wallet import LbryWalletManager
+from lbrynet.wallet import Network
 
 
 log = logging.getLogger(__name__)

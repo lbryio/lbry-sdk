@@ -6,15 +6,13 @@ from binascii import unhexlify
 from datetime import datetime
 from typing import Optional
 
-from lbrynet.schema.claim import Claim
 from torba.client.basemanager import BaseWalletManager
 from torba.rpc.jsonrpc import CodeMessageError
 
-from lbrynet.schema.claim import ClaimDict
-
+from lbrynet.schema.claim import Claim
 from lbrynet.wallet.ledger import MainNetLedger
-from lbrynet.wallet.account import BaseAccount, generate_certificate
-from lbrynet.wallet.transaction import Transaction
+from lbrynet.wallet.account import BaseAccount
+from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.database import WalletDatabase
 from lbrynet.wallet.dewies import dewies_to_lbc
 
@@ -247,7 +245,7 @@ class LbryWalletManager(BaseWalletManager):
         if not amount:
             amount = claims[0].get_estimator(self.ledger).effective_amount
         tx = await Transaction.update(
-            claims[0], ClaimDict.deserialize(claims[0].script.values['claim']), amount,
+            claims[0], claims[0].claim, amount,
             destination_address.encode(), [account], account
         )
         await self.ledger.broadcast(tx)
@@ -395,27 +393,36 @@ class LbryWalletManager(BaseWalletManager):
         return account.get_utxos()
 
     async def claim_name(self, account, name, amount, claim: Claim, certificate=None, claim_address=None):
-        if not claim_address:
-            claim_address = await account.receiving.get_or_create_usable_address()
-        if certificate:
-            claim = claim.sign(certificate.claim_id, certificate.private_key)
+        claim_address = claim_address or await account.receiving.get_or_create_usable_address()
         existing_claims = await account.get_claims(
             claim_name_type__any={'is_claim': 1, 'is_update': 1},  # exclude is_supports
             claim_name=name
         )
+
+        inputs = []
         if len(existing_claims) == 0:
-            tx = await Transaction.claim(
-                name, claim, amount, claim_address, [account], account
+            claim_output = Output.pay_claim_name_pubkey_hash(
+                amount, name, claim, account.ledger.address_to_hash160(claim_address)
             )
         elif len(existing_claims) == 1:
-            tx = await Transaction.update(
-                existing_claims[0], claim, amount, claim_address, [account], account
+            previous_claim = existing_claims[0]
+            claim_output = Output.pay_update_claim_pubkey_hash(
+                amount, previous_claim.claim_name, previous_claim.claim_id,
+                claim, account.ledger.address_to_hash160(claim_address)
             )
+            inputs = [Input.spend(previous_claim)]
         else:
             raise NameError(f"More than one other claim exists with the name '{name}'.")
+
         if certificate:
-            claim.sign(certificate.claim_id, certificate.private_key, tx.inputs[0].txo_ref.id.encode())
+            claim_output.sign(certificate, first_input_id=b'placeholder')
+
+        tx = await Transaction.create(inputs, [claim_output], [account], account)
+
+        if certificate:
+            claim_output.sign(certificate)
             tx._reset()
+
         await account.ledger.broadcast(tx)
         await self.old_db.save_claims([self._old_get_temp_claim_info(
             tx, tx.outputs[0], claim_address, claim, name, dewies_to_lbc(amount)
@@ -463,14 +470,19 @@ class LbryWalletManager(BaseWalletManager):
 
     async def claim_new_channel(self, channel_name, amount, account):
         address = await account.receiving.get_or_create_usable_address()
-        cert, key = generate_certificate()
-        tx = await Transaction.claim(channel_name, cert, amount, address, [account], account)
+        claim = Claim()
+        claim_output = Output.pay_claim_name_pubkey_hash(
+            amount, channel_name, claim, account.ledger.address_to_hash160(address)
+        )
+        key = claim_output.generate_channel_private_key()
+        tx = await Transaction.create([], [claim_output], [account], account)
+
         await account.ledger.broadcast(tx)
         account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
 
         await self.old_db.save_claims([self._old_get_temp_claim_info(
-            tx, tx.outputs[0], address, cert, channel_name, dewies_to_lbc(amount)
+            tx, tx.outputs[0], address, claim, channel_name, dewies_to_lbc(amount)
         )])
         return tx
 

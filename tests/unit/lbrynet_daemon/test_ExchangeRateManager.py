@@ -1,5 +1,6 @@
 import unittest
-from lbrynet.schema.fee import Fee
+from decimal import Decimal
+from lbrynet.schema.claim import Claim
 from lbrynet.extras.daemon import exchange_rate_manager
 from lbrynet.error import InvalidExchangeRateResponse
 from tests import test_utils
@@ -43,28 +44,6 @@ def get_dummy_exchange_rate_manager(time):
     return DummyExchangeRateManager([BTCLBCFeed(), USDBTCFeed()], rates)
 
 
-class FeeFormatTest(unittest.TestCase):
-    def test_fee_created_with_correct_inputs(self):
-        fee_dict = {
-            'currency': 'USD',
-            'amount': 10.0,
-            'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-        }
-        fee = Fee(fee_dict)
-        self.assertEqual(10.0, fee['amount'])
-        self.assertEqual('USD', fee['currency'])
-
-    def test_fee_zero(self):
-        fee_dict = {
-            'currency': 'LBC',
-            'amount': 0.0,
-            'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-        }
-        fee = Fee(fee_dict)
-        self.assertEqual(0.0, fee['amount'])
-        self.assertEqual('LBC', fee['currency'])
-
-
 class ExchangeRateTest(unittest.TestCase):
     def setUp(self):
         test_utils.reset_time(self)
@@ -81,11 +60,9 @@ class FeeTest(unittest.TestCase):
         test_utils.reset_time(self)
 
     def test_fee_converts_to_lbc(self):
-        fee = Fee({
-            'currency': 'USD',
-            'amount': 10.0,
-            'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-            })
+        fee = Claim().stream.fee
+        fee.usd = Decimal(10.0)
+        fee.address = "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
 
         rates = {
             'BTCLBC': {'spot': 3.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},
@@ -99,11 +76,9 @@ class FeeTest(unittest.TestCase):
 
     def test_missing_feed(self):
         # test when a feed is missing for conversion
-        fee = Fee({
-            'currency': 'USD',
-            'amount': 1.0,
-            'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-            })
+        fee = Claim().stream.fee
+        fee.usd = Decimal(1.0)
+        fee.address = "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
 
         rates = {
             'BTCLBC': {'spot': 1.0, 'ts': test_utils.DEFAULT_ISO_TIME + 1},

@@ -1,90 +1,64 @@
-from lbrynet.schema.constants import ADDRESS_CHECKSUM_LENGTH
-from lbrynet.schema.hashing import double_sha256
-from lbrynet.schema.error import InvalidAddress
+from google.protobuf.message import DecodeError
+from google.protobuf.json_format import MessageToDict
 
 
-alphabet = b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+class Signable:
 
+    __slots__ = (
+        'message', 'version', 'signature',
+        'signature_type', 'unsigned_payload', 'signing_channel_id'
+    )
 
-def scrub_input(v):
-    if isinstance(v, str) and not isinstance(v, bytes):
-        v = v.encode('ascii')
-    return v
+    message_class = None
 
+    def __init__(self, message=None):
+        self.message = message or self.message_class()
+        self.version = 2
+        self.signature = None
+        self.signature_type = 'SECP256k1'
+        self.unsigned_payload = None
+        self.signing_channel_id = None
 
-def b58encode_int(i, default_one=True):
-    '''Encode an integer using Base58'''
-    if not i and default_one:
-        return alphabet[0:1]
-    string = b""
-    while i:
-        i, idx = divmod(i, 58)
-        string = alphabet[idx:idx+1] + string
-    return string
+    @property
+    def is_undetermined(self):
+        return self.message.WhichOneof('type') is None
 
+    @property
+    def is_signed(self):
+        return self.signature is not None
 
-def b58encode(v):
-    '''Encode a string using Base58'''
+    def to_dict(self):
+        return MessageToDict(self.message)
 
-    v = scrub_input(v)
+    def to_message_bytes(self) -> bytes:
+        return self.message.SerializeToString()
 
-    nPad = len(v)
-    v = v.lstrip(b'\0')
-    nPad -= len(v)
+    def to_bytes(self) -> bytes:
+        pieces = bytearray()
+        if self.is_signed:
+            pieces.append(1)
+            pieces.extend(self.signing_channel_id)
+            pieces.extend(self.signature)
+        else:
+            pieces.append(0)
+        pieces.extend(self.to_message_bytes())
+        return bytes(pieces)
 
-    p, acc = 1, 0
-    for c in reversed(v):
-        acc += p * c
-        p = p << 8
+    @classmethod
+    def from_bytes(cls, data: bytes):
+        signable = cls()
+        if data[0] == 0:
+            signable.message.ParseFromString(data[1:])
+        elif data[0] == 1:
+            signable.signing_channel_id = data[1:21]
+            signable.signature = data[21:85]
+            signable.message.ParseFromString(data[85:])
+        else:
+            raise DecodeError('Could not determine message format version.')
+        return signable
 
-    result = b58encode_int(acc, default_one=False)
+    def __len__(self):
+        return len(self.to_bytes())
 
-    return alphabet[0:1] * nPad + result
-
-
-def b58decode_int(v):
-    '''Decode a Base58 encoded string as an integer'''
-
-    v = scrub_input(v)
-
-    decimal = 0
-    for char in v:
-        decimal = decimal * 58 + alphabet.index(char)
-    return decimal
-
-
-def b58decode(v):
-    '''Decode a Base58 encoded string'''
-
-    v = scrub_input(v)
-
-    origlen = len(v)
-    v = v.lstrip(alphabet[0:1])
-    newlen = len(v)
-
-    acc = b58decode_int(v)
-
-    result = []
-    while acc > 0:
-        acc, mod = divmod(acc, 256)
-        result.append(mod)
-
-    return b'\0' * (origlen - newlen) + bytes(reversed(result))
-
-
-def validate_b58_checksum(addr_bytes):
-    addr_without_checksum = addr_bytes[:-ADDRESS_CHECKSUM_LENGTH]
-    addr_checksum = addr_bytes[-ADDRESS_CHECKSUM_LENGTH:]
-    if double_sha256(addr_without_checksum)[:ADDRESS_CHECKSUM_LENGTH] != addr_checksum:
-        raise InvalidAddress("Invalid address checksum")
-
-
-def b58decode_strip_checksum(v):
-    addr_bytes = b58decode(v)
-    validate_b58_checksum(addr_bytes)
-    return addr_bytes[:-ADDRESS_CHECKSUM_LENGTH]
-
-
-def b58encode_with_checksum(addr_bytes):
-    addr_checksum = double_sha256(addr_bytes)[:ADDRESS_CHECKSUM_LENGTH]
-    return b58encode(addr_bytes + addr_checksum)
+    def __bytes__(self):
+        return self.to_bytes()

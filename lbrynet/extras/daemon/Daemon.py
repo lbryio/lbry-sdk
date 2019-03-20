@@ -33,21 +33,19 @@ from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.extras.daemon.undecorated import undecorated
-from lbrynet.extras.wallet.account import Account as LBCAccount
-from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.schema.claim import ClaimDict
-from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.schema.error import URIParseError, DecodeError
-from lbrynet.schema.validator import validate_claim_id
-from lbrynet.schema.address import decode_address
+from lbrynet.wallet.account import Account as LBCAccount, validate_claim_id
+from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
+from lbrynet.schema.claim import Claim
+from lbrynet.schema.uri import parse_lbry_uri, URIParseError
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
     from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.Components import UPnPComponent
-    from lbrynet.extras.wallet import LbryWalletManager
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbrynet.extras.daemon.storage import SQLiteStorage
+    from lbrynet.wallet.manager import LbryWalletManager
+    from lbrynet.wallet.ledger import MainNetLedger
     from lbrynet.stream.stream_manager import StreamManager
 
 log = logging.getLogger(__name__)
@@ -553,14 +551,14 @@ class Daemon(metaclass=JSONRPCServerType):
             return None
 
     @property
-    def default_account(self):
+    def default_account(self) -> Optional[LBCAccount]:
         try:
             return self.wallet_manager.default_account
         except AttributeError:
             return None
 
     @property
-    def ledger(self):
+    def ledger(self) -> Optional['MainNetLedger']:
         try:
             return self.wallet_manager.default_account.ledger
         except AttributeError:
@@ -579,12 +577,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if claim_response and 'claim' in claim_response:
             if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
-                claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
-                if not claim_value.has_fee:
+                claim_value = Claim.from_bytes(claim_response['claim']['value'])
+                if not claim_value.stream.has_fee:
                     return 0.0
                 return round(
                     self.exchange_rate_manager.convert_currency(
-                        claim_value.source_fee.currency, "LBC", claim_value.source_fee.amount
+                        claim_value.stream.fee.currency, "LBC", claim_value.stream.fee.amount
                     ), 5
                 )
             else:
@@ -855,7 +853,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if address:
             # raises an error if the address is invalid
-            decode_address(address)
+            self.ledger.is_valid_address(address)
 
             reserved_points = self.wallet_manager.reserve_points(address, amount)
             if reserved_points is None:
@@ -1245,7 +1243,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise NegativeFundsError()
 
         for address in addresses:
-            decode_address(address)
+            self.ledger.is_valid_address(address)
 
         account = self.get_account_or_default(account_id)
         result = await account.send_to_addresses(amount, addresses, broadcast)
@@ -1890,7 +1888,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_publish(
-            self, name, bid, metadata=None, file_path=None, fee=None, title=None,
+            self, name, bid, file_path=None, fee=None, title=None,
             description=None, author=None, language=None, license=None,
             license_url=None, thumbnail=None, preview=None, nsfw=None,
             channel_name=None, channel_id=None, channel_account_id=None, account_id=None,
@@ -1988,7 +1986,7 @@ class Daemon(metaclass=JSONRPCServerType):
         for address in [claim_address, change_address]:
             if address is not None:
                 # raises an error if the address is invalid
-                decode_address(address)
+                self.ledger.is_valid_address(address)
 
         account = self.get_account_or_default(account_id)
 
@@ -2005,33 +2003,26 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"you can specify for this claim is {dewies_to_lbc(available)}."
                 )
 
-        metadata = metadata or {}
-        if fee is not None:
-            metadata['fee'] = fee
+        claim = Claim()
+        stream = claim.stream
         if title is not None:
-            metadata['title'] = title
+            stream.title = title
         if description is not None:
-            metadata['description'] = description
+            stream.description = description
         if author is not None:
-            metadata['author'] = author
+            stream.author = author
         if language is not None:
-            metadata['language'] = language
+            stream.language = language
         if license is not None:
-            metadata['license'] = license
+            stream.license = license
         if license_url is not None:
-            metadata['licenseUrl'] = license_url
+            stream.license_url = license_url
         if thumbnail is not None:
-            metadata['thumbnail'] = thumbnail
-        if preview is not None:
-            metadata['preview'] = preview
-        if nsfw is not None:
-            metadata['nsfw'] = bool(nsfw)
-
-        metadata['version'] = '_0_1_0'
+            stream.thumbnail_url = thumbnail
 
         # check for original deprecated format {'currency':{'address','amount'}}
         # add address, version to fee if unspecified
-        if 'fee' in metadata:
+        if fee is not None:
             if len(metadata['fee'].keys()) == 1 and isinstance(metadata['fee'].values()[0], dict):
                 raise Exception('Old format for fee no longer supported. '
                                 'Fee must be specified as {"currency":,"address":,"amount":}')
@@ -2046,15 +2037,6 @@ class Daemon(metaclass=JSONRPCServerType):
             if 'fee' in metadata and 'version' not in metadata['fee']:
                 metadata['fee']['version'] = '_0_0_1'
 
-        claim_dict = {
-            'version': '_0_0_1',
-            'claimType': 'streamType',
-            'stream': {
-                'metadata': metadata,
-                'version': '_0_0_1'
-            }
-        }
-
         sd_to_delete = None
 
         if file_path:
@@ -2063,27 +2045,16 @@ class Daemon(metaclass=JSONRPCServerType):
             if os.path.getsize(file_path) == 0:
                 raise Exception(f"Cannot publish empty file {file_path}")
             if existing_claims:
-                sd_to_delete = existing_claims[-1].claim_dict['stream']['source']['source']
+                sd_to_delete = existing_claims[-1].claim.stream.hash
 
             # since the file hasn't yet been made into a stream, we don't have
             # a valid Source for the claim when validating the format, we'll use a fake one
-            claim_dict['stream']['source'] = {
-                'version': '_0_0_1',
-                'sourceType': 'lbry_sd_hash',
-                'source': '0' * 96,
-                'contentType': ''
-            }
+            stream.hash = '0' * 96
         elif not existing_claims:
             raise Exception("no previous stream to update")
         else:
-            claim_dict['stream']['source'] = existing_claims[-1].claim_dict['stream']['source']
-        try:
-            claim_dict = ClaimDict.load_dict(claim_dict).claim_dict
-            # the metadata to use in the claim can be serialized by lbrynet.schema
-        except DecodeError as err:
-            # there was a problem with a metadata field, raise an error here rather than
-            # waiting to find out when we go to publish the claim (after having made the stream)
-            raise Exception(f"invalid publish metadata: {err}")
+            stream.hash = '0' * 96
+            stream.hash_bytes = existing_claims[-1].claim.stream.hash_bytes
         certificate = None
         if channel_id or channel_name:
             certificate = await self.get_channel_or_error(
@@ -2092,8 +2063,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if file_path:
             stream = await self.stream_manager.create_stream(file_path)
-            claim_dict['stream']['source']['source'] = stream.sd_hash
-            claim_dict['stream']['source']['contentType'] = guess_media_type(file_path)
+            claim.stream.hash = stream.sd_hash
+            claim.stream.media_type = guess_media_type(file_path)
 
             if sd_to_delete:
                 stream_hash_to_delete = await self.storage.get_stream_hash_for_sd_hash(sd_to_delete)
@@ -2110,19 +2081,18 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             log.info("updating claim with stream %s from previous", claim_dict['stream']['source']['source'][:8])
 
-        sd_hash = claim_dict['stream']['source']['source']
+        sd_hash = claim.stream.hash
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
             'bid': dewies_to_lbc(amount),
             'claim_address': claim_address,
             'change_address': change_address,
-            'claim_dict': claim_dict,
             'channel_id': channel_id,
             'channel_name': channel_name
         })
         tx = await self.wallet_manager.claim_name(
-            account, name, amount, claim_dict, certificate, claim_address
+            account, name, amount, claim, certificate, claim_address
         )
         stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
         if stream_hash:
@@ -2274,7 +2244,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
 
         """
-        decode_address(address)
+        self.ledger.is_valid_address(address)
         return self.wallet_manager.send_claim_to_address(
             claim_id, address, self.get_dewies_or_error("amount", amount) if amount else None
         )

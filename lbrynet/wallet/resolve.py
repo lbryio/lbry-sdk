@@ -5,7 +5,7 @@ from binascii import unhexlify, hexlify
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
 from lbrynet.schema.claim import Claim
-from lbrynet.schema.error import DecodeError
+from google.protobuf.message import DecodeError
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.wallet.claim_proofs import verify_proof, InvalidProofError
 log = logging.getLogger(__name__)

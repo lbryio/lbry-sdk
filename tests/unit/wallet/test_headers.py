@@ -3,7 +3,7 @@ from binascii import unhexlify
 from torba.testcase import AsyncioTestCase
 from torba.client.util import ArithUint256
 
-from lbrynet.extras.wallet.ledger import Headers
+from lbrynet.wallet.ledger import Headers
 
 
 class TestHeaders(AsyncioTestCase):

@@ -7,9 +7,8 @@ import binascii
 import time
 from torba.client.basedatabase import SQLiteMixin
 from lbrynet.conf import Config
-from lbrynet.extras.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbrynet.schema.claim import ClaimDict
-from lbrynet.schema.decode import smart_decode
+from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
+from lbrynet.schema.claim import Claim
 from lbrynet.dht.constants import data_expiration
 from lbrynet.blob.blob_info import BlobInfo
 
@@ -39,7 +38,9 @@ class StoredStreamClaim:
         self.claim_name = name
         self.amount = amount
         self.height = height
-        self.claim: typing.Optional[ClaimDict] = None if not serialized else smart_decode(serialized)
+        self.claim: typing.Optional[Claim] = None if not serialized else Claim.from_bytes(
+            binascii.unhexlify(serialized)
+        )
         self.claim_address = address
         self.claim_sequence = claim_sequence
         self.channel_claim_id = channel_claim_id
@@ -588,19 +589,12 @@ class SQLiteStorage(SQLiteMixin):
                 height = claim_info['height']
                 address = claim_info['address']
                 sequence = claim_info['claim_sequence']
+                certificate_id = claim_info['value'].signing_channel_id
                 try:
-                    certificate_id = claim_info['value'].get('publisherSignature', {}).get('certificateId')
-                except AttributeError:
-                    certificate_id = None
-                try:
-                    if claim_info['value'].get('stream', {}).get('source', {}).get('sourceType') == "lbry_sd_hash":
-                        source_hash = claim_info['value'].get('stream', {}).get('source', {}).get('source')
-                    else:
-                        source_hash = None
-                except AttributeError:
+                    source_hash = claim_info['value'].stream.hash
+                except (AttributeError, ValueError):
                     source_hash = None
-                serialized = claim_info.get('hex') or binascii.hexlify(
-                    smart_decode(claim_info['value']).serialized).decode()
+                serialized = binascii.hexlify(claim_info['value'].to_bytes())
                 transaction.execute(
                     "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (outpoint, claim_id, name, amount, height, serialized, certificate_id, address, sequence)
@@ -620,12 +614,12 @@ class SQLiteStorage(SQLiteMixin):
                 stream_hash = stream_hash[0]
                 known_outpoint = transaction.execute(
                     "select claim_outpoint from content_claim where stream_hash=?", (stream_hash,)
-                )
+                ).fetchone()
                 known_claim_id = transaction.execute(
                     "select claim_id from claim "
                     "inner join content_claim c3 ON claim.claim_outpoint=c3.claim_outpoint "
                     "where c3.stream_hash=?", (stream_hash,)
-                )
+                ).fetchone()
                 if not known_claim_id:
                     content_claims_to_update.append((stream_hash, outpoint))
                 elif known_outpoint != outpoint:
@@ -664,7 +658,7 @@ class SQLiteStorage(SQLiteMixin):
         ).fetchone()
         if not claim_info:
             raise Exception("claim not found")
-        new_claim_id, claim = claim_info[0], ClaimDict.deserialize(binascii.unhexlify(claim_info[1]))
+        new_claim_id, claim = claim_info[0], Claim.from_bytes(binascii.unhexlify(claim_info[1]))
 
         # certificate claims should not be in the content_claim table
         if not claim.is_stream:
@@ -677,7 +671,7 @@ class SQLiteStorage(SQLiteMixin):
         if not known_sd_hash:
             raise Exception("stream not found")
         # check the claim contains the same sd hash
-        if known_sd_hash[0].encode() != claim.source_hash:
+        if known_sd_hash[0] != claim.stream.hash:
             raise Exception("stream mismatch")
 
         # if there is a current claim associated to the file, check that the new claim is an update to it

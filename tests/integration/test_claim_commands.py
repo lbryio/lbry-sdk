@@ -1,8 +1,8 @@
 import tempfile
 
-from lbrynet.extras.wallet.transaction import Transaction
+from lbrynet.wallet.transaction import Transaction
 from lbrynet.error import InsufficientFundsError
-from lbrynet.schema.claim import ClaimDict
+from lbrynet.schema.claim import Claim
 
 from integration.testcase import CommandTestCase
 
@@ -40,8 +40,8 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
         self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['value'], '0.0')
-        self.assertEqual(txs[0]['fee'], '-0.0001985')
-        await self.assertBalance(self.account, '8.9796945')
+        self.assertEqual(txs[0]['fee'], '-0.000182')
+        await self.assertBalance(self.account, '8.979711')
 
         await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
@@ -50,7 +50,7 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim['claim_id'])
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.000107')
-        await self.assertBalance(self.account, '9.9795875')
+        await self.assertBalance(self.account, '9.979604')
 
     async def test_update_claim_holding_address(self):
         other_account_id = (await self.daemon.jsonrpc_account_create('second account'))['id']

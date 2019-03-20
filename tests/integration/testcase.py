@@ -4,17 +4,14 @@ import tempfile
 import logging
 from binascii import unhexlify
 
-import lbrynet.extras.wallet
-from lbrynet.schema.claim import ClaimDict
-
 from torba.testcase import IntegrationTestCase
 
-import lbrynet.schema
-lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
+import lbrynet.wallet
+from lbrynet.schema.claim import Claim
 
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
-from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.wallet import LbryWalletManager
 from lbrynet.extras.daemon.Components import Component, WalletComponent
 from lbrynet.extras.daemon.Components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
@@ -63,7 +60,7 @@ class ExchangeRateManagerComponent(Component):
 class CommandTestCase(IntegrationTestCase):
 
     timeout = 180
-    LEDGER = lbrynet.extras.wallet
+    LEDGER = lbrynet.wallet
     MANAGER = LbryWalletManager
     VERBOSITY = logging.WARN
 

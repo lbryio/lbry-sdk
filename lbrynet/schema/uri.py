@@ -1,5 +1,4 @@
 import re
-from lbrynet.schema.error import URIParseError
 
 PROTOCOL = 'lbry://'
 CHANNEL_CHAR = '@'
@@ -11,6 +10,10 @@ QUERY_CHAR = '?'
 
 CLAIM_ID_MAX_LENGTH = 40
 CHANNEL_NAME_MIN_LENGTH = 1
+
+
+class URIParseError(Exception):
+    pass
 
 
 class URI(object):

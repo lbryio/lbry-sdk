@@ -7,9 +7,6 @@ from string import hexdigits
 from torba.client.baseaccount import BaseAccount
 from torba.client.basetransaction import TXORef
 
-from lbrynet.schema.claim import ClaimDict
-#from lbrynet.schema.signer import SECP256k1, get_signer
-
 
 log = logging.getLogger(__name__)
 
@@ -21,11 +18,6 @@ def validate_claim_id(claim_id):
         claim_id = claim_id.decode('utf-8')
     if set(claim_id).difference(hexdigits):
         raise Exception("Claim id is not hex encoded")
-
-
-def generate_certificate():
-    secp256k1_private_key = get_signer(SECP256k1).generate().private_key.to_pem()
-    return ClaimDict.generate_certificate(secp256k1_private_key, curve=SECP256k1), secp256k1_private_key
 
 
 class Account(BaseAccount):

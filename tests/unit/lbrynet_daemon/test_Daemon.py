@@ -3,16 +3,15 @@ from unittest import mock
 import json
 
 from lbrynet.conf import Config
-from lbrynet.schema.decode import smart_decode
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
 from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT
 from lbrynet.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.extras.daemon.Components import HEADERS_COMPONENT, STREAM_MANAGER_COMPONENT
+from lbrynet.extras.daemon.Components import HEADERS_COMPONENT
 from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.extras.wallet import LbryWalletManager
+from lbrynet.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
 from tests import test_utils
