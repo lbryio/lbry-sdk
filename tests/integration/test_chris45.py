@@ -109,7 +109,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # After abandoning he just waits for his LBCs to be returned to his account
         await self.generate(5)
         result = await self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, '8.9693585')
+        self.assertEqual(result, '8.969381')
 
         # Amidst all this Chris receives a call from his friend Ramsey
         # who says that it is of utmost urgency that Chris transfer him
@@ -126,7 +126,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.generate(5)
         result = await self.daemon.jsonrpc_account_balance()
         # Chris' balance was correct
-        self.assertEqual(result, '7.9692345')
+        self.assertEqual(result, '7.969257')
 
         # Ramsey too assured him that he had received the 1 LBC and thanks him
         result = await self.daemon.jsonrpc_account_balance(ramsey_account_id)

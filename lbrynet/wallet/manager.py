@@ -416,12 +416,13 @@ class LbryWalletManager(BaseWalletManager):
 
         if certificate:
             claim_output.sign(certificate, first_input_id=b'placeholder')
+            claim_output.script.generate()
 
         tx = await Transaction.create(inputs, [claim_output], [account], account)
 
         if certificate:
             claim_output.sign(certificate)
-            tx._reset()
+            await tx.sign([account])
 
         await account.ledger.broadcast(tx)
         await self.old_db.save_claims([self._old_get_temp_claim_info(
@@ -475,7 +476,9 @@ class LbryWalletManager(BaseWalletManager):
             amount, channel_name, claim, account.ledger.address_to_hash160(address)
         )
         key = claim_output.generate_channel_private_key()
+        claim_output.script.generate()
         tx = await Transaction.create([], [claim_output], [account], account)
+
 
         await account.ledger.broadcast(tx)
         account.add_certificate_private_key(tx.outputs[0].ref, key.decode())
