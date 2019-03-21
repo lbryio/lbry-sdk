@@ -67,6 +67,7 @@ class MainNetLedger(BaseLedger):
             resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
             return await resolver._handle_resolutions(resolutions, uris, page, page_size)
         except Exception as e:
+            log.exception(e)
             return {'error': str(e)}
 
     async def get_claim_by_claim_id(self, claim_id):

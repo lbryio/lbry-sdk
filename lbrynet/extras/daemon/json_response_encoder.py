@@ -77,6 +77,7 @@ class JSONResponseEncoder(JSONEncoder):
                     if txo.channel is not None:
                         output['channel_name'] = txo.channel.claim_name
                         try:
+                            raise ValueError()
                             output['valid_signature'] = txo.is_signed_by(txo.channel, self.ledger)
                         except BadSignatureError:
                             output['valid_signature'] = False

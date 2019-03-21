@@ -8,6 +8,8 @@ from lbrynet.schema.claim import Claim
 from google.protobuf.message import DecodeError
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.wallet.claim_proofs import verify_proof, InvalidProofError
+from lbrynet.wallet.transaction import Transaction
+
 log = logging.getLogger(__name__)
 
 
@@ -30,6 +32,7 @@ class Resolver:
                         await self._handle_resolve_uri_response(uri, resolution, page, page_size)
                     )
                 except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+                    log.exception(err)
                     results[uri] = {'error': str(err)}
             else:
                 results[uri] = {'error': "URI lbry://{} cannot be resolved".format(uri.replace("lbry://", ""))}
@@ -151,8 +154,9 @@ class Resolver:
         if not claim_result or 'value' not in claim_result:
             return claim_result
         certificate = None
-        certificate_id = Claim.from_bytes(claim_result['value']).signing_channel_id
+        certificate_id = Claim.from_bytes(unhexlify(claim_result['value'])).signing_channel_id
         if certificate_id:
+            certificate_id = hexlify(certificate_id[::-1]).decode()
             certificate = await self.network.get_claims_by_ids(certificate_id)
             certificate = certificate.pop(certificate_id) if certificate else None
         return await self.parse_and_validate_claim_result(claim_result, certificate=certificate)
@@ -175,6 +179,8 @@ class Resolver:
         if decoded:
             claim_result['has_signature'] = False
             if decoded.is_signed:
+                claim_tx = await self.network.get_transaction(claim_result['txid'])
+                cert_tx = await self.network.get_transaction(certificate['txid'])
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
                     certificate = await self.network.get_claims_by_ids(decoded.signing_channel_id)
@@ -183,7 +189,9 @@ class Resolver:
                 claim_result['has_signature'] = True
                 claim_result['signature_is_valid'] = False
                 validated, channel_name = validate_claim_signature_and_get_channel_name(
-                    decoded, certificate, claim_result['address'], claim_result['name'])
+                    claim_result, certificate, claim_result['address'], claim_result['name'],
+                    claim_tx=claim_tx, cert_tx=cert_tx
+                )
                 claim_result['channel_name'] = channel_name
                 if validated:
                     claim_result['signature_is_valid'] = True
@@ -382,14 +390,21 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
         return {'error': "proof not in result"}
 
 
-def validate_claim_signature_and_get_channel_name(claim, certificate_claim,
-                                                  claim_address, name, decoded_certificate=None):
+def validate_claim_signature_and_get_channel_name(claim_result, certificate_claim,
+                                                  claim_address, name, decoded_certificate=None,
+                                                  claim_tx=None, cert_tx=None):
+    if cert_tx and certificate_claim and claim_tx and claim_result:
+        tx = Transaction(unhexlify(claim_tx))
+        cert_tx = Transaction(unhexlify(cert_tx))
+        is_signed = tx.outputs[claim_result['nout']].is_signed_by(cert_tx.outputs[certificate_claim['nout']])
+        return is_signed, certificate_claim['name']
+    return False, None
     if not certificate_claim:
         return False, None
     if 'value' not in certificate_claim:
         log.warning('Got an invalid claim while parsing certificates, please report: %s', certificate_claim)
         return False, None
-    certificate = decoded_certificate or Claim.from_bytes(certificate_claim['value'])
+    certificate = decoded_certificate or certificate_claim['value']
     if not isinstance(certificate, Claim):
         raise TypeError("Certificate is not a ClaimDict: %s" % str(type(certificate)))
     if _validate_signed_claim(claim, claim_address, name, certificate):

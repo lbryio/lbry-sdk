@@ -114,7 +114,7 @@ class Output(BaseOutput):
         return True
 
     def sign(self, channel: 'Output', first_input_id=None):
-        self.claim.signing_channel_id = unhexlify(channel.claim_id)
+        self.claim.signing_channel_id = unhexlify(channel.claim_id)[::-1]
         digest = sha256(b''.join([
             first_input_id or self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
             self.claim.signing_channel_id,

@@ -149,7 +149,7 @@ class LBRYBlockProcessor(BlockProcessor):
         try:
             parse_lbry_uri(name.decode())  # skip invalid names
             claim_dict = Claim.from_bytes(value)
-            cert_id = unhexlify(claim_dict.signing_channel_id)[::-1]
+            cert_id = claim_dict.signing_channel_id
             if not self.should_validate_signatures:
                 return cert_id
             if cert_id:

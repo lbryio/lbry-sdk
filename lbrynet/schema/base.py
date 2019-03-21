@@ -1,3 +1,5 @@
+from binascii import hexlify
+
 from google.protobuf.message import DecodeError
 from google.protobuf.json_format import MessageToDict
 
@@ -22,6 +24,10 @@ class Signable:
     @property
     def is_undetermined(self):
         return self.message.WhichOneof('type') is None
+
+    @property
+    def signing_channel_hash(self):
+        return hexlify(self.signing_channel_id[::-1]).decode() if self.signing_channel_id else None
 
     @property
     def is_signed(self):

@@ -62,7 +62,7 @@ class CommandTestCase(IntegrationTestCase):
     timeout = 180
     LEDGER = lbrynet.wallet
     MANAGER = LbryWalletManager
-    VERBOSITY = logging.WARN
+    VERBOSITY = logging.DEBUG
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
