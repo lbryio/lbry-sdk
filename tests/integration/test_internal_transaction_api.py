@@ -2,7 +2,7 @@ import asyncio
 
 from torba.testcase import IntegrationTestCase
 
-import lbrynet.extras.wallet
+import lbrynet.wallet
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
