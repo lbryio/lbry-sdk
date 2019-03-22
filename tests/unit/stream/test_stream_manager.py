@@ -4,12 +4,13 @@ from unittest import mock
 import asyncio
 import time
 import json
+from decimal import Decimal
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
 from lbrynet.utils import generate_id
 from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout, \
     DownloadDataTimeout
-from lbrynet.extras.wallet.manager import LbryWalletManager
+from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.extras.daemon.analytics import AnalyticsManager
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.stream.descriptor import StreamDescriptor
