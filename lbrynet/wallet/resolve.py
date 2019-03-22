@@ -398,17 +398,6 @@ def validate_claim_signature_and_get_channel_name(claim_result, certificate_clai
         is_signed = tx.outputs[claim_result['nout']].is_signed_by(cert_tx.outputs[certificate_claim['nout']])
         return is_signed, certificate_claim['name']
     return False, None
-    if not certificate_claim:
-        return False, None
-    if 'value' not in certificate_claim:
-        log.warning('Got an invalid claim while parsing certificates, please report: %s', certificate_claim)
-        return False, None
-    certificate = decoded_certificate or certificate_claim['value']
-    if not isinstance(certificate, Claim):
-        raise TypeError("Certificate is not a ClaimDict: %s" % str(type(certificate)))
-    if _validate_signed_claim(claim, claim_address, name, certificate):
-        return True, certificate_claim['name']
-    return False, None
 
 
 def _validate_signed_claim(claim, claim_address, name, certificate):
