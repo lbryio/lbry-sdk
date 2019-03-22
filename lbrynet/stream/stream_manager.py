@@ -347,13 +347,13 @@ class StreamManager:
         else:
             return await self.storage.rowid_for_stream(downloader.descriptor.stream_hash)
 
-    async def _check_update_or_replace(self, outpoint: str, claim_id: str, claim: ClaimDict) -> typing.Tuple[
+    async def _check_update_or_replace(self, outpoint: str, claim_id: str, claim: Claim) -> typing.Tuple[
                                                        typing.Optional[ManagedStream], typing.Optional[ManagedStream]]:
         existing = self.get_filtered_streams(outpoint=outpoint)
         if existing:
             await self.start_stream(existing[0])
             return existing[0], None
-        existing = self.get_filtered_streams(sd_hash=claim.source_hash.decode())
+        existing = self.get_filtered_streams(sd_hash=claim.stream.hash)
         if existing and existing[0].claim_id != claim_id:
             raise ResolveError(f"stream for {existing[0].claim_id} collides with existing "
                                f"download {claim_id}")
@@ -373,7 +373,7 @@ class StreamManager:
         return None, None
 
     async def start_downloader(self, got_descriptor_time: asyncio.Future, downloader: StreamDownloader,
-                               download_id: str, outpoint: str, claim: ClaimDict, resolved: typing.Dict,
+                               download_id: str, outpoint: str, claim: Claim, resolved: typing.Dict,
                                file_name: typing.Optional[str] = None) -> ManagedStream:
         start_time = self.loop.time()
         downloader.download(self.node)
