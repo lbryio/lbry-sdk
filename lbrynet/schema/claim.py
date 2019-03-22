@@ -2,6 +2,7 @@ from typing import List, Tuple
 from decimal import Decimal
 from binascii import hexlify, unhexlify
 
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import DecodeError
 
 from torba.client.hash import Base58
@@ -215,6 +216,9 @@ class Channel:
         self._claim = claim or Claim()
         self._channel = self._claim.channel_message
 
+    def to_dict(self):
+        return MessageToDict(self._channel)
+
     @property
     def claim(self) -> Claim:
         return self._claim
@@ -303,6 +307,9 @@ class Stream:
     def __init__(self, claim: Claim = None):
         self._claim = claim or Claim()
         self._stream = self._claim.stream_message
+
+    def to_dict(self):
+        return MessageToDict(self._stream)
 
     @property
     def claim(self) -> Claim:

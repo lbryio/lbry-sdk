@@ -156,7 +156,6 @@ class Resolver:
         certificate = None
         certificate_id = Claim.from_bytes(unhexlify(claim_result['value'])).signing_channel_id
         if certificate_id:
-            certificate_id = hexlify(certificate_id[::-1]).decode()
             certificate = await self.network.get_claims_by_ids(certificate_id)
             certificate = certificate.pop(certificate_id) if certificate else None
         return await self.parse_and_validate_claim_result(claim_result, certificate=certificate)

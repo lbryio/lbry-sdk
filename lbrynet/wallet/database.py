@@ -1,5 +1,3 @@
-from binascii import hexlify
-
 from torba.client.basedatabase import BaseDatabase
 
 
@@ -59,7 +57,7 @@ class WalletDatabase(BaseDatabase):
         for txo in txos:
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 if txo.claim.is_signed:
-                    channel_ids.add(hexlify(txo.claim.signing_channel_id[::-1]).decode())
+                    channel_ids.add(txo.claim.signing_channel_id)
                 if txo.claim_name.startswith('@') and my_account is not None:
                     txo.private_key = my_account.get_certificate_private_key(txo.ref)
 
@@ -73,7 +71,7 @@ class WalletDatabase(BaseDatabase):
             }
             for txo in txos:
                 if txo.script.is_claim_name or txo.script.is_update_claim:
-                    txo.channel = channels.get(txo.claim.signing_channel_hash, None)
+                    txo.channel = channels.get(txo.claim.signing_channel_id, None)
 
         return txos
 

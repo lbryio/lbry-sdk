@@ -51,14 +51,17 @@ class Output(BaseOutput):
         return self.script.is_claim_name or self.script.is_update_claim
 
     @property
-    def claim_id(self) -> str:
+    def claim_hash(self) -> bytes:
         if self.script.is_claim_name:
-            claim_id = hash160(self.tx_ref.hash + struct.pack('>I', self.position))
+            return hash160(self.tx_ref.hash + struct.pack('>I', self.position))
         elif self.script.is_update_claim or self.script.is_support_claim:
-            claim_id = self.script.values['claim_id']
+            return self.script.values['claim_id']
         else:
             raise ValueError('No claim_id associated.')
-        return hexlify(claim_id[::-1]).decode()
+
+    @property
+    def claim_id(self) -> str:
+        return hexlify(self.claim_hash[::-1]).decode()
 
     @property
     def claim_name(self) -> str:
@@ -95,12 +98,12 @@ class Output(BaseOutput):
             pieces = [
                 Base58.decode(self.get_address(ledger)),
                 self.claim.unsigned_payload,
-                self.claim.signing_channel_id
+                self.claim.signing_channel_hash
             ]
         else:
             pieces = [
                 self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
-                self.claim.signing_channel_id,
+                self.claim.signing_channel_hash,
                 self.claim.to_message_bytes()
             ]
         digest = sha256(b''.join(pieces))
@@ -114,10 +117,10 @@ class Output(BaseOutput):
         return True
 
     def sign(self, channel: 'Output', first_input_id=None):
-        self.claim.signing_channel_id = unhexlify(channel.claim_id)[::-1]
+        self.claim.signing_channel_hash = channel.claim_hash
         digest = sha256(b''.join([
             first_input_id or self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
-            self.claim.signing_channel_id,
+            self.claim.signing_channel_hash,
             self.claim.to_message_bytes()
         ]))
         private_key = ecdsa.SigningKey.from_pem(channel.private_key, hashfunc=hashlib.sha256)
