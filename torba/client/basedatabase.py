@@ -444,19 +444,16 @@ class BaseDatabase(SQLiteMixin):
         if 'order_by' not in constraints:
             constraints['order_by'] = ["tx.height=0 DESC", "tx.height DESC", "tx.position DESC"]
         rows = await self.select_txos(
-            "amount, script, txid, tx.height, txo.position, chain, account", **constraints
+            "raw, txo.position, chain, account", **constraints
         )
-        output_class = self.ledger.transaction_class.output_class
-        return [
-            output_class(
-                amount=row[0],
-                script=output_class.script_class(row[1]),
-                tx_ref=TXRefImmutable.from_id(row[2], row[3]),
-                position=row[4],
-                is_change=row[5] == 1,
-                is_my_account=row[6] == my_account
-            ) for row in rows
-        ]
+        txos = []
+        for row in rows:
+            tx = self.ledger.transaction_class(row[0])
+            txo = tx.outputs[row[1]]
+            txo.is_change = row[2] == 1
+            txo.is_my_account = row[3] == my_account
+            txos.append(txo)
+        return txos
 
     async def get_txo_count(self, **constraints):
         constraints.pop('offset', None)
