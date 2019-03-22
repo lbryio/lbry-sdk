@@ -1,6 +1,5 @@
 import hashlib
 import struct
-from binascii import unhexlify
 
 import msgpack
 from torba.server.hash import hash_to_hex_str
