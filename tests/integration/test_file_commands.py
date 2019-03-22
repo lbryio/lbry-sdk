@@ -29,7 +29,7 @@ class FileCommands(CommandTestCase):
 
     async def test_download_different_timeouts(self):
         claim = await self.make_claim('foo', '0.01')
-        sd_hash = claim['output']['value']['stream']['source']['source']
+        sd_hash = claim['output']['value']['stream']['hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         all_except_sd = [
             blob_hash for blob_hash in self.server.blob_manager.completed_blob_hashes if blob_hash != sd_hash
@@ -71,7 +71,7 @@ class FileCommands(CommandTestCase):
 
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
         claim = await self.make_claim('foo', '0.01')
-        sd_hash = claim['output']['value']['stream']['source']['source']
+        sd_hash = claim['output']['value']['stream']['hash']
         file_info = self.daemon.jsonrpc_file_list()[0]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
@@ -90,7 +90,7 @@ class FileCommands(CommandTestCase):
 
     async def test_incomplete_downloads_retry(self):
         claim = await self.make_claim('foo', '0.01')
-        sd_hash = claim['output']['value']['stream']['source']['source']
+        sd_hash = claim['output']['value']['stream']['hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
             await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
@@ -130,7 +130,7 @@ class FileCommands(CommandTestCase):
     async def test_unban_recovers_stream(self):
         BlobDownloader.BAN_TIME = .5  # fixme: temporary field, will move to connection manager or a conf
         claim = await self.make_claim('foo', '0.01', data=bytes([0]*(1<<23)))
-        sd_hash = claim['output']['value']['stream']['source']['source']
+        sd_hash = claim['output']['value']['stream']['hash']
         missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))[-2]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         # backup blob
@@ -156,7 +156,7 @@ class FileCommands(CommandTestCase):
             fee={'currency': 'LBC', 'amount': 11.0, 'address': target_address})
         await self.daemon.jsonrpc_file_delete(claim_name='expensive')
         response = await self.daemon.jsonrpc_get('lbry://expensive')
-        self.assertEqual(response['error'], 'fee of 11.0 exceeds max available balance')
+        self.assertEqual(response['error'], 'fee of 11.00000 exceeds max available balance')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
 
         # FAIL: beyond maximum key fee
@@ -166,7 +166,7 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
         response = await self.daemon.jsonrpc_get('lbry://maxkey')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
-        self.assertEqual(response['error'], 'fee of 111.0 exceeds max configured to allow of 50.0')
+        self.assertEqual(response['error'], 'fee of 111.00000 exceeds max configured to allow of 50.00000')
 
         # PASS: purchase is successful
         await self.make_claim(

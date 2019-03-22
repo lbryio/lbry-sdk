@@ -72,12 +72,13 @@ class JSONResponseEncoder(JSONEncoder):
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 claim = txo.claim
                 output['value'] = claim.to_dict()
+                if claim.is_stream:
+                    output['value']['stream']['hash'] = claim.stream.hash
                 if claim.is_signed:
                     output['valid_signature'] = None
                     if txo.channel is not None:
                         output['channel_name'] = txo.channel.claim_name
                         try:
-                            raise ValueError()
                             output['valid_signature'] = txo.is_signed_by(txo.channel, self.ledger)
                         except BadSignatureError:
                             output['valid_signature'] = False

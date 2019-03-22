@@ -142,11 +142,11 @@ class ClaimCommands(CommandTestCase):
 
         # update the same claim
         await self.make_claim(amount='9.0')
-        await self.assertBalance(self.account, '0.9796205')
+        await self.assertBalance(self.account, '0.979637')
 
         # update the claim a second time but use even more funds
         await self.make_claim(amount='9.97')
-        await self.assertBalance(self.account, '0.009348')
+        await self.assertBalance(self.account, '0.009381')
 
         # fails when specifying more than available
         with tempfile.NamedTemporaryFile() as file:
@@ -155,7 +155,7 @@ class ClaimCommands(CommandTestCase):
             with self.assertRaisesRegex(
                 InsufficientFundsError,
                 "Please lower the bid value, the maximum amount"
-                " you can specify for this claim is 9.979274."
+                " you can specify for this claim is 9.979307."
             ):
                 await self.out(self.daemon.jsonrpc_publish(
                     'hovercraft', '9.98', file_path=file.name

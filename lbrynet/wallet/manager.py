@@ -416,7 +416,6 @@ class LbryWalletManager(BaseWalletManager):
 
         if certificate:
             claim_output.sign(certificate, first_input_id=b'placeholder')
-            claim_output.script.generate()
 
         tx = await Transaction.create(inputs, [claim_output], [account], account)
 
