@@ -25,7 +25,10 @@ class JSONResponseEncoder(JSONEncoder):
         if isinstance(obj, Output):
             return self.encode_output(obj)
         if isinstance(obj, Claim):
-            return obj.to_dict()
+            claim_dict = obj.to_dict()
+            if obj.is_stream:
+                claim_dict['stream']['hash'] = obj.stream.hash
+            return claim_dict
         if isinstance(obj, datetime):
             return obj.strftime("%Y%m%dT%H:%M:%S")
         if isinstance(obj, Decimal):
@@ -71,9 +74,7 @@ class JSONResponseEncoder(JSONEncoder):
 
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 claim = txo.claim
-                output['value'] = claim.to_dict()
-                if claim.is_stream:
-                    output['value']['stream']['hash'] = claim.stream.hash
+                output['value'] = claim
                 if claim.is_signed:
                     output['valid_signature'] = None
                     if txo.channel is not None:
