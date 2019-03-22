@@ -32,6 +32,7 @@ class BasicTransactionTest(IntegrationTestCase):
             l2d('1.0'), '@bar', channel, self.account.ledger.address_to_hash160(address1)
         )
         channel_txo.generate_channel_private_key()
+        channel_txo.script.generate()
         channel_tx = await Transaction.create([], [channel_txo], [self.account], self.account)
 
         stream = Claim()
@@ -39,9 +40,8 @@ class BasicTransactionTest(IntegrationTestCase):
         stream_txo = Output.pay_claim_name_pubkey_hash(
             l2d('1.0'), 'foo', stream, self.account.ledger.address_to_hash160(address1)
         )
-        stream_tx = await Transaction.create([], [channel_txo], [self.account], self.account)
-        stream_tx._reset()
-        stream_txo.sign(channel_txo, b'placeholder')
+        stream_tx = await Transaction.create([], [stream_txo], [self.account], self.account)
+        stream_txo.sign(channel_txo)
         await stream_tx.sign([self.account])
 
         await self.broadcast(channel_tx)
@@ -56,8 +56,8 @@ class BasicTransactionTest(IntegrationTestCase):
             self.ledger.wait(stream_tx)
         ])
 
-        self.assertEqual(d2l(await self.account.get_balance()), '7.983786')
-        self.assertEqual(d2l(await self.account.get_balance(include_claims=True)), '9.983786')
+        self.assertEqual(d2l(await self.account.get_balance()), '7.985786')
+        self.assertEqual(d2l(await self.account.get_balance(include_claims=True)), '9.985786')
 
         response = await self.ledger.resolve(0, 10, 'lbry://@bar/foo')
         self.assertIn('lbry://@bar/foo', response)
