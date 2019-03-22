@@ -179,12 +179,12 @@ class Resolver:
             claim_result['has_signature'] = False
             if decoded.is_signed:
                 claim_tx = await self.network.get_transaction(claim_result['txid'])
-                cert_tx = await self.network.get_transaction(certificate['txid'])
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
                     certificate = await self.network.get_claims_by_ids(decoded.signing_channel_id)
                     if not certificate:
                         log.warning('Certificate %s not found', decoded.signing_channel_id)
+                cert_tx = await self.network.get_transaction(certificate['txid']) if certificate else None
                 claim_result['has_signature'] = True
                 claim_result['signature_is_valid'] = False
                 validated, channel_name = validate_claim_signature_and_get_channel_name(
