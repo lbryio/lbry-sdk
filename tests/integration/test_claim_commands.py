@@ -11,18 +11,6 @@ from integration.testcase import CommandTestCase
 
 class ClaimCommands(CommandTestCase):
 
-    async def craft_claim(self, name, amount_dewies, claim_dict, address):
-        # FIXME: this is here mostly because publish has defensive code for situations that happens accidentally
-        # However, it still happens... So, let's reproduce them.
-        claim = Claim.load_bytes(claim_dict)
-        address = address or (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
-        tx = await Transaction.claim(name, claim, amount_dewies, address, [self.account], self.account)
-        await self.broadcast(tx)
-        await self.ledger.wait(tx)
-        await self.generate(1)
-        await self.ledger.wait(tx)
-        return tx
-
     async def test_create_update_and_abandon_claim(self):
         await self.assertBalance(self.account, '10.0')
 
