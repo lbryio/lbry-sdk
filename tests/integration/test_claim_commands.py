@@ -1,4 +1,5 @@
 import tempfile
+from binascii import unhexlify
 
 from lbrynet.wallet.transaction import Transaction
 from lbrynet.error import InsufficientFundsError
@@ -13,7 +14,7 @@ class ClaimCommands(CommandTestCase):
     async def craft_claim(self, name, amount_dewies, claim_dict, address):
         # FIXME: this is here mostly because publish has defensive code for situations that happens accidentally
         # However, it still happens... So, let's reproduce them.
-        claim = ClaimDict.load_dict(claim_dict)
+        claim = Claim.load_bytes(claim_dict)
         address = address or (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
         tx = await Transaction.claim(name, claim, amount_dewies, address, [self.account], self.account)
         await self.broadcast(tx)
@@ -214,16 +215,16 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(len(empty['claims']), 0)
 
     async def test_abandoned_channel_with_signed_claims(self):
-        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        channel = await self.daemon.jsonrpc_channel_new('@abc', "1.0")
         self.assertTrue(channel['success'])
-        await self.confirm_tx(channel['tx']['txid'])
-        claim = await self.make_claim(amount='0.0001', name='on-channel-claim', channel_name='@abc')
-        self.assertTrue(claim['success'])
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        await self.confirm_tx(channel['tx'].id)
+        orphan_claim = await self.make_claim(amount='0.0001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(orphan_claim['success'])
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx'].id, nout=0, blocking=False))
         self.assertTrue(abandon['success'])
-        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
+        channel = await self.daemon.jsonrpc_channel_new('@abc', "1.0")
         self.assertTrue(channel['success'])
-        await self.confirm_tx(channel['tx']['txid'])
+        await self.confirm_tx(channel['tx'].id)
 
         # Original channel doesnt exists anymore, so the signature is invalid. For invalid signatures, resolution is
         # only possible outside a channel
@@ -232,39 +233,46 @@ class ClaimCommands(CommandTestCase):
         response = await self.resolve('lbry://on-channel-claim')
         self.assertIn('claim', response['lbry://on-channel-claim'])
         self.assertFalse(response['lbry://on-channel-claim']['claim']['signature_is_valid'])
-        direct_uri = 'lbry://on-channel-claim#' + claim['claim_id']
+        direct_uri = 'lbry://on-channel-claim#' + orphan_claim['claim_id']
         response = await self.resolve(direct_uri)
         self.assertIn('claim', response[direct_uri])
         self.assertFalse(response[direct_uri]['claim']['signature_is_valid'])
+        await self.daemon.jsonrpc_claim_abandon(claim_id=orphan_claim['claim_id'])
 
         uri = 'lbry://@abc/on-channel-claim'
         # now, claim something on this channel (it will update the invalid claim, but we save and forcefully restore)
-        original_claim = await self.make_claim(amount='0.00000001', name='on-channel-claim', channel_name='@abc')
-        self.assertTrue(original_claim['success'])
+        valid_claim = await self.make_claim(amount='0.00000001', name='on-channel-claim', channel_name='@abc')
+        self.assertTrue(valid_claim['success'])
         # resolves normally
         response = await self.resolve(uri)
         self.assertIn('claim', response[uri])
         self.assertTrue(response[uri]['claim']['signature_is_valid'])
 
-        # FIXME BEING FIXED -- doesnt happen on current sigs but on migrated ones
-        # tamper it, invalidating the signature
-        #value = response[uri]['claim']['value'].copy()
-        #value['stream']['author'] = 'some troll'
-        #address = response[uri]['claim']['address']
-        #await self.craft_claim('on-channel-claim', 1, value, address)
-        # it resolves to the now only valid claim under the channel, ignoring the fake one
-        #response = await self.resolve(uri)
-        #self.assertIn('claim', response[uri])
-        #self.assertTrue(response[uri]['claim']['signature_is_valid'])
+        # ooops! claimed a valid conflict! (this happens on the wild, mostly by accident or race condition)
+        dupe_claim = Transaction(unhexlify(valid_claim['tx']['hex'])).outputs[valid_claim['output']['nout']].claim
+        dupe_claim.stream.hash = ''.join(reversed(dupe_claim.stream.hash))
+        address = response[uri]['claim']['address']
+        tx = await Transaction.claim(
+            'on-channel-claim', dupe_claim, 1,
+            holding_address=address, funding_accounts=[self.account], change_account=self.account
+        )
+        tx.outputs[0].sign(channel['output'])
+        await tx.sign([self.account])
+        await self.broadcast(tx)
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.ledger.wait(tx)
+        #await self.make_claim()craft_claim('on-channel-claim', 1, )
 
-        ## ooops! claimed a valid conflict! (this happens on the wild, mostly by accident or race condition)
-        #await self.craft_claim('on-channel-claim', 1, response[uri]['claim']['value'], address)
-
-        ## it still resolves! but to the older claim
-        #response = await self.resolve(uri)
-        #self.assertIn('claim', response[uri])
-        #self.assertTrue(response[uri]['claim']['signature_is_valid'])
-        #self.assertEqual(response[uri]['claim']['txid'], original_claim['tx']['txid'])
+        # it still resolves! but to the older claim
+        response = await self.resolve(uri)
+        self.assertIn('claim', response[uri])
+        self.assertTrue(response[uri]['claim']['signature_is_valid'])
+        self.assertEqual(response[uri]['claim']['txid'], valid_claim['tx']['txid'])
+        claims = (await self.daemon.jsonrpc_claim_list('on-channel-claim'))['claims']
+        self.assertEqual(2, len(claims))
+        signer_ids = set([claim['value'].signing_channel_id for claim in claims])
+        self.assertEqual({channel['claim_id']}, signer_ids)
 
     async def test_claim_list_by_channel(self):
         self.maxDiff = None
