@@ -1,12 +1,7 @@
 from unittest import mock
 
-from lbrynet.schema.claim import ClaimDict
-
 from torba.orchstr8.node import WalletNode, SPVNode
 from torba.testcase import AsyncioTestCase
-
-import lbrynet.schema
-lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 from lbrynet.conf import Config
 from lbrynet.wallet import LbryWalletManager, RegTestLedger
