@@ -1,6 +1,6 @@
 import logging
 
-from ecdsa import BadSignatureError
+from cryptography.exceptions import InvalidSignature
 from binascii import unhexlify, hexlify
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
@@ -15,12 +15,13 @@ log = logging.getLogger(__name__)
 
 class Resolver:
 
-    def __init__(self, claim_trie_root, height, transaction_class, hash160_to_address, network):
+    def __init__(self, claim_trie_root, height, transaction_class, hash160_to_address, network, ledger):
         self.claim_trie_root = claim_trie_root
         self.height = height
         self.transaction_class = transaction_class
         self.hash160_to_address = hash160_to_address
         self.network = network
+        self.ledger = ledger
 
     async def _handle_resolutions(self, resolutions, requested_uris, page, page_size):
         results = {}
@@ -188,8 +189,7 @@ class Resolver:
                 claim_result['has_signature'] = True
                 claim_result['signature_is_valid'] = False
                 validated, channel_name = validate_claim_signature_and_get_channel_name(
-                    claim_result, certificate, claim_result['address'], claim_result['name'],
-                    claim_tx=claim_tx, cert_tx=cert_tx
+                    claim_result, certificate, self.ledger, claim_tx=claim_tx, cert_tx=cert_tx
                 )
                 claim_result['channel_name'] = channel_name
                 if validated:
@@ -389,31 +389,19 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
         return {'error': "proof not in result"}
 
 
-def validate_claim_signature_and_get_channel_name(claim_result, certificate_claim,
-                                                  claim_address, name, decoded_certificate=None,
+def validate_claim_signature_and_get_channel_name(claim_result, certificate_claim, ledger,
                                                   claim_tx=None, cert_tx=None):
     if cert_tx and certificate_claim and claim_tx and claim_result:
         tx = Transaction(unhexlify(claim_tx))
         cert_tx = Transaction(unhexlify(cert_tx))
-        is_signed = tx.outputs[claim_result['nout']].is_signed_by(cert_tx.outputs[certificate_claim['nout']])
+        try:
+            is_signed = tx.outputs[claim_result['nout']].is_signed_by(
+                cert_tx.outputs[certificate_claim['nout']], ledger
+            )
+        except InvalidSignature:
+            return False, None
         return is_signed, certificate_claim['name']
     return False, None
-
-
-def _validate_signed_claim(claim, claim_address, name, certificate):
-    if not claim.has_signature:
-        raise Exception("Claim is not signed")
-    try:
-        if claim.validate_signature(claim_address, certificate.protobuf, name):
-            return True
-    except BadSignatureError:
-        # print_msg("Signature for %s is invalid" % claim_id)
-        return False
-    except Exception as err:
-        log.error("Signature for %s is invalid, reason: %s - %s", claim_address,
-                  str(type(err)), err)
-        return False
-    return False
 
 
 # TODO: The following came from code handling lbryum results. Now that it's all in one place a refactor should unify it.

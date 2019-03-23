@@ -1,12 +1,16 @@
+import hashlib
 import tempfile
 from binascii import unhexlify
 
-from lbrynet.wallet.transaction import Transaction
+import ecdsa
+
+from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.error import InsufficientFundsError
 from lbrynet.schema.claim import Claim
 from lbrynet.schema.compat import OldClaimMessage
 
 from integration.testcase import CommandTestCase
+from torba.client.hash import sha256, Base58
 
 
 class ClaimCommands(CommandTestCase):
@@ -402,3 +406,72 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(c2['claim_id'], r4c)
         self.assertEqual(r3c, r4c)
         self.assertEqual(r3n, r4n)
+
+    async def test_resolve_old_claim(self):
+        channel = await self.daemon.jsonrpc_channel_new('@olds', "1.0")
+        self.assertTrue(channel['success'])
+        await self.confirm_tx(channel['tx'].id)
+        address = channel['output'].get_address(self.account.ledger)
+        claim = generate_signed_legacy('example', address, channel['output'])
+        tx = await Transaction.claim('example', claim.SerializeToString(), 1, address, [self.account], self.account)
+        await tx.sign([self.account])
+        await self.broadcast(tx)
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.ledger.wait(tx)
+
+        response = await self.daemon.jsonrpc_resolve(urls='@olds/example')
+        self.assertTrue(response['@olds/example']['claim']['signature_is_valid'])
+
+        claim.publisherSignature.signature = bytes(reversed(claim.publisherSignature.signature))
+        tx = await Transaction.claim(
+            'bad_example', claim.SerializeToString(), 1, address, [self.account], self.account
+        )
+        await tx.sign([self.account])
+        await self.broadcast(tx)
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.ledger.wait(tx)
+
+        response = await self.daemon.jsonrpc_resolve(urls='bad_example')
+        self.assertFalse(response['bad_example']['claim']['signature_is_valid'], response)
+        response = await self.daemon.jsonrpc_resolve(urls='@olds/bad_example')
+        self.assertEqual('URI lbry://@olds/bad_example cannot be resolved', response['@olds/bad_example']['error'])
+
+
+def generate_signed_legacy(name: str, address: bytes, output: Output):
+    decoded_address = Base58.decode(address)
+    claim = OldClaimMessage()
+    claim.ParseFromString(unhexlify(
+        '080110011aee04080112a604080410011a2b4865726520617265203520526561736f6e73204920e29da4e'
+        'fb88f204e657874636c6f7564207c20544c4722920346696e64206f7574206d6f72652061626f7574204e'
+        '657874636c6f75643a2068747470733a2f2f6e657874636c6f75642e636f6d2f0a0a596f752063616e206'
+        '6696e64206d65206f6e20746865736520736f6369616c733a0a202a20466f72756d733a2068747470733a'
+        '2f2f666f72756d2e6865617679656c656d656e742e696f2f0a202a20506f64636173743a2068747470733'
+        'a2f2f6f6666746f706963616c2e6e65740a202a2050617472656f6e3a2068747470733a2f2f7061747265'
+        '6f6e2e636f6d2f7468656c696e757867616d65720a202a204d657263683a2068747470733a2f2f7465657'
+        '37072696e672e636f6d2f73746f7265732f6f6666696369616c2d6c696e75782d67616d65720a202a2054'
+        '77697463683a2068747470733a2f2f7477697463682e74762f786f6e64616b0a202a20547769747465723'
+        'a2068747470733a2f2f747769747465722e636f6d2f7468656c696e757867616d65720a0a2e2e2e0a6874'
+        '7470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d4672546442434f535f66632a0'
+        'f546865204c696e75782047616d6572321c436f7079726967687465642028636f6e746163742061757468'
+        '6f722938004a2968747470733a2f2f6265726b2e6e696e6a612f7468756d626e61696c732f46725464424'
+        '34f535f666352005a001a41080110011a30040e8ac6e89c061f982528c23ad33829fd7146435bf7a4cc22'
+        'f0bff70c4fe0b91fd36da9a375e3e1c171db825bf5d1f32209766964656f2f6d70342a5c080110031a406'
+        '2b2dd4c45e364030fbfad1a6fefff695ebf20ea33a5381b947753e2a0ca359989a5cc7d15e5392a0d354c'
+        '0b68498382b2701b22c03beb8dcb91089031b871e72214feb61536c007cdf4faeeaab4876cb397feaf6b51'
+    ))
+    claim.ClearField("publisherSignature")
+    digest = sha256(b''.join([
+        name.lower().encode(),
+        decoded_address,
+        claim.SerializeToString(),
+        output.claim_hash
+    ]))
+    private_key = ecdsa.SigningKey.from_pem(output.private_key, hashfunc=hashlib.sha256)
+    signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+    claim.publisherSignature.version = 1
+    claim.publisherSignature.signatureType = 1
+    claim.publisherSignature.signature = signature
+    claim.publisherSignature.certificateId = output.claim_hash
+    return claim
