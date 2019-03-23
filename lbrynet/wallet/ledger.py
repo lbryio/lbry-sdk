@@ -50,7 +50,7 @@ class MainNetLedger(BaseLedger):
     @property
     def resolver(self):
         return Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
-                        hash160_to_address=self.hash160_to_address, network=self.network)
+                        hash160_to_address=self.hash160_to_address, network=self.network, ledger=self)
 
     async def resolve(self, page, page_size, *uris):
         for uri in uris:
