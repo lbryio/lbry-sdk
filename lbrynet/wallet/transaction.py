@@ -96,7 +96,6 @@ class Output(BaseOutput):
     def is_signed_by(self, channel: 'Output', ledger=None):
         if self.claim.unsigned_payload:
             pieces = [
-                self.claim_name.lower().encode(),
                 Base58.decode(self.get_address(ledger)),
                 self.claim.unsigned_payload,
                 self.claim.signing_channel_hash

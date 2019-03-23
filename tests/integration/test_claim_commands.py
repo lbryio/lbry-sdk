@@ -463,7 +463,6 @@ def generate_signed_legacy(name: str, address: bytes, output: Output):
     ))
     claim.ClearField("publisherSignature")
     digest = sha256(b''.join([
-        name.lower().encode(),
         decoded_address,
         claim.SerializeToString(),
         output.claim_hash
