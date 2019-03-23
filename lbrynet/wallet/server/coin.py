@@ -22,8 +22,8 @@ class LBC(Coin):
     NET = "mainnet"
     BASIC_HEADER_SIZE = 112
     CHUNK_SIZE = 96
-    XPUB_VERBYTES = bytes.fromhex("0x0488b21e")
-    XPRV_VERBYTES = bytes.fromhex("0x0488ade4")
+    XPUB_VERBYTES = bytes.fromhex("0488b21e")
+    XPRV_VERBYTES = bytes.fromhex("0488ade4")
     P2PKH_VERBYTE = bytes.fromhex("55")
     P2SH_VERBYTES = bytes.fromhex("7A")
     WIF_BYTE = bytes.fromhex("1C")
