@@ -251,10 +251,7 @@ class ClaimCommands(CommandTestCase):
         tx.outputs[0].sign(channel['output'])
         await tx.sign([self.account])
         await self.broadcast(tx)
-        await self.ledger.wait(tx)
-        await self.generate(1)
-        await self.ledger.wait(tx)
-        #await self.make_claim()craft_claim('on-channel-claim', 1, )
+        await self.confirm_tx(tx.id)
 
         # it still resolves! but to the older claim
         response = await self.resolve(uri)
@@ -269,9 +266,7 @@ class ClaimCommands(CommandTestCase):
     async def test_claim_list_by_channel(self):
         self.maxDiff = None
         tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
-        await self.ledger.wait(tx)
-        await self.generate(1)
-        await self.ledger.wait(tx)
+        await self.confirm_tx(tx.id)
         channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "0.0001"))
         self.assertTrue(channel['success'])
         await self.confirm_tx(channel['tx']['txid'])
@@ -416,9 +411,7 @@ class ClaimCommands(CommandTestCase):
         tx = await Transaction.claim('example', claim.SerializeToString(), 1, address, [self.account], self.account)
         await tx.sign([self.account])
         await self.broadcast(tx)
-        await self.ledger.wait(tx)
-        await self.generate(1)
-        await self.ledger.wait(tx)
+        await self.confirm_tx(tx.id)
 
         response = await self.daemon.jsonrpc_resolve(urls='@olds/example')
         self.assertTrue(response['@olds/example']['claim']['signature_is_valid'])
@@ -429,9 +422,7 @@ class ClaimCommands(CommandTestCase):
         )
         await tx.sign([self.account])
         await self.broadcast(tx)
-        await self.ledger.wait(tx)
-        await self.generate(1)
-        await self.ledger.wait(tx)
+        await self.confirm_tx(tx.id)
 
         response = await self.daemon.jsonrpc_resolve(urls='bad_example')
         self.assertFalse(response['bad_example']['claim']['signature_is_valid'], response)
