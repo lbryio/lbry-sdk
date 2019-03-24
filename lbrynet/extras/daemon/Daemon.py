@@ -2830,8 +2830,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     def valid_address_or_error(self, address):
         try:
-            if not self.ledger.is_valid_address(address):
-                raise Exception(f"'{address}' is not a valid address")
+            assert self.ledger.is_valid_address(address)
         except:
             raise Exception(f"'{address}' is not a valid address")
 
