@@ -128,8 +128,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # And voila, and bravo and encore! His Best Friend Ramsey read the story and immediately knew this was a hit
         # Now to keep this claim winning on the lbry blockchain he immediately supports the claim
-        tx = await self.out(self.daemon.jsonrpc_claim_new_support(
-            'fresh-start', claim_id2, '0.2', account_id=ramsey_account_id
+        tx = await self.out(self.daemon.jsonrpc_support_create(
+            claim_id2, '0.2', account_id=ramsey_account_id
         ))
         await self.confirm_tx(tx['txid'])
 
@@ -145,7 +145,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Now he also wanted to support the original creator of the Award Winning Novel
         # So he quickly decides to send a tip to him
         tx = await self.out(
-            self.daemon.jsonrpc_claim_tip(claim_id2, '0.3', account_id=ramsey_account_id))
+            self.daemon.jsonrpc_support_create(claim_id2, '0.3', tip=True, account_id=ramsey_account_id)
+        )
         await self.confirm_tx(tx['txid'])
 
         # And again checks if it went to the just right place
@@ -156,7 +157,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.generate(5)
 
         # Seeing the ravishing success of his novel Chris adds support to his claim too
-        tx = await self.out(self.daemon.jsonrpc_claim_new_support('fresh-start', claim_id2, '0.4'))
+        tx = await self.out(self.daemon.jsonrpc_support_create(claim_id2, '0.4'))
         await self.confirm_tx(tx['txid'])
 
         # And check if his support showed up
@@ -172,10 +173,9 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # his song, seeing as his novel had smashed all the records, he was the perfect candidate!
         # .......
         # Chris agrees.. 17 hours 43 minutes and 14 seconds later, he makes his publish
-        tx = await self.out(self.daemon.jsonrpc_publish(
+        tx = await self.create_claim(
             'hit-song', '1.0', data=b'The Whale and The Bookmark', channel_id=channel_id
-        ))
-
+        )
         await self.generate(5)
 
         # He sends the link to Ramsey, all happy and proud

@@ -4,15 +4,13 @@ import logging
 from binascii import unhexlify
 
 from datetime import datetime
-from typing import Optional
 
 from torba.client.basemanager import BaseWalletManager
 from torba.rpc.jsonrpc import CodeMessageError
 
-from lbrynet.schema.claim import Claim
 from lbrynet.wallet.ledger import MainNetLedger
 from lbrynet.wallet.account import BaseAccount
-from lbrynet.wallet.transaction import Transaction, Output, Input
+from lbrynet.wallet.transaction import Transaction
 from lbrynet.wallet.database import WalletDatabase
 from lbrynet.wallet.dewies import dewies_to_lbc
 
@@ -60,10 +58,6 @@ class LbryWalletManager(BaseWalletManager):
     @property
     def use_encryption(self):
         return self.default_account.serialize_encrypted
-
-    @property
-    def is_first_run(self):
-        return True
 
     @property
     def is_wallet_unlocked(self):
@@ -374,34 +368,6 @@ class LbryWalletManager(BaseWalletManager):
     def get_utxos(account: BaseAccount):
         return account.get_utxos()
 
-    async def support_claim(self, claim_name, claim_id, amount, account):
-        holding_address = await account.receiving.get_or_create_usable_address()
-        tx = await Transaction.support(claim_name, claim_id, amount, holding_address, [account], account)
-        await account.ledger.broadcast(tx)
-        await self.old_db.save_supports(claim_id, [{
-                'txid': tx.id,
-                'nout': tx.position,
-                'address': holding_address,
-                'claim_id': claim_id,
-                'amount': dewies_to_lbc(amount)
-        }])
-        return tx
-
-    async def tip_claim(self, amount, claim_id, account):
-        claim_to_tip = await self.get_claim_by_claim_id(claim_id)
-        tx = await Transaction.support(
-            claim_to_tip['name'], claim_id, amount, claim_to_tip['address'], [account], account
-        )
-        await account.ledger.broadcast(tx)
-        await self.old_db.save_supports(claim_id, [{
-                'txid': tx.id,
-                'nout': tx.position,
-                'address': claim_to_tip['address'],
-                'claim_id': claim_id,
-                'amount': dewies_to_lbc(amount)
-        }])
-        return tx
-
     async def abandon_claim(self, claim_id, txid, nout, account):
         claim = await account.get_claim(claim_id=claim_id, txid=txid, nout=nout)
         if not claim:
@@ -438,9 +404,6 @@ class LbryWalletManager(BaseWalletManager):
         if block_hash is None:
             block_hash = self.ledger.headers.hash(height).decode()
         return self.ledger.network.get_block(block_hash)
-
-    def get_claim_by_claim_id(self, claim_id):
-        return self.ledger.get_claim_by_claim_id(claim_id)
 
     def get_claim_by_outpoint(self, txid, nout):
         return self.ledger.get_claim_by_outpoint(txid, nout)
