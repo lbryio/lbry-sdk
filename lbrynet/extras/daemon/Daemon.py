@@ -8,7 +8,6 @@ import typing
 import aiohttp
 import base58
 import random
-from decimal import Decimal
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -18,8 +17,8 @@ from functools import wraps
 from torba.client.wallet import Wallet
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
-from lbrynet import __version__, utils
-from lbrynet.conf import Config, Setting, SLACK_WEBHOOK
+from lbrynet import utils
+from lbrynet.conf import Config, Setting
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.blob_exchange.downloader import download_blob
 from lbrynet.error import InsufficientFundsError, DownloadSDTimeout, ComponentsNotStarted
@@ -32,8 +31,8 @@ from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UP
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbrynet.extras.daemon.mime_types import guess_media_type
 from lbrynet.extras.daemon.undecorated import undecorated
+from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.account import Account as LBCAccount, validate_claim_id
 from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import Claim
@@ -728,31 +727,151 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("Get version info: " + json.dumps(platform_info))
         return platform_info
 
-    async def jsonrpc_report_bug(self, message=None):
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_resolve(self, urls: typing.Union[str, list]):
         """
-        Report a bug to slack
+        Get the claim that a URL refers to.
 
         Usage:
-            report_bug (<message> | --message=<message>)
+            resolve <urls>...
 
         Options:
-            --message=<message> : (str) Description of the bug
+            --urls=<urls>   : (str, list) one or more urls to resolve
 
         Returns:
-            (bool) true if successful
+            Dictionary of results, keyed by url
+            '<url>': {
+                    If a resolution error occurs:
+                    'error': Error message
+
+                    If the url resolves to a channel or a claim in a channel:
+                    'certificate': {
+                        'address': (str) claim address,
+                        'amount': (float) claim amount,
+                        'effective_amount': (float) claim amount including supports,
+                        'claim_id': (str) claim id,
+                        'claim_sequence': (int) claim sequence number (or -1 if unknown),
+                        'decoded_claim': (bool) whether or not the claim value was decoded,
+                        'height': (int) claim height,
+                        'depth': (int) claim depth,
+                        'has_signature': (bool) included if decoded_claim
+                        'name': (str) claim name,
+                        'permanent_url': (str) permanent url of the certificate claim,
+                        'supports: (list) list of supports [{'txid': (str) txid,
+                                                             'nout': (int) nout,
+                                                             'amount': (float) amount}],
+                        'txid': (str) claim txid,
+                        'nout': (str) claim nout,
+                        'signature_is_valid': (bool), included if has_signature,
+                        'value': ClaimDict if decoded, otherwise hex string
+                    }
+
+                    If the url resolves to a channel:
+                    'claims_in_channel': (int) number of claims in the channel,
+
+                    If the url resolves to a claim:
+                    'claim': {
+                        'address': (str) claim address,
+                        'amount': (float) claim amount,
+                        'effective_amount': (float) claim amount including supports,
+                        'claim_id': (str) claim id,
+                        'claim_sequence': (int) claim sequence number (or -1 if unknown),
+                        'decoded_claim': (bool) whether or not the claim value was decoded,
+                        'height': (int) claim height,
+                        'depth': (int) claim depth,
+                        'has_signature': (bool) included if decoded_claim
+                        'name': (str) claim name,
+                        'permanent_url': (str) permanent url of the claim,
+                        'channel_name': (str) channel name if claim is in a channel
+                        'supports: (list) list of supports [{'txid': (str) txid,
+                                                             'nout': (int) nout,
+                                                             'amount': (float) amount}]
+                        'txid': (str) claim txid,
+                        'nout': (str) claim nout,
+                        'signature_is_valid': (bool), included if has_signature,
+                        'value': ClaimDict if decoded, otherwise hex string
+                    }
+            }
         """
 
-        platform_name = system_info.get_platform()['platform']
-        webhook = utils.deobfuscate(SLACK_WEBHOOK)
-        payload = json.dumps({
-            "text": f"os: {platform_name}\n"
-                    f" version: {__version__}\n"
-                    f"<{get_loggly_query_string(self.installation_id)}|loggly>\n"
-                    f"{message}"
-        })
-        async with aiohttp.request('post', webhook, data=payload):
-            pass
-        return True
+        if isinstance(urls, str):
+            urls = [urls]
+
+        results = {}
+
+        valid_urls = set()
+        for u in urls:
+            try:
+                parse_lbry_uri(u)
+                valid_urls.add(u)
+            except URIParseError:
+                results[u] = {"error": "%s is not a valid url" % u}
+
+        resolved = await self.wallet_manager.resolve(*tuple(valid_urls))
+
+        for resolved_uri in resolved:
+            results[resolved_uri] = resolved[resolved_uri]
+
+        return results
+
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
+              STREAM_MANAGER_COMPONENT,
+              conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_get(self, uri, file_name=None, timeout=None):
+        """
+        Download stream from a LBRY name.
+
+        Usage:
+            get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>]
+
+
+        Options:
+            --uri=<uri>              : (str) uri of the content to download
+            --file_name=<file_name>  : (str) specified name for the downloaded file
+            --timeout=<timeout>      : (int) download timeout in number of seconds
+
+        Returns:
+            (dict) Dictionary containing information about the stream
+            {
+                'completed': (bool) true if download is completed,
+                'file_name': (str) name of file,
+                'download_directory': (str) download directory,
+                'points_paid': (float) credit paid to download file,
+                'stopped': (bool) true if download is stopped,
+                'stream_hash': (str) stream hash of file,
+                'stream_name': (str) stream name ,
+                'suggested_file_name': (str) suggested file name,
+                'sd_hash': (str) sd hash of file,
+                'download_path': (str) download path of file,
+                'mime_type': (str) mime type of file,
+                'key': (str) key attached to file,
+                'total_bytes': (int) file size in bytes,
+                'written_bytes': (int) written size in bytes,
+                'blobs_completed': (int) number of fully downloaded blobs,
+                'blobs_in_stream': (int) total blobs on stream,
+                'status': (str) downloader status,
+                'claim_id': (str) claim id,
+                'outpoint': (str) claim outpoint string,
+                'txid': (str) claim txid,
+                'nout': (int) claim nout,
+                'metadata': (dict) claim metadata,
+                'channel_claim_id': (str) None if claim is not signed
+                'channel_name': (str) None if claim is not signed
+                'claim_name': (str) claim name
+            }
+        """
+
+        try:
+            stream = await self.stream_manager.download_stream_from_uri(
+                uri, self.exchange_rate_manager, file_name, timeout
+            )
+            if not stream:
+                raise DownloadSDTimeout(uri)
+        except Exception as e:
+            log.warning("Error downloading %s: %s", uri, str(e))
+            return {"error": str(e)}
+        else:
+            return stream.as_dict()
 
     SETTINGS_DOC = """
     Settings management.
@@ -1457,200 +1576,6 @@ class Daemon(metaclass=JSONRPCServerType):
             )
         ]
 
-    CLAIM_DOC = """
-    Claim management.
-    """
-
-    @requires(WALLET_COMPONENT)
-    async def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
-        """
-        Resolve claim info from txid/nout or with claim ID
-
-        Usage:
-            claim_show [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                       [<claim_id> | --claim_id=<claim_id>]
-
-        Options:
-            --txid=<txid>              : (str) look for claim with this txid, nout must
-                                         also be specified
-            --nout=<nout>              : (int) look for claim with this nout, txid must
-                                         also be specified
-            --claim_id=<claim_id>  : (str) look for claim with this claim id
-
-        Returns:
-            (dict) Dictionary containing claim info as below,
-
-            {
-                'txid': (str) txid of claim
-                'nout': (int) nout of claim
-                'amount': (float) amount of claim
-                'value': (str) value of claim
-                'height' : (int) height of claim takeover
-                'claim_id': (str) claim ID of claim
-                'supports': (list) list of supports associated with claim
-            }
-
-            if claim cannot be resolved, dictionary as below will be returned
-
-            {
-                'error': (str) reason for error
-            }
-
-        """
-        if claim_id is not None and txid is None and nout is None:
-            claim_results = await self.wallet_manager.get_claim_by_claim_id(claim_id)
-        elif txid is not None and nout is not None and claim_id is None:
-            claim_results = await self.wallet_manager.get_claim_by_outpoint(txid, int(nout))
-        else:
-            raise Exception("Must specify either txid/nout, or claim_id")
-        return claim_results
-
-    @requires(WALLET_COMPONENT)
-    async def jsonrpc_resolve(self, urls: typing.Union[str, list]):
-        """
-        Get the claim that a URL refers to.
-
-        Usage:
-            resolve <urls>...
-
-        Options:
-            --urls=<urls>   : (str, list) one or more urls to resolve
-
-        Returns:
-            Dictionary of results, keyed by url
-            '<url>': {
-                    If a resolution error occurs:
-                    'error': Error message
-
-                    If the url resolves to a channel or a claim in a channel:
-                    'certificate': {
-                        'address': (str) claim address,
-                        'amount': (float) claim amount,
-                        'effective_amount': (float) claim amount including supports,
-                        'claim_id': (str) claim id,
-                        'claim_sequence': (int) claim sequence number (or -1 if unknown),
-                        'decoded_claim': (bool) whether or not the claim value was decoded,
-                        'height': (int) claim height,
-                        'depth': (int) claim depth,
-                        'has_signature': (bool) included if decoded_claim
-                        'name': (str) claim name,
-                        'permanent_url': (str) permanent url of the certificate claim,
-                        'supports: (list) list of supports [{'txid': (str) txid,
-                                                             'nout': (int) nout,
-                                                             'amount': (float) amount}],
-                        'txid': (str) claim txid,
-                        'nout': (str) claim nout,
-                        'signature_is_valid': (bool), included if has_signature,
-                        'value': ClaimDict if decoded, otherwise hex string
-                    }
-
-                    If the url resolves to a channel:
-                    'claims_in_channel': (int) number of claims in the channel,
-
-                    If the url resolves to a claim:
-                    'claim': {
-                        'address': (str) claim address,
-                        'amount': (float) claim amount,
-                        'effective_amount': (float) claim amount including supports,
-                        'claim_id': (str) claim id,
-                        'claim_sequence': (int) claim sequence number (or -1 if unknown),
-                        'decoded_claim': (bool) whether or not the claim value was decoded,
-                        'height': (int) claim height,
-                        'depth': (int) claim depth,
-                        'has_signature': (bool) included if decoded_claim
-                        'name': (str) claim name,
-                        'permanent_url': (str) permanent url of the claim,
-                        'channel_name': (str) channel name if claim is in a channel
-                        'supports: (list) list of supports [{'txid': (str) txid,
-                                                             'nout': (int) nout,
-                                                             'amount': (float) amount}]
-                        'txid': (str) claim txid,
-                        'nout': (str) claim nout,
-                        'signature_is_valid': (bool), included if has_signature,
-                        'value': ClaimDict if decoded, otherwise hex string
-                    }
-            }
-        """
-
-        if isinstance(urls, str):
-            urls = [urls]
-
-        results = {}
-
-        valid_urls = set()
-        for u in urls:
-            try:
-                parse_lbry_uri(u)
-                valid_urls.add(u)
-            except URIParseError:
-                results[u] = {"error": "%s is not a valid url" % u}
-
-        resolved = await self.wallet_manager.resolve(*tuple(valid_urls))
-
-        for resolved_uri in resolved:
-            results[resolved_uri] = resolved[resolved_uri]
-
-        return results
-
-    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
-              STREAM_MANAGER_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_get(self, uri, file_name=None, timeout=None):
-        """
-        Download stream from a LBRY name.
-
-        Usage:
-            get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>]
-
-
-        Options:
-            --uri=<uri>              : (str) uri of the content to download
-            --file_name=<file_name>  : (str) specified name for the downloaded file
-            --timeout=<timeout>      : (int) download timeout in number of seconds
-
-        Returns:
-            (dict) Dictionary containing information about the stream
-            {
-                'completed': (bool) true if download is completed,
-                'file_name': (str) name of file,
-                'download_directory': (str) download directory,
-                'points_paid': (float) credit paid to download file,
-                'stopped': (bool) true if download is stopped,
-                'stream_hash': (str) stream hash of file,
-                'stream_name': (str) stream name ,
-                'suggested_file_name': (str) suggested file name,
-                'sd_hash': (str) sd hash of file,
-                'download_path': (str) download path of file,
-                'mime_type': (str) mime type of file,
-                'key': (str) key attached to file,
-                'total_bytes': (int) file size in bytes,
-                'written_bytes': (int) written size in bytes,
-                'blobs_completed': (int) number of fully downloaded blobs,
-                'blobs_in_stream': (int) total blobs on stream,
-                'status': (str) downloader status,
-                'claim_id': (str) claim id,
-                'outpoint': (str) claim outpoint string,
-                'txid': (str) claim txid,
-                'nout': (int) claim nout,
-                'metadata': (dict) claim metadata,
-                'channel_claim_id': (str) None if claim is not signed
-                'channel_name': (str) None if claim is not signed
-                'claim_name': (str) claim name
-            }
-        """
-
-        try:
-            stream = await self.stream_manager.download_stream_from_uri(
-                uri, self.exchange_rate_manager, file_name, timeout
-            )
-            if not stream:
-                raise DownloadSDTimeout(uri)
-        except Exception as e:
-            log.warning("Error downloading %s: %s", uri, str(e))
-            return {"error": str(e)}
-        else:
-            return stream.as_dict()
-
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
         """
@@ -1774,58 +1699,150 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_channel_new(self, channel_name, amount, account_id=None):
+    async def jsonrpc_channel_create(
+            self, name, bid, allow_duplicate_name=False, account_id=None, claim_address=None, preview=False, **kwargs):
         """
-        Generate a publisher key and create a new '@' prefixed certificate claim
+        Generate a publisher key and create a new '@' prefixed channel claim.
 
         Usage:
-            channel_new (<channel_name> | --channel_name=<channel_name>)
-                        (<amount> | --amount=<amount>)
-                        [--account_id=<account_id>]
+            channel create (<name> | --name=<name>) (<bid> | --bid=<bid>)
+                           [--tags=<tags>...] [--allow_duplicate_name=<allow_duplicate_name>]
+                           [--title=<title>] [--description=<description>] [--language=<language>]
+                           [--contact_email=<contact_email>]
+                           [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
+                           [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
-            --channel_name=<channel_name>    : (str) name of the channel prefixed with '@'
-            --amount=<amount>                : (decimal) bid amount on the channel
-            --account_id=<account_id>        : (str) id of the account to store channel
-
-        Returns:
-            (dict) Dictionary containing result of the claim
-            {
-                'tx' : (str) hex encoded transaction
-                'txid' : (str) txid of resulting claim
-                'nout' : (int) nout of the resulting claim
-                'fee' : (float) fee paid for the claim transaction
-                'claim_id' : (str) claim ID of the resulting claim
-            }
+            --name=<name>                  : (str) name of the channel prefixed with '@'
+        --allow_duplicate_name=<allow_duplicate_name> : (bool) create new channel even if one already exists with
+                                              given name. default: false.
+            --bid=<bid>                    : (decimal) amount to back the claim
+            --tags=<tags>                  : (list) content tags
+            --title=<title>                : (str) title of the publication
+            --description=<description>    : (str) description of the publication
+            --language=<language>          : (str) primary language of the channel
+            --contact_email=<contact_email>: (str) email of channel owner
+            --homepage_url=<homepage_url>  : (str) homepage url
+            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
+            --cover_url=<cover_url>        : (str) url of cover image
+            --account_id=<account_id>      : (str) id of the account to store channel
+            --claim_address=<claim_address>: (str) address where the channel is sent to, if not specified
+                                                   it will be determined automatically from the account
+            --preview                      : (bool) do not broadcast the transaction
         """
-        try:
-            parsed = parse_lbry_uri(channel_name)
-            if not parsed.contains_channel:
-                raise Exception("Cannot make a new channel for a non channel name")
-            if parsed.path:
-                raise Exception("Invalid channel uri")
-        except (TypeError, URIParseError):
-            raise Exception("Invalid channel name")
+        account = self.get_account_or_default(account_id)
+        name = self.get_channel_name_or_error(name)
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        claim_address = await self.get_receiving_address(claim_address, account)
 
-        amount = self.get_dewies_or_error("amount", amount)
-        if amount <= 0:
-            raise Exception("Invalid amount")
+        existing_channels = await account.get_channels(claim_name=name)
+        if len(existing_channels) > 0:
+            if not allow_duplicate_name:
+                raise Exception(
+                    f"You already have a channel under the name '{name}'. "
+                    f"Use --allow-duplicate-name flag to override."
+                )
 
-        tx = await self.wallet_manager.claim_new_channel(
-            channel_name, amount, self.get_account_or_default(account_id)
+        claim = Claim()
+        claim.channel.update(**kwargs)
+        tx = await Transaction.claim_create(
+            name, claim, amount, claim_address, [account], account
         )
-        self.default_wallet.save()
-        await self.analytics_manager.send_new_channel()
-        nout = 0
-        txo = tx.outputs[nout]
-        log.info("Claimed a new channel! lbry://%s txid: %s nout: %d", channel_name, tx.id, nout)
-        return {
-            "success": True,
-            "tx": tx,
-            "claim_id": txo.claim_id,
-            "claim_address": txo.get_address(self.ledger),
-            "output": txo
-        }
+        txo = tx.outputs[0]
+        txo.generate_channel_private_key()
+
+        if not preview:
+            await tx.sign([account])
+            await account.ledger.broadcast(tx)
+            account.add_channel_private_key(txo.ref, txo.private_key)
+            self.default_wallet.save()
+            await self.storage.save_claims([self._old_get_temp_claim_info(
+                tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
+            )])
+            await self.analytics_manager.send_new_channel()
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_channel_update(
+            self, claim_id, bid=None, account_id=None, claim_address=None,
+            new_signing_key=False, preview=False, **kwargs):
+        """
+        Update attributes of a channel.
+
+        Usage:
+            channel update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
+                           [--tags=<tags>...] [--clear-tags] [--title=<title>] [--description=<description>]
+                           [--language=<language>] [--contact_email=<contact_email>]
+                           [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
+                           [--account_id=<account_id>] [--claim_address=<claim_address>] [--new-signing-key] [--preview]
+
+        Options:
+            --claim_id=<claim_id>          : (str) claim_id of the channel to update
+            --bid=<bid>                    : (decimal) amount to back the claim
+            --tags=<tags>                  : (list) add content tags
+            --clear-tags                   : (bool) clear existing tags (prior to adding new ones)
+            --title=<title>                : (str) title of the publication
+            --description=<description>    : (str) description of the publication
+            --language=<language>          : (str) primary language of the channel
+            --contact_email=<contact_email>: (str) email of channel owner
+            --homepage_url=<homepage_url>  : (str) homepage url
+            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
+            --cover_url=<cover_url>        : (str) url of cover image
+            --account_id=<account_id>      : (str) id of the account to store channel
+            --claim_address=<claim_address>: (str) address where the channel is sent
+            --new-signing-key              : (bool) generate a new signing key, will invalidate all previous publishes
+            --preview                      : (bool) do not broadcast the transaction
+        """
+        account = self.get_account_or_default(account_id)
+
+        existing_channels = await account.get_claims(claim_id=claim_id)
+        if len(existing_channels) != 1:
+            raise Exception(
+                f"Can't find the channel '{claim_id}' in account '{account_id}'."
+            )
+        old_txo = existing_channels[0]
+        if not old_txo.claim.is_channel:
+            raise Exception(
+                f"A claim with id '{claim_id}' was found but it is not a channel."
+            )
+
+        if bid is not None:
+            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        else:
+            amount = old_txo.amount
+
+        if claim_address is not None:
+            self.ledger.is_valid_address(claim_address)
+        else:
+            claim_address = old_txo.get_address(account.ledger)
+
+        old_txo.claim.channel.update(**kwargs)
+        tx = await Transaction.claim_update(
+            old_txo, amount, claim_address, [account], account
+        )
+        new_txo = tx.outputs[0]
+
+        if new_signing_key:
+            new_txo.generate_channel_private_key()
+        else:
+            new_txo.private_key = old_txo.private_key
+
+        if not preview:
+            await tx.sign([account])
+            await account.ledger.broadcast(tx)
+            account.add_channel_private_key(new_txo.ref, new_txo.private_key)
+            self.default_wallet.save()
+            await self.storage.save_claims([self._old_get_temp_claim_info(
+                tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
+            )])
+            await self.analytics_manager.send_new_channel()
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
@@ -1886,58 +1903,41 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return await self.wallet_manager.import_certificate_info(serialized_certificate_info)
 
+    CLAIM_DOC = """
+    Claim management.
+    """
+
     @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_publish(
-            self, name, bid, file_path=None, fee=None, title=None,
-            description=None, author=None, language=None, license=None,
-            license_url=None, thumbnail=None, preview=None, nsfw=None,
-            channel_name=None, channel_id=None, channel_account_id=None, account_id=None,
-            claim_address=None, change_address=None):
+            self, name, bid, file_path, allow_duplicate_name=False,
+            channel_id=None, channel_account_id=None,
+            account_id=None, claim_address=None, preview=False, **kwargs):
         """
-        Make a new name claim and publish associated data to lbrynet,
-        update over existing claim if user already has a claim for name.
-
-        Fields required in the final Metadata are:
-            'title'
-            'description'
-            'author'
-            'language'
-            'license'
-            'nsfw'
-
-        Metadata can be set by either using the metadata argument or by setting individual arguments
-        fee, title, description, author, language, license, license_url, thumbnail, preview, nsfw,
-        or sources. Individual arguments will overwrite the fields specified in metadata argument.
+        Make a new name claim and publish associated data to lbrynet.
 
         Usage:
-            publish (<name> | --name=<name>) (<bid> | --bid=<bid>) [--metadata=<metadata>]
-                    [--file_path=<file_path>] [--fee=<fee>] [--title=<title>]
-                    [--description=<description>] [--author=<author>] [--language=<language>]
-                    [--license=<license>] [--license_url=<license_url>] [--thumbnail=<thumbnail>]
-                    [--preview=<preview>] [--nsfw=<nsfw>]
-                    [--channel_name=<channel_name>] [--channel_id=<channel_id>]
-                    [--channel_account_id=<channel_account_id>...] [--account_id=<account_id>]
-                    [--claim_address=<claim_address>] [--change_address=<change_address>]
+            publish (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
+                    [--tags=<tags>...] [--allow_duplicate_name=<allow_duplicate_name>]
+                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
+                    [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
+                    [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
+                    [--release_time=<release_time>] [--duration=<duration>]
+                    [--video_width=<video_width>] [--video_height=<video_height>]
+                    [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...]
+                    [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
+        --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
+                                              given name. default: false.
             --bid=<bid>                    : (decimal) amount to back the claim
-            --metadata=<metadata>          : (dict) ClaimDict to associate with the claim.
-            --file_path=<file_path>        : (str) path to file to be associated with name. If provided,
-                                             a lbry stream of this file will be used in 'sources'.
-                                             If no path is given but a sources dict is provided,
-                                             it will be used. If neither are provided, an
-                                             error is raised.
-            --fee=<fee>                    : (dict) Dictionary representing key fee to download content:
-                                              {
-                                                'currency': currency_symbol,
-                                                'amount': decimal,
-                                                'address': str, optional
-                                              }
-                                              supported currencies: LBC, USD, BTC
-                                              If an address is not provided a new one will be
-                                              automatically generated. Default fee is zero.
+            --file_path=<file_path>        : (str) path to file to be associated with name.
+            --tags=<tags>                  : (list) content tags
+            --fee_currency=<fee_currency>  : (string) specify fee currency
+            --fee_amount=<fee_amount>      : (decimal) content download fee
+            --fee_address=<fee_address>    : (str) address where to send fee payments, will use
+                                                   value from --claim_address if not provided
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
             --author=<author>              : (str) author of the publication. The usage for this field is not
@@ -1948,164 +1948,216 @@ class Daemon(metaclass=JSONRPCServerType):
             --language=<language>          : (str) language of the publication
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
-            --thumbnail=<thumbnail>        : (str) thumbnail url
-            --preview=<preview>            : (str) preview url
-            --nsfw=<nsfw>                  : (bool) whether the content is nsfw
-            --channel_name=<channel_name>  : (str) name of the publisher channel name in the wallet
-            --channel_id=<channel_id>      : (str) claim id of the publisher channel, does not check
-                                             for channel claim being in the wallet. This allows
-                                             publishing to a channel where only the certificate
-                                             private key is in the wallet.
+            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
+            --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
+            --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
+                                                   calculate this automatically if not provided
+            --video_width=<video_width>    : (int) video width
+            --video_height=<video_height>  : (int) video height
+            --channel_id=<channel_id>      : (str) claim id of the publisher channel
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
-                                             for channel certificates, defaults to all accounts.
-                 --account_id=<account_id> : (str) account to use for funding the transaction
-           --claim_address=<claim_address> : (str) address where the claim is sent to, if not specified
-                                             new address will automatically be created
-
-        Returns:
-            (dict) Dictionary containing result of the claim
-            {
-                'tx' : (str) hex encoded transaction
-                'txid' : (str) txid of resulting claim
-                'nout' : (int) nout of the resulting claim
-                'fee' : (decimal) fee paid for the claim transaction
-                'claim_id' : (str) claim ID of the resulting claim
-            }
+                                                   for channel certificates, defaults to all accounts.
+            --account_id=<account_id>      : (str) account to use for funding the transaction
+            --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
+                                                   it will be determined automatically from the account
+            --preview                      : (bool) do not broadcast the transaction
         """
-
-        try:
-            parsed = parse_lbry_uri(name)
-            if parsed.name != name:
-                raise Exception("Name given to publish has invalid characters")
-        except (TypeError, URIParseError):
-            raise Exception("Invalid name given to publish")
-
-        amount = self.get_dewies_or_error('bid', bid)
-        if amount <= 0:
-            raise ValueError("Bid value must be greater than 0.0")
-
-        for address in [claim_address, change_address]:
-            if address is not None:
-                # raises an error if the address is invalid
-                self.ledger.is_valid_address(address)
-
         account = self.get_account_or_default(account_id)
+        channel = await self.get_channel_or_none(channel_account_id, channel_id, for_signing=True)
+        name = self.get_claim_name_or_error(name)
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        claim_address = await self.get_receiving_address(claim_address, account)
+        kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
 
-        available = await account.get_balance()
         existing_claims = await account.get_claims(claim_name=name)
-        if len(existing_claims) > 1:
-            log.warning("found %i claims for the name %s", len(existing_claims), name)
-        if amount >= available:
-            if len(existing_claims) == 1:
-                available += existing_claims[0].get_estimator(self.ledger).effective_amount
-            if amount >= available:
-                raise InsufficientFundsError(
-                    f"Please lower the bid value, the maximum amount "
-                    f"you can specify for this claim is {dewies_to_lbc(available)}."
+        if len(existing_claims) > 0:
+            if not allow_duplicate_name:
+                raise Exception(
+                    f"You already have a claim published under the name '{name}'. "
+                    f"Use --allow-duplicate-name flag to override."
                 )
 
         claim = Claim()
-        stream = claim.stream
-        if title is not None:
-            stream.title = title
-        if description is not None:
-            stream.description = description
-        if author is not None:
-            stream.author = author
-        if language is not None:
-            stream.language = language
-        if license is not None:
-            stream.license = license
-        if license_url is not None:
-            stream.license_url = license_url
-        if thumbnail is not None:
-            stream.thumbnail_url = thumbnail
-
-        # check for original deprecated format {'currency':{'address','amount'}}
-        # add address, version to fee if unspecified
-        if fee is not None:
-            if fee['currency'] == 'LBC':
-                stream.fee.lbc = Decimal(fee['amount'])
-            elif fee['currency'] == 'USD':
-                stream.fee.usd = Decimal(fee['amount'])
-            if 'address' in fee:
-                stream.fee.address = fee['address']
-            else:
-                stream.fee.address = await account.receiving.get_or_create_usable_address()
-
-        sd_to_delete = None
-
-        if file_path:
-            if not os.path.isfile(file_path):
-                raise Exception("invalid file path to publish")
-            if os.path.getsize(file_path) == 0:
-                raise Exception(f"Cannot publish empty file {file_path}")
-            if existing_claims:
-                sd_to_delete = existing_claims[-1].claim.stream.hash
-
-            # since the file hasn't yet been made into a stream, we don't have
-            # a valid Source for the claim when validating the format, we'll use a fake one
-            stream.hash = '0' * 96
-        elif not existing_claims:
-            raise Exception("no previous stream to update")
-        else:
-            stream.hash = '0' * 96
-            stream.hash_bytes = existing_claims[-1].claim.stream.hash_bytes
-        certificate = None
-        if channel_id or channel_name:
-            certificate = await self.get_channel_or_error(
-                self.get_accounts_or_all(channel_account_id), channel_id, channel_name
-            )
-
-        if file_path:
-            stream = await self.stream_manager.create_stream(file_path)
-            claim.stream.hash = stream.sd_hash
-            claim.stream.media_type = guess_media_type(file_path)
-
-            if sd_to_delete:
-                stream_hash_to_delete = await self.storage.get_stream_hash_for_sd_hash(sd_to_delete)
-                stream_to_delete = self.stream_manager.get_stream_by_stream_hash(stream_hash_to_delete)
-                if stream_to_delete:
-                    await self.stream_manager.delete_stream(stream_to_delete, delete_file=False)
-                    log.info("updating claim to stream generated from %s, deleted previous stream %s",
-                             sd_to_delete[:8], file_path)
-                else:
-                    log.info("previous stream %s from claim was not saved locally, nothing to delete",
-                             sd_to_delete[:8])
-            else:
-                log.info("generated stream from %s for claim", file_path)
-        else:
-            log.info("updating claim with stream %s from previous", claim.stream.hash[:8])
-
-        sd_hash = claim.stream.hash
-        log.info("Publish: %s", {
-            'name': name,
-            'file_path': file_path,
-            'bid': dewies_to_lbc(amount),
-            'claim_address': claim_address,
-            'change_address': change_address,
-            'channel_id': channel_id,
-            'channel_name': channel_name
-        })
-        tx = await self.wallet_manager.claim_name(
-            account, name, amount, claim, certificate, claim_address
+        claim.stream.update(file_path=file_path, hash='0'*96, **kwargs)
+        tx = await Transaction.claim_create(
+            name, claim, amount, claim_address, [account], account, channel
         )
-        stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
-        if stream_hash:
-            await self.storage.save_content_claim(
-                stream_hash, tx.outputs[0].id
+        new_txo = tx.outputs[0]
+
+        if not preview:
+            file_stream = await self.stream_manager.create_stream(file_path)
+            claim.stream.hash = file_stream.sd_hash
+            if channel:
+                new_txo.sign(channel)
+            await tx.sign([account])
+            await account.ledger.broadcast(tx)
+            await self.storage.save_claims([self._old_get_temp_claim_info(
+                tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
+            )])
+            stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim.stream.hash)
+            if stream_hash:
+                await self.storage.save_content_claim(stream_hash, new_txo.id)
+            await self.analytics_manager.send_claim_action('publish')
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
+
+    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
+              conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_claim_update(
+            self, claim_id, bid=None, file_path=None,
+            channel_id=None, channel_account_id=None, clear_channel=False,
+            account_id=None, claim_address=None,
+            preview=False, **kwargs):
+        """
+        Modify an existing claim.
+
+        Usage:
+            claim update (<claim_id> | --claim_id=<claim_id>)
+                    [--bid=<bid>] [--file_path=<file_path>] [--tags=<tags>...] [--clear-tags]
+                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
+                    [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
+                    [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
+                    [--release_time=<release_time>] [--duration=<duration>]
+                    [--video_width=<video_width>] [--video_height=<video_height>]
+                    [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...] [--clear-channel]
+                    [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
+
+        Options:
+            --claim_id=<claim_id>          : (str) id of the claim to update
+            --bid=<bid>                    : (decimal) amount to back the claim
+            --file_path=<file_path>        : (str) path to file to be associated with name.
+            --tags=<tags>                  : (list) content tags
+            --clear-tags                   : (bool) clear existing tags (prior to adding new ones)
+            --fee_currency=<fee_currency>  : (string) specify fee currency
+            --fee_amount=<fee_amount>      : (decimal) content download fee
+            --fee_address=<fee_address>    : (str) address where to send fee payments, will use
+                                                   value from --claim_address if not provided
+            --title=<title>                : (str) title of the publication
+            --description=<description>    : (str) description of the publication
+            --author=<author>              : (str) author of the publication. The usage for this field is not
+                                             the same as for channels. The author field is used to credit an author
+                                             who is not the publisher and is not represented by the channel. For
+                                             example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
+                                             by published to a channel such as '@classics', or to no channel at all
+            --language=<language>          : (str) language of the publication
+            --license=<license>            : (str) publication license
+            --license_url=<license_url>    : (str) publication license url
+            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
+            --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
+            --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
+                                                   calculate this automatically if not provided
+            --video_width=<video_width>    : (int) video width
+            --video_height=<video_height>  : (int) video height
+            --channel_id=<channel_id>      : (str) claim id of the publisher channel
+            --clear-channel                : (bool) remove channel signature
+          --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
+                                                   for channel certificates, defaults to all accounts.
+            --account_id=<account_id>      : (str) account to use for funding the transaction
+            --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
+                                                   it will be determined automatically from the account
+            --preview                      : (bool) do not broadcast the transaction
+        """
+        account = self.get_account_or_default(account_id)
+
+        existing_claims = await account.get_claims(claim_id=claim_id)
+        if len(existing_claims) != 1:
+            raise Exception(
+                f"Can't find the claim '{claim_id}' in account '{account_id}'."
             )
-        await self.analytics_manager.send_claim_action('publish')
-        nout = 0
-        txo = tx.outputs[nout]
-        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
-        return {
-            "success": True,
-            "tx": tx,
-            "claim_id": txo.claim_id,
-            "claim_address": self.ledger.hash160_to_address(txo.script.values['pubkey_hash']),
-            "output": tx.outputs[nout]
-        }
+        old_txo = existing_claims[0]
+        if not old_txo.claim.is_stream:
+            raise Exception(
+                f"A claim with id '{claim_id}' was found but it is not a stream claim."
+            )
+
+        if bid is not None:
+            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        else:
+            amount = old_txo.amount
+
+        if claim_address is not None:
+            self.ledger.is_valid_address(claim_address)
+        else:
+            claim_address = old_txo.get_address(account.ledger)
+
+        channel = None
+        if channel_id:
+            channel = await self.get_channel_or_error(channel_account_id, channel_id, for_signing=True)
+        elif old_txo.claim.is_signed and not clear_channel:
+            channel = old_txo.channel
+
+        kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
+        old_txo.claim.stream.update(**kwargs)
+        tx = await Transaction.claim_update(
+            old_txo, amount, claim_address, [account], account, channel
+        )
+        new_txo = tx.outputs[0]
+
+        if not preview:
+            if file_path is not None:
+                file_stream = await self.stream_manager.create_stream(file_path)
+                new_txo.claim.stream.hash = file_stream.sd_hash
+            if channel:
+                new_txo.sign(channel)
+            await tx.sign([account])
+            await account.ledger.broadcast(tx)
+            await self.storage.save_claims([self._old_get_temp_claim_info(
+                tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
+            )])
+            stream_hash = await self.storage.get_stream_hash_for_sd_hash(new_txo.claim.stream.hash)
+            if stream_hash:
+                await self.storage.save_content_claim(stream_hash, new_txo.id)
+            await self.analytics_manager.send_claim_action('publish')
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
+        """
+        Resolve claim info from txid/nout or with claim ID
+
+        Usage:
+            claim_show [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
+                       [<claim_id> | --claim_id=<claim_id>]
+
+        Options:
+            --txid=<txid>              : (str) look for claim with this txid, nout must
+                                         also be specified
+            --nout=<nout>              : (int) look for claim with this nout, txid must
+                                         also be specified
+            --claim_id=<claim_id>  : (str) look for claim with this claim id
+
+        Returns:
+            (dict) Dictionary containing claim info as below,
+
+            {
+                'txid': (str) txid of claim
+                'nout': (int) nout of claim
+                'amount': (float) amount of claim
+                'value': (str) value of claim
+                'height' : (int) height of claim takeover
+                'claim_id': (str) claim ID of claim
+                'supports': (list) list of supports associated with claim
+            }
+
+            if claim cannot be resolved, dictionary as below will be returned
+
+            {
+                'error': (str) reason for error
+            }
+
+        """
+        if claim_id is not None and txid is None and nout is None:
+            claim_results = await self.wallet_manager.get_claim_by_claim_id(claim_id)
+        elif txid is not None and nout is not None and claim_id is None:
+            claim_results = await self.wallet_manager.get_claim_by_outpoint(txid, int(nout))
+        else:
+            raise Exception("Must specify either txid/nout, or claim_id")
+        return claim_results
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None, blocking=True):
@@ -2147,106 +2199,8 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.ledger.wait(tx)
         return {"success": True, "tx": tx}
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_claim_new_support(self, name, claim_id, amount, account_id=None):
-        """
-        Support a name claim
-
-        Usage:
-            claim_new_support (<name> | --name=<name>) (<claim_id> | --claim_id=<claim_id>)
-                              (<amount> | --amount=<amount>) [--account_id=<account_id>]
-
-        Options:
-            --name=<name>             : (str) name of the claim to support
-            --claim_id=<claim_id>     : (str) claim_id of the claim to support
-            --amount=<amount>         : (decimal) amount of support
-            --account_id=<account_id> : (str) id of the account to use
-
-        Returns:
-            (dict) Dictionary containing the transaction information
-            {
-                "hex": (str) raw transaction,
-                "inputs": (list) inputs(dict) used for the transaction,
-                "outputs": (list) outputs(dict) for the transaction,
-                "total_fee": (int) fee in dewies,
-                "total_input": (int) total of inputs in dewies,
-                "total_output": (int) total of outputs in dewies(input - fees),
-                "txid": (str) txid of the transaction,
-            }
-        """
-        account = self.get_account_or_default(account_id)
-        amount = self.get_dewies_or_error("amount", amount)
-        result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
-        await self.analytics_manager.send_claim_action('new_support')
-        return result
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_claim_tip(self, claim_id, amount, account_id=None):
-        """
-        Tip the owner of the claim
-
-        Usage:
-            claim_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
-                      [--account_id=<account_id>]
-
-        Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to support
-            --amount=<amount>         : (decimal) amount of support
-            --account_id=<account_id> : (str) id of the account to use
-
-        Returns:
-            (dict) Dictionary containing the transaction information
-            {
-                "hex": (str) raw transaction,
-                "inputs": (list) inputs(dict) used for the transaction,
-                "outputs": (list) outputs(dict) for the transaction,
-                "total_fee": (int) fee in dewies,
-                "total_input": (int) total of inputs in dewies,
-                "total_output": (int) total of outputs in dewies(input - fees),
-                "txid": (str) txid of the transaction,
-            }
-        """
-        account = self.get_account_or_default(account_id)
-        amount = self.get_dewies_or_error("amount", amount)
-        validate_claim_id(claim_id)
-        result = await self.wallet_manager.tip_claim(amount, claim_id, account)
-        await self.analytics_manager.send_claim_action('new_support')
-        return result
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
-        """
-        Send a name claim to an address
-
-        Usage:
-            claim_send_to_address (<claim_id> | --claim_id=<claim_id>)
-                                  (<address> | --address=<address>)
-                                  [<amount> | --amount=<amount>]
-
-        Options:
-            --claim_id=<claim_id>   : (str) claim_id to send
-            --address=<address>     : (str) address to send the claim to
-            --amount=<amount>       : (int) Amount of credits to claim name for,
-                                      defaults to the current amount on the claim
-
-        Returns:
-            (dict) Dictionary containing result of the claim
-            {
-                'tx' : (str) hex encoded transaction
-                'txid' : (str) txid of resulting claim
-                'nout' : (int) nout of the resulting claim
-                'fee' : (float) fee paid for the claim transaction
-                'claim_id' : (str) claim ID of the resulting claim
-            }
-
-        """
-        self.ledger.is_valid_address(address)
-        return self.wallet_manager.send_claim_to_address(
-            claim_id, address, self.get_dewies_or_error("amount", amount) if amount else None
-        )
-
     @requires(WALLET_COMPONENT)
-    def jsonrpc_claim_list_mine(self, account_id=None, page=None, page_size=None):
+    def jsonrpc_claim_list(self, account_id=None, page=None, page_size=None):
         """
         List my name claims
 
@@ -2258,28 +2212,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id> : (str) id of the account to query
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
-
-        Returns:
-            (list) List of name claims owned by user
-            [
-                {
-                    'address': (str) address that owns the claim
-                    'amount': (float) amount assigned to the claim
-                    'blocks_to_expiration': (int) number of blocks until it expires
-                    'category': (str) "claim", "update" , or "support"
-                    'claim_id': (str) claim ID of the claim
-                    'confirmations': (int) number of blocks of confirmations for the claim
-                    'expiration_height': (int) the block height which the claim will expire
-                    'expired': (bool) true if expired, false otherwise
-                    'height': (int) height of the block containing the claim
-                    'is_spent': (bool) true if claim is abandoned, false otherwise
-                    'name': (str) name of the claim
-                    'permanent_url': (str) permanent url of the claim,
-                    'txid': (str) txid of the claim
-                    'nout': (int) nout of the claim
-                    'value': (str) value of the claim
-                },
-           ]
         """
         account = self.get_account_or_default(account_id)
         return maybe_paginate(
@@ -2289,94 +2221,23 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_claim_list(self, name):
+    async def jsonrpc_claim_search(self, name, channel_id=None, winning=False):
         """
-        List current claims and information about them for a given name
+        Search for claims on the blockchain.
 
         Usage:
-            claim_list (<name> | --name=<name>)
+            claim search (<name> | --name=<name>) [--channel_id=<channel_id>] [--winning]
 
         Options:
-            --name=<name> : (str) name of the claim to list info about
-
-        Returns:
-            (dict) State of claims assigned for the name
-            {
-                'claims': (list) list of claims for the name
-                [
-                    {
-                    'amount': (float) amount assigned to the claim
-                    'effective_amount': (float) total amount assigned to the claim,
-                                        including supports
-                    'claim_id': (str) claim ID of the claim
-                    'height': (int) height of block containing the claim
-                    'txid': (str) txid of the claim
-                    'nout': (int) nout of the claim
-                    'permanent_url': (str) permanent url of the claim,
-                    'supports': (list) a list of supports attached to the claim
-                    'value': (str) the value of the claim
-                    },
-                ]
-                'supports_without_claims': (list) supports without any claims attached to them
-                'last_takeover_height': (int) the height of last takeover for the name
-            }
+            --name=<name>             : (str) name of the claim to list info about
+            --channel_id=<channel_id> : (str) limit search to specific channel
+            --winning                 : (bool) limit to winning claims
         """
-        claims = await self.wallet_manager.get_claims_for_name(name)  # type: dict
-        claims['claims'] = sort_claim_results(claims['claims'])
-        return claims
-
-    @requires(WALLET_COMPONENT)
-    async def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
-        """
-        Get paginated claims in a channel specified by a channel uri
-
-        Usage:
-            claim_list_by_channel (<uri> | --uri=<uri>) [<uris>...] [--page=<page>]
-                                   [--page_size=<page_size>]
-
-        Options:
-            --uri=<uri>              : (str) uri of the channel
-            --uris=<uris>            : (list) uris of the channel
-            --page=<page>            : (int) which page of results to return where page 1 is the first
-                                             page, defaults to no pages
-            --page_size=<page_size>  : (int) number of results in a page, default of 10
-
-        Returns:
-            {
-                 resolved channel uri: {
-                    If there was an error:
-                    'error': (str) error message
-
-                    'claims_in_channel': the total number of results for the channel,
-
-                    If a page of results was requested:
-                    'returned_page': page number returned,
-                    'claims_in_channel': [
-                        {
-                            'absolute_channel_position': (int) claim index number in sorted list of
-                                                         claims which assert to be part of the
-                                                         channel
-                            'address': (str) claim address,
-                            'amount': (float) claim amount,
-                            'effective_amount': (float) claim amount including supports,
-                            'claim_id': (str) claim id,
-                            'decoded_claim': (bool) whether or not the claim value was decoded,
-                            'height': (int) claim height,
-                            'depth': (int) claim depth,
-                            'has_signature': (bool) included if decoded_claim
-                            'name': (str) claim name,
-                            'supports: (list) list of supports [{'txid': (str) txid,
-                                                                 'nout': (int) nout,
-                                                                 'amount': (float) amount}],
-                            'txid': (str) claim txid,
-                            'nout': (str) claim nout,
-                            'signature_is_valid': (bool), included if has_signature,
-                            'value': ClaimDict if decoded, otherwise hex string
-                        }
-                    ],
-                }
-            }
-        """
+        response = await self.wallet_manager.ledger.network.get_claims_for_name(name)
+        resolutions = await self.wallet_manager.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']))
+        response['claims'] = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
+        response['claims'] = sort_claim_results(response['claims'])
+        return response
 
         uris = tuple(uris)
         page = int(page)
@@ -2413,6 +2274,108 @@ class Daemon(metaclass=JSONRPCServerType):
                     results[u]['returned_page'] = page
                     results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
         return results
+
+    SUPPORT_DOC = """
+    Support and tip management.
+    """
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_support_create(self, claim_id, amount, tip=False, account_id=None):
+        """
+        Create a support or a tip for name claim.
+
+        Usage:
+            support create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
+                           [--tip] [--account_id=<account_id>]
+
+        Options:
+            --claim_id=<claim_id>     : (str) claim_id of the claim to support
+            --amount=<amount>         : (decimal) amount of support
+            --tip                     : (bool) send support to claim owner, default: false.
+            --account_id=<account_id> : (str) id of the account to use
+
+        Returns:
+            (dict) Dictionary containing the transaction information
+            {
+                "hex": (str) raw transaction,
+                "inputs": (list) inputs(dict) used for the transaction,
+                "outputs": (list) outputs(dict) for the transaction,
+                "total_fee": (int) fee in dewies,
+                "total_input": (int) total of inputs in dewies,
+                "total_output": (int) total of outputs in dewies(input - fees),
+                "txid": (str) txid of the transaction,
+            }
+        """
+        account = self.get_account_or_default(account_id)
+        amount = self.get_dewies_or_error("amount", amount)
+        result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
+        await self.analytics_manager.send_claim_action('new_support')
+        # tip:
+        validate_claim_id(claim_id)
+        result = await self.wallet_manager.tip_claim(amount, claim_id, account)
+        await self.analytics_manager.send_claim_action('new_support')
+        return result
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_support_abandon(self, claim_id=None, txid=None, nout=None, account_id=None, blocking=True):
+        """
+        Abandon a name and reclaim credits from the claim
+
+        Usage:
+            claim_abandon [<claim_id> | --claim_id=<claim_id>]
+                          [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
+                          [--account_id=<account_id>]
+                          [--blocking]
+
+        Options:
+            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
+            --txid=<txid>             : (str) txid of the claim to abandon
+            --nout=<nout>             : (int) nout of the claim to abandon
+            --account_id=<account_id> : (str) id of the account to use
+            --blocking                : (bool) wait until abandon is in mempool
+
+        Returns:
+            (dict) Dictionary containing result of the claim
+            {
+                success: (bool) True if txn is successful
+                txid : (str) txid of resulting transaction
+            }
+        """
+        account = self.get_account_or_default(account_id)
+
+        if claim_id is None and txid is None and nout is None:
+            raise Exception('Must specify claim_id, or txid and nout')
+        if txid is None and nout is not None:
+            raise Exception('Must specify txid')
+        if nout is None and txid is not None:
+            raise Exception('Must specify nout')
+
+        tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
+        await self.analytics_manager.send_claim_action('abandon')
+        if blocking:
+            await self.ledger.wait(tx)
+        return {"success": True, "tx": tx}
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_support_list(self, account_id=None, page=None, page_size=None):
+        """
+        List supports and tips.
+
+        Usage:
+            support_list [<account_id> | --account_id=<account_id>]
+                         [--page=<page>] [--page_size=<page_size>]
+
+        Options:
+            --account_id=<account_id> : (str) id of the account to query
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
+        """
+        account = self.get_account_or_default(account_id)
+        return maybe_paginate(
+            account.get_supports,
+            account.get_support_count,
+            page, page_size
+        )
 
     TRANSACTION_DOC = """
     Transaction management.
@@ -2908,34 +2871,72 @@ class Daemon(metaclass=JSONRPCServerType):
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
 
-    async def get_channel_or_error(
-            self, accounts: List[LBCAccount], channel_id: str = None, channel_name: str = None):
-        if channel_id is not None:
-            certificates = await self.wallet_manager.get_certificates(
-                private_key_accounts=accounts, claim_id=channel_id)
-            if not certificates:
-                raise ValueError("Couldn't find channel with claim_id '{}'." .format(channel_id))
-            return certificates[0]
-        if channel_name is not None:
-            certificates = await self.wallet_manager.get_certificates(
-                private_key_accounts=accounts, claim_name=channel_name)
-            if not certificates:
-                raise ValueError(f"Couldn't find channel with name '{channel_name}'.")
-            return certificates[0]
-        raise ValueError("Couldn't find channel because a channel name or channel_id was not provided.")
+    def get_fee_address(self, kwargs: dict, claim_address: str) -> str:
+        if 'fee_address' in kwargs:
+            self.ledger.is_valid_address(kwargs['fee_address'])
+            return kwargs['fee_address']
+        return claim_address
 
-    def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True):
+    async def get_receiving_address(self, address: str, account: LBCAccount) -> str:
+        if address is None:
+            return await account.receiving.get_or_create_usable_address()
+        self.ledger.is_valid_address(address)
+        return address
+
+    @staticmethod
+    def get_claim_name_or_error(name: str) -> str:
+        try:
+            parsed = parse_lbry_uri(name)
+            if parsed.name != name:
+                raise Exception("Claim name given has invalid characters.")
+            if parsed.is_channel:
+                raise Exception("Claim names cannot start with @ symbol. This is reserved for channels.")
+        except (TypeError, URIParseError):
+            raise Exception("Invalid claim name given.")
+        return name
+
+    @staticmethod
+    def get_channel_name_or_error(channel_name: str) -> str:
+        try:
+            parsed = parse_lbry_uri(channel_name)
+            if not parsed.contains_channel:
+                raise Exception("Cannot make a new channel for a non channel name")
+            if parsed.path:
+                raise Exception("Invalid channel uri")
+        except (TypeError, URIParseError):
+            raise Exception("Invalid channel name")
+        return channel_name
+
+    async def get_channel_or_none(self, account_ids: List[str], channel_id: str = None,
+                                  for_signing: bool = False) -> Output:
+        if channel_id is not None:
+            return await self.get_channel_or_error(account_ids, channel_id, for_signing)
+
+    async def get_channel_or_error(self, account_ids: List[str], channel_id: str = None,
+                                   for_signing: bool = False) -> Output:
+        if channel_id is None:
+            raise ValueError("Couldn't find channel because a channel_id was not provided.")
+        for account in self.get_accounts_or_all(account_ids):
+            channels = await account.get_channels(claim_id=channel_id, limit=1)
+            if channels:
+                if for_signing and channels[0].private_key is None:
+                    raise Exception(f"Couldn't find private key for channel '{channel_id}'. ")
+                return channels[0]
+        raise ValueError(f"Couldn't find channel with channel_id '{channel_id}'.")
+
+    def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True) -> LBCAccount:
         if account_id is None:
             return self.default_account
         return self.get_account_or_error(account_id, argument_name, lbc_only)
 
-    def get_accounts_or_all(self, account_ids: List[str]):
+    def get_accounts_or_all(self, account_ids: List[str]) -> List[LBCAccount]:
         return [
             self.get_account_or_error(account_id)
             for account_id in account_ids
         ] if account_ids else self.default_wallet.accounts
 
-    def get_account_or_error(self, account_id: str, argument_name: str = "account", lbc_only=True):
+    def get_account_or_error(
+            self, account_id: str, argument_name: str = "account", lbc_only=True) -> Optional[LBCAccount]:
         for account in self.default_wallet.accounts:
             if account.id == account_id:
                 if lbc_only and not isinstance(account, LBCAccount):
@@ -2948,11 +2949,27 @@ class Daemon(metaclass=JSONRPCServerType):
         raise ValueError(f"Couldn't find account: {account_id}.")
 
     @staticmethod
-    def get_dewies_or_error(argument: str, lbc: str):
+    def get_dewies_or_error(argument: str, lbc: str, positive_value=False):
         try:
-            return lbc_to_dewies(lbc)
+            dewies = lbc_to_dewies(lbc)
+            if positive_value and dewies <= 0:
+                raise ValueError(f"'{argument}' value must be greater than 0.0")
+            return dewies
         except ValueError as e:
-            raise ValueError("Invalid value for '{}': {}".format(argument, e.args[0]))
+            raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
+
+    def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
+        return {
+            "claim_id": txo.claim_id,
+            "name": name,
+            "amount": bid,
+            "address": address,
+            "txid": tx.id,
+            "nout": txo.position,
+            "value": claim_dict,
+            "height": -1,
+            "claim_sequence": -1,
+        }
 
 
 def loggly_time_string(dt):

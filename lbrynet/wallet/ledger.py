@@ -29,6 +29,8 @@ class MainNetLedger(BaseLedger):
     network_class = Network
     transaction_class = Transaction
 
+    db: WalletDatabase
+
     secret_prefix = bytes((0x1c,))
     pubkey_address_prefix = bytes((0x55,))
     script_address_prefix = bytes((0x7a,))
@@ -97,7 +99,7 @@ class MainNetLedger(BaseLedger):
             log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
                      "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
                      account.id, balance, total_receiving, account.receiving.gap, total_change, account.change.gap,
-                     channel_count, len(account.certificates), claim_count)
+                     channel_count, len(account.channel_keys), claim_count)
 
 
 class TestNetLedger(MainNetLedger):

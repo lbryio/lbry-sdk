@@ -1,79 +1,224 @@
 import hashlib
-import tempfile
 from binascii import unhexlify
 
 import ecdsa
 
 from lbrynet.wallet.transaction import Transaction, Output
-from lbrynet.error import InsufficientFundsError
-from lbrynet.schema.claim import Claim
+from torba.client.errors import InsufficientFundsError
 from lbrynet.schema.compat import OldClaimMessage
 
 from integration.testcase import CommandTestCase
 from torba.client.hash import sha256, Base58
 
 
+class ChannelCommands(CommandTestCase):
+
+    async def test_create_channel_names(self):
+        # claim new name
+        await self.create_channel('@foo')
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 1)
+        await self.assertBalance(self.account, '8.991893')
+
+        # fail to claim duplicate
+        with self.assertRaisesRegex(Exception, "You already have a channel under the name '@foo'."):
+            await self.create_channel('@foo')
+
+        # fail to claim invalid name
+        with self.assertRaisesRegex(Exception, "Cannot make a new channel for a non channel name"):
+            await self.create_channel('foo')
+
+        # nothing's changed after failed attempts
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 1)
+        await self.assertBalance(self.account, '8.991893')
+
+        # succeed overriding duplicate restriction
+        await self.create_channel('@foo', allow_duplicate_name=True)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 2)
+        await self.assertBalance(self.account, '7.983786')
+
+    async def test_channel_bids(self):
+        # enough funds
+        tx = await self.create_channel('@foo', '5.0')
+        claim_id = tx['outputs'][0]['claim_id']
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 1)
+        await self.assertBalance(self.account, '4.991893')
+
+        # bid preserved on update
+        tx = await self.update_channel(claim_id)
+        self.assertEqual(tx['outputs'][0]['amount'], '5.0')
+
+        # bid changed on update
+        tx = await self.update_channel(claim_id, bid='4.0')
+        self.assertEqual(tx['outputs'][0]['amount'], '4.0')
+
+        await self.assertBalance(self.account, '5.991447')
+
+        # not enough funds
+        with self.assertRaisesRegex(
+                InsufficientFundsError, "Not enough funds to cover this transaction."):
+            await self.create_channel('@foo2', '9.0')
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 1)
+        await self.assertBalance(self.account, '5.991447')
+
+        # spend exactly amount available, no change
+        tx = await self.create_channel('@foo3', '5.981266')
+        await self.assertBalance(self.account, '0.0')
+        self.assertEqual(len(tx['outputs']), 1)  # no change
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 2)
+
+    async def test_setting_channel_fields(self):
+        values = {
+            'title': "Cool Channel",
+            'description': "Best channel on LBRY.",
+            'contact_email': "human@email.com",
+            'tags': ["cool", "awesome"],
+            'cover_url': "https://co.ol/cover.png",
+            'homepage_url': "https://co.ol",
+            'thumbnail_url': "https://co.ol/thumbnail.png",
+            'language': "en"
+        }
+
+        # create new channel with all fields set
+        tx = await self.out(self.create_channel('@bigchannel', **values))
+        txo = tx['outputs'][0]
+        self.assertEqual(
+            txo['value']['channel'],
+            {'public_key': txo['value']['channel']['public_key'], **values}
+        )
+
+        # create channel with nothing set
+        tx = await self.out(self.create_channel('@lightchannel'))
+        txo = tx['outputs'][0]
+        self.assertEqual(
+            txo['value']['channel'],
+            {'public_key': txo['value']['channel']['public_key']}
+        )
+
+        # create channel with just some tags
+        tx = await self.out(self.create_channel('@updatedchannel', tags='blah'))
+        txo = tx['outputs'][0]
+        claim_id = txo['claim_id']
+        public_key = txo['value']['channel']['public_key']
+        self.assertEqual(
+            txo['value']['channel'],
+            {'public_key': public_key, 'tags': ['blah']}
+        )
+
+        # update channel setting all fields
+        tx = await self.out(self.update_channel(claim_id, **values))
+        txo = tx['outputs'][0]
+        values['public_key'] = public_key
+        values['tags'].insert(0, 'blah')  # existing tag
+        self.assertEqual(
+            txo['value']['channel'],
+            values
+        )
+
+        # clearing and settings tags
+        tx = await self.out(self.update_channel(claim_id, tags='single', clear_tags=True))
+        txo = tx['outputs'][0]
+        values['tags'] = ['single']
+        self.assertEqual(
+            txo['value']['channel'],
+            values
+        )
+
+        # reset signing key
+        tx = await self.out(self.update_channel(claim_id, new_signing_key=True))
+        txo = tx['outputs'][0]
+        self.assertNotEqual(
+            txo['value']['channel']['public_key'],
+            values['public_key']
+        )
+
+        # send channel to someone else
+        new_account = await self.daemon.jsonrpc_account_create('second account')
+        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+
+        # before sending
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
+
+        other_address = await account2.receiving.get_or_create_usable_address()
+        tx = await self.out(self.update_channel(claim_id, claim_address=other_address))
+
+        # after sending
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 2)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
+
+        # shoud not have private key
+        txo = (await account2.get_channels())[0]
+        self.assertIsNone(txo.private_key)
+
+        # send the private key too
+        txoid = f"{tx['outputs'][0]['txid']}:{tx['outputs'][0]['nout']}"
+        account2.channel_keys[txoid] = self.account.channel_keys[txoid]
+
+        # now should have private key
+        txo = (await account2.get_channels())[0]
+        self.assertIsNotNone(txo.private_key)
+
+
 class ClaimCommands(CommandTestCase):
 
-    async def test_create_update_and_abandon_claim(self):
-        await self.assertBalance(self.account, '10.0')
+    async def test_create_claim_names(self):
+        # claim new name
+        await self.create_claim('foo')
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 1)
+        await self.assertBalance(self.account, '8.993893')
 
-        claim = await self.make_claim(amount='2.5')  # creates new claim
-        txs = await self.out(self.daemon.jsonrpc_transaction_list())
-        self.assertEqual(len(txs[0]['claim_info']), 1)
-        self.assertEqual(txs[0]['confirmations'], 1)
-        self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
-        self.assertEqual(txs[0]['claim_info'][0]['claim_id'], claim['claim_id'])
-        self.assertEqual(txs[0]['value'], '0.0')
-        self.assertEqual(txs[0]['fee'], '-0.020107')
-        await self.assertBalance(self.account, '7.479893')
+        # fail to claim duplicate
+        with self.assertRaisesRegex(Exception, "You already have a claim published under the name 'foo'."):
+            await self.create_claim('foo')
 
-        await self.make_claim(amount='1.0')  # updates previous claim
-        txs = await self.out(self.daemon.jsonrpc_transaction_list())
-        self.assertEqual(len(txs[0]['update_info']), 1)
-        self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
-        self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim['claim_id'])
-        self.assertEqual(txs[0]['value'], '0.0')
-        self.assertEqual(txs[0]['fee'], '-0.000182')
-        await self.assertBalance(self.account, '8.979711')
+        # fail claim starting with @
+        with self.assertRaisesRegex(Exception, "Claim names cannot start with @ symbol."):
+            await self.create_claim('@foo')
 
-        await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
-        txs = await self.out(self.daemon.jsonrpc_transaction_list())
-        self.assertEqual(len(txs[0]['abandon_info']), 1)
-        self.assertEqual(txs[0]['abandon_info'][0]['balance_delta'], '1.0')
-        self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim['claim_id'])
-        self.assertEqual(txs[0]['value'], '0.0')
-        self.assertEqual(txs[0]['fee'], '-0.000107')
-        await self.assertBalance(self.account, '9.979604')
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 1)
+        await self.assertBalance(self.account, '8.993893')
 
-    async def test_update_claim_holding_address(self):
-        other_account_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
-        other_account = self.daemon.get_account_or_error(other_account_id)
-        other_address = await other_account.receiving.get_or_create_usable_address()
+        # succeed overriding duplicate restriction
+        await self.create_claim('foo', allow_duplicate_name=True)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
+        await self.assertBalance(self.account, '7.987786')
 
-        await self.assertBalance(self.account, '10.0')
+    async def test_bids(self):
+        # enough funds
+        tx = await self.create_claim('foo', '2.0')
+        claim_id = tx['outputs'][0]['claim_id']
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 1)
+        await self.assertBalance(self.account, '7.993893')
 
-        # create the initial name claim
-        claim = await self.make_claim()
+        # bid preserved on update
+        tx = await self.update_claim(claim_id)
+        self.assertEqual(tx['outputs'][0]['amount'], '2.0')
 
-        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine()), 1)
-        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine(account_id=other_account_id)), 0)
-        tx = await self.daemon.jsonrpc_claim_send_to_address(
-            claim['claim_id'], other_address
-        )
-        await self.ledger.wait(tx)
-        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine()), 0)
-        self.assertEqual(len(await self.daemon.jsonrpc_claim_list_mine(account_id=other_account_id)), 1)
+        # bid changed on update
+        tx = await self.update_claim(claim_id, bid='3.0')
+        self.assertEqual(tx['outputs'][0]['amount'], '3.0')
 
-    async def test_publishing_checks_all_accounts_for_certificate(self):
+        await self.assertBalance(self.account, '6.993384')
+
+        # not enough funds
+        with self.assertRaisesRegex(
+                InsufficientFundsError, "Not enough funds to cover this transaction."):
+            await self.create_claim('foo2', '9.0')
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 1)
+        await self.assertBalance(self.account, '6.993384')
+
+        # spend exactly amount available, no change
+        tx = await self.create_claim('foo3', '6.98527700')
+        await self.assertBalance(self.account, '0.0')
+        self.assertEqual(len(tx['outputs']), 1)  # no change
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
+
+    async def test_publishing_checks_all_accounts_for_channel(self):
         account1_id, account1 = self.account.id, self.account
         new_account = await self.daemon.jsonrpc_account_create('second account')
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
-        spam_channel = await self.out(self.daemon.jsonrpc_channel_new('@spam', '1.0'))
-        self.assertTrue(spam_channel['success'])
-        await self.confirm_tx(spam_channel['tx']['txid'])
-
+        await self.out(self.create_channel('@spam', '1.0'))
         self.assertEqual('8.989893', await self.daemon.jsonrpc_account_balance())
 
         result = await self.out(self.daemon.jsonrpc_wallet_send(
@@ -84,9 +229,8 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual('3.989769', await self.daemon.jsonrpc_account_balance())
         self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
 
-        baz_channel = await self.out(self.daemon.jsonrpc_channel_new('@baz', '1.0', account2_id))
-        self.assertTrue(baz_channel['success'])
-        await self.confirm_tx(baz_channel['tx']['txid'])
+        baz_tx = await self.out(self.create_channel('@baz', '1.0', account_id=account2_id))
+        baz_id = baz_tx['outputs'][0]['claim_id']
 
         channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
         self.assertEqual(len(channels), 1)
@@ -98,84 +242,158 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(channels[0]['name'], '@baz')
 
         # defaults to using all accounts to lookup channel
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            claim1 = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '1.0', file_path=file.name, channel_name='@baz'
-            ))
-            self.assertTrue(claim1['success'])
-            await self.confirm_tx(claim1['tx']['txid'])
-
+        await self.create_claim('hovercraft1', channel_id=baz_id)
         # uses only the specific accounts which contains the channel
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            claim1 = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '1.0', file_path=file.name,
-                channel_name='@baz', channel_account_id=[account2_id]
-            ))
-            self.assertTrue(claim1['success'])
-            await self.confirm_tx(claim1['tx']['txid'])
-
+        await self.create_claim('hovercraft2', channel_id=baz_id, channel_account_id=[account2_id])
         # fails when specifying account which does not contain channel
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            with self.assertRaisesRegex(ValueError, "Couldn't find channel with name '@baz'."):
-                await self.out(self.daemon.jsonrpc_publish(
-                    'hovercraft', '1.0', file_path=file.name,
-                    channel_name='@baz', channel_account_id=[account1_id]
-                ))
+        with self.assertRaisesRegex(ValueError, "Couldn't find channel with channel_id"):
+            await self.create_claim(
+                'hovercraft3', channel_id=baz_id, channel_account_id=[account1_id]
+            )
 
-    async def test_updating_claim_includes_claim_value_in_balance_check(self):
+    async def test_setting_claim_fields(self):
+        values = {
+            'title': "Cool Channel",
+            'description': "Best channel on LBRY.",
+            'contact_email': "human@email.com",
+            'tags': ["cool", "awesome"],
+            'cover_url': "https://co.ol/cover.png",
+            'homepage_url': "https://co.ol",
+            'thumbnail_url': "https://co.ol/thumbnail.png",
+            'language': "en"
+        }
+
+        # create new channel with all fields set
+        tx = await self.out(self.create_channel('@bigchannel', **values))
+        txo = tx['outputs'][0]
+        self.assertEqual(
+            txo['value']['channel'],
+            {'public_key': txo['value']['channel']['public_key'], **values}
+        )
+
+        # create channel with nothing set
+        tx = await self.out(self.create_channel('@lightchannel'))
+        txo = tx['outputs'][0]
+        self.assertEqual(
+            txo['value']['channel'],
+            {'public_key': txo['value']['channel']['public_key']}
+        )
+
+        # create channel with just some tags
+        tx = await self.out(self.create_channel('@updatedchannel', tags='blah'))
+        txo = tx['outputs'][0]
+        claim_id = txo['claim_id']
+        public_key = txo['value']['channel']['public_key']
+        self.assertEqual(
+            txo['value']['channel'],
+            {'public_key': public_key, 'tags': ['blah']}
+        )
+
+        # update channel setting all fields
+        tx = await self.out(self.update_channel(claim_id, **values))
+        txo = tx['outputs'][0]
+        values['public_key'] = public_key
+        values['tags'].insert(0, 'blah')  # existing tag
+        self.assertEqual(
+            txo['value']['channel'],
+            values
+        )
+
+        # clearing and settings tags
+        tx = await self.out(self.update_channel(claim_id, tags='single', clear_tags=True))
+        txo = tx['outputs'][0]
+        values['tags'] = ['single']
+        self.assertEqual(
+            txo['value']['channel'],
+            values
+        )
+
+        # reset signing key
+        tx = await self.out(self.update_channel(claim_id, new_signing_key=True))
+        txo = tx['outputs'][0]
+        self.assertNotEqual(
+            txo['value']['channel']['public_key'],
+            values['public_key']
+        )
+
+        # send channel to someone else
+        new_account = await self.daemon.jsonrpc_account_create('second account')
+        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+
+        # before sending
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
+
+        other_address = await account2.receiving.get_or_create_usable_address()
+        tx = await self.out(self.update_channel(claim_id, claim_address=other_address))
+
+        # after sending
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 2)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
+
+        # shoud not have private key
+        txo = (await account2.get_channels())[0]
+        self.assertIsNone(txo.private_key)
+
+        # send the private key too
+        txoid = f"{tx['outputs'][0]['txid']}:{tx['outputs'][0]['nout']}"
+        account2.channel_keys[txoid] = self.account.channel_keys[txoid]
+
+        # now should have private key
+        txo = (await account2.get_channels())[0]
+        self.assertIsNotNone(txo.private_key)
+
+    async def test_create_update_and_abandon_claim(self):
         await self.assertBalance(self.account, '10.0')
 
-        await self.make_claim(amount='9.0')
-        await self.assertBalance(self.account, '0.979893')
+        tx = await self.create_claim(bid='2.5')  # creates new claim
+        claim_id = tx['outputs'][0]['claim_id']
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['claim_info']), 1)
+        self.assertEqual(txs[0]['confirmations'], 1)
+        self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
+        self.assertEqual(txs[0]['claim_info'][0]['claim_id'], claim_id)
+        self.assertEqual(txs[0]['value'], '0.0')
+        self.assertEqual(txs[0]['fee'], '-0.020107')
+        await self.assertBalance(self.account, '7.479893')
 
-        # update the same claim
-        await self.make_claim(amount='9.0')
-        await self.assertBalance(self.account, '0.979637')
+        await self.update_claim(claim_id, bid='1.0')  # updates previous claim
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['update_info']), 1)
+        self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
+        self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim_id)
+        self.assertEqual(txs[0]['value'], '0.0')
+        self.assertEqual(txs[0]['fee'], '-0.000184')
+        await self.assertBalance(self.account, '8.979709')
 
-        # update the claim a second time but use even more funds
-        await self.make_claim(amount='9.97')
-        await self.assertBalance(self.account, '0.009381')
-
-        # fails when specifying more than available
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi!')
-            file.flush()
-            with self.assertRaisesRegex(
-                InsufficientFundsError,
-                "Please lower the bid value, the maximum amount"
-                " you can specify for this claim is 9.979307."
-            ):
-                await self.out(self.daemon.jsonrpc_publish(
-                    'hovercraft', '9.98', file_path=file.name
-                ))
+        await self.out(self.daemon.jsonrpc_claim_abandon(claim_id))
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['abandon_info']), 1)
+        self.assertEqual(txs[0]['abandon_info'][0]['balance_delta'], '1.0')
+        self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim_id)
+        self.assertEqual(txs[0]['value'], '0.0')
+        self.assertEqual(txs[0]['fee'], '-0.000107')
+        await self.assertBalance(self.account, '9.979602')
 
     async def test_abandoning_claim_at_loss(self):
         await self.assertBalance(self.account, '10.0')
-        claim = await self.make_claim(amount='0.0001')
+        tx = await self.create_claim(bid='0.0001')
         await self.assertBalance(self.account, '9.979793')
-        await self.out(self.daemon.jsonrpc_claim_abandon(claim['claim_id']))
+        await self.out(self.daemon.jsonrpc_claim_abandon(tx['outputs'][0]['claim_id']))
         await self.assertBalance(self.account, '9.97968399')
 
     async def test_claim_show(self):
-        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
-        self.assertTrue(channel['success'])
-        await self.confirm_tx(channel['tx']['txid'])
+        channel = await self.create_channel('@abc', '1.0')
         channel_from_claim_show = await self.out(
-            self.daemon.jsonrpc_claim_show(txid=channel['tx']['txid'], nout=channel['output']['nout'])
+            self.daemon.jsonrpc_claim_show(txid=channel['txid'], nout=0)
         )
-        self.assertEqual(channel_from_claim_show['value'], channel['output']['value'])
+        self.assertEqual(channel_from_claim_show['value'], channel['outputs'][0]['value'])
         channel_from_claim_show = await self.out(
-            self.daemon.jsonrpc_claim_show(claim_id=channel['claim_id'])
+            self.daemon.jsonrpc_claim_show(claim_id=channel['outputs'][0]['claim_id'])
         )
-        self.assertEqual(channel_from_claim_show['value'], channel['output']['value'])
+        self.assertEqual(channel_from_claim_show['value'], channel['outputs'][0]['value'])
 
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['txid'], nout=0, blocking=False))
         self.assertTrue(abandon['success'])
         await self.confirm_tx(abandon['tx']['txid'])
         not_a_claim = await self.out(
@@ -184,13 +402,10 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(not_a_claim, 'claim not found')
 
     async def test_claim_list(self):
-        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "1.0"))
-        self.assertTrue(channel['success'])
-        await self.confirm_tx(channel['tx']['txid'])
-        claim = await self.make_claim(amount='0.0001', name='on-channel-claim', channel_name='@abc')
-        self.assertTrue(claim['success'])
-        unsigned_claim = await self.make_claim(amount='0.0001', name='unsigned')
-        self.assertTrue(claim['success'])
+        channel = await self.create_channel('@abc', '1.0')
+        channel_id = channel['outputs'][0]['claim_id']
+        claim = await self.create_claim('on-channel-claim', '0.0001', channel_id=channel_id)
+        unsigned_claim = await self.create_claim('unsigned', '0.0001')
 
         channel_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('@abc'))
         self.assertEqual(channel_from_claim_list['claims'][0]['value'], channel['output']['value'])
@@ -373,8 +588,8 @@ class ClaimCommands(CommandTestCase):
 
         # this test assumes that the lbrycrd forks normalization at height == 250 on regtest
 
-        c1 = await self.make_claim('ΣίσυφοςﬁÆ', '0.1')
-        c2 = await self.make_claim('ΣΊΣΥΦΟσFIæ', '0.2')
+        c1 = await self.create_claim('ΣίσυφοςﬁÆ', '0.1')
+        c2 = await self.create_claim('ΣΊΣΥΦΟσFIæ', '0.2')
 
         r1 = await self.daemon.jsonrpc_resolve(urls='lbry://ΣίσυφοςﬁÆ')
         r2 = await self.daemon.jsonrpc_resolve(urls='lbry://ΣΊΣΥΦΟσFIæ')

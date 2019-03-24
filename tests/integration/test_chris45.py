@@ -19,9 +19,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # While making the spamdwich he wonders... has anyone on LBRY
         # registered the @spam channel yet? "I should do that!" he
         # exclaims and goes back to his computer to do just that!
-        channel = await self.out(self.daemon.jsonrpc_channel_new('@spam', "1.0"))
-        self.assertTrue(channel['success'])
-        await self.confirm_tx(channel['tx']['txid'])
+        tx = await self.create_channel('@spam', '1.0')
+        channel_id = tx['outputs'][0]['claim_id']
 
         # Do we have it locally?
         channels = await self.out(self.daemon.jsonrpc_channel_list())
@@ -52,17 +51,12 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And so, many hours later, Chris is finished writing his epic story
         # about eels driving a hovercraft across the wetlands while eating spam
         # and decides it's time to publish it to the @spam channel.
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'blah blah blah...')
-            file.write(b'[insert long story about eels driving hovercraft]')
-            file.write(b'yada yada yada!')
-            file.write(b'the end')
-            file.flush()
-            claim1 = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '1.0', file_path=file.name, channel_id=channel['claim_id']
-            ))
-            self.assertTrue(claim1['success'])
-            await self.confirm_tx(claim1['tx']['txid'])
+        tx = await self.create_claim(
+            'hovercraft', '1.0',
+            data=b'[insert long story about eels driving hovercraft]',
+            channel_id=channel_id
+        )
+        claim_id = tx['outputs'][0]['claim_id']
 
         # He quickly checks the unconfirmed balance to make sure everything looks
         # correct.
@@ -84,21 +78,11 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # As people start reading his story they discover some typos and notify
         # Chris who explains in despair "Oh! Noooooos!" but then remembers
         # "No big deal! I can update my claim." And so he updates his claim.
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'blah blah blah...')
-            file.write(b'[typo fixing sounds being made]')
-            file.write(b'yada yada yada!')
-            file.flush()
-            claim2 = await self.out(self.daemon.jsonrpc_publish(
-                'hovercraft', '1.0', file_path=file.name, channel_name='@spam'
-            ))
-            self.assertTrue(claim2['success'])
-            self.assertEqual(claim2['claim_id'], claim1['claim_id'])
-            await self.confirm_tx(claim2['tx']['txid'])
+        await self.update_claim(claim_id, data=b'[typo fixing sounds being made]')
 
         # After some soul searching Chris decides that his story needs more
         # heart and a better ending. He takes down the story and begins the rewrite.
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(claim1['claim_id'], blocking=False))
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(claim_id, blocking=False))
         self.assertTrue(abandon['success'])
         await self.confirm_tx(abandon['tx']['txid'])
 
@@ -134,17 +118,10 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # After Chris is done with all the "helping other people" stuff he decides that it's time to
         # write a new story and publish it to lbry. All he needed was a fresh start and he came up with:
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'Amazingly Original First Line')
-            file.write(b'Super plot for the grand novel')
-            file.write(b'Totally un-cliched ending')
-            file.write(b'**Audience Gasps**')
-            file.flush()
-            claim3 = await self.out(self.daemon.jsonrpc_publish(
-                'fresh-start', '1.0', file_path=file.name, channel_name='@spam'
-            ))
-            self.assertTrue(claim3['success'])
-            await self.confirm_tx(claim3['tx']['txid'])
+        tx = await self.create_claim(
+            'fresh-start', '1.0', data=b'Amazingly Original First Line', channel_id=channel_id
+        )
+        claim_id2 = tx['outputs'][0]['claim_id']
 
         await self.generate(5)
 
@@ -154,7 +131,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And voila, and bravo and encore! His Best Friend Ramsey read the story and immediately knew this was a hit
         # Now to keep this claim winning on the lbry blockchain he immediately supports the claim
         tx = await self.out(self.daemon.jsonrpc_claim_new_support(
-            'fresh-start', claim3['claim_id'], '0.2', account_id=ramsey_account_id
+            'fresh-start', claim_id2, '0.2', account_id=ramsey_account_id
         ))
         await self.confirm_tx(tx['txid'])
 
@@ -170,7 +147,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Now he also wanted to support the original creator of the Award Winning Novel
         # So he quickly decides to send a tip to him
         tx = await self.out(
-            self.daemon.jsonrpc_claim_tip(claim3['claim_id'], '0.3', account_id=ramsey_account_id))
+            self.daemon.jsonrpc_claim_tip(claim_id2, '0.3', account_id=ramsey_account_id))
         await self.confirm_tx(tx['txid'])
 
         # And again checks if it went to the just right place
@@ -181,7 +158,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.generate(5)
 
         # Seeing the ravishing success of his novel Chris adds support to his claim too
-        tx = await self.out(self.daemon.jsonrpc_claim_new_support('fresh-start', claim3['claim_id'], '0.4'))
+        tx = await self.out(self.daemon.jsonrpc_claim_new_support('fresh-start', claim_id2, '0.4'))
         await self.confirm_tx(tx['txid'])
 
         # And check if his support showed up
@@ -197,16 +174,9 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # his song, seeing as his novel had smashed all the records, he was the perfect candidate!
         # .......
         # Chris agrees.. 17 hours 43 minutes and 14 seconds later, he makes his publish
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'The Whale amd The Bookmark')
-            file.write(b'I know right? Totally a hit song')
-            file.write(b'That\'s what goes around for songs these days anyways')
-            file.flush()
-            claim4 = await self.out(self.daemon.jsonrpc_publish(
-                'hit-song', '1.0', file_path=file.name, channel_id=channel['claim_id']
-            ))
-            self.assertTrue(claim4['success'])
-            await self.confirm_tx(claim4['tx']['txid'])
+        tx = await self.out(self.daemon.jsonrpc_publish(
+            'hit-song', '1.0', data=b'The Whale and The Bookmark', channel_id=channel_id
+        ))
 
         await self.generate(5)
 
@@ -215,7 +185,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # But sadly Ramsey wasn't so pleased. It was hard for him to tell Chris...
         # Chris, though a bit heartbroken, abandoned the claim for now, but instantly started working on new hit lyrics
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=claim4['tx']['txid'], nout=0, blocking=False))
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=tx['txid'], nout=0, blocking=False))
         self.assertTrue(abandon['success'])
         await self.confirm_tx(abandon['tx']['txid'])
 

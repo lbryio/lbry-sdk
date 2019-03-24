@@ -155,29 +155,53 @@ class CommandTestCase(IntegrationTestCase):
             to JSON and then back to a dictionary. """
         return json.loads(jsonrpc_dumps_pretty(await awaitable, ledger=self.ledger))['result']
 
-    async def make_claim(self, name='hovercraft', amount='1.0', data=b'hi!',
-                         channel_name=None, confirm=True, account_id=None, fee=None):
+    async def create_claim(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True, **kwargs):
         with tempfile.NamedTemporaryFile() as file:
             file.write(data)
             file.flush()
-            claim = await self.out(self.daemon.jsonrpc_publish(
-                name, amount, file_path=file.name, channel_name=channel_name, account_id=account_id,
-                fee=fee
-            ))
-            self.assertTrue(claim['success'])
+            claim = await self.out(
+                self.daemon.jsonrpc_publish(name, bid, file_path=file.name, **kwargs)
+            )
+            self.assertEqual(claim['outputs'][0]['name'], name)
             if confirm:
-                await self.on_transaction_dict(claim['tx'])
+                await self.on_transaction_dict(claim)
                 await self.generate(1)
-                await self.on_transaction_dict(claim['tx'])
+                await self.on_transaction_dict(claim)
             return claim
 
-    async def make_channel(self, name='@arena', amount='1.0', confirm=True, account_id=None):
-        channel = await self.out(self.daemon.jsonrpc_channel_new(name, amount, account_id))
-        self.assertTrue(channel['success'])
+    async def update_claim(self, claim_id, data=None, confirm=True, **kwargs):
+        if data:
+            with tempfile.NamedTemporaryFile() as file:
+                file.write(data)
+                file.flush()
+                claim = await self.out(
+                    self.daemon.jsonrpc_claim_update(claim_id, file_path=file.name, **kwargs)
+                )
+        else:
+            claim = await self.out(self.daemon.jsonrpc_claim_update(claim_id, **kwargs))
+        self.assertIsNotNone(claim['outputs'][0]['name'])
         if confirm:
-            await self.on_transaction_dict(channel['tx'])
+            await self.on_transaction_dict(claim)
             await self.generate(1)
-            await self.on_transaction_dict(channel['tx'])
+            await self.on_transaction_dict(claim)
+        return claim
+
+    async def create_channel(self, name='@arena', bid='1.0', confirm=True, **kwargs):
+        channel = await self.out(self.daemon.jsonrpc_channel_create(name, bid, **kwargs))
+        self.assertEqual(channel['outputs'][0]['name'], name)
+        if confirm:
+            await self.on_transaction_dict(channel)
+            await self.generate(1)
+            await self.on_transaction_dict(channel)
+        return channel
+
+    async def update_channel(self, claim_id, confirm=True, **kwargs):
+        channel = await self.out(self.daemon.jsonrpc_channel_update(claim_id, **kwargs))
+        self.assertTrue(channel['outputs'][0]['name'].startswith('@'))
+        if confirm:
+            await self.on_transaction_dict(channel)
+            await self.generate(1)
+            await self.on_transaction_dict(channel)
         return channel
 
     async def resolve(self, uri):

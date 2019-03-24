@@ -1,5 +1,5 @@
 import unittest
-from lbrynet.extras.daemon import mime_types
+from lbrynet.schema import mime_types
 
 
 class TestMimeTypes(unittest.TestCase):

@@ -4,7 +4,6 @@ import os
 
 from integration.testcase import CommandTestCase
 from lbrynet.blob_exchange.downloader import BlobDownloader
-from lbrynet.error import InsufficientFundsError
 
 
 class FileCommands(CommandTestCase):
@@ -12,8 +11,8 @@ class FileCommands(CommandTestCase):
     VERBOSITY = logging.WARN
 
     async def test_file_management(self):
-        await self.make_claim('foo', '0.01')
-        await self.make_claim('foo2', '0.01')
+        await self.create_claim('foo', '0.01')
+        await self.create_claim('foo2', '0.01')
 
         file1, file2 = self.daemon.jsonrpc_file_list('claim_name')
         self.assertEqual(file1['claim_name'], 'foo')
@@ -28,8 +27,8 @@ class FileCommands(CommandTestCase):
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
 
     async def test_download_different_timeouts(self):
-        claim = await self.make_claim('foo', '0.01')
-        sd_hash = claim['output']['value']['stream']['hash']
+        tx = await self.create_claim('foo', '0.01')
+        sd_hash = tx['outputs'][0]['value']['stream']['hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         all_except_sd = [
             blob_hash for blob_hash in self.server.blob_manager.completed_blob_hashes if blob_hash != sd_hash
@@ -49,7 +48,7 @@ class FileCommands(CommandTestCase):
             await asyncio.sleep(0.01)
 
     async def test_filename_conflicts_management_on_resume_download(self):
-        await self.make_claim('foo', '0.01', data=bytes([0]*(1<<23)))
+        await self.create_claim('foo', '0.01', data=bytes([0]*(1<<23)))
         file_info = self.daemon.jsonrpc_file_list()[0]
         original_path = os.path.join(self.daemon.conf.download_dir, file_info['file_name'])
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
@@ -70,8 +69,8 @@ class FileCommands(CommandTestCase):
         # this used to be inconsistent, if it becomes again it would create weird bugs, so worth checking
 
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
-        claim = await self.make_claim('foo', '0.01')
-        sd_hash = claim['output']['value']['stream']['hash']
+        tx = await self.create_claim('foo', '0.01')
+        sd_hash = tx['outputs'][0]['value']['stream']['hash']
         file_info = self.daemon.jsonrpc_file_list()[0]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
@@ -89,8 +88,8 @@ class FileCommands(CommandTestCase):
         self.assertFalse(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
 
     async def test_incomplete_downloads_retry(self):
-        claim = await self.make_claim('foo', '0.01')
-        sd_hash = claim['output']['value']['stream']['hash']
+        tx = await self.create_claim('foo', '0.01')
+        sd_hash = tx['outputs'][0]['value']['stream']['hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
             await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
@@ -129,8 +128,8 @@ class FileCommands(CommandTestCase):
 
     async def test_unban_recovers_stream(self):
         BlobDownloader.BAN_TIME = .5  # fixme: temporary field, will move to connection manager or a conf
-        claim = await self.make_claim('foo', '0.01', data=bytes([0]*(1<<23)))
-        sd_hash = claim['output']['value']['stream']['hash']
+        tx = await self.create_claim('foo', '0.01', data=bytes([0]*(1<<23)))
+        sd_hash = tx['outputs'][0]['value']['stream']['hash']
         missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))[-2]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         # backup blob
@@ -151,27 +150,30 @@ class FileCommands(CommandTestCase):
         target_address = await self.blockchain.get_raw_change_address()
 
         # FAIL: beyond available balance
-        await self.make_claim(
+        await self.create_claim(
             'expensive', '0.01', data=b'pay me if you can',
-            fee={'currency': 'LBC', 'amount': 11.0, 'address': target_address})
+            fee_currency='LBC', fee_amount='11.0', fee_address=target_address
+        )
         await self.daemon.jsonrpc_file_delete(claim_name='expensive')
         response = await self.daemon.jsonrpc_get('lbry://expensive')
         self.assertEqual(response['error'], 'fee of 11.00000 exceeds max available balance')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
 
         # FAIL: beyond maximum key fee
-        await self.make_claim(
+        await self.create_claim(
             'maxkey', '0.01', data=b'no pay me, no',
-            fee={'currency': 'LBC', 'amount': 111.0, 'address': target_address})
+            fee_currency='LBC', fee_amount='111.0', fee_address=target_address
+        )
         await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
         response = await self.daemon.jsonrpc_get('lbry://maxkey')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
         self.assertEqual(response['error'], 'fee of 111.00000 exceeds max configured to allow of 50.00000')
 
         # PASS: purchase is successful
-        await self.make_claim(
+        await self.create_claim(
             'icanpay', '0.01', data=b'I got the power!',
-            fee={'currency': 'LBC', 'amount': 1.0, 'address': target_address})
+            fee_currency='LBC', fee_amount='1.0', fee_address=target_address
+        )
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
         await self.assertBalance(self.account, '9.925679')
         response = await self.daemon.jsonrpc_get('lbry://icanpay')

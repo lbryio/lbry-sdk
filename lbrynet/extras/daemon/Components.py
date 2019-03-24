@@ -265,10 +265,7 @@ class WalletComponent(Component):
 
     async def start(self):
         log.info("Starting torba wallet")
-        storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        lbrynet.schema.BLOCKCHAIN_NAME = self.conf.blockchain_name
-        self.wallet_manager = await LbryWalletManager.from_lbrynet_config(self.conf, storage)
-        self.wallet_manager.old_db = storage
+        self.wallet_manager = await LbryWalletManager.from_lbrynet_config(self.conf)
         await self.wallet_manager.start()
 
     async def stop(self):
