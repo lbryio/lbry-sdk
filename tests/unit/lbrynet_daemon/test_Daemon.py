@@ -39,7 +39,7 @@ def get_test_daemon(conf: Config, with_fee=False):
     daemon.payment_rate_manager = OnlyFreePaymentsManager()
     daemon.wallet_manager = mock.Mock(spec=LbryWalletManager)
     daemon.wallet_manager.wallet = mock.Mock(spec=Wallet)
-    daemon.wallet_manager.wallet.use_encryption = False
+    daemon.wallet_manager.use_encryption = False
     daemon.wallet_manager.network = FakeNetwork()
     daemon.storage = mock.Mock(spec=SQLiteStorage)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
@@ -66,7 +66,7 @@ def get_test_daemon(conf: Config, with_fee=False):
         metadata.update(
             {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
     migrated = smart_decode(json.dumps(metadata))
-    daemon._resolve = daemon.wallet_manager.resolve = lambda *_: defer.succeed(
+    daemon._resolve = daemon.resolve = lambda *_: defer.succeed(
         {"test": {'claim': {'value': migrated.claim_dict}}})
     return daemon
 
