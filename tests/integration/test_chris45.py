@@ -1,4 +1,3 @@
-import tempfile
 from integration.testcase import CommandTestCase
 
 
@@ -93,13 +92,12 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # After abandoning he just waits for his LBCs to be returned to his account
         await self.generate(5)
         result = await self.daemon.jsonrpc_account_balance()
-        self.assertEqual(result, '8.969381')
+        self.assertEqual(result, '8.969379')
 
         # Amidst all this Chris receives a call from his friend Ramsey
         # who says that it is of utmost urgency that Chris transfer him
         # 1 LBC to which Chris readily obliges
         ramsey_account_id = (await self.daemon.jsonrpc_account_create("Ramsey"))['id']
-        ramsey_account = self.daemon.get_account_or_error(ramsey_account_id)
         ramsey_address = await self.daemon.jsonrpc_address_unused(ramsey_account_id)
         result = await self.out(self.daemon.jsonrpc_wallet_send('1.0', ramsey_address))
         self.assertIn("txid", result)
@@ -110,7 +108,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.generate(5)
         result = await self.daemon.jsonrpc_account_balance()
         # Chris' balance was correct
-        self.assertEqual(result, '7.969257')
+        self.assertEqual(result, '7.969255')
 
         # Ramsey too assured him that he had received the 1 LBC and thanks him
         result = await self.daemon.jsonrpc_account_balance(ramsey_account_id)
