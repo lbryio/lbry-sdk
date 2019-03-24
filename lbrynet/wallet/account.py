@@ -1,11 +1,15 @@
 import json
 import logging
 import binascii
+import typing
 from hashlib import sha256
 from string import hexdigits
 
 from torba.client.baseaccount import BaseAccount
 from torba.client.basetransaction import TXORef
+
+if typing.TYPE_CHECKING:
+    from lbrynet.wallet import ledger
 
 
 log = logging.getLogger(__name__)
@@ -21,31 +25,32 @@ def validate_claim_id(claim_id):
 
 
 class Account(BaseAccount):
+    ledger: 'ledger.MainNetLedger'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.certificates = {}
+        self.channel_keys = {}
 
     @property
     def hash(self) -> bytes:
         h = sha256(json.dumps(self.to_dict(False)).encode())
-        for cert in sorted(self.certificates.keys()):
+        for cert in sorted(self.channel_keys.keys()):
             h.update(cert.encode())
         return h.digest()
 
     def apply(self, d: dict):
         super().apply(d)
-        self.certificates.update(d.get('certificates', {}))
+        self.channel_keys.update(d.get('certificates', {}))
 
-    def add_certificate_private_key(self, ref: TXORef, private_key):
-        assert ref.id not in self.certificates, 'Trying to add a duplicate certificate.'
-        self.certificates[ref.id] = private_key
+    def add_channel_private_key(self, ref: TXORef, private_key):
+        assert ref.id not in self.channel_keys, 'Trying to add a duplicate channel private key.'
+        self.channel_keys[ref.id] = private_key
 
-    def get_certificate_private_key(self, ref: TXORef):
-        return self.certificates.get(ref.id)
+    def get_channel_private_key(self, ref: TXORef):
+        return self.channel_keys.get(ref.id)
 
     async def maybe_migrate_certificates(self):
-        if not self.certificates:
+        if not self.channel_keys:
             return
 
         addresses = {}
@@ -59,7 +64,7 @@ class Account(BaseAccount):
         }
         double_hex_encoded_to_pop = []
 
-        for maybe_claim_id in list(self.certificates):
+        for maybe_claim_id in list(self.channel_keys):
             if ':' not in maybe_claim_id:
                 try:
                     validate_claim_id(maybe_claim_id)
@@ -71,7 +76,7 @@ class Account(BaseAccount):
                             maybe_claim_id_bytes = maybe_claim_id_bytes.encode()
                         decoded_double_hex = binascii.unhexlify(maybe_claim_id_bytes).decode()
                         validate_claim_id(decoded_double_hex)
-                        if decoded_double_hex in self.certificates:
+                        if decoded_double_hex in self.channel_keys:
                             log.warning("don't know how to migrate certificate %s", decoded_double_hex)
                         else:
                             log.info("claim id was double hex encoded, fixing it")
@@ -80,9 +85,9 @@ class Account(BaseAccount):
                         continue
 
         for double_encoded_claim_id, correct_claim_id in double_hex_encoded_to_pop:
-            self.certificates[correct_claim_id] = self.certificates.pop(double_encoded_claim_id)
+            self.channel_keys[correct_claim_id] = self.channel_keys.pop(double_encoded_claim_id)
 
-        for maybe_claim_id in list(self.certificates):
+        for maybe_claim_id in list(self.channel_keys):
             results['total'] += 1
             if ':' not in maybe_claim_id:
                 try:
@@ -117,8 +122,8 @@ class Account(BaseAccount):
                             .format(maybe_claim_id)
                         )
                     tx_nout = '{txid}:{nout}'.format(**claim)
-                    self.certificates[tx_nout] = self.certificates[maybe_claim_id]
-                    del self.certificates[maybe_claim_id]
+                    self.channel_keys[tx_nout] = self.channel_keys[maybe_claim_id]
+                    del self.channel_keys[maybe_claim_id]
                     log.info(
                         "Migrated certificate with claim_id '%s' ('%s') to a new look up key %s.",
                         maybe_claim_id, txo.script.values['claim_name'], tx_nout
@@ -186,18 +191,18 @@ class Account(BaseAccount):
     @classmethod
     def from_dict(cls, ledger, wallet, d: dict) -> 'Account':
         account = super().from_dict(ledger, wallet, d)
-        account.certificates = d.get('certificates', {})
+        account.channel_keys = d.get('certificates', {})
         return account
 
-    def to_dict(self, include_certificates=True):
+    def to_dict(self, include_channel_keys=True):
         d = super().to_dict()
-        if include_certificates:
-            d['certificates'] = self.certificates
+        if include_channel_keys:
+            d['certificates'] = self.channel_keys
         return d
 
     async def get_details(self, **kwargs):
         details = await super().get_details(**kwargs)
-        details['certificates'] = len(self.certificates)
+        details['certificates'] = len(self.channel_keys)
         return details
 
     def get_claim(self, claim_id=None, txid=None, nout=None):
@@ -207,15 +212,15 @@ class Account(BaseAccount):
             return self.ledger.db.get_claims(**{'account': self, 'txo.txid': txid, 'txo.position': nout})
 
     @staticmethod
-    def constraint_utxos_sans_claims(constraints):
+    def constraint_spending_utxos(constraints):
         constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
 
     def get_utxos(self, **constraints):
-        self.constraint_utxos_sans_claims(constraints)
+        self.constraint_spending_utxos(constraints)
         return super().get_utxos(**constraints)
 
     def get_utxo_count(self, **constraints):
-        self.constraint_utxos_sans_claims(constraints)
+        self.constraint_spending_utxos(constraints)
         return super().get_utxo_count(**constraints)
 
     def get_claims(self, **constraints):
@@ -229,6 +234,12 @@ class Account(BaseAccount):
 
     def get_channel_count(self, **constraints):
         return self.ledger.db.get_channel_count(account=self, **constraints)
+
+    def get_supports(self, **constraints):
+        return self.ledger.db.get_supports(account=self, **constraints)
+
+    def get_support_count(self, **constraints):
+        return self.ledger.db.get_support_count(account=self, **constraints)
 
     async def send_to_addresses(self, amount, addresses, broadcast=False):
         tx_class = self.ledger.transaction_class

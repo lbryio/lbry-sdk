@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from ecdsa.util import sigencode_der
 
-from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput
+from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput, ReadOnlyList
 from torba.client.hash import hash160, sha256, Base58
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.account import Account
@@ -117,6 +117,7 @@ class Output(BaseOutput):
         return True
 
     def sign(self, channel: 'Output', first_input_id=None):
+        self.channel = channel
         self.claim.signing_channel_hash = channel.claim_hash
         digest = sha256(b''.join([
             first_input_id or self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
@@ -129,8 +130,9 @@ class Output(BaseOutput):
 
     def generate_channel_private_key(self):
         private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
-        self.private_key = private_key.to_pem()
+        self.private_key = private_key.to_pem().decode()
         self.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
+        self.script.generate()
         return self.private_key
 
     def is_channel_private_key(self, private_key_pem):
@@ -169,6 +171,9 @@ class Transaction(BaseTransaction):
     input_class = Input
     output_class = Output
 
+    outputs: ReadOnlyList[Output]
+    inputs: ReadOnlyList[Input]
+
     @classmethod
     def pay(cls, amount: int, address: bytes, funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
@@ -176,41 +181,51 @@ class Transaction(BaseTransaction):
         return cls.create([], [output], funding_accounts, change_account)
 
     @classmethod
-    def claim(cls, name: str, claim: Claim, amount: int, holding_address: bytes,
-              funding_accounts: List[Account], change_account: Account):
+    def claim_create(
+            cls, name: str, claim: Claim, amount: int, holding_address: str,
+            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
             amount, name, claim, ledger.address_to_hash160(holding_address)
         )
-        return cls.create([], [claim_output], funding_accounts, change_account)
+        if signing_channel is not None:
+            claim_output.sign(signing_channel, b'placeholder txid:nout')
+        return cls.create([], [claim_output], funding_accounts, change_account, sign=False)
+
+    @classmethod
+    def claim_update(
+            cls, previous_claim: Output, amount: int, holding_address: str,
+            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
+        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        updated_claim = Output.pay_update_claim_pubkey_hash(
+            amount, previous_claim.claim_name, previous_claim.claim_id,
+            previous_claim.claim, ledger.address_to_hash160(holding_address)
+        )
+        if signing_channel is not None:
+            updated_claim.sign(signing_channel, b'placeholder txid:nout')
+        return cls.create(
+            [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account, sign=False
+        )
+
+    @classmethod
+    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
+                funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
+        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        support_output = Output.pay_support_pubkey_hash(
+            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
+        )
+        if signing_channel is not None:
+            support_output.sign(signing_channel, b'placeholder txid:nout')
+        return cls.create([], [support_output], funding_accounts, change_account, sign=False)
 
     @classmethod
     def purchase(cls, claim: Output, amount: int, merchant_address: bytes,
-              funding_accounts: List[Account], change_account: Account):
+                 funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         claim_output = Output.purchase_claim_pubkey_hash(
             amount, claim.claim_id, ledger.address_to_hash160(merchant_address)
         )
         return cls.create([], [claim_output], funding_accounts, change_account)
-
-    @classmethod
-    def update(cls, previous_claim: Output, claim: Claim, amount: int, holding_address: bytes,
-               funding_accounts: List[Account], change_account: Account):
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
-        updated_claim = Output.pay_update_claim_pubkey_hash(
-            amount, previous_claim.claim_name, previous_claim.claim_id,
-            claim, ledger.address_to_hash160(holding_address)
-        )
-        return cls.create([Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account)
-
-    @classmethod
-    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: bytes,
-                funding_accounts: List[Account], change_account: Account):
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
-        output = Output.pay_support_pubkey_hash(
-            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
-        )
-        return cls.create([], [output], funding_accounts, change_account)
 
     @classmethod
     def abandon(cls, claims: Iterable[Output], funding_accounts: Iterable[Account], change_account: Account):

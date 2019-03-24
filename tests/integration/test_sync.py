@@ -62,7 +62,7 @@ class AccountSynchronization(AsyncioTestCase):
         self.account.modified_on = 123.456
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), starting_hash)
         self.assertEqual(self.daemon.jsonrpc_sync_apply('password')['hash'], starting_hash)
-        self.assertFalse(self.account.certificates)
+        self.assertFalse(self.account.channel_keys)
 
         hash_w_cert = '974721f42dab42657b5911b7caf4af98ce4d3879eea6ac23d50c1d79bc5020ef'
         add_cert = (
@@ -78,9 +78,9 @@ class AccountSynchronization(AsyncioTestCase):
         )
         self.daemon.jsonrpc_sync_apply('password', data=add_cert)
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
-        self.assertEqual(self.account.certificates, {'abcdefg1234:0': '---PRIVATE KEY---'})
+        self.assertEqual(self.account.channel_keys, {'abcdefg1234:0': '---PRIVATE KEY---'})
 
         # applying the same diff is idempotent
         self.daemon.jsonrpc_sync_apply('password', data=add_cert)
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
-        self.assertEqual(self.account.certificates, {'abcdefg1234:0': '---PRIVATE KEY---'})
+        self.assertEqual(self.account.channel_keys, {'abcdefg1234:0': '---PRIVATE KEY---'})

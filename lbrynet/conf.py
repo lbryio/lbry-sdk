@@ -21,10 +21,6 @@ CURRENCIES = {
     'LBC': {'type': 'crypto'},
     'USD': {'type': 'fiat'},
 }
-SLACK_WEBHOOK = (
-    'nUE0pUZ6Yl9bo29epl5moTSwnl5wo20ip2IlqzywMKZiIQSFZR5'
-    'AHx4mY0VmF0WQZ1ESEP9kMHZlp1WzJwWOoKN3ImR1M2yUAaMyqGZ='
-)
 HEADERS_FILE_SHA256_CHECKSUM = (
     366295, 'b0c8197153a33ccbc52fb81a279588b6015b68b7726f73f6a2b81f7e25bfe4b9'
 )

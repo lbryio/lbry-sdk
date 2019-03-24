@@ -38,5 +38,6 @@ setup(
         'torba',
         'pyyaml==3.13',
         'docopt==0.6.2',
+        'hachoir',
     ],
 )

@@ -4,7 +4,7 @@ import typing
 import logging
 import binascii
 from lbrynet.utils import generate_id
-from lbrynet.extras.daemon.mime_types import guess_media_type
+from lbrynet.schema.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.reflector.client import StreamReflectorClient

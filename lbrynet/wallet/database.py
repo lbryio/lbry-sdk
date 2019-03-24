@@ -1,4 +1,8 @@
+from typing import List
+
 from torba.client.basedatabase import BaseDatabase
+
+from lbrynet.wallet.transaction import Output
 
 
 class WalletDatabase(BaseDatabase):
@@ -48,7 +52,7 @@ class WalletDatabase(BaseDatabase):
             row['claim_name'] = txo.claim_name
         return row
 
-    async def get_txos(self, **constraints):
+    async def get_txos(self, **constraints) -> List[Output]:
         my_account = constraints.get('my_account', constraints.get('account', None))
 
         txos = await super().get_txos(**constraints)
@@ -58,8 +62,8 @@ class WalletDatabase(BaseDatabase):
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 if txo.claim.is_signed:
                     channel_ids.add(txo.claim.signing_channel_id)
-                if txo.claim_name.startswith('@') and my_account is not None:
-                    txo.private_key = my_account.get_certificate_private_key(txo.ref)
+                if txo.claim.is_channel and my_account is not None:
+                    txo.private_key = my_account.get_channel_private_key(txo.ref)
 
         if channel_ids:
             channels = {
@@ -77,11 +81,11 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_claims(constraints):
-        constraints['claim_type__any'] = {'is_claim': 1, 'is_update': 1, 'is_support': 1}
+        constraints['claim_type__any'] = {'is_claim': 1, 'is_update': 1}
 
-    def get_claims(self, **constraints):
+    async def get_claims(self, **constraints) -> List[Output]:
         self.constrain_claims(constraints)
-        return self.get_utxos(**constraints)
+        return await self.get_utxos(**constraints)
 
     def get_claim_count(self, **constraints):
         self.constrain_claims(constraints)
@@ -100,22 +104,17 @@ class WalletDatabase(BaseDatabase):
         self.constrain_channels(constraints)
         return self.get_claim_count(**constraints)
 
-    async def get_certificates(self, private_key_accounts, exclude_without_key=False, **constraints):
-        channels = await self.get_channels(**constraints)
-        certificates = []
-        if private_key_accounts is not None:
-            for channel in channels:
-                if not channel.has_private_key:
-                    private_key = None
-                    for account in private_key_accounts:
-                        private_key = account.get_certificate_private_key(channel.ref)
-                        if private_key is not None:
-                            break
-                    if private_key is None and exclude_without_key:
-                        continue
-                    channel.private_key = private_key
-                certificates.append(channel)
-        return certificates
+    @staticmethod
+    def constrain_supports(constraints):
+        constraints['is_support'] = 1
+
+    def get_supports(self, **constraints):
+        self.constrain_supports(constraints)
+        return self.get_utxos(**constraints)
+
+    def get_support_count(self, **constraints):
+        self.constrain_supports(constraints)
+        return self.get_utxo_count(**constraints)
 
     async def release_all_outputs(self, account):
         await self.db.execute(
