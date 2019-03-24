@@ -2280,41 +2280,48 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_support_create(self, claim_id, amount, tip=False, account_id=None):
+    async def jsonrpc_support_create(self, claim_id, amount, tip=False, account_id=None, preview=False):
         """
         Create a support or a tip for name claim.
 
         Usage:
             support create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
-                           [--tip] [--account_id=<account_id>]
+                           [--tip] [--account_id=<account_id>] [--preview]
 
         Options:
             --claim_id=<claim_id>     : (str) claim_id of the claim to support
             --amount=<amount>         : (decimal) amount of support
             --tip                     : (bool) send support to claim owner, default: false.
             --account_id=<account_id> : (str) id of the account to use
-
-        Returns:
-            (dict) Dictionary containing the transaction information
-            {
-                "hex": (str) raw transaction,
-                "inputs": (list) inputs(dict) used for the transaction,
-                "outputs": (list) outputs(dict) for the transaction,
-                "total_fee": (int) fee in dewies,
-                "total_input": (int) total of inputs in dewies,
-                "total_output": (int) total of outputs in dewies(input - fees),
-                "txid": (str) txid of the transaction,
-            }
+            --preview                 : (bool) do not broadcast the transaction
         """
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
-        result = await self.wallet_manager.support_claim(name, claim_id, amount, account)
-        await self.analytics_manager.send_claim_action('new_support')
-        # tip:
-        validate_claim_id(claim_id)
-        result = await self.wallet_manager.tip_claim(amount, claim_id, account)
-        await self.analytics_manager.send_claim_action('new_support')
-        return result
+        claim = await account.ledger.get_claim_by_claim_id(claim_id)
+        claim_name = claim['name']
+        claim_address = claim['address']
+        if not tip:
+            claim_address = await account.receiving.get_or_create_usable_address()
+
+        tx = await Transaction.support(
+            claim_name, claim_id, amount, claim_address, [account], account
+        )
+
+        if not preview:
+            await tx.sign([account])
+            await account.ledger.broadcast(tx)
+            await self.storage.save_supports(claim_id, [{
+                'txid': tx.id,
+                'nout': tx.position,
+                'address': claim_address,
+                'claim_id': claim_id,
+                'amount': dewies_to_lbc(amount)
+            }])
+            await self.analytics_manager.send_claim_action('new_support')
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_support_abandon(self, claim_id=None, txid=None, nout=None, account_id=None, blocking=True):

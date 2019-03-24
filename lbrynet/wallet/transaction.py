@@ -209,14 +209,12 @@ class Transaction(BaseTransaction):
 
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
+                funding_accounts: List[Account], change_account: Account):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         support_output = Output.pay_support_pubkey_hash(
             amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
         )
-        if signing_channel is not None:
-            support_output.sign(signing_channel, b'placeholder txid:nout')
-        return cls.create([], [support_output], funding_accounts, change_account, sign=False)
+        return cls.create([], [support_output], funding_accounts, change_account)
 
     @classmethod
     def purchase(cls, claim: Output, amount: int, merchant_address: bytes,
