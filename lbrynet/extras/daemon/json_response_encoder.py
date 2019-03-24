@@ -49,7 +49,7 @@ class JSONResponseEncoder(JSONEncoder):
             'hex': hexlify(tx.raw).decode(),
         }
 
-    def encode_output(self, txo):
+    def encode_output(self, txo, check_signature=True):
         tx_height = txo.tx_ref.height
         best_height = self.ledger.headers.height
         output = {
@@ -77,7 +77,7 @@ class JSONResponseEncoder(JSONEncoder):
                 output['value'] = claim
                 if claim.is_signed:
                     output['valid_signature'] = None
-                    if txo.channel is not None:
+                    if check_signature and txo.channel is not None:
                         output['channel_name'] = txo.channel.claim_name
                         try:
                             output['valid_signature'] = txo.is_signed_by(txo.channel, self.ledger)
@@ -102,7 +102,7 @@ class JSONResponseEncoder(JSONEncoder):
         return output
 
     def encode_input(self, txi):
-        return self.encode_output(txi.txo_ref.txo) if txi.txo_ref.txo is not None else {
+        return self.encode_output(txi.txo_ref.txo, False) if txi.txo_ref.txo is not None else {
             'txid': txi.txo_ref.tx_ref.id,
             'nout': txi.txo_ref.position
         }
