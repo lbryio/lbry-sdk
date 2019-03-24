@@ -206,6 +206,9 @@ class BaseLedger(metaclass=LedgerRegistry):
     def release_outputs(self, txos):
         return self.db.release_outputs(txos)
 
+    def release_tx(self, tx):
+        return self.release_outputs([txi.txo_ref.txo for txi in tx.inputs])
+
     async def get_local_status_and_history(self, address):
         address_details = await self.db.get_address(address=address)
         history = address_details['history'] or ''

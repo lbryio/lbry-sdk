@@ -447,8 +447,6 @@ class BaseAccount:
         if broadcast:
             await self.ledger.broadcast(tx)
         else:
-            await self.ledger.release_outputs(
-                [txi.txo_ref.txo for txi in tx.inputs]
-            )
+            await self.ledger.release_tx(tx)
 
         return tx

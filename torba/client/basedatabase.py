@@ -7,7 +7,6 @@ from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable
 
 import sqlite3
 
-from torba.client.hash import TXRefImmutable
 from torba.client.basetransaction import BaseTransaction
 from torba.client.baseaccount import BaseAccount
 

@@ -9,6 +9,7 @@ from torba.client.constants import COIN, NULL_HASH32
 from torba.client.bcd_data_stream import BCDataStream
 from torba.client.hash import sha256, TXRef, TXRefImmutable
 from torba.client.util import ReadOnlyList
+from torba.client.errors import InsufficientFundsError
 
 if typing.TYPE_CHECKING:
     from torba.client import baseledger
@@ -441,7 +442,8 @@ class BaseTransaction:
 
     @classmethod
     async def create(cls, inputs: Iterable[BaseInput], outputs: Iterable[BaseOutput],
-                     funding_accounts: Iterable[BaseAccount], change_account: BaseAccount):
+                     funding_accounts: Iterable[BaseAccount], change_account: BaseAccount,
+                     sign: bool = True):
         """ Find optimal set of inputs when only outputs are provided; add change
             outputs if only inputs are provided or if inputs are greater than outputs. """
 
@@ -467,7 +469,7 @@ class BaseTransaction:
                     deficit = cost - payment
                     spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
                     if not spendables:
-                        raise ValueError('Not enough funds to cover this transaction.')
+                        raise InsufficientFundsError('Not enough funds to cover this transaction.')
                     payment += sum(s.effective_amount for s in spendables)
                     tx.add_inputs(s.txi for s in spendables)
 
@@ -500,11 +502,12 @@ class BaseTransaction:
                     # less than the fee, after 5 attempts we give up and go home
                     cost += cost_of_change + 1
 
-            await tx.sign(funding_accounts)
+            if sign:
+                await tx.sign(funding_accounts)
 
         except Exception as e:
             log.exception('Failed to create transaction:')
-            await ledger.release_outputs(tx.outputs)
+            await ledger.release_tx(tx)
             raise e
 
         return tx
