@@ -159,6 +159,85 @@ class ChannelCommands(CommandTestCase):
         self.assertIsNotNone(txo.private_key)
 
 
+class SupportCommands(CommandTestCase):
+
+    async def test_regular_supports_and_tip_supports(self):
+        # account2 will be used to send tips and supports to account1
+        account2_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
+        account2 = self.daemon.get_account_or_error(account2_id)
+
+        # send account2 5 LBC out of the 10 LBC in account1
+        result = await self.out(self.daemon.jsonrpc_account_send(
+            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+        ))
+        await self.on_transaction_dict(result)
+
+        # account1 and account2 balances:
+        await self.assertBalance(self.account, '4.999876')
+        await self.assertBalance(account2,     '5.0')
+
+        # create the claim we'll be tipping and supporting
+        tx = await self.create_claim()
+        claim_id = tx['outputs'][0]['']
+
+        # account1 and account2 balances:
+        await self.assertBalance(self.account, '3.979769')
+        await self.assertBalance(account2,     '5.0')
+
+        # send a tip to the claim using account2
+        tip = await self.out(
+            self.daemon.jsonrpc_claim_tip(claim['claim_id'], '1.0', account2_id)
+        )
+        await self.on_transaction_dict(tip)
+        await self.generate(1)
+        await self.on_transaction_dict(tip)
+
+        # tips don't affect balance so account1 balance is same but account2 balance went down
+        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('3.9998585', await self.daemon.jsonrpc_account_balance(account2_id))
+
+        # verify that the incoming tip is marked correctly as is_tip=True in account1
+        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        self.assertEqual(len(txs[0]['support_info']), 1)
+        self.assertEqual(txs[0]['support_info'][0]['balance_delta'], '1.0')
+        self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs[0]['support_info'][0]['is_tip'], True)
+        self.assertEqual(txs[0]['value'], '1.0')
+        self.assertEqual(txs[0]['fee'], '0.0')
+
+        # verify that the outgoing tip is marked correctly as is_tip=True in account2
+        txs2 = await self.out(
+            self.daemon.jsonrpc_transaction_list(account2_id)
+        )
+        self.assertEqual(len(txs2[0]['support_info']), 1)
+        self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
+        self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], True)
+        self.assertEqual(txs2[0]['value'], '-1.0')
+        self.assertEqual(txs2[0]['fee'], '-0.0001415')
+
+        # send a support to the claim using account2
+        support = await self.out(
+            self.daemon.jsonrpc_claim_new_support('hovercraft', claim['claim_id'], '2.0', account2_id)
+        )
+        await self.on_transaction_dict(support)
+        await self.generate(1)
+        await self.on_transaction_dict(support)
+
+        # account2 balance went down ~2
+        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('1.999717', await self.daemon.jsonrpc_account_balance(account2_id))
+
+        # verify that the outgoing support is marked correctly as is_tip=False in account2
+        txs2 = await self.out(self.daemon.jsonrpc_transaction_list(account2_id))
+        self.assertEqual(len(txs2[0]['support_info']), 1)
+        self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
+        self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
+        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
+        self.assertEqual(txs2[0]['value'], '0.0')
+        self.assertEqual(txs2[0]['fee'], '-0.0001415')
+
+
 class ClaimCommands(CommandTestCase):
 
     async def test_create_claim_names(self):
@@ -487,80 +566,6 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(page_claim_ids, claims[:6])
         out_of_bounds = await self.out(self.daemon.jsonrpc_claim_list_by_channel(2, page_size=20, uri='@abc'))
         self.assertEqual(out_of_bounds['error'], 'claim 20 greater than max 12')
-
-    async def test_regular_supports_and_tip_supports(self):
-        # account2 will be used to send tips and supports to account1
-        account2_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
-
-        # send account2 5 LBC out of the 10 LBC in account1
-        result = await self.out(self.daemon.jsonrpc_wallet_send(
-            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
-        ))
-        await self.confirm_tx(result['txid'])
-
-        # account1 and account2 balances:
-        self.assertEqual('4.999876', await self.daemon.jsonrpc_account_balance())
-        self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
-
-        # create the claim we'll be tipping and supporting
-        claim = await self.make_claim()
-
-        # account1 and account2 balances:
-        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
-        self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
-
-        # send a tip to the claim using account2
-        tip = await self.out(
-            self.daemon.jsonrpc_claim_tip(claim['claim_id'], '1.0', account2_id)
-        )
-        await self.on_transaction_dict(tip)
-        await self.generate(1)
-        await self.on_transaction_dict(tip)
-
-        # tips don't affect balance so account1 balance is same but account2 balance went down
-        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
-        self.assertEqual('3.9998585', await self.daemon.jsonrpc_account_balance(account2_id))
-
-        # verify that the incoming tip is marked correctly as is_tip=True in account1
-        txs = await self.out(self.daemon.jsonrpc_transaction_list())
-        self.assertEqual(len(txs[0]['support_info']), 1)
-        self.assertEqual(txs[0]['support_info'][0]['balance_delta'], '1.0')
-        self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim['claim_id'])
-        self.assertEqual(txs[0]['support_info'][0]['is_tip'], True)
-        self.assertEqual(txs[0]['value'], '1.0')
-        self.assertEqual(txs[0]['fee'], '0.0')
-
-        # verify that the outgoing tip is marked correctly as is_tip=True in account2
-        txs2 = await self.out(
-            self.daemon.jsonrpc_transaction_list(account2_id)
-        )
-        self.assertEqual(len(txs2[0]['support_info']), 1)
-        self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
-        self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
-        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], True)
-        self.assertEqual(txs2[0]['value'], '-1.0')
-        self.assertEqual(txs2[0]['fee'], '-0.0001415')
-
-        # send a support to the claim using account2
-        support = await self.out(
-            self.daemon.jsonrpc_claim_new_support('hovercraft', claim['claim_id'], '2.0', account2_id)
-        )
-        await self.on_transaction_dict(support)
-        await self.generate(1)
-        await self.on_transaction_dict(support)
-
-        # account2 balance went down ~2
-        self.assertEqual('3.979769', await self.daemon.jsonrpc_account_balance())
-        self.assertEqual('1.999717', await self.daemon.jsonrpc_account_balance(account2_id))
-
-        # verify that the outgoing support is marked correctly as is_tip=False in account2
-        txs2 = await self.out(self.daemon.jsonrpc_transaction_list(account2_id))
-        self.assertEqual(len(txs2[0]['support_info']), 1)
-        self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
-        self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim['claim_id'])
-        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
-        self.assertEqual(txs2[0]['value'], '0.0')
-        self.assertEqual(txs2[0]['fee'], '-0.0001415')
 
     async def test_normalization_resolution(self):
 

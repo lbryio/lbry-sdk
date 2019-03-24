@@ -569,7 +569,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Resolve a name and return the estimated stream cost
         """
 
-        resolved = await self.wallet_manager.resolve(uri)
+        resolved = await self.resolve(uri)
         if resolved:
             claim_response = resolved[uri]
         else:
@@ -807,7 +807,7 @@ class Daemon(metaclass=JSONRPCServerType):
             except URIParseError:
                 results[u] = {"error": "%s is not a valid url" % u}
 
-        resolved = await self.wallet_manager.resolve(*tuple(valid_urls))
+        resolved = await self.resolve(*tuple(valid_urls))
 
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri]
@@ -911,80 +911,6 @@ class Daemon(metaclass=JSONRPCServerType):
             cleaned = attr.deserialize(value)
             setattr(c, key, cleaned)
         return {key: cleaned}
-
-    WALLET_DOC = """
-    Wallet management.
-    """
-
-    @deprecated("account_balance")
-    def jsonrpc_wallet_balance(self, address=None):
-        """ deprecated """
-
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_wallet_send(self, amount, address=None, claim_id=None, account_id=None):
-        """
-        Send credits. If given an address, send credits to it. If given a claim id, send a tip
-        to the owner of a claim specified by uri. A tip is a claim support where the recipient
-        of the support is the claim address for the claim being supported.
-
-        Usage:
-            wallet_send (<amount> | --amount=<amount>)
-                        ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
-                        [--account_id=<account_id>]
-
-        Options:
-            --amount=<amount>          : (decimal) amount of credit to send
-            --address=<address>        : (str) address to send credits to
-            --claim_id=<claim_id>      : (str) claim_id of the claim to send to tip to
-            --account_id=<account_id>  : (str) account to fund the transaction
-
-        Returns:
-            If sending to an address:
-            (dict) Dictionary containing the transaction information
-            {
-                "hex": (str) raw transaction,
-                "inputs": (list) inputs(dict) used for the transaction,
-                "outputs": (list) outputs(dict) for the transaction,
-                "total_fee": (int) fee in dewies,
-                "total_input": (int) total of inputs in dewies,
-                "total_output": (int) total of outputs in dewies(input - fees),
-                "txid": (str) txid of the transaction,
-            }
-
-            If sending a claim tip:
-            (dict) Dictionary containing the result of the support
-            {
-                txid : (str) txid of resulting support claim
-                nout : (int) nout of the resulting support claim
-                fee : (float) fee paid for the transaction
-            }
-        """
-
-        amount = self.get_dewies_or_error("amount", amount)
-        if not amount:
-            raise NullFundsError
-        if amount < 0:
-            raise NegativeFundsError()
-
-        if address and claim_id:
-            raise Exception("Given both an address and a claim id")
-        if not address and not claim_id:
-            raise Exception("Not given an address or a claim id")
-
-        if address:
-            # raises an error if the address is invalid
-            self.ledger.is_valid_address(address)
-
-            reserved_points = self.wallet_manager.reserve_points(address, amount)
-            if reserved_points is None:
-                raise InsufficientFundsError()
-            account = self.get_account_or_default(account_id)
-            result = await self.wallet_manager.send_points_to_address(reserved_points, amount, account)
-            await self.analytics_manager.send_credits_sent()
-        else:
-            log.info("This command is deprecated for sending tips, please use the newer claim_tip command")
-            result = await self.jsonrpc_claim_tip(claim_id=claim_id, amount=amount, account_id=account_id)
-        return result
 
     ACCOUNT_DOC = """
     Account management.
@@ -1342,19 +1268,20 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_account_send(self, amount, addresses, account_id=None, broadcast=False):
+    async def jsonrpc_account_send(self, amount, addresses, account_id=None, preview=False):
         """
         Send the same number of credits to multiple addresses.
 
         Usage:
-            account_send <amount> <addresses>... [--account_id=<account_id>] [--broadcast]
+            account_send <amount> <addresses>... [--account_id=<account_id>] [--preview]
 
         Options:
             --account_id=<account_id>  : (str) account to fund the transaction
-            --broadcast                : (bool) actually broadcast the transaction, default: false.
+            --preview                  : (bool) do not broadcast the transaction
 
         Returns:
         """
+        account = self.get_account_or_default(account_id)
 
         amount = self.get_dewies_or_error("amount", amount)
         if not amount:
@@ -1362,13 +1289,29 @@ class Daemon(metaclass=JSONRPCServerType):
         if amount < 0:
             raise NegativeFundsError()
 
-        for address in addresses:
-            self.ledger.is_valid_address(address)
+        if addresses and not isinstance(addresses, list):
+            addresses = [addresses]
 
-        account = self.get_account_or_default(account_id)
-        result = await account.send_to_addresses(amount, addresses, broadcast)
-        await self.analytics_manager.send_credits_sent()
-        return result
+        outputs = []
+        for address in addresses:
+            self.valid_address_or_error(address)
+            outputs.append(
+                Output.pay_pubkey_hash(
+                    amount, self.ledger.address_to_hash160(address)
+                )
+            )
+
+        tx = await Transaction.create(
+            [], outputs, [account], account
+        )
+
+        if not preview:
+            await self.ledger.broadcast(tx)
+            await self.analytics_manager.send_credits_sent()
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
 
     SYNC_DOC = """
     Wallet synchronization.
@@ -1437,7 +1380,7 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_address_is_mine(self, address, account_id=None):
+    async def jsonrpc_address_is_mine(self, address, account_id=None):
         """
         Checks if an address is associated with the current wallet.
 
@@ -1452,9 +1395,11 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true, if address is associated with current wallet
         """
-        return self.wallet_manager.address_is_mine(
-            address, self.get_account_or_default(account_id)
-        )
+        account = self.get_account_or_default(account_id)
+        match = await self.ledger.db.get_address(address=address, account=account)
+        if match is not None:
+            return True
+        return False
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_address_list(self, account_id=None, page=None, page_size=None):
@@ -1815,7 +1760,7 @@ class Daemon(metaclass=JSONRPCServerType):
             amount = old_txo.amount
 
         if claim_address is not None:
-            self.ledger.is_valid_address(claim_address)
+            self.valid_address_or_error(claim_address)
         else:
             claim_address = old_txo.get_address(account.ledger)
 
@@ -2078,7 +2023,7 @@ class Daemon(metaclass=JSONRPCServerType):
             amount = old_txo.amount
 
         if claim_address is not None:
-            self.ledger.is_valid_address(claim_address)
+            self.valid_address_or_error(claim_address)
         else:
             claim_address = old_txo.get_address(account.ledger)
 
@@ -2193,7 +2138,12 @@ class Daemon(metaclass=JSONRPCServerType):
         if nout is None and txid is not None:
             raise Exception('Must specify nout')
 
-        tx = await self.wallet_manager.abandon_claim(claim_id, txid, nout, account)
+        claim = await account.get_claim(claim_id=claim_id, txid=txid, nout=nout)
+        if not claim:
+            raise Exception('No claim found for the specified claim_id or txid:nout')
+
+        tx = await Transaction.abandon(claim, [account], account)
+        await account.ledger.broadcast(tx)
         await self.analytics_manager.send_claim_action('abandon')
         if blocking:
             await self.ledger.wait(tx)
@@ -2234,7 +2184,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --winning                 : (bool) limit to winning claims
         """
         response = await self.wallet_manager.ledger.network.get_claims_for_name(name)
-        resolutions = await self.wallet_manager.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']))
+        resolutions = await self.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']))
         response['claims'] = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
         response['claims'] = sort_claim_results(response['claims'])
         return response
@@ -2260,7 +2210,7 @@ class Daemon(metaclass=JSONRPCServerType):
             except URIParseError:
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
 
-        resolved = await self.wallet_manager.resolve(*valid_uris, page=page, page_size=page_size)
+        resolved = await self.resolve(*valid_uris, page=page, page_size=page_size)
         if 'error' in resolved:
             return {'error': resolved['error']}
         for u in resolved:
@@ -2329,7 +2279,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Abandon a name and reclaim credits from the claim
 
         Usage:
-            claim_abandon [<claim_id> | --claim_id=<claim_id>]
+            support abandon [<claim_id> | --claim_id=<claim_id>]
                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
                           [--account_id=<account_id>]
                           [--blocking]
@@ -2710,7 +2660,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if uri or stream_hash or sd_hash:
             if uri:
-                metadata = (await self.wallet_manager.resolve(uri))[uri]
+                metadata = (await self.resolve(uri))[uri]
                 sd_hash = utils.get_sd_hash(metadata)
                 stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
             elif stream_hash:
@@ -2878,16 +2828,23 @@ class Daemon(metaclass=JSONRPCServerType):
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
 
+    def valid_address_or_error(self, address):
+        try:
+            if not self.ledger.is_valid_address(address):
+                raise Exception(f"'{address}' is not a valid address")
+        except:
+            raise Exception(f"'{address}' is not a valid address")
+
     def get_fee_address(self, kwargs: dict, claim_address: str) -> str:
         if 'fee_address' in kwargs:
-            self.ledger.is_valid_address(kwargs['fee_address'])
+            self.valid_address_or_error(kwargs['fee_address'])
             return kwargs['fee_address']
         return claim_address
 
     async def get_receiving_address(self, address: str, account: LBCAccount) -> str:
         if address is None:
             return await account.receiving.get_or_create_usable_address()
-        self.ledger.is_valid_address(address)
+        self.valid_address_or_error(address)
         return address
 
     @staticmethod
@@ -2964,6 +2921,23 @@ class Daemon(metaclass=JSONRPCServerType):
             return dewies
         except ValueError as e:
             raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
+
+    async def resolve(self, *uris, **kwargs):
+        page = kwargs.get('page', 0)
+        page_size = kwargs.get('page_size', 10)
+        ledger: MainNetLedger = self.default_account.ledger
+        results = await ledger.resolve(page, page_size, *uris)
+        if 'error' not in results:
+            await self.storage.save_claims_for_resolve([
+                value for value in results.values() if 'error' not in value
+            ])
+        return results
+
+    async def get_claims_for_name(self, name: str):
+        response = await self.ledger.network.get_claims_for_name(name)
+        resolutions = await self.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']))
+        response['claims'] = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
+        return response
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
         return {

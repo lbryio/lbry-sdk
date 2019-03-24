@@ -183,7 +183,7 @@ class Account(BaseAccount):
         return super().get_balance(confirmations, **constraints)
 
     @classmethod
-    def get_private_key_from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str):
+    def get_private_key_from_seed(cls, ledger: 'ledger.MainNetLedger', seed: str, password: str):
         return super().get_private_key_from_seed(
             ledger, seed, password or 'lbryum'
         )
@@ -240,27 +240,6 @@ class Account(BaseAccount):
 
     def get_support_count(self, **constraints):
         return self.ledger.db.get_support_count(account=self, **constraints)
-
-    async def send_to_addresses(self, amount, addresses, broadcast=False):
-        tx_class = self.ledger.transaction_class
-        tx = await tx_class.create(
-            inputs=[],
-            outputs=[
-                tx_class.output_class.pay_pubkey_hash(amount, self.ledger.address_to_hash160(address))
-                for address in addresses
-            ],
-            funding_accounts=[self],
-            change_account=self
-        )
-
-        if broadcast:
-            await self.ledger.broadcast(tx)
-        else:
-            await self.ledger.release_outputs(
-                [txi.txo_ref.txo for txi in tx.inputs]
-            )
-
-        return tx
 
     async def release_all_outputs(self):
         await self.ledger.db.release_all_outputs(self)

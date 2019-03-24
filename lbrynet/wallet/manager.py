@@ -18,25 +18,6 @@ from lbrynet.wallet.dewies import dewies_to_lbc
 log = logging.getLogger(__name__)
 
 
-class ReservedPoints:
-    def __init__(self, identifier, amount):
-        self.identifier = identifier
-        self.amount = amount
-
-
-class BackwardsCompatibleNetwork:
-    def __init__(self, manager):
-        self.manager = manager
-
-    def get_local_height(self):
-        for ledger in self.manager.ledgers.values():
-            assert isinstance(ledger, MainNetLedger)
-            return ledger.headers.height
-
-    def get_server_height(self):
-        return self.get_local_height()
-
-
 class LbryWalletManager(BaseWalletManager):
 
     @property
@@ -46,14 +27,6 @@ class LbryWalletManager(BaseWalletManager):
     @property
     def db(self) -> WalletDatabase:
         return self.ledger.db
-
-    @property
-    def wallet(self):
-        return self
-
-    @property
-    def network(self):
-        return BackwardsCompatibleNetwork(self)
 
     @property
     def use_encryption(self):
@@ -214,45 +187,11 @@ class LbryWalletManager(BaseWalletManager):
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()
 
-    def get_new_address(self):
-        return self.get_unused_address()
-
-    def reserve_points(self, address, amount: int):
-        # TODO: check if we have enough to cover amount
-        return ReservedPoints(address, amount)
-
     async def send_amount_to_address(self, amount: int, destination_address: bytes, account=None):
         account = account or self.default_account
         tx = await Transaction.pay(amount, destination_address, [account], account)
         await account.ledger.broadcast(tx)
         return tx
-
-    def send_points_to_address(self, reserved: ReservedPoints, amount: int, account=None):
-        destination_address: bytes = reserved.identifier.encode('latin1')
-        return self.send_amount_to_address(amount, destination_address, account)
-
-    async def resolve(self, *uris, **kwargs):
-        page = kwargs.get('page', 0)
-        page_size = kwargs.get('page_size', 10)
-        ledger: MainNetLedger = self.default_account.ledger
-        results = await ledger.resolve(page, page_size, *uris)
-        if 'error' not in results:
-            await self.old_db.save_claims_for_resolve([
-                value for value in results.values() if 'error' not in value
-            ])
-        return results
-
-    async def get_claims_for_name(self, name: str):
-        response = await self.ledger.network.get_claims_for_name(name)
-        resolutions = await self.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']))
-        response['claims'] = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
-        return response
-
-    async def address_is_mine(self, unknown_address, account):
-        match = await self.ledger.db.get_address(address=unknown_address, account=account)
-        if match is not None:
-            return True
-        return False
 
     async def get_transaction(self, txid):
         tx = await self.db.get_transaction(txid=txid)
@@ -363,36 +302,6 @@ class LbryWalletManager(BaseWalletManager):
                 })
             history.append(item)
         return history
-
-    @staticmethod
-    def get_utxos(account: BaseAccount):
-        return account.get_utxos()
-
-    async def abandon_claim(self, claim_id, txid, nout, account):
-        claim = await account.get_claim(claim_id=claim_id, txid=txid, nout=nout)
-        if not claim:
-            raise Exception('No claim found for the specified claim_id or txid:nout')
-
-        tx = await Transaction.abandon(claim, [account], account)
-        await account.ledger.broadcast(tx)
-        # TODO: release reserved tx outputs in case anything fails by this point
-        return tx
-
-    def update_peer_address(self, peer, address):
-        pass  # TODO: Data payments is disabled
-
-    def get_unused_address_for_peer(self, peer):
-        # TODO: Data payments is disabled
-        return self.get_unused_address()
-
-    def add_expected_payment(self, peer, amount):
-        pass  # TODO: Data payments is disabled
-
-    def send_points(self, reserved_points, amount):
-        pass  # TODO: Data payments is disabled
-
-    def cancel_point_reservation(self, reserved_points):
-        pass  # fixme: disabled for now.
 
     def save(self):
         for wallet in self.wallets:
