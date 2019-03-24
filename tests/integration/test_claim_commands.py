@@ -464,22 +464,18 @@ class ClaimCommands(CommandTestCase):
         self.maxDiff = None
         tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
         await self.confirm_tx(tx.id)
-        channel = await self.out(self.daemon.jsonrpc_channel_new('@abc', "0.0001"))
-        self.assertTrue(channel['success'])
-        await self.confirm_tx(channel['tx']['txid'])
+        channel_id = (await self.create_channel('@abc', "0.0001"))['outputs'][0]['claim_id']
 
         # 4 claims per block, 3 blocks. Sorted by height (descending) then claim_id (ascending).
         claims = []
         for j in range(3):
             same_height_claims = []
             for k in range(3):
-                claim = await self.make_claim(amount='0.000001', name=f'c{j}-{k}', channel_name='@abc', confirm=False)
-                self.assertTrue(claim['success'])
-                same_height_claims.append(claim['claim_id'])
-                await self.on_transaction_dict(claim['tx'])
-            claim = await self.make_claim(amount='0.000001', name=f'c{j}-4', channel_name='@abc', confirm=True)
-            self.assertTrue(claim['success'])
-            same_height_claims.append(claim['claim_id'])
+                claim_tx = await self.create_claim(f'c{j}-{k}', '0.000001', channel_id=channel_id, confirm=False)
+                same_height_claims.append(claim_tx['outputs'][0]['claim_id'])
+                await self.on_transaction_dict(claim_tx)
+            claim_tx = await self.create_claim(f'c{j}-4', '0.000001', channel_id=channel_id, confirm=True)
+            same_height_claims.append(claim_tx['outputs'][0]['claim_id'])
             same_height_claims.sort(key=lambda x: int(x, 16))
             claims = same_height_claims + claims
 
