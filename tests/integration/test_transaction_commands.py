@@ -5,7 +5,7 @@ class TransactionCommandsTestCase(CommandTestCase):
 
     async def test_transaction_show(self):
         # local tx
-        result = await self.out(self.daemon.jsonrpc_wallet_send(
+        result = await self.out(self.daemon.jsonrpc_account_send(
             '5.0', await self.daemon.jsonrpc_address_unused(self.account.id)
         ))
         await self.confirm_tx(result['txid'])

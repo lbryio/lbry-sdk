@@ -99,7 +99,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # 1 LBC to which Chris readily obliges
         ramsey_account_id = (await self.daemon.jsonrpc_account_create("Ramsey"))['id']
         ramsey_address = await self.daemon.jsonrpc_address_unused(ramsey_account_id)
-        result = await self.out(self.daemon.jsonrpc_wallet_send('1.0', ramsey_address))
+        result = await self.out(self.daemon.jsonrpc_account_send('1.0', ramsey_address))
         self.assertIn("txid", result)
         await self.confirm_tx(result['txid'])
 

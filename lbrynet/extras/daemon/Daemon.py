@@ -5,7 +5,6 @@ import json
 import time
 import inspect
 import typing
-import aiohttp
 import base58
 import random
 from urllib.parse import urlencode, quote
@@ -21,7 +20,7 @@ from lbrynet import utils
 from lbrynet.conf import Config, Setting
 from lbrynet.blob.blob_file import is_valid_blobhash
 from lbrynet.blob_exchange.downloader import download_blob
-from lbrynet.error import InsufficientFundsError, DownloadSDTimeout, ComponentsNotStarted
+from lbrynet.error import DownloadSDTimeout, ComponentsNotStarted
 from lbrynet.error import NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
 from lbrynet.extras import system_info
 from lbrynet.extras.daemon import analytics
@@ -33,7 +32,7 @@ from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbrynet.extras.daemon.undecorated import undecorated
 from lbrynet.wallet.transaction import Transaction, Output
-from lbrynet.wallet.account import Account as LBCAccount, validate_claim_id
+from lbrynet.wallet.account import Account as LBCAccount
 from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import Claim
 from lbrynet.schema.uri import parse_lbry_uri, URIParseError
@@ -2192,6 +2191,54 @@ class Daemon(metaclass=JSONRPCServerType):
         response['claims'] = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
         response['claims'] = sort_claim_results(response['claims'])
         return response
+
+    @deprecated()
+    async def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
+        """
+        Get paginated claims in a channel specified by a channel uri
+        Usage:
+            claim_list_by_channel (<uri> | --uri=<uri>) [<uris>...] [--page=<page>]
+                                   [--page_size=<page_size>]
+        Options:
+            --uri=<uri>              : (str) uri of the channel
+            --uris=<uris>            : (list) uris of the channel
+            --page=<page>            : (int) which page of results to return where page 1 is the first
+                                             page, defaults to no pages
+            --page_size=<page_size>  : (int) number of results in a page, default of 10
+        Returns:
+            {
+                 resolved channel uri: {
+                    If there was an error:
+                    'error': (str) error message
+                    'claims_in_channel': the total number of results for the channel,
+                    If a page of results was requested:
+                    'returned_page': page number returned,
+                    'claims_in_channel': [
+                        {
+                            'absolute_channel_position': (int) claim index number in sorted list of
+                                                         claims which assert to be part of the
+                                                         channel
+                            'address': (str) claim address,
+                            'amount': (float) claim amount,
+                            'effective_amount': (float) claim amount including supports,
+                            'claim_id': (str) claim id,
+                            'decoded_claim': (bool) whether or not the claim value was decoded,
+                            'height': (int) claim height,
+                            'depth': (int) claim depth,
+                            'has_signature': (bool) included if decoded_claim
+                            'name': (str) claim name,
+                            'supports: (list) list of supports [{'txid': (str) txid,
+                                                                 'nout': (int) nout,
+                                                                 'amount': (float) amount}],
+                            'txid': (str) claim txid,
+                            'nout': (str) claim nout,
+                            'signature_is_valid': (bool), included if has_signature,
+                            'value': ClaimDict if decoded, otherwise hex string
+                        }
+                    ],
+                }
+            }
+        """
 
         uris = tuple(uris)
         page = int(page)

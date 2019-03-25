@@ -12,7 +12,6 @@ from aioupnp import __version__ as aioupnp_version
 from aioupnp.upnp import UPnP
 from aioupnp.fault import UPnPError
 
-import lbrynet.schema
 from lbrynet import utils
 from lbrynet.conf import HEADERS_FILE_SHA256_CHECKSUM
 from lbrynet.dht.node import Node
