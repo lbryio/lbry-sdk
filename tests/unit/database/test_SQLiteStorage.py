@@ -5,10 +5,10 @@ import asyncio
 import logging
 from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
+from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_info import BlobInfo
 from lbrynet.blob.blob_manager import BlobFileManager
 from lbrynet.stream.descriptor import StreamDescriptor
-from lbrynet.extras.daemon.storage import SQLiteStorage
 from tests.test_utils import random_lbry_hash
 
 log = logging.getLogger()
