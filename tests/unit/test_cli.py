@@ -93,7 +93,7 @@ class CLITest(AsyncioTestCase):
     def test_deprecated_command_daemon_not_started(self):
         actual_output = StringIO()
         with contextlib.redirect_stdout(actual_output):
-            main(["channel", "new", "@foo", "1.0"])
+            main(["channel", "new", "@foo", "1.0", "video"])
         self.assertEqual(
             actual_output.getvalue().strip(),
             "channel_new is deprecated, using channel_create.\n"
