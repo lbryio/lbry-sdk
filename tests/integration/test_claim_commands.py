@@ -472,10 +472,10 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(channel_from_claim_show['value'], channel['outputs'][0]['value'])
 
         abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['txid'], nout=0, blocking=False))
-        self.assertTrue(abandon['success'])
-        await self.confirm_tx(abandon['tx']['txid'])
+        self.assertEqual(abandon['inputs'][0]['txid'], channel['txid'])
+        await self.confirm_tx(abandon['txid'])
         not_a_claim = await self.out(
-            self.daemon.jsonrpc_claim_show(txid=abandon['tx']['txid'], nout=0)
+            self.daemon.jsonrpc_claim_show(txid=abandon['txid'], nout=0)
         )
         self.assertEqual(not_a_claim, 'claim not found')
 
