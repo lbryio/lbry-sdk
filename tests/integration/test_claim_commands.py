@@ -486,7 +486,7 @@ class ClaimCommands(CommandTestCase):
         claim = await self.create_claim('on-channel-claim', '0.0001', channel_id=channel_id)
         unsigned_claim = await self.create_claim('unsigned', '0.0001')
 
-        channel_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('@abc'))
+        channel_from_claim_list = await self.out(self.daemon.jsonrpc_channel_list('@abc'))
         self.assertEqual(channel_from_claim_list['claims'][0]['value'], channel['output']['value'])
         signed_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('on-channel-claim'))
         self.assertEqual(signed_claim_from_claim_list['claims'][0]['value'], claim['output']['value'])
