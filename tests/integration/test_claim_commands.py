@@ -300,7 +300,7 @@ class ClaimCommands(CommandTestCase):
         await self.out(self.create_channel('@spam', '1.0'))
         self.assertEqual('8.989893', await self.daemon.jsonrpc_account_balance())
 
-        result = await self.out(self.daemon.jsonrpc_wallet_send(
+        result = await self.out(self.daemon.jsonrpc_account_send(
             '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
         ))
         await self.confirm_tx(result['txid'])
