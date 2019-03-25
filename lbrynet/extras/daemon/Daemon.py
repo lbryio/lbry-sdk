@@ -1923,15 +1923,14 @@ class Daemon(metaclass=JSONRPCServerType):
                 )
 
         claim = Claim()
-        claim.stream.update(file_path=file_path, hash='0'*96, **kwargs)
+        file_stream = await self.stream_manager.create_stream(file_path)
+        claim.stream.update(file_path=file_path, hash=file_stream.sd_hash, **kwargs)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, [account], account, channel
         )
         new_txo = tx.outputs[0]
 
         if not preview:
-            file_stream = await self.stream_manager.create_stream(file_path)
-            claim.stream.hash = file_stream.sd_hash
             if channel:
                 new_txo.sign(channel)
             await tx.sign([account])
