@@ -1869,12 +1869,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
+                    (<stream_type> | --stream_type=<stream_type>)
                     [--tags=<tags>...] [--allow_duplicate_name=<allow_duplicate_name>]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--duration=<duration>]
-                    [--video_width=<video_width>] [--video_height=<video_height>]
+                    [--release_time=<release_time>] [--stream_type=<stream_type>]
+                    [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
+                    [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
                     [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
@@ -1903,8 +1905,15 @@ class Daemon(metaclass=JSONRPCServerType):
             --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
             --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
                                                    calculate this automatically if not provided
+            --stream_type=<stream_type>    : (str) type of stream
+            --image_width=<image_width>    : (int) image width
+            --image_height=<image_height>  : (int) image height
             --video_width=<video_width>    : (int) video width
             --video_height=<video_height>  : (int) video height
+            --video_duration=<duration>    : (int) video duration in seconds, an attempt will be made to
+                                                   calculate this automatically if not provided
+            --audio_duration=<duration>    : (int) audio duration in seconds, an attempt will be made to
+                                                   calculate this automatically if not provided
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
@@ -1971,8 +1980,9 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--duration=<duration>]
-                    [--video_width=<video_width>] [--video_height=<video_height>]
+                    [--release_time=<release_time>] [--stream_type=<stream_type>]
+                    [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
+                    [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
                     [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...] [--clear-channel]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
@@ -1998,10 +2008,15 @@ class Daemon(metaclass=JSONRPCServerType):
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
             --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
-            --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
+            --stream_type=<stream_type>    : (str) type of stream
+            --image_width=<image_width>    : (int) image width
+            --image_height=<image_height>  : (int) image height
             --video_width=<video_width>    : (int) video width
             --video_height=<video_height>  : (int) video height
+            --video_duration=<duration>    : (int) video duration in seconds, an attempt will be made to
+                                                   calculate this automatically if not provided
+            --audio_duration=<duration>    : (int) audio duration in seconds, an attempt will be made to
+                                                   calculate this automatically if not provided
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --clear-channel                : (bool) remove channel signature
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
