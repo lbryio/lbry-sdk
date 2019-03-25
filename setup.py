@@ -36,7 +36,7 @@ setup(
         'msgpack==0.6.1',
         'ecdsa==0.13',
         'torba',
-        'pyyaml==3.13',
+        'pyyaml==4.2b1',
         'docopt==0.6.2',
         'hachoir',
     ],
