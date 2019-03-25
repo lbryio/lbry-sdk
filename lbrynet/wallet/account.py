@@ -200,12 +200,6 @@ class Account(BaseAccount):
         details['certificates'] = len(self.channel_keys)
         return details
 
-    def get_claim(self, claim_id=None, txid=None, nout=None):
-        if claim_id is not None:
-            return self.ledger.db.get_claims(account=self, claim_id=claim_id)
-        elif txid is not None and nout is not None:
-            return self.ledger.db.get_claims(**{'account': self, 'txo.txid': txid, 'txo.position': nout})
-
     @staticmethod
     def constraint_spending_utxos(constraints):
         constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
@@ -223,6 +217,12 @@ class Account(BaseAccount):
 
     def get_claim_count(self, **constraints):
         return self.ledger.db.get_claim_count(account=self, **constraints)
+
+    def get_streams(self, **constraints):
+        return self.ledger.db.get_streams(account=self, **constraints)
+
+    def get_stream_count(self, **constraints):
+        return self.ledger.db.get_stream_count(account=self, **constraints)
 
     def get_channels(self, **constraints):
         return self.ledger.db.get_channels(account=self, **constraints)

@@ -92,6 +92,19 @@ class WalletDatabase(BaseDatabase):
         return self.get_utxo_count(**constraints)
 
     @staticmethod
+    def constrain_streams(constraints):
+        if 'claim_name' not in constraints or 'claim_id' not in constraints:
+            constraints['claim_name__not_like'] = '@%'
+
+    def get_streams(self, **constraints):
+        self.constrain_streams(constraints)
+        return self.get_claims(**constraints)
+
+    def get_stream_count(self, **constraints):
+        self.constrain_streams(constraints)
+        return self.get_claim_count(**constraints)
+
+    @staticmethod
     def constrain_channels(constraints):
         if 'claim_name' not in constraints or 'claim_id' not in constraints:
             constraints['claim_name__like'] = '@%'
