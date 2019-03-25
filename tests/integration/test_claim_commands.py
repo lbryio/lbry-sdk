@@ -601,12 +601,11 @@ class ClaimCommands(CommandTestCase):
         self.assertEqual(r3n, r4n)
 
     async def test_resolve_old_claim(self):
-        channel = await self.daemon.jsonrpc_channel_new('@olds', "1.0")
-        self.assertTrue(channel['success'])
-        await self.confirm_tx(channel['tx'].id)
-        address = channel['output'].get_address(self.account.ledger)
-        claim = generate_signed_legacy('example', address, channel['output'])
-        tx = await Transaction.claim('example', claim.SerializeToString(), 1, address, [self.account], self.account)
+        channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0')
+        await self.confirm_tx(channel.id)
+        address = channel.outputs[0].get_address(self.account.ledger)
+        claim = generate_signed_legacy('example', address, channel.outputs[0])
+        tx = await Transaction.claim_create('example', claim.SerializeToString(), 1, address, [self.account], self.account)
         await tx.sign([self.account])
         await self.broadcast(tx)
         await self.confirm_tx(tx.id)
@@ -615,7 +614,7 @@ class ClaimCommands(CommandTestCase):
         self.assertTrue(response['@olds/example']['claim']['signature_is_valid'])
 
         claim.publisherSignature.signature = bytes(reversed(claim.publisherSignature.signature))
-        tx = await Transaction.claim(
+        tx = await Transaction.claim_create(
             'bad_example', claim.SerializeToString(), 1, address, [self.account], self.account
         )
         await tx.sign([self.account])
