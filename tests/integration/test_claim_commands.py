@@ -69,14 +69,14 @@ class ChannelCommands(CommandTestCase):
 
     async def test_setting_channel_fields(self):
         values = {
+            'tags': ["cool", "awesome"],
             'title': "Cool Channel",
             'description': "Best channel on LBRY.",
-            'contact_email': "human@email.com",
-            'tags': ["cool", "awesome"],
-            'cover_url': "https://co.ol/cover.png",
-            'homepage_url': "https://co.ol",
             'thumbnail_url': "https://co.ol/thumbnail.png",
-            'language': "en"
+            'language': "en",
+            'contact_email': "human@email.com",
+            'homepage_url': "https://co.ol",
+            'cover_url': "https://co.ol/cover.png",
         }
 
         # create new channel with all fields set
@@ -333,18 +333,21 @@ class ClaimCommands(CommandTestCase):
 
     async def test_setting_claim_fields(self):
         values = {
+            'tags': ["cool", "awesome"],
             'title': "Cool Content",
             'description': "Best content on LBRY.",
-            'author': "Jules Verne",
+            'thumbnail_url': "https://co.ol/thumbnail.png",
             'language': "en",
-            'tags': ["cool", "awesome"],
+
+            'author': "Jules Verne",
             'license': 'Public Domain',
+            'license_url': "https://co.ol/license",
+            'release_time': 123456,
+
             'fee_currency': 'usd',
             'fee_amount': '2.99',
             'fee_address': 'mmCsWAiXMUVecFQ3fVzUwvpT9XFMXno2Ca',
-            'license_url': "https://co.ol/license",
-            'thumbnail_url': "https://co.ol/thumbnail.png",
-            'release_time': 123456,
+
             'video_width': 800,
             'video_height': 600
         }

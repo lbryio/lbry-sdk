@@ -82,28 +82,25 @@ class Claim(Signable):
             return claim
 
 
-class Video:
+class Dimmensional:
 
-    __slots__ = '_video',
-
-    def __init__(self, video_message):
-        self._video = video_message
+    __slots__ = ()
 
     @property
     def width(self) -> int:
-        return self._video.width
+        return self.message.width
 
     @width.setter
     def width(self, width: int):
-        self._video.width = width
+        self.message.width = width
 
     @property
     def height(self) -> int:
-        return self._video.height
+        return self.message.height
 
     @height.setter
     def height(self, height: int):
-        self._video.height = height
+        self.message.height = height
 
     @property
     def dimensions(self) -> Tuple[int, int]:
@@ -111,7 +108,51 @@ class Video:
 
     @dimensions.setter
     def dimensions(self, dimensions: Tuple[int, int]):
-        self._video.width, self._video.height = dimensions
+        self.message.width, self.message.height = dimensions
+
+
+class Playable:
+
+    __slots__ = ()
+
+    @property
+    def duration(self) -> int:
+        return self.message.duration
+
+    @duration.setter
+    def duration(self, duration: int):
+        self.message.duration = duration
+
+    def set_duration_from_path(self, file_path):
+        try:
+            file_metadata = binary_file_metadata(binary_file_parser(file_path))
+            self.duration = file_metadata.getValues('duration')[0].seconds
+        except:
+            pass
+
+
+class Image(Dimmensional):
+
+    __slots__ = 'message',
+
+    def __init__(self, image_message):
+        self.message = image_message
+
+
+class Video(Dimmensional, Playable):
+
+    __slots__ = 'message',
+
+    def __init__(self, video_message):
+        self.message = video_message
+
+
+class Audio(Playable):
+
+    __slots__ = 'message',
+
+    def __init__(self, audio_message):
+        self.message = audio_message
 
 
 class File:
@@ -227,6 +268,10 @@ class BaseClaimSubType:
         self.claim = claim or Claim()
 
     @property
+    def tags(self) -> List:
+        return self.message.tags
+
+    @property
     def title(self) -> str:
         return self.message.title
 
@@ -243,14 +288,6 @@ class BaseClaimSubType:
         self.message.description = description
 
     @property
-    def language(self) -> str:
-        return self.message.language
-
-    @language.setter
-    def language(self, language: str):
-        self.message.language = language
-
-    @property
     def thumbnail_url(self) -> str:
         return self.message.thumbnail_url
 
@@ -259,8 +296,12 @@ class BaseClaimSubType:
         self.message.thumbnail_url = thumbnail_url
 
     @property
-    def tags(self) -> List:
-        return self.message.tags
+    def language(self) -> str:
+        return self.message.language
+
+    @language.setter
+    def language(self, language: str):
+        self.message.language = language
 
     def to_dict(self):
         return MessageToDict(self.message, preserving_proto_field_name=True)
@@ -340,18 +381,34 @@ class Stream(BaseClaimSubType):
         self.message = self.claim.stream_message
 
     def update(
-            self, file_path=None, duration=None,
+            self, file_path=None, stream_type=None,
             fee_currency=None, fee_amount=None, fee_address=None,
-            video_height=None, video_width=None,
             **kwargs):
 
+        duration_was_not_set = True
+        sub_types = ('image', 'video', 'audio')
+        for key in list(kwargs.keys()):
+            for sub_type in sub_types:
+                if key.startswith(f'{sub_type}_'):
+                    stream_type = sub_type
+                    sub_obj = getattr(self, sub_type)
+                    sub_obj_attr = key[len(f'{sub_type}_'):]
+                    setattr(sub_obj, sub_obj_attr, kwargs.pop(key))
+                    if sub_obj_attr == 'duration':
+                        duration_was_not_set = False
+                    break
+
+        if stream_type is not None:
+            if stream_type not in sub_types:
+                raise Exception(
+                    f"stream_type of '{stream_type}' is not valid, must be one of: {sub_types}"
+                )
+
+            sub_obj = getattr(self, stream_type)
+            if duration_was_not_set and file_path and isinstance(sub_obj, Playable):
+                sub_obj.set_duration_from_path(file_path)
+
         super().update(**kwargs)
-
-        if video_height is not None:
-            self.video.height = video_height
-
-        if video_width is not None:
-            self.video.width = video_width
 
         if file_path is not None:
             self.media_type = guess_media_type(file_path)
@@ -370,31 +427,6 @@ class Stream(BaseClaimSubType):
                 self.fee.usd = Decimal(fee_amount)
             else:
                 raise Exception(f'Unknown currency type: {fee_currency}')
-
-        if duration is not None:
-            self.duration = duration
-        elif file_path is not None:
-            try:
-                file_metadata = binary_file_metadata(binary_file_parser(file_path))
-                self.duration = file_metadata.getValues('duration')[0].seconds
-            except:
-                pass
-
-    @property
-    def video(self) -> Video:
-        return Video(self.message.video)
-
-    @property
-    def file(self) -> File:
-        return File(self.message.file)
-
-    @property
-    def fee(self) -> Fee:
-        return Fee(self.message.fee)
-
-    @property
-    def has_fee(self) -> bool:
-        return self.message.HasField('fee')
 
     @property
     def hash(self) -> str:
@@ -421,14 +453,6 @@ class Stream(BaseClaimSubType):
         self.message.author = author
 
     @property
-    def media_type(self) -> str:
-        return self.message.media_type
-
-    @media_type.setter
-    def media_type(self, media_type: str):
-        self.message.media_type = media_type
-
-    @property
     def license(self) -> str:
         return self.message.license
 
@@ -445,17 +469,41 @@ class Stream(BaseClaimSubType):
         self.message.license_url = license_url
 
     @property
-    def duration(self) -> int:
-        return self.message.duration
-
-    @duration.setter
-    def duration(self, duration: int):
-        self.message.duration = duration
-
-    @property
     def release_time(self) -> int:
         return self.message.release_time
 
     @release_time.setter
     def release_time(self, release_time: int):
         self.message.release_time = release_time
+
+    @property
+    def media_type(self) -> str:
+        return self.message.media_type
+
+    @media_type.setter
+    def media_type(self, media_type: str):
+        self.message.media_type = media_type
+
+    @property
+    def fee(self) -> Fee:
+        return Fee(self.message.fee)
+
+    @property
+    def has_fee(self) -> bool:
+        return self.message.HasField('fee')
+
+    @property
+    def file(self) -> File:
+        return File(self.message.file)
+
+    @property
+    def image(self) -> Image:
+        return Image(self.message.image)
+
+    @property
+    def video(self) -> Video:
+        return Video(self.message.video)
+
+    @property
+    def audio(self) -> Audio:
+        return Audio(self.message.audio)
