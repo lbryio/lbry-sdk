@@ -1775,6 +1775,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             new_txo.private_key = old_txo.private_key
 
+        new_txo.script.generate()
+
         if not preview:
             await tx.sign([account])
             await account.ledger.broadcast(tx)
@@ -1923,14 +1925,16 @@ class Daemon(metaclass=JSONRPCServerType):
                 )
 
         claim = Claim()
-        file_stream = await self.stream_manager.create_stream(file_path)
-        claim.stream.update(file_path=file_path, hash=file_stream.sd_hash, **kwargs)
+        claim.stream.update(file_path=file_path, hash='0'*96, **kwargs)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, [account], account, channel
         )
         new_txo = tx.outputs[0]
 
         if not preview:
+            file_stream = await self.stream_manager.create_stream(file_path)
+            claim.stream.hash = file_stream.sd_hash
+            new_txo.script.generate()
             if channel:
                 new_txo.sign(channel)
             await tx.sign([account])
@@ -2043,6 +2047,7 @@ class Daemon(metaclass=JSONRPCServerType):
             if file_path is not None:
                 file_stream = await self.stream_manager.create_stream(file_path)
                 new_txo.claim.stream.hash = file_stream.sd_hash
+                new_txo.script.generate()
             if channel:
                 new_txo.sign(channel)
             await tx.sign([account])
