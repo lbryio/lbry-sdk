@@ -82,8 +82,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # After some soul searching Chris decides that his story needs more
         # heart and a better ending. He takes down the story and begins the rewrite.
         abandon = await self.out(self.daemon.jsonrpc_claim_abandon(claim_id, blocking=False))
-        self.assertTrue(abandon['success'])
-        await self.confirm_tx(abandon['tx']['txid'])
+        self.assertEqual(abandon['inputs'][0]['claim_id'], claim_id)
+        await self.confirm_tx(abandon['txid'])
 
         # And now checks that the claim doesn't resolve anymore.
         response = await self.out(self.daemon.jsonrpc_resolve('lbry://@spam/hovercraft'))
@@ -184,8 +184,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # But sadly Ramsey wasn't so pleased. It was hard for him to tell Chris...
         # Chris, though a bit heartbroken, abandoned the claim for now, but instantly started working on new hit lyrics
         abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=tx['txid'], nout=0, blocking=False))
-        self.assertTrue(abandon['success'])
-        await self.confirm_tx(abandon['tx']['txid'])
+        self.assertTrue(abandon['inputs'][0]['txid'], tx['txid'])
+        await self.confirm_tx(abandon['txid'])
 
         # He them checks that the claim doesn't resolve anymore.
         response = await self.out(self.daemon.jsonrpc_resolve(uri))
