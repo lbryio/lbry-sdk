@@ -579,8 +579,8 @@ class ClaimCommands(CommandTestCase):
 
         r1c = list(r1.values())[0]['claim']['claim_id']
         r2c = list(r2.values())[0]['claim']['claim_id']
-        self.assertEqual(c1['claim_id'], r1c)
-        self.assertEqual(c2['claim_id'], r2c)
+        self.assertEqual(c1['outputs'][0]['claim_id'], r1c)
+        self.assertEqual(c2['outputs'][0]['claim_id'], r2c)
         self.assertNotEqual(r1c, r2c)
 
         await self.generate(50)
@@ -595,8 +595,8 @@ class ClaimCommands(CommandTestCase):
         r3n = list(r3.values())[0]['claim']['name']
         r4n = list(r4.values())[0]['claim']['name']
 
-        self.assertEqual(c2['claim_id'], r3c)
-        self.assertEqual(c2['claim_id'], r4c)
+        self.assertEqual(c2['outputs'][0]['claim_id'], r3c)
+        self.assertEqual(c2['outputs'][0]['claim_id'], r4c)
         self.assertEqual(r3c, r4c)
         self.assertEqual(r3n, r4n)
 
