@@ -1054,7 +1054,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Remove an existing account.
 
         Usage:
-            account (<account_id> | --account_id=<account_id>)
+            account_remove (<account_id> | --account_id=<account_id>)
 
         Options:
             --account_id=<account_id>  : (str) id of the account to remove
@@ -1080,7 +1080,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Change various settings on an account.
 
         Usage:
-            account (<account_id> | --account_id=<account_id>)
+            account_set (<account_id> | --account_id=<account_id>)
                 [--default] [--new_name=<new_name>]
                 [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
                 [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
@@ -1193,7 +1193,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Encrypt an unencrypted account with a password
 
         Usage:
-            wallet_encrypt (<new_password> | --new_password=<new_password>) [<account_id> | --account_id=<account_id>]
+            account_encrypt (<new_password> | --new_password=<new_password>)
+                            [<account_id> | --account_id=<account_id>]
 
         Options:
             --account_id=<account_id>        : (str) id for the account to encrypt
@@ -1322,7 +1323,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Deterministic hash of the wallet.
 
         Usage:
-            sync hash
+            sync_hash
 
         Options:
 
@@ -1338,7 +1339,7 @@ class Daemon(metaclass=JSONRPCServerType):
         an encrypted wallet.
 
         Usage:
-            sync apply <password> [--data=<data>] [--encrypt-password=<encrypt_password>]
+            sync_apply <password> [--data=<data>] [--encrypt-password=<encrypt_password>]
 
         Options:
             --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
@@ -1384,7 +1385,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Checks if an address is associated with the current wallet.
 
         Usage:
-            wallet_is_address_mine (<address> | --address=<address>)
+            address_is_mine (<address> | --address=<address>)
                                    [<account_id> | --account_id=<account_id>]
 
         Options:
@@ -1642,6 +1643,10 @@ class Daemon(metaclass=JSONRPCServerType):
     Channel management.
     """
 
+    @deprecated('channel_create')
+    def jsonrpc_channel_new(self):
+        """ deprecated """
+
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_create(
             self, name, bid, allow_duplicate_name=False, account_id=None, claim_address=None, preview=False, **kwargs):
@@ -1649,7 +1654,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Generate a publisher key and create a new '@' prefixed channel claim.
 
         Usage:
-            channel create (<name> | --name=<name>) (<bid> | --bid=<bid>)
+            channel_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
                            [--tags=<tags>...] [--allow_duplicate_name=<allow_duplicate_name>]
                            [--title=<title>] [--description=<description>] [--language=<language>]
                            [--contact_email=<contact_email>]
@@ -1717,7 +1722,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Update attributes of a channel.
 
         Usage:
-            channel update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
+            channel_update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
                            [--tags=<tags>...] [--clear-tags] [--title=<title>] [--description=<description>]
                            [--language=<language>] [--contact_email=<contact_email>]
                            [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
@@ -1961,7 +1966,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Modify an existing claim.
 
         Usage:
-            claim update (<claim_id> | --claim_id=<claim_id>)
+            claim_update (<claim_id> | --claim_id=<claim_id>)
                     [--bid=<bid>] [--file_path=<file_path>] [--tags=<tags>...] [--clear-tags]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
@@ -2158,8 +2163,8 @@ class Daemon(metaclass=JSONRPCServerType):
         List my name claims
 
         Usage:
-            claim_list_mine [<account_id> | --account_id=<account_id>]
-                            [--page=<page>] [--page_size=<page_size>]
+            claim_list [<account_id> | --account_id=<account_id>]
+                       [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id> : (str) id of the account to query
@@ -2179,7 +2184,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Search for claims on the blockchain.
 
         Usage:
-            claim search (<name> | --name=<name>) [--channel_id=<channel_id>] [--winning]
+            claim_search (<name> | --name=<name>) [--channel_id=<channel_id>] [--winning]
 
         Options:
             --name=<name>             : (str) name of the claim to list info about
@@ -2192,7 +2197,6 @@ class Daemon(metaclass=JSONRPCServerType):
         response['claims'] = sort_claim_results(response['claims'])
         return response
 
-    @deprecated()
     async def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
         """
         Get paginated claims in a channel specified by a channel uri
@@ -2286,7 +2290,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Create a support or a tip for name claim.
 
         Usage:
-            support create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
+            support_create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
                            [--tip] [--account_id=<account_id>] [--preview]
 
         Options:
@@ -2330,7 +2334,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Abandon a name and reclaim credits from the claim
 
         Usage:
-            support abandon [<claim_id> | --claim_id=<claim_id>]
+            support_abandon [<claim_id> | --claim_id=<claim_id>]
                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
                           [--account_id=<account_id>]
                           [--blocking]
