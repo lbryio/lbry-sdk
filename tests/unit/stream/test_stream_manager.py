@@ -76,7 +76,7 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
         }
 
     mock_wallet = mock.Mock(spec=LbryWalletManager)
-    mock_wallet.resolve = mock_resolve
+    mock_wallet.ledger.resolve = mock_resolve
 
     async def get_balance(*_):
         return balance
