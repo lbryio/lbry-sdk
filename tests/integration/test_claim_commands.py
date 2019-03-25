@@ -1,7 +1,7 @@
 import hashlib
 from binascii import unhexlify
-from unittest import skip
 
+import base64
 import ecdsa
 
 from lbrynet.wallet.transaction import Transaction, Output
@@ -333,95 +333,93 @@ class ClaimCommands(CommandTestCase):
 
     async def test_setting_claim_fields(self):
         values = {
-            'title': "Cool Channel",
-            'description': "Best channel on LBRY.",
-            'contact_email': "human@email.com",
+            'title': "Cool Content",
+            'description': "Best content on LBRY.",
+            'author': "Jules Verne",
+            'language': "en",
             'tags': ["cool", "awesome"],
-            'cover_url': "https://co.ol/cover.png",
-            'homepage_url': "https://co.ol",
+            'license': 'Public Domain',
+            'fee_currency': 'usd',
+            'fee_amount': '2.99',
+            'fee_address': 'mmCsWAiXMUVecFQ3fVzUwvpT9XFMXno2Ca',
+            'license_url': "https://co.ol/license",
             'thumbnail_url': "https://co.ol/thumbnail.png",
-            'language': "en"
+            'release_time': 123456,
+            'video_width': 800,
+            'video_height': 600
         }
 
         # create new channel with all fields set
-        tx = await self.out(self.create_channel('@bigchannel', **values))
+        tx = await self.out(self.create_claim('big', **values))
         txo = tx['outputs'][0]
-        self.assertEqual(
-            txo['value']['channel'],
-            {'public_key': txo['value']['channel']['public_key'], **values}
-        )
+        stream = txo['value']['stream']
+        fixed_values = values.copy()
+        fixed_values['hash'] = stream['hash']
+        fixed_values['file'] = stream['file']
+        fixed_values['media_type'] = 'application/octet-stream'
+        fixed_values['release_time'] = str(values['release_time'])
+        fixed_values['fee'] = {
+            'address': base64.b64encode(Base58.decode(fixed_values.pop('fee_address'))).decode(),
+            'amount': fixed_values.pop('fee_amount').replace('.', ''),
+            'currency': fixed_values.pop('fee_currency').upper()
+        }
+        fixed_values['video'] = {
+            'height': fixed_values.pop('video_height'),
+            'width': fixed_values.pop('video_width')
+        }
+        self.assertEqual(stream, fixed_values)
 
         # create channel with nothing set
-        tx = await self.out(self.create_channel('@lightchannel'))
+        tx = await self.out(self.create_claim('light'))
         txo = tx['outputs'][0]
         self.assertEqual(
-            txo['value']['channel'],
-            {'public_key': txo['value']['channel']['public_key']}
+            txo['value']['stream'], {
+                'file': {'size': '3'},
+                'media_type': 'application/octet-stream',
+                'hash': txo['value']['stream']['hash']
+            }
         )
 
         # create channel with just some tags
-        tx = await self.out(self.create_channel('@updatedchannel', tags='blah'))
+        tx = await self.out(self.create_claim('updated', tags='blah'))
         txo = tx['outputs'][0]
         claim_id = txo['claim_id']
-        public_key = txo['value']['channel']['public_key']
+        fixed_values['hash'] = txo['value']['stream']['hash']
         self.assertEqual(
-            txo['value']['channel'],
-            {'public_key': public_key, 'tags': ['blah']}
+            txo['value']['stream'], {
+                'file': {'size': '3'},
+                'media_type': 'application/octet-stream',
+                'hash': fixed_values['hash'],
+                'tags': ['blah']
+            }
         )
 
         # update channel setting all fields
-        tx = await self.out(self.update_channel(claim_id, **values))
+        tx = await self.out(self.update_claim(claim_id, **values))
         txo = tx['outputs'][0]
-        values['public_key'] = public_key
-        values['tags'].insert(0, 'blah')  # existing tag
-        self.assertEqual(
-            txo['value']['channel'],
-            values
-        )
+        fixed_values['tags'].insert(0, 'blah')  # existing tag
+        self.assertEqual(txo['value']['stream'], fixed_values)
 
         # clearing and settings tags
-        tx = await self.out(self.update_channel(claim_id, tags='single', clear_tags=True))
+        tx = await self.out(self.update_claim(claim_id, tags='single', clear_tags=True))
         txo = tx['outputs'][0]
-        values['tags'] = ['single']
-        self.assertEqual(
-            txo['value']['channel'],
-            values
-        )
+        fixed_values['tags'] = ['single']
+        self.assertEqual(txo['value']['stream'], fixed_values)
 
-        # reset signing key
-        tx = await self.out(self.update_channel(claim_id, new_signing_key=True))
-        txo = tx['outputs'][0]
-        self.assertNotEqual(
-            txo['value']['channel']['public_key'],
-            values['public_key']
-        )
-
-        # send channel to someone else
+        # send claim to someone else
         new_account = await self.daemon.jsonrpc_account_create('second account')
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         # before sending
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 3)
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 0)
 
         other_address = await account2.receiving.get_or_create_usable_address()
-        tx = await self.out(self.update_channel(claim_id, claim_address=other_address))
+        tx = await self.out(self.update_claim(claim_id, claim_address=other_address))
 
         # after sending
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 2)
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
-
-        # shoud not have private key
-        txo = (await account2.get_channels())[0]
-        self.assertIsNone(txo.private_key)
-
-        # send the private key too
-        txoid = f"{tx['outputs'][0]['txid']}:{tx['outputs'][0]['nout']}"
-        account2.channel_keys[txoid] = self.account.channel_keys[txoid]
-
-        # now should have private key
-        txo = (await account2.get_channels())[0]
-        self.assertIsNotNone(txo.private_key)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 1)
 
     async def test_create_update_and_abandon_claim(self):
         await self.assertBalance(self.account, '10.0')
@@ -481,25 +479,26 @@ class ClaimCommands(CommandTestCase):
         )
         self.assertEqual(not_a_claim, 'claim not found')
 
-    @skip
-    async def test_claim_list(self):
+    async def test_claim_search(self):
         channel = await self.create_channel('@abc', '1.0')
         channel_id = channel['outputs'][0]['claim_id']
         claim = await self.create_claim('on-channel-claim', '0.0001', channel_id=channel_id)
         unsigned_claim = await self.create_claim('unsigned', '0.0001')
 
-        channel_from_claim_list = await self.out(self.daemon.jsonrpc_channel_list('@abc'))
-        self.assertEqual(channel_from_claim_list['claims'][0]['value'], channel['output']['value'])
-        signed_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('on-channel-claim'))
-        self.assertEqual(signed_claim_from_claim_list['claims'][0]['value'], claim['output']['value'])
-        unsigned_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_list('unsigned'))
-        self.assertEqual(unsigned_claim_from_claim_list['claims'][0]['value'], unsigned_claim['output']['value'])
+        channel_from_claim_list = await self.out(self.daemon.jsonrpc_claim_search('@abc'))
+        self.assertEqual(channel_from_claim_list['claims'][0]['value'], channel['outputs'][0]['value'])
+        signed_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_search('on-channel-claim'))
+        self.assertEqual(signed_claim_from_claim_list['claims'][0]['value'], claim['outputs'][0]['value'])
+        unsigned_claim_from_claim_list = await self.out(self.daemon.jsonrpc_claim_search('unsigned'))
+        self.assertEqual(unsigned_claim_from_claim_list['claims'][0]['value'], unsigned_claim['outputs'][0]['value'])
 
-        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['tx']['txid'], nout=0, blocking=False))
-        self.assertTrue(abandon['success'])
-        await self.confirm_tx(abandon['tx']['txid'])
+        abandon = await self.out(self.daemon.jsonrpc_claim_abandon(txid=channel['txid'], nout=0, blocking=False))
+        self.assertTrue(abandon['outputs'][0]['txid'], channel['txid'])
+        await self.on_transaction_dict(abandon)
+        await self.generate(1)
+        await self.on_transaction_dict(abandon)
 
-        empty = await self.out(self.daemon.jsonrpc_claim_list('@abc'))
+        empty = await self.out(self.daemon.jsonrpc_claim_search('@abc'))
         self.assertEqual(len(empty['claims']), 0)
 
     async def test_abandoned_channel_with_signed_claims(self):

@@ -2113,7 +2113,9 @@ class Daemon(metaclass=JSONRPCServerType):
         return claim_results
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None, account_id=None, blocking=True):
+    async def jsonrpc_claim_abandon(
+            self, claim_id=None, txid=None, nout=None, account_id=None,
+            preview=False, blocking=True):
         """
         Abandon a name and reclaim credits from the claim
 
@@ -2121,21 +2123,15 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_abandon [<claim_id> | --claim_id=<claim_id>]
                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
                           [--account_id=<account_id>]
-                          [--blocking]
+                          [--preview] [--blocking]
 
         Options:
             --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
             --txid=<txid>             : (str) txid of the claim to abandon
             --nout=<nout>             : (int) nout of the claim to abandon
             --account_id=<account_id> : (str) id of the account to use
+            --preview                 : (bool) do not broadcast the transaction
             --blocking                : (bool) wait until abandon is in mempool
-
-        Returns:
-            (dict) Dictionary containing result of the claim
-            {
-                success: (bool) True if txn is successful
-                txid : (str) txid of resulting transaction
-            }
         """
         account = self.get_account_or_default(account_id)
 
@@ -2151,11 +2147,16 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception('No claim found for the specified claim_id or txid:nout')
 
         tx = await Transaction.abandon(claim, [account], account)
-        await account.ledger.broadcast(tx)
-        await self.analytics_manager.send_claim_action('abandon')
-        if blocking:
-            await self.ledger.wait(tx)
-        return {"success": True, "tx": tx}
+
+        if not preview:
+            await account.ledger.broadcast(tx)
+            await self.analytics_manager.send_claim_action('abandon')
+            if blocking:
+                await account.ledger.wait(tx)
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_claim_list(self, account_id=None, page=None, page_size=None):
