@@ -225,10 +225,6 @@ class Transaction(BaseTransaction):
         )
         return cls.create([], [claim_output], funding_accounts, change_account)
 
-    @classmethod
-    def abandon(cls, claims: Iterable[Output], funding_accounts: Iterable[Account], change_account: Account):
-        return cls.create([Input.spend(txo) for txo in claims], [], funding_accounts, change_account)
-
     @property
     def my_inputs(self):
         for txi in self.inputs:
