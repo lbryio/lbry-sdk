@@ -1,5 +1,6 @@
 import hashlib
 from binascii import unhexlify
+from unittest import skip
 
 import ecdsa
 
@@ -480,6 +481,7 @@ class ClaimCommands(CommandTestCase):
         )
         self.assertEqual(not_a_claim, 'claim not found')
 
+    @skip
     async def test_claim_list(self):
         channel = await self.create_channel('@abc', '1.0')
         channel_id = channel['outputs'][0]['claim_id']
