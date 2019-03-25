@@ -252,9 +252,11 @@ class WalletComponent(Component):
     async def get_status(self):
         if self.wallet_manager and self.running:
             local_height = self.wallet_manager.ledger.headers.height
+            remote_height = await self.wallet_manager.ledger.network.get_server_height()
             best_hash = self.wallet_manager.get_best_blockhash()
             return {
                 'blocks': max(local_height, 0),
+                'blocks_behind': max(remote_height - local_height, 0),
                 'best_blockhash': best_hash,
                 'is_encrypted': self.wallet_manager.use_encryption,
                 'is_locked': not self.wallet_manager.is_wallet_unlocked,
