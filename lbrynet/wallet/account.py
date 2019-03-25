@@ -1,15 +1,11 @@
 import json
 import logging
 import binascii
-import typing
 from hashlib import sha256
 from string import hexdigits
 
 from torba.client.baseaccount import BaseAccount
 from torba.client.basetransaction import TXORef
-
-if typing.TYPE_CHECKING:
-    from lbrynet.wallet import ledger
 
 
 log = logging.getLogger(__name__)
@@ -25,7 +21,6 @@ def validate_claim_id(claim_id):
 
 
 class Account(BaseAccount):
-    ledger: 'ledger.MainNetLedger'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -183,7 +178,7 @@ class Account(BaseAccount):
         return super().get_balance(confirmations, **constraints)
 
     @classmethod
-    def get_private_key_from_seed(cls, ledger: 'ledger.MainNetLedger', seed: str, password: str):
+    def get_private_key_from_seed(cls, ledger, seed: str, password: str):
         return super().get_private_key_from_seed(
             ledger, seed, password or 'lbryum'
         )
