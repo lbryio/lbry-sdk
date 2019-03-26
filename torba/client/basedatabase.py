@@ -101,6 +101,8 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
             col, op = col[:-len('__gt')], '>'
         elif key.endswith('__like'):
             col, op = col[:-len('__like')], 'LIKE'
+        elif key.endswith('__not_like'):
+            col, op = col[:-len('__not_like')], 'NOT LIKE'
         elif key.endswith('__in') or key.endswith('__not_in'):
             if key.endswith('__in'):
                 col, op = col[:-len('__in')], 'IN'
