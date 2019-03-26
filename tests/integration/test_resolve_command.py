@@ -4,7 +4,7 @@ from integration.testcase import CommandTestCase
 class ResolveCommand(CommandTestCase):
 
     async def test_resolve(self):
-        tx = await self.create_channel('@abc', '0.01')
+        tx = await self.channel_create('@abc', '0.01')
         channel_id = tx['outputs'][0]['claim_id']
 
         # resolving a channel @abc
@@ -15,8 +15,8 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(response['lbry://@abc']['certificate']['name'], '@abc')
         self.assertEqual(response['lbry://@abc']['claims_in_channel'], 0)
 
-        await self.create_claim('foo', '0.01', channel_id=channel_id)
-        await self.create_claim('foo2', '0.01', channel_id=channel_id)
+        await self.stream_create('foo', '0.01', channel_id=channel_id)
+        await self.stream_create('foo2', '0.01', channel_id=channel_id)
 
         # resolving a channel @abc with some claims in it
         response = await self.resolve('lbry://@abc')

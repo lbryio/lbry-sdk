@@ -11,8 +11,8 @@ class FileCommands(CommandTestCase):
     VERBOSITY = logging.WARN
 
     async def test_file_management(self):
-        await self.create_claim('foo', '0.01')
-        await self.create_claim('foo2', '0.01')
+        await self.stream_create('foo', '0.01')
+        await self.stream_create('foo2', '0.01')
 
         file1, file2 = self.daemon.jsonrpc_file_list('claim_name')
         self.assertEqual(file1['claim_name'], 'foo')
@@ -27,7 +27,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
 
     async def test_download_different_timeouts(self):
-        tx = await self.create_claim('foo', '0.01')
+        tx = await self.stream_create('foo', '0.01')
         sd_hash = tx['outputs'][0]['value']['stream']['hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         all_except_sd = [
@@ -48,7 +48,7 @@ class FileCommands(CommandTestCase):
             await asyncio.sleep(0.01)
 
     async def test_filename_conflicts_management_on_resume_download(self):
-        await self.create_claim('foo', '0.01', data=bytes([0]*(1<<23)))
+        await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
         file_info = self.daemon.jsonrpc_file_list()[0]
         original_path = os.path.join(self.daemon.conf.download_dir, file_info['file_name'])
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
@@ -69,7 +69,7 @@ class FileCommands(CommandTestCase):
         # this used to be inconsistent, if it becomes again it would create weird bugs, so worth checking
 
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
-        tx = await self.create_claim('foo', '0.01')
+        tx = await self.stream_create('foo', '0.01')
         sd_hash = tx['outputs'][0]['value']['stream']['hash']
         file_info = self.daemon.jsonrpc_file_list()[0]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
@@ -88,7 +88,7 @@ class FileCommands(CommandTestCase):
         self.assertFalse(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
 
     async def test_incomplete_downloads_retry(self):
-        tx = await self.create_claim('foo', '0.01')
+        tx = await self.stream_create('foo', '0.01')
         sd_hash = tx['outputs'][0]['value']['stream']['hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
@@ -128,7 +128,7 @@ class FileCommands(CommandTestCase):
 
     async def test_unban_recovers_stream(self):
         BlobDownloader.BAN_TIME = .5  # fixme: temporary field, will move to connection manager or a conf
-        tx = await self.create_claim('foo', '0.01', data=bytes([0]*(1<<23)))
+        tx = await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
         sd_hash = tx['outputs'][0]['value']['stream']['hash']
         missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))[-2]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
@@ -150,7 +150,7 @@ class FileCommands(CommandTestCase):
         target_address = await self.blockchain.get_raw_change_address()
 
         # FAIL: beyond available balance
-        await self.create_claim(
+        await self.stream_create(
             'expensive', '0.01', data=b'pay me if you can',
             fee_currency='LBC', fee_amount='11.0', fee_address=target_address
         )
@@ -160,7 +160,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
 
         # FAIL: beyond maximum key fee
-        await self.create_claim(
+        await self.stream_create(
             'maxkey', '0.01', data=b'no pay me, no',
             fee_currency='LBC', fee_amount='111.0', fee_address=target_address
         )
@@ -170,7 +170,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual(response['error'], 'fee of 111.00000 exceeds max configured to allow of 50.00000')
 
         # PASS: purchase is successful
-        await self.create_claim(
+        await self.stream_create(
             'icanpay', '0.01', data=b'I got the power!',
             fee_currency='LBC', fee_amount='1.0', fee_address=target_address
         )

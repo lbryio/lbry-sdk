@@ -18,7 +18,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # While making the spamdwich he wonders... has anyone on LBRY
         # registered the @spam channel yet? "I should do that!" he
         # exclaims and goes back to his computer to do just that!
-        tx = await self.create_channel('@spam', '1.0')
+        tx = await self.channel_create('@spam', '1.0')
         channel_id = tx['outputs'][0]['claim_id']
 
         # Do we have it locally?
@@ -50,7 +50,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And so, many hours later, Chris is finished writing his epic story
         # about eels driving a hovercraft across the wetlands while eating spam
         # and decides it's time to publish it to the @spam channel.
-        tx = await self.create_claim(
+        tx = await self.stream_create(
             'hovercraft', '1.0',
             data=b'[insert long story about eels driving hovercraft]',
             channel_id=channel_id
@@ -77,7 +77,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # As people start reading his story they discover some typos and notify
         # Chris who explains in despair "Oh! Noooooos!" but then remembers
         # "No big deal! I can update my claim." And so he updates his claim.
-        await self.update_claim(claim_id, data=b'[typo fixing sounds being made]')
+        await self.stream_update(claim_id, data=b'[typo fixing sounds being made]')
 
         # After some soul searching Chris decides that his story needs more
         # heart and a better ending. He takes down the story and begins the rewrite.
@@ -116,7 +116,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # After Chris is done with all the "helping other people" stuff he decides that it's time to
         # write a new story and publish it to lbry. All he needed was a fresh start and he came up with:
-        tx = await self.create_claim(
+        tx = await self.stream_create(
             'fresh-start', '1.0', data=b'Amazingly Original First Line', channel_id=channel_id
         )
         claim_id2 = tx['outputs'][0]['claim_id']
@@ -173,7 +173,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # his song, seeing as his novel had smashed all the records, he was the perfect candidate!
         # .......
         # Chris agrees.. 17 hours 43 minutes and 14 seconds later, he makes his publish
-        tx = await self.create_claim(
+        tx = await self.stream_create(
             'hit-song', '1.0', data=b'The Whale and The Bookmark', channel_id=channel_id
         )
         await self.generate(5)

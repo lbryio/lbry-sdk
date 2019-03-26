@@ -141,6 +141,7 @@ class Resolver:
             claims_in_channel, upper_bound = channel_info
 
             if claims_in_channel:
+                result['total_claims'] = upper_bound
                 result['claims_in_channel'] = claims_in_channel
         elif 'error' not in result:
             return {'error': 'claim not found', 'success': False, 'uri': str(parsed_uri)}
