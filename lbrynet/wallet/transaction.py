@@ -1,7 +1,7 @@
 import struct
 import hashlib
 from binascii import hexlify, unhexlify
-from typing import List, Iterable, Optional
+from typing import List, Optional
 
 import ecdsa
 from cryptography.hazmat.backends import default_backend
