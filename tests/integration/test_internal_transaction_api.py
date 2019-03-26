@@ -4,7 +4,7 @@ from torba.testcase import IntegrationTestCase
 
 import lbrynet.wallet
 from lbrynet.schema.claim import Claim
-from lbrynet.wallet.transaction import Transaction, Output
+from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
 
 
@@ -63,7 +63,7 @@ class BasicTransactionTest(IntegrationTestCase):
         self.assertIn('lbry://@bar/foo', response)
         self.assertIn('claim', response['lbry://@bar/foo'])
 
-        abandon_tx = await Transaction.abandon([stream_tx.outputs[0]], [self.account], self.account)
+        abandon_tx = await Transaction.create([Input.spend(stream_tx.outputs[0])], [], [self.account], self.account)
         await self.broadcast(abandon_tx)
         await self.ledger.wait(abandon_tx)
         await self.blockchain.generate(1)
