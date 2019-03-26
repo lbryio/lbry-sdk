@@ -448,15 +448,6 @@ class Daemon(metaclass=JSONRPCServerType):
         if self.analytics_manager.is_started:
             self.analytics_manager.stop()
 
-    async def handle_pipe_request(self, data):
-        data = json.loads(data)
-        ledger = None
-        if 'wallet' in self.component_manager.get_components_status():
-            # self.ledger only available if wallet component is not skipped
-            ledger = self.ledger
-        result = await self._process_rpc_call(data)
-        return jsonrpc_dumps_pretty(result, ledger=ledger)
-
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
         result = await self._process_rpc_call(data)
