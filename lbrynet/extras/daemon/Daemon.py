@@ -1650,7 +1650,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Use --channel_id=<channel_id> to list all stream claims in a channel.
 
         Usage:
-            claim_search ([<name> | --name=<name>] | --claim_id=<claim_id> | --txid=<txid> --nout=<nout>)
+            claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
                          [--channel_id=<channel_id>] [--winning] [--page=<page>] [--page_size=<page_size>]
 
         Options:
@@ -1678,7 +1678,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = await self.wallet_manager.get_claim_by_claim_id(channel_id)
             if claim and claim != 'claim not found':
                 channel_url = f"{claim['name']}#{claim['claim_id']}"
-                resolve = await self.resolve(f"{claim['name']}#{claim['claim_id']}", page=page, page_size=page_size)
+                resolve = await self.resolve(channel_url, page=page, page_size=page_size)
                 resolve = resolve.get(channel_url, {})
                 claims = resolve.get('claims_in_channel', []) or []
                 total_pages = 0
@@ -1968,11 +1968,11 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
-                    (<stream_type> | --stream_type=<stream_type>) [--tags=<tags>...]
+                    [<stream_type> | --stream_type=<stream_type>] [--tags=<tags>...]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--stream_type=<stream_type>]
+                    [--release_time=<release_time>]
                     [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
                     [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
                     [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...]
@@ -1982,6 +1982,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --stream_type=<stream_type>    : (str) type of stream
             --tags=<tags>                  : (list) content tags
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
@@ -2001,7 +2002,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
             --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
                                                    calculate this automatically if not provided
-            --stream_type=<stream_type>    : (str) type of stream
             --image_width=<image_width>    : (int) image width
             --image_height=<image_height>  : (int) image height
             --video_width=<video_width>    : (int) video width
@@ -2042,13 +2042,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                    (<file_path> | --file_path=<file_path>)
-                    (<stream_type> | --stream_type=<stream_type>)
+                    (<file_path> | --file_path=<file_path>) [<stream_type> | --stream_type=<stream_type>]
                     [--tags=<tags>...] [--allow_duplicate_name=<allow_duplicate_name>]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--stream_type=<stream_type>]
+                    [--release_time=<release_time>]
                     [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
                     [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
                     [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...]
@@ -2060,6 +2059,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                               given name. default: false.
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --stream_type=<stream_type>    : (str) type of stream
             --tags=<tags>                  : (list) content tags
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
@@ -2079,7 +2079,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
             --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
                                                    calculate this automatically if not provided
-            --stream_type=<stream_type>    : (str) type of stream
             --image_width=<image_width>    : (int) image width
             --image_height=<image_height>  : (int) image height
             --video_width=<video_width>    : (int) video width
@@ -2263,7 +2262,7 @@ class Daemon(metaclass=JSONRPCServerType):
         List my stream claims.
 
         Usage:
-            claim_list [<account_id> | --account_id=<account_id>]
+            stream_list [<account_id> | --account_id=<account_id>]
                        [--page=<page>] [--page_size=<page_size>]
 
         Options:
