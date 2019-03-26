@@ -445,14 +445,14 @@ class BaseDatabase(SQLiteMixin):
         if 'order_by' not in constraints:
             constraints['order_by'] = ["tx.height=0 DESC", "tx.height DESC", "tx.position DESC"]
         rows = await self.select_txos(
-            "raw, txo.position, chain, account", **constraints
+            "raw, tx.height, tx.position, tx.is_verified, txo.position, chain, account", **constraints
         )
         txos = []
         for row in rows:
-            tx = self.ledger.transaction_class(row[0])
-            txo = tx.outputs[row[1]]
-            txo.is_change = row[2] == 1
-            txo.is_my_account = row[3] == my_account
+            tx = self.ledger.transaction_class(row[0], height=row[1], position=row[2], is_verified=row[3])
+            txo = tx.outputs[row[4]]
+            txo.is_change = row[5] == 1
+            txo.is_my_account = row[6] == my_account
             txos.append(txo)
         return txos
 
