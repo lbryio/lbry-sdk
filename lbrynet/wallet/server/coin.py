@@ -1,6 +1,6 @@
 import struct
 
-from lbrynet.extras.wallet.script import OutputScript
+from lbrynet.wallet.script import OutputScript
 from torba.server.script import ScriptPubKey, OpCodes
 from torba.server.util import cachedproperty
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
