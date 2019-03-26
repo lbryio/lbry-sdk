@@ -34,6 +34,10 @@ if sys.platform == "win32":
 else:
     PIPE_NAME = './lbrypipe'
 
+
+IS_THE_SPECIAL_CYTHON_PR_MERGED = True
+
+
 class Setting(typing.Generic[T]):
 
     def __init__(self, doc: str, default: typing.Optional[T] = None,

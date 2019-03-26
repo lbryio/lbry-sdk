@@ -13,7 +13,7 @@ from aiohttp.web import GracefulExit
 
 from lbrynet import __name__ as lbrynet_name, __version__ as lbrynet_version
 from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
-from lbrynet.conf import Config, CLIConfig
+from lbrynet.conf import Config, CLIConfig, PIPE_NAME, IS_THE_SPECIAL_CYTHON_PR_MERGED
 from lbrynet.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger(lbrynet_name)
@@ -25,7 +25,10 @@ def display(data):
 
 
 async def execute_command(conf, method, params):
-    conn = aiohttp.NamedPipeConnector(path=r'\\.\pipe\lbrypipe')
+    conn = None
+    if sys.platform == "win32" and IS_THE_SPECIAL_CYTHON_PR_MERGED:
+        conn = aiohttp.NamedPipeConnector(path=PIPE_NAME)
+
     async with aiohttp.ClientSession(connector=conn) as session:
         try:
             message = {'method': method, 'params': params}
@@ -225,7 +228,7 @@ def ensure_directory_exists(path: str):
 
 
 def main(argv=None):
-    if sys.platform == 'win32':
+    if sys.platform == 'win32' and IS_THE_SPECIAL_CYTHON_PR_MERGED:
         asyncio.set_event_loop(asyncio.ProactorEventLoop())
 
     argv = argv or sys.argv[1:]
