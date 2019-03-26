@@ -1,16 +1,14 @@
-import hashlib
 import struct
 
 import msgpack
 
-from lbrynet.extras.wallet.transaction import Transaction, Output
+from lbrynet.wallet.transaction import Transaction, Output
 from torba.server.hash import hash_to_hex_str
 
 from torba.server.block_processor import BlockProcessor
-from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.schema.claim import Claim
 
-from lbrynet.extras.wallet.server.model import ClaimInfo
+from lbrynet.wallet.server.model import ClaimInfo
 
 
 class LBRYBlockProcessor(BlockProcessor):
@@ -47,7 +45,7 @@ class LBRYBlockProcessor(BlockProcessor):
                 if output.script.is_claim_name:
                     add_undo(self.advance_claim_name_transaction(output, height, txid, index))
                 elif output.script.is_update_claim:
-                    update_input = self.db.get_update_input(unhexlify(output.claim_id)[::-1], tx.inputs)
+                    update_input = self.db.get_update_input(output.claim_hash, tx.inputs)
                     if update_input:
                         update_inputs.add(update_input)
                         add_undo(self.advance_update_claim(output, height, txid, index))
@@ -62,7 +60,7 @@ class LBRYBlockProcessor(BlockProcessor):
         return undo_info
 
     def advance_update_claim(self, output: Output, height, txid, nout):
-        claim_id = unhexlify(output.claim_id)[::-1]
+        claim_id = output.claim_hash
         claim_info = self.claim_info_from_output(output, txid, nout, height)
         old_claim_info = self.db.get_claim_info(claim_id)
         self.db.put_claim_id_for_outpoint(old_claim_info.txid, old_claim_info.nout, None)
@@ -75,7 +73,7 @@ class LBRYBlockProcessor(BlockProcessor):
         return claim_id, old_claim_info
 
     def advance_claim_name_transaction(self, output: Output, height, txid, nout):
-        claim_id = unhexlify(output.claim_id)[::-1]
+        claim_id = output.claim_hash
         claim_info = self.claim_info_from_output(output, txid, nout, height)
         if claim_info.cert_id:
             self.db.put_claim_id_signed_by_cert_id(claim_info.cert_id, claim_id)
@@ -113,7 +111,7 @@ class LBRYBlockProcessor(BlockProcessor):
         if undo_claim_info:
             self.db.put_claim_info(claim_id, undo_claim_info)
             if undo_claim_info.cert_id:
-                cert_id = self._checksig(undo_claim_info.name, undo_claim_info.value, undo_claim_info.address)
+                cert_id = self._checksig(undo_claim_info.value, undo_claim_info.address)
                 self.db.put_claim_id_signed_by_cert_id(cert_id, claim_id)
             self.db.put_claim_id_for_outpoint(undo_claim_info.txid, undo_claim_info.nout, claim_id)
 
@@ -135,14 +133,13 @@ class LBRYBlockProcessor(BlockProcessor):
 
     def claim_info_from_output(self, output: Output, txid, nout, height):
         address = self.coin.address_from_script(output.script.source)
-        name, value, cert_id = output.script.values['claim_name'], output.raw_claim, None
+        name, value, cert_id = output.script.values['claim_name'], output.script.values['claim'], None
         assert txid and address
-        cert_id = self._checksig(name, value, address)
+        cert_id = self._checksig(value, address)
         return ClaimInfo(name, value, txid, nout, output.amount, address, height, cert_id)
 
-    def _checksig(self, name, value, address):
+    def _checksig(self, value, address):
         try:
-            parse_lbry_uri(name.decode())  # skip invalid names
             claim_dict = Claim.from_bytes(value)
             cert_id = claim_dict.signing_channel_hash
             if not self.should_validate_signatures:
