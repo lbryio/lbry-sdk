@@ -155,12 +155,12 @@ class CommandTestCase(IntegrationTestCase):
             to JSON and then back to a dictionary. """
         return json.loads(jsonrpc_dumps_pretty(await awaitable, ledger=self.ledger))['result']
 
-    async def create_claim(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True, **kwargs):
+    async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True, **kwargs):
         with tempfile.NamedTemporaryFile() as file:
             file.write(data)
             file.flush()
             claim = await self.out(
-                self.daemon.jsonrpc_publish(name, bid, file_path=file.name, **kwargs)
+                self.daemon.jsonrpc_stream_create(name, bid, file_path=file.name, **kwargs)
             )
             self.assertEqual(claim['outputs'][0]['name'], name)
             if confirm:
@@ -169,16 +169,16 @@ class CommandTestCase(IntegrationTestCase):
                 await self.on_transaction_dict(claim)
             return claim
 
-    async def update_claim(self, claim_id, data=None, confirm=True, **kwargs):
+    async def stream_update(self, claim_id, data=None, confirm=True, **kwargs):
         if data:
             with tempfile.NamedTemporaryFile() as file:
                 file.write(data)
                 file.flush()
                 claim = await self.out(
-                    self.daemon.jsonrpc_claim_update(claim_id, file_path=file.name, **kwargs)
+                    self.daemon.jsonrpc_stream_update(claim_id, file_path=file.name, **kwargs)
                 )
         else:
-            claim = await self.out(self.daemon.jsonrpc_claim_update(claim_id, **kwargs))
+            claim = await self.out(self.daemon.jsonrpc_stream_update(claim_id, **kwargs))
         self.assertIsNotNone(claim['outputs'][0]['name'])
         if confirm:
             await self.on_transaction_dict(claim)
@@ -186,7 +186,7 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(claim)
         return claim
 
-    async def create_channel(self, name='@arena', bid='1.0', confirm=True, **kwargs):
+    async def channel_create(self, name='@arena', bid='1.0', confirm=True, **kwargs):
         channel = await self.out(self.daemon.jsonrpc_channel_create(name, bid, **kwargs))
         self.assertEqual(channel['outputs'][0]['name'], name)
         if confirm:
@@ -195,7 +195,7 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(channel)
         return channel
 
-    async def update_channel(self, claim_id, confirm=True, **kwargs):
+    async def channel_update(self, claim_id, confirm=True, **kwargs):
         channel = await self.out(self.daemon.jsonrpc_channel_update(claim_id, **kwargs))
         self.assertTrue(channel['outputs'][0]['name'].startswith('@'))
         if confirm:
@@ -204,5 +204,18 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(channel)
         return channel
 
+    async def claim_abandon(self, *args, confirm=True, **kwargs):
+        if 'blocking' not in kwargs:
+            kwargs['blocking'] = False
+        tx = await self.out(self.daemon.jsonrpc_claim_abandon(*args, **kwargs))
+        if confirm:
+            await self.on_transaction_dict(tx)
+            await self.generate(1)
+            await self.on_transaction_dict(tx)
+        return tx
+
     async def resolve(self, uri):
         return await self.out(self.daemon.jsonrpc_resolve(uri))
+
+    async def claim_search(self, *args, **kwargs):
+        return (await self.out(self.daemon.jsonrpc_claim_search(*args, **kwargs)))['items']

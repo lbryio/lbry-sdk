@@ -61,7 +61,7 @@ class CLITest(AsyncioTestCase):
         # publish is ungrouped command, returns usage only implicitly
         self.assertIn('publish (<name> | --name=<name>)', self.shell(['publish']))
         # publish is ungrouped command, with explicit --help
-        self.assertIn('Make a new name claim and publish', self.shell(['publish', '--help']))
+        self.assertIn('Create or update a stream claim at a given name', self.shell(['publish', '--help']))
         # account is a group, returns help implicitly
         self.assertIn('Return the balance of an account', self.shell(['account']))
         # account is a group, with explicit --help
