@@ -1,4 +1,6 @@
 import hashlib
+import tempfile
+import logging
 from binascii import unhexlify
 
 import base64
@@ -246,8 +248,10 @@ class StreamCommands(CommandTestCase):
 
         # defaults to using all accounts to lookup channel
         await self.stream_create('hovercraft1', channel_id=baz_id)
+        self.assertEqual((await self.claim_search('hovercraft1'))[0]['channel_name'], '@baz')
         # uses only the specific accounts which contains the channel
         await self.stream_create('hovercraft2', channel_id=baz_id, channel_account_id=[account2_id])
+        self.assertEqual((await self.claim_search('hovercraft2'))[0]['channel_name'], '@baz')
         # fails when specifying account which does not contain channel
         with self.assertRaisesRegex(ValueError, "Couldn't find channel with channel_id"):
             await self.stream_create(
@@ -385,6 +389,45 @@ class StreamCommands(CommandTestCase):
         await self.assertBalance(self.account, '9.979793')
         await self.claim_abandon(tx['outputs'][0]['claim_id'])
         await self.assertBalance(self.account, '9.97968399')
+
+    async def test_publish(self):
+
+        # errors on missing arguments to create a stream
+        with self.assertRaisesRegex(Exception, "'bid' is a required argument for new publishes."):
+            await self.daemon.jsonrpc_publish('foo')
+
+        with self.assertRaisesRegex(Exception, "'file_path' is a required argument for new publishes."):
+            await self.daemon.jsonrpc_publish('foo', bid='1.0')
+
+        # successfully create stream
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi')
+            file.flush()
+            tx1 = await self.publish('foo', bid='1.0', file_path=file.name)
+
+        # doesn't error on missing arguments when doing an update stream
+        tx2 = await self.publish('foo', tags='updated')
+        self.assertEqual(
+            tx1['outputs'][0]['claim_id'],
+            tx2['outputs'][0]['claim_id']
+        )
+
+        # update conflict with two claims of the same name
+        tx3 = await self.stream_create('foo', allow_duplicate_name=True)
+        with self.assertRaisesRegex(Exception, "There are 2 claims for 'foo'"):
+            await self.daemon.jsonrpc_publish('foo')
+
+        # abandon duplicate channel
+        await self.claim_abandon(tx3['outputs'][0]['claim_id'])
+
+        # publish to a channel
+        await self.channel_create('@abc')
+        tx3 = await self.publish('foo', channel_name='@abc')
+        r = await self.resolve('lbry://@abc/foo')
+        self.assertEqual(
+            r['lbry://@abc/foo']['claim']['claim_id'],
+            tx3['outputs'][0]['claim_id']
+        )
 
     async def test_claim_search(self):
         # search for channel claim
