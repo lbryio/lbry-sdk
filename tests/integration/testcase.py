@@ -186,6 +186,15 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(claim)
         return claim
 
+    async def publish(self, name, *args, confirm=True, **kwargs):
+        claim = await self.out(self.daemon.jsonrpc_publish(name, *args, **kwargs))
+        self.assertEqual(claim['outputs'][0]['name'], name)
+        if confirm:
+            await self.on_transaction_dict(claim)
+            await self.generate(1)
+            await self.on_transaction_dict(claim)
+        return claim
+
     async def channel_create(self, name='@arena', bid='1.0', confirm=True, **kwargs):
         channel = await self.out(self.daemon.jsonrpc_channel_create(name, bid, **kwargs))
         self.assertEqual(channel['outputs'][0]['name'], name)

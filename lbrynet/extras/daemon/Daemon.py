@@ -1967,7 +1967,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Create or update a stream claim at a given name (use 'stream create/update' for more control).
 
         Usage:
-            publish (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
+            publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
                     [<stream_type> | --stream_type=<stream_type>] [--tags=<tags>...]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
@@ -1975,7 +1975,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--release_time=<release_time>]
                     [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
                     [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
-                    [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...]
+                    [--channel_id=<channel_id>] [--channel_name=<channel_name>]
+                    [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
@@ -2011,6 +2012,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --audio_duration=<duration>    : (int) audio duration in seconds, an attempt will be made to
                                                    calculate this automatically if not provided
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
+            --channel_name=<channel_name>  : (str) name of publisher channel
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for funding the transaction
@@ -2022,6 +2024,10 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(kwargs.get('account_id'))
         claims = await account.get_claims(claim_name=name)
         if len(claims) == 0:
+            if 'bid' not in kwargs:
+                raise Exception("'bid' is a required argument for new publishes.")
+            if 'file_path' not in kwargs:
+                raise Exception("'file_path' is a required argument for new publishes.")
             return await self.jsonrpc_stream_create(name, **kwargs)
         elif len(claims) == 1:
             assert claims[0].claim.is_stream, f"Claim at name '{name}' is not a stream claim."
@@ -2035,7 +2041,7 @@ class Daemon(metaclass=JSONRPCServerType):
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_stream_create(
             self, name, bid, file_path, allow_duplicate_name=False,
-            channel_id=None, channel_account_id=None,
+            channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, claim_address=None, preview=False, **kwargs):
         """
         Make a new stream claim and announce the associated file to lbrynet.
@@ -2050,7 +2056,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--release_time=<release_time>]
                     [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
                     [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
-                    [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...]
+                    [--channel_id=<channel_id>] [--channel_name=<channel_name>]
+                    [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
@@ -2097,7 +2104,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         self.valid_stream_name_or_error(name)
         account = self.get_account_or_default(account_id)
-        channel = await self.get_channel_or_none(channel_account_id, channel_id, for_signing=True)
+        channel = await self.get_channel_or_none(channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
         kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
@@ -2141,7 +2148,7 @@ class Daemon(metaclass=JSONRPCServerType):
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_stream_update(
             self, claim_id, bid=None, file_path=None,
-            channel_id=None, channel_account_id=None, clear_channel=False,
+            channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
             account_id=None, claim_address=None,
             preview=False, **kwargs):
         """
@@ -2149,14 +2156,15 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             stream_update (<claim_id> | --claim_id=<claim_id>)
-                    [--bid=<bid>] [--file_path=<file_path>] [--tags=<tags>...] [--clear-tags]
+                    [--bid=<bid>] [--file_path=<file_path>] [--tags=<tags>...] [--clear_tags]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--stream_type=<stream_type>]
                     [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
                     [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
-                    [--channel_id=<channel_id>] [--channel_account_id=<channel_account_id>...] [--clear-channel]
+                    [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--clear_channel]
+                    [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
@@ -2164,7 +2172,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
             --tags=<tags>                  : (list) content tags
-            --clear-tags                   : (bool) clear existing tags (prior to adding new ones)
+            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -2191,7 +2199,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --audio_duration=<duration>    : (int) audio duration in seconds, an attempt will be made to
                                                    calculate this automatically if not provided
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
-            --clear-channel                : (bool) remove channel signature
+            --clear_channel                : (bool) remove channel signature
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for funding the transaction
@@ -2223,8 +2231,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = old_txo.get_address(account.ledger)
 
         channel = None
-        if channel_id:
-            channel = await self.get_channel_or_error(channel_account_id, channel_id, for_signing=True)
+        if channel_id or channel_name:
+            channel = await self.get_channel_or_error(channel_account_id, channel_id, channel_name, for_signing=True)
         elif old_txo.claim.is_signed and not clear_channel:
             channel = old_txo.channel
 
@@ -2974,22 +2982,28 @@ class Daemon(metaclass=JSONRPCServerType):
         self.valid_address_or_error(address)
         return address
 
-    async def get_channel_or_none(self, account_ids: List[str], channel_id: str = None,
+    async def get_channel_or_none(self, account_ids: List[str], channel_id: str = None, channel_name: str = None,
                                   for_signing: bool = False) -> Output:
         if channel_id is not None:
-            return await self.get_channel_or_error(account_ids, channel_id, for_signing)
+            return await self.get_channel_or_error(account_ids, channel_id, channel_name, for_signing)
 
-    async def get_channel_or_error(self, account_ids: List[str], channel_id: str = None,
+    async def get_channel_or_error(self, account_ids: List[str], channel_id: str = None, channel_name: str = None,
                                    for_signing: bool = False) -> Output:
-        if channel_id is None:
-            raise ValueError("Couldn't find channel because a channel_id was not provided.")
+        if channel_id:
+            key, value = 'id', channel_id
+        elif channel_name:
+            key, value = 'name', channel_name
+        else:
+            raise ValueError("Couldn't find channel because a channel_id or channel_name was not provided.")
         for account in self.get_accounts_or_all(account_ids):
-            channels = await account.get_channels(claim_id=channel_id, limit=1)
-            if channels:
+            channels = await account.get_channels(**{f'claim_{key}': value}, limit=1)
+            if len(channels) == 1:
                 if for_signing and channels[0].private_key is None:
-                    raise Exception(f"Couldn't find private key for channel '{channel_id}'. ")
+                    raise Exception(f"Couldn't find private key for {key} '{value}'. ")
                 return channels[0]
-        raise ValueError(f"Couldn't find channel with channel_id '{channel_id}'.")
+            elif len(channels) > 1:
+                raise ValueError(f"Multiple channels found with {key} '{value}', pass a channel_id to narrow it down.")
+        raise ValueError(f"Couldn't find channel with {key} '{value}'.")
 
     def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True) -> LBCAccount:
         if account_id is None:
