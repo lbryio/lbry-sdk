@@ -4,7 +4,7 @@ import logging
 import typing
 
 if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_manager import BlobManager
     from lbrynet.stream.descriptor import StreamDescriptor
 
 REFLECTOR_V1 = 0
@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 class StreamReflectorClient(asyncio.Protocol):
-    def __init__(self, blob_manager: 'BlobFileManager', descriptor: 'StreamDescriptor'):
+    def __init__(self, blob_manager: 'BlobManager', descriptor: 'StreamDescriptor'):
         self.loop = asyncio.get_event_loop()
         self.transport: asyncio.StreamWriter = None
         self.blob_manager = blob_manager

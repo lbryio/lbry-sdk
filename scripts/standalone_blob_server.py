@@ -1,7 +1,7 @@
 import sys
 import os
 import asyncio
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.blob_exchange.server import BlobServer
 from lbrynet.schema.address import decode_address
 from lbrynet.extras.daemon.storage import SQLiteStorage
@@ -17,7 +17,7 @@ async def main(address: str):
 
     storage = SQLiteStorage(os.path.expanduser("~/.lbrynet/lbrynet.sqlite"))
     await storage.open()
-    blob_manager = BlobFileManager(loop, os.path.expanduser("~/.lbrynet/blobfiles"), storage)
+    blob_manager = BlobManager(loop, os.path.expanduser("~/.lbrynet/blobfiles"), storage)
     await blob_manager.setup()
 
     server = await loop.create_server(

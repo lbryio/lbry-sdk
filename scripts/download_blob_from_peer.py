@@ -5,7 +5,7 @@ import socket
 import ipaddress
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.blob_exchange.client import BlobExchangeClientProtocol, request_blob
 import logging
 
@@ -32,7 +32,7 @@ async def main(blob_hash: str, url: str):
         host = host_info[0][4][0]
 
     storage = SQLiteStorage(conf, os.path.join(conf.data_dir, "lbrynet.sqlite"))
-    blob_manager = BlobFileManager(loop, os.path.join(conf.data_dir, "blobfiles"), storage)
+    blob_manager = BlobManager(loop, os.path.join(conf.data_dir, "blobfiles"), storage)
     await storage.open()
     await blob_manager.setup()
 

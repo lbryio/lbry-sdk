@@ -2,18 +2,18 @@ import os
 import typing
 import asyncio
 import logging
-from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_file import BlobFile, is_valid_blobhash
 from lbrynet.stream.descriptor import StreamDescriptor
 
 if typing.TYPE_CHECKING:
     from lbrynet.dht.protocol.data_store import DictDataStore
+    from lbrynet.extras.daemon.storage import SQLiteStorage
 
 log = logging.getLogger(__name__)
 
 
-class BlobFileManager:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, storage: SQLiteStorage,
+class BlobManager:
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, storage: 'SQLiteStorage',
                  node_data_store: typing.Optional['DictDataStore'] = None):
         """
         This class stores blobs on the hard disk

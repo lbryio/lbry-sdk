@@ -7,7 +7,7 @@ from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_info import BlobInfo
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.stream.descriptor import StreamDescriptor
 from tests.test_utils import random_lbry_hash
 
@@ -71,7 +71,7 @@ class StorageTest(AsyncioTestCase):
         self.storage = SQLiteStorage(Config(), ':memory:')
         self.blob_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.blob_dir)
-        self.blob_manager = BlobFileManager(asyncio.get_event_loop(), self.blob_dir, self.storage)
+        self.blob_manager = BlobManager(asyncio.get_event_loop(), self.blob_dir, self.storage)
         await self.storage.open()
 
     async def asyncTearDown(self):

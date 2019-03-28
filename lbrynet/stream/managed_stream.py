@@ -11,7 +11,7 @@ from lbrynet.stream.reflector.client import StreamReflectorClient
 from lbrynet.extras.daemon.storage import StoredStreamClaim
 if typing.TYPE_CHECKING:
     from lbrynet.schema.claim import Claim
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_manager import BlobManager
     from lbrynet.dht.node import Node
 
 log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class ManagedStream:
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', rowid: int,
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobManager', rowid: int,
                  descriptor: 'StreamDescriptor', download_directory: str, file_name: typing.Optional[str],
                  downloader: typing.Optional[StreamDownloader] = None,
                  status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None,

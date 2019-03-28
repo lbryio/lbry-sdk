@@ -10,7 +10,7 @@ from lbrynet.dht.peer import KademliaPeer
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.dht.node import Node
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_manager import BlobManager
     from lbrynet.blob.blob_file import BlobFile
 
 log = logging.getLogger(__name__)

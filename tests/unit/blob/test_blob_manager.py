@@ -5,7 +5,7 @@ import os
 from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 
 
 class TestBlobManager(AsyncioTestCase):
@@ -15,7 +15,7 @@ class TestBlobManager(AsyncioTestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
 
         storage = SQLiteStorage(Config(), os.path.join(tmp_dir, "lbrynet.sqlite"))
-        blob_manager = BlobFileManager(loop, tmp_dir, storage)
+        blob_manager = BlobManager(loop, tmp_dir, storage)
 
         # add a blob file
         blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"

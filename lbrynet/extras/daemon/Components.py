@@ -16,7 +16,7 @@ from lbrynet import utils
 from lbrynet.conf import HEADERS_FILE_SHA256_CHECKSUM
 from lbrynet.dht.node import Node
 from lbrynet.dht.blob_announcer import BlobAnnouncer
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.blob_exchange.server import BlobServer
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.extras.daemon.Component import Component
@@ -278,10 +278,10 @@ class BlobComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.blob_manager: BlobFileManager = None
+        self.blob_manager: BlobManager = None
 
     @property
-    def component(self) -> typing.Optional[BlobFileManager]:
+    def component(self) -> typing.Optional[BlobManager]:
         return self.blob_manager
 
     async def start(self):
@@ -291,8 +291,10 @@ class BlobComponent(Component):
             dht_node: Node = self.component_manager.get_component(DHT_COMPONENT)
             if dht_node:
                 data_store = dht_node.protocol.data_store
-        self.blob_manager = BlobFileManager(asyncio.get_event_loop(), os.path.join(self.conf.data_dir, "blobfiles"),
-                                            storage, data_store)
+        blob_dir = os.path.join(self.conf.data_dir, 'blobfiles')
+        if not os.path.isdir(blob_dir):
+            os.mkdir(blob_dir)
+        self.blob_manager = BlobManager(asyncio.get_event_loop(), blob_dir, storage, data_store)
         return await self.blob_manager.setup()
 
     async def stop(self):
@@ -451,7 +453,7 @@ class PeerProtocolServerComponent(Component):
     async def start(self):
         log.info("start blob server")
         upnp = self.component_manager.get_component(UPNP_COMPONENT)
-        blob_manager: BlobFileManager = self.component_manager.get_component(BLOB_COMPONENT)
+        blob_manager: BlobManager = self.component_manager.get_component(BLOB_COMPONENT)
         wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
         peer_port = self.conf.tcp_port
         address = await wallet.get_unused_address()

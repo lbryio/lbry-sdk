@@ -5,7 +5,7 @@ import shutil
 from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.stream.stream_manager import StreamManager
 from lbrynet.stream.reflector.server import ReflectorServer
 
@@ -20,14 +20,14 @@ class TestStreamAssembler(AsyncioTestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         self.storage = SQLiteStorage(Config(), os.path.join(tmp_dir, "lbrynet.sqlite"))
         await self.storage.open()
-        self.blob_manager = BlobFileManager(self.loop, tmp_dir, self.storage)
+        self.blob_manager = BlobManager(self.loop, tmp_dir, self.storage)
         self.stream_manager = StreamManager(self.loop, Config(), self.blob_manager, None, self.storage, None)
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(server_tmp_dir))
         self.server_storage = SQLiteStorage(Config(), os.path.join(server_tmp_dir, "lbrynet.sqlite"))
         await self.server_storage.open()
-        self.server_blob_manager = BlobFileManager(self.loop, server_tmp_dir, self.server_storage)
+        self.server_blob_manager = BlobManager(self.loop, server_tmp_dir, self.server_storage)
 
         download_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(download_dir))

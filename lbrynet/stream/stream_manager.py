@@ -16,7 +16,7 @@ from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.extras.daemon.storage import lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_manager import BlobManager
     from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.analytics import AnalyticsManager
     from lbrynet.extras.daemon.storage import SQLiteStorage, StoredStreamClaim

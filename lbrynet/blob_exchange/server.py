@@ -8,13 +8,13 @@ from lbrynet.blob_exchange.serialization import BlobAvailabilityResponse, BlobPr
     BlobPaymentAddressResponse
 
 if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_manager import BlobManager
 
 log = logging.getLogger(__name__)
 
 
 class BlobServerProtocol(asyncio.Protocol):
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', lbrycrd_address: str):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
         self.loop = loop
         self.blob_manager = blob_manager
         self.server_task: asyncio.Task = None
@@ -94,7 +94,7 @@ class BlobServerProtocol(asyncio.Protocol):
 
 
 class BlobServer:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobFileManager', lbrycrd_address: str):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
         self.loop = loop
         self.blob_manager = blob_manager
         self.server_task: asyncio.Task = None

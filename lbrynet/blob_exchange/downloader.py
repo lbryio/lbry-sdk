@@ -7,7 +7,7 @@ if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.dht.node import Node
     from lbrynet.dht.peer import KademliaPeer
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_manager import BlobManager
     from lbrynet.blob.blob_file import BlobFile
 
 log = logging.getLogger(__name__)
@@ -15,7 +15,8 @@ log = logging.getLogger(__name__)
 
 class BlobDownloader:
     BAN_TIME = 10.0  # fixme: when connection manager gets implemented, move it out from here
-    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobFileManager',
+
+    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  peer_queue: asyncio.Queue):
         self.loop = loop
         self.config = config
@@ -130,7 +131,7 @@ class BlobDownloader:
             transport.close()
 
 
-async def download_blob(loop, config: 'Config', blob_manager: 'BlobFileManager', node: 'Node',
+async def download_blob(loop, config: 'Config', blob_manager: 'BlobManager', node: 'Node',
                         blob_hash: str) -> 'BlobFile':
     search_queue = asyncio.Queue(loop=loop, maxsize=config.max_connections_per_download)
     search_queue.put_nowait(blob_hash)

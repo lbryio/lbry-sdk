@@ -7,7 +7,7 @@ from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.stream.assembler import StreamAssembler
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.stream_manager import StreamManager
@@ -24,7 +24,7 @@ class TestStreamAssembler(AsyncioTestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         self.storage = SQLiteStorage(Config(), ":memory:")
         await self.storage.open()
-        self.blob_manager = BlobFileManager(self.loop, tmp_dir, self.storage)
+        self.blob_manager = BlobManager(self.loop, tmp_dir, self.storage)
 
         download_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(download_dir))
@@ -51,7 +51,7 @@ class TestStreamAssembler(AsyncioTestCase):
         await downloader_storage.open()
 
         # add the blobs to the blob table (this would happen upon a blob download finishing)
-        downloader_blob_manager = BlobFileManager(self.loop, download_dir, downloader_storage)
+        downloader_blob_manager = BlobManager(self.loop, download_dir, downloader_storage)
         descriptor = await downloader_blob_manager.get_stream_descriptor(sd_hash)
 
         # assemble the decrypted file
@@ -97,7 +97,7 @@ class TestStreamAssembler(AsyncioTestCase):
         await storage.open()
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-        blob_manager = BlobFileManager(self.loop, tmp_dir, storage)
+        blob_manager = BlobManager(self.loop, tmp_dir, storage)
         stream_manager = StreamManager(self.loop, Config(), blob_manager, None, storage, None)
         # create the stream
         download_dir = tempfile.mkdtemp()

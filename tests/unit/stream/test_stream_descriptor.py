@@ -9,7 +9,7 @@ from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.error import InvalidStreamDescriptorError
 from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.stream.descriptor import StreamDescriptor
 
 
@@ -22,7 +22,7 @@ class TestStreamDescriptor(AsyncioTestCase):
         self.addCleanup(lambda: shutil.rmtree(self.tmp_dir))
         self.storage = SQLiteStorage(Config(), ":memory:")
         await self.storage.open()
-        self.blob_manager = BlobFileManager(self.loop, self.tmp_dir, self.storage)
+        self.blob_manager = BlobManager(self.loop, self.tmp_dir, self.storage)
 
         self.file_path = os.path.join(self.tmp_dir, "test_file")
         with open(self.file_path, 'wb') as f:
@@ -85,7 +85,7 @@ class TestRecoverOldStreamDescriptors(AsyncioTestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         storage = SQLiteStorage(Config(), ":memory:")
         await storage.open()
-        blob_manager = BlobFileManager(loop, tmp_dir, storage)
+        blob_manager = BlobManager(loop, tmp_dir, storage)
 
         sd_bytes = b'{"stream_name": "4f62616d6120446f6e6b65792d322e73746c", "blobs": [{"length": 1153488, "blob_num' \
                    b'": 0, "blob_hash": "9fa32a249ce3f2d4e46b78599800f368b72f2a7f22b81df443c7f6bdbef496bd61b4c0079c7' \
