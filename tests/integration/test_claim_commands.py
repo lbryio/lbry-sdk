@@ -1,9 +1,7 @@
 import hashlib
 import tempfile
-import logging
 from binascii import unhexlify
 
-import base64
 import ecdsa
 
 from lbrynet.wallet.transaction import Transaction, Output
@@ -80,13 +78,16 @@ class ChannelCommands(CommandTestCase):
             'homepage_url': "https://co.ol",
             'cover_url': "https://co.ol/cover.png",
         }
+        fixed_values = values.copy()
+        del fixed_values['language']
+        fixed_values['languages'] = [{'language': 'en'}]
 
         # create new channel with all fields set
         tx = await self.out(self.channel_create('@bigchannel', **values))
         txo = tx['outputs'][0]
         self.assertEqual(
             txo['value']['channel'],
-            {'public_key': txo['value']['channel']['public_key'], **values}
+            {'public_key': txo['value']['channel']['public_key'], **fixed_values}
         )
 
         # create channel with nothing set
@@ -110,20 +111,20 @@ class ChannelCommands(CommandTestCase):
         # update channel setting all fields
         tx = await self.out(self.channel_update(claim_id, **values))
         txo = tx['outputs'][0]
-        values['public_key'] = public_key
-        values['tags'].insert(0, 'blah')  # existing tag
+        fixed_values['public_key'] = public_key
+        fixed_values['tags'].insert(0, 'blah')  # existing tag
         self.assertEqual(
             txo['value']['channel'],
-            values
+            fixed_values
         )
 
         # clearing and settings tags
         tx = await self.out(self.channel_update(claim_id, tags='single', clear_tags=True))
         txo = tx['outputs'][0]
-        values['tags'] = ['single']
+        fixed_values['tags'] = ['single']
         self.assertEqual(
             txo['value']['channel'],
-            values
+            fixed_values
         )
 
         # reset signing key
@@ -131,7 +132,7 @@ class ChannelCommands(CommandTestCase):
         txo = tx['outputs'][0]
         self.assertNotEqual(
             txo['value']['channel']['public_key'],
-            values['public_key']
+            fixed_values['public_key']
         )
 
         # send channel to someone else
@@ -278,18 +279,20 @@ class StreamCommands(CommandTestCase):
             'video_width': 800,
             'video_height': 600
         }
+        fixed_values = values.copy()
+        del fixed_values['language']
+        fixed_values['languages'] = [{'language': 'en'}]
 
         # create new channel with all fields set
         tx = await self.out(self.stream_create('big', **values))
         txo = tx['outputs'][0]
         stream = txo['value']['stream']
-        fixed_values = values.copy()
-        fixed_values['hash'] = stream['hash']
+        fixed_values['sd_hash'] = stream['sd_hash']
         fixed_values['file'] = stream['file']
         fixed_values['media_type'] = 'application/octet-stream'
         fixed_values['release_time'] = str(values['release_time'])
         fixed_values['fee'] = {
-            'address': base64.b64encode(Base58.decode(fixed_values.pop('fee_address'))).decode(),
+            'address': fixed_values.pop('fee_address'),
             'amount': fixed_values.pop('fee_amount').replace('.', ''),
             'currency': fixed_values.pop('fee_currency').upper()
         }
@@ -306,7 +309,7 @@ class StreamCommands(CommandTestCase):
             txo['value']['stream'], {
                 'file': {'size': '3'},
                 'media_type': 'application/octet-stream',
-                'hash': txo['value']['stream']['hash']
+                'sd_hash': txo['value']['stream']['sd_hash']
             }
         )
 
@@ -314,12 +317,12 @@ class StreamCommands(CommandTestCase):
         tx = await self.out(self.stream_create('updated', tags='blah'))
         txo = tx['outputs'][0]
         claim_id = txo['claim_id']
-        fixed_values['hash'] = txo['value']['stream']['hash']
+        fixed_values['sd_hash'] = txo['value']['stream']['sd_hash']
         self.assertEqual(
             txo['value']['stream'], {
                 'file': {'size': '3'},
                 'media_type': 'application/octet-stream',
-                'hash': fixed_values['hash'],
+                'sd_hash': fixed_values['sd_hash'],
                 'tags': ['blah']
             }
         )

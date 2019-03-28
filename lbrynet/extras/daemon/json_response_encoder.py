@@ -27,7 +27,11 @@ class JSONResponseEncoder(JSONEncoder):
         if isinstance(obj, Claim):
             claim_dict = obj.to_dict()
             if obj.is_stream:
-                claim_dict['stream']['hash'] = obj.stream.hash
+                claim_dict['stream']['sd_hash'] = obj.stream.sd_hash
+                if 'fee' in claim_dict['stream'] and 'address' in claim_dict['stream']['fee']:
+                    claim_dict['stream']['fee']['address'] = obj.stream.fee.address
+            elif obj.is_channel:
+                claim_dict['channel']['public_key'] = obj.channel.public_key
             return claim_dict
         if isinstance(obj, datetime):
             return obj.strftime("%Y%m%dT%H:%M:%S")

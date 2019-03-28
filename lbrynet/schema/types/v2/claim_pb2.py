@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='pb',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x0b\x63laim.proto\x12\x02pb\"M\n\x05\x43laim\x12\x1c\n\x06stream\x18\x01 \x01(\x0b\x32\n.pb.StreamH\x00\x12\x1e\n\x07\x63hannel\x18\x02 \x01(\x0b\x32\x0b.pb.ChannelH\x00\x42\x06\n\x04type\"\xb8\x01\n\x07\x43hannel\x12\x12\n\npublic_key\x18\x01 \x01(\x0c\x12\x0c\n\x04tags\x18\x02 \x03(\t\x12\r\n\x05title\x18\x03 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x04 \x01(\t\x12\x15\n\rthumbnail_url\x18\x05 \x01(\t\x12\x10\n\x08language\x18\x06 \x01(\t\x12\x15\n\rcontact_email\x18\x07 \x01(\t\x12\x14\n\x0chomepage_url\x18\x08 \x01(\t\x12\x11\n\tcover_url\x18\t \x01(\t\"\xdb\x02\n\x06Stream\x12\x0c\n\x04hash\x18\x01 \x01(\x0c\x12\x0c\n\x04tags\x18\x02 \x03(\t\x12\r\n\x05title\x18\x03 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x04 \x01(\t\x12\x15\n\rthumbnail_url\x18\x05 \x01(\t\x12\x10\n\x08language\x18\x06 \x01(\t\x12\x0e\n\x06\x61uthor\x18\x07 \x01(\t\x12\x0f\n\x07license\x18\x08 \x01(\t\x12\x13\n\x0blicense_url\x18\t \x01(\t\x12\x14\n\x0crelease_time\x18\n \x01(\x03\x12\x12\n\nmedia_type\x18\r \x01(\t\x12\x14\n\x03\x66\x65\x65\x18\x0e \x01(\x0b\x32\x07.pb.Fee\x12\x16\n\x04\x66ile\x18\x0f \x01(\x0b\x32\x08.pb.File\x12\x1a\n\x05image\x18\x10 \x01(\x0b\x32\t.pb.ImageH\x00\x12\x1a\n\x05video\x18\x11 \x01(\x0b\x32\t.pb.VideoH\x00\x12\x1a\n\x05\x61udio\x18\x12 \x01(\x0b\x32\t.pb.AudioH\x00\x42\x06\n\x04type\"h\n\x03\x46\x65\x65\x12\"\n\x08\x63urrency\x18\x01 \x01(\x0e\x32\x10.pb.Fee.Currency\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\x0c\x12\x0e\n\x06\x61mount\x18\x03 \x01(\x04\"\x1c\n\x08\x43urrency\x12\x07\n\x03LBC\x10\x00\x12\x07\n\x03USD\x10\x01\"\"\n\x04\x46ile\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04size\x18\x02 \x01(\x04\"&\n\x05Image\x12\r\n\x05width\x18\x01 \x01(\r\x12\x0e\n\x06height\x18\x02 \x01(\r\"8\n\x05Video\x12\r\n\x05width\x18\x01 \x01(\r\x12\x0e\n\x06height\x18\x02 \x01(\r\x12\x10\n\x08\x64uration\x18\x03 \x01(\r\"\x19\n\x05\x41udio\x12\x10\n\x08\x64uration\x18\x01 \x01(\rb\x06proto3')
+  serialized_pb=_b('\n\x0b\x63laim.proto\x12\x02pb\"M\n\x05\x43laim\x12\x1c\n\x06stream\x18\x01 \x01(\x0b\x32\n.pb.StreamH\x00\x12\x1e\n\x07\x63hannel\x18\x02 \x01(\x0b\x32\x0b.pb.ChannelH\x00\x42\x06\n\x04type\"\xe8\x01\n\x07\x43hannel\x12\x12\n\npublic_key\x18\x01 \x01(\x0c\x12\r\n\x05title\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x03 \x01(\t\x12\x15\n\rthumbnail_url\x18\x04 \x01(\t\x12\x0c\n\x04tags\x18\x05 \x03(\t\x12\x1f\n\tlanguages\x18\x06 \x03(\x0b\x32\x0c.pb.Language\x12\x1f\n\tlocations\x18\x07 \x03(\x0b\x32\x0c.pb.Location\x12\x15\n\rcontact_email\x18\x08 \x01(\t\x12\x14\n\x0chomepage_url\x18\t \x01(\t\x12\x11\n\tcover_url\x18\n \x01(\t\"\x8e\x03\n\x06Stream\x12\x0f\n\x07sd_hash\x18\x01 \x01(\x0c\x12\r\n\x05title\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x03 \x01(\t\x12\x15\n\rthumbnail_url\x18\x04 \x01(\t\x12\x0c\n\x04tags\x18\x05 \x03(\t\x12\x1f\n\tlanguages\x18\x06 \x03(\x0b\x32\x0c.pb.Language\x12\x1f\n\tlocations\x18\x07 \x03(\x0b\x32\x0c.pb.Location\x12\x0e\n\x06\x61uthor\x18\x08 \x01(\t\x12\x0f\n\x07license\x18\t \x01(\t\x12\x13\n\x0blicense_url\x18\n \x01(\t\x12\x14\n\x0crelease_time\x18\x0b \x01(\x03\x12\x12\n\nmedia_type\x18\r \x01(\t\x12\x16\n\x04\x66ile\x18\x0e \x01(\x0b\x32\x08.pb.File\x12\x14\n\x03\x66\x65\x65\x18\x0f \x01(\x0b\x32\x07.pb.Fee\x12\x1a\n\x05image\x18\x10 \x01(\x0b\x32\t.pb.ImageH\x00\x12\x1a\n\x05video\x18\x11 \x01(\x0b\x32\t.pb.VideoH\x00\x12\x1a\n\x05\x61udio\x18\x12 \x01(\x0b\x32\t.pb.AudioH\x00\x42\x06\n\x04type\"h\n\x03\x46\x65\x65\x12\"\n\x08\x63urrency\x18\x01 \x01(\x0e\x32\x10.pb.Fee.Currency\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\x0c\x12\x0e\n\x06\x61mount\x18\x03 \x01(\x04\"\x1c\n\x08\x43urrency\x12\x07\n\x03LBC\x10\x00\x12\x07\n\x03USD\x10\x02\"0\n\x04\x46ile\x12\x0c\n\x04hash\x18\x03 \x01(\x0c\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04size\x18\x02 \x01(\x04\"&\n\x05Image\x12\r\n\x05width\x18\x01 \x01(\r\x12\x0e\n\x06height\x18\x02 \x01(\r\"8\n\x05Video\x12\r\n\x05width\x18\x01 \x01(\r\x12\x0e\n\x06height\x18\x02 \x01(\r\x12\x10\n\x08\x64uration\x18\x03 \x01(\r\"\x19\n\x05\x41udio\x12\x10\n\x08\x64uration\x18\x01 \x01(\r\"\xc7\x1d\n\x08Language\x12\'\n\x08language\x18\x01 \x01(\x0e\x32\x15.pb.Language.Language\x12#\n\x06script\x18\x02 \x01(\x0e\x32\x13.pb.Language.Script\x12$\n\x06region\x18\x03 \x01(\x0e\x32\x14.pb.Location.Country\"\x99\x0c\n\x08Language\x12\x14\n\x10UNKNOWN_LANGUAGE\x10\x00\x12\x06\n\x02\x65n\x10\x01\x12\x06\n\x02\x61\x61\x10\x02\x12\x06\n\x02\x61\x62\x10\x03\x12\x06\n\x02\x61\x65\x10\x04\x12\x06\n\x02\x61\x66\x10\x05\x12\x06\n\x02\x61k\x10\x06\x12\x06\n\x02\x61m\x10\x07\x12\x06\n\x02\x61n\x10\x08\x12\x06\n\x02\x61r\x10\t\x12\x06\n\x02\x61s\x10\n\x12\x06\n\x02\x61v\x10\x0b\x12\x06\n\x02\x61y\x10\x0c\x12\x06\n\x02\x61z\x10\r\x12\x06\n\x02\x62\x61\x10\x0e\x12\x06\n\x02\x62\x65\x10\x0f\x12\x06\n\x02\x62g\x10\x10\x12\x06\n\x02\x62h\x10\x11\x12\x06\n\x02\x62i\x10\x12\x12\x06\n\x02\x62m\x10\x13\x12\x06\n\x02\x62n\x10\x14\x12\x06\n\x02\x62o\x10\x15\x12\x06\n\x02\x62r\x10\x16\x12\x06\n\x02\x62s\x10\x17\x12\x06\n\x02\x63\x61\x10\x18\x12\x06\n\x02\x63\x65\x10\x19\x12\x06\n\x02\x63h\x10\x1a\x12\x06\n\x02\x63o\x10\x1b\x12\x06\n\x02\x63r\x10\x1c\x12\x06\n\x02\x63s\x10\x1d\x12\x06\n\x02\x63u\x10\x1e\x12\x06\n\x02\x63v\x10\x1f\x12\x06\n\x02\x63y\x10 \x12\x06\n\x02\x64\x61\x10!\x12\x06\n\x02\x64\x65\x10\"\x12\x06\n\x02\x64v\x10#\x12\x06\n\x02\x64z\x10$\x12\x06\n\x02\x65\x65\x10%\x12\x06\n\x02\x65l\x10&\x12\x06\n\x02\x65o\x10\'\x12\x06\n\x02\x65s\x10(\x12\x06\n\x02\x65t\x10)\x12\x06\n\x02\x65u\x10*\x12\x06\n\x02\x66\x61\x10+\x12\x06\n\x02\x66\x66\x10,\x12\x06\n\x02\x66i\x10-\x12\x06\n\x02\x66j\x10.\x12\x06\n\x02\x66o\x10/\x12\x06\n\x02\x66r\x10\x30\x12\x06\n\x02\x66y\x10\x31\x12\x06\n\x02ga\x10\x32\x12\x06\n\x02gd\x10\x33\x12\x06\n\x02gl\x10\x34\x12\x06\n\x02gn\x10\x35\x12\x06\n\x02gu\x10\x36\x12\x06\n\x02gv\x10\x37\x12\x06\n\x02ha\x10\x38\x12\x06\n\x02he\x10\x39\x12\x06\n\x02hi\x10:\x12\x06\n\x02ho\x10;\x12\x06\n\x02hr\x10<\x12\x06\n\x02ht\x10=\x12\x06\n\x02hu\x10>\x12\x06\n\x02hy\x10?\x12\x06\n\x02hz\x10@\x12\x06\n\x02ia\x10\x41\x12\x06\n\x02id\x10\x42\x12\x06\n\x02ie\x10\x43\x12\x06\n\x02ig\x10\x44\x12\x06\n\x02ii\x10\x45\x12\x06\n\x02ik\x10\x46\x12\x06\n\x02io\x10G\x12\x06\n\x02is\x10H\x12\x06\n\x02it\x10I\x12\x06\n\x02iu\x10J\x12\x06\n\x02ja\x10K\x12\x06\n\x02jv\x10L\x12\x06\n\x02ka\x10M\x12\x06\n\x02kg\x10N\x12\x06\n\x02ki\x10O\x12\x06\n\x02kj\x10P\x12\x06\n\x02kk\x10Q\x12\x06\n\x02kl\x10R\x12\x06\n\x02km\x10S\x12\x06\n\x02kn\x10T\x12\x06\n\x02ko\x10U\x12\x06\n\x02kr\x10V\x12\x06\n\x02ks\x10W\x12\x06\n\x02ku\x10X\x12\x06\n\x02kv\x10Y\x12\x06\n\x02kw\x10Z\x12\x06\n\x02ky\x10[\x12\x06\n\x02la\x10\\\x12\x06\n\x02lb\x10]\x12\x06\n\x02lg\x10^\x12\x06\n\x02li\x10_\x12\x06\n\x02ln\x10`\x12\x06\n\x02lo\x10\x61\x12\x06\n\x02lt\x10\x62\x12\x06\n\x02lu\x10\x63\x12\x06\n\x02lv\x10\x64\x12\x06\n\x02mg\x10\x65\x12\x06\n\x02mh\x10\x66\x12\x06\n\x02mi\x10g\x12\x06\n\x02mk\x10h\x12\x06\n\x02ml\x10i\x12\x06\n\x02mn\x10j\x12\x06\n\x02mr\x10k\x12\x06\n\x02ms\x10l\x12\x06\n\x02mt\x10m\x12\x06\n\x02my\x10n\x12\x06\n\x02na\x10o\x12\x06\n\x02nb\x10p\x12\x06\n\x02nd\x10q\x12\x06\n\x02ne\x10r\x12\x06\n\x02ng\x10s\x12\x06\n\x02nl\x10t\x12\x06\n\x02nn\x10u\x12\x06\n\x02no\x10v\x12\x06\n\x02nr\x10w\x12\x06\n\x02nv\x10x\x12\x06\n\x02ny\x10y\x12\x06\n\x02oc\x10z\x12\x06\n\x02oj\x10{\x12\x06\n\x02om\x10|\x12\x06\n\x02or\x10}\x12\x06\n\x02os\x10~\x12\x06\n\x02pa\x10\x7f\x12\x07\n\x02pi\x10\x80\x01\x12\x07\n\x02pl\x10\x81\x01\x12\x07\n\x02ps\x10\x82\x01\x12\x07\n\x02pt\x10\x83\x01\x12\x07\n\x02qu\x10\x84\x01\x12\x07\n\x02rm\x10\x85\x01\x12\x07\n\x02rn\x10\x86\x01\x12\x07\n\x02ro\x10\x87\x01\x12\x07\n\x02ru\x10\x88\x01\x12\x07\n\x02rw\x10\x89\x01\x12\x07\n\x02sa\x10\x8a\x01\x12\x07\n\x02sc\x10\x8b\x01\x12\x07\n\x02sd\x10\x8c\x01\x12\x07\n\x02se\x10\x8d\x01\x12\x07\n\x02sg\x10\x8e\x01\x12\x07\n\x02si\x10\x8f\x01\x12\x07\n\x02sk\x10\x90\x01\x12\x07\n\x02sl\x10\x91\x01\x12\x07\n\x02sm\x10\x92\x01\x12\x07\n\x02sn\x10\x93\x01\x12\x07\n\x02so\x10\x94\x01\x12\x07\n\x02sq\x10\x95\x01\x12\x07\n\x02sr\x10\x96\x01\x12\x07\n\x02ss\x10\x97\x01\x12\x07\n\x02st\x10\x98\x01\x12\x07\n\x02su\x10\x99\x01\x12\x07\n\x02sv\x10\x9a\x01\x12\x07\n\x02sw\x10\x9b\x01\x12\x07\n\x02ta\x10\x9c\x01\x12\x07\n\x02te\x10\x9d\x01\x12\x07\n\x02tg\x10\x9e\x01\x12\x07\n\x02th\x10\x9f\x01\x12\x07\n\x02ti\x10\xa0\x01\x12\x07\n\x02tk\x10\xa1\x01\x12\x07\n\x02tl\x10\xa2\x01\x12\x07\n\x02tn\x10\xa3\x01\x12\x07\n\x02to\x10\xa4\x01\x12\x07\n\x02tr\x10\xa5\x01\x12\x07\n\x02ts\x10\xa6\x01\x12\x07\n\x02tt\x10\xa7\x01\x12\x07\n\x02tw\x10\xa8\x01\x12\x07\n\x02ty\x10\xa9\x01\x12\x07\n\x02ug\x10\xaa\x01\x12\x07\n\x02uk\x10\xab\x01\x12\x07\n\x02ur\x10\xac\x01\x12\x07\n\x02uz\x10\xad\x01\x12\x07\n\x02ve\x10\xae\x01\x12\x07\n\x02vi\x10\xaf\x01\x12\x07\n\x02vo\x10\xb0\x01\x12\x07\n\x02wa\x10\xb1\x01\x12\x07\n\x02wo\x10\xb2\x01\x12\x07\n\x02xh\x10\xb3\x01\x12\x07\n\x02yi\x10\xb4\x01\x12\x07\n\x02yo\x10\xb5\x01\x12\x07\n\x02za\x10\xb6\x01\x12\x07\n\x02zh\x10\xb7\x01\x12\x07\n\x02zu\x10\xb8\x01\"\xaa\x10\n\x06Script\x12\x12\n\x0eUNKNOWN_SCRIPT\x10\x00\x12\x08\n\x04\x41\x64lm\x10\x01\x12\x08\n\x04\x41\x66\x61k\x10\x02\x12\x08\n\x04\x41ghb\x10\x03\x12\x08\n\x04\x41hom\x10\x04\x12\x08\n\x04\x41rab\x10\x05\x12\x08\n\x04\x41ran\x10\x06\x12\x08\n\x04\x41rmi\x10\x07\x12\x08\n\x04\x41rmn\x10\x08\x12\x08\n\x04\x41vst\x10\t\x12\x08\n\x04\x42\x61li\x10\n\x12\x08\n\x04\x42\x61mu\x10\x0b\x12\x08\n\x04\x42\x61ss\x10\x0c\x12\x08\n\x04\x42\x61tk\x10\r\x12\x08\n\x04\x42\x65ng\x10\x0e\x12\x08\n\x04\x42hks\x10\x0f\x12\x08\n\x04\x42lis\x10\x10\x12\x08\n\x04\x42opo\x10\x11\x12\x08\n\x04\x42rah\x10\x12\x12\x08\n\x04\x42rai\x10\x13\x12\x08\n\x04\x42ugi\x10\x14\x12\x08\n\x04\x42uhd\x10\x15\x12\x08\n\x04\x43\x61km\x10\x16\x12\x08\n\x04\x43\x61ns\x10\x17\x12\x08\n\x04\x43\x61ri\x10\x18\x12\x08\n\x04\x43ham\x10\x19\x12\x08\n\x04\x43her\x10\x1a\x12\x08\n\x04\x43irt\x10\x1b\x12\x08\n\x04\x43opt\x10\x1c\x12\x08\n\x04\x43pmn\x10\x1d\x12\x08\n\x04\x43prt\x10\x1e\x12\x08\n\x04\x43yrl\x10\x1f\x12\x08\n\x04\x43yrs\x10 \x12\x08\n\x04\x44\x65va\x10!\x12\x08\n\x04\x44ogr\x10\"\x12\x08\n\x04\x44srt\x10#\x12\x08\n\x04\x44upl\x10$\x12\x08\n\x04\x45gyd\x10%\x12\x08\n\x04\x45gyh\x10&\x12\x08\n\x04\x45gyp\x10\'\x12\x08\n\x04\x45lba\x10(\x12\x08\n\x04\x45lym\x10)\x12\x08\n\x04\x45thi\x10*\x12\x08\n\x04Geok\x10+\x12\x08\n\x04Geor\x10,\x12\x08\n\x04Glag\x10-\x12\x08\n\x04Gong\x10.\x12\x08\n\x04Gonm\x10/\x12\x08\n\x04Goth\x10\x30\x12\x08\n\x04Gran\x10\x31\x12\x08\n\x04Grek\x10\x32\x12\x08\n\x04Gujr\x10\x33\x12\x08\n\x04Guru\x10\x34\x12\x08\n\x04Hanb\x10\x35\x12\x08\n\x04Hang\x10\x36\x12\x08\n\x04Hani\x10\x37\x12\x08\n\x04Hano\x10\x38\x12\x08\n\x04Hans\x10\x39\x12\x08\n\x04Hant\x10:\x12\x08\n\x04Hatr\x10;\x12\x08\n\x04Hebr\x10<\x12\x08\n\x04Hira\x10=\x12\x08\n\x04Hluw\x10>\x12\x08\n\x04Hmng\x10?\x12\x08\n\x04Hmnp\x10@\x12\x08\n\x04Hrkt\x10\x41\x12\x08\n\x04Hung\x10\x42\x12\x08\n\x04Inds\x10\x43\x12\x08\n\x04Ital\x10\x44\x12\x08\n\x04Jamo\x10\x45\x12\x08\n\x04Java\x10\x46\x12\x08\n\x04Jpan\x10G\x12\x08\n\x04Jurc\x10H\x12\x08\n\x04Kali\x10I\x12\x08\n\x04Kana\x10J\x12\x08\n\x04Khar\x10K\x12\x08\n\x04Khmr\x10L\x12\x08\n\x04Khoj\x10M\x12\x08\n\x04Kitl\x10N\x12\x08\n\x04Kits\x10O\x12\x08\n\x04Knda\x10P\x12\x08\n\x04Kore\x10Q\x12\x08\n\x04Kpel\x10R\x12\x08\n\x04Kthi\x10S\x12\x08\n\x04Lana\x10T\x12\x08\n\x04Laoo\x10U\x12\x08\n\x04Latf\x10V\x12\x08\n\x04Latg\x10W\x12\x08\n\x04Latn\x10X\x12\x08\n\x04Leke\x10Y\x12\x08\n\x04Lepc\x10Z\x12\x08\n\x04Limb\x10[\x12\x08\n\x04Lina\x10\\\x12\x08\n\x04Linb\x10]\x12\x08\n\x04Lisu\x10^\x12\x08\n\x04Loma\x10_\x12\x08\n\x04Lyci\x10`\x12\x08\n\x04Lydi\x10\x61\x12\x08\n\x04Mahj\x10\x62\x12\x08\n\x04Maka\x10\x63\x12\x08\n\x04Mand\x10\x64\x12\x08\n\x04Mani\x10\x65\x12\x08\n\x04Marc\x10\x66\x12\x08\n\x04Maya\x10g\x12\x08\n\x04Medf\x10h\x12\x08\n\x04Mend\x10i\x12\x08\n\x04Merc\x10j\x12\x08\n\x04Mero\x10k\x12\x08\n\x04Mlym\x10l\x12\x08\n\x04Modi\x10m\x12\x08\n\x04Mong\x10n\x12\x08\n\x04Moon\x10o\x12\x08\n\x04Mroo\x10p\x12\x08\n\x04Mtei\x10q\x12\x08\n\x04Mult\x10r\x12\x08\n\x04Mymr\x10s\x12\x08\n\x04Nand\x10t\x12\x08\n\x04Narb\x10u\x12\x08\n\x04Nbat\x10v\x12\x08\n\x04Newa\x10w\x12\x08\n\x04Nkdb\x10x\x12\x08\n\x04Nkgb\x10y\x12\x08\n\x04Nkoo\x10z\x12\x08\n\x04Nshu\x10{\x12\x08\n\x04Ogam\x10|\x12\x08\n\x04Olck\x10}\x12\x08\n\x04Orkh\x10~\x12\x08\n\x04Orya\x10\x7f\x12\t\n\x04Osge\x10\x80\x01\x12\t\n\x04Osma\x10\x81\x01\x12\t\n\x04Palm\x10\x82\x01\x12\t\n\x04Pauc\x10\x83\x01\x12\t\n\x04Perm\x10\x84\x01\x12\t\n\x04Phag\x10\x85\x01\x12\t\n\x04Phli\x10\x86\x01\x12\t\n\x04Phlp\x10\x87\x01\x12\t\n\x04Phlv\x10\x88\x01\x12\t\n\x04Phnx\x10\x89\x01\x12\t\n\x04Plrd\x10\x8a\x01\x12\t\n\x04Piqd\x10\x8b\x01\x12\t\n\x04Prti\x10\x8c\x01\x12\t\n\x04Qaaa\x10\x8d\x01\x12\t\n\x04Qabx\x10\x8e\x01\x12\t\n\x04Rjng\x10\x8f\x01\x12\t\n\x04Rohg\x10\x90\x01\x12\t\n\x04Roro\x10\x91\x01\x12\t\n\x04Runr\x10\x92\x01\x12\t\n\x04Samr\x10\x93\x01\x12\t\n\x04Sara\x10\x94\x01\x12\t\n\x04Sarb\x10\x95\x01\x12\t\n\x04Saur\x10\x96\x01\x12\t\n\x04Sgnw\x10\x97\x01\x12\t\n\x04Shaw\x10\x98\x01\x12\t\n\x04Shrd\x10\x99\x01\x12\t\n\x04Shui\x10\x9a\x01\x12\t\n\x04Sidd\x10\x9b\x01\x12\t\n\x04Sind\x10\x9c\x01\x12\t\n\x04Sinh\x10\x9d\x01\x12\t\n\x04Sogd\x10\x9e\x01\x12\t\n\x04Sogo\x10\x9f\x01\x12\t\n\x04Sora\x10\xa0\x01\x12\t\n\x04Soyo\x10\xa1\x01\x12\t\n\x04Sund\x10\xa2\x01\x12\t\n\x04Sylo\x10\xa3\x01\x12\t\n\x04Syrc\x10\xa4\x01\x12\t\n\x04Syre\x10\xa5\x01\x12\t\n\x04Syrj\x10\xa6\x01\x12\t\n\x04Syrn\x10\xa7\x01\x12\t\n\x04Tagb\x10\xa8\x01\x12\t\n\x04Takr\x10\xa9\x01\x12\t\n\x04Tale\x10\xaa\x01\x12\t\n\x04Talu\x10\xab\x01\x12\t\n\x04Taml\x10\xac\x01\x12\t\n\x04Tang\x10\xad\x01\x12\t\n\x04Tavt\x10\xae\x01\x12\t\n\x04Telu\x10\xaf\x01\x12\t\n\x04Teng\x10\xb0\x01\x12\t\n\x04Tfng\x10\xb1\x01\x12\t\n\x04Tglg\x10\xb2\x01\x12\t\n\x04Thaa\x10\xb3\x01\x12\t\n\x04Thai\x10\xb4\x01\x12\t\n\x04Tibt\x10\xb5\x01\x12\t\n\x04Tirh\x10\xb6\x01\x12\t\n\x04Ugar\x10\xb7\x01\x12\t\n\x04Vaii\x10\xb8\x01\x12\t\n\x04Visp\x10\xb9\x01\x12\t\n\x04Wara\x10\xba\x01\x12\t\n\x04Wcho\x10\xbb\x01\x12\t\n\x04Wole\x10\xbc\x01\x12\t\n\x04Xpeo\x10\xbd\x01\x12\t\n\x04Xsux\x10\xbe\x01\x12\t\n\x04Yiii\x10\xbf\x01\x12\t\n\x04Zanb\x10\xc0\x01\x12\t\n\x04Zinh\x10\xc1\x01\x12\t\n\x04Zmth\x10\xc2\x01\x12\t\n\x04Zsye\x10\xc3\x01\x12\t\n\x04Zsym\x10\xc4\x01\x12\t\n\x04Zxxx\x10\xc5\x01\x12\t\n\x04Zyyy\x10\xc6\x01\x12\t\n\x04Zzzz\x10\xc7\x01\"\xe4\x11\n\x08Location\x12%\n\x07\x63ountry\x18\x01 \x01(\x0e\x32\x14.pb.Location.Country\x12\r\n\x05state\x18\x02 \x01(\t\x12\x0c\n\x04\x63ity\x18\x03 \x01(\t\x12\x0c\n\x04\x63ode\x18\x04 \x01(\t\x12\x10\n\x08latitude\x18\x05 \x01(\x01\x12\x11\n\tlongitude\x18\x06 \x01(\x01\"\xe0\x10\n\x07\x43ountry\x12\x13\n\x0fUNKNOWN_COUNTRY\x10\x00\x12\x06\n\x02\x41\x46\x10\x01\x12\x06\n\x02\x41X\x10\x02\x12\x06\n\x02\x41L\x10\x03\x12\x06\n\x02\x44Z\x10\x04\x12\x06\n\x02\x41S\x10\x05\x12\x06\n\x02\x41\x44\x10\x06\x12\x06\n\x02\x41O\x10\x07\x12\x06\n\x02\x41I\x10\x08\x12\x06\n\x02\x41Q\x10\t\x12\x06\n\x02\x41G\x10\n\x12\x06\n\x02\x41R\x10\x0b\x12\x06\n\x02\x41M\x10\x0c\x12\x06\n\x02\x41W\x10\r\x12\x06\n\x02\x41U\x10\x0e\x12\x06\n\x02\x41T\x10\x0f\x12\x06\n\x02\x41Z\x10\x10\x12\x06\n\x02\x42S\x10\x11\x12\x06\n\x02\x42H\x10\x12\x12\x06\n\x02\x42\x44\x10\x13\x12\x06\n\x02\x42\x42\x10\x14\x12\x06\n\x02\x42Y\x10\x15\x12\x06\n\x02\x42\x45\x10\x16\x12\x06\n\x02\x42Z\x10\x17\x12\x06\n\x02\x42J\x10\x18\x12\x06\n\x02\x42M\x10\x19\x12\x06\n\x02\x42T\x10\x1a\x12\x06\n\x02\x42O\x10\x1b\x12\x06\n\x02\x42Q\x10\x1c\x12\x06\n\x02\x42\x41\x10\x1d\x12\x06\n\x02\x42W\x10\x1e\x12\x06\n\x02\x42V\x10\x1f\x12\x06\n\x02\x42R\x10 \x12\x06\n\x02IO\x10!\x12\x06\n\x02\x42N\x10\"\x12\x06\n\x02\x42G\x10#\x12\x06\n\x02\x42\x46\x10$\x12\x06\n\x02\x42I\x10%\x12\x06\n\x02KH\x10&\x12\x06\n\x02\x43M\x10\'\x12\x06\n\x02\x43\x41\x10(\x12\x06\n\x02\x43V\x10)\x12\x06\n\x02KY\x10*\x12\x06\n\x02\x43\x46\x10+\x12\x06\n\x02TD\x10,\x12\x06\n\x02\x43L\x10-\x12\x06\n\x02\x43N\x10.\x12\x06\n\x02\x43X\x10/\x12\x06\n\x02\x43\x43\x10\x30\x12\x06\n\x02\x43O\x10\x31\x12\x06\n\x02KM\x10\x32\x12\x06\n\x02\x43G\x10\x33\x12\x06\n\x02\x43\x44\x10\x34\x12\x06\n\x02\x43K\x10\x35\x12\x06\n\x02\x43R\x10\x36\x12\x06\n\x02\x43I\x10\x37\x12\x06\n\x02HR\x10\x38\x12\x06\n\x02\x43U\x10\x39\x12\x06\n\x02\x43W\x10:\x12\x06\n\x02\x43Y\x10;\x12\x06\n\x02\x43Z\x10<\x12\x06\n\x02\x44K\x10=\x12\x06\n\x02\x44J\x10>\x12\x06\n\x02\x44M\x10?\x12\x06\n\x02\x44O\x10@\x12\x06\n\x02\x45\x43\x10\x41\x12\x06\n\x02\x45G\x10\x42\x12\x06\n\x02SV\x10\x43\x12\x06\n\x02GQ\x10\x44\x12\x06\n\x02\x45R\x10\x45\x12\x06\n\x02\x45\x45\x10\x46\x12\x06\n\x02\x45T\x10G\x12\x06\n\x02\x46K\x10H\x12\x06\n\x02\x46O\x10I\x12\x06\n\x02\x46J\x10J\x12\x06\n\x02\x46I\x10K\x12\x06\n\x02\x46R\x10L\x12\x06\n\x02GF\x10M\x12\x06\n\x02PF\x10N\x12\x06\n\x02TF\x10O\x12\x06\n\x02GA\x10P\x12\x06\n\x02GM\x10Q\x12\x06\n\x02GE\x10R\x12\x06\n\x02\x44\x45\x10S\x12\x06\n\x02GH\x10T\x12\x06\n\x02GI\x10U\x12\x06\n\x02GR\x10V\x12\x06\n\x02GL\x10W\x12\x06\n\x02GD\x10X\x12\x06\n\x02GP\x10Y\x12\x06\n\x02GU\x10Z\x12\x06\n\x02GT\x10[\x12\x06\n\x02GG\x10\\\x12\x06\n\x02GN\x10]\x12\x06\n\x02GW\x10^\x12\x06\n\x02GY\x10_\x12\x06\n\x02HT\x10`\x12\x06\n\x02HM\x10\x61\x12\x06\n\x02VA\x10\x62\x12\x06\n\x02HN\x10\x63\x12\x06\n\x02HK\x10\x64\x12\x06\n\x02HU\x10\x65\x12\x06\n\x02IS\x10\x66\x12\x06\n\x02IN\x10g\x12\x06\n\x02ID\x10h\x12\x06\n\x02IR\x10i\x12\x06\n\x02IQ\x10j\x12\x06\n\x02IE\x10k\x12\x06\n\x02IM\x10l\x12\x06\n\x02IL\x10m\x12\x06\n\x02IT\x10n\x12\x06\n\x02JM\x10o\x12\x06\n\x02JP\x10p\x12\x06\n\x02JE\x10q\x12\x06\n\x02JO\x10r\x12\x06\n\x02KZ\x10s\x12\x06\n\x02KE\x10t\x12\x06\n\x02KI\x10u\x12\x06\n\x02KP\x10v\x12\x06\n\x02KR\x10w\x12\x06\n\x02KW\x10x\x12\x06\n\x02KG\x10y\x12\x06\n\x02LA\x10z\x12\x06\n\x02LV\x10{\x12\x06\n\x02LB\x10|\x12\x06\n\x02LS\x10}\x12\x06\n\x02LR\x10~\x12\x06\n\x02LY\x10\x7f\x12\x07\n\x02LI\x10\x80\x01\x12\x07\n\x02LT\x10\x81\x01\x12\x07\n\x02LU\x10\x82\x01\x12\x07\n\x02MO\x10\x83\x01\x12\x07\n\x02MK\x10\x84\x01\x12\x07\n\x02MG\x10\x85\x01\x12\x07\n\x02MW\x10\x86\x01\x12\x07\n\x02MY\x10\x87\x01\x12\x07\n\x02MV\x10\x88\x01\x12\x07\n\x02ML\x10\x89\x01\x12\x07\n\x02MT\x10\x8a\x01\x12\x07\n\x02MH\x10\x8b\x01\x12\x07\n\x02MQ\x10\x8c\x01\x12\x07\n\x02MR\x10\x8d\x01\x12\x07\n\x02MU\x10\x8e\x01\x12\x07\n\x02YT\x10\x8f\x01\x12\x07\n\x02MX\x10\x90\x01\x12\x07\n\x02\x46M\x10\x91\x01\x12\x07\n\x02MD\x10\x92\x01\x12\x07\n\x02MC\x10\x93\x01\x12\x07\n\x02MN\x10\x94\x01\x12\x07\n\x02ME\x10\x95\x01\x12\x07\n\x02MS\x10\x96\x01\x12\x07\n\x02MA\x10\x97\x01\x12\x07\n\x02MZ\x10\x98\x01\x12\x07\n\x02MM\x10\x99\x01\x12\x07\n\x02NA\x10\x9a\x01\x12\x07\n\x02NR\x10\x9b\x01\x12\x07\n\x02NP\x10\x9c\x01\x12\x07\n\x02NL\x10\x9d\x01\x12\x07\n\x02NC\x10\x9e\x01\x12\x07\n\x02NZ\x10\x9f\x01\x12\x07\n\x02NI\x10\xa0\x01\x12\x07\n\x02NE\x10\xa1\x01\x12\x07\n\x02NG\x10\xa2\x01\x12\x07\n\x02NU\x10\xa3\x01\x12\x07\n\x02NF\x10\xa4\x01\x12\x07\n\x02MP\x10\xa5\x01\x12\x07\n\x02NO\x10\xa6\x01\x12\x07\n\x02OM\x10\xa7\x01\x12\x07\n\x02PK\x10\xa8\x01\x12\x07\n\x02PW\x10\xa9\x01\x12\x07\n\x02PS\x10\xaa\x01\x12\x07\n\x02PA\x10\xab\x01\x12\x07\n\x02PG\x10\xac\x01\x12\x07\n\x02PY\x10\xad\x01\x12\x07\n\x02PE\x10\xae\x01\x12\x07\n\x02PH\x10\xaf\x01\x12\x07\n\x02PN\x10\xb0\x01\x12\x07\n\x02PL\x10\xb1\x01\x12\x07\n\x02PT\x10\xb2\x01\x12\x07\n\x02PR\x10\xb3\x01\x12\x07\n\x02QA\x10\xb4\x01\x12\x07\n\x02RE\x10\xb5\x01\x12\x07\n\x02RO\x10\xb6\x01\x12\x07\n\x02RU\x10\xb7\x01\x12\x07\n\x02RW\x10\xb8\x01\x12\x07\n\x02\x42L\x10\xb9\x01\x12\x07\n\x02SH\x10\xba\x01\x12\x07\n\x02KN\x10\xbb\x01\x12\x07\n\x02LC\x10\xbc\x01\x12\x07\n\x02MF\x10\xbd\x01\x12\x07\n\x02PM\x10\xbe\x01\x12\x07\n\x02VC\x10\xbf\x01\x12\x07\n\x02WS\x10\xc0\x01\x12\x07\n\x02SM\x10\xc1\x01\x12\x07\n\x02ST\x10\xc2\x01\x12\x07\n\x02SA\x10\xc3\x01\x12\x07\n\x02SN\x10\xc4\x01\x12\x07\n\x02RS\x10\xc5\x01\x12\x07\n\x02SC\x10\xc6\x01\x12\x07\n\x02SL\x10\xc7\x01\x12\x07\n\x02SG\x10\xc8\x01\x12\x07\n\x02SX\x10\xc9\x01\x12\x07\n\x02SK\x10\xca\x01\x12\x07\n\x02SI\x10\xcb\x01\x12\x07\n\x02SB\x10\xcc\x01\x12\x07\n\x02SO\x10\xcd\x01\x12\x07\n\x02ZA\x10\xce\x01\x12\x07\n\x02GS\x10\xcf\x01\x12\x07\n\x02SS\x10\xd0\x01\x12\x07\n\x02\x45S\x10\xd1\x01\x12\x07\n\x02LK\x10\xd2\x01\x12\x07\n\x02SD\x10\xd3\x01\x12\x07\n\x02SR\x10\xd4\x01\x12\x07\n\x02SJ\x10\xd5\x01\x12\x07\n\x02SZ\x10\xd6\x01\x12\x07\n\x02SE\x10\xd7\x01\x12\x07\n\x02\x43H\x10\xd8\x01\x12\x07\n\x02SY\x10\xd9\x01\x12\x07\n\x02TW\x10\xda\x01\x12\x07\n\x02TJ\x10\xdb\x01\x12\x07\n\x02TZ\x10\xdc\x01\x12\x07\n\x02TH\x10\xdd\x01\x12\x07\n\x02TL\x10\xde\x01\x12\x07\n\x02TG\x10\xdf\x01\x12\x07\n\x02TK\x10\xe0\x01\x12\x07\n\x02TO\x10\xe1\x01\x12\x07\n\x02TT\x10\xe2\x01\x12\x07\n\x02TN\x10\xe3\x01\x12\x07\n\x02TR\x10\xe4\x01\x12\x07\n\x02TM\x10\xe5\x01\x12\x07\n\x02TC\x10\xe6\x01\x12\x07\n\x02TV\x10\xe7\x01\x12\x07\n\x02UG\x10\xe8\x01\x12\x07\n\x02UA\x10\xe9\x01\x12\x07\n\x02\x41\x45\x10\xea\x01\x12\x07\n\x02GB\x10\xeb\x01\x12\x07\n\x02US\x10\xec\x01\x12\x07\n\x02UM\x10\xed\x01\x12\x07\n\x02UY\x10\xee\x01\x12\x07\n\x02UZ\x10\xef\x01\x12\x07\n\x02VU\x10\xf0\x01\x12\x07\n\x02VE\x10\xf1\x01\x12\x07\n\x02VN\x10\xf2\x01\x12\x07\n\x02VG\x10\xf3\x01\x12\x07\n\x02VI\x10\xf4\x01\x12\x07\n\x02WF\x10\xf5\x01\x12\x07\n\x02\x45H\x10\xf6\x01\x12\x07\n\x02YE\x10\xf7\x01\x12\x07\n\x02ZM\x10\xf8\x01\x12\x07\n\x02ZW\x10\xf9\x01\x62\x06proto3')
 )
 
 
@@ -35,16 +35,2598 @@ _FEE_CURRENCY = _descriptor.EnumDescriptor(
       serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='USD', index=1, number=1,
+      name='USD', index=1, number=2,
       serialized_options=None,
       type=None),
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=711,
-  serialized_end=739,
+  serialized_start=810,
+  serialized_end=838,
 )
 _sym_db.RegisterEnumDescriptor(_FEE_CURRENCY)
+
+_LANGUAGE_LANGUAGE = _descriptor.EnumDescriptor(
+  name='Language',
+  full_name='pb.Language.Language',
+  filename=None,
+  file=DESCRIPTOR,
+  values=[
+    _descriptor.EnumValueDescriptor(
+      name='UNKNOWN_LANGUAGE', index=0, number=0,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='en', index=1, number=1,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='aa', index=2, number=2,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ab', index=3, number=3,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ae', index=4, number=4,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='af', index=5, number=5,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ak', index=6, number=6,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='am', index=7, number=7,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='an', index=8, number=8,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ar', index=9, number=9,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='as', index=10, number=10,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='av', index=11, number=11,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ay', index=12, number=12,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='az', index=13, number=13,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ba', index=14, number=14,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='be', index=15, number=15,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='bg', index=16, number=16,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='bh', index=17, number=17,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='bi', index=18, number=18,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='bm', index=19, number=19,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='bn', index=20, number=20,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='bo', index=21, number=21,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='br', index=22, number=22,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='bs', index=23, number=23,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ca', index=24, number=24,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ce', index=25, number=25,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ch', index=26, number=26,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='co', index=27, number=27,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='cr', index=28, number=28,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='cs', index=29, number=29,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='cu', index=30, number=30,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='cv', index=31, number=31,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='cy', index=32, number=32,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='da', index=33, number=33,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='de', index=34, number=34,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='dv', index=35, number=35,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='dz', index=36, number=36,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ee', index=37, number=37,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='el', index=38, number=38,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='eo', index=39, number=39,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='es', index=40, number=40,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='et', index=41, number=41,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='eu', index=42, number=42,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='fa', index=43, number=43,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ff', index=44, number=44,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='fi', index=45, number=45,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='fj', index=46, number=46,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='fo', index=47, number=47,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='fr', index=48, number=48,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='fy', index=49, number=49,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ga', index=50, number=50,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='gd', index=51, number=51,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='gl', index=52, number=52,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='gn', index=53, number=53,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='gu', index=54, number=54,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='gv', index=55, number=55,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ha', index=56, number=56,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='he', index=57, number=57,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='hi', index=58, number=58,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ho', index=59, number=59,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='hr', index=60, number=60,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ht', index=61, number=61,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='hu', index=62, number=62,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='hy', index=63, number=63,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='hz', index=64, number=64,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ia', index=65, number=65,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='id', index=66, number=66,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ie', index=67, number=67,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ig', index=68, number=68,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ii', index=69, number=69,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ik', index=70, number=70,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='io', index=71, number=71,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='is', index=72, number=72,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='it', index=73, number=73,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='iu', index=74, number=74,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ja', index=75, number=75,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='jv', index=76, number=76,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ka', index=77, number=77,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kg', index=78, number=78,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ki', index=79, number=79,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kj', index=80, number=80,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kk', index=81, number=81,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kl', index=82, number=82,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='km', index=83, number=83,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kn', index=84, number=84,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ko', index=85, number=85,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kr', index=86, number=86,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ks', index=87, number=87,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ku', index=88, number=88,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kv', index=89, number=89,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='kw', index=90, number=90,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ky', index=91, number=91,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='la', index=92, number=92,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='lb', index=93, number=93,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='lg', index=94, number=94,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='li', index=95, number=95,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ln', index=96, number=96,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='lo', index=97, number=97,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='lt', index=98, number=98,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='lu', index=99, number=99,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='lv', index=100, number=100,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='mg', index=101, number=101,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='mh', index=102, number=102,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='mi', index=103, number=103,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='mk', index=104, number=104,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ml', index=105, number=105,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='mn', index=106, number=106,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='mr', index=107, number=107,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ms', index=108, number=108,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='mt', index=109, number=109,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='my', index=110, number=110,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='na', index=111, number=111,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='nb', index=112, number=112,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='nd', index=113, number=113,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ne', index=114, number=114,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ng', index=115, number=115,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='nl', index=116, number=116,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='nn', index=117, number=117,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='no', index=118, number=118,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='nr', index=119, number=119,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='nv', index=120, number=120,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ny', index=121, number=121,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='oc', index=122, number=122,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='oj', index=123, number=123,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='om', index=124, number=124,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='or', index=125, number=125,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='os', index=126, number=126,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='pa', index=127, number=127,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='pi', index=128, number=128,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='pl', index=129, number=129,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ps', index=130, number=130,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='pt', index=131, number=131,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='qu', index=132, number=132,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='rm', index=133, number=133,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='rn', index=134, number=134,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ro', index=135, number=135,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ru', index=136, number=136,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='rw', index=137, number=137,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sa', index=138, number=138,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sc', index=139, number=139,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sd', index=140, number=140,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='se', index=141, number=141,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sg', index=142, number=142,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='si', index=143, number=143,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sk', index=144, number=144,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sl', index=145, number=145,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sm', index=146, number=146,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sn', index=147, number=147,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='so', index=148, number=148,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sq', index=149, number=149,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sr', index=150, number=150,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ss', index=151, number=151,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='st', index=152, number=152,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='su', index=153, number=153,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sv', index=154, number=154,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='sw', index=155, number=155,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ta', index=156, number=156,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='te', index=157, number=157,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='tg', index=158, number=158,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='th', index=159, number=159,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ti', index=160, number=160,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='tk', index=161, number=161,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='tl', index=162, number=162,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='tn', index=163, number=163,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='to', index=164, number=164,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='tr', index=165, number=165,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ts', index=166, number=166,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='tt', index=167, number=167,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='tw', index=168, number=168,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ty', index=169, number=169,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ug', index=170, number=170,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='uk', index=171, number=171,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ur', index=172, number=172,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='uz', index=173, number=173,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ve', index=174, number=174,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='vi', index=175, number=175,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='vo', index=176, number=176,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='wa', index=177, number=177,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='wo', index=178, number=178,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='xh', index=179, number=179,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='yi', index=180, number=180,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='yo', index=181, number=181,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='za', index=182, number=182,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='zh', index=183, number=183,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='zu', index=184, number=184,
+      serialized_options=None,
+      type=None),
+  ],
+  containing_type=None,
+  serialized_options=None,
+  serialized_start=1145,
+  serialized_end=2706,
+)
+_sym_db.RegisterEnumDescriptor(_LANGUAGE_LANGUAGE)
+
+_LANGUAGE_SCRIPT = _descriptor.EnumDescriptor(
+  name='Script',
+  full_name='pb.Language.Script',
+  filename=None,
+  file=DESCRIPTOR,
+  values=[
+    _descriptor.EnumValueDescriptor(
+      name='UNKNOWN_SCRIPT', index=0, number=0,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Adlm', index=1, number=1,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Afak', index=2, number=2,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Aghb', index=3, number=3,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Ahom', index=4, number=4,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Arab', index=5, number=5,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Aran', index=6, number=6,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Armi', index=7, number=7,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Armn', index=8, number=8,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Avst', index=9, number=9,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Bali', index=10, number=10,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Bamu', index=11, number=11,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Bass', index=12, number=12,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Batk', index=13, number=13,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Beng', index=14, number=14,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Bhks', index=15, number=15,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Blis', index=16, number=16,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Bopo', index=17, number=17,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Brah', index=18, number=18,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Brai', index=19, number=19,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Bugi', index=20, number=20,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Buhd', index=21, number=21,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cakm', index=22, number=22,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cans', index=23, number=23,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cari', index=24, number=24,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cham', index=25, number=25,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cher', index=26, number=26,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cirt', index=27, number=27,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Copt', index=28, number=28,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cpmn', index=29, number=29,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cprt', index=30, number=30,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cyrl', index=31, number=31,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Cyrs', index=32, number=32,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Deva', index=33, number=33,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Dogr', index=34, number=34,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Dsrt', index=35, number=35,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Dupl', index=36, number=36,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Egyd', index=37, number=37,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Egyh', index=38, number=38,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Egyp', index=39, number=39,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Elba', index=40, number=40,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Elym', index=41, number=41,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Ethi', index=42, number=42,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Geok', index=43, number=43,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Geor', index=44, number=44,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Glag', index=45, number=45,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Gong', index=46, number=46,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Gonm', index=47, number=47,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Goth', index=48, number=48,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Gran', index=49, number=49,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Grek', index=50, number=50,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Gujr', index=51, number=51,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Guru', index=52, number=52,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hanb', index=53, number=53,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hang', index=54, number=54,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hani', index=55, number=55,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hano', index=56, number=56,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hans', index=57, number=57,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hant', index=58, number=58,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hatr', index=59, number=59,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hebr', index=60, number=60,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hira', index=61, number=61,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hluw', index=62, number=62,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hmng', index=63, number=63,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hmnp', index=64, number=64,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hrkt', index=65, number=65,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Hung', index=66, number=66,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Inds', index=67, number=67,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Ital', index=68, number=68,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Jamo', index=69, number=69,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Java', index=70, number=70,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Jpan', index=71, number=71,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Jurc', index=72, number=72,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Kali', index=73, number=73,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Kana', index=74, number=74,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Khar', index=75, number=75,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Khmr', index=76, number=76,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Khoj', index=77, number=77,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Kitl', index=78, number=78,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Kits', index=79, number=79,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Knda', index=80, number=80,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Kore', index=81, number=81,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Kpel', index=82, number=82,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Kthi', index=83, number=83,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Lana', index=84, number=84,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Laoo', index=85, number=85,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Latf', index=86, number=86,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Latg', index=87, number=87,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Latn', index=88, number=88,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Leke', index=89, number=89,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Lepc', index=90, number=90,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Limb', index=91, number=91,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Lina', index=92, number=92,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Linb', index=93, number=93,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Lisu', index=94, number=94,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Loma', index=95, number=95,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Lyci', index=96, number=96,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Lydi', index=97, number=97,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mahj', index=98, number=98,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Maka', index=99, number=99,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mand', index=100, number=100,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mani', index=101, number=101,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Marc', index=102, number=102,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Maya', index=103, number=103,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Medf', index=104, number=104,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mend', index=105, number=105,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Merc', index=106, number=106,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mero', index=107, number=107,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mlym', index=108, number=108,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Modi', index=109, number=109,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mong', index=110, number=110,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Moon', index=111, number=111,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mroo', index=112, number=112,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mtei', index=113, number=113,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mult', index=114, number=114,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Mymr', index=115, number=115,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Nand', index=116, number=116,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Narb', index=117, number=117,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Nbat', index=118, number=118,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Newa', index=119, number=119,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Nkdb', index=120, number=120,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Nkgb', index=121, number=121,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Nkoo', index=122, number=122,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Nshu', index=123, number=123,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Ogam', index=124, number=124,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Olck', index=125, number=125,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Orkh', index=126, number=126,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Orya', index=127, number=127,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Osge', index=128, number=128,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Osma', index=129, number=129,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Palm', index=130, number=130,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Pauc', index=131, number=131,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Perm', index=132, number=132,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Phag', index=133, number=133,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Phli', index=134, number=134,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Phlp', index=135, number=135,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Phlv', index=136, number=136,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Phnx', index=137, number=137,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Plrd', index=138, number=138,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Piqd', index=139, number=139,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Prti', index=140, number=140,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Qaaa', index=141, number=141,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Qabx', index=142, number=142,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Rjng', index=143, number=143,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Rohg', index=144, number=144,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Roro', index=145, number=145,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Runr', index=146, number=146,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Samr', index=147, number=147,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sara', index=148, number=148,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sarb', index=149, number=149,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Saur', index=150, number=150,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sgnw', index=151, number=151,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Shaw', index=152, number=152,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Shrd', index=153, number=153,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Shui', index=154, number=154,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sidd', index=155, number=155,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sind', index=156, number=156,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sinh', index=157, number=157,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sogd', index=158, number=158,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sogo', index=159, number=159,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sora', index=160, number=160,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Soyo', index=161, number=161,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sund', index=162, number=162,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Sylo', index=163, number=163,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Syrc', index=164, number=164,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Syre', index=165, number=165,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Syrj', index=166, number=166,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Syrn', index=167, number=167,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tagb', index=168, number=168,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Takr', index=169, number=169,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tale', index=170, number=170,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Talu', index=171, number=171,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Taml', index=172, number=172,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tang', index=173, number=173,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tavt', index=174, number=174,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Telu', index=175, number=175,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Teng', index=176, number=176,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tfng', index=177, number=177,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tglg', index=178, number=178,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Thaa', index=179, number=179,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Thai', index=180, number=180,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tibt', index=181, number=181,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Tirh', index=182, number=182,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Ugar', index=183, number=183,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Vaii', index=184, number=184,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Visp', index=185, number=185,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Wara', index=186, number=186,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Wcho', index=187, number=187,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Wole', index=188, number=188,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Xpeo', index=189, number=189,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Xsux', index=190, number=190,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Yiii', index=191, number=191,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zanb', index=192, number=192,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zinh', index=193, number=193,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zmth', index=194, number=194,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zsye', index=195, number=195,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zsym', index=196, number=196,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zxxx', index=197, number=197,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zyyy', index=198, number=198,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='Zzzz', index=199, number=199,
+      serialized_options=None,
+      type=None),
+  ],
+  containing_type=None,
+  serialized_options=None,
+  serialized_start=2709,
+  serialized_end=4799,
+)
+_sym_db.RegisterEnumDescriptor(_LANGUAGE_SCRIPT)
+
+_LOCATION_COUNTRY = _descriptor.EnumDescriptor(
+  name='Country',
+  full_name='pb.Location.Country',
+  filename=None,
+  file=DESCRIPTOR,
+  values=[
+    _descriptor.EnumValueDescriptor(
+      name='UNKNOWN_COUNTRY', index=0, number=0,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AF', index=1, number=1,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AX', index=2, number=2,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AL', index=3, number=3,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DZ', index=4, number=4,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AS', index=5, number=5,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AD', index=6, number=6,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AO', index=7, number=7,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AI', index=8, number=8,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AQ', index=9, number=9,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AG', index=10, number=10,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AR', index=11, number=11,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AM', index=12, number=12,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AW', index=13, number=13,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AU', index=14, number=14,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AT', index=15, number=15,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AZ', index=16, number=16,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BS', index=17, number=17,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BH', index=18, number=18,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BD', index=19, number=19,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BB', index=20, number=20,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BY', index=21, number=21,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BE', index=22, number=22,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BZ', index=23, number=23,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BJ', index=24, number=24,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BM', index=25, number=25,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BT', index=26, number=26,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BO', index=27, number=27,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BQ', index=28, number=28,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BA', index=29, number=29,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BW', index=30, number=30,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BV', index=31, number=31,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BR', index=32, number=32,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IO', index=33, number=33,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BN', index=34, number=34,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BG', index=35, number=35,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BF', index=36, number=36,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BI', index=37, number=37,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KH', index=38, number=38,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CM', index=39, number=39,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CA', index=40, number=40,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CV', index=41, number=41,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KY', index=42, number=42,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CF', index=43, number=43,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TD', index=44, number=44,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CL', index=45, number=45,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CN', index=46, number=46,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CX', index=47, number=47,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CC', index=48, number=48,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CO', index=49, number=49,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KM', index=50, number=50,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CG', index=51, number=51,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CD', index=52, number=52,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CK', index=53, number=53,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CR', index=54, number=54,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CI', index=55, number=55,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='HR', index=56, number=56,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CU', index=57, number=57,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CW', index=58, number=58,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CY', index=59, number=59,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CZ', index=60, number=60,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DK', index=61, number=61,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DJ', index=62, number=62,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DM', index=63, number=63,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DO', index=64, number=64,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='EC', index=65, number=65,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='EG', index=66, number=66,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SV', index=67, number=67,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GQ', index=68, number=68,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ER', index=69, number=69,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='EE', index=70, number=70,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ET', index=71, number=71,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='FK', index=72, number=72,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='FO', index=73, number=73,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='FJ', index=74, number=74,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='FI', index=75, number=75,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='FR', index=76, number=76,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GF', index=77, number=77,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PF', index=78, number=78,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TF', index=79, number=79,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GA', index=80, number=80,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GM', index=81, number=81,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GE', index=82, number=82,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DE', index=83, number=83,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GH', index=84, number=84,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GI', index=85, number=85,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GR', index=86, number=86,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GL', index=87, number=87,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GD', index=88, number=88,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GP', index=89, number=89,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GU', index=90, number=90,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GT', index=91, number=91,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GG', index=92, number=92,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GN', index=93, number=93,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GW', index=94, number=94,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GY', index=95, number=95,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='HT', index=96, number=96,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='HM', index=97, number=97,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='VA', index=98, number=98,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='HN', index=99, number=99,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='HK', index=100, number=100,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='HU', index=101, number=101,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IS', index=102, number=102,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IN', index=103, number=103,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ID', index=104, number=104,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IR', index=105, number=105,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IQ', index=106, number=106,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IE', index=107, number=107,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IM', index=108, number=108,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IL', index=109, number=109,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='IT', index=110, number=110,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='JM', index=111, number=111,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='JP', index=112, number=112,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='JE', index=113, number=113,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='JO', index=114, number=114,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KZ', index=115, number=115,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KE', index=116, number=116,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KI', index=117, number=117,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KP', index=118, number=118,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KR', index=119, number=119,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KW', index=120, number=120,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KG', index=121, number=121,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LA', index=122, number=122,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LV', index=123, number=123,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LB', index=124, number=124,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LS', index=125, number=125,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LR', index=126, number=126,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LY', index=127, number=127,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LI', index=128, number=128,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LT', index=129, number=129,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LU', index=130, number=130,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MO', index=131, number=131,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MK', index=132, number=132,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MG', index=133, number=133,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MW', index=134, number=134,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MY', index=135, number=135,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MV', index=136, number=136,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ML', index=137, number=137,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MT', index=138, number=138,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MH', index=139, number=139,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MQ', index=140, number=140,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MR', index=141, number=141,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MU', index=142, number=142,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='YT', index=143, number=143,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MX', index=144, number=144,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='FM', index=145, number=145,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MD', index=146, number=146,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MC', index=147, number=147,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MN', index=148, number=148,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ME', index=149, number=149,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MS', index=150, number=150,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MA', index=151, number=151,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MZ', index=152, number=152,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MM', index=153, number=153,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NA', index=154, number=154,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NR', index=155, number=155,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NP', index=156, number=156,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NL', index=157, number=157,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NC', index=158, number=158,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NZ', index=159, number=159,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NI', index=160, number=160,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NE', index=161, number=161,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NG', index=162, number=162,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NU', index=163, number=163,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NF', index=164, number=164,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MP', index=165, number=165,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NO', index=166, number=166,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='OM', index=167, number=167,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PK', index=168, number=168,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PW', index=169, number=169,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PS', index=170, number=170,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PA', index=171, number=171,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PG', index=172, number=172,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PY', index=173, number=173,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PE', index=174, number=174,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PH', index=175, number=175,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PN', index=176, number=176,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PL', index=177, number=177,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PT', index=178, number=178,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PR', index=179, number=179,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='QA', index=180, number=180,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='RE', index=181, number=181,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='RO', index=182, number=182,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='RU', index=183, number=183,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='RW', index=184, number=184,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BL', index=185, number=185,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SH', index=186, number=186,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='KN', index=187, number=187,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LC', index=188, number=188,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='MF', index=189, number=189,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PM', index=190, number=190,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='VC', index=191, number=191,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='WS', index=192, number=192,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SM', index=193, number=193,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ST', index=194, number=194,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SA', index=195, number=195,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SN', index=196, number=196,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='RS', index=197, number=197,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SC', index=198, number=198,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SL', index=199, number=199,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SG', index=200, number=200,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SX', index=201, number=201,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SK', index=202, number=202,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SI', index=203, number=203,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SB', index=204, number=204,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SO', index=205, number=205,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ZA', index=206, number=206,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GS', index=207, number=207,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SS', index=208, number=208,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ES', index=209, number=209,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='LK', index=210, number=210,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SD', index=211, number=211,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SR', index=212, number=212,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SJ', index=213, number=213,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SZ', index=214, number=214,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SE', index=215, number=215,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CH', index=216, number=216,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SY', index=217, number=217,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TW', index=218, number=218,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TJ', index=219, number=219,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TZ', index=220, number=220,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TH', index=221, number=221,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TL', index=222, number=222,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TG', index=223, number=223,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TK', index=224, number=224,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TO', index=225, number=225,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TT', index=226, number=226,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TN', index=227, number=227,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TR', index=228, number=228,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TM', index=229, number=229,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TC', index=230, number=230,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='TV', index=231, number=231,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UG', index=232, number=232,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UA', index=233, number=233,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='AE', index=234, number=234,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='GB', index=235, number=235,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='US', index=236, number=236,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UM', index=237, number=237,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UY', index=238, number=238,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UZ', index=239, number=239,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='VU', index=240, number=240,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='VE', index=241, number=241,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='VN', index=242, number=242,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='VG', index=243, number=243,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='VI', index=244, number=244,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='WF', index=245, number=245,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='EH', index=246, number=246,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='YE', index=247, number=247,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ZM', index=248, number=248,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ZW', index=249, number=249,
+      serialized_options=None,
+      type=None),
+  ],
+  containing_type=None,
+  serialized_options=None,
+  serialized_start=4934,
+  serialized_end=7078,
+)
+_sym_db.RegisterEnumDescriptor(_LOCATION_COUNTRY)
 
 
 _CLAIM = _descriptor.Descriptor(
@@ -103,57 +2685,64 @@ _CHANNEL = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='tags', full_name='pb.Channel.tags', index=1,
-      number=2, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='title', full_name='pb.Channel.title', index=1,
+      number=2, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='title', full_name='pb.Channel.title', index=2,
+      name='description', full_name='pb.Channel.description', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='description', full_name='pb.Channel.description', index=3,
+      name='thumbnail_url', full_name='pb.Channel.thumbnail_url', index=3,
       number=4, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='thumbnail_url', full_name='pb.Channel.thumbnail_url', index=4,
-      number=5, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
+      name='tags', full_name='pb.Channel.tags', index=4,
+      number=5, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='language', full_name='pb.Channel.language', index=5,
-      number=6, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
+      name='languages', full_name='pb.Channel.languages', index=5,
+      number=6, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='contact_email', full_name='pb.Channel.contact_email', index=6,
-      number=7, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
+      name='locations', full_name='pb.Channel.locations', index=6,
+      number=7, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='homepage_url', full_name='pb.Channel.homepage_url', index=7,
+      name='contact_email', full_name='pb.Channel.contact_email', index=7,
       number=8, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='cover_url', full_name='pb.Channel.cover_url', index=8,
+      name='homepage_url', full_name='pb.Channel.homepage_url', index=8,
       number=9, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='cover_url', full_name='pb.Channel.cover_url', index=9,
+      number=10, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -171,7 +2760,7 @@ _CHANNEL = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=99,
-  serialized_end=283,
+  serialized_end=331,
 )
 
 
@@ -183,112 +2772,119 @@ _STREAM = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='hash', full_name='pb.Stream.hash', index=0,
+      name='sd_hash', full_name='pb.Stream.sd_hash', index=0,
       number=1, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='tags', full_name='pb.Stream.tags', index=1,
-      number=2, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='title', full_name='pb.Stream.title', index=1,
+      number=2, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='title', full_name='pb.Stream.title', index=2,
+      name='description', full_name='pb.Stream.description', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='description', full_name='pb.Stream.description', index=3,
+      name='thumbnail_url', full_name='pb.Stream.thumbnail_url', index=3,
       number=4, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='thumbnail_url', full_name='pb.Stream.thumbnail_url', index=4,
-      number=5, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
+      name='tags', full_name='pb.Stream.tags', index=4,
+      number=5, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='language', full_name='pb.Stream.language', index=5,
-      number=6, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
+      name='languages', full_name='pb.Stream.languages', index=5,
+      number=6, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='author', full_name='pb.Stream.author', index=6,
-      number=7, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
+      name='locations', full_name='pb.Stream.locations', index=6,
+      number=7, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='license', full_name='pb.Stream.license', index=7,
+      name='author', full_name='pb.Stream.author', index=7,
       number=8, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='license_url', full_name='pb.Stream.license_url', index=8,
+      name='license', full_name='pb.Stream.license', index=8,
       number=9, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='release_time', full_name='pb.Stream.release_time', index=9,
-      number=10, type=3, cpp_type=2, label=1,
+      name='license_url', full_name='pb.Stream.license_url', index=9,
+      number=10, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='release_time', full_name='pb.Stream.release_time', index=10,
+      number=11, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='media_type', full_name='pb.Stream.media_type', index=10,
+      name='media_type', full_name='pb.Stream.media_type', index=11,
       number=13, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='fee', full_name='pb.Stream.fee', index=11,
+      name='file', full_name='pb.Stream.file', index=12,
       number=14, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='file', full_name='pb.Stream.file', index=12,
+      name='fee', full_name='pb.Stream.fee', index=13,
       number=15, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='image', full_name='pb.Stream.image', index=13,
+      name='image', full_name='pb.Stream.image', index=14,
       number=16, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='video', full_name='pb.Stream.video', index=14,
+      name='video', full_name='pb.Stream.video', index=15,
       number=17, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='audio', full_name='pb.Stream.audio', index=15,
+      name='audio', full_name='pb.Stream.audio', index=16,
       number=18, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
@@ -309,8 +2905,8 @@ _STREAM = _descriptor.Descriptor(
       name='type', full_name='pb.Stream.type',
       index=0, containing_type=None, fields=[]),
   ],
-  serialized_start=286,
-  serialized_end=633,
+  serialized_start=334,
+  serialized_end=732,
 )
 
 
@@ -355,8 +2951,8 @@ _FEE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=635,
-  serialized_end=739,
+  serialized_start=734,
+  serialized_end=838,
 )
 
 
@@ -368,14 +2964,21 @@ _FILE = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='name', full_name='pb.File.name', index=0,
+      name='hash', full_name='pb.File.hash', index=0,
+      number=3, type=12, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b(""),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='name', full_name='pb.File.name', index=1,
       number=1, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='size', full_name='pb.File.size', index=1,
+      name='size', full_name='pb.File.size', index=2,
       number=2, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -393,8 +2996,8 @@ _FILE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=741,
-  serialized_end=775,
+  serialized_start=840,
+  serialized_end=888,
 )
 
 
@@ -431,8 +3034,8 @@ _IMAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=777,
-  serialized_end=815,
+  serialized_start=890,
+  serialized_end=928,
 )
 
 
@@ -476,8 +3079,8 @@ _VIDEO = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=817,
-  serialized_end=873,
+  serialized_start=930,
+  serialized_end=986,
 )
 
 
@@ -507,8 +3110,122 @@ _AUDIO = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=875,
-  serialized_end=900,
+  serialized_start=988,
+  serialized_end=1013,
+)
+
+
+_LANGUAGE = _descriptor.Descriptor(
+  name='Language',
+  full_name='pb.Language',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='language', full_name='pb.Language.language', index=0,
+      number=1, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='script', full_name='pb.Language.script', index=1,
+      number=2, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='region', full_name='pb.Language.region', index=2,
+      number=3, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+    _LANGUAGE_LANGUAGE,
+    _LANGUAGE_SCRIPT,
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1016,
+  serialized_end=4799,
+)
+
+
+_LOCATION = _descriptor.Descriptor(
+  name='Location',
+  full_name='pb.Location',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='country', full_name='pb.Location.country', index=0,
+      number=1, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='state', full_name='pb.Location.state', index=1,
+      number=2, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='city', full_name='pb.Location.city', index=2,
+      number=3, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='code', full_name='pb.Location.code', index=3,
+      number=4, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='latitude', full_name='pb.Location.latitude', index=4,
+      number=5, type=1, cpp_type=5, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='longitude', full_name='pb.Location.longitude', index=5,
+      number=6, type=1, cpp_type=5, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+    _LOCATION_COUNTRY,
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=4802,
+  serialized_end=7078,
 )
 
 _CLAIM.fields_by_name['stream'].message_type = _STREAM
@@ -519,8 +3236,12 @@ _CLAIM.fields_by_name['stream'].containing_oneof = _CLAIM.oneofs_by_name['type']
 _CLAIM.oneofs_by_name['type'].fields.append(
   _CLAIM.fields_by_name['channel'])
 _CLAIM.fields_by_name['channel'].containing_oneof = _CLAIM.oneofs_by_name['type']
-_STREAM.fields_by_name['fee'].message_type = _FEE
+_CHANNEL.fields_by_name['languages'].message_type = _LANGUAGE
+_CHANNEL.fields_by_name['locations'].message_type = _LOCATION
+_STREAM.fields_by_name['languages'].message_type = _LANGUAGE
+_STREAM.fields_by_name['locations'].message_type = _LOCATION
 _STREAM.fields_by_name['file'].message_type = _FILE
+_STREAM.fields_by_name['fee'].message_type = _FEE
 _STREAM.fields_by_name['image'].message_type = _IMAGE
 _STREAM.fields_by_name['video'].message_type = _VIDEO
 _STREAM.fields_by_name['audio'].message_type = _AUDIO
@@ -535,6 +3256,13 @@ _STREAM.oneofs_by_name['type'].fields.append(
 _STREAM.fields_by_name['audio'].containing_oneof = _STREAM.oneofs_by_name['type']
 _FEE.fields_by_name['currency'].enum_type = _FEE_CURRENCY
 _FEE_CURRENCY.containing_type = _FEE
+_LANGUAGE.fields_by_name['language'].enum_type = _LANGUAGE_LANGUAGE
+_LANGUAGE.fields_by_name['script'].enum_type = _LANGUAGE_SCRIPT
+_LANGUAGE.fields_by_name['region'].enum_type = _LOCATION_COUNTRY
+_LANGUAGE_LANGUAGE.containing_type = _LANGUAGE
+_LANGUAGE_SCRIPT.containing_type = _LANGUAGE
+_LOCATION.fields_by_name['country'].enum_type = _LOCATION_COUNTRY
+_LOCATION_COUNTRY.containing_type = _LOCATION
 DESCRIPTOR.message_types_by_name['Claim'] = _CLAIM
 DESCRIPTOR.message_types_by_name['Channel'] = _CHANNEL
 DESCRIPTOR.message_types_by_name['Stream'] = _STREAM
@@ -543,6 +3271,8 @@ DESCRIPTOR.message_types_by_name['File'] = _FILE
 DESCRIPTOR.message_types_by_name['Image'] = _IMAGE
 DESCRIPTOR.message_types_by_name['Video'] = _VIDEO
 DESCRIPTOR.message_types_by_name['Audio'] = _AUDIO
+DESCRIPTOR.message_types_by_name['Language'] = _LANGUAGE
+DESCRIPTOR.message_types_by_name['Location'] = _LOCATION
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 Claim = _reflection.GeneratedProtocolMessageType('Claim', (_message.Message,), dict(
@@ -600,6 +3330,20 @@ Audio = _reflection.GeneratedProtocolMessageType('Audio', (_message.Message,), d
   # @@protoc_insertion_point(class_scope:pb.Audio)
   ))
 _sym_db.RegisterMessage(Audio)
+
+Language = _reflection.GeneratedProtocolMessageType('Language', (_message.Message,), dict(
+  DESCRIPTOR = _LANGUAGE,
+  __module__ = 'claim_pb2'
+  # @@protoc_insertion_point(class_scope:pb.Language)
+  ))
+_sym_db.RegisterMessage(Language)
+
+Location = _reflection.GeneratedProtocolMessageType('Location', (_message.Message,), dict(
+  DESCRIPTOR = _LOCATION,
+  __module__ = 'claim_pb2'
+  # @@protoc_insertion_point(class_scope:pb.Location)
+  ))
+_sym_db.RegisterMessage(Location)
 
 
 # @@protoc_insertion_point(module_scope)

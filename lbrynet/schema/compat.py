@@ -17,8 +17,15 @@ def from_old_json_schema(claim, payload: bytes):
     stream.author = value.get('author', '')
     stream.license = value.get('license', '')
     stream.license_url = value.get('license_url', '')
-    stream.language = value.get('language', '')
-    stream.hash = value['sources']['lbry_sd_hash']
+    language = value.get('language', '')
+    if language:
+        if language.lower() == 'english':
+            language = 'en'
+        try:
+            stream.language = language
+        except:
+            pass
+    stream.sd_hash = value['sources']['lbry_sd_hash']
     if value.get('nsfw', False):
         stream.tags.append('mature')
     if "fee" in value:
@@ -45,9 +52,10 @@ def from_types_v1(claim, payload: bytes):
         stream.license = old.stream.metadata.license
         stream.license_url = old.stream.metadata.licenseUrl
         stream.thumbnail_url = old.stream.metadata.thumbnail
-        stream.language = MetadataMessage.Language.Name(old.stream.metadata.language)
+        if old.stream.metadata.HasField('language'):
+            stream.languages.add().language = old.stream.metadata.language
         stream.media_type = old.stream.source.contentType
-        stream.hash_bytes = old.stream.source.source
+        stream.sd_hash_bytes = old.stream.source.source
         if old.stream.metadata.nsfw:
             stream.tags.append('mature')
         if old.stream.metadata.HasField('fee'):
