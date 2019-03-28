@@ -116,7 +116,7 @@ def get_sd_hash(stream_info):
     if not stream_info:
         return None
     if isinstance(stream_info, Claim):
-        return stream_info.stream.hash
+        return stream_info.stream.sd_hash
     result = stream_info.get('claim', {}).\
         get('value', {}).\
         get('stream', {}).\

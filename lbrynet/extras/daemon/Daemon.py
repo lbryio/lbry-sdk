@@ -2118,7 +2118,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 )
 
         claim = Claim()
-        claim.stream.update(file_path=file_path, hash='0'*96, **kwargs)
+        claim.stream.update(file_path=file_path, sd_hash='0'*96, **kwargs)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, [account], account, channel
         )
@@ -2126,7 +2126,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             file_stream = await self.stream_manager.create_stream(file_path)
-            claim.stream.hash = file_stream.sd_hash
+            claim.stream.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
             if channel:
                 new_txo.sign(channel)
@@ -2135,7 +2135,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim.stream.hash)
+            stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim.stream.sd_hash)
             if stream_hash:
                 await self.storage.save_content_claim(stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
@@ -2246,7 +2246,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if not preview:
             if file_path is not None:
                 file_stream = await self.stream_manager.create_stream(file_path)
-                new_txo.claim.stream.hash = file_stream.sd_hash
+                new_txo.claim.stream.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
             if channel:
                 new_txo.sign(channel)
@@ -2255,7 +2255,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(new_txo.claim.stream.hash)
+            stream_hash = await self.storage.get_stream_hash_for_sd_hash(new_txo.claim.stream.sd_hash)
             if stream_hash:
                 await self.storage.save_content_claim(stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
@@ -3002,8 +3002,11 @@ class Daemon(metaclass=JSONRPCServerType):
                     raise Exception(f"Couldn't find private key for {key} '{value}'. ")
                 return channels[0]
             elif len(channels) > 1:
-                raise ValueError(f"Multiple channels found with {key} '{value}', pass a channel_id to narrow it down.")
-        raise ValueError(f"Couldn't find channel with {key} '{value}'.")
+                raise ValueError(
+                    f"Multiple channels found with channel_{key} '{value}', "
+                    f"pass a channel_id to narrow it down."
+                )
+        raise ValueError(f"Couldn't find channel with channel_{key} '{value}'.")
 
     def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True) -> LBCAccount:
         if account_id is None:

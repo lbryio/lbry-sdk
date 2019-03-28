@@ -12,10 +12,15 @@ from hachoir.core.log import log as hachoir_log
 from torba.client.hash import Base58
 from torba.client.constants import COIN
 
-from lbrynet.schema.types.v2.claim_pb2 import Claim as ClaimMessage, Fee as FeeMessage
 from lbrynet.schema import compat
 from lbrynet.schema.base import Signable
 from lbrynet.schema.mime_types import guess_media_type
+from lbrynet.schema.types.v2.claim_pb2 import (
+    Claim as ClaimMessage,
+    Fee as FeeMessage,
+    Location as LocationMessage,
+    Language as LanguageMessage
+)
 
 
 hachoir_log.use_print = False
@@ -297,11 +302,37 @@ class BaseClaimSubType:
 
     @property
     def language(self) -> str:
-        return self.message.language
+        if len(self.languages) > 0:
+            return LanguageMessage.Language.Name(self.languages[0].language)
 
     @language.setter
     def language(self, language: str):
-        self.message.language = language
+        value = LanguageMessage.Language.Value(language)
+        if len(self.languages) > 0:
+            self.languages[0].language = value
+        else:
+            self.languages.add().language = value
+
+    @property
+    def languages(self):
+        return self.message.languages
+
+    @property
+    def location_country(self) -> str:
+        if len(self.locations) > 0:
+            return LocationMessage.Country.Name(self.locations[0].country)
+
+    @location_country.setter
+    def location_country(self, country: str):
+        value = LocationMessage.Country.Value(country)
+        if len(self.locations) > 0:
+            self.locations[0].location = value
+        else:
+            self.locations.add().location = value
+
+    @property
+    def locations(self):
+        return self.message.locations
 
     def to_dict(self):
         return MessageToDict(self.message, preserving_proto_field_name=True)
@@ -429,20 +460,20 @@ class Stream(BaseClaimSubType):
                 raise Exception(f'Unknown currency type: {fee_currency}')
 
     @property
-    def hash(self) -> str:
-        return hexlify(self.message.hash).decode()
+    def sd_hash(self) -> str:
+        return hexlify(self.message.sd_hash).decode()
 
-    @hash.setter
-    def hash(self, sd_hash: str):
-        self.message.hash = unhexlify(sd_hash.encode())
+    @sd_hash.setter
+    def sd_hash(self, sd_hash: str):
+        self.message.sd_hash = unhexlify(sd_hash.encode())
 
     @property
-    def hash_bytes(self) -> bytes:
-        return self.message.hash
+    def sd_hash_bytes(self) -> bytes:
+        return self.message.sd_hash
 
-    @hash_bytes.setter
-    def hash_bytes(self, hash: bytes):
-        self.message.hash = hash
+    @sd_hash_bytes.setter
+    def sd_hash_bytes(self, sd_hash: bytes):
+        self.message.sd_hash = sd_hash
 
     @property
     def author(self) -> str:

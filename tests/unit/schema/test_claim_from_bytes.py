@@ -20,11 +20,11 @@ class TestOldJSONSchemaCompatibility(TestCase):
         self.assertEqual(stream.description, '10MB test file to measure download speed on Lbry p2p-network.')
         self.assertEqual(stream.license, 'None')
         self.assertEqual(stream.author, 'root')
-        self.assertEqual(stream.language, 'English')
+        self.assertEqual(stream.language, 'en')
         self.assertEqual(stream.media_type, 'application/octet-stream')
         self.assertEqual(stream.thumbnail_url, '/home/robert/lbry/speed.jpg')
         self.assertEqual(
-            stream.hash,
+            stream.sd_hash,
             'bbd1f68374ff9a1044a90d7dd578ce41979211c386caf19e'
             '6f496536db5f2c96b58fe2c7a6677b331419a117873b539f'
         )
@@ -54,7 +54,7 @@ class TestOldJSONSchemaCompatibility(TestCase):
         self.assertEqual(stream.language, 'en')
         self.assertEqual(stream.media_type, 'application/x-msdownload')
         self.assertEqual(
-            stream.hash,
+            stream.sd_hash,
             'c5ffee0fa5168e16681b519d9d85446e8d1d818a616bd555'
             '40aa7374d2321b51abf2ac3dae1443a03dadcc8f7affaa62'
         )
@@ -80,7 +80,7 @@ class TestOldJSONSchemaCompatibility(TestCase):
         self.assertEqual(stream.language, 'en')
         self.assertEqual(stream.media_type, 'video/mp4')
         self.assertEqual(
-            stream.hash,
+            stream.sd_hash,
             'd83db664c6d7d570aa824300f4869e0bfb560e765efa477a'
             'ebf566467f8d3a57f4f8c704cab1308eb75ff8b7e84e3caf'
         )
@@ -124,7 +124,7 @@ class TestTypesV1Compatibility(TestCase):
         self.assertEqual(stream.media_type, 'video/mp4')
         self.assertEqual(stream.thumbnail_url, 'https://berk.ninja/thumbnails/FrTdBCOS_fc')
         self.assertEqual(
-            stream.hash,
+            stream.sd_hash,
             '040e8ac6e89c061f982528c23ad33829fd7146435bf7a4cc'
             '22f0bff70c4fe0b91fd36da9a375e3e1c171db825bf5d1f3'
         )
@@ -160,7 +160,7 @@ class TestTypesV1Compatibility(TestCase):
         self.assertEqual(stream.language, 'en')
         self.assertEqual(stream.media_type, 'application/x-zip-compressed')
         self.assertEqual(
-            stream.hash,
+            stream.sd_hash,
             '1f41eb0312aa7e8a5ce49349bc77d811da975833719d7515'
             '23b19f123fc3d528d6a94e3446ccddb7b9329f27a9cad7e3'
         )
