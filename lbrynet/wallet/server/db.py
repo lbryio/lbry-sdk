@@ -15,7 +15,9 @@ class LBRYDB(DB):
         self.claim_cache = {}
         self.claims_signed_by_cert_cache = {}
         self.outpoint_to_claim_id_cache = {}
+        self.canonical_url_cache = {}
         self.claims_db = self.signatures_db = self.outpoint_to_claim_id_db = self.claim_undo_db = None
+        self.canonical_url_db = None
         # stores deletes not yet flushed to disk
         self.pending_abandons = {}
         super().__init__(*args, **kwargs)
@@ -25,6 +27,7 @@ class LBRYDB(DB):
         self.claims_db.close()
         self.signatures_db.close()
         self.outpoint_to_claim_id_db.close()
+        self.canonical_url_db.close()
         self.claim_undo_db.close()
         self.utxo_db.close()
         super().close()
@@ -43,10 +46,12 @@ class LBRYDB(DB):
             self.signatures_db.close()
             self.outpoint_to_claim_id_db.close()
             self.claim_undo_db.close()
+            self.canonical_url_db.close()
         self.claims_db = self.db_class('claims', for_sync)
         self.signatures_db = self.db_class('signatures', for_sync)
         self.outpoint_to_claim_id_db = self.db_class('outpoint_claim_id', for_sync)
         self.claim_undo_db = self.db_class('claim_undo', for_sync)
+        self.canonical_url_db = self.db_class('canonical_url_db', for_sync)
         log_reason('opened claim DBs', self.claims_db.for_sync)
 
     def flush_dbs(self, flush_data, flush_utxos, estimate_txs_remaining):
@@ -58,12 +63,14 @@ class LBRYDB(DB):
         with self.claims_db.write_batch() as claims_batch:
             with self.signatures_db.write_batch() as signed_claims_batch:
                 with self.outpoint_to_claim_id_db.write_batch() as outpoint_batch:
-                    self.flush_claims(claims_batch, signed_claims_batch, outpoint_batch)
+                    with self.canonical_url_db.write_batch() as canonical_url_batch:
+                        self.flush_claims(claims_batch, signed_claims_batch, outpoint_batch, canonical_url_batch)
 
-    def flush_claims(self, batch, signed_claims_batch, outpoint_batch):
+    def flush_claims(self, batch, signed_claims_batch, outpoint_batch, canonical_url_batch):
         flush_start = time.time()
         write_claim, write_cert = batch.put, signed_claims_batch.put
         write_outpoint = outpoint_batch.put
+        write_canonical_url = canonical_url_batch.put
         delete_claim, delete_outpoint = batch.delete, outpoint_batch.delete
         delete_cert = signed_claims_batch.delete
         for claim_id, outpoints in self.pending_abandons.items():
@@ -89,6 +96,10 @@ class LBRYDB(DB):
                 write_outpoint(key, claim_id)
             else:
                 delete_outpoint(key)
+        for key, claim_id in self.canonical_url_cache.items():
+            self.logger.info("HERE HERE HERE HERE {}, {}".format(key, claim_id))
+            if claim_id:
+                write_canonical_url(key, claim_id)
         self.logger.info('flushed at height {:,d} with {:,d} claims, {:,d} outpoints '
                          'and {:,d} certificates added while {:,d} were abandoned in {:.1f}s, committing...'
                          .format(self.db_height,
@@ -99,6 +110,7 @@ class LBRYDB(DB):
         self.claims_signed_by_cert_cache = {}
         self.outpoint_to_claim_id_cache = {}
         self.pending_abandons = {}
+        self.canonical_url_cache = {}
 
     def assert_flushed(self, flush_data):
         super().assert_flushed(flush_data)
@@ -106,6 +118,7 @@ class LBRYDB(DB):
         assert not self.claims_signed_by_cert_cache
         assert not self.outpoint_to_claim_id_cache
         assert not self.pending_abandons
+        assert not self.canonical_url_cache
 
     def abandon_spent(self, tx_hash, tx_idx):
         claim_id = self.get_claim_id_from_outpoint(tx_hash, tx_idx)
@@ -156,6 +169,22 @@ class LBRYDB(DB):
     def get_claim_info(self, claim_id):
         serialized = self.claim_cache.get(claim_id) or self.claims_db.get(claim_id)
         return ClaimInfo.from_serialized(serialized) if serialized else None
+
+    def get_full_claim_id_from_canonical(self, claim_name, short_id):
+        uri = "{}#{}".format(claim_name, short_id).encode()
+        full_claim_id = self.canonical_url_cache.get(uri) or self.canonical_url_db.get(uri)
+        return full_claim_id
+
+    def put_canonical_url(self, claim_id, claim_info):
+        self.logger.info("[+] Adding canonical url for: {}".format(hash_to_hex_str(claim_id)))
+        claim_name = claim_info.name.decode()
+        claim_id = hash_to_hex_str(claim_id)
+        separator = '#'
+        for i in range(len(claim_id)):
+            canonical_url = separator.join([claim_name, claim_id[:i+1]])
+            if not (self.canonical_url_cache.get(canonical_url) or self.canonical_url_db.get(canonical_url.encode())):
+                self.canonical_url_cache[canonical_url.encode()] = claim_id.encode()
+                break
 
     def put_claim_info(self, claim_id, claim_info):
         self.logger.info("[+] Adding claim info for: {}".format(hash_to_hex_str(claim_id)))

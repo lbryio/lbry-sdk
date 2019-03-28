@@ -78,6 +78,7 @@ class LBRYBlockProcessor(BlockProcessor):
         if claim_info.cert_id:
             self.db.put_claim_id_signed_by_cert_id(claim_info.cert_id, claim_id)
         self.db.put_claim_info(claim_id, claim_info)
+        self.db.put_canonical_url(claim_id, claim_info)
         self.db.put_claim_id_for_outpoint(txid, nout, claim_id)
         return claim_id, None
 
