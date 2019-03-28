@@ -87,7 +87,7 @@ class CLITest(AsyncioTestCase):
     def test_valid_command_daemon_not_started(self):
         self.assertEqual(
             "Could not connect to daemon. Are you sure it's running?",
-            self.shell(["publish", 'asd', '99', '/blah/foo', 'video'])
+            self.shell(["publish", 'asd'])
         )
 
     def test_deprecated_command_daemon_not_started(self):
