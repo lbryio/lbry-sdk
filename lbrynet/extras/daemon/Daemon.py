@@ -1658,7 +1658,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>     : (str) find a claim with this claim_id
             --txid=<txid>             : (str) find a claim with this txid:nout
             --nout=<nout>             : (str) find a claim with this txid:nout
-            --channel_id=<channel_id> : (str) limit search to specific channel (returns stream claims)
+            --channel_id=<channel_id> : (str) limit search to specific channel claim id (returns stream claims)
             --winning                 : (bool) limit to winning claims
             --page=<page>             : (int) page to return during paginating
             --page_size=<page_size>   : (int) number of items on page during pagination
