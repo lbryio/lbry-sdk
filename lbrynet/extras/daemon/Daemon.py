@@ -1828,7 +1828,7 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--tags=<tags>...] [--clear_tags] [--title=<title>] [--description=<description>]
                            [--language=<language>] [--contact_email=<contact_email>]
                            [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
-                           [--account_id=<account_id>] [--claim_address=<claim_address>] [--new-signing-key] [--preview]
+                           [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key] [--preview]
 
         Options:
             --claim_id=<claim_id>          : (str) claim_id of the channel to update
@@ -1844,7 +1844,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --cover_url=<cover_url>        : (str) url of cover image
             --account_id=<account_id>      : (str) id of the account to store channel
             --claim_address=<claim_address>: (str) address where the channel is sent
-            --new-signing-key              : (bool) generate a new signing key, will invalidate all previous publishes
+            --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
             --preview                      : (bool) do not broadcast the transaction
         """
         account = self.get_account_or_default(account_id)
