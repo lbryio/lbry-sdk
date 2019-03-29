@@ -1825,7 +1825,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             channel_update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
-                           [--tags=<tags>...] [--clear-tags] [--title=<title>] [--description=<description>]
+                           [--tags=<tags>...] [--clear_tags] [--title=<title>] [--description=<description>]
                            [--language=<language>] [--contact_email=<contact_email>]
                            [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--new-signing-key] [--preview]
@@ -1834,7 +1834,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>          : (str) claim_id of the channel to update
             --bid=<bid>                    : (decimal) amount to back the claim
             --tags=<tags>                  : (list) add content tags
-            --clear-tags                   : (bool) clear existing tags (prior to adding new ones)
+            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
             --language=<language>          : (str) primary language of the channel
