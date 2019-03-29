@@ -2415,10 +2415,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if keep > 0:
             outputs = [
                 Output.pay_support_pubkey_hash(
-                    keep, supports[0].claim_name, supports[0].claim_id,
-                    account.ledger.address_to_hash160(
-                        await account.receiving.get_or_create_usable_address()
-                    )
+                    keep, supports[0].claim_name, supports[0].claim_id, supports[0].pubkey_hash
                 )
             ]
 
