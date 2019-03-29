@@ -51,26 +51,11 @@ class MainNetLedger(BaseLedger):
 
     @property
     def resolver(self):
-        return Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
+        return Resolver(self.headers, self.transaction_class,
                         hash160_to_address=self.hash160_to_address, network=self.network, ledger=self)
 
-    async def resolve(self, page, page_size, *uris):
-        for uri in uris:
-            try:
-                parsed_uri = parse_lbry_uri(uri)
-                if parsed_uri.claim_id:
-                    validate_claim_id(parsed_uri.claim_id)
-            except URIParseError as err:
-                return {'error': err.args[0]}
-            except Exception as e:
-                return {'error': str(e)}
-        try:
-            resolver = self.resolver
-            resolutions = await self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
-            return await resolver._handle_resolutions(resolutions, uris, page, page_size)
-        except Exception as e:
-            log.exception(e)
-            return {'error': str(e)}
+    def resolve(self, page, page_size, *uris):
+        return self.resolver.resolve(page, page_size, *uris)
 
     async def get_claim_by_claim_id(self, claim_id):
         result = (await self.network.get_claims_by_ids(claim_id)).pop(claim_id, {})

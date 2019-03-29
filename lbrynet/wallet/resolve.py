@@ -2,11 +2,13 @@ import logging
 
 from cryptography.exceptions import InvalidSignature
 from binascii import unhexlify, hexlify
+
+from lbrynet.wallet.account import validate_claim_id
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
 from lbrynet.schema.claim import Claim
 from google.protobuf.message import DecodeError
-from lbrynet.schema.uri import parse_lbry_uri
+from lbrynet.schema.uri import parse_lbry_uri, URIParseError
 from lbrynet.wallet.claim_proofs import verify_proof, InvalidProofError
 from lbrynet.wallet.transaction import Transaction
 
@@ -15,13 +17,28 @@ log = logging.getLogger(__name__)
 
 class Resolver:
 
-    def __init__(self, claim_trie_root, height, transaction_class, hash160_to_address, network, ledger):
-        self.claim_trie_root = claim_trie_root
-        self.height = height
+    def __init__(self, headers, transaction_class, hash160_to_address, network, ledger):
+        self.claim_trie_root = headers.claim_trie_root
+        self.height = headers.height
+        self.header_hash = headers.hash().decode()
         self.transaction_class = transaction_class
         self.hash160_to_address = hash160_to_address
         self.network = network
         self.ledger = ledger
+
+    async def resolve(self, page, page_size, *uris):
+        try:
+            for uri in uris:
+                parsed_uri = parse_lbry_uri(uri)
+                if parsed_uri.claim_id:
+                    validate_claim_id(parsed_uri.claim_id)
+            resolutions = await self.network.get_values_for_uris(self.header_hash, *uris)
+            return await self._handle_resolutions(resolutions, uris, page, page_size)
+        except URIParseError as err:
+            return {'error': err.args[0]}
+        except Exception as e:
+            log.exception(e)
+            return {'error': str(e)}
 
     async def _handle_resolutions(self, resolutions, requested_uris, page, page_size):
         results = {}
