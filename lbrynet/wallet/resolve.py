@@ -420,7 +420,7 @@ def _decode_claim_result(claim):
         return claim
     try:
         if not isinstance(claim['value'], Claim):
-            claim['value'] = Claim.from_bytes(claim['value'])
+            claim['value'] = Claim.from_bytes(unhexlify(claim['value']))
         claim['hex'] = hexlify(claim['value'].to_bytes())
     except DecodeError:
         claim['hex'] = claim['value']
