@@ -1,6 +1,8 @@
 import json
 from decimal import Decimal
 
+from google.protobuf.message import DecodeError
+
 from lbrynet.schema.types.v1.legacy_claim_pb2 import Claim as OldClaimMessage
 from lbrynet.schema.types.v1.certificate_pb2 import KeyType
 from lbrynet.schema.types.v1.fee_pb2 import Fee as FeeMessage
@@ -37,7 +39,7 @@ def from_old_json_schema(claim, payload: bytes):
         elif currency == 'BTC':
             stream.fee.btc = Decimal(fee[currency]['amount'])
         else:
-            raise ValueError(f'Unknown currency: {currency}')
+            raise DecodeError(f'Unknown currency: {currency}')
         stream.fee.address = fee[currency]['address']
     return claim
 
@@ -70,7 +72,7 @@ def from_types_v1(claim, payload: bytes):
             elif currency == 'BTC':
                 stream.fee.btc = Decimal(fee.amount)
             else:
-                raise ValueError(f'Unsupported currency: {currency}')
+                raise DecodeError(f'Unsupported currency: {currency}')
         if old.HasField('publisherSignature'):
             sig = old.publisherSignature
             claim.signature = sig.signature
@@ -82,5 +84,5 @@ def from_types_v1(claim, payload: bytes):
         channel = claim.channel
         channel.public_key_bytes = old.certificate.publicKey
     else:
-        raise ValueError('claimType must be 1 for Streams and 2 for Channel')
+        raise DecodeError('claimType must be 1 for Streams and 2 for Channel')
     return claim
