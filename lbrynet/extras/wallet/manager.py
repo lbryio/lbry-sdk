@@ -368,16 +368,17 @@ class LbryWalletManager(BaseWalletManager):
                     'is_tip': not is_my_inputs,
                     'nout': txo.position
                 })
-            for txo in tx.other_support_outputs:
-                item['support_info'].append({
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'is_tip': is_my_inputs,
-                    'nout': txo.position
-                })
+            if is_my_inputs:
+                for txo in tx.other_support_outputs:
+                    item['support_info'].append({
+                        'address': txo.get_address(account.ledger),
+                        'balance_delta': dewies_to_lbc(-txo.amount),
+                        'amount': dewies_to_lbc(txo.amount),
+                        'claim_id': txo.claim_id,
+                        'claim_name': txo.claim_name,
+                        'is_tip': is_my_inputs,
+                        'nout': txo.position
+                    })
             for txo in tx.my_abandon_outputs:
                 item['abandon_info'].append({
                     'address': txo.get_address(account.ledger),
