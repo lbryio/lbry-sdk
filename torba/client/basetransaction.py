@@ -218,10 +218,12 @@ class BaseOutput(InputOutput):
     def id(self):
         return self.ref.id
 
+    @property
+    def pubkey_hash(self):
+        return self.script.values['pubkey_hash']
+
     def get_address(self, ledger):
-        return ledger.hash160_to_address(
-            self.script.values['pubkey_hash']
-        )
+        return ledger.hash160_to_address(self.pubkey_hash)
 
     def get_estimator(self, ledger):
         return self.estimator_class(ledger, self)
