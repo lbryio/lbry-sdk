@@ -1795,7 +1795,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations"::Manchester"
+                                                          --locations="::Manchester"
 
                                                         with all values set:
 
@@ -1903,7 +1903,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations"::Manchester"
+                                                          --locations="::Manchester"
 
                                                         with all values set:
 
@@ -2089,7 +2089,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     for Chinese (Simplified) `--languages=zh-Hans`
                                                     for Chinese (Traditional) `--languages=zh-Hant`
             --clear_locations              : (bool) clear existing locations (prior to adding new ones)
-            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+            --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
                                                     `country` code and a `state`, `city` and a postal
                                                     `code` along with a `latitude` and `longitude`.
                                                     for JSON RPC: pass a dictionary with aforementioned
@@ -2105,7 +2105,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations"::Manchester"
+                                                          --locations="::Manchester"
 
                                                         with all values set:
 
@@ -2210,7 +2210,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     for Spanish (Mexican) `--languages=es-MX`
                                                     for Chinese (Simplified) `--languages=zh-Hans`
                                                     for Chinese (Traditional) `--languages=zh-Hant`
-            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+            --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
                                                     `country` code and a `state`, `city` and a postal
                                                     `code` along with a `latitude` and `longitude`.
                                                     for JSON RPC: pass a dictionary with aforementioned
@@ -2226,7 +2226,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations"::Manchester"
+                                                          --locations="::Manchester"
 
                                                         with all values set:
 
@@ -2356,7 +2356,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     for Chinese (Simplified) `--languages=zh-Hans`
                                                     for Chinese (Traditional) `--languages=zh-Hant`
             --clear_locations              : (bool) clear existing locations (prior to adding new ones)
-            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+            --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
                                                     `country` code and a `state`, `city` and a postal
                                                     `code` along with a `latitude` and `longitude`.
                                                     for JSON RPC: pass a dictionary with aforementioned
@@ -2372,7 +2372,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations"::Manchester"
+                                                          --locations="::Manchester"
 
                                                         with all values set:
 
