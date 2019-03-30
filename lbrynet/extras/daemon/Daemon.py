@@ -1757,8 +1757,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             channel_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                           [--tags=<tags>...] [--allow_duplicate_name=<allow_duplicate_name>]
-                           [--title=<title>] [--description=<description>] [--language=<language>]
+                           [--allow_duplicate_name=<allow_duplicate_name>]
+                           [--title=<title>] [--description=<description>]
+                           [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                            [--contact_email=<contact_email>]
                            [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
@@ -1768,10 +1769,47 @@ class Daemon(metaclass=JSONRPCServerType):
         --allow_duplicate_name=<allow_duplicate_name> : (bool) create new channel even if one already exists with
                                               given name. default: false.
             --bid=<bid>                    : (decimal) amount to back the claim
-            --tags=<tags>                  : (list) content tags
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
-            --language=<language>          : (str) primary language of the channel
+            --tags=<tags>                  : (list) content tags
+            --languages=<languages>        : (list) languages used by the channel,
+                                                    using RFC 5646 format, eg:
+                                                    for English `--languages=en`
+                                                    for Spanish (Spain) `--languages=es-ES`
+                                                    for Spanish (Mexican) `--languages=es-MX`
+                                                    for Chinese (Simplified) `--languages=zh-Hans`
+                                                    for Chinese (Traditional) `--languages=zh-Hant`
+            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+                                                    `country` code and a `state`, `city` and a postal
+                                                    `code` along with a `latitude` and `longitude`.
+                                                    for JSON RPC: pass a dictionary with aforementioned
+                                                        attributes as keys, eg:
+                                                        ...
+                                                        "locations": [{'country': 'US', 'state': 'NH'}]
+                                                        ...
+                                                    for command line: pass a colon delimited list
+                                                        with values in the following order:
+
+                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
+
+                                                        making sure to include colon for blank values, for
+                                                        example to provide only the city:
+
+                                                          --locations"::Manchester"
+
+                                                        with all values set:
+
+                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+
+                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
+
+                                                          --locations="42.990605:-71.460989"
+
+                                                        finally, you can also pass JSON string of dictionary
+                                                        on the command line as you would via JSON RPC
+
+                                                        --locations="{'country': 'US', 'state': 'NH'}"
+
             --contact_email=<contact_email>: (str) email of channel owner
             --homepage_url=<homepage_url>  : (str) homepage url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
@@ -1825,19 +1863,61 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             channel_update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
-                           [--tags=<tags>...] [--clear_tags] [--title=<title>] [--description=<description>]
-                           [--language=<language>] [--contact_email=<contact_email>]
+                           [--title=<title>] [--description=<description>]
+                           [--tags=<tags>...] [--clear_tags]
+                           [--languages=<languages>...] [--clear_languages]
+                           [--locations=<locations>...] [--clear_locations]
+                           [--contact_email=<contact_email>]
                            [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key] [--preview]
 
         Options:
             --claim_id=<claim_id>          : (str) claim_id of the channel to update
             --bid=<bid>                    : (decimal) amount to back the claim
-            --tags=<tags>                  : (list) add content tags
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
-            --language=<language>          : (str) primary language of the channel
+            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
+            --tags=<tags>                  : (list) add content tags
+            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
+            --languages=<languages>        : (list) languages used by the channel,
+                                                    using RFC 5646 format, eg:
+                                                    for English `--languages=en`
+                                                    for Spanish (Spain) `--languages=es-ES`
+                                                    for Spanish (Mexican) `--languages=es-MX`
+                                                    for Chinese (Simplified) `--languages=zh-Hans`
+                                                    for Chinese (Traditional) `--languages=zh-Hant`
+            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
+            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+                                                    `country` code and a `state`, `city` and a postal
+                                                    `code` along with a `latitude` and `longitude`.
+                                                    for JSON RPC: pass a dictionary with aforementioned
+                                                        attributes as keys, eg:
+                                                        ...
+                                                        "locations": [{'country': 'US', 'state': 'NH'}]
+                                                        ...
+                                                    for command line: pass a colon delimited list
+                                                        with values in the following order:
+
+                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
+
+                                                        making sure to include colon for blank values, for
+                                                        example to provide only the city:
+
+                                                          --locations"::Manchester"
+
+                                                        with all values set:
+
+                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+
+                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
+
+                                                          --locations="42.990605:-71.460989"
+
+                                                        finally, you can also pass JSON string of dictionary
+                                                        on the command line as you would via JSON RPC
+
+                                                        --locations="{'country': 'US', 'state': 'NH'}"
+
             --contact_email=<contact_email>: (str) email of channel owner
             --homepage_url=<homepage_url>  : (str) homepage url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
@@ -1968,7 +2048,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
-                    [<stream_type> | --stream_type=<stream_type>] [--tags=<tags>...]
+                    [<stream_type> | --stream_type=<stream_type>]
+                    [--tags=<tags>...] [--clear_tags]
+                    [--languages=<languages>...] [--clear_languages]
+                    [--locations=<locations>...] [--clear_locations]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
@@ -1984,7 +2067,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
             --stream_type=<stream_type>    : (str) type of stream
-            --tags=<tags>                  : (list) content tags
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -1996,7 +2078,48 @@ class Daemon(metaclass=JSONRPCServerType):
                                              who is not the publisher and is not represented by the channel. For
                                              example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
                                              by published to a channel such as '@classics', or to no channel at all
-            --language=<language>          : (str) language of the publication
+            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
+            --tags=<tags>                  : (list) add content tags
+            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
+            --languages=<languages>        : (list) languages used by the channel,
+                                                    using RFC 5646 format, eg:
+                                                    for English `--languages=en`
+                                                    for Spanish (Spain) `--languages=es-ES`
+                                                    for Spanish (Mexican) `--languages=es-MX`
+                                                    for Chinese (Simplified) `--languages=zh-Hans`
+                                                    for Chinese (Traditional) `--languages=zh-Hant`
+            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
+            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+                                                    `country` code and a `state`, `city` and a postal
+                                                    `code` along with a `latitude` and `longitude`.
+                                                    for JSON RPC: pass a dictionary with aforementioned
+                                                        attributes as keys, eg:
+                                                        ...
+                                                        "locations": [{'country': 'US', 'state': 'NH'}]
+                                                        ...
+                                                    for command line: pass a colon delimited list
+                                                        with values in the following order:
+
+                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
+
+                                                        making sure to include colon for blank values, for
+                                                        example to provide only the city:
+
+                                                          --locations"::Manchester"
+
+                                                        with all values set:
+
+                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+
+                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
+
+                                                          --locations="42.990605:-71.460989"
+
+                                                        finally, you can also pass JSON string of dictionary
+                                                        on the command line as you would via JSON RPC
+
+                                                        --locations="{'country': 'US', 'state': 'NH'}"
+
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
@@ -2049,9 +2172,10 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
                     (<file_path> | --file_path=<file_path>) [<stream_type> | --stream_type=<stream_type>]
-                    [--tags=<tags>...] [--allow_duplicate_name=<allow_duplicate_name>]
+                    [--allow_duplicate_name=<allow_duplicate_name>]
+                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
-                    [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
+                    [--title=<title>] [--description=<description>] [--author=<author>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>]
                     [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
@@ -2067,7 +2191,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
             --stream_type=<stream_type>    : (str) type of stream
-            --tags=<tags>                  : (list) content tags
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -2079,7 +2202,45 @@ class Daemon(metaclass=JSONRPCServerType):
                                              who is not the publisher and is not represented by the channel. For
                                              example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
                                              by published to a channel such as '@classics', or to no channel at all
-            --language=<language>          : (str) language of the publication
+            --tags=<tags>                  : (list) add content tags
+            --languages=<languages>        : (list) languages used by the channel,
+                                                    using RFC 5646 format, eg:
+                                                    for English `--languages=en`
+                                                    for Spanish (Spain) `--languages=es-ES`
+                                                    for Spanish (Mexican) `--languages=es-MX`
+                                                    for Chinese (Simplified) `--languages=zh-Hans`
+                                                    for Chinese (Traditional) `--languages=zh-Hant`
+            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+                                                    `country` code and a `state`, `city` and a postal
+                                                    `code` along with a `latitude` and `longitude`.
+                                                    for JSON RPC: pass a dictionary with aforementioned
+                                                        attributes as keys, eg:
+                                                        ...
+                                                        "locations": [{'country': 'US', 'state': 'NH'}]
+                                                        ...
+                                                    for command line: pass a colon delimited list
+                                                        with values in the following order:
+
+                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
+
+                                                        making sure to include colon for blank values, for
+                                                        example to provide only the city:
+
+                                                          --locations"::Manchester"
+
+                                                        with all values set:
+
+                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+
+                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
+
+                                                          --locations="42.990605:-71.460989"
+
+                                                        finally, you can also pass JSON string of dictionary
+                                                        on the command line as you would via JSON RPC
+
+                                                        --locations="{'country': 'US', 'state': 'NH'}"
+
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
@@ -2155,8 +2316,10 @@ class Daemon(metaclass=JSONRPCServerType):
         Update an existing stream claim and if a new file is provided announce it to lbrynet.
 
         Usage:
-            stream_update (<claim_id> | --claim_id=<claim_id>)
-                    [--bid=<bid>] [--file_path=<file_path>] [--tags=<tags>...] [--clear_tags]
+            stream_update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>] [--file_path=<file_path>]
+                    [--tags=<tags>...] [--clear_tags]
+                    [--languages=<languages>...] [--clear_languages]
+                    [--locations=<locations>...] [--clear_locations]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
@@ -2171,8 +2334,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>          : (str) id of the stream claim to update
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
-            --tags=<tags>                  : (list) content tags
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -2184,7 +2345,48 @@ class Daemon(metaclass=JSONRPCServerType):
                                              who is not the publisher and is not represented by the channel. For
                                              example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
                                              by published to a channel such as '@classics', or to no channel at all
-            --language=<language>          : (str) language of the publication
+            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
+            --tags=<tags>                  : (list) add content tags
+            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
+            --languages=<languages>        : (list) languages used by the channel,
+                                                    using RFC 5646 format, eg:
+                                                    for English `--languages=en`
+                                                    for Spanish (Spain) `--languages=es-ES`
+                                                    for Spanish (Mexican) `--languages=es-MX`
+                                                    for Chinese (Simplified) `--languages=zh-Hans`
+                                                    for Chinese (Traditional) `--languages=zh-Hant`
+            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
+            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
+                                                    `country` code and a `state`, `city` and a postal
+                                                    `code` along with a `latitude` and `longitude`.
+                                                    for JSON RPC: pass a dictionary with aforementioned
+                                                        attributes as keys, eg:
+                                                        ...
+                                                        "locations": [{'country': 'US', 'state': 'NH'}]
+                                                        ...
+                                                    for command line: pass a colon delimited list
+                                                        with values in the following order:
+
+                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
+
+                                                        making sure to include colon for blank values, for
+                                                        example to provide only the city:
+
+                                                          --locations"::Manchester"
+
+                                                        with all values set:
+
+                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+
+                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
+
+                                                          --locations="42.990605:-71.460989"
+
+                                                        finally, you can also pass JSON string of dictionary
+                                                        on the command line as you would via JSON RPC
+
+                                                        --locations="{'country': 'US', 'state': 'NH'}"
+
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url

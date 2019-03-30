@@ -2,7 +2,6 @@ import json
 from decimal import Decimal
 
 from lbrynet.schema.types.v1.legacy_claim_pb2 import Claim as OldClaimMessage
-from lbrynet.schema.types.v1.metadata_pb2 import Metadata as MetadataMessage
 from lbrynet.schema.types.v1.certificate_pb2 import KeyType
 from lbrynet.schema.types.v1.fee_pb2 import Fee as FeeMessage
 
@@ -22,7 +21,7 @@ def from_old_json_schema(claim, payload: bytes):
         if language.lower() == 'english':
             language = 'en'
         try:
-            stream.language = language
+            stream.languages.append(language)
         except:
             pass
     stream.sd_hash = value['sources']['lbry_sd_hash']
@@ -35,6 +34,8 @@ def from_old_json_schema(claim, payload: bytes):
             stream.fee.lbc = Decimal(fee[currency]['amount'])
         elif currency == 'USD':
             stream.fee.usd = Decimal(fee[currency]['amount'])
+        elif currency == 'BTC':
+            stream.fee.btc = Decimal(fee[currency]['amount'])
         else:
             raise ValueError(f'Unknown currency: {currency}')
         stream.fee.address = fee[currency]['address']
@@ -53,7 +54,7 @@ def from_types_v1(claim, payload: bytes):
         stream.license_url = old.stream.metadata.licenseUrl
         stream.thumbnail_url = old.stream.metadata.thumbnail
         if old.stream.metadata.HasField('language'):
-            stream.languages.add().language = old.stream.metadata.language
+            stream.languages.add().message.language = old.stream.metadata.language
         stream.media_type = old.stream.source.contentType
         stream.sd_hash_bytes = old.stream.source.source
         if old.stream.metadata.nsfw:
@@ -66,6 +67,8 @@ def from_types_v1(claim, payload: bytes):
                 stream.fee.lbc = Decimal(fee.amount)
             elif currency == 'USD':
                 stream.fee.usd = Decimal(fee.amount)
+            elif currency == 'BTC':
+                stream.fee.btc = Decimal(fee.amount)
             else:
                 raise ValueError(f'Unsupported currency: {currency}')
         if old.HasField('publisherSignature'):

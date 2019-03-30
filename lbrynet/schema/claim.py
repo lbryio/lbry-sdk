@@ -1,5 +1,7 @@
 import os.path
-from typing import List, Tuple
+import json
+from string import ascii_letters
+from typing import List, Tuple, Iterator, TypeVar, Generic
 from decimal import Decimal
 from binascii import hexlify, unhexlify
 
@@ -85,6 +87,39 @@ class Claim(Signable):
             else:
                 raise
             return claim
+
+
+I = TypeVar('I')
+
+
+class BaseMessageList(Generic[I]):
+
+    __slots__ = 'message',
+
+    item_class = None
+
+    def __init__(self, message):
+        self.message = message
+
+    def add(self) -> I:
+        return self.item_class(self.message.add())
+
+    def extend(self, values: List[str]):
+        for value in values:
+            self.append(value)
+
+    def append(self, value: str):
+        raise NotImplemented
+
+    def __len__(self):
+        return len(self.message)
+
+    def __iter__(self) -> Iterator[I]:
+        for lang in self.message:
+            yield self.item_class(lang)
+
+    def __getitem__(self, item) -> I:
+        return self.item_class(self.message[item])
 
 
 class Dimmensional:
@@ -215,6 +250,8 @@ class Fee:
     def amount(self) -> Decimal:
         if self.currency == 'LBC':
             return self.lbc
+        if self.currency == 'BTC':
+            return self.btc
         if self.currency == 'USD':
             return self.usd
 
@@ -241,6 +278,29 @@ class Fee:
         self._fee.amount = amount
         self._fee.currency = FeeMessage.LBC
 
+    SATOSHIES = Decimal(COIN)
+
+    @property
+    def btc(self) -> Decimal:
+        if self._fee.currency != FeeMessage.BTC:
+            raise ValueError('BTC can only be returned for BTC fees.')
+        return Decimal(self._fee.amount / self.SATOSHIES)
+
+    @btc.setter
+    def btc(self, amount: Decimal):
+        self.satoshis = int(amount * self.SATOSHIES)
+
+    @property
+    def satoshis(self) -> int:
+        if self._fee.currency != FeeMessage.BTC:
+            raise ValueError('Satoshies can only be returned for BTC fees.')
+        return self._fee.amount
+
+    @satoshis.setter
+    def satoshis(self, amount: int):
+        self._fee.amount = amount
+        self._fee.currency = FeeMessage.BTC
+
     PENNIES = Decimal(100.0)
 
     @property
@@ -265,16 +325,182 @@ class Fee:
         self._fee.currency = FeeMessage.USD
 
 
+class Language:
+
+    __slots__ = 'message',
+
+    def __init__(self, message):
+        self.message = message
+
+    @property
+    def langtag(self) -> str:
+        langtag = []
+        if self.language:
+            langtag.append(self.language)
+        if self.script:
+            langtag.append(self.script)
+        if self.region:
+            langtag.append(self.region)
+        return '-'.join(langtag)
+
+    @langtag.setter
+    def langtag(self, langtag: str):
+        parts = langtag.split('-')
+        self.language = parts.pop(0)
+        if parts and len(parts[0]) == 4:
+            self.script = parts.pop(0)
+        if parts and len(parts[0]) == 2:
+            self.region = parts.pop(0)
+        assert not parts, f"Failed to parse language tag: {langtag}"
+
+    @property
+    def language(self) -> str:
+        if self.message.language:
+            return LanguageMessage.Language.Name(self.message.language)
+
+    @language.setter
+    def language(self, language: str):
+        self.message.language = LanguageMessage.Language.Value(language)
+
+    @property
+    def script(self) -> str:
+        if self.message.script:
+            return LanguageMessage.Script.Name(self.message.script)
+
+    @script.setter
+    def script(self, script: str):
+        self.message.script = LanguageMessage.Script.Value(script)
+
+    @property
+    def region(self) -> str:
+        if self.message.region:
+            return LocationMessage.Country.Name(self.message.region)
+
+    @region.setter
+    def region(self, region: str):
+        self.message.region = LocationMessage.Country.Value(region)
+
+
+class LanguageList(BaseMessageList[Language]):
+    __slots__ = ()
+    item_class = Language
+
+    def append(self, value: str):
+        self.add().langtag = value
+
+
+class Location:
+
+    __slots__ = 'message',
+
+    def __init__(self, message):
+        self.message = message
+
+    def from_value(self, value):
+        if isinstance(value, str) and value.startswith('{'):
+            value = json.loads(value)
+
+        if isinstance(value, dict):
+            for key, val in value.items():
+                setattr(self, key, val)
+
+        elif isinstance(value, str):
+            parts = value.split(':')
+            if len(parts) > 2 or (parts[0] and parts[0][0] in ascii_letters):
+                country = parts and parts.pop(0)
+                if country:
+                    self.country = country
+                state = parts and parts.pop(0)
+                if state:
+                    self.state = state
+                city = parts and parts.pop(0)
+                if city:
+                    self.city = city
+                code = parts and parts.pop(0)
+                if code:
+                    self.code = code
+            latitude = parts and parts.pop(0)
+            if latitude:
+                self.latitude = latitude
+            longitude = parts and parts.pop(0)
+            if longitude:
+                self.longitude = longitude
+
+        else:
+            raise ValueError(f'Could not parse country value: {value}')
+
+    @property
+    def country(self) -> str:
+        if self.message.country:
+            return LocationMessage.Country.Name(self.message.country)
+
+    @country.setter
+    def country(self, country: str):
+        self.message.country = LocationMessage.Country.Value(country)
+
+    @property
+    def state(self) -> str:
+        return self.message.state
+
+    @state.setter
+    def state(self, state: str):
+        self.message.state = state
+
+    @property
+    def city(self) -> str:
+        return self.message.city
+
+    @city.setter
+    def city(self, city: str):
+        self.message.city = city
+
+    @property
+    def code(self) -> str:
+        return self.message.code
+
+    @code.setter
+    def code(self, code: str):
+        self.message.code = code
+
+    GPS_PRECISION = Decimal('10000000')
+
+    @property
+    def latitude(self) -> str:
+        if self.message.latitude:
+            return str(Decimal(self.message.latitude) / self.GPS_PRECISION)
+
+    @latitude.setter
+    def latitude(self, latitude: str):
+        latitude = Decimal(latitude)
+        assert -90 <= latitude <= 90, "Latitude must be between -90 and 90 degrees."
+        self.message.latitude = int(latitude * self.GPS_PRECISION)
+
+    @property
+    def longitude(self) -> str:
+        if self.message.longitude:
+            return str(Decimal(self.message.longitude) / self.GPS_PRECISION)
+
+    @longitude.setter
+    def longitude(self, longitude: str):
+        longitude = Decimal(longitude)
+        assert -180 <= longitude <= 180, "Longitude must be between -180 and 180 degrees."
+        self.message.longitude = int(longitude * self.GPS_PRECISION)
+
+
+class LocationList(BaseMessageList[Location]):
+    __slots__ = ()
+    item_class = Location
+
+    def append(self, value):
+        self.add().from_value(value)
+
+
 class BaseClaimSubType:
 
     __slots__ = 'claim', 'message'
 
     def __init__(self, claim: Claim):
         self.claim = claim or Claim()
-
-    @property
-    def tags(self) -> List:
-        return self.message.tags
 
     @property
     def title(self) -> str:
@@ -301,54 +527,36 @@ class BaseClaimSubType:
         self.message.thumbnail_url = thumbnail_url
 
     @property
-    def language(self) -> str:
-        if len(self.languages) > 0:
-            return LanguageMessage.Language.Name(self.languages[0].language)
-
-    @language.setter
-    def language(self, language: str):
-        value = LanguageMessage.Language.Value(language)
-        if len(self.languages) > 0:
-            self.languages[0].language = value
-        else:
-            self.languages.add().language = value
+    def tags(self) -> List:
+        return self.message.tags
 
     @property
-    def languages(self):
-        return self.message.languages
+    def languages(self) -> LanguageList:
+        return LanguageList(self.message.languages)
 
     @property
-    def location_country(self) -> str:
-        if len(self.locations) > 0:
-            return LocationMessage.Country.Name(self.locations[0].country)
-
-    @location_country.setter
-    def location_country(self, country: str):
-        value = LocationMessage.Country.Value(country)
-        if len(self.locations) > 0:
-            self.locations[0].location = value
-        else:
-            self.locations.add().location = value
+    def langtags(self) -> List[str]:
+        return [l.langtag for l in self.languages]
 
     @property
-    def locations(self):
-        return self.message.locations
+    def locations(self) -> LocationList:
+        return LocationList(self.message.locations)
 
     def to_dict(self):
         return MessageToDict(self.message, preserving_proto_field_name=True)
 
-    def update(self, tags=None, clear_tags=False, **kwargs):
-
-        if clear_tags:
-            self.message.ClearField('tags')
-
-        if tags is not None:
-            if isinstance(tags, str):
-                self.tags.append(tags)
-            elif isinstance(tags, list):
-                self.tags.extend(tags)
-            else:
-                raise ValueError(f"Unknown tag type: {tags}")
+    def update(self, **kwargs):
+        for l in ('tags', 'languages', 'locations'):
+            if kwargs.pop(f'clear_{l}', False):
+                self.message.ClearField('tags')
+            items = kwargs.pop(l, None)
+            if items is not None:
+                if isinstance(items, str):
+                    getattr(self, l).append(items)
+                elif isinstance(items, list):
+                    getattr(self, l).extend(items)
+                else:
+                    raise ValueError(f"Unknown {l} value: {items}")
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -454,6 +662,8 @@ class Stream(BaseClaimSubType):
                 self.fee.address = fee_address
             if fee_currency.lower() == 'lbc':
                 self.fee.lbc = Decimal(fee_amount)
+            elif fee_currency.lower() == 'btc':
+                self.fee.btc = Decimal(fee_amount)
             elif fee_currency.lower() == 'usd':
                 self.fee.usd = Decimal(fee_amount)
             else:
