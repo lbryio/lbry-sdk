@@ -1795,20 +1795,20 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations="::Manchester"
+                                                          ... --locations="::Manchester"
 
                                                         with all values set:
 
-                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
 
                                                         optionally, you can just pass the "LATITUDE:LONGITUDE":
 
-                                                          --locations="42.990605:-71.460989"
+                                                          ... --locations="42.990605:-71.460989"
 
                                                         finally, you can also pass JSON string of dictionary
                                                         on the command line as you would via JSON RPC
 
-                                                        --locations="{'country': 'US', 'state': 'NH'}"
+                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
 
             --contact_email=<contact_email>: (str) email of channel owner
             --homepage_url=<homepage_url>  : (str) homepage url
@@ -1903,20 +1903,20 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations="::Manchester"
+                                                          ... --locations="::Manchester"
 
                                                         with all values set:
 
-                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
 
                                                         optionally, you can just pass the "LATITUDE:LONGITUDE":
 
-                                                          --locations="42.990605:-71.460989"
+                                                          ... --locations="42.990605:-71.460989"
 
                                                         finally, you can also pass JSON string of dictionary
                                                         on the command line as you would via JSON RPC
 
-                                                        --locations="{'country': 'US', 'state': 'NH'}"
+                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
 
             --contact_email=<contact_email>: (str) email of channel owner
             --homepage_url=<homepage_url>  : (str) homepage url
@@ -2105,20 +2105,20 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations="::Manchester"
+                                                          ... --locations="::Manchester"
 
                                                         with all values set:
 
-                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
 
                                                         optionally, you can just pass the "LATITUDE:LONGITUDE":
 
-                                                          --locations="42.990605:-71.460989"
+                                                          ... --locations="42.990605:-71.460989"
 
                                                         finally, you can also pass JSON string of dictionary
                                                         on the command line as you would via JSON RPC
 
-                                                        --locations="{'country': 'US', 'state': 'NH'}"
+                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
 
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
@@ -2226,20 +2226,20 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations="::Manchester"
+                                                          ... --locations="::Manchester"
 
                                                         with all values set:
 
-                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
 
                                                         optionally, you can just pass the "LATITUDE:LONGITUDE":
 
-                                                          --locations="42.990605:-71.460989"
+                                                          ... --locations="42.990605:-71.460989"
 
                                                         finally, you can also pass JSON string of dictionary
                                                         on the command line as you would via JSON RPC
 
-                                                        --locations="{'country': 'US', 'state': 'NH'}"
+                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
 
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
@@ -2372,20 +2372,20 @@ class Daemon(metaclass=JSONRPCServerType):
                                                         making sure to include colon for blank values, for
                                                         example to provide only the city:
 
-                                                          --locations="::Manchester"
+                                                          ... --locations="::Manchester"
 
                                                         with all values set:
 
-                                                     --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
 
                                                         optionally, you can just pass the "LATITUDE:LONGITUDE":
 
-                                                          --locations="42.990605:-71.460989"
+                                                          ... --locations="42.990605:-71.460989"
 
                                                         finally, you can also pass JSON string of dictionary
                                                         on the command line as you would via JSON RPC
 
-                                                        --locations="{'country': 'US', 'state': 'NH'}"
+                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
 
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
