@@ -1616,7 +1616,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return result
 
     CLAIM_DOC = """
-    List, search and abandon all types of claims.
+    List and search all types of claims.
     """
 
     @requires(WALLET_COMPONENT)
@@ -1694,55 +1694,8 @@ class Daemon(metaclass=JSONRPCServerType):
             sort_claim_results(claims)
         return {"items": claims, "total_pages": 1, "page": 1, "page_size": len(claims)}
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_claim_abandon(
-            self, claim_id=None, txid=None, nout=None, account_id=None,
-            preview=False, blocking=True):
-        """
-        Abandon one of my channel or stream claims.
-
-        Usage:
-            claim_abandon [<claim_id> | --claim_id=<claim_id>]
-                          [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                          [--account_id=<account_id>]
-                          [--preview] [--blocking]
-
-        Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
-            --txid=<txid>             : (str) txid of the claim to abandon
-            --nout=<nout>             : (int) nout of the claim to abandon
-            --account_id=<account_id> : (str) id of the account to use
-            --preview                 : (bool) do not broadcast the transaction
-            --blocking                : (bool) wait until abandon is in mempool
-        """
-        account = self.get_account_or_default(account_id)
-
-        if txid is not None and nout is not None:
-            claims = await account.get_claims(**{'txo.txid': txid, 'txo.position': nout})
-        elif claim_id is not None:
-            claims = await account.get_claims(claim_id=claim_id)
-        else:
-            raise Exception('Must specify claim_id, or txid and nout')
-
-        if not claims:
-            raise Exception('No claim found for the specified claim_id or txid:nout')
-
-        tx = await Transaction.create(
-            [Input.spend(txo) for txo in claims], [], [account], account
-        )
-
-        if not preview:
-            await account.ledger.broadcast(tx)
-            await self.analytics_manager.send_claim_action('abandon')
-            if blocking:
-                await account.ledger.wait(tx)
-        else:
-            await account.ledger.release_tx(tx)
-
-        return tx
-
     CHANNEL_DOC = """
-    Create, update and list your channel claims.
+    Create, update, abandon and list your channel claims.
     """
 
     @deprecated('channel_create')
@@ -1977,6 +1930,53 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return tx
 
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_channel_abandon(
+            self, claim_id=None, txid=None, nout=None, account_id=None,
+            preview=False, blocking=True):
+        """
+        Abandon one of my channel claims.
+
+        Usage:
+            channel_abandon [<claim_id> | --claim_id=<claim_id>]
+                            [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
+                            [--account_id=<account_id>]
+                            [--preview] [--blocking]
+
+        Options:
+            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
+            --txid=<txid>             : (str) txid of the claim to abandon
+            --nout=<nout>             : (int) nout of the claim to abandon
+            --account_id=<account_id> : (str) id of the account to use
+            --preview                 : (bool) do not broadcast the transaction
+            --blocking                : (bool) wait until abandon is in mempool
+        """
+        account = self.get_account_or_default(account_id)
+
+        if txid is not None and nout is not None:
+            claims = await account.get_claims(**{'txo.txid': txid, 'txo.position': nout})
+        elif claim_id is not None:
+            claims = await account.get_claims(claim_id=claim_id)
+        else:
+            raise Exception('Must specify claim_id, or txid and nout')
+
+        if not claims:
+            raise Exception('No claim found for the specified claim_id or txid:nout')
+
+        tx = await Transaction.create(
+            [Input.spend(txo) for txo in claims], [], [account], account
+        )
+
+        if not preview:
+            await account.ledger.broadcast(tx)
+            await self.analytics_manager.send_claim_action('abandon')
+            if blocking:
+                await account.ledger.wait(tx)
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
         """
@@ -2037,7 +2037,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return await self.wallet_manager.import_certificate_info(serialized_certificate_info)
 
     STREAM_DOC = """
-    Create, update, list and inspect your stream claims.
+    Create, update, abandon, list and inspect your stream claims.
     """
 
     @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
@@ -2461,6 +2461,53 @@ class Daemon(metaclass=JSONRPCServerType):
             if stream_hash:
                 await self.storage.save_content_claim(stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
+
+    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    async def jsonrpc_stream_abandon(
+            self, claim_id=None, txid=None, nout=None, account_id=None,
+            preview=False, blocking=True):
+        """
+        Abandon one of my stream claims.
+
+        Usage:
+            stream_abandon [<claim_id> | --claim_id=<claim_id>]
+                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
+                           [--account_id=<account_id>]
+                           [--preview] [--blocking]
+
+        Options:
+            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
+            --txid=<txid>             : (str) txid of the claim to abandon
+            --nout=<nout>             : (int) nout of the claim to abandon
+            --account_id=<account_id> : (str) id of the account to use
+            --preview                 : (bool) do not broadcast the transaction
+            --blocking                : (bool) wait until abandon is in mempool
+        """
+        account = self.get_account_or_default(account_id)
+
+        if txid is not None and nout is not None:
+            claims = await account.get_claims(**{'txo.txid': txid, 'txo.position': nout})
+        elif claim_id is not None:
+            claims = await account.get_claims(claim_id=claim_id)
+        else:
+            raise Exception('Must specify claim_id, or txid and nout')
+
+        if not claims:
+            raise Exception('No claim found for the specified claim_id or txid:nout')
+
+        tx = await Transaction.create(
+            [Input.spend(txo) for txo in claims], [], [account], account
+        )
+
+        if not preview:
+            await account.ledger.broadcast(tx)
+            await self.analytics_manager.send_claim_action('abandon')
+            if blocking:
+                await account.ledger.wait(tx)
         else:
             await account.ledger.release_tx(tx)
 

@@ -379,7 +379,7 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(txs[0]['fee'], '-0.000184')
         await self.assertBalance(self.account, '8.979709')
 
-        await self.claim_abandon(claim_id)
+        await self.stream_abandon(claim_id)
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
         self.assertEqual(len(txs[0]['abandon_info']), 1)
         self.assertEqual(txs[0]['abandon_info'][0]['balance_delta'], '1.0')
@@ -392,7 +392,7 @@ class StreamCommands(CommandTestCase):
         await self.assertBalance(self.account, '10.0')
         tx = await self.stream_create(bid='0.0001')
         await self.assertBalance(self.account, '9.979793')
-        await self.claim_abandon(tx['outputs'][0]['claim_id'])
+        await self.stream_abandon(tx['outputs'][0]['claim_id'])
         await self.assertBalance(self.account, '9.97968399')
 
     async def test_publish(self):
@@ -422,8 +422,8 @@ class StreamCommands(CommandTestCase):
         with self.assertRaisesRegex(Exception, "There are 2 claims for 'foo'"):
             await self.daemon.jsonrpc_publish('foo')
 
-        # abandon duplicate channel
-        await self.claim_abandon(tx3['outputs'][0]['claim_id'])
+        # abandon duplicate stream
+        await self.stream_abandon(tx3['outputs'][0]['claim_id'])
 
         # publish to a channel
         await self.channel_create('@abc')
@@ -458,7 +458,7 @@ class StreamCommands(CommandTestCase):
         claims = await self.claim_search(claim_id=channel_id)
         self.assertEqual(claims[0]['value'], value)
 
-        await self.claim_abandon(txid=txid, nout=0)
+        await self.channel_abandon(txid=txid, nout=0)
         self.assertEqual(len(await self.claim_search(txid=txid, nout=0)), 0)
 
         # search stream claims
@@ -481,9 +481,9 @@ class StreamCommands(CommandTestCase):
         claims = await self.claim_search(channel_id=channel_id)
         self.assertEqual(len(claims), 3)
 
-        await self.claim_abandon(claim_id=claims[0]['claim_id'])
-        await self.claim_abandon(claim_id=claims[1]['claim_id'])
-        await self.claim_abandon(claim_id=claims[2]['claim_id'])
+        await self.stream_abandon(claim_id=claims[0]['claim_id'])
+        await self.stream_abandon(claim_id=claims[1]['claim_id'])
+        await self.stream_abandon(claim_id=claims[2]['claim_id'])
 
         claims = await self.claim_search(channel_id=channel_id)
         self.assertEqual(len(claims), 0)
@@ -518,7 +518,7 @@ class StreamCommands(CommandTestCase):
     async def test_abandoned_channel_with_signed_claims(self):
         channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
         orphan_claim = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel['claim_id'])
-        await self.claim_abandon(txid=channel['txid'], nout=0)
+        await self.channel_abandon(txid=channel['txid'], nout=0)
         channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
         orphan_claim_id = orphan_claim['outputs'][0]['claim_id']
 
@@ -531,7 +531,7 @@ class StreamCommands(CommandTestCase):
         direct_uri = 'lbry://on-channel-claim#' + orphan_claim_id
         response = await self.resolve(direct_uri)
         self.assertFalse(response[direct_uri]['claim']['signature_is_valid'])
-        await self.claim_abandon(claim_id=orphan_claim_id)
+        await self.stream_abandon(claim_id=orphan_claim_id)
 
         uri = 'lbry://@abc/on-channel-claim'
         # now, claim something on this channel (it will update the invalid claim, but we save and forcefully restore)
