@@ -186,6 +186,16 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(claim)
         return claim
 
+    async def stream_abandon(self, *args, confirm=True, **kwargs):
+        if 'blocking' not in kwargs:
+            kwargs['blocking'] = False
+        tx = await self.out(self.daemon.jsonrpc_stream_abandon(*args, **kwargs))
+        if confirm:
+            await self.on_transaction_dict(tx)
+            await self.generate(1)
+            await self.on_transaction_dict(tx)
+        return tx
+
     async def publish(self, name, *args, confirm=True, **kwargs):
         claim = await self.out(self.daemon.jsonrpc_publish(name, *args, **kwargs))
         self.assertEqual(claim['outputs'][0]['name'], name)
@@ -213,10 +223,10 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(channel)
         return channel
 
-    async def claim_abandon(self, *args, confirm=True, **kwargs):
+    async def channel_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
-        tx = await self.out(self.daemon.jsonrpc_claim_abandon(*args, **kwargs))
+        tx = await self.out(self.daemon.jsonrpc_channel_abandon(*args, **kwargs))
         if confirm:
             await self.on_transaction_dict(tx)
             await self.generate(1)
