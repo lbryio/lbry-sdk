@@ -1,7 +1,6 @@
 import hashlib
 import tempfile
 from binascii import unhexlify
-from decimal import Decimal
 
 import ecdsa
 
@@ -434,6 +433,15 @@ class StreamCommands(CommandTestCase):
             r['lbry://@abc/foo']['claim']['claim_id'],
             tx3['outputs'][0]['claim_id']
         )
+
+        # publishing again re-signs with the same channel
+        tx4 = await self.publish('foo', languages='uk-UA')
+        r = await self.resolve('lbry://@abc/foo')
+        claim = r['lbry://@abc/foo']['claim']
+        self.assertEqual(claim['txid'], tx4['outputs'][0]['txid'])
+        self.assertEqual(claim['channel_name'], '@abc')
+        self.assertEqual(claim['signature_is_valid'], True)
+        self.assertEqual(claim['value']['stream']['languages'], ['uk-UA'])
 
     async def test_claim_search(self):
         # search for channel claim
