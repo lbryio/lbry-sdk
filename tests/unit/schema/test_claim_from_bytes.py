@@ -20,7 +20,7 @@ class TestOldJSONSchemaCompatibility(TestCase):
         self.assertEqual(stream.description, '10MB test file to measure download speed on Lbry p2p-network.')
         self.assertEqual(stream.license, 'None')
         self.assertEqual(stream.author, 'root')
-        self.assertEqual(stream.language, 'en')
+        self.assertEqual(stream.langtags, ['en'])
         self.assertEqual(stream.media_type, 'application/octet-stream')
         self.assertEqual(stream.thumbnail_url, '/home/robert/lbry/speed.jpg')
         self.assertEqual(
@@ -51,7 +51,7 @@ class TestOldJSONSchemaCompatibility(TestCase):
         self.assertEqual(stream.license, 'Creative Commons Attribution 3.0 United States')
         self.assertEqual(stream.license_url, 'https://creativecommons.org/licenses/by/3.0/us/legalcode')
         self.assertEqual(stream.author, 'Mii')
-        self.assertEqual(stream.language, 'en')
+        self.assertEqual(stream.langtags, ['en'])
         self.assertEqual(stream.media_type, 'application/x-msdownload')
         self.assertEqual(
             stream.sd_hash,
@@ -77,7 +77,7 @@ class TestOldJSONSchemaCompatibility(TestCase):
         self.assertEqual(stream.description, 'asd')
         self.assertEqual(stream.license, 'Creative Commons Attribution 4.0 International')
         self.assertEqual(stream.author, 'sgb')
-        self.assertEqual(stream.language, 'en')
+        self.assertEqual(stream.langtags, ['en'])
         self.assertEqual(stream.media_type, 'video/mp4')
         self.assertEqual(
             stream.sd_hash,
@@ -120,7 +120,7 @@ class TestTypesV1Compatibility(TestCase):
         )
         self.assertEqual(stream.license, 'Copyrighted (contact author)')
         self.assertEqual(stream.author, 'The Linux Gamer')
-        self.assertEqual(stream.language, 'en')
+        self.assertEqual(stream.langtags, ['en'])
         self.assertEqual(stream.media_type, 'video/mp4')
         self.assertEqual(stream.thumbnail_url, 'https://berk.ninja/thumbnails/FrTdBCOS_fc')
         self.assertEqual(
@@ -157,7 +157,7 @@ class TestTypesV1Compatibility(TestCase):
         self.assertEqual(stream.description, 'midi')
         self.assertEqual(stream.license, 'Creative Commons Attribution 4.0 International')
         self.assertEqual(stream.author, 'rpg midi')
-        self.assertEqual(stream.language, 'en')
+        self.assertEqual(stream.langtags, ['en'])
         self.assertEqual(stream.media_type, 'application/x-zip-compressed')
         self.assertEqual(
             stream.sd_hash,

@@ -1,6 +1,7 @@
 import hashlib
 import tempfile
 from binascii import unhexlify
+from decimal import Decimal
 
 import ecdsa
 
@@ -73,14 +74,15 @@ class ChannelCommands(CommandTestCase):
             'title': "Cool Channel",
             'description': "Best channel on LBRY.",
             'thumbnail_url': "https://co.ol/thumbnail.png",
-            'language': "en",
+            'languages': ["en-US"],
+            'locations': ['US::Manchester'],
             'contact_email': "human@email.com",
             'homepage_url': "https://co.ol",
             'cover_url': "https://co.ol/cover.png",
         }
         fixed_values = values.copy()
-        del fixed_values['language']
-        fixed_values['languages'] = [{'language': 'en'}]
+        fixed_values['languages'] = ['en-US']
+        fixed_values['locations'] = [{'country': 'US', 'city': 'Manchester'}]
 
         # create new channel with all fields set
         tx = await self.out(self.channel_create('@bigchannel', **values))
@@ -259,13 +261,14 @@ class StreamCommands(CommandTestCase):
                 'hovercraft3', channel_id=baz_id, channel_account_id=[account1_id]
             )
 
-    async def test_setting_claim_fields(self):
+    async def test_setting_stream_fields(self):
         values = {
             'tags': ["cool", "awesome"],
             'title': "Cool Content",
             'description': "Best content on LBRY.",
             'thumbnail_url': "https://co.ol/thumbnail.png",
-            'language': "en",
+            'languages': ["en"],
+            'locations': ['{"country": "UA"}'],
 
             'author': "Jules Verne",
             'license': 'Public Domain',
@@ -280,8 +283,8 @@ class StreamCommands(CommandTestCase):
             'video_height': 600
         }
         fixed_values = values.copy()
-        del fixed_values['language']
-        fixed_values['languages'] = [{'language': 'en'}]
+        fixed_values['languages'] = ['en']
+        fixed_values['locations'] = [{'country': 'UA'}]
 
         # create new channel with all fields set
         tx = await self.out(self.stream_create('big', **values))
@@ -293,7 +296,7 @@ class StreamCommands(CommandTestCase):
         fixed_values['release_time'] = str(values['release_time'])
         fixed_values['fee'] = {
             'address': fixed_values.pop('fee_address'),
-            'amount': fixed_values.pop('fee_amount').replace('.', ''),
+            'amount': float(fixed_values.pop('fee_amount')),
             'currency': fixed_values.pop('fee_currency').upper()
         }
         fixed_values['video'] = {
