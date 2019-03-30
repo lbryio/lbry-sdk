@@ -265,6 +265,14 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(tx)
         return tx
 
+    async def support_create(self, claim_id, bid='1.0', confirm=True, **kwargs):
+        tx = await self.out(self.daemon.jsonrpc_support_create(claim_id, bid, **kwargs))
+        if confirm:
+            await self.on_transaction_dict(tx)
+            await self.generate(1)
+            await self.on_transaction_dict(tx)
+        return tx
+
     async def resolve(self, uri):
         return await self.out(self.daemon.jsonrpc_resolve(uri))
 

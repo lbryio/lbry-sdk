@@ -676,7 +676,7 @@ class StreamCommands(CommandTestCase):
         channel_id, txid = channel['outputs'][0]['claim_id'], channel['txid']
         value = channel['outputs'][0]['value']
 
-        claims = await self.claim_search('@abc')
+        claims = await self.claim_search(name='@abc')
         self.assertEqual(claims[0]['value'], value)
 
         claims = await self.claim_search(txid=txid, nout=0)
@@ -695,10 +695,10 @@ class StreamCommands(CommandTestCase):
         signed = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel_id)
         unsigned = await self.stream_create('unsigned', '0.0001')
 
-        claims = await self.claim_search('on-channel-claim')
+        claims = await self.claim_search(name='on-channel-claim')
         self.assertEqual(claims[0]['value'], signed['outputs'][0]['value'])
 
-        claims = await self.claim_search('unsigned')
+        claims = await self.claim_search(name='unsigned')
         self.assertEqual(claims[0]['value'], unsigned['outputs'][0]['value'])
 
         # list streams in a channel
@@ -725,25 +725,24 @@ class StreamCommands(CommandTestCase):
         tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
         await self.confirm_tx(tx.id)
 
-        # 4 claims per block, 3 blocks. Sorted by height (descending) then claim_id (ascending).
+        # 4 claims per block, 3 blocks. Sorted by height (descending) then claim name (ascending).
         claims = []
         for j in range(3):
             same_height_claims = []
             for k in range(3):
                 claim_tx = await self.stream_create(f'c{j}-{k}', '0.000001', channel_id=channel_id, confirm=False)
-                same_height_claims.append(claim_tx['outputs'][0]['claim_id'])
+                same_height_claims.append(claim_tx['outputs'][0]['name'])
                 await self.on_transaction_dict(claim_tx)
             claim_tx = await self.stream_create(f'c{j}-4', '0.000001', channel_id=channel_id, confirm=True)
-            same_height_claims.append(claim_tx['outputs'][0]['claim_id'])
-            same_height_claims.sort(key=lambda x: int(x, 16))
+            same_height_claims.append(claim_tx['outputs'][0]['name'])
             claims = same_height_claims + claims
 
         page = await self.claim_search(page_size=20, channel_id=channel_id)
-        page_claim_ids = [item['claim_id'] for item in page]
+        page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, claims)
 
         page = await self.claim_search(page_size=6, channel_id=channel_id)
-        page_claim_ids = [item['claim_id'] for item in page]
+        page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, claims[:6])
 
         out_of_bounds = await self.claim_search(page=2, page_size=20, channel_id=channel_id)

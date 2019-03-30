@@ -1663,9 +1663,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_claim_search(
-            self, name=None, claim_id=None, txid=None, nout=None,
-            channel_id=None, channel_name=None, winning=False, page=1, page_size=10):
+    async def jsonrpc_claim_search(self, **kwargs):
         """
         Search for stream and channel claims on the blockchain.
 
@@ -1673,7 +1671,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
-                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--winning] [--page=<page>]
+                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_winning] [--page=<page>]
                          [--page_size=<page_size>]
 
         Options:
@@ -1683,45 +1681,19 @@ class Daemon(metaclass=JSONRPCServerType):
             --nout=<nout>                 : (str) find a claim with this txid:nout
             --channel_id=<channel_id>     : (str) limit search to specific channel claim id (returns stream claims)
             --channel_name=<channel_name> : (str) limit search to specific channel name (returns stream claims)
-            --winning                     : (bool) limit to winning claims
+            --is_winning                     : (bool) limit to winning claims
             --page=<page>                 : (int) page to return during paginating
             --page_size=<page_size>       : (int) number of items on page during pagination
 
         Returns: {Paginated[Output]}
         """
-        claims = []
-        if name is not None:
-            claims = await self.ledger.network.get_claims_for_name(name)
-        elif claim_id is not None:
-            claim = await self.wallet_manager.get_claim_by_claim_id(claim_id)
-            if claim and claim != 'claim not found':
-                claims = {'claims': [claim]}
-        elif txid is not None and nout is not None:
-            claim = await self.wallet_manager.get_claim_by_outpoint(txid, int(nout))
-            if claim and claim != 'claim not found':
-                claims = {'claims': [claim]}
-        elif channel_id is not None or channel_name is not None:
-            channel_url = f"{channel_name}{('#' + str(channel_id)) if channel_id else ''}" if channel_name else None
-            if channel_id and not channel_name:
-                claim = await self.wallet_manager.get_claim_by_claim_id(channel_id)
-                if claim and claim != 'claim not found':
-                    channel_url = f"{claim['name']}#{claim['claim_id']}"
-            if channel_url:
-                resolve = await self.resolve(channel_url, page=page, page_size=page_size)
-                resolve = resolve.get(channel_url, {})
-                claims = resolve.get('claims_in_channel', []) or []
-                total_pages = 0
-                if claims:
-                    total_pages = int((resolve['total_claims'] + (page_size-1)) / page_size)
-                #sort_claim_results(claims)
-                return {"items": claims, "total_pages": total_pages, "page": page, "page_size": page_size}
-        else:
-            raise Exception("Must specify either name, claim_id, or txid:nout.")
-        if claims:
-            resolutions = await self.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in claims['claims']))
-            claims = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
-            sort_claim_results(claims)
-        return {"items": claims, "total_pages": 1, "page": 1, "page_size": len(claims)}
+        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
+        kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})
+        page = await self.ledger.claim_search(**kwargs)
+        return {
+            "items": page.txos, "page": page_num, "page_size": page_size,
+            "total_pages": int((page.total + (page_size-1)) / page_size)
+        }
 
     CHANNEL_DOC = """
     Create, update, abandon and list your channel claims.
@@ -2641,14 +2613,13 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
-        claim = await account.ledger.get_claim_by_claim_id(claim_id)
-        claim_name = claim['name']
-        claim_address = claim['address']
+        claim = await self.ledger.get_claim_by_claim_id(claim_id)
+        claim_address = claim.get_address(self.ledger)
         if not tip:
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
-            claim_name, claim_id, amount, claim_address, [account], account
+            claim.claim_name, claim_id, amount, claim_address, [account], account
         )
 
         if not preview:
