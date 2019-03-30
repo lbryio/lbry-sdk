@@ -1,14 +1,16 @@
 import asyncio
 import logging
 from binascii import unhexlify
+from typing import Optional
 
 from torba.client.baseledger import BaseLedger
+from lbrynet.schema.page import Page
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.wallet.resolve import Resolver
 from lbrynet.wallet.account import Account
 from lbrynet.wallet.network import Network
 from lbrynet.wallet.database import WalletDatabase
-from lbrynet.wallet.transaction import Transaction
+from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.header import Headers, UnvalidatedHeaders
 
 
@@ -52,16 +54,18 @@ class MainNetLedger(BaseLedger):
     def resolve(self, page, page_size, *uris):
         return self.resolver.resolve(page, page_size, *uris)
 
-    async def get_claim_by_claim_id(self, claim_id):
-        result = (await self.network.get_claims_by_ids(claim_id)).pop(claim_id, {})
-        return await self.resolver.parse_and_validate_claim_result(result)
+    async def claim_search(self, **kwargs) -> Page:
+        return Page.from_base64(await self.network.claim_search(**kwargs))
 
-    async def get_claim_by_outpoint(self, txid, nout):
-        claims = (await self.network.get_claims_in_tx(txid)) or []
-        for claim in claims:
-            if claim['nout'] == nout:
-                return await self.resolver.parse_and_validate_claim_result(claim)
-        return 'claim not found'
+    async def get_claim_by_claim_id(self, claim_id) -> Optional[Output]:
+        page = await self.claim_search(claim_id=claim_id)
+        if page.txos:
+            return page.txos[0]
+
+    async def get_claim_by_outpoint(self, txid, nout) -> Optional[Output]:
+        page = await self.claim_search(txid=txid, nout=nout)
+        if page.txos:
+            return page.txos[0]
 
     async def start(self):
         await super().start()

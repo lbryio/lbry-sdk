@@ -307,9 +307,3 @@ class LbryWalletManager(BaseWalletManager):
     def save(self):
         for wallet in self.wallets:
             wallet.save()
-
-    def get_claim_by_claim_id(self, claim_id):
-        return self.ledger.get_claim_by_claim_id(claim_id)
-
-    def get_claim_by_outpoint(self, txid, nout):
-        return self.ledger.get_claim_by_outpoint(txid, nout)

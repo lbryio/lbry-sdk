@@ -27,13 +27,14 @@ class Output(BaseOutput):
     script: OutputScript
     script_class = OutputScript
 
-    __slots__ = 'channel', 'private_key'
+    __slots__ = 'channel', 'private_key', 'meta'
 
     def __init__(self, *args, channel: Optional['Output'] = None,
                  private_key: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.channel = channel
         self.private_key = private_key
+        self.meta = {}
 
     def update_annotations(self, annotated):
         super().update_annotations(annotated)
@@ -49,6 +50,10 @@ class Output(BaseOutput):
     @property
     def is_claim(self) -> bool:
         return self.script.is_claim_name or self.script.is_update_claim
+
+    @property
+    def is_support(self) -> bool:
+        return self.script.is_support_claim
 
     @property
     def claim_hash(self) -> bytes:
