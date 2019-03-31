@@ -350,9 +350,12 @@ class StreamManager:
             raise ResolveError("cannot download a channel claim, specify a /path")
 
         # resolve the claim
-        resolved = (await self.wallet.ledger.resolve(0, 10, uri)).get(uri, {})
+        resolved_result = await self.wallet.ledger.resolve(0, 10, uri)
+        await self.storage.save_claims_for_resolve([
+            value for value in resolved_result.values() if 'error' not in value
+        ])
+        resolved = resolved_result.get(uri, {})
         resolved = resolved if 'value' in resolved else resolved.get('claim')
-
         if not resolved:
             raise ResolveError(f"Failed to resolve stream at '{uri}'")
         if 'error' in resolved:
