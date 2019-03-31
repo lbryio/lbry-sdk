@@ -14,6 +14,7 @@ import pkg_resources
 import contextlib
 import certifi
 import aiohttp
+import functools
 from lbrynet.schema.claim import Claim
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
@@ -146,6 +147,26 @@ def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
         cancel_task(tasks.pop())
 
 
+def async_timed_cache(duration: int):
+    def wrapper(fn):
+        cache: typing.Dict[typing.Tuple,
+                           typing.Tuple[typing.Any, float]] = {}
+
+        @functools.wraps(fn)
+        async def _inner(*args, **kwargs) -> typing.Any:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
+            if key in cache and (now - cache[key][1] < duration):
+                return cache[key][0]
+            to_cache = await fn(*args, **kwargs)
+            cache[key] = to_cache, now
+            return to_cache
+        return _inner
+    return wrapper
+
+
+@async_timed_cache(300)
 async def resolve_host(url: str, port: int, proto: str) -> str:
     if proto not in ['udp', 'tcp']:
         raise Exception("invalid protocol")
