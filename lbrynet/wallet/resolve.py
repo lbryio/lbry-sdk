@@ -17,12 +17,11 @@ log = logging.getLogger(__name__)
 
 class Resolver:
 
-    def __init__(self, headers, transaction_class, hash160_to_address, network, ledger):
+    def __init__(self, headers, transaction_class, network, ledger):
         self.claim_trie_root = headers.claim_trie_root
         self.height = headers.height
         self.header_hash = headers.hash().decode()
         self.transaction_class = transaction_class
-        self.hash160_to_address = hash160_to_address
         self.network = network
         self.ledger = ledger
 
@@ -60,7 +59,7 @@ class Resolver:
         result = {}
         claim_trie_root = self.claim_trie_root
         parsed_uri = parse_lbry_uri(uri)
-        certificate = None
+        certificate_response = None
         # parse an included certificate
         if 'certificate' in resolution:
             certificate_response = resolution['certificate']['result']
@@ -69,37 +68,16 @@ class Resolver:
                 if 'height' in certificate_response:
                     height = certificate_response['height']
                     depth = self.height - height
-                    certificate_result = _verify_proof(parsed_uri.name,
+                    certificate_response = _verify_proof(parsed_uri.name,
                                                        claim_trie_root,
                                                        certificate_response,
                                                        height, depth,
                                                        transaction_class=self.transaction_class,
-                                                       hash160_to_address=self.hash160_to_address)
-                    result['certificate'] = await self.parse_and_validate_claim_result(certificate_result,
-                                                                                       raw=raw)
-            elif certificate_resolution_type == "claim_id":
-                result['certificate'] = await self.parse_and_validate_claim_result(certificate_response,
-                                                                                   raw=raw)
-            elif certificate_resolution_type == "sequence":
-                result['certificate'] = await self.parse_and_validate_claim_result(certificate_response,
-                                                                                   raw=raw)
-            else:
-                log.error("unknown response type: %s", certificate_resolution_type)
-
-            if 'certificate' in result:
-                certificate = result['certificate']
-                if 'unverified_claims_in_channel' in resolution:
-                    max_results = len(resolution['unverified_claims_in_channel'])
-                    result['claims_in_channel'] = max_results
-                else:
-                    result['claims_in_channel'] = 0
-            else:
-                result['error'] = "claim not found"
-                result['success'] = False
-                result['uri'] = str(parsed_uri)
-
-        else:
-            certificate = None
+                                                       ledger=self.ledger)
+            elif certificate_resolution_type not in ['winning', 'claim_id', 'sequence']:
+                raise Exception("unknown response type: %s", certificate_resolution_type)
+            result['certificate'] = await self.parse_and_validate_claim_result(certificate_response)
+            result['claims_in_channel'] = len(resolution.get('unverified_claims_in_channel', []))
 
         # if this was a resolution for a name, parse the result
         if 'claim' in resolution:
@@ -109,25 +87,16 @@ class Resolver:
                 if 'height' in claim_response:
                     height = claim_response['height']
                     depth = self.height - height
-                    claim_result = _verify_proof(parsed_uri.name,
-                                                 claim_trie_root,
-                                                 claim_response,
-                                                 height, depth,
-                                                 transaction_class=self.transaction_class,
-                                                 hash160_to_address=self.hash160_to_address)
-                    result['claim'] = await self.parse_and_validate_claim_result(claim_result,
-                                                                                 certificate,
-                                                                                 raw)
-            elif claim_resolution_type == "claim_id":
-                result['claim'] = await self.parse_and_validate_claim_result(claim_response,
-                                                                             certificate,
-                                                                             raw)
-            elif claim_resolution_type == "sequence":
-                result['claim'] = await self.parse_and_validate_claim_result(claim_response,
-                                                                             certificate,
-                                                                             raw)
-            else:
-                log.error("unknown response type: %s", claim_resolution_type)
+                    claim_response = _verify_proof(parsed_uri.name,
+                                                   claim_trie_root,
+                                                   claim_response,
+                                                   height, depth,
+                                                   transaction_class=self.transaction_class,
+                                                   ledger=self.ledger)
+            elif claim_resolution_type not in ["sequence", "winning", "claim_id"]:
+                raise Exception("unknown response type: %s", claim_resolution_type)
+            result['claim'] = await self.parse_and_validate_claim_result(claim_response,
+                                                                         certificate_response)
 
         # if this was a resolution for a name in a channel make sure there is only one valid
         # match
@@ -169,58 +138,40 @@ class Resolver:
                 return {'error': 'claim not found', 'success': False, 'uri': str(parsed_uri)}
         return result
 
-    async def get_certificate_and_validate_result(self, claim_result):
+    async def parse_and_validate_claim_result(self, claim_result, certificate=None):
         if not claim_result or 'value' not in claim_result:
             return claim_result
-        certificate = None
-        certificate_id = Claim.from_bytes(unhexlify(claim_result['value'])).signing_channel_id
-        if certificate_id:
-            certificate = await self.network.get_claims_by_ids(certificate_id)
-            certificate = certificate.pop(certificate_id) if certificate else None
-        return await self.parse_and_validate_claim_result(claim_result, certificate=certificate)
+        claim_result = _decode_claim_result(claim_result)
+        channel_id = None
 
-    async def parse_and_validate_claim_result(self, claim_result, certificate=None, raw=False):
-        if not claim_result or 'value' not in claim_result:
-            return claim_result
-
-        claim_result['decoded_claim'] = False
-        decoded = None
-
-        if not raw:
-            claim_value = claim_result['value']
-            try:
-                decoded = claim_result['value'] = Claim.from_bytes(unhexlify(claim_value))
-                claim_result['decoded_claim'] = True
-            except DecodeError:
-                pass
-
-        if decoded:
+        if claim_result['value']:
             claim_result['has_signature'] = False
-            if decoded.is_signed:
+            if claim_result['value'].is_signed:
+                claim_result['has_signature'] = True
                 claim_tx = await self.network.get_transaction(claim_result['txid'])
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
-                    certificate = await self.network.get_claims_by_ids(decoded.signing_channel_id)
+                    channel_id = claim_result['value'].signing_channel_id
+                    certificate = (await self.network.get_claims_by_ids(channel_id)).get(channel_id)
                     if not certificate:
-                        log.warning('Certificate %s not found', decoded.signing_channel_id)
+                        log.warning('Certificate %s not found', channel_id)
+                claim_result['channel_name'] = certificate['name'] if certificate else None
                 cert_tx = await self.network.get_transaction(certificate['txid']) if certificate else None
-                claim_result['has_signature'] = True
-                claim_result['signature_is_valid'] = False
-                validated, channel_name = validate_claim_signature_and_get_channel_name(
+                claim_result['signature_is_valid'] = validate_claim_signature_and_get_channel_name(
                     claim_result, certificate, self.ledger, claim_tx=claim_tx, cert_tx=cert_tx
                 )
-                claim_result['channel_name'] = channel_name
-                if validated:
-                    claim_result['signature_is_valid'] = True
-
-        if 'height' in claim_result and claim_result['height'] is None:
-            claim_result['height'] = -1
 
         if 'amount' in claim_result:
-            claim_result = format_amount_value(claim_result)
+            claim_result['amount'] = dewies_to_lbc(claim_result['amount'])
+            claim_result['effective_amount'] = dewies_to_lbc(claim_result['effective_amount'])
+            claim_result['supports'] = [
+                {'txid': txid, 'nout': nout, 'amount': dewies_to_lbc(amount)}
+                for (txid, nout, amount) in claim_result['supports']
+            ]
 
+        claim_result['height'] = claim_result.get('height', -1) or -1
         claim_result['permanent_url'] = _get_permanent_url(
-            claim_result, decoded.signing_channel_id if decoded else None)
+            claim_result, channel_id)
 
         return claim_result
 
@@ -301,33 +252,14 @@ class Resolver:
         start_position = (page - 1) * page_size
         queries, names, claim_positions = self.prepare_claim_queries(start_position, page_size,
                                                                      channel_claim_infos)
-        page_generator = await self.iter_channel_claims_pages(queries, claim_positions, names,
-                                                              certificate, page_size=page_size)
         upper_bound = len(claim_positions)
         if not page:
             return None, upper_bound
         if start_position > upper_bound:
             raise IndexError("claim %i greater than max %i" % (start_position, upper_bound))
+        page_generator = await self.iter_channel_claims_pages(queries, claim_positions, names,
+                                                              certificate, page_size=page_size)
         return page_generator, upper_bound
-
-
-# Format amount to be decimal encoded string
-# Format value to be hex encoded string
-# TODO: refactor. Came from lbryum, there could be another part of torba doing it
-def format_amount_value(obj):
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if k in ('amount', 'effective_amount'):
-                if not isinstance(obj[k], float):
-                    obj[k] = dewies_to_lbc(obj[k])
-            elif k == 'supports' and isinstance(v, list):
-                obj[k] = [{'txid': txid, 'nout': nout, 'amount': dewies_to_lbc(amount)}
-                          for (txid, nout, amount) in v]
-            elif isinstance(v, (list, dict)):
-                obj[k] = format_amount_value(v)
-    elif isinstance(obj, list):
-        obj = [format_amount_value(o) for o in obj]
-    return obj
 
 
 def _get_permanent_url(claim_result, certificate_id):
@@ -337,51 +269,39 @@ def _get_permanent_url(claim_result, certificate_id):
         return f"{claim_result['name']}#{claim_result['claim_id']}"
 
 
-def _verify_proof(name, claim_trie_root, result, height, depth, transaction_class, hash160_to_address):
+def _verify_proof(name, claim_trie_root, result, height, depth, transaction_class, ledger):
     """
     Verify proof for name claim
     """
+    support_amount = sum([amt for (stxid, snout, amt) in result['supports']])
 
-    def _build_response(name, value, claim_id, txid, n, amount, effective_amount,
-                        claim_sequence, claim_address, supports):
+    def _build_response(name, tx, nOut):
+        output = tx.outputs[nOut]
         r = {
             'name': name,
-            'value': hexlify(value),
-            'claim_id': claim_id,
-            'txid': txid,
-            'nout': n,
-            'amount': amount,
-            'effective_amount': effective_amount,
+            'value': hexlify(output.script.values['claim']),
+            'claim_id': output.claim_id,
+            'txid': tx.id,
+            'nout': nOut,
+            'amount': output.amount,
+            'effective_amount': output.amount + support_amount,
             'height': height,
             'depth': depth,
-            'claim_sequence': claim_sequence,
-            'address': claim_address,
-            'supports': supports
+            'claim_sequence': result['claim_sequence'],
+            'address': output.get_address(ledger),
+            'supports': result['supports']
         }
         return r
 
     def _parse_proof_result(name, result):
-        support_amount = sum([amt for (stxid, snout, amt) in result['supports']])
-        supports = result['supports']
         if 'txhash' in result['proof'] and 'nOut' in result['proof']:
             if 'transaction' in result:
                 tx = transaction_class(raw=unhexlify(result['transaction']))
                 nOut = result['proof']['nOut']
                 if result['proof']['txhash'] == tx.id:
                     if 0 <= nOut < len(tx.outputs):
-                        claim_output = tx.outputs[nOut]
-                        effective_amount = claim_output.amount + support_amount
-                        claim_address = hash160_to_address(claim_output.script.values['pubkey_hash'])
-                        claim_id = result['claim_id']
-                        claim_sequence = result['claim_sequence']
-                        claim_script = claim_output.script
-                        decoded_name = claim_script.values['claim_name'].decode()
-                        decoded_value = claim_script.values['claim']
-                        if decoded_name == name:
-                            return _build_response(name, decoded_value, claim_id,
-                                                   tx.id, nOut, claim_output.amount,
-                                                   effective_amount, claim_sequence,
-                                                   claim_address, supports)
+                        if tx.outputs[nOut].script.values['claim_name'].decode() == name:
+                            return _build_response(name, tx, nOut)
                         return {'error': 'name in proof did not match requested name'}
                     outputs = len(tx['outputs'])
                     return {'error': 'invalid nOut: %d (let(outputs): %d' % (nOut, outputs)}
@@ -392,12 +312,8 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
         return {'error': 'name is not claimed'}
 
     if 'proof' in result:
-        proof_name = name
-        if 'name' in result:
-            proof_name = result['name']
-            name = result['name']
-        if 'normalized_name' in result:
-            proof_name = result['normalized_name']
+        name = result.get('name', name)
+        proof_name = result.get('normalized_name', name)
         try:
             verify_proof(result['proof'], claim_trie_root, proof_name)
         except InvalidProofError:
@@ -412,37 +328,39 @@ def validate_claim_signature_and_get_channel_name(claim_result, certificate_clai
     if cert_tx and certificate_claim and claim_tx and claim_result:
         tx = Transaction(unhexlify(claim_tx))
         cert_tx = Transaction(unhexlify(cert_tx))
+        valid_signature = False
         try:
-            is_signed = tx.outputs[claim_result['nout']].is_signed_by(
+            valid_signature = tx.outputs[claim_result['nout']].is_signed_by(
                 cert_tx.outputs[certificate_claim['nout']], ledger
             )
         except InvalidSignature:
-            return False, None
-        return is_signed, certificate_claim['name']
-    return False, None
+            pass
+        if not valid_signature:
+            log.warning("lbry://%s#%s has an invalid signature",
+                        claim_result['name'], claim_result['claim_id'])
+        return valid_signature
 
 
 # TODO: The following came from code handling lbryum results. Now that it's all in one place a refactor should unify it.
 def _decode_claim_result(claim):
-    if 'has_signature' in claim and claim['has_signature']:
-        if not claim['signature_is_valid']:
-            log.warning("lbry://%s#%s has an invalid signature",
-                        claim['name'], claim['claim_id'])
+    if 'decoded_claim' in claim:
+        return claim
     if 'value' not in claim:
         log.warning('Got an invalid claim while parsing, please report: %s', claim)
         claim['hex'] = None
         claim['value'] = None
-        backend_message = ' SDK message: ' + claim['error'] if 'error' in claim else ''
+        backend_message = ' SDK message: ' + claim.get('error', '')
         claim['error'] = "Failed to parse: missing value." + backend_message
         return claim
     try:
         if not isinstance(claim['value'], Claim):
             claim['value'] = Claim.from_bytes(unhexlify(claim['value']))
         claim['hex'] = hexlify(claim['value'].to_bytes())
+        claim['decoded_claim'] = True
     except DecodeError:
+        claim['decoded_claim'] = False
         claim['hex'] = claim['value']
         claim['value'] = None
-        claim['error'] = "Failed to decode value"
     return claim
 
 
@@ -493,11 +411,7 @@ def pick_winner_from_channel_path_collision(claims_in_channel):
     # potentially triggering that.
     winner = None
     for claim in claims_in_channel:
-        if not claim['signature_is_valid']:
-            continue
-        if winner is None:
-            winner = claim
-        elif claim['height'] < winner['height'] or \
+        if winner is None or claim['height'] < winner['height'] or \
                 (claim['height'] == winner['height'] and claim['nout'] < winner['nout']):
-            winner = claim
+            winner = claim if claim['signature_is_valid'] else winner
     return winner
