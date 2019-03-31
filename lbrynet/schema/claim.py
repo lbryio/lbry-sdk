@@ -2,7 +2,7 @@ import os.path
 import json
 from string import ascii_letters
 from typing import List, Tuple, Iterator, TypeVar, Generic
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP
 from binascii import hexlify, unhexlify
 
 from google.protobuf.json_format import MessageToDict
@@ -301,7 +301,8 @@ class Fee:
         self._fee.amount = amount
         self._fee.currency = FeeMessage.BTC
 
-    PENNIES = Decimal(100.0)
+    PENNIES = Decimal('100.0')
+    PENNY = Decimal('0.01')
 
     @property
     def usd(self) -> Decimal:
@@ -311,7 +312,7 @@ class Fee:
 
     @usd.setter
     def usd(self, amount: Decimal):
-        self.pennies = int(amount * self.PENNIES)
+        self.pennies = int(amount.quantize(self.PENNY, ROUND_UP) * self.PENNIES)
 
     @property
     def pennies(self) -> int:
