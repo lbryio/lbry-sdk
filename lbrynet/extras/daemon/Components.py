@@ -294,7 +294,7 @@ class BlobComponent(Component):
         blob_dir = os.path.join(self.conf.data_dir, 'blobfiles')
         if not os.path.isdir(blob_dir):
             os.mkdir(blob_dir)
-        self.blob_manager = BlobManager(asyncio.get_event_loop(), blob_dir, storage, data_store)
+        self.blob_manager = BlobManager(asyncio.get_event_loop(), blob_dir, storage, data_store, self.conf.save_blobs)
         return await self.blob_manager.setup()
 
     async def stop(self):

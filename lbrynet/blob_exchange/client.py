@@ -5,7 +5,7 @@ import binascii
 from lbrynet.error import InvalidBlobHashError, InvalidDataError
 from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest
 if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_file import BlobFile
+    from lbrynet.blob.blob_file import AbstractBlob
     from lbrynet.blob.writer import HashBlobWriter
 
 log = logging.getLogger(__name__)
@@ -17,10 +17,10 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.peer_port: typing.Optional[int] = None
         self.peer_address: typing.Optional[str] = None
         self.peer_timeout = peer_timeout
-        self.transport: asyncio.Transport = None
+        self.transport: typing.Optional[asyncio.Transport] = None
 
-        self.writer: 'HashBlobWriter' = None
-        self.blob: 'BlobFile' = None
+        self.writer: typing.Optional['HashBlobWriter'] = None
+        self.blob: typing.Optional['AbstractBlob'] = None
 
         self._blob_bytes_received = 0
         self._response_fut: asyncio.Future = None
@@ -63,8 +63,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             # write blob bytes if we're writing a blob and have blob bytes to write
             self._write(response.blob_data)
 
-
-    def _write(self, data):
+    def _write(self, data: bytes):
         if len(data) > (self.blob.get_length() - self._blob_bytes_received):
             data = data[:(self.blob.get_length() - self._blob_bytes_received)]
             log.warning("got more than asked from %s:%d, probable sendfile bug", self.peer_address, self.peer_port)
@@ -145,11 +144,12 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.transport = None
         self.buf = b''
 
-    async def download_blob(self, blob: 'BlobFile') -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
-        if blob.get_is_verified() or blob.file_exists or blob.blob_write_lock.locked():
+    async def download_blob(self, blob: 'AbstractBlob') -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
+        if blob.get_is_verified() or not blob.is_writeable():
             return 0, self.transport
         try:
-            self.blob, self.writer, self._blob_bytes_received = blob, blob.open_for_writing(), 0
+            blob.get_blob_writer()
+            self.blob, self.writer, self._blob_bytes_received = blob, blob.get_blob_writer(), 0
             self._response_fut = asyncio.Future(loop=self.loop)
             return await self._download_blob()
         except OSError as e:
@@ -177,7 +177,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.close()
 
 
-async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: str, tcp_port: int,
+async def request_blob(loop: asyncio.BaseEventLoop, blob: 'AbstractBlob', address: str, tcp_port: int,
                        peer_connect_timeout: float, blob_download_timeout: float,
                        connected_transport: asyncio.Transport = None)\
         -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
@@ -196,7 +196,7 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'BlobFile', address: s
         if not connected_transport:
             await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
                                    peer_connect_timeout, loop=loop)
-        if blob.get_is_verified() or blob.file_exists:
+        if blob.get_is_verified() or not blob.is_writeable():
             # file exists but not verified means someone is writing right now, give it time, come back later
             return 0, connected_transport
         return await protocol.download_blob(blob)

@@ -4,6 +4,8 @@ import asyncio
 import binascii
 import logging
 import typing
+import contextlib
+from io import BytesIO
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -19,10 +21,6 @@ log = logging.getLogger(__name__)
 
 
 _hexmatch = re.compile("^[a-f,0-9]+$")
-
-
-def is_valid_hashcharacter(char: str) -> bool:
-    return len(char) == 1 and _hexmatch.match(char)
 
 
 def is_valid_blobhash(blobhash: str) -> bool:
@@ -46,143 +44,51 @@ def encrypt_blob_bytes(key: bytes, iv: bytes, unencrypted: bytes) -> typing.Tupl
     return encrypted, digest.hexdigest()
 
 
-class BlobFile:
-    """
-    A chunk of data available on the network which is specified by a hashsum
+def decrypt_blob_bytes(read_handle: typing.BinaryIO, length: int, key: bytes, iv: bytes) -> bytes:
+    buff = read_handle.read()
+    if len(buff) != length:
+        raise ValueError("unexpected length")
+    cipher = Cipher(AES(key), modes.CBC(iv), backend=backend)
+    unpadder = PKCS7(AES.block_size).unpadder()
+    decryptor = cipher.decryptor()
+    return unpadder.update(decryptor.update(buff) + decryptor.finalize()) + unpadder.finalize()
 
-    This class is used to create blobs on the local filesystem
-    when we already know the blob hash before hand (i.e., when downloading blobs)
-    Also can be used for reading from blobs on the local filesystem
-    """
 
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, blob_hash: str,
-                 length: typing.Optional[int] = None,
-                 blob_completed_callback: typing.Optional[typing.Callable[['BlobFile'], typing.Awaitable]] = None):
+class AbstractBlob:
+    """
+    A chunk of data (up to 2MB) available on the network which is specified by a sha384 hash
+
+    This class is non-io specific
+    """
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], typing.Awaitable]] = None,
+                 blob_directory: typing.Optional[str] = None):
         if not is_valid_blobhash(blob_hash):
             raise InvalidBlobHashError(blob_hash)
+
         self.loop = loop
         self.blob_hash = blob_hash
         self.length = length
-        self.blob_dir = blob_dir
-        self.file_path = os.path.join(blob_dir, self.blob_hash)
-        self.writers: typing.List[HashBlobWriter] = []
-
-        self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
-        self.finished_writing = asyncio.Event(loop=loop)
-        self.blob_write_lock = asyncio.Lock(loop=loop)
-        if self.file_exists:
-            length = int(os.stat(os.path.join(blob_dir, blob_hash)).st_size)
-            self.length = length
-            self.verified.set()
-            self.finished_writing.set()
-        self.saved_verified_blob = False
         self.blob_completed_callback = blob_completed_callback
+        self.blob_directory = blob_directory
 
-    @property
-    def file_exists(self):
-        return os.path.isfile(self.file_path)
+        self.writers: typing.List[HashBlobWriter] = []
+        self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
+        self.writing: asyncio.Event = asyncio.Event(loop=self.loop)
 
-    def writer_finished(self, writer: HashBlobWriter):
-        def callback(finished: asyncio.Future):
-            try:
-                error = finished.exception()
-            except Exception as err:
-                error = err
-            if writer in self.writers:  # remove this download attempt
-                self.writers.remove(writer)
-            if not error:  # the blob downloaded, cancel all the other download attempts and set the result
-                while self.writers:
-                    other = self.writers.pop()
-                    other.finished.cancel()
-                t = self.loop.create_task(self.save_verified_blob(writer, finished.result()))
-                t.add_done_callback(lambda *_: self.finished_writing.set())
-                return
-            if isinstance(error, (InvalidBlobHashError, InvalidDataError)):
-                log.debug("writer error downloading %s: %s", self.blob_hash[:8], str(error))
-            elif not isinstance(error, (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError)):
-                log.exception("something else")
-                raise error
-        return callback
-
-    async def save_verified_blob(self, writer, verified_bytes: bytes):
-        def _save_verified():
-            # log.debug(f"write blob file {self.blob_hash[:8]} from {writer.peer.address}")
-            if not self.saved_verified_blob and not os.path.isfile(self.file_path):
-                if self.get_length() == len(verified_bytes):
-                    with open(self.file_path, 'wb') as write_handle:
-                        write_handle.write(verified_bytes)
-                    self.saved_verified_blob = True
-                else:
-                    raise Exception("length mismatch")
-
-        async with self.blob_write_lock:
-            if self.verified.is_set():
-                return
-            await self.loop.run_in_executor(None, _save_verified)
-            if self.blob_completed_callback:
-                await self.blob_completed_callback(self)
-            self.verified.set()
-
-    def open_for_writing(self) -> HashBlobWriter:
-        if self.file_exists:
-            raise OSError(f"File already exists '{self.file_path}'")
-        fut = asyncio.Future(loop=self.loop)
-        writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
-        self.writers.append(writer)
-        fut.add_done_callback(self.writer_finished(writer))
-        return writer
-
-    async def sendfile(self, writer: asyncio.StreamWriter) -> int:
-        """
-        Read and send the file to the writer and return the number of bytes sent
-        """
-
-        with open(self.file_path, 'rb') as handle:
-            return await self.loop.sendfile(writer.transport, handle, count=self.get_length())
-
-    def close(self):
-        while self.writers:
-            self.writers.pop().finished.cancel()
-
-    def delete(self):
+    def __del__(self):
+        if self.writers:
+            log.warning("%s not closed before being garbage collected", self.blob_hash)
         self.close()
-        self.saved_verified_blob = False
-        if os.path.isfile(self.file_path):
-            os.remove(self.file_path)
-        self.verified.clear()
-        self.finished_writing.clear()
-        self.length = None
 
-    def decrypt(self, key: bytes, iv: bytes) -> bytes:
-        """
-        Decrypt a BlobFile to plaintext bytes
-        """
+    @contextlib.contextmanager
+    def reader_context(self) -> typing.ContextManager[typing.BinaryIO]:
+        raise NotImplementedError()
 
-        with open(self.file_path, "rb") as f:
-            buff = f.read()
-        if len(buff) != self.length:
-            raise ValueError("unexpected length")
-        cipher = Cipher(AES(key), modes.CBC(iv), backend=backend)
-        unpadder = PKCS7(AES.block_size).unpadder()
-        decryptor = cipher.decryptor()
-        return unpadder.update(decryptor.update(buff) + decryptor.finalize()) + unpadder.finalize()
+    def _write_blob(self, blob_bytes: bytes):
+        raise NotImplementedError()
 
-    @classmethod
-    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_dir: str, key: bytes,
-                                      iv: bytes, unencrypted: bytes, blob_num: int) -> BlobInfo:
-        """
-        Create an encrypted BlobFile from plaintext bytes
-        """
-
-        blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
-        length = len(blob_bytes)
-        blob = cls(loop, blob_dir, blob_hash, length)
-        writer = blob.open_for_writing()
-        writer.write(blob_bytes)
-        await blob.verified.wait()
-        return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), blob_hash)
-
-    def set_length(self, length):
+    def set_length(self, length) -> None:
         if self.length is not None and length == self.length:
             return
         if self.length is None and 0 <= length <= MAX_BLOB_SIZE:
@@ -190,8 +96,192 @@ class BlobFile:
             return
         log.warning("Got an invalid length. Previous length: %s, Invalid length: %s", self.length, length)
 
-    def get_length(self):
+    def get_length(self) -> typing.Optional[int]:
         return self.length
 
-    def get_is_verified(self):
+    def get_is_verified(self) -> bool:
         return self.verified.is_set()
+
+    def is_readable(self) -> bool:
+        return self.verified.is_set()
+
+    def is_writeable(self) -> bool:
+        return not self.writing.is_set()
+
+    def write_blob(self, blob_bytes: bytes):
+        if not self.is_writeable():
+            raise OSError("cannot open blob for writing")
+        try:
+            self.writing.set()
+            self._write_blob(blob_bytes)
+        finally:
+            self.writing.clear()
+
+    def close(self):
+        while self.writers:
+            self.writers.pop().finished.cancel()
+
+    def delete(self):
+        self.close()
+        self.verified.clear()
+        self.length = None
+
+    async def sendfile(self, writer: asyncio.StreamWriter) -> int:
+        """
+        Read and send the file to the writer and return the number of bytes sent
+        """
+
+        if not self.is_readable():
+            raise OSError('blob files cannot be read')
+        with self.reader_context() as handle:
+            return await self.loop.sendfile(writer.transport, handle, count=self.get_length())
+
+    def decrypt(self, key: bytes, iv: bytes) -> bytes:
+        """
+        Decrypt a BlobFile to plaintext bytes
+        """
+
+        with self.reader_context() as reader:
+            return decrypt_blob_bytes(reader, self.length, key, iv)
+
+    @classmethod
+    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_dir: typing.Optional[str], key: bytes,
+                                      iv: bytes, unencrypted: bytes, blob_num: int) -> BlobInfo:
+        """
+        Create an encrypted BlobFile from plaintext bytes
+        """
+
+        blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
+        length = len(blob_bytes)
+        blob = cls(loop, blob_hash, length, blob_directory=blob_dir)
+        writer = blob.get_blob_writer()
+        writer.write(blob_bytes)
+        await blob.verified.wait()
+        return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), blob_hash)
+
+    async def save_verified_blob(self, verified_bytes: bytes):
+        if self.verified.is_set():
+            return
+        if self.is_writeable():
+            if self.get_length() == len(verified_bytes):
+                self._write_blob(verified_bytes)
+                self.verified.set()
+                if self.blob_completed_callback:
+                    await self.blob_completed_callback(self)
+            else:
+                raise Exception("length mismatch")
+
+    def get_blob_writer(self) -> HashBlobWriter:
+        fut = asyncio.Future(loop=self.loop)
+        writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
+        self.writers.append(writer)
+
+        def writer_finished_callback(finished: asyncio.Future):
+            try:
+                err = finished.exception()
+                if err:
+                    raise err
+                verified_bytes = finished.result()
+                while self.writers:
+                    other = self.writers.pop()
+                    if other is not writer:
+                        other.finished.cancel()
+                self.loop.create_task(self.save_verified_blob(verified_bytes))
+                return
+            except (InvalidBlobHashError, InvalidDataError) as error:
+                log.debug("writer error downloading %s: %s", self.blob_hash[:8], str(error))
+            except (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError) as error:
+                # log.exception("something else")
+                pass
+            finally:
+                if writer in self.writers:
+                    self.writers.remove(writer)
+
+        fut.add_done_callback(writer_finished_callback)
+        return writer
+
+
+class BlobBuffer(AbstractBlob):
+    """
+    An in-memory only blob
+    """
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], typing.Awaitable]] = None,
+                 blob_directory: typing.Optional[str] = None):
+        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
+        self._verified_bytes: typing.Optional[BytesIO] = None
+
+    @contextlib.contextmanager
+    def reader_context(self) -> typing.ContextManager[typing.BinaryIO]:
+        if not self.is_readable():
+            raise OSError("cannot open blob for reading")
+        try:
+            yield self._verified_bytes
+        finally:
+            self._verified_bytes.close()
+            self._verified_bytes = None
+            self.verified.clear()
+
+    def _write_blob(self, blob_bytes: bytes):
+        if self._verified_bytes:
+            raise OSError("already have bytes for blob")
+        self._verified_bytes = BytesIO(blob_bytes)
+
+
+class BlobFile(AbstractBlob):
+    """
+    A blob existing on the local file system
+    """
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], typing.Awaitable]] = None,
+                 blob_directory: typing.Optional[str] = None):
+        if not blob_directory or not os.path.isdir(blob_directory):
+            raise OSError(f"invalid blob directory '{blob_directory}'")
+        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
+        if not is_valid_blobhash(blob_hash):
+            raise InvalidBlobHashError(blob_hash)
+        self.file_path = os.path.join(self.blob_directory, self.blob_hash)
+        if self.file_exists:
+            file_size = int(os.stat(self.file_path).st_size)
+            if length and length != file_size:
+                log.warning("expected %s to be %s bytes, file has %s", self.blob_hash, length, file_size)
+                self.delete()
+            else:
+                self.length = file_size
+                self.verified.set()
+
+    @property
+    def file_exists(self):
+        return os.path.isfile(self.file_path)
+
+    def is_writeable(self) -> bool:
+        return super().is_writeable() and not os.path.isfile(self.file_path)
+
+    def get_blob_writer(self) -> HashBlobWriter:
+        if self.file_exists:
+            raise OSError(f"File already exists '{self.file_path}'")
+        return super().get_blob_writer()
+
+    @contextlib.contextmanager
+    def reader_context(self) -> typing.ContextManager[typing.BinaryIO]:
+        handle = open(self.file_path, 'rb')
+        try:
+            yield handle
+        finally:
+            handle.close()
+
+    def _write_blob(self, blob_bytes: bytes):
+        with open(self.file_path, 'wb') as f:
+            f.write(blob_bytes)
+
+    def delete(self):
+        if os.path.isfile(self.file_path):
+            os.remove(self.file_path)
+        return super().delete()
+
+    @classmethod
+    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_dir: str, key: bytes,
+                                      iv: bytes, unencrypted: bytes, blob_num: int) -> BlobInfo:
+        if not blob_dir or not os.path.isdir(blob_dir):
+            raise OSError(f"cannot create blob in directory: '{blob_dir}'")
+        return await super().create_from_unencrypted(loop, blob_dir, key, iv, unencrypted, blob_num)

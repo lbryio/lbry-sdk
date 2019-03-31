@@ -63,11 +63,11 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 return
             self.sd_blob = self.blob_manager.get_blob(request['sd_blob_hash'], request['sd_blob_size'])
             if not self.sd_blob.get_is_verified():
-                self.writer = self.sd_blob.open_for_writing()
+                self.writer = self.sd_blob.get_blob_writer()
                 self.incoming.set()
                 self.send_response({"send_sd_blob": True})
                 try:
-                    await asyncio.wait_for(self.sd_blob.finished_writing.wait(), 30, loop=self.loop)
+                    await asyncio.wait_for(self.sd_blob.verified.wait(), 30, loop=self.loop)
                     self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(
                         self.loop, self.blob_manager.blob_dir, self.sd_blob
                     )
@@ -102,11 +102,11 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 return
             blob = self.blob_manager.get_blob(request['blob_hash'], request['blob_size'])
             if not blob.get_is_verified():
-                self.writer = blob.open_for_writing()
+                self.writer = blob.get_blob_writer()
                 self.incoming.set()
                 self.send_response({"send_blob": True})
                 try:
-                    await asyncio.wait_for(blob.finished_writing.wait(), 30, loop=self.loop)
+                    await asyncio.wait_for(blob.verified.wait(), 30, loop=self.loop)
                     self.send_response({"received_blob": True})
                 except asyncio.TimeoutError:
                     self.send_response({"received_blob": False})
