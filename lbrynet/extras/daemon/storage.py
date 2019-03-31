@@ -195,12 +195,16 @@ def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor
     transaction.executemany("delete from blob where blob_hash=?", blob_hashes)
 
 
-def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: str, download_directory: str,
-               data_payment_rate: float, status: str) -> int:
+def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typing.Optional[str],
+               download_directory: typing.Optional[str], data_payment_rate: float, status: str) -> int:
+    if not file_name and not download_directory:
+        encoded_file_name, encoded_download_dir = "{stream}", "{stream}"
+    else:
+        encoded_file_name = binascii.hexlify(file_name.encode()).decode()
+        encoded_download_dir = binascii.hexlify(download_directory.encode()).decode()
     transaction.execute(
         "insert or replace into file values (?, ?, ?, ?, ?)",
-        (stream_hash, binascii.hexlify(file_name.encode()).decode(),
-         binascii.hexlify(download_directory.encode()).decode(), data_payment_rate, status)
+        (stream_hash, encoded_file_name, encoded_download_dir, data_payment_rate, status)
     )
     return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
 
@@ -481,6 +485,12 @@ class SQLiteStorage(SQLiteMixin):
             "select stream_hash from stream where sd_hash = ?", sd_blob_hash
         )
 
+    def get_stream_info_for_sd_hash(self, sd_blob_hash):
+        return self.run_and_return_one_or_none(
+            "select stream_hash, stream_name, suggested_filename, stream_key from stream where sd_hash = ?",
+            sd_blob_hash
+        )
+
     def delete_stream(self, descriptor: 'StreamDescriptor'):
         return self.db.run_with_foreign_keys_disabled(delete_stream, descriptor)
 
@@ -492,7 +502,8 @@ class SQLiteStorage(SQLiteMixin):
             stream_hash, file_name, download_directory, data_payment_rate, status="running"
         )
 
-    def save_published_file(self, stream_hash: str, file_name: str, download_directory: str, data_payment_rate: float,
+    def save_published_file(self, stream_hash: str, file_name: typing.Optional[str],
+                            download_directory: typing.Optional[str], data_payment_rate: float,
                             status="finished") -> typing.Awaitable[int]:
         return self.db.run(store_file, stream_hash, file_name, download_directory, data_payment_rate, status)
 
