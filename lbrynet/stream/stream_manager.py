@@ -6,8 +6,8 @@ import logging
 import random
 from decimal import Decimal
 from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError
-#    DownloadDataTimeout, DownloadSDTimeout
-from lbrynet.utils import generate_id, cache_concurrent
+from lbrynet.error import DownloadSDTimeout, DownloadDataTimeout, ResolveTimeout
+from lbrynet.utils import cache_concurrent
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import Claim
@@ -96,11 +96,10 @@ class StreamManager:
             await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_STOPPED)
 
     async def start_stream(self, stream: ManagedStream):
-        await stream.setup(self.node, save_file=not self.config.streaming_only)
-        self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
         stream.update_status(ManagedStream.STATUS_RUNNING)
         await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_RUNNING)
-        self.wait_for_stream_finished(stream)
+        await stream.setup(self.node, save_file=not self.config.streaming_only)
+        self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
     async def recover_streams(self, file_infos: typing.List[typing.Dict]):
         to_restore = []
@@ -139,13 +138,14 @@ class StreamManager:
             return
         stream = ManagedStream(
             self.loop, self.config, self.blob_manager, descriptor.sd_hash, download_directory, file_name, status,
-            claim, rowid=rowid, descriptor=descriptor
+            claim, rowid=rowid, descriptor=descriptor, analytics_manager=self.analytics_manager
         )
         self.streams[sd_hash] = stream
 
     async def load_streams_from_database(self):
         to_recover = []
         to_start = []
+        await self.storage.sync_files_to_blobs()
         for file_info in await self.storage.get_all_lbry_files():
             if not self.blob_manager.get_blob(file_info['sd_hash']).get_is_verified():
                 to_recover.append(file_info)
@@ -181,10 +181,10 @@ class StreamManager:
         while True:
             if self.config.reflect_streams and self.config.reflector_servers:
                 sd_hashes = await self.storage.get_streams_to_re_reflect()
-                streams = list(filter(lambda s: s in sd_hashes, self.streams.keys()))
+                sd_hashes = [sd for sd in sd_hashes if sd in self.streams]
                 batch = []
-                while streams:
-                    stream = streams.pop()
+                while sd_hashes:
+                    stream = self.streams[sd_hashes.pop()]
                     if not stream.fully_reflected.is_set():
                         host, port = random.choice(self.config.reflector_servers)
                         batch.append(stream.upload_to_reflector(host, port))
@@ -198,7 +198,7 @@ class StreamManager:
     async def start(self):
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
-        # self.re_reflect_task = self.loop.create_task(self.reflect_streams())
+        self.re_reflect_task = self.loop.create_task(self.reflect_streams())
 
     def stop(self):
         if self.resume_downloading_task and not self.resume_downloading_task.done():
@@ -279,28 +279,11 @@ class StreamManager:
                 streams.reverse()
         return streams
 
-    def wait_for_stream_finished(self, stream: ManagedStream):
-        async def _wait_for_stream_finished():
-            if stream.downloader and stream.running:
-                await stream.finished_writing.wait()
-                stream.update_status(ManagedStream.STATUS_FINISHED)
-                if self.analytics_manager:
-                    self.loop.create_task(self.analytics_manager.send_download_finished(
-                        stream.download_id, stream.claim_name, stream.sd_hash
-                    ))
-
-        task = self.loop.create_task(_wait_for_stream_finished())
-        self.update_stream_finished_futs.append(task)
-        task.add_done_callback(
-            lambda _: None if task not in self.update_stream_finished_futs else
-            self.update_stream_finished_futs.remove(task)
-        )
-
     async def _check_update_or_replace(self, outpoint: str, claim_id: str, claim: Claim) -> typing.Tuple[
                                                        typing.Optional[ManagedStream], typing.Optional[ManagedStream]]:
         existing = self.get_filtered_streams(outpoint=outpoint)
         if existing:
-            if not existing[0].running:
+            if existing[0].status == ManagedStream.STATUS_STOPPED:
                 await self.start_stream(existing[0])
             return existing[0], None
         existing = self.get_filtered_streams(sd_hash=claim.stream.source.sd_hash)
@@ -323,163 +306,112 @@ class StreamManager:
                 return None, existing_for_claim_id[0]
         return None, None
 
-    # async def start_downloader(self, got_descriptor_time: asyncio.Future, downloader: EncryptedStreamDownloader,
-    #                            download_id: str, outpoint: str, claim: Claim, resolved: typing.Dict,
-    #                            file_name: typing.Optional[str] = None) -> ManagedStream:
-    #     start_time = self.loop.time()
-    #     downloader.download(self.node)
-    #     await downloader.got_descriptor.wait()
-    #     got_descriptor_time.set_result(self.loop.time() - start_time)
-    #     rowid = await self._store_stream(downloader)
-    #     await self.storage.save_content_claim(
-    #         downloader.descriptor.stream_hash, outpoint
-    #     )
-    #     stream = ManagedStream(self.loop, self.blob_manager, rowid, downloader.descriptor, self.config.download_dir,
-    #                            file_name, downloader, ManagedStream.STATUS_RUNNING, download_id=download_id)
-    #     stream.set_claim(resolved, claim)
-    #     await stream.downloader.wrote_bytes_event.wait()
-    #     self.streams.add(stream)
-    #     return stream
-
     @cache_concurrent
-    async def download_stream_from_uri(self, uri, timeout: float, exchange_rate_manager: 'ExchangeRateManager',
-                                       file_name: typing.Optional[str] = None) -> ManagedStream:
+    async def download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
+                                       timeout: typing.Optional[float] = None,
+                                       file_name: typing.Optional[str] = None,
+                                       download_directory: typing.Optional[str] = None,
+                                       save_file: bool = True, resolve_timeout: float = 3.0) -> ManagedStream:
+        timeout = timeout or self.config.download_timeout
         start_time = self.loop.time()
-        parsed_uri = parse_lbry_uri(uri)
-        if parsed_uri.is_channel:
-            raise ResolveError("cannot download a channel claim, specify a /path")
-
-        # resolve the claim
-        resolved_result = await self.wallet.ledger.resolve(0, 10, uri)
-        await self.storage.save_claims_for_resolve([
-            value for value in resolved_result.values() if 'error' not in value
-        ])
-        resolved = resolved_result.get(uri, {})
-        resolved = resolved if 'value' in resolved else resolved.get('claim')
-        if not resolved:
-            raise ResolveError(f"Failed to resolve stream at '{uri}'")
-        if 'error' in resolved:
-            raise ResolveError(f"error resolving stream: {resolved['error']}")
+        resolved_time = None
+        stream = None
+        error = None
+        outpoint = None
+        try:
+            # resolve the claim
+            parsed_uri = parse_lbry_uri(uri)
+            if parsed_uri.is_channel:
+                raise ResolveError("cannot download a channel claim, specify a /path")
+            try:
+                resolved_result = await asyncio.wait_for(self.wallet.ledger.resolve(0, 1, uri), resolve_timeout)
+            except asyncio.TimeoutError:
+                raise ResolveTimeout(uri)
+            await self.storage.save_claims_for_resolve([
+                value for value in resolved_result.values() if 'error' not in value
+            ])
+            resolved = resolved_result.get(uri, {})
+            resolved = resolved if 'value' in resolved else resolved.get('claim')
+            if not resolved:
+                raise ResolveError(f"Failed to resolve stream at '{uri}'")
+            if 'error' in resolved:
+                raise ResolveError(f"error resolving stream: {resolved['error']}")
 
         claim = Claim.from_bytes(binascii.unhexlify(resolved['protobuf']))
         outpoint = f"{resolved['txid']}:{resolved['nout']}"
         resolved_time = self.loop.time() - start_time
 
-        # resume or update an existing stream, if the stream changed download it and delete the old one after
-        updated_stream, to_replace = await self._check_update_or_replace(outpoint, resolved['claim_id'], claim)
-        if updated_stream:
-            return updated_stream
+            # resume or update an existing stream, if the stream changed download it and delete the old one after
+            updated_stream, to_replace = await self._check_update_or_replace(outpoint, resolved['claim_id'], claim)
+            if updated_stream:
+                return updated_stream
 
-        # check that the fee is payable
-        fee_amount, fee_address = None, None
-        if claim.stream.has_fee:
-            fee_amount = round(exchange_rate_manager.convert_currency(
-                claim.stream.fee.currency, "LBC", claim.stream.fee.amount
-            ), 5)
-            max_fee_amount = round(exchange_rate_manager.convert_currency(
-                self.config.max_key_fee['currency'], "LBC", Decimal(self.config.max_key_fee['amount'])
-            ), 5)
-            if fee_amount > max_fee_amount:
-                msg = f"fee of {fee_amount} exceeds max configured to allow of {max_fee_amount}"
-                log.warning(msg)
-                raise KeyFeeAboveMaxAllowed(msg)
-            balance = await self.wallet.default_account.get_balance()
-            if lbc_to_dewies(str(fee_amount)) > balance:
-                msg = f"fee of {fee_amount} exceeds max available balance"
-                log.warning(msg)
-                raise InsufficientFundsError(msg)
-            fee_address = claim.stream.fee.address
-            # content_fee_tx = await self.wallet.send_amount_to_address(
-            #     lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
-            # )
+            # check that the fee is payable
+            if not to_replace and claim.stream.has_fee:
+                fee_amount = round(exchange_rate_manager.convert_currency(
+                    claim.stream.fee.currency, "LBC", claim.stream.fee.amount
+                ), 5)
+                max_fee_amount = round(exchange_rate_manager.convert_currency(
+                    self.config.max_key_fee['currency'], "LBC", Decimal(self.config.max_key_fee['amount'])
+                ), 5)
+                if fee_amount > max_fee_amount:
+                    msg = f"fee of {fee_amount} exceeds max configured to allow of {max_fee_amount}"
+                    log.warning(msg)
+                    raise KeyFeeAboveMaxAllowed(msg)
+                balance = await self.wallet.default_account.get_balance()
+                if lbc_to_dewies(str(fee_amount)) > balance:
+                    msg = f"fee of {fee_amount} exceeds max available balance"
+                    log.warning(msg)
+                    raise InsufficientFundsError(msg)
+                fee_address = claim.stream.fee.address
+                await self.wallet.send_amount_to_address(
+                    lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
+                )
+                log.info("paid fee of %s for %s", fee_amount, uri)
 
-        handled_fee_time = self.loop.time() - resolved_time - start_time
-
-        # download the stream
-        download_id = binascii.hexlify(generate_id()).decode()
-
-        download_dir = self.config.download_dir
-        save_file = True
-        if not file_name and self.config.streaming_only:
-            download_dir, file_name = None, None
-            save_file = False
-        stream = ManagedStream(
-            self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash, download_dir,
-            file_name, ManagedStream.STATUS_RUNNING, download_id=download_id
-        )
-
-        await stream.setup(self.node, save_file=save_file)
-        stream.set_claim(resolved, claim)
-        await self.storage.save_content_claim(stream.stream_hash, outpoint)
-        self.streams[stream.sd_hash] = stream
-
-        # stream = None
-        # descriptor_time_fut = self.loop.create_future()
-        # start_download_time = self.loop.time()
-        # time_to_descriptor = None
-        # time_to_first_bytes = None
-        # error = None
-        # try:
-        #     stream = await asyncio.wait_for(
-        #         asyncio.ensure_future(
-        #             self.start_downloader(descriptor_time_fut, downloader, download_id, outpoint, claim, resolved,
-        #                                   file_name)
-        #         ), timeout
-        #     )
-        #     time_to_descriptor = await descriptor_time_fut
-        #     time_to_first_bytes = self.loop.time() - start_download_time - time_to_descriptor
-        #     self.wait_for_stream_finished(stream)
-        #     if fee_address and fee_amount and not to_replace:
-        #
-        #     elif to_replace:  # delete old stream now that the replacement has started downloading
-        #         await self.delete_stream(to_replace)
-        # except asyncio.TimeoutError:
-        #     if descriptor_time_fut.done():
-        #         time_to_descriptor = descriptor_time_fut.result()
-        #         error = DownloadDataTimeout(downloader.sd_hash)
-        #         self.blob_manager.delete_blob(downloader.sd_hash)
-        #         await self.storage.delete_stream(downloader.descriptor)
-        #     else:
-        #         descriptor_time_fut.cancel()
-        #         error = DownloadSDTimeout(downloader.sd_hash)
-        #     if stream:
-        #         await self.stop_stream(stream)
-        #     else:
-        #         downloader.stop()
-        # if error:
-        #     log.warning(error)
-        # if self.analytics_manager:
-        #     self.loop.create_task(
-        #         self.analytics_manager.send_time_to_first_bytes(
-        #             resolved_time, self.loop.time() - start_time, download_id, parse_lbry_uri(uri).name, outpoint,
-        #             None if not stream else len(stream.downloader.blob_downloader.active_connections),
-        #             None if not stream else len(stream.downloader.blob_downloader.scores),
-        #             False if not downloader else downloader.added_fixed_peers,
-        #             self.config.fixed_peer_delay if not downloader else downloader.fixed_peers_delay,
-        #             claim.source_hash.decode(), time_to_descriptor,
-        #             None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].blob_hash,
-        #             None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,
-        #             time_to_first_bytes, None if not error else error.__class__.__name__
-        #         )
-        #     )
-        # if error:
-        #     raise error
-        return stream
-
-    # async def download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
-    #                                    file_name: typing.Optional[str] = None,
-    #                                    timeout: typing.Optional[float] = None) -> ManagedStream:
-    #     timeout = timeout or self.config.download_timeout
-    #     if uri in self.starting_streams:
-    #         return await self.starting_streams[uri]
-    #     fut = asyncio.Future(loop=self.loop)
-    #     self.starting_streams[uri] = fut
-    #     try:
-    #         stream = await self._download_stream_from_uri(uri, timeout, exchange_rate_manager, file_name)
-    #         fut.set_result(stream)
-    #     except Exception as err:
-    #         fut.set_exception(err)
-    #     try:
-    #         return await fut
-    #     finally:
-    #         del self.starting_streams[uri]
+            download_directory = download_directory or self.config.download_dir
+            if not file_name and (self.config.streaming_only or not save_file):
+                download_dir, file_name = None, None
+            stream = ManagedStream(
+                self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash, download_directory,
+                file_name, ManagedStream.STATUS_RUNNING, analytics_manager=self.analytics_manager
+            )
+            try:
+                await asyncio.wait_for(stream.setup(
+                    self.node, save_file=save_file, file_name=file_name, download_directory=download_directory
+                ), timeout, loop=self.loop)
+            except asyncio.TimeoutError:
+                if not stream.descriptor:
+                    raise DownloadSDTimeout(stream.sd_hash)
+                raise DownloadDataTimeout(stream.sd_hash)
+            if to_replace:  # delete old stream now that the replacement has started downloading
+                await self.delete_stream(to_replace)
+            stream.set_claim(resolved, claim)
+            await self.storage.save_content_claim(stream.stream_hash, outpoint)
+            self.streams[stream.sd_hash] = stream
+            return stream
+        except Exception as err:
+            error = err
+            if stream and stream.descriptor:
+                await self.storage.delete_stream(stream.descriptor)
+        finally:
+            if self.analytics_manager and (error or (stream and (stream.downloader.time_to_descriptor or
+                                                                 stream.downloader.time_to_first_bytes))):
+                self.loop.create_task(
+                    self.analytics_manager.send_time_to_first_bytes(
+                        resolved_time, self.loop.time() - start_time, None if not stream else stream.download_id,
+                        uri, outpoint,
+                        None if not stream else len(stream.downloader.blob_downloader.active_connections),
+                        None if not stream else len(stream.downloader.blob_downloader.scores),
+                        False if not stream else stream.downloader.added_fixed_peers,
+                        self.config.fixed_peer_delay if not stream else stream.downloader.fixed_peers_delay,
+                        None if not stream else stream.sd_hash,
+                        None if not stream else stream.downloader.time_to_descriptor,
+                        None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].blob_hash,
+                        None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,
+                        None if not stream else stream.downloader.time_to_first_bytes,
+                        None if not error else error.__class__.__name__
+                    )
+                )
+            if error:
+                raise error

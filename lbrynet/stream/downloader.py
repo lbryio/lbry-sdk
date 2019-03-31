@@ -2,6 +2,7 @@ import asyncio
 import typing
 import logging
 import binascii
+from lbrynet.error import DownloadSDTimeout
 from lbrynet.utils import resolve_host
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.blob_exchange.downloader import BlobDownloader
@@ -32,6 +33,8 @@ class StreamDownloader:
         self.fixed_peers_handle: typing.Optional[asyncio.Handle] = None
         self.fixed_peers_delay: typing.Optional[float] = None
         self.added_fixed_peers = False
+        self.time_to_descriptor: typing.Optional[float] = None
+        self.time_to_first_bytes: typing.Optional[float] = None
 
     async def add_fixed_peers(self):
         def _delayed_add_fixed_peers():
@@ -59,8 +62,16 @@ class StreamDownloader:
         # download or get the sd blob
         sd_blob = self.blob_manager.get_blob(self.sd_hash)
         if not sd_blob.get_is_verified():
-            sd_blob = await self.blob_downloader.download_blob(self.sd_hash)
-            log.info("downloaded sd blob %s", self.sd_hash)
+            try:
+                now = self.loop.time()
+                sd_blob = await asyncio.wait_for(
+                    self.blob_downloader.download_blob(self.sd_hash),
+                    self.config.blob_download_timeout, loop=self.loop
+                )
+                log.info("downloaded sd blob %s", self.sd_hash)
+                self.time_to_descriptor = self.loop.time() - now
+            except asyncio.TimeoutError:
+                raise DownloadSDTimeout(self.sd_hash)
 
         # parse the descriptor
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(
@@ -101,12 +112,18 @@ class StreamDownloader:
             binascii.unhexlify(self.descriptor.key.encode()), binascii.unhexlify(blob_info.iv.encode())
         )
 
-    async def decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob'):
+    async def decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob') -> bytes:
         return await self.loop.run_in_executor(None, self._decrypt_blob, blob_info, blob)
 
     async def read_blob(self, blob_info: 'BlobInfo') -> bytes:
+        start = None
+        if self.time_to_first_bytes is None:
+            start = self.loop.time()
         blob = await self.download_stream_blob(blob_info)
-        return await self.decrypt_blob(blob_info, blob)
+        decrypted = await self.decrypt_blob(blob_info, blob)
+        if start:
+            self.time_to_first_bytes = self.loop.time() - start
+        return decrypted
 
     def stop(self):
         if self.accumulate_task:

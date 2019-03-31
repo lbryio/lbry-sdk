@@ -32,6 +32,12 @@ class DownloadDataTimeout(Exception):
         self.download = download
 
 
+class ResolveTimeout(Exception):
+    def __init__(self, uri):
+        super().__init__(f'Failed to resolve "{uri}" within the timeout')
+        self.uri = uri
+
+
 class RequestCanceledError(Exception):
     pass
 

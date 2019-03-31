@@ -28,9 +28,9 @@ class TestBlobfile(AsyncioTestCase):
         self.assertEqual(blob.get_is_verified(), False)
         self.assertNotIn(blob_hash, blob_manager.completed_blob_hashes)
 
-        writer = blob.open_for_writing()
+        writer = blob.get_blob_writer()
         writer.write(blob_bytes)
-        await blob.finished_writing.wait()
+        await blob.verified.wait()
         self.assertTrue(os.path.isfile(blob.file_path), True)
         self.assertEqual(blob.get_is_verified(), True)
         self.assertIn(blob_hash, blob_manager.completed_blob_hashes)

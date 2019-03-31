@@ -897,7 +897,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         try:
             stream = await self.stream_manager.download_stream_from_uri(
-                uri, timeout, self.exchange_rate_manager, file_name
+                uri, self.exchange_rate_manager, timeout, file_name
             )
             if not stream:
                 raise DownloadSDTimeout(uri)

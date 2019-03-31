@@ -11,7 +11,7 @@ from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.blob_exchange.server import BlobServer, BlobServerProtocol
-from lbrynet.blob_exchange.client import BlobExchangeClientProtocol, request_blob
+from lbrynet.blob_exchange.client import request_blob
 from lbrynet.dht.peer import KademliaPeer, PeerManager
 
 # import logging
@@ -58,9 +58,9 @@ class TestBlobExchange(BlobExchangeTestBase):
     async def _add_blob_to_server(self, blob_hash: str, blob_bytes: bytes):
         # add the blob on the server
         server_blob = self.server_blob_manager.get_blob(blob_hash, len(blob_bytes))
-        writer = server_blob.open_for_writing()
+        writer = server_blob.get_blob_writer()
         writer.write(blob_bytes)
-        await server_blob.finished_writing.wait()
+        await server_blob.verified.wait()
         self.assertTrue(os.path.isfile(server_blob.file_path))
         self.assertEqual(server_blob.get_is_verified(), True)
 
@@ -68,11 +68,14 @@ class TestBlobExchange(BlobExchangeTestBase):
         client_blob = self.client_blob_manager.get_blob(blob_hash)
 
         # download the blob
-        downloaded = await request_blob(self.loop, client_blob, self.server_from_client.address,
-                                        self.server_from_client.tcp_port, 2, 3)
-        await client_blob.finished_writing.wait()
+        downloaded, transport = await request_blob(self.loop, client_blob, self.server_from_client.address,
+                                                   self.server_from_client.tcp_port, 2, 3)
+        self.assertIsNotNone(transport)
+        self.addCleanup(transport.close)
+        await client_blob.verified.wait()
         self.assertEqual(client_blob.get_is_verified(), True)
         self.assertTrue(downloaded)
+        self.addCleanup(client_blob.close)
 
     async def test_transfer_sd_blob(self):
         sd_hash = "3e2706157a59aaa47ef52bc264fce488078b4026c0b9bab649a8f2fe1ecc5e5cad7182a2bb7722460f856831a1ac0f02"
@@ -112,7 +115,7 @@ class TestBlobExchange(BlobExchangeTestBase):
             ),
             self._test_transfer_blob(blob_hash)
         )
-        await second_client_blob.finished_writing.wait()
+        await second_client_blob.verified.wait()
         self.assertEqual(second_client_blob.get_is_verified(), True)
 
     async def test_host_different_blobs_to_multiple_peers_at_once(self):
@@ -143,7 +146,7 @@ class TestBlobExchange(BlobExchangeTestBase):
                 server_from_second_client.tcp_port, 2, 3
             ),
             self._test_transfer_blob(sd_hash),
-            second_client_blob.finished_writing.wait()
+            second_client_blob.verified.wait()
         )
         self.assertEqual(second_client_blob.get_is_verified(), True)
 

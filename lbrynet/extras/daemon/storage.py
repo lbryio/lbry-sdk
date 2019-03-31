@@ -423,6 +423,17 @@ class SQLiteStorage(SQLiteMixin):
             }
         return self.db.run(_sync_blobs)
 
+    def sync_files_to_blobs(self):
+        def _sync_blobs(transaction: sqlite3.Connection) -> typing.Set[str]:
+            transaction.executemany(
+                "update file set status='stopped' where stream_hash=?",
+                transaction.execute(
+                    "select distinct sb.stream_hash from stream_blob sb "
+                    "inner join blob b on b.blob_hash=sb.blob_hash and b.status=='pending'"
+                ).fetchall()
+            )
+        return self.db.run(_sync_blobs)
+
     # # # # # # # # # stream functions # # # # # # # # #
 
     async def stream_exists(self, sd_hash: str) -> bool:

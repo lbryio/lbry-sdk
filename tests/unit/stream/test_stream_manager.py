@@ -192,8 +192,8 @@ class TestStreamManager(BlobExchangeTestBase):
         def check_post(event):
             self.assertEqual(event['event'], 'Time To First Bytes')
             self.assertEqual(event['properties']['error'], 'DownloadSDTimeout')
-            self.assertEqual(event['properties']['tried_peers_count'], None)
-            self.assertEqual(event['properties']['active_peer_count'], None)
+            self.assertEqual(event['properties']['tried_peers_count'], 0)
+            self.assertEqual(event['properties']['active_peer_count'], 0)
             self.assertEqual(event['properties']['use_fixed_peers'], False)
             self.assertEqual(event['properties']['added_fixed_peers'], False)
             self.assertEqual(event['properties']['fixed_peer_delay'], None)
@@ -213,10 +213,10 @@ class TestStreamManager(BlobExchangeTestBase):
 
         self.stream_manager.analytics_manager._post = check_post
 
-        self.assertSetEqual(self.stream_manager.streams, set())
+        self.assertDictEqual(self.stream_manager.streams, {})
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
         stream_hash = stream.stream_hash
-        self.assertSetEqual(self.stream_manager.streams, {stream})
+        self.assertDictEqual(self.stream_manager.streams, {stream.sd_hash: stream})
         self.assertTrue(stream.running)
         self.assertFalse(stream.finished)
         self.assertTrue(os.path.isfile(os.path.join(self.client_dir, "test_file")))
@@ -236,7 +236,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertEqual(stored_status, "stopped")
 
         await self.stream_manager.start_stream(stream)
-        await stream.downloader.stream_finished_event.wait()
+        await stream.finished_writing.wait()
         await asyncio.sleep(0, loop=self.loop)
         self.assertTrue(stream.finished)
         self.assertFalse(stream.running)
@@ -247,7 +247,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertEqual(stored_status, "finished")
 
         await self.stream_manager.delete_stream(stream, True)
-        self.assertSetEqual(self.stream_manager.streams, set())
+        self.assertDictEqual(self.stream_manager.streams, {})
         self.assertFalse(os.path.isfile(os.path.join(self.client_dir, "test_file")))
         stored_status = await self.client_storage.run_and_return_one_or_none(
             "select status from file where stream_hash=?", stream_hash
@@ -257,7 +257,7 @@ class TestStreamManager(BlobExchangeTestBase):
 
     async def _test_download_error_on_start(self, expected_error, timeout=None):
         with self.assertRaises(expected_error):
-            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager, timeout=timeout)
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager, timeout)
 
     async def _test_download_error_analytics_on_start(self, expected_error, timeout=None):
         received = []
@@ -321,9 +321,9 @@ class TestStreamManager(BlobExchangeTestBase):
         await self.setup_stream_manager(old_sort=old_sort)
         self.stream_manager.analytics_manager._post = check_post
 
-        self.assertSetEqual(self.stream_manager.streams, set())
+        self.assertDictEqual(self.stream_manager.streams, {})
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
-        await stream.downloader.stream_finished_event.wait()
+        await stream.finished_writing.wait()
         await asyncio.sleep(0, loop=self.loop)
         self.stream_manager.stop()
         self.client_blob_manager.stop()
@@ -333,8 +333,11 @@ class TestStreamManager(BlobExchangeTestBase):
         await self.client_blob_manager.setup()
         await self.stream_manager.start()
         self.assertEqual(1, len(self.stream_manager.streams))
-        self.assertEqual(stream.sd_hash, list(self.stream_manager.streams)[0].sd_hash)
-        self.assertEqual('stopped', list(self.stream_manager.streams)[0].status)
+        self.assertListEqual([self.sd_hash], list(self.stream_manager.streams.keys()))
+        for blob_hash in [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]:
+            blob_status = await self.client_storage.get_blob_status(blob_hash)
+            self.assertEqual('pending', blob_status)
+        self.assertEqual('stopped', self.stream_manager.streams[self.sd_hash].status)
 
         sd_blob = self.client_blob_manager.get_blob(stream.sd_hash)
         self.assertTrue(sd_blob.file_exists)
