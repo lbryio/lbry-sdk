@@ -1,7 +1,7 @@
 import asyncio
 import typing
 import logging
-from lbrynet.utils import drain_tasks
+from lbrynet.utils import drain_tasks, cache_concurrent
 from lbrynet.blob_exchange.client import request_blob
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
@@ -90,6 +90,7 @@ class BlobDownloader:
         for banned_peer in forgiven:
             self.ignored.pop(banned_peer)
 
+    @cache_concurrent
     async def download_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'AbstractBlob':
         blob = self.blob_manager.get_blob(blob_hash, length)
         if blob.get_is_verified():
