@@ -60,7 +60,7 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(claim['claims_in_channel'], 0)
 
         # resolve handles invalid data
-        txid = await self.blockchain.claim_name("gibberish", "cafecafe", "0.1")
+        txid = await self.blockchain_claim_name("gibberish", "cafecafe", "0.1")
         await self.generate(1)
         response = await self.resolve("lbry://gibberish")
         self.assertSetEqual({'lbry://gibberish'}, set(response))

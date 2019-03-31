@@ -150,6 +150,9 @@ class CommandTestCase(IntegrationTestCase):
         await self.blockchain.generate(blocks)
         await self.ledger.on_header.where(self.blockchain.is_expected_block)
 
+    def blockchain_claim_name(self, name: str, value: str, amount: str):
+        return self.blockchain._cli_cmnd('claimname', name, value, amount)
+
     async def out(self, awaitable):
         """ Converts Daemon API call results (dictionary)
             to JSON and then back to a dictionary. """
