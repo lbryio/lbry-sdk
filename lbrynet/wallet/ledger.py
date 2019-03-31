@@ -51,21 +51,20 @@ class MainNetLedger(BaseLedger):
 
     @property
     def resolver(self):
-        return Resolver(self.headers, self.transaction_class,
-                        hash160_to_address=self.hash160_to_address, network=self.network, ledger=self)
+        return Resolver(self.headers, self.transaction_class, network=self.network, ledger=self)
 
     def resolve(self, page, page_size, *uris):
         return self.resolver.resolve(page, page_size, *uris)
 
     async def get_claim_by_claim_id(self, claim_id):
         result = (await self.network.get_claims_by_ids(claim_id)).pop(claim_id, {})
-        return await self.resolver.get_certificate_and_validate_result(result)
+        return await self.resolver.parse_and_validate_claim_result(result)
 
     async def get_claim_by_outpoint(self, txid, nout):
         claims = (await self.network.get_claims_in_tx(txid)) or []
         for claim in claims:
             if claim['nout'] == nout:
-                return await self.resolver.get_certificate_and_validate_result(claim)
+                return await self.resolver.parse_and_validate_claim_result(claim)
         return 'claim not found'
 
     async def start(self):
