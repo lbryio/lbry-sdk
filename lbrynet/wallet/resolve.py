@@ -46,7 +46,8 @@ class Resolver:
             if resolution:
                 try:
                     results[uri] = _handle_claim_result(
-                        await self._handle_resolve_uri_response(uri, resolution, page, page_size)
+                        await self._handle_resolve_uri_response(uri, resolution, page, page_size),
+                        uri
                     )
                 except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
                     log.exception(err)
@@ -75,7 +76,7 @@ class Resolver:
                                                        transaction_class=self.transaction_class,
                                                        ledger=self.ledger)
             elif certificate_resolution_type not in ['winning', 'claim_id', 'sequence']:
-                raise Exception("unknown response type: %s", certificate_resolution_type)
+                raise Exception(f"unknown response type: {certificate_resolution_type}")
             result['certificate'] = await self.parse_and_validate_claim_result(certificate_response)
             result['claims_in_channel'] = len(resolution.get('unverified_claims_in_channel', []))
 
@@ -94,7 +95,7 @@ class Resolver:
                                                    transaction_class=self.transaction_class,
                                                    ledger=self.ledger)
             elif claim_resolution_type not in ["sequence", "winning", "claim_id"]:
-                raise Exception("unknown response type: %s", claim_resolution_type)
+                raise Exception(f"unknown response type: {claim_resolution_type}")
             result['claim'] = await self.parse_and_validate_claim_result(claim_response,
                                                                          certificate_response)
 
@@ -364,11 +365,9 @@ def _decode_claim_result(claim):
     return claim
 
 
-def _handle_claim_result(results):
+def _handle_claim_result(results, uri):
     if not results:
-        #TODO: cannot determine what name we searched for here
-        # we should fix lbryum commands that return None
-        raise UnknownNameError("")
+        raise UnknownURI(uri)
 
     if 'error' in results:
         if results['error'] in ['name is not claimed', 'claim not found']:
@@ -381,26 +380,8 @@ def _handle_claim_result(results):
             if 'outpoint' in results:
                 raise UnknownOutpoint(results['outpoint'])
         raise Exception(results['error'])
-
-    # case where return value is {'certificate':{'txid', 'value',...},...}
-    if 'certificate' in results:
-        results['certificate'] = _decode_claim_result(results['certificate'])
-
-    # case where return value is {'claim':{'txid','value',...},...}
-    if 'claim' in results:
-        results['claim'] = _decode_claim_result(results['claim'])
-
-    # case where return value is {'txid','value',...}
-    # returned by queries that are not name resolve related
-    # (getclaimbyoutpoint, getclaimbyid, getclaimsfromtx)
-    elif 'value' in results:
-        results = _decode_claim_result(results)
-
-    # case where there is no 'certificate', 'value', or 'claim' key
-    elif 'certificate' not in results:
-        msg = f'result in unexpected format:{results}'
-        assert False, msg
-
+    if not {'value', 'claim', 'certificate'}.intersection(results.keys()):
+        raise Exception(f'result in unexpected format:{results}')
     return results
 
 
@@ -409,9 +390,9 @@ def pick_winner_from_channel_path_collision(claims_in_channel):
     # claim triggers another issue where 2 claims cant be saved for the same file. This code picks the oldest, so it
     # stays the same. Using effective amount would change the resolved claims for a channel path on takeovers,
     # potentially triggering that.
-    winner = None
+    winner = {}
     for claim in claims_in_channel:
-        if winner is None or claim['height'] < winner['height'] or \
+        if not winner or claim['height'] < winner['height'] or \
                 (claim['height'] == winner['height'] and claim['nout'] < winner['nout']):
             winner = claim if claim['signature_is_valid'] else winner
-    return winner
+    return winner or None
