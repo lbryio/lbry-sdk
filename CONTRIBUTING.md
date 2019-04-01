@@ -1,3 +1,3 @@
 ## Contributing to LBRY
 
-https://lbry.io/faq/contributing
+https://lbry.tech/contribute
