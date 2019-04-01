@@ -93,7 +93,7 @@ async def main(uris=None, allow_fees=False):
     for name in uris:
         resolved = await daemon_rpc(conf, 'resolve', name)
         if 'error' not in resolved.get(name, {}):
-            if ("fee" not in resolved[name]['claim']['value']['stream']['metadata']) or allow_fees:
+            if ("fee" not in resolved[name]['claim']['value']['stream']) or allow_fees:
                 resolvable.append(name)
             else:
                 print(f"{name} has a fee, skipping it")
