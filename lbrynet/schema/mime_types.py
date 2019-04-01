@@ -160,7 +160,7 @@ types_map = {
 def guess_media_type(path):
     _, ext = os.path.splitext(path)
     extension = ext.strip().lower()
-    if extension:
+    if extension[1:]:
         if extension in types_map:
             return types_map[extension][0]
         return f'application/x-ext-{extension[1:]}'
