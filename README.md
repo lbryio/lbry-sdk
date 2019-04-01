@@ -33,7 +33,7 @@ Installing from source is also relatively painless. Full instructions are in [IN
 
 ## Contributing
 
-Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.io/faq/contributing) link.
+Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.tech/contribute) link.
 
 ## License
 
@@ -41,11 +41,11 @@ This project is MIT licensed. For the full license, see [LICENSE](LICENSE).
 
 ## Security
 
-We take security seriously. Please contact security@lbry.io regarding any security issues. [Our GPG key is here](https://lbry.io/faq/gpg-key) if you need it.
+We take security seriously. Please contact security@lbry.com regarding any security issues. [Our GPG key is here](https://lbry.io/faq/gpg-key) if you need it.
 
 ## Contact
 
-The primary contact for this project is [@eukreign](mailto:lex@lbry.io).
+The primary contact for this project is [@eukreign](mailto:lex@lbry.com).
 
 ## Additional information and links
 
