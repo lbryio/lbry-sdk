@@ -107,9 +107,9 @@ class ResolveCommand(CommandTestCase):
         claim_g1 = await self.make_claim('gornado', '0.02', account_id=gorn1)
         claim_id2 = claim_g1['claim_id']
         await self.make_claim('gornado', '0.01', channel_name='@kauffj', account_id=kauffj1)
-        y = await self.resolve("lbry://gornado")
-        z = await self.resolve("lbry://@kauffj/gornado")
-        qq = z["lbry://@kauffj/gornado"]
+        z = await self.resolve("lbry://gornado")
+        w = await self.resolve("lbry://@kauffj/gornado")
+        qq = w["lbry://@kauffj/gornado"]
 
     def assertResolveDictEqual(self, resolve_dict1, resolve_dict2):
         if resolve_dict1['certificate'].get('valid_at_height'):
