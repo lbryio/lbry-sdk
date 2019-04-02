@@ -324,10 +324,10 @@ def _verify_proof(name, claim_trie_root, result, height, depth, ledger):
 
 def validate_claim_signature_and_get_channel_name(claim_result, certificate_claim, ledger,
                                                   claim_tx=None, cert_tx=None):
+    valid_signature = False
     if cert_tx and certificate_claim and claim_tx and claim_result:
         tx = Transaction(unhexlify(claim_tx))
         cert_tx = Transaction(unhexlify(cert_tx))
-        valid_signature = False
         try:
             valid_signature = tx.outputs[claim_result['nout']].is_signed_by(
                 cert_tx.outputs[certificate_claim['nout']], ledger
@@ -337,7 +337,7 @@ def validate_claim_signature_and_get_channel_name(claim_result, certificate_clai
         if not valid_signature:
             log.warning("lbry://%s#%s has an invalid signature",
                         claim_result['name'], claim_result['claim_id'])
-        return valid_signature
+    return valid_signature
 
 
 # TODO: The following came from code handling lbryum results. Now that it's all in one place a refactor should unify it.
