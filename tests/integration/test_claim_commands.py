@@ -527,10 +527,10 @@ class StreamCommands(CommandTestCase):
         response = await self.resolve('lbry://@abc/on-channel-claim')
         self.assertNotIn('claim', response['lbry://@abc/on-channel-claim'])
         response = await self.resolve('lbry://on-channel-claim')
-        self.assertFalse(response['lbry://on-channel-claim']['claim']['signature_is_valid'])
+        self.assertIs(False, response['lbry://on-channel-claim']['claim']['signature_is_valid'])
         direct_uri = 'lbry://on-channel-claim#' + orphan_claim_id
         response = await self.resolve(direct_uri)
-        self.assertFalse(response[direct_uri]['claim']['signature_is_valid'])
+        self.assertIs(False, response[direct_uri]['claim']['signature_is_valid'])
         await self.stream_abandon(claim_id=orphan_claim_id)
 
         uri = 'lbry://@abc/on-channel-claim'
