@@ -50,7 +50,7 @@ class MainNetLedger(BaseLedger):
 
     @property
     def resolver(self):
-        return Resolver(self.headers, self.transaction_class, network=self.network, ledger=self)
+        return Resolver(self)
 
     def resolve(self, page, page_size, *uris):
         return self.resolver.resolve(page, page_size, *uris)

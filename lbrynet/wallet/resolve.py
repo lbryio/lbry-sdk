@@ -17,12 +17,12 @@ log = logging.getLogger(__name__)
 
 class Resolver:
 
-    def __init__(self, headers, transaction_class, network, ledger):
-        self.claim_trie_root = headers.claim_trie_root
-        self.height = headers.height
-        self.header_hash = headers.hash().decode()
-        self.transaction_class = transaction_class
-        self.network = network
+    def __init__(self, ledger):
+        self.claim_trie_root = ledger.headers.claim_trie_root
+        self.height = ledger.headers.height
+        self.header_hash = ledger.headers.hash().decode()
+        self.transaction_class = ledger.transaction_class
+        self.network = ledger.network
         self.ledger = ledger
 
     async def resolve(self, page, page_size, *uris):
@@ -73,7 +73,6 @@ class Resolver:
                                                        claim_trie_root,
                                                        certificate_response,
                                                        height, depth,
-                                                       transaction_class=self.transaction_class,
                                                        ledger=self.ledger)
             elif certificate_resolution_type not in ['winning', 'claim_id', 'sequence']:
                 raise Exception(f"unknown response type: {certificate_resolution_type}")
@@ -92,7 +91,6 @@ class Resolver:
                                                    claim_trie_root,
                                                    claim_response,
                                                    height, depth,
-                                                   transaction_class=self.transaction_class,
                                                    ledger=self.ledger)
             elif claim_resolution_type not in ["sequence", "winning", "claim_id"]:
                 raise Exception(f"unknown response type: {claim_resolution_type}")
@@ -270,7 +268,7 @@ def _get_permanent_url(claim_result, certificate_id):
         return f"{claim_result['name']}#{claim_result['claim_id']}"
 
 
-def _verify_proof(name, claim_trie_root, result, height, depth, transaction_class, ledger):
+def _verify_proof(name, claim_trie_root, result, height, depth, ledger):
     """
     Verify proof for name claim
     """
@@ -297,11 +295,11 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
     def _parse_proof_result(name, result):
         if 'txhash' in result['proof'] and 'nOut' in result['proof']:
             if 'transaction' in result:
-                tx = transaction_class(raw=unhexlify(result['transaction']))
+                tx = ledger.transaction_class(raw=unhexlify(result['transaction']))
                 nOut = result['proof']['nOut']
                 if result['proof']['txhash'] == tx.id:
                     if 0 <= nOut < len(tx.outputs):
-                        if tx.outputs[nOut].script.values['claim_name'].decode() == name:
+                        if tx.outputs[nOut].claim_name == name:
                             return _build_response(name, tx, nOut)
                         return {'error': 'name in proof did not match requested name'}
                     outputs = len(tx['outputs'])
