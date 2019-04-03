@@ -48,6 +48,10 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(claim['certificate']['name'], '@abc')
         self.assertEqual(claim['claims_in_channel'], 0)
 
+        # resolving from the given permanent url
+        new_response = await self.resolve(claim['claim']['permanent_url'])
+        self.assertEqual(new_response[claim['claim']['permanent_url']], claim)
+
         # resolving multiple at once
         response = await self.resolve(['lbry://foo', 'lbry://foo2'])
         self.assertSetEqual({'lbry://foo', 'lbry://foo2'}, set(response))

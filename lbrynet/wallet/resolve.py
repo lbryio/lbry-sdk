@@ -169,8 +169,7 @@ class Resolver:
             ]
 
         claim_result['height'] = claim_result.get('height', -1) or -1
-        claim_result['permanent_url'] = _get_permanent_url(
-            claim_result, channel_id)
+        claim_result['permanent_url'] = f"lbry://{claim_result['name']}#{claim_result['claim_id']}"
 
         return claim_result
 
@@ -259,13 +258,6 @@ class Resolver:
         page_generator = await self.iter_channel_claims_pages(queries, claim_positions, names,
                                                               certificate, page_size=page_size)
         return page_generator, upper_bound
-
-
-def _get_permanent_url(claim_result, certificate_id):
-    if certificate_id:
-        return f"{claim_result['channel_name']}#{certificate_id}/{claim_result['name']}"
-    else:
-        return f"{claim_result['name']}#{claim_result['claim_id']}"
 
 
 def _verify_proof(name, claim_trie_root, result, height, depth, ledger):
