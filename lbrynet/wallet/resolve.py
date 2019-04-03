@@ -280,6 +280,7 @@ def _verify_proof(name, claim_trie_root, result, height, depth, ledger):
             'depth': depth,
             'claim_sequence': result['claim_sequence'],
             'address': output.get_address(ledger),
+            'valid_at_height': result['valid_at_height'],
             'supports': result['supports']
         }
         return r
