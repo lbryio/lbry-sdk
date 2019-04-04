@@ -1,3 +1,5 @@
+import json
+
 from integration.testcase import CommandTestCase
 
 
@@ -62,6 +64,10 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(claim['claim']['channel_name'], '@abc')
         self.assertEqual(claim['certificate']['name'], '@abc')
         self.assertEqual(claim['claims_in_channel'], 0)
+
+        # resolve has correct depth
+        tx_details = await self.blockchain.get_raw_transaction(claim['claim']['txid'])
+        self.assertEqual(claim['claim']['depth'], json.loads(tx_details)['confirmations'])
 
         # resolve handles invalid data
         txid = await self.blockchain_claim_name("gibberish", "cafecafe", "0.1")
