@@ -98,7 +98,7 @@ class Output(BaseOutput):
             pieces = [
                 Base58.decode(self.get_address(ledger)),
                 self.claim.unsigned_payload,
-                self.claim.signing_channel_hash
+                self.claim.signing_channel_hash[::-1]
             ]
         else:
             pieces = [

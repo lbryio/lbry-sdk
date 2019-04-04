@@ -591,7 +591,7 @@ class StreamCommands(CommandTestCase):
         channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0')
         await self.confirm_tx(channel.id)
         address = channel.outputs[0].get_address(self.account.ledger)
-        claim = generate_signed_legacy('example', address, channel.outputs[0])
+        claim = generate_signed_legacy(address, channel.outputs[0])
         tx = await Transaction.claim_create('example', claim.SerializeToString(), 1, address, [self.account], self.account)
         await tx.sign([self.account])
         await self.broadcast(tx)
@@ -609,12 +609,12 @@ class StreamCommands(CommandTestCase):
         await self.confirm_tx(tx.id)
 
         response = await self.daemon.jsonrpc_resolve(urls='bad_example')
-        self.assertFalse(response['bad_example']['claim']['signature_is_valid'], response)
+        self.assertIs(False, response['bad_example']['claim']['signature_is_valid'], response)
         response = await self.daemon.jsonrpc_resolve(urls='@olds/bad_example')
         self.assertEqual('URI lbry://@olds/bad_example cannot be resolved', response['@olds/bad_example']['error'])
 
 
-def generate_signed_legacy(name: str, address: bytes, output: Output):
+def generate_signed_legacy(address: bytes, output: Output):
     decoded_address = Base58.decode(address)
     claim = OldClaimMessage()
     claim.ParseFromString(unhexlify(
@@ -640,14 +640,14 @@ def generate_signed_legacy(name: str, address: bytes, output: Output):
     digest = sha256(b''.join([
         decoded_address,
         claim.SerializeToString(),
-        output.claim_hash
+        output.claim_hash[::-1]
     ]))
     private_key = ecdsa.SigningKey.from_pem(output.private_key, hashfunc=hashlib.sha256)
     signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
     claim.publisherSignature.version = 1
     claim.publisherSignature.signatureType = 1
     claim.publisherSignature.signature = signature
-    claim.publisherSignature.certificateId = output.claim_hash
+    claim.publisherSignature.certificateId = output.claim_hash[::-1]
     return claim
 
 
