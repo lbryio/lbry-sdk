@@ -241,7 +241,7 @@ class LBRYElectrumX(ElectrumX):
             "txid": claim['txid'],
             "nout": claim['n'],
             "amount": amount,
-            "depth": self.db.db_height - height,
+            "depth": self.db.db_height - height + 1,
             "height": height,
             "value": hexlify(claim['value'].encode('ISO-8859-1')).decode(),
             "address": address,  # from index

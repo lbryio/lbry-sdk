@@ -67,12 +67,9 @@ class Resolver:
             certificate_resolution_type = resolution['certificate']['resolution_type']
             if certificate_resolution_type == "winning" and certificate_response:
                 if 'height' in certificate_response:
-                    height = certificate_response['height']
-                    depth = self.height - height
                     certificate_response = _verify_proof(parsed_uri.name,
                                                        claim_trie_root,
                                                        certificate_response,
-                                                       height, depth,
                                                        ledger=self.ledger)
             elif certificate_resolution_type not in ['winning', 'claim_id', 'sequence']:
                 raise Exception(f"unknown response type: {certificate_resolution_type}")
@@ -85,12 +82,9 @@ class Resolver:
             claim_resolution_type = resolution['claim']['resolution_type']
             if claim_resolution_type == "winning" and claim_response:
                 if 'height' in claim_response:
-                    height = claim_response['height']
-                    depth = self.height - height
                     claim_response = _verify_proof(parsed_uri.name,
                                                    claim_trie_root,
                                                    claim_response,
-                                                   height, depth,
                                                    ledger=self.ledger)
             elif claim_resolution_type not in ["sequence", "winning", "claim_id"]:
                 raise Exception(f"unknown response type: {claim_resolution_type}")
@@ -260,7 +254,7 @@ class Resolver:
         return page_generator, upper_bound
 
 
-def _verify_proof(name, claim_trie_root, result, height, depth, ledger):
+def _verify_proof(name, claim_trie_root, result, ledger):
     """
     Verify proof for name claim
     """
@@ -276,8 +270,8 @@ def _verify_proof(name, claim_trie_root, result, height, depth, ledger):
             'nout': nOut,
             'amount': output.amount,
             'effective_amount': output.amount + support_amount,
-            'height': height,
-            'depth': depth,
+            'height': result['height'],
+            'depth': result['depth'],
             'claim_sequence': result['claim_sequence'],
             'address': output.get_address(ledger),
             'valid_at_height': result['valid_at_height'],
