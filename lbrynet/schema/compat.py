@@ -77,7 +77,7 @@ def from_types_v1(claim, payload: bytes):
             sig = old.publisherSignature
             claim.signature = sig.signature
             claim.signature_type = KeyType.Name(sig.signatureType)
-            claim.signing_channel_hash = sig.certificateId
+            claim.signing_channel_hash = sig.certificateId[::-1]
             old.ClearField("publisherSignature")
             claim.unsigned_payload = old.SerializeToString()
     elif old.claimType == 2:
