@@ -381,6 +381,7 @@ class StreamManager:
                 file_name, ManagedStream.STATUS_RUNNING, content_fee=content_fee,
                 analytics_manager=self.analytics_manager
             )
+            log.info("starting download for %s", uri)
             try:
                 await asyncio.wait_for(stream.setup(
                     self.node, save_file=save_file, file_name=file_name, download_directory=download_directory

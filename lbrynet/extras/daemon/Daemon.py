@@ -273,6 +273,8 @@ class Daemon(metaclass=JSONRPCServerType):
         app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
         app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
         app.router.add_get('/streams', self.handle_streams_index)
+        app.router.add_get('/get/{claim_name}', self.handle_stream_get_request)
+        app.router.add_get('/get/{claim_name}/{claim_id}', self.handle_stream_get_request)
         app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
         app.router.add_post('/', self.handle_old_jsonrpc)
         self.runner = web.AppRunner(app)
@@ -462,6 +464,16 @@ class Daemon(metaclass=JSONRPCServerType):
             ]) + "</ul>",
             content_type='text/html'
         )
+
+    async def handle_stream_get_request(self, request: web.Request):
+        name_and_claim_id = request.path.split("/get/")[1]
+        if "/" not in name_and_claim_id:
+            uri = f"lbry://{name_and_claim_id}"
+        else:
+            name, claim_id = name_and_claim_id.split("/")
+            uri = f"lbry://{name}#{claim_id}"
+        stream = await self.jsonrpc_get(uri)
+        return web.HTTPFound(f"http://localhost:5279/stream/{stream['sd_hash']}")
 
     async def handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
