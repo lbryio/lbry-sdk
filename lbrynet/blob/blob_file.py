@@ -163,13 +163,10 @@ class AbstractBlob:
         if self.verified.is_set():
             return
         if self.is_writeable():
-            if self.get_length() == len(verified_bytes):
-                self._write_blob(verified_bytes)
-                self.verified.set()
-                if self.blob_completed_callback:
-                    await self.blob_completed_callback(self)
-            else:
-                raise Exception("length mismatch")
+            self._write_blob(verified_bytes)
+            self.verified.set()
+            if self.blob_completed_callback:
+                await self.blob_completed_callback(self)
 
     def get_blob_writer(self) -> HashBlobWriter:
         fut = asyncio.Future(loop=self.loop)
@@ -227,6 +224,12 @@ class BlobBuffer(AbstractBlob):
             raise OSError("already have bytes for blob")
         self._verified_bytes = BytesIO(blob_bytes)
 
+    def delete(self):
+        if self._verified_bytes:
+            self._verified_bytes.close()
+            self._verified_bytes = None
+        return super().delete()
+
 
 class BlobFile(AbstractBlob):
     """
@@ -238,8 +241,6 @@ class BlobFile(AbstractBlob):
         if not blob_directory or not os.path.isdir(blob_directory):
             raise OSError(f"invalid blob directory '{blob_directory}'")
         super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
-        if not is_valid_blobhash(blob_hash):
-            raise InvalidBlobHashError(blob_hash)
         self.file_path = os.path.join(self.blob_directory, self.blob_hash)
         if self.file_exists:
             file_size = int(os.stat(self.file_path).st_size)
