@@ -51,6 +51,7 @@ class BlobExchangeTestBase(AsyncioTestCase):
         await self.server_blob_manager.setup()
 
         self.server.start_server(33333, '127.0.0.1')
+        self.addCleanup(self.server.stop_server)
         await self.server.started_listening.wait()
 
 

@@ -60,26 +60,35 @@ class AbstractBlob:
 
     This class is non-io specific
     """
+    __slots__ = [
+        'loop',
+        'blob_hash',
+        'length',
+        'blob_completed_callback',
+        'blob_directory',
+        'writers',
+        'verified',
+        'writing'
+    ]
+
     def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
                  blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], typing.Awaitable]] = None,
                  blob_directory: typing.Optional[str] = None):
-        if not is_valid_blobhash(blob_hash):
-            raise InvalidBlobHashError(blob_hash)
-
         self.loop = loop
         self.blob_hash = blob_hash
         self.length = length
         self.blob_completed_callback = blob_completed_callback
         self.blob_directory = blob_directory
-
         self.writers: typing.List[HashBlobWriter] = []
         self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
         self.writing: asyncio.Event = asyncio.Event(loop=self.loop)
+        if not is_valid_blobhash(blob_hash):
+            raise InvalidBlobHashError(blob_hash)
 
     def __del__(self):
-        if self.writers:
+        if self.writers or self.is_readable():
             log.warning("%s not closed before being garbage collected", self.blob_hash)
-        self.close()
+            self.close()
 
     @contextlib.contextmanager
     def reader_context(self) -> typing.ContextManager[typing.BinaryIO]:
@@ -159,14 +168,14 @@ class AbstractBlob:
         await blob.verified.wait()
         return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), blob_hash)
 
-    async def save_verified_blob(self, verified_bytes: bytes):
+    def save_verified_blob(self, verified_bytes: bytes):
         if self.verified.is_set():
             return
         if self.is_writeable():
             self._write_blob(verified_bytes)
             self.verified.set()
             if self.blob_completed_callback:
-                await self.blob_completed_callback(self)
+                self.loop.create_task(self.blob_completed_callback(self))
 
     def get_blob_writer(self) -> HashBlobWriter:
         fut = asyncio.Future(loop=self.loop)
@@ -183,12 +192,11 @@ class AbstractBlob:
                     other = self.writers.pop()
                     if other is not writer:
                         other.finished.cancel()
-                self.loop.create_task(self.save_verified_blob(verified_bytes))
+                self.save_verified_blob(verified_bytes)
                 return
             except (InvalidBlobHashError, InvalidDataError) as error:
                 log.debug("writer error downloading %s: %s", self.blob_hash[:8], str(error))
-            except (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError) as error:
-                # log.exception("something else")
+            except (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             finally:
                 if writer in self.writers:
