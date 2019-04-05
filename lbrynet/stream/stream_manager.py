@@ -337,14 +337,16 @@ class StreamManager:
             if 'error' in resolved:
                 raise ResolveError(f"error resolving stream: {resolved['error']}")
 
-        claim = Claim.from_bytes(binascii.unhexlify(resolved['protobuf']))
-        outpoint = f"{resolved['txid']}:{resolved['nout']}"
-        resolved_time = self.loop.time() - start_time
+            claim = Claim.from_bytes(binascii.unhexlify(resolved['protobuf']))
+            outpoint = f"{resolved['txid']}:{resolved['nout']}"
+            resolved_time = self.loop.time() - start_time
 
             # resume or update an existing stream, if the stream changed download it and delete the old one after
             updated_stream, to_replace = await self._check_update_or_replace(outpoint, resolved['claim_id'], claim)
             if updated_stream:
                 return updated_stream
+
+            content_fee = None
 
             # check that the fee is payable
             if not to_replace and claim.stream.has_fee:
@@ -364,9 +366,11 @@ class StreamManager:
                     log.warning(msg)
                     raise InsufficientFundsError(msg)
                 fee_address = claim.stream.fee.address
-                await self.wallet.send_amount_to_address(
+
+                content_fee = await self.wallet.send_amount_to_address(
                     lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
                 )
+
                 log.info("paid fee of %s for %s", fee_amount, uri)
 
             download_directory = download_directory or self.config.download_dir
@@ -374,7 +378,8 @@ class StreamManager:
                 download_dir, file_name = None, None
             stream = ManagedStream(
                 self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash, download_directory,
-                file_name, ManagedStream.STATUS_RUNNING, analytics_manager=self.analytics_manager
+                file_name, ManagedStream.STATUS_RUNNING, content_fee=content_fee,
+                analytics_manager=self.analytics_manager
             )
             try:
                 await asyncio.wait_for(stream.setup(

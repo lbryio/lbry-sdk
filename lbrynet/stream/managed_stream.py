@@ -16,6 +16,7 @@ if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_info import BlobInfo
     from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.analytics import AnalyticsManager
+    from lbrynet.wallet.transaction import Transaction
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class ManagedStream:
                  status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None,
                  download_id: typing.Optional[str] = None, rowid: typing.Optional[int] = None,
                  descriptor: typing.Optional[StreamDescriptor] = None,
+                 content_fee: typing.Optional['Transaction'] = None,
                  analytics_manager: typing.Optional['AnalyticsManager'] = None):
         self.loop = loop
         self.config = config
@@ -56,6 +58,7 @@ class ManagedStream:
         self.download_id = download_id or binascii.hexlify(generate_id()).decode()
         self.rowid = rowid
         self.written_bytes = 0
+        self.content_fee = content_fee
         self.downloader = StreamDownloader(self.loop, self.config, self.blob_manager, sd_hash, descriptor)
         self.analytics_manager = analytics_manager
         self.fully_reflected = asyncio.Event(loop=self.loop)
@@ -126,7 +129,7 @@ class ManagedStream:
         return None if not self.stream_claim_info else self.stream_claim_info.claim_name
 
     @property
-    def metadata(self) ->typing.Optional[typing.Dict]:
+    def metadata(self) -> typing.Optional[typing.Dict]:
         return None if not self.stream_claim_info else self.stream_claim_info.claim.stream.to_dict()
 
     @property
@@ -158,16 +161,13 @@ class ManagedStream:
 
     @property
     def mime_type(self):
-        return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))
+        return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
 
     def as_dict(self) -> typing.Dict:
-        full_path = self.full_path if self.output_file_exists else None
-        mime_type = guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
-
         if self.written_bytes:
             written_bytes = self.written_bytes
-        elif full_path:
-            written_bytes = os.stat(full_path).st_size
+        elif self.output_file_exists:
+            written_bytes = os.stat(self.full_path).st_size
         else:
             written_bytes = None
         return {
@@ -180,7 +180,7 @@ class ManagedStream:
             'stream_name': self.descriptor.stream_name,
             'suggested_file_name': self.descriptor.suggested_file_name,
             'sd_hash': self.descriptor.sd_hash,
-            'download_path': full_path,
+            'download_path': self.full_path,
             'mime_type': self.mime_type,
             'key': self.descriptor.key,
             'total_bytes_lower_bound': self.descriptor.lower_bound_decrypted_length(),
@@ -198,7 +198,8 @@ class ManagedStream:
             'protobuf': self.metadata_protobuf,
             'channel_claim_id': self.channel_claim_id,
             'channel_name': self.channel_name,
-            'claim_name': self.claim_name
+            'claim_name': self.claim_name,
+            'content_fee': self.content_fee  # TODO: this isn't in the database
         }
 
     @classmethod
@@ -228,12 +229,12 @@ class ManagedStream:
                 self.rowid = self.blob_manager.storage.save_downloaded_file(
                     self.stream_hash, None, None, 0.0
                 )
+                self.update_status(ManagedStream.STATUS_RUNNING)
+                await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_RUNNING)
             self.update_delayed_stop()
         else:
             await self.save_file(file_name, download_directory)
             await self.started_writing.wait()
-        self.update_status(ManagedStream.STATUS_RUNNING)
-        await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_RUNNING)
 
     def update_delayed_stop(self):
         def _delayed_stop():
@@ -261,6 +262,7 @@ class ManagedStream:
                 raise
 
     async def _save_file(self, output_path: str):
+        log.debug("save file %s -> %s", self.sd_hash, output_path)
         self.saving.set()
         self.finished_writing.clear()
         self.started_writing.clear()
@@ -316,6 +318,8 @@ class ManagedStream:
             await self.blob_manager.storage.change_file_download_dir_and_file_name(
                 self.stream_hash, self.download_directory, self.file_name
             )
+        self.update_status(ManagedStream.STATUS_RUNNING)
+        await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_RUNNING)
         self.written_bytes = 0
         self.file_output_task = self.loop.create_task(self._save_file(self.full_path))
 

@@ -36,12 +36,12 @@ class FileCommands(CommandTestCase):
         await self.server.blob_manager.delete_blobs(all_except_sd)
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
         self.assertIn('error', resp)
-        self.assertEquals('Failed to download data blobs for sd hash %s within timeout' % sd_hash, resp['error'])
+        self.assertEqual('Failed to download data blobs for sd hash %s within timeout' % sd_hash, resp['error'])
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         await self.server.blob_manager.delete_blobs([sd_hash])
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
         self.assertIn('error', resp)
-        self.assertEquals('Failed to download sd blob %s within timeout' % sd_hash, resp['error'])
+        self.assertEqual('Failed to download sd blob %s within timeout' % sd_hash, resp['error'])
 
     async def wait_files_to_complete(self):
         while self.sout(self.daemon.jsonrpc_file_list(status='running')):
@@ -66,7 +66,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual(stream.full_path, file_info['download_path'])
 
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
-        tx = await self.stream_create('foo', '0.01')
+        tx = await self.stream_create('foo', '0.01', data=b'deadbeef' * 1000000)
         sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         file_info = self.sout(self.daemon.jsonrpc_file_list())[0]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
@@ -74,7 +74,7 @@ class FileCommands(CommandTestCase):
             await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
         )
         all_except_sd_and_head = [
-            blob.blob_hash for blob in blobs[1:] if blob.blob_hash
+            blob.blob_hash for blob in blobs[1:-1]
         ]
         await self.server.blob_manager.delete_blobs(all_except_sd_and_head)
         self.assertFalse(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
@@ -82,17 +82,18 @@ class FileCommands(CommandTestCase):
         self.assertNotIn('error', resp)
         self.assertTrue(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
         self.daemon.stream_manager.stop()
+        await asyncio.sleep(0, loop=self.loop)
         self.assertFalse(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
 
     async def test_incomplete_downloads_retry(self):
-        tx = await self.stream_create('foo', '0.01')
+        tx = await self.stream_create('foo', '0.01', data=b'deadbeef' * 1000000)
         sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
             await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
         )
         all_except_sd_and_head = [
-            blob.blob_hash for blob in blobs[1:] if blob.blob_hash
+            blob.blob_hash for blob in blobs[1:-1]
         ]
 
         # backup server blobs
@@ -175,7 +176,7 @@ class FileCommands(CommandTestCase):
         await self.assertBalance(self.account, '9.925679')
         response = await self.out(self.daemon.jsonrpc_get('lbry://icanpay'))
         self.assertNotIn('error', response)
-        await self.on_transaction_dict(response['tx'])
+        await self.on_transaction_dict(response['content_fee'])
         await self.assertBalance(self.account, '8.925555')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
 
