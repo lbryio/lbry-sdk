@@ -150,3 +150,27 @@ class TestBlob(AsyncioTestCase):
         self.assertRaises(InvalidBlobHashError, BlobBuffer, self.loop, '', len(self.blob_bytes))
         self.assertRaises(InvalidBlobHashError, BlobBuffer, self.loop, 'x' * 96, len(self.blob_bytes))
         self.assertRaises(InvalidBlobHashError, BlobBuffer, self.loop, 'a' * 97, len(self.blob_bytes))
+
+    async def _test_close_reader(self, blob_class=AbstractBlob, blob_directory=None):
+        blob = await self._test_create_blob(blob_class, blob_directory)
+        reader = blob.reader_context()
+        self.assertEqual(0, len(blob.readers))
+
+        async def read_blob_buffer():
+            with reader as read_handle:
+                self.assertEqual(1, len(blob.readers))
+                await asyncio.sleep(2, loop=self.loop)
+                self.assertEqual(0, len(blob.readers))
+                return read_handle.read()
+
+        self.loop.call_later(1, blob.close)
+        with self.assertRaises(ValueError) as err:
+            read_task = self.loop.create_task(read_blob_buffer())
+            await read_task
+            self.assertEqual(err.exception, ValueError("I/O operation on closed file"))
+
+    async def test_close_reader(self):
+        tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
+        await self._test_close_reader(BlobBuffer)
+        await self._test_close_reader(BlobFile, tmp_dir)
