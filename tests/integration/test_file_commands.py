@@ -59,14 +59,11 @@ class FileCommands(CommandTestCase):
         await self.daemon.stream_manager.start()
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didnt get set completed
         # check that internal state got through up to the file list API
-        downloader = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash']).downloader
-        file_info = self.sout(self.daemon.jsonrpc_file_list())[0]
-        self.assertEqual(downloader.output_file_name, file_info['file_name'])
+        stream = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash'])
+        file_info = self.daemon.jsonrpc_file_list()[0]
+        self.assertEqual(stream.file_name, file_info['file_name'])
         # checks if what the API shows is what he have at the very internal level.
-        self.assertEqual(downloader.output_path, file_info['download_path'])
-        # if you got here refactoring just change above, but ensure what gets set internally gets reflected externally!
-        self.assertTrue(downloader.output_path.endswith(downloader.output_file_name))
-        # this used to be inconsistent, if it becomes again it would create weird bugs, so worth checking
+        self.assertEqual(stream.full_path, file_info['download_path'])
 
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
         tx = await self.stream_create('foo', '0.01')

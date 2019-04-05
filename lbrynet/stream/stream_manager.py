@@ -394,6 +394,7 @@ class StreamManager:
             error = err
             if stream and stream.descriptor:
                 await self.storage.delete_stream(stream.descriptor)
+                await self.blob_manager.delete_blob(stream.sd_hash)
         finally:
             if self.analytics_manager and (error or (stream and (stream.downloader.time_to_descriptor or
                                                                  stream.downloader.time_to_first_bytes))):
