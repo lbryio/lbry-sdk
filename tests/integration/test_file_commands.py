@@ -81,7 +81,7 @@ class FileCommands(CommandTestCase):
         ]
         await self.server.blob_manager.delete_blobs(all_except_sd_and_head)
         self.assertFalse(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
-        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
+        resp = await self.out(self.daemon.jsonrpc_get('lbry://foo', timeout=2))
         self.assertNotIn('error', resp)
         self.assertTrue(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
         self.daemon.stream_manager.stop()
@@ -107,7 +107,7 @@ class FileCommands(CommandTestCase):
         await self.server.blob_manager.delete_blobs(all_except_sd_and_head)
 
         # start the download
-        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
+        resp = await self.out(self.daemon.jsonrpc_get('lbry://foo', timeout=2))
         self.assertNotIn('error', resp)
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
         self.assertEqual('running', self.sout(self.daemon.jsonrpc_file_list())[0]['status'])
@@ -155,7 +155,7 @@ class FileCommands(CommandTestCase):
             fee_currency='LBC', fee_amount='11.0', fee_address=target_address
         )
         await self.daemon.jsonrpc_file_delete(claim_name='expensive')
-        response = await self.daemon.jsonrpc_get('lbry://expensive')
+        response = await self.out(self.daemon.jsonrpc_get('lbry://expensive'))
         self.assertEqual(response['error'], 'fee of 11.00000 exceeds max available balance')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
 
@@ -165,7 +165,7 @@ class FileCommands(CommandTestCase):
             fee_currency='LBC', fee_amount='111.0', fee_address=target_address
         )
         await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
-        response = await self.daemon.jsonrpc_get('lbry://maxkey')
+        response = await self.out(self.daemon.jsonrpc_get('lbry://maxkey'))
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
         self.assertEqual(response['error'], 'fee of 111.00000 exceeds max configured to allow of 50.00000')
 
@@ -176,9 +176,9 @@ class FileCommands(CommandTestCase):
         )
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
         await self.assertBalance(self.account, '9.925679')
-        response = await self.daemon.jsonrpc_get('lbry://icanpay')
+        response = await self.out(self.daemon.jsonrpc_get('lbry://icanpay'))
         self.assertNotIn('error', response)
-        await self.ledger.wait(response['tx'])
+        await self.on_transaction_dict(response['tx'])
         await self.assertBalance(self.account, '8.925555')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
 
