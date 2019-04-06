@@ -23,6 +23,7 @@ setup(
         'console_scripts': 'lbrynet=lbrynet.extras.cli:main'
     },
     install_requires=[
+        'torba',
         'aiohttp==3.5.4',
         'aioupnp',
         'appdirs==1.4.3',
@@ -35,7 +36,6 @@ setup(
         'protobuf==3.6.1',
         'msgpack==0.6.1',
         'ecdsa==0.13',
-        'torba',
         'pyyaml==4.2b1',
         'docopt==0.6.2',
         'hachoir',
