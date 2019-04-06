@@ -137,7 +137,7 @@ class ChannelCommands(CommandTestCase):
         )
 
         # send channel to someone else
-        new_account = await self.daemon.jsonrpc_account_create('second account')
+        new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         # before sending
@@ -222,7 +222,7 @@ class StreamCommands(CommandTestCase):
 
     async def test_publishing_checks_all_accounts_for_channel(self):
         account1_id, account1 = self.account.id, self.account
-        new_account = await self.daemon.jsonrpc_account_create('second account')
+        new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         await self.out(self.channel_create('@spam', '1.0'))
@@ -342,7 +342,7 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(txo['value']['stream'], fixed_values)
 
         # send claim to someone else
-        new_account = await self.daemon.jsonrpc_account_create('second account')
+        new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         # before sending
@@ -655,7 +655,7 @@ class SupportCommands(CommandTestCase):
 
     async def test_regular_supports_and_tip_supports(self):
         # account2 will be used to send tips and supports to account1
-        account2_id = (await self.daemon.jsonrpc_account_create('second account'))['id']
+        account2_id = (await self.out(self.daemon.jsonrpc_account_create('second account')))['id']
         account2 = self.daemon.get_account_or_error(account2_id)
 
         # send account2 5 LBC out of the 10 LBC in account1

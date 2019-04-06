@@ -153,9 +153,12 @@ class CommandTestCase(IntegrationTestCase):
         return self.blockchain._cli_cmnd('claimname', name, value, amount)
 
     async def out(self, awaitable):
-        """ Converts Daemon API call results (dictionary)
-            to JSON and then back to a dictionary. """
+        """ Serializes lbrynet API results to JSON then loads and returns it as dictionary. """
         return json.loads(jsonrpc_dumps_pretty(await awaitable, ledger=self.ledger))['result']
+
+    def sout(self, value):
+        """ Synchronous version of `out` method. """
+        return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
     async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True, **kwargs):
         with tempfile.NamedTemporaryFile() as file:
