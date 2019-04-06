@@ -105,6 +105,15 @@ SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 
 
+def encode_pagination_doc(items):
+    return {
+        "page": "Page number of the current items.",
+        "page_size": "Number of items to show on a page.",
+        "total_pages": "Total number of pages.",
+        "items": [items],
+    }
+
+
 async def maybe_paginate(get_records: Callable, get_record_count: Callable,
                          page: Optional[int], page_size: Optional[int], **constraints):
     if None not in (page, page_size):
@@ -932,8 +941,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      LBC account is specified (default: false)
             --show_seed                     : (bool) show the seed for the account
 
-        Returns:
-            (map) balance of account(s)
+        Returns: {List[Account]}
         """
         kwargs = {
             'confirmations': confirmations,
@@ -984,9 +992,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --public_key=<public_key>      : (str) public key for new account
             --single_key                   : (bool) create single key account, default is multi-key
 
-        Returns:
-            (map) added account details
-
+        Returns: {Account}
         """
         account = LBCAccount.from_dict(
             self.ledger, self.default_wallet, {
@@ -1005,12 +1011,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         self.default_wallet.save()
 
-        result = account.to_dict()
-        result['id'] = account.id
-        result['status'] = 'added'
-        result.pop('certificates', None)
-        result['is_default'] = self.default_wallet.accounts[0] == account
-        return result
+        return account
 
     @requires("wallet")
     async def jsonrpc_account_create(self, account_name, single_key=False):
@@ -1025,9 +1026,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_name=<account_name>  : (str) name of the account to create
             --single_key                   : (bool) create single key account, default is multi-key
 
-        Returns:
-            (map) new account details
-
+        Returns: {Account}
         """
         account = LBCAccount.generate(
             self.ledger, self.default_wallet, account_name, {
@@ -1040,12 +1039,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         self.default_wallet.save()
 
-        result = account.to_dict()
-        result['id'] = account.id
-        result['status'] = 'created'
-        result.pop('certificates', None)
-        result['is_default'] = self.default_wallet.accounts[0] == account
-        return result
+        return account
 
     @requires("wallet")
     def jsonrpc_account_remove(self, account_id):
@@ -1058,18 +1052,12 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --account_id=<account_id>  : (str) id of the account to remove
 
-        Returns:
-            (map) details of removed account
-
+        Returns: {Account}
         """
         account = self.get_account_or_error(account_id)
         self.default_wallet.accounts.remove(account)
         self.default_wallet.save()
-        result = account.to_dict()
-        result['id'] = account.id
-        result['status'] = 'removed'
-        result.pop('certificates', None)
-        return result
+        return account
 
     @requires("wallet")
     def jsonrpc_account_set(
@@ -1095,9 +1083,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --change_max_uses=<change_max_uses> : (int) set the maximum number of times to
                                                         use a change address
 
-        Returns:
-            (map) updated account details
-
+        Returns: {Account}
         """
         account = self.get_account_or_error(account_id)
         change_made = False
@@ -1127,11 +1113,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account.modified_on = time.time()
             self.default_wallet.save()
 
-        result = account.to_dict()
-        result['id'] = account.id
-        result.pop('certificates', None)
-        result['is_default'] = self.default_wallet.accounts[0] == account
-        return result
+        return account
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_account_unlock(self, password, account_id=None):
@@ -1250,9 +1232,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
             --broadcast                   : (bool) actually broadcast the transaction, default: false.
 
-        Returns:
-            (map) transaction performing requested action
-
+        Returns: {Transaction}
         """
         to_account = self.get_account_or_default(to_account, 'to_account')
         from_account = self.get_account_or_default(from_account, 'from_account')
@@ -1278,7 +1258,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>  : (str) account to fund the transaction
             --preview                  : (bool) do not broadcast the transaction
 
-        Returns:
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
 
@@ -1414,8 +1394,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
 
-        Returns:
-            List of wallet addresses
+        Returns: {Paginated[Address]}
         """
         account = self.get_account_or_default(account_id)
         return maybe_paginate(
@@ -1436,8 +1415,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --account_id=<account_id> : (str) id of the account to use
 
-        Returns:
-            (str) Unused wallet address in base58
+        Returns: {Address}
         """
         return self.get_account_or_default(account_id).receiving.get_or_create_usable_address()
 
@@ -1476,49 +1454,13 @@ class Daemon(metaclass=JSONRPCServerType):
             --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
             --comparison=<comparison>              : (str) logical comparision, (eq | ne | g | ge | l | le)
 
-        Returns:
-            (list) List of files
-
-            [
-                {
-                    'completed': (bool) true if download is completed,
-                    'file_name': (str) name of file,
-                    'download_directory': (str) download directory,
-                    'points_paid': (float) credit paid to download file,
-                    'stopped': (bool) true if download is stopped,
-                    'stream_hash': (str) stream hash of file,
-                    'stream_name': (str) stream name ,
-                    'suggested_file_name': (str) suggested file name,
-                    'sd_hash': (str) sd hash of file,
-                    'download_path': (str) download path of file,
-                    'mime_type': (str) mime type of file,
-                    'key': (str) key attached to file,
-                    'total_bytes_lower_bound': (int) lower bound file size in bytes,
-                    'total_bytes': (int) file upper bound size in bytes,
-                    'written_bytes': (int) written size in bytes,
-                    'blobs_completed': (int) number of fully downloaded blobs,
-                    'blobs_in_stream': (int) total blobs on stream,
-                    'blobs_remaining': (int) total blobs remaining to download,
-                    'status': (str) downloader status
-                    'claim_id': (str) None if claim is not found else the claim id,
-                    'txid': (str) None if claim is not found else the transaction id,
-                    'nout': (int) None if claim is not found else the transaction output index,
-                    'outpoint': (str) None if claim is not found else the tx and output,
-                    'metadata': (dict) None if claim is not found else the claim metadata,
-                    'channel_claim_id': (str) None if claim is not found or not signed,
-                    'channel_name': (str) None if claim is not found or not signed,
-                    'claim_name': (str) None if claim is not found else the claim name
-                },
-            ]
-        }
+        Returns: {List[File]}
         """
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
-        return [
-            stream.as_dict() for stream in self.stream_manager.get_filtered_streams(
-                sort, reverse, comparison, **kwargs
-            )
-        ]
+        return self.stream_manager.get_filtered_streams(
+            sort, reverse, comparison, **kwargs
+        )
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
@@ -1632,6 +1574,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id> : (str) id of the account to query
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+
+        Returns: {Paginated[Output]}
         """
         account = self.get_account_or_default(account_id)
         return maybe_paginate(
@@ -1662,6 +1606,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --winning                 : (bool) limit to winning claims
             --page=<page>             : (int) page to return during paginating
             --page_size=<page_size>   : (int) number of items on page during pagination
+
+        Returns: {Paginated[Output]}
         """
         claims = []
         if name is not None:
@@ -1771,6 +1717,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the channel is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
         self.valid_channel_name_or_error(name)
@@ -1879,6 +1827,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the channel is sent
             --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
             --preview                      : (bool) do not broadcast the transaction
+
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
 
@@ -1950,6 +1900,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id> : (str) id of the account to use
             --preview                 : (bool) do not broadcast the transaction
             --blocking                : (bool) wait until abandon is in mempool
+
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
 
@@ -1991,9 +1943,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
 
-        Returns:
-            (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
-            is in the wallet.
+        Returns: {Paginated[Output]}
         """
         account = self.get_account_or_default(account_id)
         return maybe_paginate(
@@ -2142,6 +2092,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+
+        Returns: {Transaction}
         """
         self.valid_stream_name_or_error(name)
         account = self.get_account_or_default(kwargs.get('account_id'))
@@ -2262,6 +2214,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+
+        Returns: {Transaction}
         """
         self.valid_stream_name_or_error(name)
         account = self.get_account_or_default(account_id)
@@ -2408,6 +2362,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
 
@@ -2486,6 +2442,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id> : (str) id of the account to use
             --preview                 : (bool) do not broadcast the transaction
             --blocking                : (bool) wait until abandon is in mempool
+
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
 
@@ -2526,6 +2484,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id> : (str) id of the account to query
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+
+        Returns: {Paginated[Output]}
         """
         account = self.get_account_or_default(account_id)
         return maybe_paginate(
@@ -2572,6 +2532,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --tip                     : (bool) send support to claim owner, default: false.
             --account_id=<account_id> : (str) id of the account to use
             --preview                 : (bool) do not broadcast the transaction
+
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
         amount = self.get_dewies_or_error("amount", amount)
@@ -2614,6 +2576,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id> : (str) id of the account to query
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+
+        Returns: {Paginated[Output]}
         """
         account = self.get_account_or_default(account_id)
         return maybe_paginate(
@@ -2642,6 +2606,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id> : (str) id of the account to use
             --preview                 : (bool) do not broadcast the transaction
             --blocking                : (bool) wait until abandon is in mempool
+
+        Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
 
@@ -2764,8 +2730,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --txid=<txid>  : (str) txid of the transaction
 
-        Returns:
-            (dict) JSON formatted transaction
+        Returns: {Transaction}
         """
         return self.wallet_manager.get_transaction(txid)
 
@@ -2787,22 +2752,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
 
-        Returns:
-            (list) List of unspent transaction outputs (UTXOs)
-            [
-                {
-                    "address": (str) the output address
-                    "amount": (float) unspent amount
-                    "height": (int) block height
-                    "is_claim": (bool) is the tx a claim
-                    "is_coinbase": (bool) is the tx a coinbase tx
-                    "is_support": (bool) is the tx a support
-                    "is_update": (bool) is the tx an update
-                    "nout": (int) nout of the output
-                    "txid": (str) txid of the output
-                },
-                ...
-            ]
+        Returns: {Paginated[Output]}
         """
         account = self.get_account_or_default(account_id)
         return maybe_paginate(
