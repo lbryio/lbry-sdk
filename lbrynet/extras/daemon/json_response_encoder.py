@@ -5,12 +5,84 @@ from datetime import datetime
 from json import JSONEncoder
 from ecdsa import BadSignatureError
 from lbrynet.schema.claim import Claim
-from lbrynet.wallet.ledger import MainNetLedger
+from lbrynet.wallet.ledger import MainNetLedger, Account
 from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.dewies import dewies_to_lbc
+from lbrynet.stream.managed_stream import ManagedStream
 
 
 log = logging.getLogger(__name__)
+
+
+def encode_txo_doc():
+    return {
+        'txid': "hash of transaction in hex",
+        'height': "block where transaction was recorded",
+        'nout': "position in the transaction",
+        'amount': "value of the txo as a decimal",
+        'address': "address of who can spend the txo",
+        'confirmations': "number of confirmed blocks"
+    }
+
+
+def encode_tx_doc():
+    return {
+        'txid': "hash of transaction in hex",
+        'height': "block where transaction was recorded",
+        'inputs': [encode_txo_doc()],
+        'outputs': [encode_txo_doc()],
+        'total_input': "sum of inputs as a decimal",
+        'total_output': "sum of outputs, sans fee, as a decimal",
+        'total_fee': "fee amount",
+        'hex': "entire transaction encoded in hex",
+    }
+
+
+def encode_account_doc():
+    return {
+        'id': 'account_id',
+        'is_default': 'this account is used by default',
+        'ledger': 'name of crypto currency and network',
+        'name': 'optional account name',
+        'seed': 'human friendly words from which account can be recreated',
+        'encrypted': 'if account is encrypted',
+        'private_key': 'extended private key',
+        'public_key': 'extended public key',
+        'address_generator': 'settings for generating addresses',
+        'modified_on': 'date of last modification to account settings'
+    }
+
+
+def encode_file_doc():
+    return {
+        'completed': '(bool) true if download is completed',
+        'file_name': '(str) name of file',
+        'download_directory': '(str) download directory',
+        'points_paid': '(float) credit paid to download file',
+        'stopped': '(bool) true if download is stopped',
+        'stream_hash': '(str) stream hash of file',
+        'stream_name': '(str) stream name',
+        'suggested_file_name': '(str) suggested file name',
+        'sd_hash': '(str) sd hash of file',
+        'download_path': '(str) download path of file',
+        'mime_type': '(str) mime type of file',
+        'key': '(str) key attached to file',
+        'total_bytes_lower_bound': '(int) lower bound file size in bytes',
+        'total_bytes': '(int) file upper bound size in bytes',
+        'written_bytes': '(int) written size in bytes',
+        'blobs_completed': '(int) number of fully downloaded blobs',
+        'blobs_in_stream': '(int) total blobs on stream',
+        'blobs_remaining': '(int) total blobs remaining to download',
+        'status': '(str) downloader status',
+        'claim_id': '(str) None if claim is not found else the claim id',
+        'txid': '(str) None if claim is not found else the transaction id',
+        'nout': '(int) None if claim is not found else the transaction output index',
+        'outpoint': '(str) None if claim is not found else the tx and output',
+        'metadata': '(dict) None if claim is not found else the claim metadata',
+        'channel_claim_id': '(str) None if claim is not found or not signed',
+        'channel_name': '(str) None if claim is not found or not signed',
+        'claim_name': '(str) None if claim is not found else the claim name'
+    }
 
 
 class JSONResponseEncoder(JSONEncoder):
@@ -20,6 +92,10 @@ class JSONResponseEncoder(JSONEncoder):
         self.ledger = ledger
 
     def default(self, obj):  # pylint: disable=method-hidden
+        if isinstance(obj, Account):
+            return self.encode_account(obj)
+        if isinstance(obj, ManagedStream):
+            return self.encode_file(obj)
         if isinstance(obj, Transaction):
             return self.encode_transaction(obj)
         if isinstance(obj, Output):
@@ -117,3 +193,14 @@ class JSONResponseEncoder(JSONEncoder):
             'txid': txi.txo_ref.tx_ref.id,
             'nout': txi.txo_ref.position
         }
+
+    def encode_account(self, account):
+        result = account.to_dict()
+        result['id'] = account.id
+        result.pop('certificates', None)
+        result['is_default'] = self.ledger.accounts[0] == account
+        return result
+
+    @staticmethod
+    def encode_file(managed_stream):
+        return managed_stream.as_dict()
