@@ -7,7 +7,6 @@ from binascii import unhexlify
 from torba.testcase import IntegrationTestCase
 
 import lbrynet.wallet
-from lbrynet.schema.claim import Claim
 
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
