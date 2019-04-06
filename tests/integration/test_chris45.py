@@ -97,7 +97,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Amidst all this Chris receives a call from his friend Ramsey
         # who says that it is of utmost urgency that Chris transfer him
         # 1 LBC to which Chris readily obliges
-        ramsey_account_id = (await self.daemon.jsonrpc_account_create("Ramsey"))['id']
+        ramsey_account_id = (await self.out(self.daemon.jsonrpc_account_create("Ramsey")))['id']
         ramsey_address = await self.daemon.jsonrpc_address_unused(ramsey_account_id)
         result = await self.out(self.daemon.jsonrpc_account_send('1.0', ramsey_address))
         self.assertIn("txid", result)

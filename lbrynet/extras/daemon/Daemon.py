@@ -837,37 +837,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --file_name=<file_name>  : (str) specified name for the downloaded file
             --timeout=<timeout>      : (int) download timeout in number of seconds
 
-        Returns:
-            (dict) Dictionary containing information about the stream
-            {
-                'completed': (bool) true if download is completed,
-                'file_name': (str) name of file,
-                'download_directory': (str) download directory,
-                'points_paid': (float) credit paid to download file,
-                'stopped': (bool) true if download is stopped,
-                'stream_hash': (str) stream hash of file,
-                'stream_name': (str) stream name ,
-                'suggested_file_name': (str) suggested file name,
-                'sd_hash': (str) sd hash of file,
-                'download_path': (str) download path of file,
-                'mime_type': (str) mime type of file,
-                'key': (str) key attached to file,
-                'total_bytes': (int) file size in bytes,
-                'written_bytes': (int) written size in bytes,
-                'blobs_completed': (int) number of fully downloaded blobs,
-                'blobs_in_stream': (int) total blobs on stream,
-                'status': (str) downloader status,
-                'claim_id': (str) claim id,
-                'outpoint': (str) claim outpoint string,
-                'txid': (str) claim txid,
-                'nout': (int) claim nout,
-                'metadata': (dict) claim metadata,
-                'channel_claim_id': (str) None if claim is not signed
-                'channel_name': (str) None if claim is not signed
-                'claim_name': (str) claim name
-            }
+        Returns: {File}
         """
-
         try:
             stream = await self.stream_manager.download_stream_from_uri(
                 uri, self.exchange_rate_manager, file_name, timeout
@@ -877,8 +848,7 @@ class Daemon(metaclass=JSONRPCServerType):
         except Exception as e:
             log.warning("Error downloading %s: %s", uri, str(e))
             return {"error": str(e)}
-        else:
-            return stream.as_dict()
+        return stream
 
     SETTINGS_DOC = """
     Settings management.

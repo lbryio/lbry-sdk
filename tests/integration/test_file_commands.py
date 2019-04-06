@@ -14,7 +14,7 @@ class FileCommands(CommandTestCase):
         await self.stream_create('foo', '0.01')
         await self.stream_create('foo2', '0.01')
 
-        file1, file2 = self.daemon.jsonrpc_file_list('claim_name')
+        file1, file2 = self.sout(self.daemon.jsonrpc_file_list('claim_name'))
         self.assertEqual(file1['claim_name'], 'foo')
         self.assertEqual(file2['claim_name'], 'foo2')
 
@@ -44,12 +44,12 @@ class FileCommands(CommandTestCase):
         self.assertEquals('Failed to download sd blob %s within timeout' % sd_hash, resp['error'])
 
     async def wait_files_to_complete(self):
-        while self.daemon.jsonrpc_file_list(status='running'):
+        while self.sout(self.daemon.jsonrpc_file_list(status='running')):
             await asyncio.sleep(0.01)
 
     async def test_filename_conflicts_management_on_resume_download(self):
         await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
-        file_info = self.daemon.jsonrpc_file_list()[0]
+        file_info = self.sout(self.daemon.jsonrpc_file_list())[0]
         original_path = os.path.join(self.daemon.conf.download_dir, file_info['file_name'])
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         await self.daemon.jsonrpc_get('lbry://foo')
@@ -60,7 +60,7 @@ class FileCommands(CommandTestCase):
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didnt get set completed
         # check that internal state got through up to the file list API
         downloader = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash']).downloader
-        file_info = self.daemon.jsonrpc_file_list()[0]
+        file_info = self.sout(self.daemon.jsonrpc_file_list())[0]
         self.assertEqual(downloader.output_file_name, file_info['file_name'])
         # checks if what the API shows is what he have at the very internal level.
         self.assertEqual(downloader.output_path, file_info['download_path'])
@@ -71,7 +71,7 @@ class FileCommands(CommandTestCase):
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
         tx = await self.stream_create('foo', '0.01')
         sd_hash = tx['outputs'][0]['value']['stream']['sd_hash']
-        file_info = self.daemon.jsonrpc_file_list()[0]
+        file_info = self.sout(self.daemon.jsonrpc_file_list())[0]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
             await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
@@ -110,7 +110,7 @@ class FileCommands(CommandTestCase):
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
         self.assertNotIn('error', resp)
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
-        self.assertEqual('running', self.daemon.jsonrpc_file_list()[0]['status'])
+        self.assertEqual('running', self.sout(self.daemon.jsonrpc_file_list())[0]['status'])
         await self.daemon.jsonrpc_file_set_status('stop', claim_name='foo')
 
         # recover blobs
@@ -122,7 +122,7 @@ class FileCommands(CommandTestCase):
 
         await self.daemon.jsonrpc_file_set_status('start', claim_name='foo')
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)
-        file_info = self.daemon.jsonrpc_file_list()[0]
+        file_info = self.sout(self.daemon.jsonrpc_file_list())[0]
         self.assertEqual(file_info['blobs_completed'], file_info['blobs_in_stream'])
         self.assertEqual('finished', file_info['status'])
 
