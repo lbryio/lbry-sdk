@@ -34,8 +34,16 @@
                 "is_required": false
             }
         ],
-        "returns": "(map) added account details",
-        "examples": []
+        "returns": "            {\n                \"id\": \"account_id\",\n                \"is_default\": \"this account is used by default\",\n                \"ledger\": \"name of crypto currency and network\",\n                \"name\": \"optional account name\",\n                \"seed\": \"human friendly words from which account can be recreated\",\n                \"encrypted\": \"if account is encrypted\",\n                \"private_key\": \"extended private key\",\n                \"public_key\": \"extended public key\",\n                \"address_generator\": \"settings for generating addresses\",\n                \"modified_on\": \"date of last modification to account settings\"\n            }",
+        "examples": [
+            {
+                "title": "Add an account from seed.",
+                "curl": "curl -d'{\"method\": \"account_add\", \"params\": {\"account_name\": \"new account\", \"seed\": \"genuine case gate always artwork taxi garden hurdle shed detect proud east\", \"single_key\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet account add \"new account\" --seed=\"genuine case gate always artwork taxi garden hurdle shed detect proud east\"",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_add\", \"params\": {\"account_name\": \"new account\", \"seed\": \"genuine case gate always artwork taxi garden hurdle shed detect proud east\", \"single_key\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"address_generator\": {\n      \"change\": {\n        \"gap\": 6,\n        \"maximum_uses_per_address\": 1\n      },\n      \"name\": \"deterministic-chain\",\n      \"receiving\": {\n        \"gap\": 20,\n        \"maximum_uses_per_address\": 1\n      }\n    },\n    \"encrypted\": false,\n    \"id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\",\n    \"is_default\": false,\n    \"ledger\": \"lbc_regtest\",\n    \"modified_on\": 1554578686.081968,\n    \"name\": \"new account\",\n    \"private_key\": \"tprv8ZgxMBicQKsPeWRzJjSXgb4TP7QdWM5pkwry7bcDcjkameXUw4AWmfLh3ibCLPxQmvxaHcXsCjQNjrQDrvCyt5XmJitAVMmAVtn4zL1E5kR\",\n    \"public_key\": \"tpubD6NzVbkrYhZ4XyTnCP785ziZx8vZfgGjLFTkQ7eX31Yyc8nFZSz6x9xZDqo4PjSxeFUYWqnEAswz7KjMvFZmdrgGWFLvf6eByVkMWH4hwjc\",\n    \"seed\": \"genuine case gate always artwork taxi garden hurdle shed detect proud east\"\n  }\n}"
+            }
+        ]
     },
     {
         "name": "account_balance",
@@ -74,8 +82,16 @@
                 "is_required": false
             }
         ],
-        "returns": "(map) new account details",
-        "examples": []
+        "returns": "            {\n                \"id\": \"account_id\",\n                \"is_default\": \"this account is used by default\",\n                \"ledger\": \"name of crypto currency and network\",\n                \"name\": \"optional account name\",\n                \"seed\": \"human friendly words from which account can be recreated\",\n                \"encrypted\": \"if account is encrypted\",\n                \"private_key\": \"extended private key\",\n                \"public_key\": \"extended public key\",\n                \"address_generator\": \"settings for generating addresses\",\n                \"modified_on\": \"date of last modification to account settings\"\n            }",
+        "examples": [
+            {
+                "title": "Create an account.",
+                "curl": "curl -d'{\"method\": \"account_create\", \"params\": {\"account_name\": \"generated account\", \"single_key\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet account create \"generated account\"",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_create\", \"params\": {\"account_name\": \"generated account\", \"single_key\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"address_generator\": {\n      \"change\": {\n        \"gap\": 6,\n        \"maximum_uses_per_address\": 1\n      },\n      \"name\": \"deterministic-chain\",\n      \"receiving\": {\n        \"gap\": 20,\n        \"maximum_uses_per_address\": 1\n      }\n    },\n    \"encrypted\": false,\n    \"id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\",\n    \"is_default\": false,\n    \"ledger\": \"lbc_regtest\",\n    \"modified_on\": 1554578685.924084,\n    \"name\": \"generated account\",\n    \"private_key\": \"tprv8ZgxMBicQKsPeWRzJjSXgb4TP7QdWM5pkwry7bcDcjkameXUw4AWmfLh3ibCLPxQmvxaHcXsCjQNjrQDrvCyt5XmJitAVMmAVtn4zL1E5kR\",\n    \"public_key\": \"tpubD6NzVbkrYhZ4XyTnCP785ziZx8vZfgGjLFTkQ7eX31Yyc8nFZSz6x9xZDqo4PjSxeFUYWqnEAswz7KjMvFZmdrgGWFLvf6eByVkMWH4hwjc\",\n    \"seed\": \"genuine case gate always artwork taxi garden hurdle shed detect proud east\"\n  }\n}"
+            }
+        ]
     },
     {
         "name": "account_decrypt",
@@ -146,7 +162,7 @@
                 "is_required": false
             }
         ],
-        "returns": "(map) transaction performing requested action",
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
         "examples": []
     },
     {
@@ -178,14 +194,14 @@
                 "is_required": false
             }
         ],
-        "returns": "(map) balance of account(s)",
+        "returns": "            [\n                {\n                    \"id\": \"account_id\",\n                    \"is_default\": \"this account is used by default\",\n                    \"ledger\": \"name of crypto currency and network\",\n                    \"name\": \"optional account name\",\n                    \"seed\": \"human friendly words from which account can be recreated\",\n                    \"encrypted\": \"if account is encrypted\",\n                    \"private_key\": \"extended private key\",\n                    \"public_key\": \"extended public key\",\n                    \"address_generator\": \"settings for generating addresses\",\n                    \"modified_on\": \"date of last modification to account settings\"\n                }\n            ]",
         "examples": [
             {
                 "title": "List your accounts.",
                 "curl": "curl -d'{\"method\": \"account_list\", \"params\": {\"include_claims\": false, \"show_seed\": false}}' http://localhost:5279/",
                 "lbrynet": "lbrynet account list",
                 "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_list\", \"params\": {\"include_claims\": false, \"show_seed\": false}}).json()",
-                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"lbc_regtest\": [\n      {\n        \"address_generator\": {\n          \"change\": {\n            \"gap\": 6,\n            \"maximum_uses_per_address\": 1\n          },\n          \"name\": \"deterministic-chain\",\n          \"receiving\": {\n            \"gap\": 20,\n            \"maximum_uses_per_address\": 1\n          }\n        },\n        \"certificates\": 0,\n        \"coins\": 10.0,\n        \"encrypted\": false,\n        \"id\": \"mxTNUVArNCbhBJAbY3WMLV7Hu3jebTR9En\",\n        \"is_default_account\": true,\n        \"name\": \"Account #mxTNUVArNCbhBJAbY3WMLV7Hu3jebTR9En\",\n        \"public_key\": \"tpubD6NzVbkrYhZ4XwPmJUjsb9aVZzCSjH5Jm66SGbY5Krk5BkUZz4RNgNcKnf4narAht6jT7786XXM4em7cu7rs6ELmUEje755V5jTja2ubFn4\",\n        \"satoshis\": 1000000000\n      }\n    ]\n  }\n}"
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"lbc_regtest\": [\n      {\n        \"address_generator\": {\n          \"change\": {\n            \"gap\": 6,\n            \"maximum_uses_per_address\": 1\n          },\n          \"name\": \"deterministic-chain\",\n          \"receiving\": {\n            \"gap\": 20,\n            \"maximum_uses_per_address\": 1\n          }\n        },\n        \"certificates\": 0,\n        \"coins\": 10.0,\n        \"encrypted\": false,\n        \"id\": \"n3UZZjeevho2mMnnsXkZerQAYtBqwXjSbw\",\n        \"is_default\": true,\n        \"name\": \"Account #n3UZZjeevho2mMnnsXkZerQAYtBqwXjSbw\",\n        \"public_key\": \"tpubD6NzVbkrYhZ4WpBr62Lh2vWJyfbZ3HWSxySHpLuQzHcVmQ4r76xMENjZnQhc6JEagf4gHzbXD6Y5nBVbhzQnQ4VfZPZYQramFkmciky9FJm\",\n        \"satoshis\": 1000000000\n      }\n    ]\n  }\n}"
             }
         ]
     },
@@ -228,8 +244,16 @@
                 "is_required": true
             }
         ],
-        "returns": "(map) details of removed account",
-        "examples": []
+        "returns": "            {\n                \"id\": \"account_id\",\n                \"is_default\": \"this account is used by default\",\n                \"ledger\": \"name of crypto currency and network\",\n                \"name\": \"optional account name\",\n                \"seed\": \"human friendly words from which account can be recreated\",\n                \"encrypted\": \"if account is encrypted\",\n                \"private_key\": \"extended private key\",\n                \"public_key\": \"extended public key\",\n                \"address_generator\": \"settings for generating addresses\",\n                \"modified_on\": \"date of last modification to account settings\"\n            }",
+        "examples": [
+            {
+                "title": "Remove an account.",
+                "curl": "curl -d'{\"method\": \"account_remove\", \"params\": {\"account_id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\"}}' http://localhost:5279/",
+                "lbrynet": "lbrynet account remove mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_remove\", \"params\": {\"account_id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\"}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"address_generator\": {\n      \"change\": {\n        \"gap\": 6,\n        \"maximum_uses_per_address\": 1\n      },\n      \"name\": \"deterministic-chain\",\n      \"receiving\": {\n        \"gap\": 20,\n        \"maximum_uses_per_address\": 1\n      }\n    },\n    \"encrypted\": false,\n    \"id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\",\n    \"is_default\": false,\n    \"ledger\": \"lbc_regtest\",\n    \"modified_on\": 1554578685.924084,\n    \"name\": \"generated account\",\n    \"private_key\": \"tprv8ZgxMBicQKsPeWRzJjSXgb4TP7QdWM5pkwry7bcDcjkameXUw4AWmfLh3ibCLPxQmvxaHcXsCjQNjrQDrvCyt5XmJitAVMmAVtn4zL1E5kR\",\n    \"public_key\": \"tpubD6NzVbkrYhZ4XyTnCP785ziZx8vZfgGjLFTkQ7eX31Yyc8nFZSz6x9xZDqo4PjSxeFUYWqnEAswz7KjMvFZmdrgGWFLvf6eByVkMWH4hwjc\",\n    \"seed\": \"genuine case gate always artwork taxi garden hurdle shed detect proud east\"\n  }\n}"
+            }
+        ]
     },
     {
         "name": "account_send",
@@ -242,13 +266,13 @@
                 "is_required": false
             },
             {
-                "name": "broadcast",
+                "name": "preview",
                 "type": "bool",
-                "description": "actually broadcast the transaction, default: false.",
+                "description": "do not broadcast the transaction",
                 "is_required": false
             }
         ],
-        "returns": "",
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
         "examples": []
     },
     {
@@ -298,8 +322,16 @@
                 "is_required": false
             }
         ],
-        "returns": "(map) updated account details",
-        "examples": []
+        "returns": "            {\n                \"id\": \"account_id\",\n                \"is_default\": \"this account is used by default\",\n                \"ledger\": \"name of crypto currency and network\",\n                \"name\": \"optional account name\",\n                \"seed\": \"human friendly words from which account can be recreated\",\n                \"encrypted\": \"if account is encrypted\",\n                \"private_key\": \"extended private key\",\n                \"public_key\": \"extended public key\",\n                \"address_generator\": \"settings for generating addresses\",\n                \"modified_on\": \"date of last modification to account settings\"\n            }",
+        "examples": [
+            {
+                "title": "Modify maximum number of times a change address can be reused.",
+                "curl": "curl -d'{\"method\": \"account_set\", \"params\": {\"account_id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\", \"default\": false, \"change_max_uses\": 10}}' http://localhost:5279/",
+                "lbrynet": "lbrynet account set mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ --change_max_uses=10",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"account_set\", \"params\": {\"account_id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\", \"default\": false, \"change_max_uses\": 10}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"address_generator\": {\n      \"change\": {\n        \"gap\": 6,\n        \"maximum_uses_per_address\": 10\n      },\n      \"name\": \"deterministic-chain\",\n      \"receiving\": {\n        \"gap\": 20,\n        \"maximum_uses_per_address\": 1\n      }\n    },\n    \"encrypted\": false,\n    \"id\": \"mt2Eqt55iczBA95pVQdy65ze9ozYToSVGZ\",\n    \"is_default\": false,\n    \"ledger\": \"lbc_regtest\",\n    \"modified_on\": 1554578686.1519668,\n    \"name\": \"new account\",\n    \"private_key\": \"tprv8ZgxMBicQKsPeWRzJjSXgb4TP7QdWM5pkwry7bcDcjkameXUw4AWmfLh3ibCLPxQmvxaHcXsCjQNjrQDrvCyt5XmJitAVMmAVtn4zL1E5kR\",\n    \"public_key\": \"tpubD6NzVbkrYhZ4XyTnCP785ziZx8vZfgGjLFTkQ7eX31Yyc8nFZSz6x9xZDqo4PjSxeFUYWqnEAswz7KjMvFZmdrgGWFLvf6eByVkMWH4hwjc\",\n    \"seed\": \"genuine case gate always artwork taxi garden hurdle shed detect proud east\"\n  }\n}"
+            }
+        ]
     },
     {
         "name": "account_unlock",
@@ -358,7 +390,7 @@
                 "is_required": false
             }
         ],
-        "returns": "List of wallet addresses",
+        "returns": "            {\n                \"page\": \"Page number of the current items.\",\n                \"page_size\": \"Number of items to show on a page.\",\n                \"total_pages\": \"Total number of pages.\",\n                \"items\": [\n                    \"an address in base58\"\n                ]\n            }",
         "examples": []
     },
     {
@@ -372,7 +404,7 @@
                 "is_required": false
             }
         ],
-        "returns": "(str) Unused wallet address in base58",
+        "returns": "            \"an address in base58\"",
         "examples": []
     },
     {
@@ -527,6 +559,164 @@
         "examples": []
     },
     {
+        "name": "channel_abandon",
+        "description": "Abandon one of my channel claims.",
+        "arguments": [
+            {
+                "name": "claim_id",
+                "type": "str",
+                "description": "claim_id of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "txid",
+                "type": "str",
+                "description": "txid of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "nout",
+                "type": "int",
+                "description": "nout of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to use",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
+                "is_required": false
+            },
+            {
+                "name": "blocking",
+                "type": "bool",
+                "description": "wait until abandon is in mempool",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
+        "examples": [
+            {
+                "title": "Abandon a channel claim.",
+                "curl": "curl -d'{\"method\": \"channel_abandon\", \"params\": {\"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\", \"preview\": false, \"blocking\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet channel abandon 4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_abandon\", \"params\": {\"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\", \"preview\": false, \"blocking\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"height\": -2,\n    \"hex\": \"0100000001580c84ee9be8da1151ea7ee8af0c031f5b8dd4eee8bd9fa6dc3b8779cdccf183000000006b483045022100bcc0ad41eee030496499b36b13af239bfe05515f01b39ddd32e9e643fbbe4ea002202e9a702aa9b31e62deb4f67caaab02f40f8e7d01910269003a792cefbd95902a01210329e2491076fee9936796ed96e0c0b1f66f5a9a8055cebdfac3bbc35036069f2effffffff0134b7f505000000001976a914f7ce87cdb10655286266c59bc3ca142fcc7c55e188ac00000000\",\n    \"inputs\": [\n      {\n        \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"confirmations\": 4,\n        \"height\": 208,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"@channel\",\n        \"nout\": 0,\n        \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\",\n        \"type\": \"update\",\n        \"value\": {\n          \"channel\": {\n            \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\",\n            \"title\": \"New Channel\"\n          }\n        }\n      }\n    ],\n    \"outputs\": [\n      {\n        \"address\": \"n47EcRe3PKjzBGxgRq9ixtMBomhCzCBKaR\",\n        \"amount\": \"0.999893\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"nout\": 0,\n        \"txid\": \"9758b74391f5b739d3e76372acc0eaba7daba669290246c920106fa2019c0abe\"\n      }\n    ],\n    \"total_fee\": \"0.000107\",\n    \"total_input\": \"1.0\",\n    \"total_output\": \"0.999893\",\n    \"txid\": \"9758b74391f5b739d3e76372acc0eaba7daba669290246c920106fa2019c0abe\"\n  }\n}"
+            }
+        ]
+    },
+    {
+        "name": "channel_create",
+        "description": "Create a new channel by generating a channel private key and establishing an '@' prefixed claim.",
+        "arguments": [
+            {
+                "name": "name",
+                "type": "str",
+                "description": "name of the channel prefixed with '@'",
+                "is_required": true
+            },
+            {
+                "name": "allow_duplicate_name",
+                "type": "bool",
+                "description": "create new channel even if one already exists with given name. default: false.",
+                "is_required": false
+            },
+            {
+                "name": "bid",
+                "type": "decimal",
+                "description": "amount to back the claim",
+                "is_required": true
+            },
+            {
+                "name": "title",
+                "type": "str",
+                "description": "title of the publication",
+                "is_required": false
+            },
+            {
+                "name": "description",
+                "type": "str",
+                "description": "description of the publication",
+                "is_required": false
+            },
+            {
+                "name": "tags",
+                "type": "list",
+                "description": "content tags",
+                "is_required": false
+            },
+            {
+                "name": "languages",
+                "type": "list",
+                "description": "languages used by the channel, using RFC 5646 format, eg: for English `--languages=en` for Spanish (Spain) `--languages=es-ES` for Spanish (Mexican) `--languages=es-MX` for Chinese (Simplified) `--languages=zh-Hans` for Chinese (Traditional) `--languages=zh-Hant`",
+                "is_required": false
+            },
+            {
+                "name": "locations",
+                "type": "list",
+                "description": "locations of the channel, consisting of 2 letter `country` code and a `state`, `city` and a postal `code` along with a `latitude` and `longitude`. for JSON RPC: pass a dictionary with aforementioned attributes as keys, eg: ... \"locations\": [{'country': 'US', 'state': 'NH'}] ... for command line: pass a colon delimited list with values in the following order: \"COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE\" making sure to include colon for blank values, for example to provide only the city: ... --locations=\"::Manchester\" with all values set: ... --locations=\"US:NH:Manchester:03101:42.990605:-71.460989\" optionally, you can just pass the \"LATITUDE:LONGITUDE\": ... --locations=\"42.990605:-71.460989\" finally, you can also pass JSON string of dictionary on the command line as you would via JSON RPC ... --locations=\"{'country': 'US', 'state': 'NH'}\"",
+                "is_required": false
+            },
+            {
+                "name": "contact_email",
+                "type": "str",
+                "description": "email of channel owner",
+                "is_required": false
+            },
+            {
+                "name": "homepage_url",
+                "type": "str",
+                "description": "homepage url",
+                "is_required": false
+            },
+            {
+                "name": "thumbnail_url",
+                "type": "str",
+                "description": "thumbnail url",
+                "is_required": false
+            },
+            {
+                "name": "cover_url",
+                "type": "str",
+                "description": "url of cover image",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to store channel",
+                "is_required": false
+            },
+            {
+                "name": "claim_address",
+                "type": "str",
+                "description": "address where the channel is sent to, if not specified it will be determined automatically from the account",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
+        "examples": [
+            {
+                "title": "Create a channel claim.",
+                "curl": "curl -d'{\"method\": \"channel_create\", \"params\": {\"name\": \"@channel\", \"bid\": \"1.0\", \"tags\": [], \"languages\": [], \"locations\": [], \"preview\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet channel create @channel 1.0",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_create\", \"params\": {\"name\": \"@channel\", \"bid\": \"1.0\", \"tags\": [], \"languages\": [], \"locations\": [], \"preview\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"height\": -2,\n    \"hex\": \"01000000011745d6605014dfed1bfbfadc83a6b7d64afd5a4799c6786ea46ea201f29384ec000000006b483045022100eb417b5bb035ae79b0acb786d81f4e00b0ebe130f63756c8d9e2a33ff85fceeb02206c9e8f6877de0803da1141d9a5fd4cefed997dcdb53f0659f57843863fee0dfb012103225b54913ee6c9b8c32c012b836412d7b8fe8bfcb1ee64bb0ad6d41fed377874ffffffff0200e1f5050000000084b508406368616e6e656c4c5d00125a0a583056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa06d7576a914bae97ac3fa178afbe668e45a2e663e112ba3531488ac34558c35000000001976a9142351e1e4e0d07d20acdc1effc923f492bb572aac88ac00000000\",\n    \"inputs\": [\n      {\n        \"address\": \"n2YHMk1Do5azQTjLhkXaHMQBTKj534o8j2\",\n        \"amount\": \"10.0\",\n        \"confirmations\": 6,\n        \"height\": 201,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"nout\": 0,\n        \"txid\": \"ec8493f201a26ea46e78c699475afd4ad6b7a683dcfafb1beddf145060d64517\"\n      }\n    ],\n    \"outputs\": [\n      {\n        \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"name\": \"@channel\",\n        \"nout\": 0,\n        \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"txid\": \"85175f2cda9d4d8e9566d376d49e09612cc293042f5af0e4e24b0c79b0328303\",\n        \"type\": \"claim\",\n        \"value\": {\n          \"channel\": {\n            \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\"\n          }\n        }\n      },\n      {\n        \"address\": \"miji34FcSCGLnovtK7FHezB19f1wG9PmGy\",\n        \"amount\": \"8.983893\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"nout\": 1,\n        \"txid\": \"85175f2cda9d4d8e9566d376d49e09612cc293042f5af0e4e24b0c79b0328303\"\n      }\n    ],\n    \"total_fee\": \"0.016107\",\n    \"total_input\": \"10.0\",\n    \"total_output\": \"9.983893\",\n    \"txid\": \"85175f2cda9d4d8e9566d376d49e09612cc293042f5af0e4e24b0c79b0328303\"\n  }\n}"
+            }
+        ]
+    },
+    {
         "name": "channel_export",
         "description": "Export serialized channel signing information for a given certificate claim id",
         "arguments": [
@@ -556,7 +746,7 @@
     },
     {
         "name": "channel_list",
-        "description": "Get certificate claim infos for channels that can be published to",
+        "description": "List my channel claims.",
         "arguments": [
             {
                 "name": "account_id",
@@ -577,130 +767,151 @@
                 "is_required": false
             }
         ],
-        "returns": "(list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim\n    is in the wallet.",
-        "examples": []
+        "returns": "            {\n                \"page\": \"Page number of the current items.\",\n                \"page_size\": \"Number of items to show on a page.\",\n                \"total_pages\": \"Total number of pages.\",\n                \"items\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ]\n            }",
+        "examples": [
+            {
+                "title": "List all your channel claims.",
+                "curl": "curl -d'{\"method\": \"channel_list\", \"params\": {}}' http://localhost:5279/",
+                "lbrynet": "lbrynet channel list",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_list\", \"params\": {}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": [\n    {\n      \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n      \"amount\": \"1.0\",\n      \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n      \"confirmations\": 3,\n      \"height\": 208,\n      \"is_change\": false,\n      \"is_mine\": true,\n      \"name\": \"@channel\",\n      \"nout\": 0,\n      \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n      \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\",\n      \"type\": \"update\",\n      \"value\": {\n        \"channel\": {\n          \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\",\n          \"title\": \"New Channel\"\n        }\n      }\n    }\n  ]\n}"
+            },
+            {
+                "title": "Paginate your channel claims.",
+                "curl": "curl -d'{\"method\": \"channel_list\", \"params\": {\"page\": 1, \"page_size\": 20}}' http://localhost:5279/",
+                "lbrynet": "lbrynet channel list --page=1 --page_size=20",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_list\", \"params\": {\"page\": 1, \"page_size\": 20}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"items\": [\n      {\n        \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"confirmations\": 3,\n        \"height\": 208,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"@channel\",\n        \"nout\": 0,\n        \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\",\n        \"type\": \"update\",\n        \"value\": {\n          \"channel\": {\n            \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\",\n            \"title\": \"New Channel\"\n          }\n        }\n      }\n    ],\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total_pages\": 1\n  }\n}"
+            }
+        ]
     },
     {
-        "name": "channel_new",
-        "description": "Generate a publisher key and create a new '@' prefixed certificate claim",
+        "name": "channel_update",
+        "description": "Update an existing channel claim.",
         "arguments": [
             {
-                "name": "channel_name",
+                "name": "claim_id",
                 "type": "str",
-                "description": "name of the channel prefixed with '@'",
+                "description": "claim_id of the channel to update",
                 "is_required": true
             },
             {
-                "name": "amount",
+                "name": "bid",
                 "type": "decimal",
-                "description": "bid amount on the channel",
-                "is_required": true
+                "description": "amount to back the claim",
+                "is_required": false
+            },
+            {
+                "name": "title",
+                "type": "str",
+                "description": "title of the publication",
+                "is_required": false
+            },
+            {
+                "name": "description",
+                "type": "str",
+                "description": "description of the publication",
+                "is_required": false
+            },
+            {
+                "name": "clear_tags",
+                "type": "bool",
+                "description": "clear existing tags (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "tags",
+                "type": "list",
+                "description": "add content tags",
+                "is_required": false
+            },
+            {
+                "name": "clear_languages",
+                "type": "bool",
+                "description": "clear existing languages (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "languages",
+                "type": "list",
+                "description": "languages used by the channel, using RFC 5646 format, eg: for English `--languages=en` for Spanish (Spain) `--languages=es-ES` for Spanish (Mexican) `--languages=es-MX` for Chinese (Simplified) `--languages=zh-Hans` for Chinese (Traditional) `--languages=zh-Hant`",
+                "is_required": false
+            },
+            {
+                "name": "clear_locations",
+                "type": "bool",
+                "description": "clear existing locations (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "locations",
+                "type": "list",
+                "description": "locations of the channel, consisting of 2 letter `country` code and a `state`, `city` and a postal `code` along with a `latitude` and `longitude`. for JSON RPC: pass a dictionary with aforementioned attributes as keys, eg: ... \"locations\": [{'country': 'US', 'state': 'NH'}] ... for command line: pass a colon delimited list with values in the following order: \"COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE\" making sure to include colon for blank values, for example to provide only the city: ... --locations=\"::Manchester\" with all values set: ... --locations=\"US:NH:Manchester:03101:42.990605:-71.460989\" optionally, you can just pass the \"LATITUDE:LONGITUDE\": ... --locations=\"42.990605:-71.460989\" finally, you can also pass JSON string of dictionary on the command line as you would via JSON RPC ... --locations=\"{'country': 'US', 'state': 'NH'}\"",
+                "is_required": false
+            },
+            {
+                "name": "contact_email",
+                "type": "str",
+                "description": "email of channel owner",
+                "is_required": false
+            },
+            {
+                "name": "homepage_url",
+                "type": "str",
+                "description": "homepage url",
+                "is_required": false
+            },
+            {
+                "name": "thumbnail_url",
+                "type": "str",
+                "description": "thumbnail url",
+                "is_required": false
+            },
+            {
+                "name": "cover_url",
+                "type": "str",
+                "description": "url of cover image",
+                "is_required": false
             },
             {
                 "name": "account_id",
                 "type": "str",
                 "description": "id of the account to store channel",
                 "is_required": false
-            }
-        ],
-        "returns": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (float) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }",
-        "examples": []
-    },
-    {
-        "name": "claim_abandon",
-        "description": "Abandon a name and reclaim credits from the claim",
-        "arguments": [
+            },
             {
-                "name": "claim_id",
+                "name": "claim_address",
                 "type": "str",
-                "description": "claim_id of the claim to abandon",
+                "description": "address where the channel is sent",
                 "is_required": false
             },
             {
-                "name": "txid",
-                "type": "str",
-                "description": "txid of the claim to abandon",
-                "is_required": false
-            },
-            {
-                "name": "nout",
-                "type": "int",
-                "description": "nout of the claim to abandon",
-                "is_required": false
-            },
-            {
-                "name": "account_id",
-                "type": "str",
-                "description": "id of the account to use",
-                "is_required": false
-            },
-            {
-                "name": "blocking",
+                "name": "new_signing_key",
                 "type": "bool",
-                "description": "wait until abandon is in mempool",
+                "description": "generate a new signing key, will invalidate all previous publishes",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
                 "is_required": false
             }
         ],
-        "returns": "(dict) Dictionary containing result of the claim\n    {\n        success: (bool) True if txn is successful\n        txid : (str) txid of resulting transaction\n    }",
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
         "examples": [
             {
-                "title": "Abandon a published file.",
-                "curl": "curl -d'{\"method\": \"claim_abandon\", \"params\": {\"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\", \"blocking\": false}}' http://localhost:5279/",
-                "lbrynet": "lbrynet claim abandon 434a7beefbbcdda93fd385c787f717fd8a9b4586",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_abandon\", \"params\": {\"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\", \"blocking\": false}}).json()",
-                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"success\": true,\n    \"tx\": {\n      \"height\": -2,\n      \"hex\": \"010000000167d12f14d9dad5898cde562706ccc385b8b4fd3121e668e888694b0aed5829d3000000006a47304402206d2fcee353267584698ae14aea7ddc37ae5c76de1b4b2f127915890ca3ce1a9f022078c360472e1562cdd84912ee29e20a51f8833932d0a723dececf1e3c64bb25f50121029497c359b1aed344e09e9ba769f0fd56a0c8b799e476e01256b7cc5fcb031f92ffffffff0134b7f505000000001976a9146f96072dc6d71f34c4222c7cdfcaeb0b61cee77c88ac00000000\",\n      \"inputs\": [\n        {\n          \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n          \"amount\": \"1.0\",\n          \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"confirmations\": 1,\n          \"height\": 207,\n          \"is_change\": false,\n          \"is_mine\": true,\n          \"name\": \"aname\",\n          \"nout\": 0,\n          \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n          \"type\": \"claim\",\n          \"value\": {\n            \"claimType\": \"streamType\",\n            \"stream\": {\n              \"metadata\": {\n                \"author\": \"\",\n                \"description\": \"\",\n                \"language\": \"UNKNOWN_LANGUAGE\",\n                \"license\": \"\",\n                \"licenseUrl\": \"\",\n                \"nsfw\": false,\n                \"preview\": \"\",\n                \"thumbnail\": \"\",\n                \"title\": \"\",\n                \"version\": \"_0_1_0\"\n              },\n              \"source\": {\n                \"contentType\": \"application/octet-stream\",\n                \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n                \"sourceType\": \"lbry_sd_hash\",\n                \"version\": \"_0_0_1\"\n              },\n              \"version\": \"_0_0_1\"\n            },\n            \"version\": \"_0_0_1\"\n          }\n        }\n      ],\n      \"outputs\": [\n        {\n          \"address\": \"mqgy2UhKgRRnEZNGBPPoqwHPbpPubDYx2t\",\n          \"amount\": \"0.999893\",\n          \"confirmations\": -2,\n          \"height\": -2,\n          \"nout\": 0,\n          \"txid\": \"6dc508ed13b1e7dc0d823d3875d43a56f858f72a6a2b5ee3f3955ea14cf5aba2\"\n        }\n      ],\n      \"total_fee\": \"0.000107\",\n      \"total_input\": \"1.0\",\n      \"total_output\": \"0.999893\",\n      \"txid\": \"6dc508ed13b1e7dc0d823d3875d43a56f858f72a6a2b5ee3f3955ea14cf5aba2\"\n    }\n  }\n}"
+                "title": "Update a channel claim.",
+                "curl": "curl -d'{\"method\": \"channel_update\", \"params\": {\"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\", \"title\": \"New Channel\", \"tags\": [], \"clear_tags\": false, \"languages\": [], \"clear_languages\": false, \"locations\": [], \"clear_locations\": false, \"new_signing_key\": false, \"preview\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet channel update 4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca --title=\"New Channel\"",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"channel_update\", \"params\": {\"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\", \"title\": \"New Channel\", \"tags\": [], \"clear_tags\": false, \"languages\": [], \"clear_languages\": false, \"locations\": [], \"clear_locations\": false, \"new_signing_key\": false, \"preview\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"height\": -2,\n    \"hex\": \"0100000002038332b0790c4be2e4f05a2f0493c22c61099ed476d366958e4d9dda2c5f1785000000006a4730440220138d6a363f747f5b0c681a2a0f3c2b4fb58127abe7f565689a20dd075d78765e022033b007af8690c35709f8fe52fb5c276b49375a67ca997da64856187cd2e9ad3801210329e2491076fee9936796ed96e0c0b1f66f5a9a8055cebdfac3bbc35036069f2effffffff038332b0790c4be2e4f05a2f0493c22c61099ed476d366958e4d9dda2c5f1785010000006b483045022100d095c03ff65fe9ab282553a54a46d7b3051b0050deb74bec731c0ac5df42ad4002207385ec2d2a21a54de7163f069e7a481a3de4038bbb0987a1e2b4fd6f394db63901210252322d9463992edfb8174afbe65d3796e99f85a2717a1d48c5da7472b7f8d840ffffffff0200e1f50500000000a6b708406368616e6e656c14ca24697d111bbff340674d5dbdbfd6f2a8ee164a4c6a0012670a583056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0120b4e6577204368616e6e656c6d6d76a914bae97ac3fa178afbe668e45a2e663e112ba3531488ac52ec8b35000000001976a9141a26538f62e38b72d64de7a85c294d49b6db613988ac00000000\",\n    \"inputs\": [\n      {\n        \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"confirmations\": 1,\n        \"height\": 207,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"@channel\",\n        \"nout\": 0,\n        \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"txid\": \"85175f2cda9d4d8e9566d376d49e09612cc293042f5af0e4e24b0c79b0328303\",\n        \"type\": \"claim\",\n        \"value\": {\n          \"channel\": {\n            \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\",\n            \"title\": \"New Channel\"\n          }\n        }\n      },\n      {\n        \"address\": \"miji34FcSCGLnovtK7FHezB19f1wG9PmGy\",\n        \"amount\": \"8.983893\",\n        \"confirmations\": 1,\n        \"height\": 207,\n        \"is_change\": true,\n        \"is_mine\": true,\n        \"nout\": 1,\n        \"txid\": \"85175f2cda9d4d8e9566d376d49e09612cc293042f5af0e4e24b0c79b0328303\"\n      }\n    ],\n    \"outputs\": [\n      {\n        \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"name\": \"@channel\",\n        \"nout\": 0,\n        \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\",\n        \"type\": \"update\",\n        \"value\": {\n          \"channel\": {\n            \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\",\n            \"title\": \"New Channel\"\n          }\n        }\n      },\n      {\n        \"address\": \"mhuDn1MuVGvtrntW8bJo9UWoKJySqvp755\",\n        \"amount\": \"8.9836245\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"nout\": 1,\n        \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\"\n      }\n    ],\n    \"total_fee\": \"0.0002685\",\n    \"total_input\": \"9.983893\",\n    \"total_output\": \"9.9836245\",\n    \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\"\n  }\n}"
             }
         ]
     },
     {
         "name": "claim_list",
-        "description": "List current claims and information about them for a given name",
-        "arguments": [
-            {
-                "name": "name",
-                "type": "str",
-                "description": "name of the claim to list info about",
-                "is_required": true
-            }
-        ],
-        "returns": "(dict) State of claims assigned for the name\n    {\n        'claims': (list) list of claims for the name\n        [\n            {\n            'amount': (float) amount assigned to the claim\n            'effective_amount': (float) total amount assigned to the claim,\n                                including supports\n            'claim_id': (str) claim ID of the claim\n            'height': (int) height of block containing the claim\n            'txid': (str) txid of the claim\n            'nout': (int) nout of the claim\n            'permanent_url': (str) permanent url of the claim,\n            'supports': (list) a list of supports attached to the claim\n            'value': (str) the value of the claim\n            },\n        ]\n        'supports_without_claims': (list) supports without any claims attached to them\n        'last_takeover_height': (int) the height of last takeover for the name\n    }",
-        "examples": []
-    },
-    {
-        "name": "claim_list_by_channel",
-        "description": "Get paginated claims in a channel specified by a channel uri",
-        "arguments": [
-            {
-                "name": "uri",
-                "type": "str",
-                "description": "uri of the channel",
-                "is_required": true
-            },
-            {
-                "name": "uris",
-                "type": "list",
-                "description": "uris of the channel",
-                "is_required": false
-            },
-            {
-                "name": "page",
-                "type": "int",
-                "description": "which page of results to return where page 1 is the first page, defaults to no pages",
-                "is_required": false
-            },
-            {
-                "name": "page_size",
-                "type": "int",
-                "description": "number of results in a page, default of 10",
-                "is_required": false
-            }
-        ],
-        "returns": "{\n         resolved channel uri: {\n            If there was an error:\n            'error': (str) error message\n\n            'claims_in_channel': the total number of results for the channel,\n\n            If a page of results was requested:\n            'returned_page': page number returned,\n            'claims_in_channel': [\n                {\n                    'absolute_channel_position': (int) claim index number in sorted list of\n                                                 claims which assert to be part of the\n                                                 channel\n                    'address': (str) claim address,\n                    'amount': (float) claim amount,\n                    'effective_amount': (float) claim amount including supports,\n                    'claim_id': (str) claim id,\n                    'claim_sequence': (int) claim sequence number,\n                    'decoded_claim': (bool) whether or not the claim value was decoded,\n                    'height': (int) claim height,\n                    'depth': (int) claim depth,\n                    'has_signature': (bool) included if decoded_claim\n                    'name': (str) claim name,\n                    'supports: (list) list of supports [{'txid': (str) txid,\n                                                         'nout': (int) nout,\n                                                         'amount': (float) amount}],\n                    'txid': (str) claim txid,\n                    'nout': (str) claim nout,\n                    'signature_is_valid': (bool), included if has_signature,\n                    'value': ClaimDict if decoded, otherwise hex string\n                }\n            ],\n        }\n    }",
-        "examples": []
-    },
-    {
-        "name": "claim_list_mine",
-        "description": "List my name claims",
+        "description": "List my stream and channel claims.",
         "arguments": [
             {
                 "name": "account_id",
@@ -721,125 +932,78 @@
                 "is_required": false
             }
         ],
-        "returns": "(list) List of name claims owned by user\n    [\n        {\n            'address': (str) address that owns the claim\n            'amount': (float) amount assigned to the claim\n            'blocks_to_expiration': (int) number of blocks until it expires\n            'category': (str) \"claim\", \"update\" , or \"support\"\n            'claim_id': (str) claim ID of the claim\n            'confirmations': (int) number of blocks of confirmations for the claim\n            'expiration_height': (int) the block height which the claim will expire\n            'expired': (bool) true if expired, false otherwise\n            'height': (int) height of the block containing the claim\n            'is_spent': (bool) true if claim is abandoned, false otherwise\n            'name': (str) name of the claim\n            'permanent_url': (str) permanent url of the claim,\n            'txid': (str) txid of the claim\n            'nout': (int) nout of the claim\n            'value': (str) value of the claim\n        },\n   ]",
+        "returns": "            {\n                \"page\": \"Page number of the current items.\",\n                \"page_size\": \"Number of items to show on a page.\",\n                \"total_pages\": \"Total number of pages.\",\n                \"items\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ]\n            }",
         "examples": [
             {
-                "title": "List your claims.",
-                "curl": "curl -d'{\"method\": \"claim_list_mine\", \"params\": {}}' http://localhost:5279/",
-                "lbrynet": "lbrynet claim list_mine",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_list_mine\", \"params\": {}}).json()",
-                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": [\n    {\n      \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n      \"amount\": \"1.0\",\n      \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"confirmations\": 1,\n      \"height\": 207,\n      \"is_change\": false,\n      \"is_mine\": true,\n      \"name\": \"aname\",\n      \"nout\": 0,\n      \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n      \"type\": \"claim\",\n      \"value\": {\n        \"claimType\": \"streamType\",\n        \"stream\": {\n          \"metadata\": {\n            \"author\": \"\",\n            \"description\": \"\",\n            \"language\": \"UNKNOWN_LANGUAGE\",\n            \"license\": \"\",\n            \"licenseUrl\": \"\",\n            \"nsfw\": false,\n            \"preview\": \"\",\n            \"thumbnail\": \"\",\n            \"title\": \"\",\n            \"version\": \"_0_1_0\"\n          },\n          \"source\": {\n            \"contentType\": \"application/octet-stream\",\n            \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n            \"sourceType\": \"lbry_sd_hash\",\n            \"version\": \"_0_0_1\"\n          },\n          \"version\": \"_0_0_1\"\n        },\n        \"version\": \"_0_0_1\"\n      }\n    }\n  ]\n}"
+                "title": "List all your claims.",
+                "curl": "curl -d'{\"method\": \"claim_list\", \"params\": {}}' http://localhost:5279/",
+                "lbrynet": "lbrynet claim list",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_list\", \"params\": {}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": [\n    {\n      \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n      \"amount\": \"1.0\",\n      \"channel_name\": \"@channel\",\n      \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n      \"confirmations\": 1,\n      \"height\": 210,\n      \"is_change\": false,\n      \"is_mine\": true,\n      \"name\": \"astream\",\n      \"nout\": 0,\n      \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n      \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\",\n      \"type\": \"update\",\n      \"valid_signature\": true,\n      \"value\": {\n        \"stream\": {\n          \"file\": {\n            \"size\": \"11\"\n          },\n          \"media_type\": \"application/octet-stream\",\n          \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n        }\n      }\n    },\n    {\n      \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n      \"amount\": \"1.0\",\n      \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n      \"confirmations\": 3,\n      \"height\": 208,\n      \"is_change\": false,\n      \"is_mine\": true,\n      \"name\": \"@channel\",\n      \"nout\": 0,\n      \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n      \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\",\n      \"type\": \"update\",\n      \"value\": {\n        \"channel\": {\n          \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\",\n          \"title\": \"New Channel\"\n        }\n      }\n    }\n  ]\n}"
+            },
+            {
+                "title": "Paginate your claims.",
+                "curl": "curl -d'{\"method\": \"claim_list\", \"params\": {\"page\": 1, \"page_size\": 20}}' http://localhost:5279/",
+                "lbrynet": "lbrynet claim list --page=1 --page_size=20",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"claim_list\", \"params\": {\"page\": 1, \"page_size\": 20}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"items\": [\n      {\n        \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n        \"amount\": \"1.0\",\n        \"channel_name\": \"@channel\",\n        \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"confirmations\": 1,\n        \"height\": 210,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"astream\",\n        \"nout\": 0,\n        \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\",\n        \"type\": \"update\",\n        \"valid_signature\": true,\n        \"value\": {\n          \"stream\": {\n            \"file\": {\n              \"size\": \"11\"\n            },\n            \"media_type\": \"application/octet-stream\",\n            \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n          }\n        }\n      },\n      {\n        \"address\": \"mxZFgBHkn6RJZiWqq6UQ8USJp6BSVHYeBf\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"confirmations\": 3,\n        \"height\": 208,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"@channel\",\n        \"nout\": 0,\n        \"permanent_url\": \"@channel#4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\",\n        \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\",\n        \"type\": \"update\",\n        \"value\": {\n          \"channel\": {\n            \"public_key\": \"3056301006072a8648ce3d020106052b8104000a03420004885fa84952f41c19546a2f3f1a1a7cda0148c5bed6710e688c526f60692f3749753855f8d035ebb2a215df1a34982391f1987b7ad21e26132050ae791bb4aaa0\",\n            \"title\": \"New Channel\"\n          }\n        }\n      }\n    ],\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total_pages\": 1\n  }\n}"
             }
         ]
     },
     {
-        "name": "claim_new_support",
-        "description": "Support a name claim",
+        "name": "claim_search",
+        "description": "Search for stream and channel claims on the blockchain.\n\nUse --channel_id=<channel_id> to list all stream claims in a channel.",
         "arguments": [
             {
                 "name": "name",
                 "type": "str",
-                "description": "name of the claim to support",
-                "is_required": true
+                "description": "find claims with this name",
+                "is_required": false
             },
             {
                 "name": "claim_id",
                 "type": "str",
-                "description": "claim_id of the claim to support",
-                "is_required": true
-            },
-            {
-                "name": "amount",
-                "type": "decimal",
-                "description": "amount of support",
-                "is_required": true
-            },
-            {
-                "name": "account_id",
-                "type": "str",
-                "description": "id of the account to use",
+                "description": "find a claim with this claim_id",
                 "is_required": false
-            }
-        ],
-        "returns": "(dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }",
-        "examples": []
-    },
-    {
-        "name": "claim_send_to_address",
-        "description": "Send a name claim to an address",
-        "arguments": [
-            {
-                "name": "claim_id",
-                "type": "str",
-                "description": "claim_id to send",
-                "is_required": true
             },
-            {
-                "name": "address",
-                "type": "str",
-                "description": "address to send the claim to",
-                "is_required": true
-            },
-            {
-                "name": "amount",
-                "type": "int",
-                "description": "Amount of credits to claim name for, defaults to the current amount on the claim",
-                "is_required": false
-            }
-        ],
-        "returns": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (float) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }",
-        "examples": []
-    },
-    {
-        "name": "claim_show",
-        "description": "Resolve claim info from txid/nout or with claim ID",
-        "arguments": [
             {
                 "name": "txid",
                 "type": "str",
-                "description": "look for claim with this txid, nout must also be specified",
+                "description": "find a claim with this txid:nout",
                 "is_required": false
             },
             {
                 "name": "nout",
+                "type": "str",
+                "description": "find a claim with this txid:nout",
+                "is_required": false
+            },
+            {
+                "name": "channel_id",
+                "type": "str",
+                "description": "limit search to specific channel claim id (returns stream claims)",
+                "is_required": false
+            },
+            {
+                "name": "winning",
+                "type": "bool",
+                "description": "limit to winning claims",
+                "is_required": false
+            },
+            {
+                "name": "page",
                 "type": "int",
-                "description": "look for claim with this nout, txid must also be specified",
+                "description": "page to return during paginating",
                 "is_required": false
             },
             {
-                "name": "claim_id",
-                "type": "str",
-                "description": "look for claim with this claim id",
-                "is_required": false
-            }
-        ],
-        "returns": "(dict) Dictionary containing claim info as below,\n\n    {\n        'txid': (str) txid of claim\n        'nout': (int) nout of claim\n        'amount': (float) amount of claim\n        'value': (str) value of claim\n        'height' : (int) height of claim takeover\n        'claim_id': (str) claim ID of claim\n        'supports': (list) list of supports associated with claim\n    }\n\n    if claim cannot be resolved, dictionary as below will be returned\n\n    {\n        'error': (str) reason for error\n    }",
-        "examples": []
-    },
-    {
-        "name": "claim_tip",
-        "description": "Tip the owner of the claim",
-        "arguments": [
-            {
-                "name": "claim_id",
-                "type": "str",
-                "description": "claim_id of the claim to support",
-                "is_required": true
-            },
-            {
-                "name": "amount",
-                "type": "decimal",
-                "description": "amount of support",
-                "is_required": true
-            },
-            {
-                "name": "account_id",
-                "type": "str",
-                "description": "id of the account to use",
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
                 "is_required": false
             }
         ],
-        "returns": "(dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }",
+        "returns": "            {\n                \"page\": \"Page number of the current items.\",\n                \"page_size\": \"Number of items to show on a page.\",\n                \"total_pages\": \"Total number of pages.\",\n                \"items\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ]\n            }",
         "examples": []
     },
     {
@@ -1017,7 +1181,7 @@
                 "is_required": false
             }
         ],
-        "returns": "(list) List of files\n\n    [\n        {\n            'completed': (bool) true if download is completed,\n            'file_name': (str) name of file,\n            'download_directory': (str) download directory,\n            'points_paid': (float) credit paid to download file,\n            'stopped': (bool) true if download is stopped,\n            'stream_hash': (str) stream hash of file,\n            'stream_name': (str) stream name ,\n            'suggested_file_name': (str) suggested file name,\n            'sd_hash': (str) sd hash of file,\n            'download_path': (str) download path of file,\n            'mime_type': (str) mime type of file,\n            'key': (str) key attached to file,\n            'total_bytes_lower_bound': (int) lower bound file size in bytes,\n            'total_bytes': (int) file upper bound size in bytes,\n            'written_bytes': (int) written size in bytes,\n            'blobs_completed': (int) number of fully downloaded blobs,\n            'blobs_in_stream': (int) total blobs on stream,\n            'blobs_remaining': (int) total blobs remaining to download,\n            'status': (str) downloader status\n            'claim_id': (str) None if claim is not found else the claim id,\n            'txid': (str) None if claim is not found else the transaction id,\n            'nout': (int) None if claim is not found else the transaction output index,\n            'outpoint': (str) None if claim is not found else the tx and output,\n            'metadata': (dict) None if claim is not found else the claim metadata,\n            'channel_claim_id': (str) None if claim is not found or not signed,\n            'channel_name': (str) None if claim is not found or not signed,\n            'claim_name': (str) None if claim is not found else the claim name\n        },\n    ]\n}",
+        "returns": "            [\n                {\n                    \"completed\": \"(bool) true if download is completed\",\n                    \"file_name\": \"(str) name of file\",\n                    \"download_directory\": \"(str) download directory\",\n                    \"points_paid\": \"(float) credit paid to download file\",\n                    \"stopped\": \"(bool) true if download is stopped\",\n                    \"stream_hash\": \"(str) stream hash of file\",\n                    \"stream_name\": \"(str) stream name\",\n                    \"suggested_file_name\": \"(str) suggested file name\",\n                    \"sd_hash\": \"(str) sd hash of file\",\n                    \"download_path\": \"(str) download path of file\",\n                    \"mime_type\": \"(str) mime type of file\",\n                    \"key\": \"(str) key attached to file\",\n                    \"total_bytes_lower_bound\": \"(int) lower bound file size in bytes\",\n                    \"total_bytes\": \"(int) file upper bound size in bytes\",\n                    \"written_bytes\": \"(int) written size in bytes\",\n                    \"blobs_completed\": \"(int) number of fully downloaded blobs\",\n                    \"blobs_in_stream\": \"(int) total blobs on stream\",\n                    \"blobs_remaining\": \"(int) total blobs remaining to download\",\n                    \"status\": \"(str) downloader status\",\n                    \"claim_id\": \"(str) None if claim is not found else the claim id\",\n                    \"txid\": \"(str) None if claim is not found else the transaction id\",\n                    \"nout\": \"(int) None if claim is not found else the transaction output index\",\n                    \"outpoint\": \"(str) None if claim is not found else the tx and output\",\n                    \"metadata\": \"(dict) None if claim is not found else the claim metadata\",\n                    \"channel_claim_id\": \"(str) None if claim is not found or not signed\",\n                    \"channel_name\": \"(str) None if claim is not found or not signed\",\n                    \"claim_name\": \"(str) None if claim is not found else the claim name\"\n                }\n            ]",
         "examples": []
     },
     {
@@ -1151,7 +1315,7 @@
     },
     {
         "name": "publish",
-        "description": "Make a new name claim and publish associated data to lbrynet,\nupdate over existing claim if user already has a claim for name.\n\nFields required in the final Metadata are:\n    'title'\n    'description'\n    'author'\n    'language'\n    'license'\n    'nsfw'\n\nMetadata can be set by either using the metadata argument or by setting individual arguments\nfee, title, description, author, language, license, license_url, thumbnail, preview, nsfw,\nor sources. Individual arguments will overwrite the fields specified in metadata argument.",
+        "description": "Create or update a stream claim at a given name (use 'stream create/update' for more control).",
         "arguments": [
             {
                 "name": "name",
@@ -1163,24 +1327,36 @@
                 "name": "bid",
                 "type": "decimal",
                 "description": "amount to back the claim",
-                "is_required": true
-            },
-            {
-                "name": "metadata",
-                "type": "dict",
-                "description": "ClaimDict to associate with the claim.",
                 "is_required": false
             },
             {
                 "name": "file_path",
                 "type": "str",
-                "description": "path to file to be associated with name. If provided, a lbry stream of this file will be used in 'sources'. If no path is given but a sources dict is provided, it will be used. If neither are provided, an error is raised.",
+                "description": "path to file to be associated with name.",
                 "is_required": false
             },
             {
-                "name": "fee",
-                "type": "dict",
-                "description": "Dictionary representing key fee to download content: { 'currency': currency_symbol, 'amount': decimal, 'address': str, optional } supported currencies: LBC, USD, BTC If an address is not provided a new one will be automatically generated. Default fee is zero.",
+                "name": "stream_type",
+                "type": "str",
+                "description": "type of stream",
+                "is_required": false
+            },
+            {
+                "name": "fee_currency",
+                "type": "string",
+                "description": "specify fee currency",
+                "is_required": false
+            },
+            {
+                "name": "fee_amount",
+                "type": "decimal",
+                "description": "content download fee",
+                "is_required": false
+            },
+            {
+                "name": "fee_address",
+                "type": "str",
+                "description": "address where to send fee payments, will use value from --claim_address if not provided",
                 "is_required": false
             },
             {
@@ -1202,9 +1378,39 @@
                 "is_required": false
             },
             {
-                "name": "language",
-                "type": "str",
-                "description": "language of the publication",
+                "name": "clear_tags",
+                "type": "bool",
+                "description": "clear existing tags (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "tags",
+                "type": "list",
+                "description": "add content tags",
+                "is_required": false
+            },
+            {
+                "name": "clear_languages",
+                "type": "bool",
+                "description": "clear existing languages (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "languages",
+                "type": "list",
+                "description": "languages used by the channel, using RFC 5646 format, eg: for English `--languages=en` for Spanish (Spain) `--languages=es-ES` for Spanish (Mexican) `--languages=es-MX` for Chinese (Simplified) `--languages=zh-Hans` for Chinese (Traditional) `--languages=zh-Hant`",
+                "is_required": false
+            },
+            {
+                "name": "clear_locations",
+                "type": "bool",
+                "description": "clear existing locations (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "locations",
+                "type": "list",
+                "description": "locations relevant to the stream, consisting of 2 letter `country` code and a `state`, `city` and a postal `code` along with a `latitude` and `longitude`. for JSON RPC: pass a dictionary with aforementioned attributes as keys, eg: ... \"locations\": [{'country': 'US', 'state': 'NH'}] ... for command line: pass a colon delimited list with values in the following order: \"COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE\" making sure to include colon for blank values, for example to provide only the city: ... --locations=\"::Manchester\" with all values set: ... --locations=\"US:NH:Manchester:03101:42.990605:-71.460989\" optionally, you can just pass the \"LATITUDE:LONGITUDE\": ... --locations=\"42.990605:-71.460989\" finally, you can also pass JSON string of dictionary on the command line as you would via JSON RPC ... --locations=\"{'country': 'US', 'state': 'NH'}\"",
                 "is_required": false
             },
             {
@@ -1220,33 +1426,69 @@
                 "is_required": false
             },
             {
-                "name": "thumbnail",
+                "name": "thumbnail_url",
                 "type": "str",
                 "description": "thumbnail url",
                 "is_required": false
             },
             {
-                "name": "preview",
-                "type": "str",
-                "description": "preview url",
+                "name": "release_time",
+                "type": "int",
+                "description": "original public release of content, seconds since UNIX epoch",
                 "is_required": false
             },
             {
-                "name": "nsfw",
-                "type": "bool",
-                "description": "whether the content is nsfw",
+                "name": "duration",
+                "type": "int",
+                "description": "audio/video duration in seconds, an attempt will be made to calculate this automatically if not provided",
                 "is_required": false
             },
             {
-                "name": "channel_name",
-                "type": "str",
-                "description": "name of the publisher channel name in the wallet",
+                "name": "image_width",
+                "type": "int",
+                "description": "image width",
+                "is_required": false
+            },
+            {
+                "name": "image_height",
+                "type": "int",
+                "description": "image height",
+                "is_required": false
+            },
+            {
+                "name": "video_width",
+                "type": "int",
+                "description": "video width",
+                "is_required": false
+            },
+            {
+                "name": "video_height",
+                "type": "int",
+                "description": "video height",
+                "is_required": false
+            },
+            {
+                "name": "video_duration",
+                "type": "int",
+                "description": "video duration in seconds, an attempt will be made to calculate this automatically if not provided",
+                "is_required": false
+            },
+            {
+                "name": "audio_duration",
+                "type": "int",
+                "description": "audio duration in seconds, an attempt will be made to calculate this automatically if not provided",
                 "is_required": false
             },
             {
                 "name": "channel_id",
                 "type": "str",
-                "description": "claim id of the publisher channel, does not check for channel claim being in the wallet. This allows publishing to a channel where only the certificate private key is in the wallet.",
+                "description": "claim id of the publisher channel",
+                "is_required": false
+            },
+            {
+                "name": "channel_name",
+                "type": "str",
+                "description": "name of publisher channel",
                 "is_required": false
             },
             {
@@ -1264,34 +1506,26 @@
             {
                 "name": "claim_address",
                 "type": "str",
-                "description": "address where the claim is sent to, if not specified new address will automatically be created",
+                "description": "address where the claim is sent to, if not specified it will be determined automatically from the account",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
                 "is_required": false
             }
         ],
-        "returns": "(dict) Dictionary containing result of the claim\n    {\n        'tx' : (str) hex encoded transaction\n        'txid' : (str) txid of resulting claim\n        'nout' : (int) nout of the resulting claim\n        'fee' : (decimal) fee paid for the claim transaction\n        'claim_id' : (str) claim ID of the resulting claim\n    }",
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
         "examples": [
             {
                 "title": "Publish a file.",
-                "curl": "curl -d'{\"method\": \"publish\", \"params\": {\"name\": \"aname\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpwq4kj5mj\", \"channel_account_id\": []}}' http://localhost:5279/",
-                "lbrynet": "lbrynet publish aname 1.0 --file_path=/tmp/tmpwq4kj5mj",
-                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"publish\", \"params\": {\"name\": \"aname\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpwq4kj5mj\", \"channel_account_id\": []}}).json()",
-                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"claim_address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n    \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n    \"output\": {\n      \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n      \"amount\": \"1.0\",\n      \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"confirmations\": -2,\n      \"height\": -2,\n      \"name\": \"aname\",\n      \"nout\": 0,\n      \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n      \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n      \"type\": \"claim\",\n      \"value\": {\n        \"claimType\": \"streamType\",\n        \"stream\": {\n          \"metadata\": {\n            \"author\": \"\",\n            \"description\": \"\",\n            \"language\": \"UNKNOWN_LANGUAGE\",\n            \"license\": \"\",\n            \"licenseUrl\": \"\",\n            \"nsfw\": false,\n            \"preview\": \"\",\n            \"thumbnail\": \"\",\n            \"title\": \"\",\n            \"version\": \"_0_1_0\"\n          },\n          \"source\": {\n            \"contentType\": \"application/octet-stream\",\n            \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n            \"sourceType\": \"lbry_sd_hash\",\n            \"version\": \"_0_0_1\"\n          },\n          \"version\": \"_0_0_1\"\n        },\n        \"version\": \"_0_0_1\"\n      }\n    },\n    \"success\": true,\n    \"tx\": {\n      \"height\": -2,\n      \"hex\": \"0100000001f2f08ba213c41435ba862eac0e65101a43cca5ad57a331c5c5f425560c5e6cb6010000006b483045022100b58743ad6cf3778ecccf92fb3644741883c29fd9c1cd2a375d197e0f713311db02206e90f85f2c5c40a167868c5cb37db5427d3019c3fd078dd5bf16d272cc688535012102ca3bb54f0381e34b202c14d109290667120e52713958c0fd2b0a4b196e20d69cffffffff0200e1f5050000000094b505616e616d654c70080110011a6a08011214080410001a0022002a00320038004a0052005a001a50080110011a30f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa3522186170706c69636174696f6e2f6f637465742d73747265616d6d7576a914de1d82a0d9853c286e7615d2e296006c449738b888acf47c9535000000001976a914feda0f2fce4d40679a0d000dfedbf3c8d5447da388ac00000000\",\n      \"inputs\": [\n        {\n          \"address\": \"mtGNuVUELE6JiGzwL4R5K16AkxRYTKAxd9\",\n          \"amount\": \"10.0\",\n          \"confirmations\": 6,\n          \"height\": 201,\n          \"is_change\": false,\n          \"is_mine\": true,\n          \"nout\": 1,\n          \"txid\": \"b66c5e0c5625f4c5c531a357ada5cc431a10650eac2e86ba3514c413a28bf0f2\"\n        }\n      ],\n      \"outputs\": [\n        {\n          \"address\": \"n1mPf3qKQqepGiupMicjbEgaMaijhJa5EA\",\n          \"amount\": \"1.0\",\n          \"claim_id\": \"434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"confirmations\": -2,\n          \"height\": -2,\n          \"name\": \"aname\",\n          \"nout\": 0,\n          \"permanent_url\": \"aname#434a7beefbbcdda93fd385c787f717fd8a9b4586\",\n          \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\",\n          \"type\": \"claim\",\n          \"value\": {\n            \"claimType\": \"streamType\",\n            \"stream\": {\n              \"metadata\": {\n                \"author\": \"\",\n                \"description\": \"\",\n                \"language\": \"UNKNOWN_LANGUAGE\",\n                \"license\": \"\",\n                \"licenseUrl\": \"\",\n                \"nsfw\": false,\n                \"preview\": \"\",\n                \"thumbnail\": \"\",\n                \"title\": \"\",\n                \"version\": \"_0_1_0\"\n              },\n              \"source\": {\n                \"contentType\": \"application/octet-stream\",\n                \"source\": \"f0159ac9ce04486c2ac63f881cf7c1eac6c7cdd02d8b33b4e367d6b7fd4f40ce87b9be90783be9abb0fe104f8483fa35\",\n                \"sourceType\": \"lbry_sd_hash\",\n                \"version\": \"_0_0_1\"\n              },\n              \"version\": \"_0_0_1\"\n            },\n            \"version\": \"_0_0_1\"\n          }\n        },\n        {\n          \"address\": \"n4kV9oinBqCu8JVea4JrFDKdcFzojcqrXD\",\n          \"amount\": \"8.989893\",\n          \"confirmations\": -2,\n          \"height\": -2,\n          \"nout\": 1,\n          \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\"\n        }\n      ],\n      \"total_fee\": \"0.010107\",\n      \"total_input\": \"10.0\",\n      \"total_output\": \"9.989893\",\n      \"txid\": \"d32958ed0a4b6988e868e62131fdb4b885c3cc062756de8c89d5dad9142fd167\"\n    }\n  }\n}"
+                "curl": "curl -d'{\"method\": \"publish\", \"params\": {\"name\": \"a-new-stream\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpqaqmfma7\", \"tags\": [], \"clear_tags\": false, \"languages\": [], \"clear_languages\": false, \"locations\": [], \"clear_locations\": false, \"channel_account_id\": [], \"preview\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet publish a-new-stream --bid=1.0 --file_path=/tmp/tmpqaqmfma7",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"publish\", \"params\": {\"name\": \"a-new-stream\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpqaqmfma7\", \"tags\": [], \"clear_tags\": false, \"languages\": [], \"clear_languages\": false, \"locations\": [], \"clear_locations\": false, \"channel_account_id\": [], \"preview\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"height\": -2,\n    \"hex\": \"0100000001ab9e30b7ea08d9f163ef5455eca8ba59dc563788bf4a0fe4f23b38f683be890a010000006b483045022100efbf985a6cfa258d49ab657ea79b7e4685e1676a29012ee1fd990e8ea88835c50220766d0281301bfd21ce3d4ac8ca12864741d8855fa602eb779ad50e0d1ce8cda4012103fdec70ea82c7cefd3c6d4fe9753f389da3fa4c97bedd6edf1d84ae45fc1c18bcffffffff0200e1f505000000007eb50c612d6e65772d73747265616d4c53000a500a307b38925d55d2886f0ab5544cf79fc303f2849133d89743cd5519afce7e96d9c98301edbcc67dc7fc761402d62b5946986a186170706c69636174696f6e2f6f637465742d73747265616d7202100b6d7576a9142c1c1ca4bfd5901dbefeb0bff8a4ff5a25e8482988ac60666529000000001976a914cd9549eaa2ef51559108ac9d5cfaf934796f940588ac00000000\",\n    \"inputs\": [\n      {\n        \"address\": \"n2mXrUnikFTVYwAqQHKWFG4XjVMgGLqfM3\",\n        \"amount\": \"7.969219\",\n        \"confirmations\": 3,\n        \"height\": 210,\n        \"is_change\": true,\n        \"is_mine\": true,\n        \"nout\": 1,\n        \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\"\n      }\n    ],\n    \"outputs\": [\n      {\n        \"address\": \"mjYBhk3Av25ewuBy4mLFzABP5paicSbt2g\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"2dfb6c2602b790b9cc25d30b7e264fc1d5f5d081\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"name\": \"a-new-stream\",\n        \"nout\": 0,\n        \"permanent_url\": \"a-new-stream#2dfb6c2602b790b9cc25d30b7e264fc1d5f5d081\",\n        \"txid\": \"14a821ce9071d0e854214e0c41b3639520184881152faf62db3595ad80bc48e5\",\n        \"type\": \"claim\",\n        \"value\": {\n          \"stream\": {\n            \"file\": {\n              \"size\": \"11\"\n            },\n            \"media_type\": \"application/octet-stream\",\n            \"sd_hash\": \"7b38925d55d2886f0ab5544cf79fc303f2849133d89743cd5519afce7e96d9c98301edbcc67dc7fc761402d62b594698\"\n          }\n        }\n      },\n      {\n        \"address\": \"mzFyf9DgTUvLJ7qEEYdvF5cDWkc8s5jg5q\",\n        \"amount\": \"6.945112\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"nout\": 1,\n        \"txid\": \"14a821ce9071d0e854214e0c41b3639520184881152faf62db3595ad80bc48e5\"\n      }\n    ],\n    \"total_fee\": \"0.024107\",\n    \"total_input\": \"7.969219\",\n    \"total_output\": \"7.945112\",\n    \"txid\": \"14a821ce9071d0e854214e0c41b3639520184881152faf62db3595ad80bc48e5\"\n  }\n}"
             }
         ]
-    },
-    {
-        "name": "report_bug",
-        "description": "Report a bug to slack",
-        "arguments": [
-            {
-                "name": "message",
-                "type": "str",
-                "description": "Description of the bug",
-                "is_required": true
-            }
-        ],
-        "returns": "(bool) true if successful",
-        "examples": []
     },
     {
         "name": "resolve",
@@ -1304,7 +1538,7 @@
                 "is_required": false
             }
         ],
-        "returns": "Dictionary of results, keyed by url\n    '<url>': {\n            If a resolution error occurs:\n            'error': Error message\n\n            If the url resolves to a channel or a claim in a channel:\n            'certificate': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the certificate claim,\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}],\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n\n            If the url resolves to a channel:\n            'claims_in_channel': (int) number of claims in the channel,\n\n            If the url resolves to a claim:\n            'claim': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number,\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the claim,\n                'channel_name': (str) channel name if claim is in a channel\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}]\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n    }",
+        "returns": "Dictionary of results, keyed by url\n    '<url>': {\n            If a resolution error occurs:\n            'error': Error message\n\n            If the url resolves to a channel or a claim in a channel:\n            'certificate': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number (or -1 if unknown),\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the certificate claim,\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}],\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n\n            If the url resolves to a channel:\n            'claims_in_channel': (int) number of claims in the channel,\n\n            If the url resolves to a claim:\n            'claim': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number (or -1 if unknown),\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the claim,\n                'channel_name': (str) channel name if claim is in a channel\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}]\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n    }",
         "examples": []
     },
     {
@@ -1343,6 +1577,58 @@
         "examples": []
     },
     {
+        "name": "stream_abandon",
+        "description": "Abandon one of my stream claims.",
+        "arguments": [
+            {
+                "name": "claim_id",
+                "type": "str",
+                "description": "claim_id of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "txid",
+                "type": "str",
+                "description": "txid of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "nout",
+                "type": "int",
+                "description": "nout of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to use",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
+                "is_required": false
+            },
+            {
+                "name": "blocking",
+                "type": "bool",
+                "description": "wait until abandon is in mempool",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
+        "examples": [
+            {
+                "title": "Abandon a stream claim.",
+                "curl": "curl -d'{\"method\": \"stream_abandon\", \"params\": {\"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\", \"preview\": false, \"blocking\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet stream abandon 23d67f3b1fdb3c7eb1649db09f02165a2be5440f",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stream_abandon\", \"params\": {\"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\", \"preview\": false, \"blocking\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"height\": -2,\n    \"hex\": \"0100000001ab9e30b7ea08d9f163ef5455eca8ba59dc563788bf4a0fe4f23b38f683be890a000000006a473044022060fb7367dab92a28368ea677a2f9b91ac2f1af1c43efc0c9c51891c3673c01a502200950a5b4e178ea4f4591158d2cff984ee021c92ff6f1533503aaf656ad2c5537012103bd2ca037d6553e04cc11b075727d519aabb63156e3cfe408fccaed0613ccb236ffffffff0134b7f505000000001976a914388a6a8dcd7a1ecfe1b3401a410c9c539fbbee2f88ac00000000\",\n    \"inputs\": [\n      {\n        \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"confirmations\": 1,\n        \"height\": 210,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"astream\",\n        \"nout\": 0,\n        \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\",\n        \"type\": \"update\",\n        \"valid_signature\": null,\n        \"value\": {\n          \"stream\": {\n            \"file\": {\n              \"size\": \"11\"\n            },\n            \"media_type\": \"application/octet-stream\",\n            \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n          }\n        }\n      }\n    ],\n    \"outputs\": [\n      {\n        \"address\": \"mkfux8BAHKFVnDhDEi4FJCwafb2r7B1qbp\",\n        \"amount\": \"0.999893\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"nout\": 0,\n        \"txid\": \"cdfa39b01b02fced4ccd160862b96f4b760b060e56e7be67b48b7c2fadeb9cbb\"\n      }\n    ],\n    \"total_fee\": \"0.000107\",\n    \"total_input\": \"1.0\",\n    \"total_output\": \"0.999893\",\n    \"txid\": \"cdfa39b01b02fced4ccd160862b96f4b760b060e56e7be67b48b7c2fadeb9cbb\"\n  }\n}"
+            }
+        ]
+    },
+    {
         "name": "stream_cost_estimate",
         "description": "Get estimated cost for a lbry stream",
         "arguments": [
@@ -1354,6 +1640,598 @@
             }
         ],
         "returns": "(float) Estimated cost in lbry credits, returns None if uri is not\n        resolvable",
+        "examples": []
+    },
+    {
+        "name": "stream_create",
+        "description": "Make a new stream claim and announce the associated file to lbrynet.",
+        "arguments": [
+            {
+                "name": "name",
+                "type": "str",
+                "description": "name of the content (can only consist of a-z A-Z 0-9 and -(dash))",
+                "is_required": true
+            },
+            {
+                "name": "allow_duplicate_name",
+                "type": "bool",
+                "description": "create new claim even if one already exists with given name. default: false.",
+                "is_required": false
+            },
+            {
+                "name": "bid",
+                "type": "decimal",
+                "description": "amount to back the claim",
+                "is_required": true
+            },
+            {
+                "name": "file_path",
+                "type": "str",
+                "description": "path to file to be associated with name.",
+                "is_required": true
+            },
+            {
+                "name": "stream_type",
+                "type": "str",
+                "description": "type of stream",
+                "is_required": false
+            },
+            {
+                "name": "fee_currency",
+                "type": "string",
+                "description": "specify fee currency",
+                "is_required": false
+            },
+            {
+                "name": "fee_amount",
+                "type": "decimal",
+                "description": "content download fee",
+                "is_required": false
+            },
+            {
+                "name": "fee_address",
+                "type": "str",
+                "description": "address where to send fee payments, will use value from --claim_address if not provided",
+                "is_required": false
+            },
+            {
+                "name": "title",
+                "type": "str",
+                "description": "title of the publication",
+                "is_required": false
+            },
+            {
+                "name": "description",
+                "type": "str",
+                "description": "description of the publication",
+                "is_required": false
+            },
+            {
+                "name": "author",
+                "type": "str",
+                "description": "author of the publication. The usage for this field is not the same as for channels. The author field is used to credit an author who is not the publisher and is not represented by the channel. For example, a pdf file of 'The Odyssey' has an author of 'Homer' but may by published to a channel such as '@classics', or to no channel at all",
+                "is_required": false
+            },
+            {
+                "name": "tags",
+                "type": "list",
+                "description": "add content tags",
+                "is_required": false
+            },
+            {
+                "name": "languages",
+                "type": "list",
+                "description": "languages used by the channel, using RFC 5646 format, eg: for English `--languages=en` for Spanish (Spain) `--languages=es-ES` for Spanish (Mexican) `--languages=es-MX` for Chinese (Simplified) `--languages=zh-Hans` for Chinese (Traditional) `--languages=zh-Hant`",
+                "is_required": false
+            },
+            {
+                "name": "locations",
+                "type": "list",
+                "description": "locations relevant to the stream, consisting of 2 letter `country` code and a `state`, `city` and a postal `code` along with a `latitude` and `longitude`. for JSON RPC: pass a dictionary with aforementioned attributes as keys, eg: ... \"locations\": [{'country': 'US', 'state': 'NH'}] ... for command line: pass a colon delimited list with values in the following order: \"COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE\" making sure to include colon for blank values, for example to provide only the city: ... --locations=\"::Manchester\" with all values set: ... --locations=\"US:NH:Manchester:03101:42.990605:-71.460989\" optionally, you can just pass the \"LATITUDE:LONGITUDE\": ... --locations=\"42.990605:-71.460989\" finally, you can also pass JSON string of dictionary on the command line as you would via JSON RPC ... --locations=\"{'country': 'US', 'state': 'NH'}\"",
+                "is_required": false
+            },
+            {
+                "name": "license",
+                "type": "str",
+                "description": "publication license",
+                "is_required": false
+            },
+            {
+                "name": "license_url",
+                "type": "str",
+                "description": "publication license url",
+                "is_required": false
+            },
+            {
+                "name": "thumbnail_url",
+                "type": "str",
+                "description": "thumbnail url",
+                "is_required": false
+            },
+            {
+                "name": "release_time",
+                "type": "int",
+                "description": "original public release of content, seconds since UNIX epoch",
+                "is_required": false
+            },
+            {
+                "name": "duration",
+                "type": "int",
+                "description": "audio/video duration in seconds, an attempt will be made to calculate this automatically if not provided",
+                "is_required": false
+            },
+            {
+                "name": "image_width",
+                "type": "int",
+                "description": "image width",
+                "is_required": false
+            },
+            {
+                "name": "image_height",
+                "type": "int",
+                "description": "image height",
+                "is_required": false
+            },
+            {
+                "name": "video_width",
+                "type": "int",
+                "description": "video width",
+                "is_required": false
+            },
+            {
+                "name": "video_height",
+                "type": "int",
+                "description": "video height",
+                "is_required": false
+            },
+            {
+                "name": "video_duration",
+                "type": "int",
+                "description": "video duration in seconds, an attempt will be made to calculate this automatically if not provided",
+                "is_required": false
+            },
+            {
+                "name": "audio_duration",
+                "type": "int",
+                "description": "audio duration in seconds, an attempt will be made to calculate this automatically if not provided",
+                "is_required": false
+            },
+            {
+                "name": "channel_id",
+                "type": "str",
+                "description": "claim id of the publisher channel",
+                "is_required": false
+            },
+            {
+                "name": "channel_account_id",
+                "type": "str",
+                "description": "one or more account ids for accounts to look in for channel certificates, defaults to all accounts.",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "account to use for funding the transaction",
+                "is_required": false
+            },
+            {
+                "name": "claim_address",
+                "type": "str",
+                "description": "address where the claim is sent to, if not specified it will be determined automatically from the account",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
+        "examples": [
+            {
+                "title": "Create a stream claim.",
+                "curl": "curl -d'{\"method\": \"stream_create\", \"params\": {\"name\": \"astream\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpn86l47l_\", \"tags\": [], \"languages\": [], \"locations\": [], \"channel_account_id\": [], \"preview\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet stream create astream 1.0 /tmp/tmpn86l47l_",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stream_create\", \"params\": {\"name\": \"astream\", \"bid\": \"1.0\", \"file_path\": \"/tmp/tmpn86l47l_\", \"tags\": [], \"languages\": [], \"locations\": [], \"channel_account_id\": [], \"preview\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"height\": -2,\n    \"hex\": \"0100000001580c84ee9be8da1151ea7ee8af0c031f5b8dd4eee8bd9fa6dc3b8779cdccf183010000006b483045022100d190acebaafb852ce0d31a8f6984e783b279af3950daabe869bd49ee8d91891e02201d4a26eeef99ef66fdbfed51ad5779d10819aefded8c85032585024e7e52e9420121029bb8b59dd4a55236bb6d88c764eecb3f02aec6c53f17a7c26e3dc5cc14e92ff4ffffffff0200e1f5050000000079b5076173747265616d4c53000a500a3070914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b76a186170706c69636174696f6e2f6f637465742d73747265616d7202100b6d7576a9140ebb098fff5ea0d6b33d5dc92fe2397db2a53a7c88acc684802f000000001976a914d4f7c80a9d2a4e92abcf37c3d4faa55bb48056c488ac00000000\",\n    \"inputs\": [\n      {\n        \"address\": \"mhuDn1MuVGvtrntW8bJo9UWoKJySqvp755\",\n        \"amount\": \"8.9836245\",\n        \"confirmations\": 1,\n        \"height\": 208,\n        \"is_change\": true,\n        \"is_mine\": true,\n        \"nout\": 1,\n        \"txid\": \"83f1cccd79873bdca69fbde8eed48d5b1f030cafe87eea5111dae89bee840c58\"\n      }\n    ],\n    \"outputs\": [\n      {\n        \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"name\": \"astream\",\n        \"nout\": 0,\n        \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"txid\": \"05b9cead0bcbae7d485c7c13e8dea561bd7d48e89eefe133df4ad39016f8b9f6\",\n        \"type\": \"claim\",\n        \"value\": {\n          \"stream\": {\n            \"file\": {\n              \"size\": \"11\"\n            },\n            \"media_type\": \"application/octet-stream\",\n            \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n          }\n        }\n      },\n      {\n        \"address\": \"mzw2NsnSHKHobtBR12T7XcUsJAFZ48mVmp\",\n        \"amount\": \"7.9695175\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"nout\": 1,\n        \"txid\": \"05b9cead0bcbae7d485c7c13e8dea561bd7d48e89eefe133df4ad39016f8b9f6\"\n      }\n    ],\n    \"total_fee\": \"0.014107\",\n    \"total_input\": \"8.9836245\",\n    \"total_output\": \"8.9695175\",\n    \"txid\": \"05b9cead0bcbae7d485c7c13e8dea561bd7d48e89eefe133df4ad39016f8b9f6\"\n  }\n}"
+            }
+        ]
+    },
+    {
+        "name": "stream_list",
+        "description": "List my stream claims.",
+        "arguments": [
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to query",
+                "is_required": false
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "description": "page to return during paginating",
+                "is_required": false
+            },
+            {
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"page\": \"Page number of the current items.\",\n                \"page_size\": \"Number of items to show on a page.\",\n                \"total_pages\": \"Total number of pages.\",\n                \"items\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ]\n            }",
+        "examples": [
+            {
+                "title": "List all your stream claims.",
+                "curl": "curl -d'{\"method\": \"stream_list\", \"params\": {}}' http://localhost:5279/",
+                "lbrynet": "lbrynet stream list",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stream_list\", \"params\": {}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": [\n    {\n      \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n      \"amount\": \"1.0\",\n      \"channel_name\": \"@channel\",\n      \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n      \"confirmations\": 1,\n      \"height\": 210,\n      \"is_change\": false,\n      \"is_mine\": true,\n      \"name\": \"astream\",\n      \"nout\": 0,\n      \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n      \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\",\n      \"type\": \"update\",\n      \"valid_signature\": true,\n      \"value\": {\n        \"stream\": {\n          \"file\": {\n            \"size\": \"11\"\n          },\n          \"media_type\": \"application/octet-stream\",\n          \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n        }\n      }\n    }\n  ]\n}"
+            },
+            {
+                "title": "Paginate your stream claims.",
+                "curl": "curl -d'{\"method\": \"stream_list\", \"params\": {\"page\": 1, \"page_size\": 20}}' http://localhost:5279/",
+                "lbrynet": "lbrynet stream list --page=1 --page_size=20",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stream_list\", \"params\": {\"page\": 1, \"page_size\": 20}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"items\": [\n      {\n        \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n        \"amount\": \"1.0\",\n        \"channel_name\": \"@channel\",\n        \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"confirmations\": 1,\n        \"height\": 210,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"astream\",\n        \"nout\": 0,\n        \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\",\n        \"type\": \"update\",\n        \"valid_signature\": true,\n        \"value\": {\n          \"stream\": {\n            \"file\": {\n              \"size\": \"11\"\n            },\n            \"media_type\": \"application/octet-stream\",\n            \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n          }\n        }\n      }\n    ],\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total_pages\": 1\n  }\n}"
+            }
+        ]
+    },
+    {
+        "name": "stream_update",
+        "description": "Update an existing stream claim and if a new file is provided announce it to lbrynet.",
+        "arguments": [
+            {
+                "name": "claim_id",
+                "type": "str",
+                "description": "id of the stream claim to update",
+                "is_required": true
+            },
+            {
+                "name": "bid",
+                "type": "decimal",
+                "description": "amount to back the claim",
+                "is_required": false
+            },
+            {
+                "name": "file_path",
+                "type": "str",
+                "description": "path to file to be associated with name.",
+                "is_required": false
+            },
+            {
+                "name": "fee_currency",
+                "type": "string",
+                "description": "specify fee currency",
+                "is_required": false
+            },
+            {
+                "name": "fee_amount",
+                "type": "decimal",
+                "description": "content download fee",
+                "is_required": false
+            },
+            {
+                "name": "fee_address",
+                "type": "str",
+                "description": "address where to send fee payments, will use value from --claim_address if not provided",
+                "is_required": false
+            },
+            {
+                "name": "title",
+                "type": "str",
+                "description": "title of the publication",
+                "is_required": false
+            },
+            {
+                "name": "description",
+                "type": "str",
+                "description": "description of the publication",
+                "is_required": false
+            },
+            {
+                "name": "author",
+                "type": "str",
+                "description": "author of the publication. The usage for this field is not the same as for channels. The author field is used to credit an author who is not the publisher and is not represented by the channel. For example, a pdf file of 'The Odyssey' has an author of 'Homer' but may by published to a channel such as '@classics', or to no channel at all",
+                "is_required": false
+            },
+            {
+                "name": "clear_tags",
+                "type": "bool",
+                "description": "clear existing tags (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "tags",
+                "type": "list",
+                "description": "add content tags",
+                "is_required": false
+            },
+            {
+                "name": "clear_languages",
+                "type": "bool",
+                "description": "clear existing languages (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "languages",
+                "type": "list",
+                "description": "languages used by the channel, using RFC 5646 format, eg: for English `--languages=en` for Spanish (Spain) `--languages=es-ES` for Spanish (Mexican) `--languages=es-MX` for Chinese (Simplified) `--languages=zh-Hans` for Chinese (Traditional) `--languages=zh-Hant`",
+                "is_required": false
+            },
+            {
+                "name": "clear_locations",
+                "type": "bool",
+                "description": "clear existing locations (prior to adding new ones)",
+                "is_required": false
+            },
+            {
+                "name": "locations",
+                "type": "list",
+                "description": "locations relevant to the stream, consisting of 2 letter `country` code and a `state`, `city` and a postal `code` along with a `latitude` and `longitude`. for JSON RPC: pass a dictionary with aforementioned attributes as keys, eg: ... \"locations\": [{'country': 'US', 'state': 'NH'}] ... for command line: pass a colon delimited list with values in the following order: \"COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE\" making sure to include colon for blank values, for example to provide only the city: ... --locations=\"::Manchester\" with all values set: ... --locations=\"US:NH:Manchester:03101:42.990605:-71.460989\" optionally, you can just pass the \"LATITUDE:LONGITUDE\": ... --locations=\"42.990605:-71.460989\" finally, you can also pass JSON string of dictionary on the command line as you would via JSON RPC ... --locations=\"{'country': 'US', 'state': 'NH'}\"",
+                "is_required": false
+            },
+            {
+                "name": "license",
+                "type": "str",
+                "description": "publication license",
+                "is_required": false
+            },
+            {
+                "name": "license_url",
+                "type": "str",
+                "description": "publication license url",
+                "is_required": false
+            },
+            {
+                "name": "thumbnail_url",
+                "type": "str",
+                "description": "thumbnail url",
+                "is_required": false
+            },
+            {
+                "name": "release_time",
+                "type": "int",
+                "description": "original public release of content, seconds since UNIX epoch",
+                "is_required": false
+            },
+            {
+                "name": "stream_type",
+                "type": "str",
+                "description": "type of stream",
+                "is_required": false
+            },
+            {
+                "name": "image_width",
+                "type": "int",
+                "description": "image width",
+                "is_required": false
+            },
+            {
+                "name": "image_height",
+                "type": "int",
+                "description": "image height",
+                "is_required": false
+            },
+            {
+                "name": "video_width",
+                "type": "int",
+                "description": "video width",
+                "is_required": false
+            },
+            {
+                "name": "video_height",
+                "type": "int",
+                "description": "video height",
+                "is_required": false
+            },
+            {
+                "name": "video_duration",
+                "type": "int",
+                "description": "video duration in seconds, an attempt will be made to calculate this automatically if not provided",
+                "is_required": false
+            },
+            {
+                "name": "audio_duration",
+                "type": "int",
+                "description": "audio duration in seconds, an attempt will be made to calculate this automatically if not provided",
+                "is_required": false
+            },
+            {
+                "name": "channel_id",
+                "type": "str",
+                "description": "claim id of the publisher channel",
+                "is_required": false
+            },
+            {
+                "name": "clear_channel",
+                "type": "bool",
+                "description": "remove channel signature",
+                "is_required": false
+            },
+            {
+                "name": "channel_account_id",
+                "type": "str",
+                "description": "one or more account ids for accounts to look in for channel certificates, defaults to all accounts.",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "account to use for funding the transaction",
+                "is_required": false
+            },
+            {
+                "name": "claim_address",
+                "type": "str",
+                "description": "address where the claim is sent to, if not specified it will be determined automatically from the account",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
+        "examples": [
+            {
+                "title": "Update a stream claim to add channel.",
+                "curl": "curl -d'{\"method\": \"stream_update\", \"params\": {\"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\", \"tags\": [], \"clear_tags\": false, \"languages\": [], \"clear_languages\": false, \"locations\": [], \"clear_locations\": false, \"channel_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\", \"clear_channel\": false, \"channel_account_id\": [], \"preview\": false}}' http://localhost:5279/",
+                "lbrynet": "lbrynet stream update 23d67f3b1fdb3c7eb1649db09f02165a2be5440f --channel_id=4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca",
+                "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"stream_update\", \"params\": {\"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\", \"tags\": [], \"clear_tags\": false, \"languages\": [], \"clear_languages\": false, \"locations\": [], \"clear_locations\": false, \"channel_id\": \"4a16eea8f2d6bfbd5d4d6740f3bf1b117d6924ca\", \"clear_channel\": false, \"channel_account_id\": [], \"preview\": false}}).json()",
+                "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"height\": -2,\n    \"hex\": \"0100000002f6b9f81690d34adf33e1ef9ee8487dbd61a5dee8137c5c487daecb0badceb905000000006b483045022100f051be0f3058a6923f0cd9da14adb5b8cd5761f4b961a3292628d7bc6ff68371022001a803a9531d22376e10c93c582a2f0f236556c50af523a721fe5cb868a59826012103bd2ca037d6553e04cc11b075727d519aabb63156e3cfe408fccaed0613ccb236fffffffff6b9f81690d34adf33e1ef9ee8487dbd61a5dee8137c5c487daecb0badceb905010000006b483045022100f44e5ea01a7c54bc462f7ea8d019a1a32d6b73bc17d3a67642a98edf3daa74e70220036cfc4ac4246dbe7afe955243d074884a7ea29e2bc0da464cea097669102f59012102253ff2c542f3585d423ca1758f580f2bca35c925d8ef73665bb643f53451070affffffff0200e1f50500000000e2b7076173747265616d140f44e52b5a16029fb09d64b17e3cdb1f3b7fd6234ca701ca24697d111bbff340674d5dbdbfd6f2a8ee164a26f9a3b767809abe05a29ce68cc3a085b8df42dcf4b5ced981ccac6377182a2df51ae32887babf97e58f6d796070b122f7b752172a6c8e3e97d011ef6b221fce0a500a3070914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b76a186170706c69636174696f6e2f6f637465742d73747265616d7202100b6d6d76a9140ebb098fff5ea0d6b33d5dc92fe2397db2a53a7c88ac2c10802f000000001976a914e91c7a8709926eaff7a6ff018dfd1582482e778288ac00000000\",\n    \"inputs\": [\n      {\n        \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n        \"amount\": \"1.0\",\n        \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"confirmations\": 1,\n        \"height\": 209,\n        \"is_change\": false,\n        \"is_mine\": true,\n        \"name\": \"astream\",\n        \"nout\": 0,\n        \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"txid\": \"05b9cead0bcbae7d485c7c13e8dea561bd7d48e89eefe133df4ad39016f8b9f6\",\n        \"type\": \"claim\",\n        \"valid_signature\": null,\n        \"value\": {\n          \"stream\": {\n            \"file\": {\n              \"size\": \"11\"\n            },\n            \"media_type\": \"application/octet-stream\",\n            \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n          }\n        }\n      },\n      {\n        \"address\": \"mzw2NsnSHKHobtBR12T7XcUsJAFZ48mVmp\",\n        \"amount\": \"7.9695175\",\n        \"confirmations\": 1,\n        \"height\": 209,\n        \"is_change\": true,\n        \"is_mine\": true,\n        \"nout\": 1,\n        \"txid\": \"05b9cead0bcbae7d485c7c13e8dea561bd7d48e89eefe133df4ad39016f8b9f6\"\n      }\n    ],\n    \"outputs\": [\n      {\n        \"address\": \"mgrqpKg8jCxAGeruF1q9MdyvL9aCCGD1Bh\",\n        \"amount\": \"1.0\",\n        \"channel_name\": \"@channel\",\n        \"claim_id\": \"23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"name\": \"astream\",\n        \"nout\": 0,\n        \"permanent_url\": \"astream#23d67f3b1fdb3c7eb1649db09f02165a2be5440f\",\n        \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\",\n        \"type\": \"update\",\n        \"valid_signature\": true,\n        \"value\": {\n          \"stream\": {\n            \"file\": {\n              \"size\": \"11\"\n            },\n            \"media_type\": \"application/octet-stream\",\n            \"sd_hash\": \"70914f894d32659607844c2ebb7c19f239c9e9e34a760bb910febc85f2f9d49db825954f74ed76de07f929aaf10f00b7\"\n          }\n        }\n      },\n      {\n        \"address\": \"n2mXrUnikFTVYwAqQHKWFG4XjVMgGLqfM3\",\n        \"amount\": \"7.969219\",\n        \"confirmations\": -2,\n        \"height\": -2,\n        \"nout\": 1,\n        \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\"\n      }\n    ],\n    \"total_fee\": \"0.0002985\",\n    \"total_input\": \"8.9695175\",\n    \"total_output\": \"8.969219\",\n    \"txid\": \"0a89be83f6383bf2e40f4abf883756dc59baa8ec5554ef63f1d908eab7309eab\"\n  }\n}"
+            }
+        ]
+    },
+    {
+        "name": "support_abandon",
+        "description": "Abandon supports, including tips, of a specific claim, optionally\nkeeping some amount as supports.",
+        "arguments": [
+            {
+                "name": "claim_id",
+                "type": "str",
+                "description": "claim_id of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "txid",
+                "type": "str",
+                "description": "txid of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "nout",
+                "type": "int",
+                "description": "nout of the claim to abandon",
+                "is_required": false
+            },
+            {
+                "name": "keep",
+                "type": "decimal",
+                "description": "amount of lbc to keep as support",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to use",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
+                "is_required": false
+            },
+            {
+                "name": "blocking",
+                "type": "bool",
+                "description": "wait until abandon is in mempool",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
+        "examples": []
+    },
+    {
+        "name": "support_create",
+        "description": "Create a support or a tip for name claim.",
+        "arguments": [
+            {
+                "name": "claim_id",
+                "type": "str",
+                "description": "claim_id of the claim to support",
+                "is_required": true
+            },
+            {
+                "name": "amount",
+                "type": "decimal",
+                "description": "amount of support",
+                "is_required": true
+            },
+            {
+                "name": "tip",
+                "type": "bool",
+                "description": "send support to claim owner, default: false.",
+                "is_required": false
+            },
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to use",
+                "is_required": false
+            },
+            {
+                "name": "preview",
+                "type": "bool",
+                "description": "do not broadcast the transaction",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
+        "examples": []
+    },
+    {
+        "name": "support_list",
+        "description": "List supports and tips in my control.",
+        "arguments": [
+            {
+                "name": "account_id",
+                "type": "str",
+                "description": "id of the account to query",
+                "is_required": false
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "description": "page to return during paginating",
+                "is_required": false
+            },
+            {
+                "name": "page_size",
+                "type": "int",
+                "description": "number of items on page during pagination",
+                "is_required": false
+            }
+        ],
+        "returns": "            {\n                \"page\": \"Page number of the current items.\",\n                \"page_size\": \"Number of items to show on a page.\",\n                \"total_pages\": \"Total number of pages.\",\n                \"items\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ]\n            }",
+        "examples": []
+    },
+    {
+        "name": "sync_apply",
+        "description": "Apply incoming synchronization data, if provided, and then produce a sync hash and\nan encrypted wallet.",
+        "arguments": [
+            {
+                "name": "password",
+                "type": "str",
+                "description": "password to decrypt incoming and encrypt outgoing data",
+                "is_required": false
+            },
+            {
+                "name": "data",
+                "type": "str",
+                "description": "incoming sync data, if any",
+                "is_required": false
+            },
+            {
+                "name": "encrypt-password",
+                "type": "str",
+                "description": "password to encrypt outgoing data if different from the decrypt password, used during password changes",
+                "is_required": false
+            }
+        ],
+        "returns": "(map) sync hash and data",
+        "examples": []
+    },
+    {
+        "name": "sync_hash",
+        "description": "Deterministic hash of the wallet.",
+        "arguments": [],
+        "returns": "(str) sha256 hash of wallet",
         "examples": []
     },
     {
@@ -1393,7 +2271,7 @@
                 "is_required": true
             }
         ],
-        "returns": "(dict) JSON formatted transaction",
+        "returns": "            {\n                \"txid\": \"hash of transaction in hex\",\n                \"height\": \"block where transaction was recorded\",\n                \"inputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"outputs\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ],\n                \"total_input\": \"sum of inputs as a decimal\",\n                \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n                \"total_fee\": \"fee amount\",\n                \"hex\": \"entire transaction encoded in hex\"\n            }",
         "examples": []
     },
     {
@@ -1419,7 +2297,7 @@
                 "is_required": false
             }
         ],
-        "returns": "(list) List of unspent transaction outputs (UTXOs)\n    [\n        {\n            \"address\": (str) the output address\n            \"amount\": (float) unspent amount\n            \"height\": (int) block height\n            \"is_claim\": (bool) is the tx a claim\n            \"is_coinbase\": (bool) is the tx a coinbase tx\n            \"is_support\": (bool) is the tx a support\n            \"is_update\": (bool) is the tx an update\n            \"nout\": (int) nout of the output\n            \"txid\": (str) txid of the output\n        },\n        ...\n    ]",
+        "returns": "            {\n                \"page\": \"Page number of the current items.\",\n                \"page_size\": \"Number of items to show on a page.\",\n                \"total_pages\": \"Total number of pages.\",\n                \"items\": [\n                    {\n                        \"txid\": \"hash of transaction in hex\",\n                        \"height\": \"block where transaction was recorded\",\n                        \"nout\": \"position in the transaction\",\n                        \"amount\": \"value of the txo as a decimal\",\n                        \"address\": \"address of who can spend the txo\",\n                        \"confirmations\": \"number of confirmed blocks\"\n                    }\n                ]\n            }",
         "examples": []
     },
     {
@@ -1441,38 +2319,6 @@
         "description": "Get lbrynet API server version information",
         "arguments": [],
         "returns": "(dict) Dictionary of lbry version information\n    {\n        'build': (str) build type (e.g. \"dev\", \"rc\", \"release\"),\n        'ip': (str) remote ip, if available,\n        'lbrynet_version': (str) lbrynet_version,\n        'lbryum_version': (str) lbryum_version,\n        'lbryschema_version': (str) lbryschema_version,\n        'os_release': (str) os release string\n        'os_system': (str) os name\n        'platform': (str) platform string\n        'processor': (str) processor type,\n        'python_version': (str) python version,\n    }",
-        "examples": []
-    },
-    {
-        "name": "wallet_send",
-        "description": "Send credits. If given an address, send credits to it. If given a claim id, send a tip\nto the owner of a claim specified by uri. A tip is a claim support where the recipient\nof the support is the claim address for the claim being supported.",
-        "arguments": [
-            {
-                "name": "amount",
-                "type": "decimal",
-                "description": "amount of credit to send",
-                "is_required": true
-            },
-            {
-                "name": "address",
-                "type": "str",
-                "description": "address to send credits to",
-                "is_required": true
-            },
-            {
-                "name": "claim_id",
-                "type": "str",
-                "description": "claim_id of the claim to send to tip to",
-                "is_required": true
-            },
-            {
-                "name": "account_id",
-                "type": "str",
-                "description": "account to fund the transaction",
-                "is_required": false
-            }
-        ],
-        "returns": "If sending to an address:\n    (dict) Dictionary containing the transaction information\n    {\n        \"hex\": (str) raw transaction,\n        \"inputs\": (list) inputs(dict) used for the transaction,\n        \"outputs\": (list) outputs(dict) for the transaction,\n        \"total_fee\": (int) fee in dewies,\n        \"total_input\": (int) total of inputs in dewies,\n        \"total_output\": (int) total of outputs in dewies(input - fees),\n        \"txid\": (str) txid of the transaction,\n    }\n\n    If sending a claim tip:\n    (dict) Dictionary containing the result of the support\n    {\n        txid : (str) txid of resulting support claim\n        nout : (int) nout of the resulting support claim\n        fee : (float) fee paid for the transaction\n    }",
         "examples": []
     }
 ]
