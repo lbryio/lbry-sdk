@@ -35,6 +35,17 @@ jobs:
         - coverage combine tests/
         - bash <(curl -s https://codecov.io/bash)
 
+    - name: "Run Examples"
+      install:
+        - pip install coverage
+        - pip install git+https://github.com/lbryio/torba.git#egg=torba
+        - pip install -e .
+      script:
+        - HOME=/tmp coverage run -p --source=lbrynet scripts/ scripts/generate_json_api.py
+      after_success:
+        - coverage combine
+        - bash <(curl -s https://codecov.io/bash)
+
     - stage: build
       name: "Windows"
       language: generic
