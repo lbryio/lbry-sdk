@@ -45,7 +45,7 @@ class BaseWalletManager:
         ledgers = {}
         for i, account in enumerate(self.accounts):
             details = await account.get_details(**kwargs)
-            details['is_default_account'] = i == 0
+            details['is_default'] = i == 0
             ledger_id = account.ledger.get_id()
             ledgers.setdefault(ledger_id, [])
             ledgers[ledger_id].append(details)

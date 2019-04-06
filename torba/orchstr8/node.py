@@ -263,14 +263,15 @@ class BlockchainNode:
         self.protocol = None
         self.transport = None
         self._block_expected = 0
+        self.hostname = 'localhost'
+        self.peerport = 9246 + 2  # avoid conflict with default peer port
+        self.rpcport = 9245 + 2  # avoid conflict with default rpc port
         self.rpcuser = 'rpcuser'
         self.rpcpassword = 'rpcpassword'
-        self.hostname = 'localhost'
-        self.port = 9245 + 1  # avoid conflict with default daemon
 
     @property
     def rpc_url(self):
-        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.port}/'
+        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.rpcport}/'
 
     def is_expected_block(self, e: BlockHeightEvent):
         return self._block_expected == e.height
@@ -322,9 +323,9 @@ class BlockchainNode:
         asyncio.get_child_watcher().attach_loop(loop)
         command = (
             self.daemon_bin,
-            '-datadir={}'.format(self.data_path),
-            '-printtoconsole', '-regtest', '-server', '-txindex',
-            f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.port}'
+            f'-datadir={self.data_path}', '-printtoconsole', '-regtest', '-server', '-txindex',
+            f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.rpcport}',
+            f'-port={self.peerport}'
         )
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
@@ -346,8 +347,8 @@ class BlockchainNode:
 
     async def _cli_cmnd(self, *args):
         cmnd_args = [
-            self.cli_bin, '-datadir={}'.format(self.data_path), '-regtest',
-            f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.port}'
+            self.cli_bin, f'-datadir={self.data_path}', '-regtest',
+            f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.rpcport}'
         ] + list(args)
         self.log.info(' '.join(cmnd_args))
         loop = asyncio.get_event_loop()
