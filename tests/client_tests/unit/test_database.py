@@ -76,11 +76,17 @@ class TestQueryBuilder(unittest.TestCase):
     def test_in(self):
         self.assertEqual(
             constraints_to_sql({'txo.age__in': [18, 38]}),
-            ('txo.age IN (18, 38)', {})
+            ('txo.age IN (:txo_age__in0, :txo_age__in1)', {
+                'txo_age__in0': 18,
+                'txo_age__in1': 38
+            })
         )
         self.assertEqual(
-            constraints_to_sql({'txo.age__in': ['abc123', 'def456']}),
-            ("txo.age IN ('abc123', 'def456')", {})
+            constraints_to_sql({'txo.name__in': ('abc123', 'def456')}),
+            ('txo.name IN (:txo_name__in0, :txo_name__in1)', {
+                'txo_name__in0': 'abc123',
+                'txo_name__in1': 'def456'
+            })
         )
         self.assertEqual(
             constraints_to_sql({'txo.age__in': 'SELECT age from ages_table'}),
@@ -90,7 +96,17 @@ class TestQueryBuilder(unittest.TestCase):
     def test_not_in(self):
         self.assertEqual(
             constraints_to_sql({'txo.age__not_in': [18, 38]}),
-            ('txo.age NOT IN (18, 38)', {})
+            ('txo.age NOT IN (:txo_age__not_in0, :txo_age__not_in1)', {
+                'txo_age__not_in0': 18,
+                'txo_age__not_in1': 38
+            })
+        )
+        self.assertEqual(
+            constraints_to_sql({'txo.name__not_in': ('abc123', 'def456')}),
+            ('txo.name NOT IN (:txo_name__not_in0, :txo_name__not_in1)', {
+                'txo_name__not_in0': 'abc123',
+                'txo_name__not_in1': 'def456'
+            })
         )
         self.assertEqual(
             constraints_to_sql({'txo.age__not_in': 'SELECT age from ages_table'}),

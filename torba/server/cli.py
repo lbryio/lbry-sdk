@@ -2,8 +2,8 @@ import logging
 import traceback
 import argparse
 import importlib
-from .env import Env
-from .server import Server
+from torba.server.env import Env
+from torba.server.server import Server
 
 
 def get_argument_parser():

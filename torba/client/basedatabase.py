@@ -93,6 +93,14 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
             continue
         elif key.endswith('__not'):
             col, op = col[:-len('__not')], '!='
+        elif key.endswith('__is_null'):
+            col = col[:-len('__is_null')]
+            sql.append(f'{col} IS NULL')
+            continue
+        elif key.endswith('__is_not_null'):
+            col = col[:-len('__is_not_null')]
+            sql.append(f'{col} IS NOT NULL')
+            continue
         elif key.endswith('__lt'):
             col, op = col[:-len('__lt')], '<'
         elif key.endswith('__lte'):
@@ -108,23 +116,24 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
                 col, op = col[:-len('__in')], 'IN'
             else:
                 col, op = col[:-len('__not_in')], 'NOT IN'
-            if isinstance(constraint, (list, set)):
-                items = ', '.join(
-                    "'{}'".format(item) if isinstance(item, str) else str(item)
-                    for item in constraint
-                )
-            elif isinstance(constraint, str):
-                items = constraint
-            else:
-                raise ValueError("{} requires a list, set or string as constraint value.".format(col))
-            sql.append('{} {} ({})'.format(col, op, items))
+            if constraint:
+                if isinstance(constraint, (list, set, tuple)):
+                    keys = []
+                    for i, val in enumerate(constraint):
+                        keys.append(f':{key}{i}')
+                        values[f'{key}{i}'] = val
+                    sql.append(f'{col} {op} ({", ".join(keys)})')
+                elif isinstance(constraint, str):
+                    sql.append(f'{col} {op} ({constraint})')
+                else:
+                    raise ValueError(f"{col} requires a list, set or string as constraint value.")
             continue
         elif key.endswith('__any'):
             where, subvalues = constraints_to_sql(constraint, ' OR ', key+'_')
-            sql.append('({})'.format(where))
+            sql.append(f'({where})')
             values.update(subvalues)
             continue
-        sql.append('{} {} :{}'.format(col, op, prepend_key+key))
+        sql.append(f'{col} {op} :{prepend_key}{key}')
         values[prepend_key+key] = constraint
     return joiner.join(sql) if sql else '', values
 
@@ -382,12 +391,14 @@ class BaseDatabase(SQLiteMixin):
         if not tx_rows:
             return []
 
-        txids, txs = [], []
+        txids, txs, txi_txoids = [], [], []
         for row in tx_rows:
             txids.append(row[0])
             txs.append(self.ledger.transaction_class(
                 raw=row[1], height=row[2], position=row[3], is_verified=bool(row[4])
             ))
+            for txi in txs[-1].inputs:
+                txi_txoids.append(txi.txo_ref.id)
 
         annotated_txos = {
             txo.id: txo for txo in
@@ -401,7 +412,7 @@ class BaseDatabase(SQLiteMixin):
             txo.id: txo for txo in
             (await self.get_txos(
                 my_account=my_account,
-                txoid__in=query("SELECT txoid FROM txi", **{'txid__in': txids})[0]
+                txoid__in=txi_txoids
             ))
         }
 

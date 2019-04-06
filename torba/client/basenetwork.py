@@ -114,32 +114,32 @@ class BaseNetwork:
     def is_connected(self):
         return self.client is not None and not self.client.is_closing()
 
-    def rpc(self, list_or_method, *args):
+    def rpc(self, list_or_method, args):
         if self.is_connected:
             return self.client.send_request(list_or_method, args)
         else:
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
 
     def ensure_server_version(self, required='1.2'):
-        return self.rpc('server.version', __version__, required)
+        return self.rpc('server.version', [__version__, required])
 
     def broadcast(self, raw_transaction):
-        return self.rpc('blockchain.transaction.broadcast', raw_transaction)
+        return self.rpc('blockchain.transaction.broadcast', [raw_transaction])
 
     def get_history(self, address):
-        return self.rpc('blockchain.address.get_history', address)
+        return self.rpc('blockchain.address.get_history', [address])
 
     def get_transaction(self, tx_hash):
-        return self.rpc('blockchain.transaction.get', tx_hash)
+        return self.rpc('blockchain.transaction.get', [tx_hash])
 
     def get_merkle(self, tx_hash, height):
-        return self.rpc('blockchain.transaction.get_merkle', tx_hash, height)
+        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height])
 
     def get_headers(self, height, count=10000):
-        return self.rpc('blockchain.block.headers', height, count)
+        return self.rpc('blockchain.block.headers', [height, count])
 
     def subscribe_headers(self):
-        return self.rpc('blockchain.headers.subscribe', True)
+        return self.rpc('blockchain.headers.subscribe', [True])
 
     def subscribe_address(self, address):
-        return self.rpc('blockchain.address.subscribe', address)
+        return self.rpc('blockchain.address.subscribe', [address])
