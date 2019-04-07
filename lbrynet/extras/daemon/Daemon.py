@@ -36,6 +36,8 @@ from lbrynet.wallet.account import Account as LBCAccount
 from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import Claim
 from lbrynet.schema.uri import parse_lbry_uri, URIParseError
+from lbrynet.extras.daemon.comment_client import jsonrpc_batch, jsonrpc_post, rpc_body
+
 
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_manager import BlobFileManager
@@ -3095,6 +3097,178 @@ class Daemon(metaclass=JSONRPCServerType):
 
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
+
+    COMMENT_DOC = """
+    Create and list comments.
+    """
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_comment_list(self, claim_id, parent_comment_id=None, flat=False,
+                                   page=1, page_size=None, max_replies_shown=5):
+        """
+        List comments associated with a claim.
+
+        Usage:
+            comment_list <claim_id> [--flat] [(--page=<page> --page_size=<page_size>)]
+                         [--parent_comment_id=<parent_comment_id>]
+                         [--max_replies_shown=<max_replies_shown>]
+
+        Options:
+            --flat  : (bool) Flag to indicate whether or not you want the
+                                    replies to be flattened along with the rest of
+                                    the comments attached to the claim. Off by default
+            --parent_comment_id=<parent_comment_id>  : (int) The ID of an existing
+                                                             comment to list replies from
+            --max_replies_shown=<max_replies_shown>  : (int) For every comment that we pull replies from,
+                                                             only retrieve up to this amount.
+                                                             Note: This is not the same as page size.
+            --page=<page>  : (int) The page you'd like to see in the comment list.
+                             The first page is 1, second page is 2, and so on.
+            --page_size=<page_size>  : (int) The amount of comments that you'd like to
+                                       retrieve in one request
+
+        Returns:
+            (dict)  Dict containing the following schema:
+            {
+                "page":  (int) The page of comments as provided when limiting response to page_size.
+                "page_size":  (int) Number of comments in the given page. -1 if page_size wasn't used
+                "comments":  (list) Contains all the comments (as dicts) as provided by the specified parameters
+            }
+        """
+        # Should be like this:
+        # comment list [claimd_id] [parent_comment_id] --flat --page=1 --page-size=10
+        url = self.conf.comment_server
+        # The server uses permanent URIs for keys; not claims.
+        # This is temporary until we can get that functionality removed
+        claim_info = (await self.jsonrpc_claim_search(claim_id=claim_id))
+        if 'error' in claim_info:
+            raise Exception(claim_info['error'])
+        if claim_info["page"] == 0:
+            return {'page': 1, 'page_size': 0, 'comments': []}
+        claim_uri = claim_info["items"][0]['permanent_url']
+        # These two cases need separation since getting replies requires a bit of magic
+        # to reduce request count from O(n^2) to O(1)
+        if parent_comment_id:
+            # Since we don't directly get all the comment data at once,
+            # we have to do a bit more work to get them
+            comment_ids = await jsonrpc_post(url, 'get_comment_replies',
+                                             comm_index=parent_comment_id, clean=False)
+            comment_ids = comment_ids['result']
+            if page_size is not None:
+                comment_ids = comment_ids[page_size * (page - 1): page_size * page]
+            # now we have to just batch request the reply comments
+            comments_batch = [
+                rpc_body('get_comment_data', index, comm_index=comment_id, better_keys=True)
+                for index, comment_id in enumerate(comment_ids)
+            ]
+            del comment_ids
+            comments = await jsonrpc_batch(url, comments_batch, clean=True)
+        else:
+            # Get the content of the top level comments
+            comments = await jsonrpc_post(url, 'get_claim_comments', uri=claim_uri, better_keys=True)
+            if page_size is not None:
+                comments = comments[page_size * (page - 1): page_size * page]
+        # By now comments should be a list containing comment dicts that are supposed to be
+        # at the given height that was requested. The parent_id may or may not be present
+        # in the dicts, as they may or may not be replies to comments at a higher level
+        # However this is dependent purely on whether or not parent_comment_id is None or not
+        reply_lists = await jsonrpc_batch(url, [
+            rpc_body('get_comment_replies', index, comm_index=comment['comment_id'])
+            for index, comment in enumerate(comments)
+        ])
+        response = {
+            'page': page,
+            'page_size': -1 if page_size is None else page_size,
+            'comments': []
+        }
+        if flat:
+            # If it's flat then we'll need to get the comments into an order such that
+            # If an element e in the list has a non-null parent id, the element before it
+            # is either also a reply with the same parent id, or has an id that equals e's parent id,
+            # in which case it's the comment that is being replied to.
+            # Otherwise, if it has a null parent id, then it is a top level comment.
+
+            # To do this, we create a dict that maps the index of the comment in the array
+            # to a list containing the comment IDs of the replies
+            comment_replies = {resp['id']: resp['result'] for resp in reply_lists if 'result' in resp}
+
+            # Next, we create a batch request for the actual data of all of the replies
+            # the id in this batch request is going to be in the form 'X:Y'
+            # where X is the index of the parent comment in `comments,
+            # and Y is index of the reply's ID within the list X maps to in `comment_replies`
+            full_replies_batch = [
+                rpc_body('get_comment_data', f'{parent_idx}:{idx}', comm_index=reply_id, better_keys=True)
+                for parent_idx, id_list in comment_replies.items()
+                for idx, reply_id in enumerate(id_list[0:max_replies_shown])
+            ]
+            reply_dump = await jsonrpc_batch(url, full_replies_batch)
+            del full_replies_batch
+            # This neatly orders the response into a dict to aggregate the
+            # full comments by the parent comment they're replying to
+            #
+            # WARNING: The following block is going to be saving the comment dict
+            #   objects TO `comment_replies`. This means that the lists
+            #   stored in `comments_replies` may not hold just comments, but
+            #    the ids of the comments who weren't requested due to the
+            #   maximum reply limit. They need to be either cleaned out or stored
+            #   somewhere else
+
+            for comment in reply_dump:
+                parent_index, reply_index = comment['id'].split(':')
+                parent_index, reply_index = int(parent_index), int(reply_index)
+                comment_replies[parent_index][reply_index] = comment['result']
+
+            for idx, parent_comment in enumerate(comments):
+                if 'parent_id' not in parent_comment:
+                    parent_comment['parent_id'] = None
+                parent_comment['reply_count'] = len(comment_replies[idx])
+                parent_comment['omitted'] = 0
+                if len(comment_replies[idx]) > max_replies_shown:
+                    parent_comment['omitted'] = len(comment_replies[idx]) - max_replies_shown
+
+                response['comments'].append(parent_comment)
+                response['comments'] += comment_replies[idx][0:max_replies_shown]
+            response['page_size'] = page_size if page_size is not None else -1
+            return response
+        else:
+            for id_list in reply_lists:
+                comments[id_list['id']]['reply_count'] = len(id_list['result'])
+                comments[id_list['id']]['omitted'] = len(id_list['result'])
+            response['comments'] = comments
+        del reply_lists
+        return response
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_comment_create(self, claim_id: str, channel_id: str,
+                                     message: str, parent_comment_id: int = None) -> dict:
+        """
+        Create and associate a comment with a claim using your channel identity.
+
+        Usage:
+            comment_create <claim_id> <channel_id> <message> [--parent_comment_id=<parent_comment_id>]
+
+        Options:
+            --parent_comment_id=<parent_comment_id>  : (int) The ID of a comment to make a response to
+
+        Returns:
+            (dict) Comment object if successfully made
+        """
+        if not 1 < len(message) <= 2000:
+            raise Exception(f'Message length ({len(message)}) needs to be between 2 and 2000 chars')
+        url = self.conf.comment_server
+        if parent_comment_id is not None:
+            comment_id = await jsonrpc_post(url, 'reply', parent_id=parent_comment_id,
+                                            poster=channel_id, message=message)
+        else:
+            claim_data = await self.jsonrpc_claim_search(claim_id=claim_id)
+            if 'error' not in claim_data and claim_data['total_pages'] == 1:
+                uri = claim_data['items'][0]['permanent_url']
+                comment_id = await jsonrpc_post(url, 'comment', uri=uri,
+                                                poster=channel_id, message=message)
+            else:
+                raise Exception(f"permanent_url is not in the claim_data {claim_data}\n"
+                                f"The given claim_id ({claim_id}) may be invalid")
+        return await jsonrpc_post(url, 'get_comment_data', comm_index=comment_id, better_keys=True)
 
     def valid_address_or_error(self, address):
         try:
