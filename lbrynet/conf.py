@@ -528,6 +528,9 @@ class Config(CLIConfig):
         ('lbrynet4.lbry.io', 4444)  # ASIA
     ])
 
+    # comment server uses a single string because requests are made to the /api resource
+    comment_server = String("Server to store user-generated metadata.", "http://comments.lbry.com:2903/api")
+
     # blockchain
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
     s3_headers_depth = Integer("download headers from s3 when the local height is more than 10 chunks behind", 96 * 10)
