@@ -1,6 +1,7 @@
 import asyncio
 import typing
 import logging
+import concurrent.futures
 from lbrynet.utils import drain_tasks, cache_concurrent
 from lbrynet.blob_exchange.client import request_blob
 if typing.TYPE_CHECKING:
@@ -125,7 +126,7 @@ class BlobDownloader:
             blob.close()
             log.debug("downloaded %s", blob_hash[:8])
             return blob
-        except asyncio.CancelledError as err:
+        except (concurrent.futures.CancelledError, asyncio.CancelledError) as err:
             error = err
         finally:
             re_add = set()
