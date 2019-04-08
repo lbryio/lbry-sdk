@@ -49,7 +49,10 @@ def from_old_json_schema(claim, payload: bytes):
 def from_types_v1(claim, payload: bytes):
     old = OldClaimMessage()
     old.ParseFromString(payload)
-    if old.claimType == 1:
+    if old.claimType == 2:
+        channel = claim.channel
+        channel.public_key_bytes = old.certificate.publicKey
+    else:
         stream = claim.stream
         stream.title = old.stream.metadata.title
         stream.description = old.stream.metadata.description
@@ -82,9 +85,4 @@ def from_types_v1(claim, payload: bytes):
             claim.signing_channel_hash = sig.certificateId[::-1]
             old.ClearField("publisherSignature")
             claim.unsigned_payload = old.SerializeToString()
-    elif old.claimType == 2:
-        channel = claim.channel
-        channel.public_key_bytes = old.certificate.publicKey
-    else:
-        raise DecodeError('claimType must be 1 for Streams and 2 for Channel')
     return claim
