@@ -377,7 +377,7 @@ class BlockProcessor:
 
         for block in blocks:
             height += 1
-            undo_info = self.advance_txs(block.transactions, height)
+            undo_info = self.advance_txs(height, block.transactions)
             if height >= min_height:
                 self.undo_infos.append((undo_info, height))
                 self.db.write_raw_block(block.raw, height)
@@ -387,7 +387,7 @@ class BlockProcessor:
         self.headers.extend(headers)
         self.tip = self.coin.header_hash(headers[-1])
 
-    def advance_txs(self, txs, height):
+    def advance_txs(self, height, txs):
         self.tx_hashes.append(b''.join(tx_hash for tx, tx_hash in txs))
 
         # Use local vars for speed in the loops
