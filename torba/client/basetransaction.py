@@ -59,6 +59,10 @@ class TXORef:
         return '{}:{}'.format(self.tx_ref.id, self.position)
 
     @property
+    def hash(self):
+        return self.tx_ref.hash + BCDataStream.uint32.pack(self.position)
+
+    @property
     def is_null(self):
         return self.tx_ref.is_null
 
