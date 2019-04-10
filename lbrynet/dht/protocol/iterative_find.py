@@ -5,7 +5,7 @@ from itertools import chain
 import typing
 import logging
 from lbrynet.dht import constants
-from lbrynet.dht.error import RemoteException
+from lbrynet.dht.error import RemoteException, TransportNotConnected
 from lbrynet.dht.protocol.distance import Distance
 
 from typing import TYPE_CHECKING
@@ -169,7 +169,7 @@ class IterativeFinder:
             log.warning(str(err))
             self.active.discard(peer)
             return
-        except RemoteException:
+        except (RemoteException, TransportNotConnected):
             return
         return await self._handle_probe_result(peer, response)
 
@@ -215,7 +215,7 @@ class IterativeFinder:
                 await self._search_round()
             if self.running:
                 self.delayed_calls.append(self.loop.call_later(delay, self._search))
-        except (asyncio.CancelledError, StopAsyncIteration):
+        except (asyncio.CancelledError, StopAsyncIteration, TransportNotConnected):
             if self.running:
                 self.loop.call_soon(self.aclose)
 
