@@ -524,6 +524,10 @@ class KademliaProtocol(DatagramProtocol):
             response = await asyncio.wait_for(response_fut, self.rpc_timeout)
             self.peer_manager.report_last_replied(peer.address, peer.udp_port)
             return response
+        except asyncio.CancelledError:
+            if not response_fut.done():
+                response_fut.cancel()
+            raise
         except (asyncio.TimeoutError, RemoteException):
             self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
