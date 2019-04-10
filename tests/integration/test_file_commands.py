@@ -60,7 +60,7 @@ class FileCommands(CommandTestCase):
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didnt get set completed
         # check that internal state got through up to the file list API
         stream = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash'])
-        file_info = self.daemon.jsonrpc_file_list()[0]
+        file_info = self.sout(self.daemon.jsonrpc_file_list()[0])
         self.assertEqual(stream.file_name, file_info['file_name'])
         # checks if what the API shows is what he have at the very internal level.
         self.assertEqual(stream.full_path, file_info['download_path'])
@@ -77,13 +77,14 @@ class FileCommands(CommandTestCase):
             blob.blob_hash for blob in blobs[1:-1]
         ]
         await self.server.blob_manager.delete_blobs(all_except_sd_and_head)
-        self.assertFalse(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
+        path = os.path.join(self.daemon.conf.download_dir, file_info['file_name'])
+        self.assertFalse(os.path.isfile(path))
         resp = await self.out(self.daemon.jsonrpc_get('lbry://foo', timeout=2))
         self.assertNotIn('error', resp)
-        self.assertTrue(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
+        self.assertTrue(os.path.isfile(path))
         self.daemon.stream_manager.stop()
         await asyncio.sleep(0, loop=self.loop)
-        self.assertFalse(os.path.isfile(os.path.join(self.daemon.conf.download_dir, file_info['file_name'])))
+        self.assertFalse(os.path.isfile(path))
 
     async def test_incomplete_downloads_retry(self):
         tx = await self.stream_create('foo', '0.01', data=b'deadbeef' * 1000000)
@@ -174,9 +175,8 @@ class FileCommands(CommandTestCase):
         )
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
         await self.assertBalance(self.account, '9.925679')
-        response = await self.out(self.daemon.jsonrpc_get('lbry://icanpay'))
-        self.assertNotIn('error', response)
-        await self.on_transaction_dict(response['content_fee'])
+        response = await self.daemon.jsonrpc_get('lbry://icanpay')
+        await self.ledger.wait(response.content_fee)
         await self.assertBalance(self.account, '8.925555')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
 
