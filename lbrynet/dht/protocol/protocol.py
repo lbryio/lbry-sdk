@@ -544,7 +544,7 @@ class KademliaProtocol(DatagramProtocol):
 
     async def _send(self, peer: 'KademliaPeer', message: typing.Union[RequestDatagram, ResponseDatagram,
                                                                       ErrorDatagram]):
-        if not self.transport:
+        if not self.transport or self.transport.is_closing():
             raise TransportNotConnected()
 
         data = message.bencode()
