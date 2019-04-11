@@ -265,9 +265,22 @@ def get_api(name, examples):
 
 def write_api(f):
     examples = get_examples()
-    apis = []
-    for method_name in sorted(Daemon.callable_methods.keys()):
-        apis.append(get_api(
+    api_definitions = Daemon.get_api_definitions()
+    apis = {
+        'main': {
+            'doc': 'Ungrouped commands.',
+            'commands': []
+        }
+    }
+    for group_name, group_doc in api_definitions['groups'].items():
+        apis[group_name] = {
+            'doc': group_doc,
+            'commands': []
+        }
+    for method_name, command in api_definitions['commands'].items():
+        if 'replaced_by' in command:
+            continue
+        apis[command['group'] or 'main']['commands'].append(get_api(
             method_name,
             examples.get(method_name, [])
         ))
