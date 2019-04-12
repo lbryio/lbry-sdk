@@ -530,7 +530,7 @@ class UPnPComponent(Component):
                 self.upnp_redirects.update(upnp_redirects)
             except (asyncio.TimeoutError, UPnPError):
                 self.upnp = None
-                return self._maintain_redirects()
+                return
         elif self.upnp:  # check existing redirects are still active
             found = set()
             mappings = await self.upnp.get_redirects()
