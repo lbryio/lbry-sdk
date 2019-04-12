@@ -1605,7 +1605,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 #sort_claim_results(claims)
                 return {"items": claims, "total_pages": total_pages, "page": page, "page_size": page_size}
         else:
-            raise Exception("Must specify either name, claimd_id, or txid:nout.")
+            raise Exception("Must specify either name, claim_id, or txid:nout.")
         if claims:
             resolutions = await self.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in claims['claims']))
             claims = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
@@ -3136,7 +3136,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         # Should be like this:
-        # comment list [claimd_id] [parent_comment_id] --flat --page=1 --page-size=10
+        # comment list [claim_id] [parent_comment_id] --flat --page=1 --page-size=10
         url = self.conf.comment_server
         # The server uses permanent URIs for keys; not claims.
         # This is temporary until we can get that functionality removed
