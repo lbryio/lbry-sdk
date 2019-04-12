@@ -2277,9 +2277,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim.stream.source.sd_hash)
-            if stream_hash:
-                await self.storage.save_content_claim(stream_hash, new_txo.id)
+            await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
         else:
             await account.ledger.release_tx(tx)
@@ -2432,6 +2430,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 file_stream = await self.stream_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
+                stream_hash = file_stream.stream_hash
+            else:
+                stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
             if channel:
                 new_txo.sign(channel)
             await tx.sign([account])
@@ -2439,9 +2440,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(new_txo.claim.stream.source.sd_hash)
-            if stream_hash:
-                await self.storage.save_content_claim(stream_hash, new_txo.id)
+            await self.storage.save_content_claim(stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
         else:
             await account.ledger.release_tx(tx)
