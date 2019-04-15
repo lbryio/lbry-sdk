@@ -107,9 +107,11 @@ class CommandTestCase(IntegrationTestCase):
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, server_tmp_dir)
-        self.server_storage = SQLiteStorage(Config(), ':memory:')
+        self.server_config = Config()
+        self.server_storage = SQLiteStorage(self.server_config, ':memory:')
         await self.server_storage.open()
-        self.server_blob_manager = BlobManager(self.loop, server_tmp_dir, self.server_storage)
+
+        self.server_blob_manager = BlobManager(self.loop, server_tmp_dir, self.server_storage, self.server_config)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
         self.server.start_server(5567, '127.0.0.1')
         await self.server.started_listening.wait()

@@ -36,8 +36,9 @@ class TestManagedStream(BlobExchangeTestBase):
 
     async def setup_stream(self, blob_count: int = 10):
         await self.create_stream(blob_count)
-        self.stream = ManagedStream(self.loop, self.client_config, self.client_blob_manager, self.sd_hash,
-                                    self.client_dir)
+        self.stream = ManagedStream(
+            self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir
+        )
 
     async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None):
         await self.setup_stream(blob_count)

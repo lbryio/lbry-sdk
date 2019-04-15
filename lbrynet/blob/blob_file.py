@@ -73,7 +73,7 @@ class AbstractBlob:
     ]
 
     def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
-                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], typing.Awaitable]] = None,
+                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None,
                  blob_directory: typing.Optional[str] = None):
         self.loop = loop
         self.blob_hash = blob_hash
@@ -170,15 +170,17 @@ class AbstractBlob:
             return decrypt_blob_bytes(reader, self.length, key, iv)
 
     @classmethod
-    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_dir: typing.Optional[str], key: bytes,
-                                      iv: bytes, unencrypted: bytes, blob_num: int) -> BlobInfo:
+    async def create_from_unencrypted(
+            cls, loop: asyncio.BaseEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+            unencrypted: bytes, blob_num: int,
+            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None) -> BlobInfo:
         """
         Create an encrypted BlobFile from plaintext bytes
         """
 
         blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
         length = len(blob_bytes)
-        blob = cls(loop, blob_hash, length, blob_directory=blob_dir)
+        blob = cls(loop, blob_hash, length, blob_completed_callback, blob_dir)
         writer = blob.get_blob_writer()
         writer.write(blob_bytes)
         await blob.verified.wait()
@@ -191,7 +193,7 @@ class AbstractBlob:
             self._write_blob(verified_bytes)
             self.verified.set()
             if self.blob_completed_callback:
-                self.loop.create_task(self.blob_completed_callback(self))
+                self.blob_completed_callback(self)
 
     def get_blob_writer(self) -> HashBlobWriter:
         fut = asyncio.Future(loop=self.loop)
@@ -217,7 +219,6 @@ class AbstractBlob:
             finally:
                 if writer in self.writers:
                     self.writers.remove(writer)
-
         fut.add_done_callback(writer_finished_callback)
         return writer
 
@@ -227,7 +228,7 @@ class BlobBuffer(AbstractBlob):
     An in-memory only blob
     """
     def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
-                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], typing.Awaitable]] = None,
+                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None,
                  blob_directory: typing.Optional[str] = None):
         self._verified_bytes: typing.Optional[BytesIO] = None
         super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
@@ -265,11 +266,11 @@ class BlobFile(AbstractBlob):
     A blob existing on the local file system
     """
     def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
-                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], typing.Awaitable]] = None,
+                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None,
                  blob_directory: typing.Optional[str] = None):
+        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
         if not blob_directory or not os.path.isdir(blob_directory):
             raise OSError(f"invalid blob directory '{blob_directory}'")
-        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
         self.file_path = os.path.join(self.blob_directory, self.blob_hash)
         if self.file_exists:
             file_size = int(os.stat(self.file_path).st_size)
@@ -310,8 +311,12 @@ class BlobFile(AbstractBlob):
         return super().delete()
 
     @classmethod
-    async def create_from_unencrypted(cls, loop: asyncio.BaseEventLoop, blob_dir: str, key: bytes,
-                                      iv: bytes, unencrypted: bytes, blob_num: int) -> BlobInfo:
+    async def create_from_unencrypted(
+            cls, loop: asyncio.BaseEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+            unencrypted: bytes, blob_num: int,
+            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None) -> BlobInfo:
         if not blob_dir or not os.path.isdir(blob_dir):
             raise OSError(f"cannot create blob in directory: '{blob_dir}'")
-        return await super().create_from_unencrypted(loop, blob_dir, key, iv, unencrypted, blob_num)
+        return await super().create_from_unencrypted(
+            loop, blob_dir, key, iv, unencrypted, blob_num, blob_completed_callback
+        )

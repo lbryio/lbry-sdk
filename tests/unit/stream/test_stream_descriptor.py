@@ -20,9 +20,10 @@ class TestStreamDescriptor(AsyncioTestCase):
         self.cleartext = os.urandom(20000000)
         self.tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(self.tmp_dir))
-        self.storage = SQLiteStorage(Config(), ":memory:")
+        self.conf = Config()
+        self.storage = SQLiteStorage(self.conf, ":memory:")
         await self.storage.open()
-        self.blob_manager = BlobManager(self.loop, self.tmp_dir, self.storage)
+        self.blob_manager = BlobManager(self.loop, self.tmp_dir, self.storage, self.conf)
 
         self.file_path = os.path.join(self.tmp_dir, "test_file")
         with open(self.file_path, 'wb') as f:
@@ -83,9 +84,10 @@ class TestRecoverOldStreamDescriptors(AsyncioTestCase):
         loop = asyncio.get_event_loop()
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-        storage = SQLiteStorage(Config(), ":memory:")
+        self.conf = Config()
+        storage = SQLiteStorage(self.conf, ":memory:")
         await storage.open()
-        blob_manager = BlobManager(loop, tmp_dir, storage)
+        blob_manager = BlobManager(loop, tmp_dir, storage, self.conf)
 
         sd_bytes = b'{"stream_name": "4f62616d6120446f6e6b65792d322e73746c", "blobs": [{"length": 1153488, "blob_num' \
                    b'": 0, "blob_hash": "9fa32a249ce3f2d4e46b78599800f368b72f2a7f22b81df443c7f6bdbef496bd61b4c0079c7' \

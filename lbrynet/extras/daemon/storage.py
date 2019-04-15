@@ -300,25 +300,26 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # blob functions # # # # # # # # #
 
-    def add_completed_blob(self, blob_hash: str, length: int):
-        def _add_blob(transaction: sqlite3.Connection):
-            transaction.execute(
+    async def add_blobs(self, *blob_hashes_and_lengths: typing.Tuple[str, int], finished=False):
+        def _add_blobs(transaction: sqlite3.Connection):
+            transaction.executemany(
                 "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-                (blob_hash, length, 0, 0, "pending", 0, 0)
+                [
+                    (blob_hash, length, 0, 0, "pending" if not finished else "finished", 0, 0)
+                    for blob_hash, length in blob_hashes_and_lengths
+                ]
             )
-            transaction.execute(
-                "update blob set status='finished' where blob.blob_hash=?", (blob_hash, )
-            )
-        return self.db.run(_add_blob)
+            if finished:
+                transaction.executemany(
+                    "update blob set status='finished' where blob.blob_hash=?", [
+                        (blob_hash, ) for blob_hash, _ in blob_hashes_and_lengths
+                    ]
+                )
+        return await self.db.run(_add_blobs)
 
     def get_blob_status(self, blob_hash: str):
         return self.run_and_return_one_or_none(
             "select status from blob where blob_hash=?", blob_hash
-        )
-
-    def add_known_blob(self, blob_hash: str, length: int):
-        return self.db.execute(
-            "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)", (blob_hash, length, 0, 0, "pending", 0, 0)
         )
 
     def should_announce(self, blob_hash: str):

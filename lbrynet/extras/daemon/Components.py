@@ -294,7 +294,7 @@ class BlobComponent(Component):
         blob_dir = os.path.join(self.conf.data_dir, 'blobfiles')
         if not os.path.isdir(blob_dir):
             os.mkdir(blob_dir)
-        self.blob_manager = BlobManager(asyncio.get_event_loop(), blob_dir, storage, data_store, self.conf.save_blobs)
+        self.blob_manager = BlobManager(asyncio.get_event_loop(), blob_dir, storage, self.conf, data_store)
         return await self.blob_manager.setup()
 
     async def stop(self):
@@ -487,7 +487,7 @@ class UPnPComponent(Component):
         while True:
             if now:
                 await self._maintain_redirects()
-            await asyncio.sleep(360)
+            await asyncio.sleep(360, loop=self.component_manager.loop)
 
     async def _maintain_redirects(self):
         # setup the gateway if necessary

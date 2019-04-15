@@ -142,7 +142,7 @@ class FileCommands(CommandTestCase):
         os.rename(missing_blob.file_path + '__', missing_blob.file_path)
         self.server_blob_manager.blobs.clear()
         missing_blob = self.server_blob_manager.get_blob(missing_blob_hash)
-        await self.server_blob_manager.blob_completed(missing_blob)
+        self.server_blob_manager.blob_completed(missing_blob)
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
 
     async def test_paid_download(self):

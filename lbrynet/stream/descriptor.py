@@ -109,13 +109,14 @@ class StreamDescriptor:
         return h.hexdigest()
 
     async def make_sd_blob(self, blob_file_obj: typing.Optional[AbstractBlob] = None,
-                           old_sort: typing.Optional[bool] = False):
+                           old_sort: typing.Optional[bool] = False,
+                           blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None):
         sd_hash = self.calculate_sd_hash() if not old_sort else self.calculate_old_sort_sd_hash()
         if not old_sort:
             sd_data = self.as_json()
         else:
             sd_data = self.old_sort_json()
-        sd_blob = blob_file_obj or BlobFile(self.loop, sd_hash, len(sd_data), blob_directory=self.blob_dir)
+        sd_blob = blob_file_obj or BlobFile(self.loop, sd_hash, len(sd_data), blob_completed_callback, self.blob_dir)
         if blob_file_obj:
             blob_file_obj.set_length(len(sd_data))
         if not sd_blob.get_is_verified():
@@ -194,11 +195,12 @@ class StreamDescriptor:
         return h.hexdigest()
 
     @classmethod
-    async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
-                            file_path: str, key: typing.Optional[bytes] = None,
-                            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
-                            old_sort: bool = False) -> 'StreamDescriptor':
-
+    async def create_stream(
+            cls, loop: asyncio.BaseEventLoop, blob_dir: str, file_path: str, key: typing.Optional[bytes] = None,
+            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
+            old_sort: bool = False,
+            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'],
+                                                                     None]] = None) -> 'StreamDescriptor':
         blobs: typing.List[BlobInfo] = []
 
         iv_generator = iv_generator or random_iv_generator()
@@ -207,7 +209,7 @@ class StreamDescriptor:
         for blob_bytes in file_reader(file_path):
             blob_num += 1
             blob_info = await BlobFile.create_from_unencrypted(
-                    loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num
+                    loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, blob_completed_callback
                 )
             blobs.append(blob_info)
         blobs.append(
@@ -216,7 +218,7 @@ class StreamDescriptor:
             loop, blob_dir, os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path),
             blobs
         )
-        sd_blob = await descriptor.make_sd_blob(old_sort=old_sort)
+        sd_blob = await descriptor.make_sd_blob(old_sort=old_sort, blob_completed_callback=blob_completed_callback)
         descriptor.sd_hash = sd_blob.blob_hash
         return descriptor
 

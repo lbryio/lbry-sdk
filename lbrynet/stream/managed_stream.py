@@ -9,6 +9,7 @@ from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.reflector.client import StreamReflectorClient
 from lbrynet.extras.daemon.storage import StoredStreamClaim
+from lbrynet.blob.blob_file import BlobFile
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.schema.claim import Claim
@@ -207,15 +208,12 @@ class ManagedStream:
                      file_path: str, key: typing.Optional[bytes] = None,
                      iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> 'ManagedStream':
         descriptor = await StreamDescriptor.create_stream(
-            loop, blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator
+            loop, blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator,
+            blob_completed_callback=blob_manager.blob_completed
         )
-        sd_blob = blob_manager.get_blob(descriptor.sd_hash)
         await blob_manager.storage.store_stream(
             blob_manager.get_blob(descriptor.sd_hash), descriptor
         )
-        await blob_manager.blob_completed(sd_blob)
-        for blob in descriptor.blobs[:-1]:
-            await blob_manager.blob_completed(blob_manager.get_blob(blob.blob_hash, blob.length))
         row_id = await blob_manager.storage.save_published_file(descriptor.stream_hash, os.path.basename(file_path),
                                                                 os.path.dirname(file_path), 0)
         return cls(loop, config, blob_manager, descriptor.sd_hash, os.path.dirname(file_path),

@@ -15,10 +15,17 @@ class TestBlob(AsyncioTestCase):
     blob_bytes = b'1' * ((2 * 2 ** 20) - 1)
 
     async def asyncSetUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.tmp_dir))
         self.loop = asyncio.get_running_loop()
+        self.config = Config()
+        self.storage = SQLiteStorage(self.config, ":memory:", self.loop)
+        self.blob_manager = BlobManager(self.loop, self.tmp_dir, self.storage, self.config)
+        await self.storage.open()
 
     def _get_blob(self, blob_class=AbstractBlob, blob_directory=None):
-        blob = blob_class(self.loop, self.blob_hash, len(self.blob_bytes), blob_directory=blob_directory)
+        blob = blob_class(self.loop, self.blob_hash, len(self.blob_bytes), self.blob_manager.blob_completed,
+                          blob_directory=blob_directory)
         self.assertFalse(blob.get_is_verified())
         self.addCleanup(blob.close)
         return blob
@@ -29,6 +36,7 @@ class TestBlob(AsyncioTestCase):
         writer.write(self.blob_bytes)
         await blob.verified.wait()
         self.assertTrue(blob.get_is_verified())
+        await asyncio.sleep(0, loop=self.loop)  # wait for the db save task
         return blob
 
     async def _test_close_writers_on_finished(self, blob_class=AbstractBlob, blob_directory=None):
@@ -54,25 +62,39 @@ class TestBlob(AsyncioTestCase):
             other.write(self.blob_bytes)
 
     def _test_ioerror_if_length_not_set(self, blob_class=AbstractBlob, blob_directory=None):
-        blob = blob_class(self.loop, self.blob_hash, blob_directory=blob_directory)
+        blob = blob_class(
+            self.loop, self.blob_hash, blob_completed_callback=self.blob_manager.blob_completed,
+            blob_directory=blob_directory
+        )
         self.addCleanup(blob.close)
         writer = blob.get_blob_writer()
         with self.assertRaises(IOError):
             writer.write(b'')
 
     async def _test_invalid_blob_bytes(self, blob_class=AbstractBlob, blob_directory=None):
-        blob = blob_class(self.loop, self.blob_hash, len(self.blob_bytes), blob_directory=blob_directory)
+        blob = blob_class(
+            self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
+            blob_directory=blob_directory
+        )
         self.addCleanup(blob.close)
         writer = blob.get_blob_writer()
         writer.write(self.blob_bytes[:-4] + b'fake')
         with self.assertRaises(InvalidBlobHashError):
             await writer.finished
 
+    async def test_add_blob_buffer_to_db(self):
+        blob = await self._test_create_blob(BlobBuffer)
+        db_status = await self.storage.get_blob_status(blob.blob_hash)
+        self.assertEqual(db_status, 'pending')
+
+    async def test_add_blob_file_to_db(self):
+        blob = await self._test_create_blob(BlobFile, self.tmp_dir)
+        db_status = await self.storage.get_blob_status(blob.blob_hash)
+        self.assertEqual(db_status, 'finished')
+
     async def test_invalid_blob_bytes(self):
-        tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         await self._test_invalid_blob_bytes(BlobBuffer)
-        await self._test_invalid_blob_bytes(BlobFile, tmp_dir)
+        await self._test_invalid_blob_bytes(BlobFile, self.tmp_dir)
 
     def test_ioerror_if_length_not_set(self):
         tmp_dir = tempfile.mkdtemp()
@@ -113,6 +135,7 @@ class TestBlob(AsyncioTestCase):
 
     async def test_delete(self):
         blob_buffer = await self._test_create_blob(BlobBuffer)
+        self.assertIsInstance(blob_buffer, BlobBuffer)
         self.assertIsNotNone(blob_buffer._verified_bytes)
         self.assertTrue(blob_buffer.get_is_verified())
         blob_buffer.delete()
@@ -123,6 +146,7 @@ class TestBlob(AsyncioTestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
 
         blob_file = await self._test_create_blob(BlobFile, tmp_dir)
+        self.assertIsInstance(blob_file, BlobFile)
         self.assertTrue(os.path.isfile(blob_file.file_path))
         self.assertTrue(blob_file.get_is_verified())
         blob_file.delete()
@@ -132,17 +156,26 @@ class TestBlob(AsyncioTestCase):
     async def test_delete_corrupt(self):
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-        blob = BlobFile(self.loop, self.blob_hash, len(self.blob_bytes), blob_directory=tmp_dir)
+        blob = BlobFile(
+            self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
+            blob_directory=tmp_dir
+        )
         writer = blob.get_blob_writer()
         writer.write(self.blob_bytes)
         await blob.verified.wait()
         blob.close()
-        blob = BlobFile(self.loop, self.blob_hash, len(self.blob_bytes), blob_directory=tmp_dir)
+        blob = BlobFile(
+            self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
+            blob_directory=tmp_dir
+        )
         self.assertTrue(blob.get_is_verified())
 
         with open(blob.file_path, 'wb+') as f:
             f.write(b'\x00')
-        blob = BlobFile(self.loop, self.blob_hash, len(self.blob_bytes), blob_directory=tmp_dir)
+        blob = BlobFile(
+            self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
+            blob_directory=tmp_dir
+        )
         self.assertFalse(blob.get_is_verified())
         self.assertFalse(os.path.isfile(blob.file_path))
 

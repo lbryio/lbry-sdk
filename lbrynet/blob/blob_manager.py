@@ -6,6 +6,7 @@ from lbrynet.blob.blob_file import is_valid_blobhash, BlobFile, BlobBuffer, Abst
 from lbrynet.stream.descriptor import StreamDescriptor
 
 if typing.TYPE_CHECKING:
+    from lbrynet.conf import Config
     from lbrynet.dht.protocol.data_store import DictDataStore
     from lbrynet.extras.daemon.storage import SQLiteStorage
 
@@ -13,8 +14,8 @@ log = logging.getLogger(__name__)
 
 
 class BlobManager:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, storage: 'SQLiteStorage',
-                 node_data_store: typing.Optional['DictDataStore'] = None, save_blobs: bool = True):
+    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, storage: 'SQLiteStorage', config: 'Config',
+                 node_data_store: typing.Optional['DictDataStore'] = None):
         """
         This class stores blobs on the hard disk
 
@@ -28,12 +29,29 @@ class BlobManager:
         self.completed_blob_hashes: typing.Set[str] = set() if not self._node_data_store\
             else self._node_data_store.completed_blobs
         self.blobs: typing.Dict[str, AbstractBlob] = {}
-        self._save_blobs = save_blobs
+        self.config = config
 
-    def get_blob_class(self):
-        if not self._save_blobs:
-            return BlobBuffer
-        return BlobFile
+    def _get_blob(self, blob_hash: str, length: typing.Optional[int] = None):
+        if self.config.save_blobs:
+            return BlobFile(
+                self.loop, blob_hash, length, self.blob_completed, self.blob_dir
+            )
+        else:
+            if length and is_valid_blobhash(blob_hash) and os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
+                return BlobFile(
+                    self.loop, blob_hash, length, self.blob_completed, self.blob_dir
+                )
+            return BlobBuffer(
+                self.loop, blob_hash, length, self.blob_completed, self.blob_dir
+            )
+
+    def get_blob(self, blob_hash, length: typing.Optional[int] = None):
+        if blob_hash in self.blobs:
+            if length and self.blobs[blob_hash].length is None:
+                self.blobs[blob_hash].set_length(length)
+        else:
+            self.blobs[blob_hash] = self._get_blob(blob_hash, length)
+        return self.blobs[blob_hash]
 
     async def setup(self) -> bool:
         def get_files_in_blob_dir() -> typing.Set[str]:
@@ -54,28 +72,22 @@ class BlobManager:
             blob.close()
         self.completed_blob_hashes.clear()
 
-    def get_blob(self, blob_hash, length: typing.Optional[int] = None):
-        if blob_hash in self.blobs:
-            if length and self.blobs[blob_hash].length is None:
-                self.blobs[blob_hash].set_length(length)
-        else:
-            self.blobs[blob_hash] = self.get_blob_class()(self.loop, blob_hash, length, self.blob_completed,
-                                                          self.blob_dir)
-        return self.blobs[blob_hash]
-
     def get_stream_descriptor(self, sd_hash):
         return StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_dir, self.get_blob(sd_hash))
 
-    async def blob_completed(self, blob: AbstractBlob):
+    def blob_completed(self, blob: AbstractBlob):
         if blob.blob_hash is None:
             raise Exception("Blob hash is None")
         if not blob.length:
             raise Exception("Blob has a length of 0")
-        if isinstance(blob, BlobBuffer):  # don't save blob buffers to the db / dont announce them
-            return
-        if blob.blob_hash not in self.completed_blob_hashes:
-            self.completed_blob_hashes.add(blob.blob_hash)
-        await self.storage.add_completed_blob(blob.blob_hash, blob.length)
+        if not blob.get_is_verified():
+            raise Exception("Blob is not verified")
+        if isinstance(blob, BlobFile):
+            if blob.blob_hash not in self.completed_blob_hashes:
+                self.completed_blob_hashes.add(blob.blob_hash)
+            self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=True))
+        else:
+            self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=False))
 
     def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
         """Returns of the blobhashes_to_check, which are valid"""

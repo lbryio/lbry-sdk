@@ -35,13 +35,13 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.server_config = Config(data_dir=self.server_dir, download_dir=self.server_dir, wallet=self.server_dir,
                                     reflector_servers=[])
         self.server_storage = SQLiteStorage(self.server_config, os.path.join(self.server_dir, "lbrynet.sqlite"))
-        self.server_blob_manager = BlobManager(self.loop, self.server_dir, self.server_storage)
+        self.server_blob_manager = BlobManager(self.loop, self.server_dir, self.server_storage, self.server_config)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
 
         self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir, wallet=self.client_dir,
                                     reflector_servers=[])
         self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
-        self.client_blob_manager = BlobManager(self.loop, self.client_dir, self.client_storage)
+        self.client_blob_manager = BlobManager(self.loop, self.client_dir, self.client_storage, self.client_config)
         self.client_peer_manager = PeerManager(self.loop)
         self.server_from_client = KademliaPeer(self.loop, "127.0.0.1", b'1' * 48, tcp_port=33333)
 
@@ -64,6 +64,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         await server_blob.verified.wait()
         self.assertTrue(os.path.isfile(server_blob.file_path))
         self.assertEqual(server_blob.get_is_verified(), True)
+        self.assertTrue(writer.closed())
 
     async def _test_transfer_blob(self, blob_hash: str):
         client_blob = self.client_blob_manager.get_blob(blob_hash)
@@ -76,7 +77,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         await client_blob.verified.wait()
         self.assertEqual(client_blob.get_is_verified(), True)
         self.assertTrue(downloaded)
-        self.addCleanup(client_blob.close)
+        client_blob.close()
 
     async def test_transfer_sd_blob(self):
         sd_hash = "3e2706157a59aaa47ef52bc264fce488078b4026c0b9bab649a8f2fe1ecc5e5cad7182a2bb7722460f856831a1ac0f02"
@@ -96,9 +97,11 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         second_client_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, second_client_dir)
-
-        second_client_storage = SQLiteStorage(Config(), os.path.join(second_client_dir, "lbrynet.sqlite"))
-        second_client_blob_manager = BlobManager(self.loop, second_client_dir, second_client_storage)
+        second_client_conf = Config()
+        second_client_storage = SQLiteStorage(second_client_conf, os.path.join(second_client_dir, "lbrynet.sqlite"))
+        second_client_blob_manager = BlobManager(
+            self.loop, second_client_dir, second_client_storage, second_client_conf
+        )
         server_from_second_client = KademliaPeer(self.loop, "127.0.0.1", b'1' * 48, tcp_port=33333)
 
         await second_client_storage.open()
@@ -128,9 +131,12 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         second_client_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, second_client_dir)
+        second_client_conf = Config()
 
-        second_client_storage = SQLiteStorage(Config(), os.path.join(second_client_dir, "lbrynet.sqlite"))
-        second_client_blob_manager = BlobManager(self.loop, second_client_dir, second_client_storage)
+        second_client_storage = SQLiteStorage(second_client_conf, os.path.join(second_client_dir, "lbrynet.sqlite"))
+        second_client_blob_manager = BlobManager(
+            self.loop, second_client_dir, second_client_storage, second_client_conf
+        )
         server_from_second_client = KademliaPeer(self.loop, "127.0.0.1", b'1' * 48, tcp_port=33333)
 
         await second_client_storage.open()
