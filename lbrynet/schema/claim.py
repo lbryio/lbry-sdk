@@ -195,28 +195,60 @@ class Audio(Playable):
         self.message = audio_message
 
 
-class File:
+class Source:
 
-    __slots__ = '_file',
+    __slots__ = 'message',
 
     def __init__(self, file_message):
-        self._file = file_message
+        self.message = file_message
 
     @property
     def name(self) -> str:
-        return self._file.name
+        return self.message.name
 
     @name.setter
     def name(self, name: str):
-        self._file.name = name
+        self.message.name = name
 
     @property
     def size(self) -> int:
-        return self._file.size
+        return self.message.size
 
     @size.setter
     def size(self, size: int):
-        self._file.size = size
+        self.message.size = size
+
+    @property
+    def media_type(self) -> str:
+        return self.message.media_type
+
+    @media_type.setter
+    def media_type(self, media_type: str):
+        self.message.media_type = media_type
+
+    @property
+    def sd_hash(self) -> str:
+        return hexlify(self.message.sd_hash).decode()
+
+    @sd_hash.setter
+    def sd_hash(self, sd_hash: str):
+        self.message.sd_hash = unhexlify(sd_hash.encode())
+
+    @property
+    def sd_hash_bytes(self) -> bytes:
+        return self.message.sd_hash
+
+    @sd_hash_bytes.setter
+    def sd_hash_bytes(self, sd_hash: bytes):
+        self.message.sd_hash = sd_hash
+
+    @property
+    def url(self) -> str:
+        return self.message.url
+
+    @url.setter
+    def url(self, url: str):
+        self.message.url = url
 
 
 class Fee:
@@ -505,35 +537,31 @@ class BaseClaimSubType:
 
     @property
     def title(self) -> str:
-        return self.message.title
+        return self.claim.message.title
 
     @title.setter
     def title(self, title: str):
-        self.message.title = title
+        self.claim.message.title = title
 
     @property
     def description(self) -> str:
-        return self.message.description
+        return self.claim.message.description
 
     @description.setter
     def description(self, description: str):
-        self.message.description = description
+        self.claim.message.description = description
 
     @property
-    def thumbnail_url(self) -> str:
-        return self.message.thumbnail_url
-
-    @thumbnail_url.setter
-    def thumbnail_url(self, thumbnail_url: str):
-        self.message.thumbnail_url = thumbnail_url
+    def thumbnail(self) -> Source:
+        return Source(self.claim.message.thumbnail)
 
     @property
     def tags(self) -> List:
-        return self.message.tags
+        return self.claim.message.tags
 
     @property
     def languages(self) -> LanguageList:
-        return LanguageList(self.message.languages)
+        return LanguageList(self.claim.message.languages)
 
     @property
     def langtags(self) -> List[str]:
@@ -541,7 +569,7 @@ class BaseClaimSubType:
 
     @property
     def locations(self) -> LocationList:
-        return LocationList(self.message.locations)
+        return LocationList(self.claim.message.locations)
 
     def to_dict(self):
         return MessageToDict(self.message, preserving_proto_field_name=True)
@@ -604,12 +632,8 @@ class Channel(BaseClaimSubType):
         self.message.homepage_url = homepage_url
 
     @property
-    def cover_url(self) -> str:
-        return self.message.cover_url
-
-    @cover_url.setter
-    def cover_url(self, cover_url: str):
-        self.message.cover_url = cover_url
+    def cover(self) -> Source:
+        return Source(self.message.cover)
 
 
 class Stream(BaseClaimSubType):
@@ -671,22 +695,6 @@ class Stream(BaseClaimSubType):
                 raise Exception(f'Unknown currency type: {fee_currency}')
 
     @property
-    def sd_hash(self) -> str:
-        return hexlify(self.message.sd_hash).decode()
-
-    @sd_hash.setter
-    def sd_hash(self, sd_hash: str):
-        self.message.sd_hash = unhexlify(sd_hash.encode())
-
-    @property
-    def sd_hash_bytes(self) -> bytes:
-        return self.message.sd_hash
-
-    @sd_hash_bytes.setter
-    def sd_hash_bytes(self, sd_hash: bytes):
-        self.message.sd_hash = sd_hash
-
-    @property
     def author(self) -> str:
         return self.message.author
 
@@ -719,14 +727,6 @@ class Stream(BaseClaimSubType):
         self.message.release_time = release_time
 
     @property
-    def media_type(self) -> str:
-        return self.message.media_type
-
-    @media_type.setter
-    def media_type(self, media_type: str):
-        self.message.media_type = media_type
-
-    @property
     def fee(self) -> Fee:
         return Fee(self.message.fee)
 
@@ -735,8 +735,8 @@ class Stream(BaseClaimSubType):
         return self.message.HasField('fee')
 
     @property
-    def file(self) -> File:
-        return File(self.message.file)
+    def source(self) -> Source:
+        return Source(self.message.source)
 
     @property
     def image(self) -> Image:

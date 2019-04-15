@@ -11,10 +11,13 @@ from lbrynet.schema.types.v1.fee_pb2 import Fee as FeeMessage
 def from_old_json_schema(claim, payload: bytes):
     value = json.loads(payload)
     stream = claim.stream
-    stream.media_type = value.get('content_type', value.get('content-type', 'application/octet-stream'))
+    stream.source.sd_hash = value['sources']['lbry_sd_hash']
+    stream.source.media_type = value.get(
+        'content_type', value.get('content-type', 'application/octet-stream'))
     stream.title = value.get('title', '')
     stream.description = value.get('description', '')
-    stream.thumbnail_url = value.get('thumbnail', '')
+    if value.get('thumbnail', ''):
+        stream.thumbnail.url = value.get('thumbnail', '')
     stream.author = value.get('author', '')
     stream.license = value.get('license', '')
     stream.license_url = value.get('license_url', '')
@@ -26,7 +29,6 @@ def from_old_json_schema(claim, payload: bytes):
             stream.languages.append(language)
         except:
             pass
-    stream.sd_hash = value['sources']['lbry_sd_hash']
     if value.get('nsfw', False):
         stream.tags.append('mature')
     if "fee" in value:
@@ -54,11 +56,11 @@ def from_types_v1(claim, payload: bytes):
         stream.author = old.stream.metadata.author
         stream.license = old.stream.metadata.license
         stream.license_url = old.stream.metadata.licenseUrl
-        stream.thumbnail_url = old.stream.metadata.thumbnail
+        stream.thumbnail.url = old.stream.metadata.thumbnail
         if old.stream.metadata.HasField('language'):
             stream.languages.add().message.language = old.stream.metadata.language
-        stream.media_type = old.stream.source.contentType
-        stream.sd_hash_bytes = old.stream.source.source
+        stream.source.media_type = old.stream.source.contentType
+        stream.source.sd_hash_bytes = old.stream.source.source
         if old.stream.metadata.nsfw:
             stream.tags.append('mature')
         if old.stream.metadata.HasField('fee'):
