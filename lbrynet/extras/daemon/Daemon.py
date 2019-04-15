@@ -473,7 +473,7 @@ class Daemon(metaclass=JSONRPCServerType):
             name, claim_id = name_and_claim_id.split("/")
             uri = f"lbry://{name}#{claim_id}"
         stream = await self.jsonrpc_get(uri)
-        return web.HTTPFound(f"/stream/{stream.sd_hash}")
+        raise web.HTTPFound(f"/stream/{stream.sd_hash}")
 
     async def handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
@@ -515,6 +515,7 @@ class Daemon(metaclass=JSONRPCServerType):
         async for blob_info, decrypted in stream.aiter_read_stream(skip_blobs):
             await response.write(decrypted)
             log.info("sent browser blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
+        await response.write_eof()
         return response
 
     async def _process_rpc_call(self, data):

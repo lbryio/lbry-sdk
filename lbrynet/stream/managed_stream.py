@@ -9,7 +9,6 @@ from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.reflector.client import StreamReflectorClient
 from lbrynet.extras.daemon.storage import StoredStreamClaim
-from lbrynet.blob.blob_file import BlobFile
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.schema.claim import Claim
