@@ -139,13 +139,13 @@ class Env:
         raise self.Error('unknown event loop policy "{}"'.format(policy))
 
     def cs_host(self, *, for_rpc):
-        '''Returns the 'host' argument to pass to asyncio's create_server
+        """Returns the 'host' argument to pass to asyncio's create_server
         call.  The result can be a single host name string, a list of
         host name strings, or an empty string to bind to all interfaces.
 
         If rpc is True the host to use for the RPC server is returned.
         Otherwise the host to use for SSL/TCP servers is returned.
-        '''
+        """
         host = self.rpc_host if for_rpc else self.host
         result = [part.strip() for part in host.split(',')]
         if len(result) == 1:
@@ -161,9 +161,9 @@ class Env:
         return result
 
     def sane_max_sessions(self):
-        '''Return the maximum number of sessions to permit.  Normally this
+        """Return the maximum number of sessions to permit.  Normally this
         is MAX_SESSIONS.  However, to prevent open file exhaustion, ajdust
-        downwards if running with a small open file rlimit.'''
+        downwards if running with a small open file rlimit."""
         env_value = self.integer('MAX_SESSIONS', 1000)
         nofile_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
         # We give the DB 250 files; allow ElectrumX 100 for itself
@@ -209,8 +209,8 @@ class Env:
                              .format(host))
 
         def port(port_kind):
-            '''Returns the clearnet identity port, if any and not zero,
-            otherwise the listening port.'''
+            """Returns the clearnet identity port, if any and not zero,
+            otherwise the listening port."""
             result = 0
             if clearnet:
                 result = getattr(clearnet, port_kind)

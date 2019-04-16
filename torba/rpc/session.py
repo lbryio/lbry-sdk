@@ -54,7 +54,7 @@ class Connector:
         self.kwargs = kwargs
 
     async def create_connection(self):
-        '''Initiate a connection.'''
+        """Initiate a connection."""
         connector = self.proxy or self.loop
         return await connector.create_connection(
             self.session_factory, self.host, self.port, **self.kwargs)
@@ -70,7 +70,7 @@ class Connector:
 
 
 class SessionBase(asyncio.Protocol):
-    '''Base class of networking sessions.
+    """Base class of networking sessions.
 
     There is no client / server distinction other than who initiated
     the connection.
@@ -81,7 +81,7 @@ class SessionBase(asyncio.Protocol):
 
     Alternatively if used in a with statement, the connection is made
     on entry to the block, and closed on exit from the block.
-    '''
+    """
 
     max_errors = 10
 
@@ -138,7 +138,7 @@ class SessionBase(asyncio.Protocol):
             await self._concurrency.set_max_concurrent(target)
 
     def _using_bandwidth(self, size):
-        '''Called when sending or receiving size bytes.'''
+        """Called when sending or receiving size bytes."""
         self.bw_charge += size
 
     async def _limited_wait(self, secs):
@@ -173,7 +173,7 @@ class SessionBase(asyncio.Protocol):
 
     # asyncio framework
     def data_received(self, framed_message):
-        '''Called by asyncio when a message comes in.'''
+        """Called by asyncio when a message comes in."""
         if self.verbosity >= 4:
             self.logger.debug(f'Received framed message {framed_message}')
         self.recv_size += len(framed_message)
@@ -181,21 +181,21 @@ class SessionBase(asyncio.Protocol):
         self.framer.received_bytes(framed_message)
 
     def pause_writing(self):
-        '''Transport calls when the send buffer is full.'''
+        """Transport calls when the send buffer is full."""
         if not self.is_closing():
             self._can_send.clear()
             self.transport.pause_reading()
 
     def resume_writing(self):
-        '''Transport calls when the send buffer has room.'''
+        """Transport calls when the send buffer has room."""
         if not self._can_send.is_set():
             self._can_send.set()
             self.transport.resume_reading()
 
     def connection_made(self, transport):
-        '''Called by asyncio when a connection is established.
+        """Called by asyncio when a connection is established.
 
-        Derived classes overriding this method must call this first.'''
+        Derived classes overriding this method must call this first."""
         self.transport = transport
         # This would throw if called on a closed SSL transport.  Fixed
         # in asyncio in Python 3.6.1 and 3.5.4
@@ -209,9 +209,9 @@ class SessionBase(asyncio.Protocol):
         self._pm_task = self.loop.create_task(self._receive_messages())
 
     def connection_lost(self, exc):
-        '''Called by asyncio when the connection closes.
+        """Called by asyncio when the connection closes.
 
-        Tear down things done in connection_made.'''
+        Tear down things done in connection_made."""
         self._address = None
         self.transport = None
         self._task_group.cancel()
@@ -221,21 +221,21 @@ class SessionBase(asyncio.Protocol):
 
     # External API
     def default_framer(self):
-        '''Return a default framer.'''
+        """Return a default framer."""
         raise NotImplementedError
 
     def peer_address(self):
-        '''Returns the peer's address (Python networking address), or None if
+        """Returns the peer's address (Python networking address), or None if
         no connection or an error.
 
         This is the result of socket.getpeername() when the connection
         was made.
-        '''
+        """
         return self._address
 
     def peer_address_str(self):
-        '''Returns the peer's IP address and port as a human-readable
-        string.'''
+        """Returns the peer's IP address and port as a human-readable
+        string."""
         if not self._address:
             return 'unknown'
         ip_addr_str, port = self._address[:2]
@@ -245,16 +245,16 @@ class SessionBase(asyncio.Protocol):
             return f'{ip_addr_str}:{port}'
 
     def is_closing(self):
-        '''Return True if the connection is closing.'''
+        """Return True if the connection is closing."""
         return not self.transport or self.transport.is_closing()
 
     def abort(self):
-        '''Forcefully close the connection.'''
+        """Forcefully close the connection."""
         if self.transport:
             self.transport.abort()
 
     async def close(self, *, force_after=30):
-        '''Close the connection and return when closed.'''
+        """Close the connection and return when closed."""
         self._close()
         if self._pm_task:
             with suppress(CancelledError):
@@ -264,12 +264,12 @@ class SessionBase(asyncio.Protocol):
 
 
 class MessageSession(SessionBase):
-    '''Session class for protocols where messages are not tied to responses,
+    """Session class for protocols where messages are not tied to responses,
     such as the Bitcoin protocol.
 
     To use as a client (connection-opening) session, pass host, port
     and perhaps a proxy.
-    '''
+    """
     async def _receive_messages(self):
         while not self.is_closing():
             try:
@@ -303,7 +303,7 @@ class MessageSession(SessionBase):
                 await self._task_group.add(self._throttled_message(message))
 
     async def _throttled_message(self, message):
-        '''Process a single request, respecting the concurrency limit.'''
+        """Process a single request, respecting the concurrency limit."""
         async with self._concurrency.semaphore:
             try:
                 await self.handle_message(message)
@@ -318,15 +318,15 @@ class MessageSession(SessionBase):
 
     # External API
     def default_framer(self):
-        '''Return a bitcoin framer.'''
+        """Return a bitcoin framer."""
         return BitcoinFramer(bytes.fromhex('e3e1f3e8'), 128_000_000)
 
     async def handle_message(self, message):
-        '''message is a (command, payload) pair.'''
+        """message is a (command, payload) pair."""
         pass
 
     async def send_message(self, message):
-        '''Send a message (command, payload) over the network.'''
+        """Send a message (command, payload) over the network."""
         await self._send_message(message)
 
 
@@ -337,7 +337,7 @@ class BatchError(Exception):
 
 
 class BatchRequest(object):
-    '''Used to build a batch request to send to the server.  Stores
+    """Used to build a batch request to send to the server.  Stores
     the
 
     Attributes batch and results are initially None.
@@ -367,7 +367,7 @@ class BatchRequest(object):
        RPC error response, or violated the protocol in some way, a
        BatchError exception is raised.  Otherwise the caller can be
        certain each request returned a standard result.
-    '''
+    """
 
     def __init__(self, session, raise_errors):
         self._session = session
@@ -401,8 +401,8 @@ class BatchRequest(object):
 
 
 class RPCSession(SessionBase):
-    '''Base class for protocols where a message can lead to a response,
-    for example JSON RPC.'''
+    """Base class for protocols where a message can lead to a response,
+    for example JSON RPC."""
 
     def __init__(self, *, framer=None, loop=None, connection=None):
         super().__init__(framer=framer, loop=loop)
@@ -435,7 +435,7 @@ class RPCSession(SessionBase):
                     await self._task_group.add(self._throttled_request(request))
 
     async def _throttled_request(self, request):
-        '''Process a single request, respecting the concurrency limit.'''
+        """Process a single request, respecting the concurrency limit."""
         async with self._concurrency.semaphore:
             try:
                 result = await self.handle_request(request)
@@ -461,18 +461,18 @@ class RPCSession(SessionBase):
 
     # External API
     def default_connection(self):
-        '''Return a default connection if the user provides none.'''
+        """Return a default connection if the user provides none."""
         return JSONRPCConnection(JSONRPCv2)
 
     def default_framer(self):
-        '''Return a default framer.'''
+        """Return a default framer."""
         return NewlineFramer()
 
     async def handle_request(self, request):
         pass
 
     async def send_request(self, method, args=()):
-        '''Send an RPC request over the network.'''
+        """Send an RPC request over the network."""
         message, event = self.connection.send_request(Request(method, args))
         await self._send_message(message)
         await event.wait()
@@ -482,12 +482,12 @@ class RPCSession(SessionBase):
         return result
 
     async def send_notification(self, method, args=()):
-        '''Send an RPC notification over the network.'''
+        """Send an RPC notification over the network."""
         message = self.connection.send_notification(Notification(method, args))
         await self._send_message(message)
 
     def send_batch(self, raise_errors=False):
-        '''Return a BatchRequest.  Intended to be used like so:
+        """Return a BatchRequest.  Intended to be used like so:
 
            async with session.send_batch() as batch:
                batch.add_request("method1")
@@ -499,12 +499,12 @@ class RPCSession(SessionBase):
 
         Note that in some circumstances exceptions can be raised; see
         BatchRequest doc string.
-        '''
+        """
         return BatchRequest(self, raise_errors)
 
 
 class Server(object):
-    '''A simple wrapper around an asyncio.Server object.'''
+    """A simple wrapper around an asyncio.Server object."""
 
     def __init__(self, session_factory, host=None, port=None, *,
                  loop=None, **kwargs):
@@ -520,9 +520,9 @@ class Server(object):
             self._session_factory, self.host, self.port, **self._kwargs)
 
     async def close(self):
-        '''Close the listening socket.  This does not close any ServerSession
+        """Close the listening socket.  This does not close any ServerSession
         objects created to handle incoming connections.
-        '''
+        """
         if self.server:
             self.server.close()
             await self.server.wait_closed()

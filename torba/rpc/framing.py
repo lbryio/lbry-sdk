@@ -23,7 +23,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-'''RPC message framing in a byte stream.'''
+"""RPC message framing in a byte stream."""
 
 __all__ = ('FramerBase', 'NewlineFramer', 'BinaryFramer', 'BitcoinFramer',
            'OversizedPayloadError', 'BadChecksumError', 'BadMagicError')
@@ -34,38 +34,38 @@ from asyncio import Queue
 
 
 class FramerBase(object):
-    '''Abstract base class for a framer.
+    """Abstract base class for a framer.
 
     A framer breaks an incoming byte stream into protocol messages,
     buffering if necesary.  It also frames outgoing messages into
     a byte stream.
-    '''
+    """
 
     def frame(self, message):
-        '''Return the framed message.'''
+        """Return the framed message."""
         raise NotImplementedError
 
     def received_bytes(self, data):
-        '''Pass incoming network bytes.'''
+        """Pass incoming network bytes."""
         raise NotImplementedError
 
     async def receive_message(self):
-        '''Wait for a complete unframed message to arrive, and return it.'''
+        """Wait for a complete unframed message to arrive, and return it."""
         raise NotImplementedError
 
 
 class NewlineFramer(FramerBase):
-    '''A framer for a protocol where messages are separated by newlines.'''
+    """A framer for a protocol where messages are separated by newlines."""
 
     # The default max_size value is motivated by JSONRPC, where a
     # normal request will be 250 bytes or less, and a reasonable
     # batch may contain 4000 requests.
     def __init__(self, max_size=250 * 4000):
-        '''max_size - an anti-DoS measure.  If, after processing an incoming
+        """max_size - an anti-DoS measure.  If, after processing an incoming
         message, buffered data would exceed max_size bytes, that
         buffered data is dropped entirely and the framer waits for a
         newline character to re-synchronize the stream.
-        '''
+        """
         self.max_size = max_size
         self.queue = Queue()
         self.received_bytes = self.queue.put_nowait
@@ -105,9 +105,9 @@ class NewlineFramer(FramerBase):
 
 
 class ByteQueue(object):
-    '''A producer-comsumer queue.  Incoming network data is put as it
+    """A producer-comsumer queue.  Incoming network data is put as it
     arrives, and the consumer calls an async method waiting for data of
-    a specific length.'''
+    a specific length."""
 
     def __init__(self):
         self.queue = Queue()
@@ -127,7 +127,7 @@ class ByteQueue(object):
 
 
 class BinaryFramer(object):
-    '''A framer for binary messaging protocols.'''
+    """A framer for binary messaging protocols."""
 
     def __init__(self):
         self.byte_queue = ByteQueue()
@@ -165,12 +165,12 @@ pack_le_uint32 = struct_le_I.pack
 
 
 def sha256(x):
-    '''Simple wrapper of hashlib sha256.'''
+    """Simple wrapper of hashlib sha256."""
     return _sha256(x).digest()
 
 
 def double_sha256(x):
-    '''SHA-256 of SHA-256, as used extensively in bitcoin.'''
+    """SHA-256 of SHA-256, as used extensively in bitcoin."""
     return sha256(sha256(x))
 
 
@@ -187,7 +187,7 @@ class OversizedPayloadError(Exception):
 
 
 class BitcoinFramer(BinaryFramer):
-    '''Provides a framer of binary message payloads in the style of the
+    """Provides a framer of binary message payloads in the style of the
     Bitcoin network protocol.
 
     Each binary message has the following elements, in order:
@@ -201,7 +201,7 @@ class BitcoinFramer(BinaryFramer):
     Call frame(command, payload) to get a framed message.
     Pass incoming network bytes to received_bytes().
     Wait on receive_message() to get incoming (command, payload) pairs.
-    '''
+    """
 
     def __init__(self, magic, max_block_size):
         def pad_command(command):

@@ -24,7 +24,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 # and warranty status of this software.
 
-'''Merkle trees, branches, proofs and roots.'''
+"""Merkle trees, branches, proofs and roots."""
 
 from asyncio import Event
 from math import ceil, log
@@ -33,12 +33,12 @@ from torba.server.hash import double_sha256
 
 
 class Merkle:
-    '''Perform merkle tree calculations on binary hashes using a given hash
+    """Perform merkle tree calculations on binary hashes using a given hash
     function.
 
     If the hash count is not even, the final hash is repeated when
     calculating the next merkle layer up the tree.
-    '''
+    """
 
     def __init__(self, hash_func=double_sha256):
         self.hash_func = hash_func
@@ -47,7 +47,7 @@ class Merkle:
         return self.branch_length(hash_count) + 1
 
     def branch_length(self, hash_count):
-        '''Return the length of a merkle branch given the number of hashes.'''
+        """Return the length of a merkle branch given the number of hashes."""
         if not isinstance(hash_count, int):
             raise TypeError('hash_count must be an integer')
         if hash_count < 1:
@@ -55,9 +55,9 @@ class Merkle:
         return ceil(log(hash_count, 2))
 
     def branch_and_root(self, hashes, index, length=None):
-        '''Return a (merkle branch, merkle_root) pair given hashes, and the
+        """Return a (merkle branch, merkle_root) pair given hashes, and the
         index of one of those hashes.
-        '''
+        """
         hashes = list(hashes)
         if not isinstance(index, int):
             raise TypeError('index must be an integer')
@@ -86,12 +86,12 @@ class Merkle:
         return branch, hashes[0]
 
     def root(self, hashes, length=None):
-        '''Return the merkle root of a non-empty iterable of binary hashes.'''
+        """Return the merkle root of a non-empty iterable of binary hashes."""
         branch, root = self.branch_and_root(hashes, 0, length)
         return root
 
     def root_from_proof(self, hash, branch, index):
-        '''Return the merkle root given a hash, a merkle branch to it, and
+        """Return the merkle root given a hash, a merkle branch to it, and
         its index in the hashes array.
 
         branch is an iterable sorted deepest to shallowest.  If the
@@ -102,7 +102,7 @@ class Merkle:
         branch_length().  Unfortunately this is not easily done for
         bitcoin transactions as the number of transactions in a block
         is unknown to an SPV client.
-        '''
+        """
         hash_func = self.hash_func
         for elt in branch:
             if index & 1:
@@ -115,8 +115,8 @@ class Merkle:
         return hash
 
     def level(self, hashes, depth_higher):
-        '''Return a level of the merkle tree of hashes the given depth
-        higher than the bottom row of the original tree.'''
+        """Return a level of the merkle tree of hashes the given depth
+        higher than the bottom row of the original tree."""
         size = 1 << depth_higher
         root = self.root
         return [root(hashes[n: n + size], depth_higher)
@@ -124,7 +124,7 @@ class Merkle:
 
     def branch_and_root_from_level(self, level, leaf_hashes, index,
                                    depth_higher):
-        '''Return a (merkle branch, merkle_root) pair when a merkle-tree has a
+        """Return a (merkle branch, merkle_root) pair when a merkle-tree has a
         level cached.
 
         To maximally reduce the amount of data hashed in computing a
@@ -140,7 +140,7 @@ class Merkle:
 
         index is the index in the full list of hashes of the hash whose
         merkle branch we want.
-        '''
+        """
         if not isinstance(level, list):
             raise TypeError("level must be a list")
         if not isinstance(leaf_hashes, list):
@@ -157,14 +157,14 @@ class Merkle:
 
 
 class MerkleCache:
-    '''A cache to calculate merkle branches efficiently.'''
+    """A cache to calculate merkle branches efficiently."""
 
     def __init__(self, merkle, source_func):
-        '''Initialise a cache hashes taken from source_func:
+        """Initialise a cache hashes taken from source_func:
 
            async def source_func(index, count):
               ...
-        '''
+        """
         self.merkle = merkle
         self.source_func = source_func
         self.length = 0
@@ -175,9 +175,9 @@ class MerkleCache:
         return 1 << self.depth_higher
 
     def _leaf_start(self, index):
-        '''Given a level's depth higher and a hash index, return the leaf
+        """Given a level's depth higher and a hash index, return the leaf
         index and leaf hash count needed to calculate a merkle branch.
-        '''
+        """
         depth_higher = self.depth_higher
         return (index >> depth_higher) << depth_higher
 
@@ -185,7 +185,7 @@ class MerkleCache:
         return self.merkle.level(hashes, self.depth_higher)
 
     async def _extend_to(self, length):
-        '''Extend the length of the cache if necessary.'''
+        """Extend the length of the cache if necessary."""
         if length <= self.length:
             return
         # Start from the beginning of any final partial segment.
@@ -196,8 +196,8 @@ class MerkleCache:
         self.length = length
 
     async def _level_for(self, length):
-        '''Return a (level_length, final_hash) pair for a truncation
-        of the hashes to the given length.'''
+        """Return a (level_length, final_hash) pair for a truncation
+        of the hashes to the given length."""
         if length == self.length:
             return self.level
         level = self.level[:length >> self.depth_higher]
@@ -208,15 +208,15 @@ class MerkleCache:
         return level
 
     async def initialize(self, length):
-        '''Call to initialize the cache to a source of given length.'''
+        """Call to initialize the cache to a source of given length."""
         self.length = length
         self.depth_higher = self.merkle.tree_depth(length) // 2
         self.level = self._level(await self.source_func(0, length))
         self.initialized.set()
 
     def truncate(self, length):
-        '''Truncate the cache so it covers no more than length underlying
-        hashes.'''
+        """Truncate the cache so it covers no more than length underlying
+        hashes."""
         if not isinstance(length, int):
             raise TypeError('length must be an integer')
         if length <= 0:
@@ -228,11 +228,11 @@ class MerkleCache:
         self.level[length >> self.depth_higher:] = []
 
     async def branch_and_root(self, length, index):
-        '''Return a merkle branch and root.  Length is the number of
+        """Return a merkle branch and root.  Length is the number of
         hashes used to calculate the merkle root, index is the position
         of the hash to calculate the branch of.
 
-        index must be less than length, which must be at least 1.'''
+        index must be less than length, which must be at least 1."""
         if not isinstance(length, int):
             raise TypeError('length must be an integer')
         if not isinstance(index, int):

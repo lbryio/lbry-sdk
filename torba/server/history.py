@@ -6,7 +6,7 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-'''History by script hash (address).'''
+"""History by script hash (address)."""
 
 import array
 import ast
@@ -96,7 +96,7 @@ class History:
         self.logger.info('deleted excess history entries')
 
     def write_state(self, batch):
-        '''Write state to the history DB.'''
+        """Write state to the history DB."""
         state = {
             'flush_count': self.flush_count,
             'comp_flush_count': self.comp_flush_count,
@@ -174,10 +174,10 @@ class History:
         self.logger.info(f'backing up removed {nremoves:,d} history entries')
 
     def get_txnums(self, hashX, limit=1000):
-        '''Generator that returns an unpruned, sorted list of tx_nums in the
+        """Generator that returns an unpruned, sorted list of tx_nums in the
         history of a hashX.  Includes both spending and receiving
         transactions.  By default yields at most 1000 entries.  Set
-        limit to None to get them all.  '''
+        limit to None to get them all.  """
         limit = util.resolve_limit(limit)
         for key, hist in self.db.iterator(prefix=hashX):
             a = array.array('I')
@@ -208,7 +208,7 @@ class History:
     # flush_count is reset to comp_flush_count, and comp_flush_count to -1
 
     def _flush_compaction(self, cursor, write_items, keys_to_delete):
-        '''Flush a single compaction pass as a batch.'''
+        """Flush a single compaction pass as a batch."""
         # Update compaction state
         if cursor == 65536:
             self.flush_count = self.comp_flush_count
@@ -228,8 +228,8 @@ class History:
 
     def _compact_hashX(self, hashX, hist_map, hist_list,
                        write_items, keys_to_delete):
-        '''Compres history for a hashX.  hist_list is an ordered list of
-        the histories to be compressed.'''
+        """Compres history for a hashX.  hist_list is an ordered list of
+        the histories to be compressed."""
         # History entries (tx numbers) are 4 bytes each.  Distribute
         # over rows of up to 50KB in size.  A fixed row size means
         # future compactions will not need to update the first N - 1
@@ -263,8 +263,8 @@ class History:
         return write_size
 
     def _compact_prefix(self, prefix, write_items, keys_to_delete):
-        '''Compact all history entries for hashXs beginning with the
-        given prefix.  Update keys_to_delete and write.'''
+        """Compact all history entries for hashXs beginning with the
+        given prefix.  Update keys_to_delete and write."""
         prior_hashX = None
         hist_map = {}
         hist_list = []
@@ -292,9 +292,9 @@ class History:
         return write_size
 
     def _compact_history(self, limit):
-        '''Inner loop of history compaction.  Loops until limit bytes have
+        """Inner loop of history compaction.  Loops until limit bytes have
         been processed.
-        '''
+        """
         keys_to_delete = set()
         write_items = []   # A list of (key, value) pairs
         write_size = 0

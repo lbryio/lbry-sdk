@@ -6,7 +6,7 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-'''Block prefetcher and chain processor.'''
+"""Block prefetcher and chain processor."""
 
 
 import asyncio
@@ -21,7 +21,7 @@ from torba.server.db import FlushData
 
 
 class Prefetcher:
-    '''Prefetches blocks (in the forward direction only).'''
+    """Prefetches blocks (in the forward direction only)."""
 
     def __init__(self, daemon, coin, blocks_event):
         self.logger = class_logger(__name__, self.__class__.__name__)
@@ -43,7 +43,7 @@ class Prefetcher:
         self.polling_delay = 5
 
     async def main_loop(self, bp_height):
-        '''Loop forever polling for more blocks.'''
+        """Loop forever polling for more blocks."""
         await self.reset_height(bp_height)
         while True:
             try:
@@ -55,7 +55,7 @@ class Prefetcher:
                 self.logger.info(f'ignoring daemon error: {e}')
 
     def get_prefetched_blocks(self):
-        '''Called by block processor when it is processing queued blocks.'''
+        """Called by block processor when it is processing queued blocks."""
         blocks = self.blocks
         self.blocks = []
         self.cache_size = 0
@@ -63,12 +63,12 @@ class Prefetcher:
         return blocks
 
     async def reset_height(self, height):
-        '''Reset to prefetch blocks from the block processor's height.
+        """Reset to prefetch blocks from the block processor's height.
 
         Used in blockchain reorganisations.  This coroutine can be
         called asynchronously to the _prefetch_blocks coroutine so we
         must synchronize with a semaphore.
-        '''
+        """
         async with self.semaphore:
             self.blocks.clear()
             self.cache_size = 0
@@ -86,10 +86,10 @@ class Prefetcher:
                              .format(daemon_height))
 
     async def _prefetch_blocks(self):
-        '''Prefetch some blocks and put them on the queue.
+        """Prefetch some blocks and put them on the queue.
 
         Repeats until the queue is full or caught up.
-        '''
+        """
         daemon = self.daemon
         daemon_height = await daemon.height()
         async with self.semaphore:
@@ -136,15 +136,15 @@ class Prefetcher:
 
 
 class ChainError(Exception):
-    '''Raised on error processing blocks.'''
+    """Raised on error processing blocks."""
 
 
 class BlockProcessor:
-    '''Process blocks and update the DB state to match.
+    """Process blocks and update the DB state to match.
 
     Employ a prefetcher to prefetch blocks in batches for processing.
     Coordinate backing up in case of chain reorganisations.
-    '''
+    """
 
     def __init__(self, env, db, daemon, notifications):
         self.env = env
@@ -187,9 +187,9 @@ class BlockProcessor:
         return await asyncio.shield(run_in_thread_locked())
 
     async def check_and_advance_blocks(self, raw_blocks):
-        '''Process the list of raw blocks passed.  Detects and handles
+        """Process the list of raw blocks passed.  Detects and handles
         reorgs.
-        '''
+        """
         if not raw_blocks:
             return
         first = self.height + 1
@@ -224,10 +224,10 @@ class BlockProcessor:
             await self.prefetcher.reset_height(self.height)
 
     async def reorg_chain(self, count=None):
-        '''Handle a chain reorganisation.
+        """Handle a chain reorganisation.
 
         Count is the number of blocks to simulate a reorg, or None for
-        a real reorg.'''
+        a real reorg."""
         if count is None:
             self.logger.info('chain reorg detected')
         else:
@@ -260,12 +260,12 @@ class BlockProcessor:
         await self.prefetcher.reset_height(self.height)
 
     async def reorg_hashes(self, count):
-        '''Return a pair (start, last, hashes) of blocks to back up during a
+        """Return a pair (start, last, hashes) of blocks to back up during a
         reorg.
 
         The hashes are returned in order of increasing height.  Start
         is the height of the first hash, last of the last.
-        '''
+        """
         start, count = await self.calc_reorg_range(count)
         last = start + count - 1
         s = '' if count == 1 else 's'
@@ -275,11 +275,11 @@ class BlockProcessor:
         return start, last, await self.db.fs_block_hashes(start, count)
 
     async def calc_reorg_range(self, count):
-        '''Calculate the reorg range'''
+        """Calculate the reorg range"""
 
         def diff_pos(hashes1, hashes2):
-            '''Returns the index of the first difference in the hash lists.
-            If both lists match returns their length.'''
+            """Returns the index of the first difference in the hash lists.
+            If both lists match returns their length."""
             for n, (hash1, hash2) in enumerate(zip(hashes1, hashes2)):
                 if hash1 != hash2:
                     return n
@@ -318,7 +318,7 @@ class BlockProcessor:
 
     # - Flushing
     def flush_data(self):
-        '''The data for a flush.  The lock must be taken.'''
+        """The data for a flush.  The lock must be taken."""
         assert self.state_lock.locked()
         return FlushData(self.height, self.tx_count, self.headers,
                          self.tx_hashes, self.undo_infos, self.utxo_cache,
@@ -342,7 +342,7 @@ class BlockProcessor:
             self.next_cache_check = time.time() + 30
 
     def check_cache_size(self):
-        '''Flush a cache if it gets too big.'''
+        """Flush a cache if it gets too big."""
         # Good average estimates based on traversal of subobjects and
         # requesting size from Python (see deep_getsizeof).
         one_MB = 1000*1000
@@ -368,10 +368,10 @@ class BlockProcessor:
         return None
 
     def advance_blocks(self, blocks):
-        '''Synchronously advance the blocks.
+        """Synchronously advance the blocks.
 
         It is already verified they correctly connect onto our tip.
-        '''
+        """
         min_height = self.db.min_undo_height(self.daemon.cached_height())
         height = self.height
 
@@ -436,11 +436,11 @@ class BlockProcessor:
         return undo_info
 
     def backup_blocks(self, raw_blocks):
-        '''Backup the raw blocks and flush.
+        """Backup the raw blocks and flush.
 
         The blocks should be in order of decreasing height, starting at.
         self.height.  A flush is performed once the blocks are backed up.
-        '''
+        """
         self.db.assert_flushed(self.flush_data())
         assert self.height >= len(raw_blocks)
 
@@ -500,7 +500,7 @@ class BlockProcessor:
         assert n == 0
         self.tx_count -= len(txs)
 
-    '''An in-memory UTXO cache, representing all changes to UTXO state
+    """An in-memory UTXO cache, representing all changes to UTXO state
     since the last DB flush.
 
     We want to store millions of these in memory for optimal
@@ -552,15 +552,15 @@ class BlockProcessor:
     looking up a UTXO the prefix space of the compressed hash needs to
     be searched and resolved if necessary with the tx_num.  The
     collision rate is low (<0.1%).
-    '''
+    """
 
     def spend_utxo(self, tx_hash, tx_idx):
-        '''Spend a UTXO and return the 33-byte value.
+        """Spend a UTXO and return the 33-byte value.
 
         If the UTXO is not in the cache it must be on disk.  We store
         all UTXOs so not finding one indicates a logic error or DB
         corruption.
-        '''
+        """
         # Fast track is it being in the cache
         idx_packed = pack('<H', tx_idx)
         cache_value = self.utxo_cache.pop(tx_hash + idx_packed, None)
@@ -599,7 +599,7 @@ class BlockProcessor:
                          .format(hash_to_hex_str(tx_hash), tx_idx))
 
     async def _process_prefetched_blocks(self):
-        '''Loop forever processing blocks as they arrive.'''
+        """Loop forever processing blocks as they arrive."""
         while True:
             if self.height == self.daemon.cached_height():
                 if not self._caught_up_event.is_set():
@@ -635,7 +635,7 @@ class BlockProcessor:
     # --- External API
 
     async def fetch_and_process_blocks(self, caught_up_event):
-        '''Fetch, process and index blocks from the daemon.
+        """Fetch, process and index blocks from the daemon.
 
         Sets caught_up_event when first caught up.  Flushes to disk
         and shuts down cleanly if cancelled.
@@ -645,7 +645,7 @@ class BlockProcessor:
         processed but not written to disk, it should write those to
         disk before exiting, as otherwise a significant amount of work
         could be lost.
-        '''
+        """
         self._caught_up_event = caught_up_event
         await self._first_open_dbs()
         try:
@@ -660,10 +660,10 @@ class BlockProcessor:
             self.db.close()
 
     def force_chain_reorg(self, count):
-        '''Force a reorg of the given number of blocks.
+        """Force a reorg of the given number of blocks.
 
         Returns True if a reorg is queued, false if not caught up.
-        '''
+        """
         if self._caught_up_event.is_set():
             self.reorg_count = count
             self.blocks_event.set()

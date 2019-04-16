@@ -4,9 +4,9 @@ from torba.server import util
 
 
 def sessions_lines(data):
-    '''A generator returning lines for a list of sessions.
+    """A generator returning lines for a list of sessions.
 
-    data is the return value of rpc_sessions().'''
+    data is the return value of rpc_sessions()."""
     fmt = ('{:<6} {:<5} {:>17} {:>5} {:>5} {:>5} '
            '{:>7} {:>7} {:>7} {:>7} {:>7} {:>9} {:>21}')
     yield fmt.format('ID', 'Flags', 'Client', 'Proto',
@@ -26,9 +26,9 @@ def sessions_lines(data):
 
 
 def groups_lines(data):
-    '''A generator returning lines for a list of groups.
+    """A generator returning lines for a list of groups.
 
-    data is the return value of rpc_groups().'''
+    data is the return value of rpc_groups()."""
 
     fmt = ('{:<6} {:>9} {:>9} {:>6} {:>6} {:>8}'
            '{:>7} {:>9} {:>7} {:>9}')
@@ -49,9 +49,9 @@ def groups_lines(data):
 
 
 def peers_lines(data):
-    '''A generator returning lines for a list of peers.
+    """A generator returning lines for a list of peers.
 
-    data is the return value of rpc_peers().'''
+    data is the return value of rpc_peers()."""
     def time_fmt(t):
         if not t:
             return 'Never'

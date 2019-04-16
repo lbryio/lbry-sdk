@@ -5,7 +5,7 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-'''Classes for local RPC server and remote client TCP/SSL servers.'''
+"""Classes for local RPC server and remote client TCP/SSL servers."""
 
 import asyncio
 import codecs
@@ -48,8 +48,8 @@ def scripthash_to_hashX(scripthash):
 
 
 def non_negative_integer(value):
-    '''Return param value it is or can be converted to a non-negative
-    integer, otherwise raise an RPCError.'''
+    """Return param value it is or can be converted to a non-negative
+    integer, otherwise raise an RPCError."""
     try:
         value = int(value)
         if value >= 0:
@@ -61,15 +61,15 @@ def non_negative_integer(value):
 
 
 def assert_boolean(value):
-    '''Return param value it is boolean otherwise raise an RPCError.'''
+    """Return param value it is boolean otherwise raise an RPCError."""
     if value in (False, True):
         return value
     raise RPCError(BAD_REQUEST, f'{value} should be a boolean value')
 
 
 def assert_tx_hash(value):
-    '''Raise an RPCError if the value is not a valid transaction
-    hash.'''
+    """Raise an RPCError if the value is not a valid transaction
+    hash."""
     try:
         if len(util.hex_to_bytes(value)) == 32:
             return
@@ -79,7 +79,7 @@ def assert_tx_hash(value):
 
 
 class Semaphores:
-    '''For aiorpcX's semaphore handling.'''
+    """For aiorpcX's semaphore handling."""
 
     def __init__(self, semaphores):
         self.semaphores = semaphores
@@ -104,7 +104,7 @@ class SessionGroup:
 
 
 class SessionManager:
-    '''Holds global state about all sessions.'''
+    """Holds global state about all sessions."""
 
     def __init__(self, env, db, bp, daemon, mempool, shutdown_event):
         env.max_send = max(350000, env.max_send)
@@ -159,9 +159,9 @@ class SessionManager:
             self.logger.info(f'{kind} server listening on {host}:{port:d}')
 
     async def _start_external_servers(self):
-        '''Start listening on TCP and SSL ports, but only if the respective
+        """Start listening on TCP and SSL ports, but only if the respective
         port was given in the environment.
-        '''
+        """
         env = self.env
         host = env.cs_host(for_rpc=False)
         if env.tcp_port is not None:
@@ -172,7 +172,7 @@ class SessionManager:
             await self._start_server('SSL', host, env.ssl_port, ssl=sslc)
 
     async def _close_servers(self, kinds):
-        '''Close the servers of the given kinds (TCP etc.).'''
+        """Close the servers of the given kinds (TCP etc.)."""
         if kinds:
             self.logger.info('closing down {} listening servers'
                              .format(', '.join(kinds)))
@@ -203,7 +203,7 @@ class SessionManager:
                 paused = False
 
     async def _log_sessions(self):
-        '''Periodically log sessions.'''
+        """Periodically log sessions."""
         log_interval = self.env.log_sessions
         if log_interval:
             while True:
@@ -247,7 +247,7 @@ class SessionManager:
         return result
 
     async def _clear_stale_sessions(self):
-        '''Cut off sessions that haven't done anything for 10 minutes.'''
+        """Cut off sessions that haven't done anything for 10 minutes."""
         while True:
             await sleep(60)
             stale_cutoff = time.time() - self.env.session_timeout
@@ -276,7 +276,7 @@ class SessionManager:
                         session.group = new_group
 
     def _get_info(self):
-        '''A summary of server state.'''
+        """A summary of server state."""
         group_map = self._group_map()
         return {
             'closing': len([s for s in self.sessions if s.is_closing()]),
@@ -298,7 +298,7 @@ class SessionManager:
         }
 
     def _session_data(self, for_log):
-        '''Returned to the RPC 'sessions' call.'''
+        """Returned to the RPC 'sessions' call."""
         now = time.time()
         sessions = sorted(self.sessions, key=lambda s: s.start_time)
         return [(session.session_id,
@@ -315,7 +315,7 @@ class SessionManager:
                 for session in sessions]
 
     def _group_data(self):
-        '''Returned to the RPC 'groups' call.'''
+        """Returned to the RPC 'groups' call."""
         result = []
         group_map = self._group_map()
         for group, sessions in group_map.items():
@@ -338,9 +338,9 @@ class SessionManager:
         return electrum_header, raw_header
 
     async def _refresh_hsub_results(self, height):
-        '''Refresh the cached header subscription responses to be for height,
+        """Refresh the cached header subscription responses to be for height,
         and record that as notified_height.
-        '''
+        """
         # Paranoia: a reorg could race and leave db_height lower
         height = min(height, self.db.db_height)
         electrum, raw = await self._electrum_and_raw_headers(height)
@@ -350,39 +350,39 @@ class SessionManager:
     # --- LocalRPC command handlers
 
     async def rpc_add_peer(self, real_name):
-        '''Add a peer.
+        """Add a peer.
 
         real_name: "bch.electrumx.cash t50001 s50002" for example
-        '''
+        """
         await self.peer_mgr.add_localRPC_peer(real_name)
         return "peer '{}' added".format(real_name)
 
     async def rpc_disconnect(self, session_ids):
-        '''Disconnect sesssions.
+        """Disconnect sesssions.
 
         session_ids: array of session IDs
-        '''
+        """
         async def close(session):
-            '''Close the session's transport.'''
+            """Close the session's transport."""
             await session.close(force_after=2)
             return f'disconnected {session.session_id}'
 
         return await self._for_each_session(session_ids, close)
 
     async def rpc_log(self, session_ids):
-        '''Toggle logging of sesssions.
+        """Toggle logging of sesssions.
 
         session_ids: array of session IDs
-        '''
+        """
         async def toggle_logging(session):
-            '''Toggle logging of the session.'''
+            """Toggle logging of the session."""
             session.toggle_logging()
             return f'log {session.session_id}: {session.log_me}'
 
         return await self._for_each_session(session_ids, toggle_logging)
 
     async def rpc_daemon_url(self, daemon_url):
-        '''Replace the daemon URL.'''
+        """Replace the daemon URL."""
         daemon_url = daemon_url or self.env.daemon_url
         try:
             self.daemon.set_url(daemon_url)
@@ -391,24 +391,24 @@ class SessionManager:
         return f'now using daemon at {self.daemon.logged_url()}'
 
     async def rpc_stop(self):
-        '''Shut down the server cleanly.'''
+        """Shut down the server cleanly."""
         self.shutdown_event.set()
         return 'stopping'
 
     async def rpc_getinfo(self):
-        '''Return summary information about the server process.'''
+        """Return summary information about the server process."""
         return self._get_info()
 
     async def rpc_groups(self):
-        '''Return statistics about the session groups.'''
+        """Return statistics about the session groups."""
         return self._group_data()
 
     async def rpc_peers(self):
-        '''Return a list of data about server peers.'''
+        """Return a list of data about server peers."""
         return self.peer_mgr.rpc_data()
 
     async def rpc_query(self, items, limit):
-        '''Return a list of data about server peers.'''
+        """Return a list of data about server peers."""
         coin = self.env.coin
         db = self.db
         lines = []
@@ -459,14 +459,14 @@ class SessionManager:
         return lines
 
     async def rpc_sessions(self):
-        '''Return statistics about connected sessions.'''
+        """Return statistics about connected sessions."""
         return self._session_data(for_log=False)
 
     async def rpc_reorg(self, count):
-        '''Force a reorg of the given number of blocks.
+        """Force a reorg of the given number of blocks.
 
         count: number of blocks to reorg
-        '''
+        """
         count = non_negative_integer(count)
         if not self.bp.force_chain_reorg(count):
             raise RPCError(BAD_REQUEST, 'still catching up with daemon')
@@ -475,8 +475,8 @@ class SessionManager:
     # --- External Interface
 
     async def serve(self, notifications, server_listening_event):
-        '''Start the RPC server if enabled.  When the event is triggered,
-        start TCP and SSL servers.'''
+        """Start the RPC server if enabled.  When the event is triggered,
+        start TCP and SSL servers."""
         try:
             if self.env.rpc_port is not None:
                 await self._start_server('RPC', self.env.cs_host(for_rpc=True),
@@ -515,18 +515,18 @@ class SessionManager:
                 ])
 
     def session_count(self):
-        '''The number of connections that we've sent something to.'''
+        """The number of connections that we've sent something to."""
         return len(self.sessions)
 
     async def daemon_request(self, method, *args):
-        '''Catch a DaemonError and convert it to an RPCError.'''
+        """Catch a DaemonError and convert it to an RPCError."""
         try:
             return await getattr(self.daemon, method)(*args)
         except DaemonError as e:
             raise RPCError(DAEMON_ERROR, f'daemon error: {e!r}') from None
 
     async def raw_header(self, height):
-        '''Return the binary header at the given height.'''
+        """Return the binary header at the given height."""
         try:
             return await self.db.raw_header(height)
         except IndexError:
@@ -534,7 +534,7 @@ class SessionManager:
                            'out of range') from None
 
     async def electrum_header(self, height):
-        '''Return the deserialized header at the given height.'''
+        """Return the deserialized header at the given height."""
         electrum_header, _ = await self._electrum_and_raw_headers(height)
         return electrum_header
 
@@ -544,7 +544,7 @@ class SessionManager:
         return hex_hash
 
     async def limited_history(self, hashX):
-        '''A caching layer.'''
+        """A caching layer."""
         hc = self.history_cache
         if hashX not in hc:
             # History DoS limit.  Each element of history is about 99
@@ -556,7 +556,7 @@ class SessionManager:
         return hc[hashX]
 
     async def _notify_sessions(self, height, touched):
-        '''Notify sessions about height changes and touched addresses.'''
+        """Notify sessions about height changes and touched addresses."""
         height_changed = height != self.notified_height
         if height_changed:
             await self._refresh_hsub_results(height)
@@ -579,7 +579,7 @@ class SessionManager:
         return self.cur_group
 
     def remove_session(self, session):
-        '''Remove a session from our sessions list if there.'''
+        """Remove a session from our sessions list if there."""
         self.sessions.remove(session)
         self.session_event.set()
 
@@ -593,11 +593,11 @@ class SessionManager:
 
 
 class SessionBase(RPCSession):
-    '''Base class of ElectrumX JSON sessions.
+    """Base class of ElectrumX JSON sessions.
 
     Each session runs its tasks in asynchronous parallelism with other
     sessions.
-    '''
+    """
 
     MAX_CHUNK_SIZE = 2016
     session_counter = itertools.count()
@@ -627,8 +627,8 @@ class SessionBase(RPCSession):
         pass
 
     def peer_address_str(self, *, for_log=True):
-        '''Returns the peer's IP address and port as a human-readable
-        string, respecting anon logs if the output is for a log.'''
+        """Returns the peer's IP address and port as a human-readable
+        string, respecting anon logs if the output is for a log."""
         if for_log and self.anon_logs:
             return 'xx.xx.xx.xx:xx'
         return super().peer_address_str()
@@ -642,7 +642,7 @@ class SessionBase(RPCSession):
         self.log_me = not self.log_me
 
     def flags(self):
-        '''Status flags.'''
+        """Status flags."""
         status = self.kind[0]
         if self.is_closing():
             status += 'C'
@@ -652,7 +652,7 @@ class SessionBase(RPCSession):
         return status
 
     def connection_made(self, transport):
-        '''Handle an incoming client connection.'''
+        """Handle an incoming client connection."""
         super().connection_made(transport)
         self.session_id = next(self.session_counter)
         context = {'conn_id': f'{self.session_id}'}
@@ -662,7 +662,7 @@ class SessionBase(RPCSession):
                          f'{self.session_mgr.session_count():,d} total')
 
     def connection_lost(self, exc):
-        '''Handle client disconnection.'''
+        """Handle client disconnection."""
         super().connection_lost(exc)
         self.session_mgr.remove_session(self)
         msg = ''
@@ -687,9 +687,9 @@ class SessionBase(RPCSession):
         return 0
 
     async def handle_request(self, request):
-        '''Handle an incoming request.  ElectrumX doesn't receive
+        """Handle an incoming request.  ElectrumX doesn't receive
         notifications from client sessions.
-        '''
+        """
         if isinstance(request, Request):
             handler = self.request_handlers.get(request.method)
         else:
@@ -699,7 +699,7 @@ class SessionBase(RPCSession):
 
 
 class ElectrumX(SessionBase):
-    '''A TCP server that handles incoming Electrum connections.'''
+    """A TCP server that handles incoming Electrum connections."""
 
     PROTOCOL_MIN = (1, 1)
     PROTOCOL_MAX = (1, 4)
@@ -722,7 +722,7 @@ class ElectrumX(SessionBase):
 
     @classmethod
     def server_features(cls, env):
-        '''Return the server features dictionary.'''
+        """Return the server features dictionary."""
         min_str, max_str = cls.protocol_min_max_strings()
         return {
             'hosts': env.hosts_dict(),
@@ -739,7 +739,7 @@ class ElectrumX(SessionBase):
 
     @classmethod
     def server_version_args(cls):
-        '''The arguments to a server.version RPC call to a peer.'''
+        """The arguments to a server.version RPC call to a peer."""
         return [torba.__version__, cls.protocol_min_max_strings()]
 
     def protocol_version_string(self):
@@ -749,9 +749,9 @@ class ElectrumX(SessionBase):
         return len(self.hashX_subs)
 
     async def notify(self, touched, height_changed):
-        '''Notify the client about changes to touched addresses (from mempool
+        """Notify the client about changes to touched addresses (from mempool
         updates or new blocks) and height.
-        '''
+        """
         if height_changed and self.subscribe_headers:
             args = (await self.subscribe_headers_result(), )
             await self.send_notification('blockchain.headers.subscribe', args)
@@ -789,40 +789,40 @@ class ElectrumX(SessionBase):
                 self.logger.info(f'notified of {len(changed):,d} address{es}')
 
     async def subscribe_headers_result(self):
-        '''The result of a header subscription or notification.'''
+        """The result of a header subscription or notification."""
         return self.session_mgr.hsub_results[self.subscribe_headers_raw]
 
     async def _headers_subscribe(self, raw):
-        '''Subscribe to get headers of new blocks.'''
+        """Subscribe to get headers of new blocks."""
         self.subscribe_headers_raw = assert_boolean(raw)
         self.subscribe_headers = True
         return await self.subscribe_headers_result()
 
     async def headers_subscribe(self):
-        '''Subscribe to get raw headers of new blocks.'''
+        """Subscribe to get raw headers of new blocks."""
         return await self._headers_subscribe(True)
 
     async def headers_subscribe_True(self, raw=True):
-        '''Subscribe to get headers of new blocks.'''
+        """Subscribe to get headers of new blocks."""
         return await self._headers_subscribe(raw)
 
     async def headers_subscribe_False(self, raw=False):
-        '''Subscribe to get headers of new blocks.'''
+        """Subscribe to get headers of new blocks."""
         return await self._headers_subscribe(raw)
 
     async def add_peer(self, features):
-        '''Add a peer (but only if the peer resolves to the source).'''
+        """Add a peer (but only if the peer resolves to the source)."""
         return await self.peer_mgr.on_add_peer(features, self.peer_address())
 
     async def peers_subscribe(self):
-        '''Return the server peers as a list of (ip, host, details) tuples.'''
+        """Return the server peers as a list of (ip, host, details) tuples."""
         return self.peer_mgr.on_peers_subscribe(self.is_tor())
 
     async def address_status(self, hashX):
-        '''Returns an address status.
+        """Returns an address status.
 
         Status is a hex string, but must be None if there is no history.
-        '''
+        """
         # Note history is ordered and mempool unordered in electrum-server
         # For mempool, height is -1 if it has unconfirmed inputs, otherwise 0
         db_history = await self.session_mgr.limited_history(hashX)
@@ -847,8 +847,8 @@ class ElectrumX(SessionBase):
         return status
 
     async def hashX_listunspent(self, hashX):
-        '''Return the list of UTXOs of a script hash, including mempool
-        effects.'''
+        """Return the list of UTXOs of a script hash, including mempool
+        effects."""
         utxos = await self.db.all_utxos(hashX)
         utxos = sorted(utxos)
         utxos.extend(await self.mempool.unordered_UTXOs(hashX))
@@ -879,29 +879,29 @@ class ElectrumX(SessionBase):
         raise RPCError(BAD_REQUEST, f'{address} is not a valid address')
 
     async def address_get_balance(self, address):
-        '''Return the confirmed and unconfirmed balance of an address.'''
+        """Return the confirmed and unconfirmed balance of an address."""
         hashX = self.address_to_hashX(address)
         return await self.get_balance(hashX)
 
     async def address_get_history(self, address):
-        '''Return the confirmed and unconfirmed history of an address.'''
+        """Return the confirmed and unconfirmed history of an address."""
         hashX = self.address_to_hashX(address)
         return await self.confirmed_and_unconfirmed_history(hashX)
 
     async def address_get_mempool(self, address):
-        '''Return the mempool transactions touching an address.'''
+        """Return the mempool transactions touching an address."""
         hashX = self.address_to_hashX(address)
         return await self.unconfirmed_history(hashX)
 
     async def address_listunspent(self, address):
-        '''Return the list of UTXOs of an address.'''
+        """Return the list of UTXOs of an address."""
         hashX = self.address_to_hashX(address)
         return await self.hashX_listunspent(hashX)
 
     async def address_subscribe(self, address):
-        '''Subscribe to an address.
+        """Subscribe to an address.
 
-        address: the address to subscribe to'''
+        address: the address to subscribe to"""
         hashX = self.address_to_hashX(address)
         return await self.hashX_subscribe(hashX, address)
 
@@ -912,7 +912,7 @@ class ElectrumX(SessionBase):
         return {'confirmed': confirmed, 'unconfirmed': unconfirmed}
 
     async def scripthash_get_balance(self, scripthash):
-        '''Return the confirmed and unconfirmed balance of a scripthash.'''
+        """Return the confirmed and unconfirmed balance of a scripthash."""
         hashX = scripthash_to_hashX(scripthash)
         return await self.get_balance(hashX)
 
@@ -932,24 +932,24 @@ class ElectrumX(SessionBase):
         return conf + await self.unconfirmed_history(hashX)
 
     async def scripthash_get_history(self, scripthash):
-        '''Return the confirmed and unconfirmed history of a scripthash.'''
+        """Return the confirmed and unconfirmed history of a scripthash."""
         hashX = scripthash_to_hashX(scripthash)
         return await self.confirmed_and_unconfirmed_history(hashX)
 
     async def scripthash_get_mempool(self, scripthash):
-        '''Return the mempool transactions touching a scripthash.'''
+        """Return the mempool transactions touching a scripthash."""
         hashX = scripthash_to_hashX(scripthash)
         return await self.unconfirmed_history(hashX)
 
     async def scripthash_listunspent(self, scripthash):
-        '''Return the list of UTXOs of a scripthash.'''
+        """Return the list of UTXOs of a scripthash."""
         hashX = scripthash_to_hashX(scripthash)
         return await self.hashX_listunspent(hashX)
 
     async def scripthash_subscribe(self, scripthash):
-        '''Subscribe to a script hash.
+        """Subscribe to a script hash.
 
-        scripthash: the SHA256 hash of the script to subscribe to'''
+        scripthash: the SHA256 hash of the script to subscribe to"""
         hashX = scripthash_to_hashX(scripthash)
         return await self.hashX_subscribe(hashX, scripthash)
 
@@ -968,8 +968,8 @@ class ElectrumX(SessionBase):
         }
 
     async def block_header(self, height, cp_height=0):
-        '''Return a raw block header as a hexadecimal string, or as a
-        dictionary with a merkle proof.'''
+        """Return a raw block header as a hexadecimal string, or as a
+        dictionary with a merkle proof."""
         height = non_negative_integer(height)
         cp_height = non_negative_integer(cp_height)
         raw_header_hex = (await self.session_mgr.raw_header(height)).hex()
@@ -980,18 +980,18 @@ class ElectrumX(SessionBase):
         return result
 
     async def block_header_13(self, height):
-        '''Return a raw block header as a hexadecimal string.
+        """Return a raw block header as a hexadecimal string.
 
-        height: the header's height'''
+        height: the header's height"""
         return await self.block_header(height)
 
     async def block_headers(self, start_height, count, cp_height=0):
-        '''Return count concatenated block headers as hex for the main chain;
+        """Return count concatenated block headers as hex for the main chain;
         starting at start_height.
 
         start_height and count must be non-negative integers.  At most
         MAX_CHUNK_SIZE headers will be returned.
-        '''
+        """
         start_height = non_negative_integer(start_height)
         count = non_negative_integer(count)
         cp_height = non_negative_integer(cp_height)
@@ -1009,9 +1009,9 @@ class ElectrumX(SessionBase):
         return await self.block_headers(start_height, count)
 
     async def block_get_chunk(self, index):
-        '''Return a chunk of block headers as a hexadecimal string.
+        """Return a chunk of block headers as a hexadecimal string.
 
-        index: the chunk index'''
+        index: the chunk index"""
         index = non_negative_integer(index)
         size = self.coin.CHUNK_SIZE
         start_height = index * size
@@ -1019,15 +1019,15 @@ class ElectrumX(SessionBase):
         return headers.hex()
 
     async def block_get_header(self, height):
-        '''The deserialized header at a given height.
+        """The deserialized header at a given height.
 
-        height: the header's height'''
+        height: the header's height"""
         height = non_negative_integer(height)
         return await self.session_mgr.electrum_header(height)
 
     def is_tor(self):
-        '''Try to detect if the connection is to a tor hidden service we are
-        running.'''
+        """Try to detect if the connection is to a tor hidden service we are
+        running."""
         peername = self.peer_mgr.proxy_peername()
         if not peername:
             return False
@@ -1051,11 +1051,11 @@ class ElectrumX(SessionBase):
         return banner
 
     async def donation_address(self):
-        '''Return the donation address as a string, empty if there is none.'''
+        """Return the donation address as a string, empty if there is none."""
         return self.env.donation_address
 
     async def banner(self):
-        '''Return the server banner text.'''
+        """Return the server banner text."""
         banner = f'You are connected to an {torba.__version__} server.'
 
         if self.is_tor():
@@ -1074,31 +1074,31 @@ class ElectrumX(SessionBase):
         return banner
 
     async def relayfee(self):
-        '''The minimum fee a low-priority tx must pay in order to be accepted
-        to the daemon's memory pool.'''
+        """The minimum fee a low-priority tx must pay in order to be accepted
+        to the daemon's memory pool."""
         return await self.daemon_request('relayfee')
 
     async def estimatefee(self, number):
-        '''The estimated transaction fee per kilobyte to be paid for a
+        """The estimated transaction fee per kilobyte to be paid for a
         transaction to be included within a certain number of blocks.
 
         number: the number of blocks
-        '''
+        """
         number = non_negative_integer(number)
         return await self.daemon_request('estimatefee', number)
 
     async def ping(self):
-        '''Serves as a connection keep-alive mechanism and for the client to
+        """Serves as a connection keep-alive mechanism and for the client to
         confirm the server is still responding.
-        '''
+        """
         return None
 
     async def server_version(self, client_name='', protocol_version=None):
-        '''Returns the server version as a string.
+        """Returns the server version as a string.
 
         client_name: a string identifying the client
         protocol_version: the protocol version spoken by the client
-        '''
+        """
         if self.sv_seen and self.protocol_tuple >= (1, 4):
             raise RPCError(BAD_REQUEST, f'server.version already sent')
         self.sv_seen = True
@@ -1129,9 +1129,9 @@ class ElectrumX(SessionBase):
         return torba.__version__, self.protocol_version_string()
 
     async def transaction_broadcast(self, raw_tx):
-        '''Broadcast a raw transaction to the network.
+        """Broadcast a raw transaction to the network.
 
-        raw_tx: the raw transaction as a hexadecimal string'''
+        raw_tx: the raw transaction as a hexadecimal string"""
         # This returns errors as JSON RPC errors, as is natural
         try:
             hex_hash = await self.session_mgr.broadcast_transaction(raw_tx)
@@ -1146,11 +1146,11 @@ class ElectrumX(SessionBase):
                            f'network rules.\n\n{message}\n[{raw_tx}]')
 
     async def transaction_get(self, tx_hash, verbose=False):
-        '''Return the serialized raw transaction given its hash
+        """Return the serialized raw transaction given its hash
 
         tx_hash: the transaction hash as a hexadecimal string
         verbose: passed on to the daemon
-        '''
+        """
         assert_tx_hash(tx_hash)
         if verbose not in (True, False):
             raise RPCError(BAD_REQUEST, f'"verbose" must be a boolean')
@@ -1158,12 +1158,12 @@ class ElectrumX(SessionBase):
         return await self.daemon_request('getrawtransaction', tx_hash, verbose)
 
     async def _block_hash_and_tx_hashes(self, height):
-        '''Returns a pair (block_hash, tx_hashes) for the main chain block at
+        """Returns a pair (block_hash, tx_hashes) for the main chain block at
         the given height.
 
         block_hash is a hexadecimal string, and tx_hashes is an
         ordered list of hexadecimal strings.
-        '''
+        """
         height = non_negative_integer(height)
         hex_hashes = await self.daemon_request('block_hex_hashes', height, 1)
         block_hash = hex_hashes[0]
@@ -1171,23 +1171,23 @@ class ElectrumX(SessionBase):
         return block_hash, block['tx']
 
     def _get_merkle_branch(self, tx_hashes, tx_pos):
-        '''Return a merkle branch to a transaction.
+        """Return a merkle branch to a transaction.
 
         tx_hashes: ordered list of hex strings of tx hashes in a block
         tx_pos: index of transaction in tx_hashes to create branch for
-        '''
+        """
         hashes = [hex_str_to_hash(hash) for hash in tx_hashes]
         branch, root = self.db.merkle.branch_and_root(hashes, tx_pos)
         branch = [hash_to_hex_str(hash) for hash in branch]
         return branch
 
     async def transaction_merkle(self, tx_hash, height):
-        '''Return the markle branch to a confirmed transaction given its hash
+        """Return the markle branch to a confirmed transaction given its hash
         and height.
 
         tx_hash: the transaction hash as a hexadecimal string
         height: the height of the block it is in
-        '''
+        """
         assert_tx_hash(tx_hash)
         block_hash, tx_hashes = await self._block_hash_and_tx_hashes(height)
         try:
@@ -1199,9 +1199,9 @@ class ElectrumX(SessionBase):
         return {"block_height": height, "merkle": branch, "pos": pos}
 
     async def transaction_id_from_pos(self, height, tx_pos, merkle=False):
-        '''Return the txid and optionally a merkle proof, given
+        """Return the txid and optionally a merkle proof, given
         a block height and position in the block.
-        '''
+        """
         tx_pos = non_negative_integer(tx_pos)
         if merkle not in (True, False):
             raise RPCError(BAD_REQUEST, f'"merkle" must be a boolean')
@@ -1279,7 +1279,7 @@ class ElectrumX(SessionBase):
 
 
 class LocalRPC(SessionBase):
-    '''A local TCP RPC server session.'''
+    """A local TCP RPC server session."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1291,7 +1291,7 @@ class LocalRPC(SessionBase):
 
 
 class DashElectrumX(ElectrumX):
-    '''A TCP server that handles incoming Electrum Dash connections.'''
+    """A TCP server that handles incoming Electrum Dash connections."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1307,7 +1307,7 @@ class DashElectrumX(ElectrumX):
         })
 
     async def notify(self, touched, height_changed):
-        '''Notify the client about changes in masternode list.'''
+        """Notify the client about changes in masternode list."""
         await super().notify(touched, height_changed)
         for mn in self.mns:
             status = await self.daemon_request('masternode_list',
@@ -1317,10 +1317,10 @@ class DashElectrumX(ElectrumX):
 
     # Masternode command handlers
     async def masternode_announce_broadcast(self, signmnb):
-        '''Pass through the masternode announce message to be broadcast
+        """Pass through the masternode announce message to be broadcast
         by the daemon.
 
-        signmnb: signed masternode broadcast message.'''
+        signmnb: signed masternode broadcast message."""
         try:
             return await self.daemon_request('masternode_broadcast',
                                              ['relay', signmnb])
@@ -1332,10 +1332,10 @@ class DashElectrumX(ElectrumX):
                            f'rejected.\n\n{message}\n[{signmnb}]')
 
     async def masternode_subscribe(self, collateral):
-        '''Returns the status of masternode.
+        """Returns the status of masternode.
 
         collateral: masternode collateral.
-        '''
+        """
         result = await self.daemon_request('masternode_list',
                                            ['status', collateral])
         if result is not None:
@@ -1344,20 +1344,20 @@ class DashElectrumX(ElectrumX):
         return None
 
     async def masternode_list(self, payees):
-        '''
+        """
         Returns the list of masternodes.
 
         payees: a list of masternode payee addresses.
-        '''
+        """
         if not isinstance(payees, list):
             raise RPCError(BAD_REQUEST, 'expected a list of payees')
 
         def get_masternode_payment_queue(mns):
-            '''Returns the calculated position in the payment queue for all the
+            """Returns the calculated position in the payment queue for all the
             valid masterernodes in the given mns list.
 
             mns: a list of masternodes information.
-            '''
+            """
             now = int(datetime.datetime.utcnow().strftime("%s"))
             mn_queue = []
 
@@ -1383,12 +1383,12 @@ class DashElectrumX(ElectrumX):
             return mn_queue
 
         def get_payment_position(payment_queue, address):
-            '''
+            """
             Returns the position of the payment list for the given address.
 
             payment_queue: position in the payment queue for the masternode.
             address: masternode payee address.
-            '''
+            """
             position = -1
             for pos, mn in enumerate(payment_queue, start=1):
                 if mn[2] == address:

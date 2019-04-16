@@ -23,7 +23,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-'''SOCKS proxying.'''
+"""SOCKS proxying."""
 
 import sys
 import asyncio
@@ -42,16 +42,16 @@ SOCKSUserAuth = collections.namedtuple("SOCKSUserAuth", "username password")
 
 
 class SOCKSError(Exception):
-    '''Base class for SOCKS exceptions.  Each raised exception will be
-    an instance of a derived class.'''
+    """Base class for SOCKS exceptions.  Each raised exception will be
+    an instance of a derived class."""
 
 
 class SOCKSProtocolError(SOCKSError):
-    '''Raised when the proxy does not follow the SOCKS protocol'''
+    """Raised when the proxy does not follow the SOCKS protocol"""
 
 
 class SOCKSFailure(SOCKSError):
-    '''Raised when the proxy refuses or fails to make a connection'''
+    """Raised when the proxy refuses or fails to make a connection"""
 
 
 class NeedData(Exception):
@@ -83,7 +83,7 @@ class SOCKSBase(object):
 
 
 class SOCKS4(SOCKSBase):
-    '''SOCKS4 protocol wrapper.'''
+    """SOCKS4 protocol wrapper."""
 
     # See http://ftp.icm.edu.pl/packages/socks/socks4/SOCKS4.protocol
     REPLY_CODES = {
@@ -159,7 +159,7 @@ class SOCKS4a(SOCKS4):
 
 
 class SOCKS5(SOCKSBase):
-    '''SOCKS protocol wrapper.'''
+    """SOCKS protocol wrapper."""
 
     # See https://tools.ietf.org/html/rfc1928
     ERROR_CODES = {
@@ -269,12 +269,12 @@ class SOCKS5(SOCKSBase):
 class SOCKSProxy(object):
 
     def __init__(self, address, protocol, auth):
-        '''A SOCKS proxy at an address following a SOCKS protocol.  auth is an
+        """A SOCKS proxy at an address following a SOCKS protocol.  auth is an
         authentication method to use when connecting, or None.
 
         address is a (host, port) pair; for IPv6 it can instead be a
         (host, port, flowinfo, scopeid) 4-tuple.
-        '''
+        """
         self.address = address
         self.protocol = protocol
         self.auth = auth
@@ -305,11 +305,11 @@ class SOCKSProxy(object):
                 client.receive_data(data)
 
     async def _connect_one(self, host, port):
-        '''Connect to the proxy and perform a handshake requesting a
+        """Connect to the proxy and perform a handshake requesting a
         connection to (host, port).
 
         Return the open socket on success, or the exception on failure.
-        '''
+        """
         client = self.protocol(host, port, self.auth)
         sock = socket.socket()
         loop = asyncio.get_event_loop()
@@ -327,11 +327,11 @@ class SOCKSProxy(object):
             return e
 
     async def _connect(self, addresses):
-        '''Connect to the proxy and perform a handshake requesting a
+        """Connect to the proxy and perform a handshake requesting a
         connection to each address in addresses.
 
         Return an (open_socket, address) pair on success.
-        '''
+        """
         assert len(addresses) > 0
 
         exceptions = []
@@ -347,9 +347,9 @@ class SOCKSProxy(object):
                OSError(f'multiple exceptions: {", ".join(strings)}'))
 
     async def _detect_proxy(self):
-        '''Return True if it appears we can connect to a SOCKS proxy,
+        """Return True if it appears we can connect to a SOCKS proxy,
         otherwise False.
-        '''
+        """
         if self.protocol is SOCKS4a:
             host, port = 'www.apple.com', 80
         else:
@@ -366,7 +366,7 @@ class SOCKSProxy(object):
 
     @classmethod
     async def auto_detect_address(cls, address, auth):
-        '''Try to detect a SOCKS proxy at address using the authentication
+        """Try to detect a SOCKS proxy at address using the authentication
         method (or None).  SOCKS5, SOCKS4a and SOCKS are tried in
         order.  If a SOCKS proxy is detected a SOCKSProxy object is
         returned.
@@ -375,7 +375,7 @@ class SOCKSProxy(object):
         example, it may have no network connectivity.
 
         If no proxy is detected return None.
-        '''
+        """
         for protocol in (SOCKS5, SOCKS4a, SOCKS4):
             proxy = cls(address, protocol, auth)
             if await proxy._detect_proxy():
@@ -384,7 +384,7 @@ class SOCKSProxy(object):
 
     @classmethod
     async def auto_detect_host(cls, host, ports, auth):
-        '''Try to detect a SOCKS proxy on a host on one of the ports.
+        """Try to detect a SOCKS proxy on a host on one of the ports.
 
         Calls auto_detect for the ports in order.  Returns SOCKS are
         tried in order; a SOCKSProxy object for the first detected
@@ -394,7 +394,7 @@ class SOCKSProxy(object):
         example, it may have no network connectivity.
 
         If no proxy is detected return None.
-        '''
+        """
         for port in ports:
             address = (host, port)
             proxy = await cls.auto_detect_address(address, auth)
@@ -406,7 +406,7 @@ class SOCKSProxy(object):
     async def create_connection(self, protocol_factory, host, port, *,
                                 resolve=False, ssl=None,
                                 family=0, proto=0, flags=0):
-        '''Set up a connection to (host, port) through the proxy.
+        """Set up a connection to (host, port) through the proxy.
 
         If resolve is True then host is resolved locally with
         getaddrinfo using family, proto and flags, otherwise the proxy
@@ -417,7 +417,7 @@ class SOCKSProxy(object):
         protocol to the address of the successful remote connection.
         Additionally raises SOCKSError if something goes wrong with
         the proxy handshake.
-        '''
+        """
         loop = asyncio.get_event_loop()
         if resolve:
             infos = await loop.getaddrinfo(host, port, family=family,

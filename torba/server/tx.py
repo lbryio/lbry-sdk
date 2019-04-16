@@ -25,7 +25,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 # and warranty status of this software.
 
-'''Transaction-related classes and functions.'''
+"""Transaction-related classes and functions."""
 
 from collections import namedtuple
 
@@ -42,7 +42,7 @@ MINUS_1 = 4294967295
 
 
 class Tx(namedtuple("Tx", "version inputs outputs locktime")):
-    '''Class representing a transaction.'''
+    """Class representing a transaction."""
 
     def serialize(self):
         return b''.join((
@@ -56,7 +56,7 @@ class Tx(namedtuple("Tx", "version inputs outputs locktime")):
 
 
 class TxInput(namedtuple("TxInput", "prev_hash prev_idx script sequence")):
-    '''Class representing a transaction input.'''
+    """Class representing a transaction input."""
     def __str__(self):
         script = self.script.hex()
         prev_hash = hash_to_hex_str(self.prev_hash)
@@ -64,7 +64,7 @@ class TxInput(namedtuple("TxInput", "prev_hash prev_idx script sequence")):
                 .format(prev_hash, self.prev_idx, script, self.sequence))
 
     def is_generation(self):
-        '''Test if an input is generation/coinbase like'''
+        """Test if an input is generation/coinbase like"""
         return self.prev_idx == MINUS_1 and self.prev_hash == ZERO
 
     def serialize(self):
@@ -86,14 +86,14 @@ class TxOutput(namedtuple("TxOutput", "value pk_script")):
 
 
 class Deserializer:
-    '''Deserializes blocks into transactions.
+    """Deserializes blocks into transactions.
 
     External entry points are read_tx(), read_tx_and_hash(),
     read_tx_and_vsize() and read_block().
 
     This code is performance sensitive as it is executed 100s of
     millions of times during sync.
-    '''
+    """
 
     TX_HASH_FN = staticmethod(double_sha256)
 
@@ -104,7 +104,7 @@ class Deserializer:
         self.cursor = start
 
     def read_tx(self):
-        '''Return a deserialized transaction.'''
+        """Return a deserialized transaction."""
         return Tx(
             self._read_le_int32(),  # version
             self._read_inputs(),    # inputs
@@ -113,20 +113,20 @@ class Deserializer:
         )
 
     def read_tx_and_hash(self):
-        '''Return a (deserialized TX, tx_hash) pair.
+        """Return a (deserialized TX, tx_hash) pair.
 
         The hash needs to be reversed for human display; for efficiency
         we process it in the natural serialized order.
-        '''
+        """
         start = self.cursor
         return self.read_tx(), self.TX_HASH_FN(self.binary[start:self.cursor])
 
     def read_tx_and_vsize(self):
-        '''Return a (deserialized TX, vsize) pair.'''
+        """Return a (deserialized TX, vsize) pair."""
         return self.read_tx(), self.binary_length
 
     def read_tx_block(self):
-        '''Returns a list of (deserialized_tx, tx_hash) pairs.'''
+        """Returns a list of (deserialized_tx, tx_hash) pairs."""
         read = self.read_tx_and_hash
         # Some coins have excess data beyond the end of the transactions
         return [read() for _ in range(self._read_varint())]
@@ -206,7 +206,7 @@ class Deserializer:
 
 class TxSegWit(namedtuple("Tx", "version marker flag inputs outputs "
                           "witness locktime")):
-    '''Class representing a SegWit transaction.'''
+    """Class representing a SegWit transaction."""
 
 
 class DeserializerSegWit(Deserializer):
@@ -222,7 +222,7 @@ class DeserializerSegWit(Deserializer):
         return [read_varbytes() for i in range(self._read_varint())]
 
     def _read_tx_parts(self):
-        '''Return a (deserialized TX, tx_hash, vsize) tuple.'''
+        """Return a (deserialized TX, tx_hash, vsize) tuple."""
         start = self.cursor
         marker = self.binary[self.cursor + 4]
         if marker:
@@ -269,7 +269,7 @@ class DeserializerAuxPow(Deserializer):
     VERSION_AUXPOW = (1 << 8)
 
     def read_header(self, height, static_header_size):
-        '''Return the AuxPow block header bytes'''
+        """Return the AuxPow block header bytes"""
         start = self.cursor
         version = self._read_le_uint32()
         if version & self.VERSION_AUXPOW:
@@ -298,7 +298,7 @@ class DeserializerAuxPowSegWit(DeserializerSegWit, DeserializerAuxPow):
 
 class DeserializerEquihash(Deserializer):
     def read_header(self, height, static_header_size):
-        '''Return the block header bytes'''
+        """Return the block header bytes"""
         start = self.cursor
         # We are going to calculate the block size then read it as bytes
         self.cursor += static_header_size
@@ -314,7 +314,7 @@ class DeserializerEquihashSegWit(DeserializerSegWit, DeserializerEquihash):
 
 
 class TxJoinSplit(namedtuple("Tx", "version inputs outputs locktime")):
-    '''Class representing a JoinSplit transaction.'''
+    """Class representing a JoinSplit transaction."""
 
 
 class DeserializerZcash(DeserializerEquihash):
@@ -365,7 +365,7 @@ class DeserializerZcash(DeserializerEquihash):
 
 
 class TxTime(namedtuple("Tx", "version time inputs outputs locktime")):
-    '''Class representing transaction that has a time field.'''
+    """Class representing transaction that has a time field."""
 
 
 class DeserializerTxTime(Deserializer):
@@ -406,7 +406,7 @@ class DeserializerTxTimeAuxPow(DeserializerTxTime):
         return False
 
     def read_header(self, height, static_header_size):
-        '''Return the AuxPow block header bytes'''
+        """Return the AuxPow block header bytes"""
         start = self.cursor
         version = self._read_le_uint32()
         if version & self.VERSION_AUXPOW:
@@ -433,7 +433,7 @@ class DeserializerBitcoinAtom(DeserializerSegWit):
     FORK_BLOCK_HEIGHT = 505888
 
     def read_header(self, height, static_header_size):
-        '''Return the block header bytes'''
+        """Return the block header bytes"""
         header_len = static_header_size
         if height >= self.FORK_BLOCK_HEIGHT:
             header_len += 4  # flags
@@ -445,7 +445,7 @@ class DeserializerGroestlcoin(DeserializerSegWit):
 
 
 class TxInputTokenPay(TxInput):
-    '''Class representing a TokenPay transaction input.'''
+    """Class representing a TokenPay transaction input."""
 
     OP_ANON_MARKER = 0xb9
     # 2byte marker (cpubkey + sigc + sigr)
@@ -468,7 +468,7 @@ class TxInputTokenPay(TxInput):
 
 class TxInputTokenPayStealth(
         namedtuple("TxInput", "keyimage ringsize script sequence")):
-    '''Class representing a TokenPay stealth transaction input.'''
+    """Class representing a TokenPay stealth transaction input."""
 
     def __str__(self):
         script = self.script.hex()
@@ -514,7 +514,7 @@ class DeserializerTokenPay(DeserializerTxTime):
 
 # Decred
 class TxInputDcr(namedtuple("TxInput", "prev_hash prev_idx tree sequence")):
-    '''Class representing a Decred transaction input.'''
+    """Class representing a Decred transaction input."""
 
     def __str__(self):
         prev_hash = hash_to_hex_str(self.prev_hash)
@@ -522,18 +522,18 @@ class TxInputDcr(namedtuple("TxInput", "prev_hash prev_idx tree sequence")):
                 .format(prev_hash, self.prev_idx, self.tree, self.sequence))
 
     def is_generation(self):
-        '''Test if an input is generation/coinbase like'''
+        """Test if an input is generation/coinbase like"""
         return self.prev_idx == MINUS_1 and self.prev_hash == ZERO
 
 
 class TxOutputDcr(namedtuple("TxOutput", "value version pk_script")):
-    '''Class representing a Decred transaction output.'''
+    """Class representing a Decred transaction output."""
     pass
 
 
 class TxDcr(namedtuple("Tx", "version inputs outputs locktime expiry "
                              "witness")):
-    '''Class representing a Decred  transaction.'''
+    """Class representing a Decred  transaction."""
 
 
 class DeserializerDecred(Deserializer):
@@ -559,14 +559,14 @@ class DeserializerDecred(Deserializer):
         return tx, vsize
 
     def read_tx_block(self):
-        '''Returns a list of (deserialized_tx, tx_hash) pairs.'''
+        """Returns a list of (deserialized_tx, tx_hash) pairs."""
         read = self.read_tx_and_hash
         txs = [read() for _ in range(self._read_varint())]
         stxs = [read() for _ in range(self._read_varint())]
         return txs + stxs
 
     def read_tx_tree(self):
-        '''Returns a list of deserialized_tx without tx hashes.'''
+        """Returns a list of deserialized_tx without tx hashes."""
         read_tx = self.read_tx
         return [read_tx() for _ in range(self._read_varint())]
 

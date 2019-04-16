@@ -24,7 +24,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 # and warranty status of this software.
 
-'''Miscellaneous utility classes and functions.'''
+"""Miscellaneous utility classes and functions."""
 
 
 import array
@@ -40,21 +40,21 @@ from struct import pack, Struct
 
 
 class ConnectionLogger(logging.LoggerAdapter):
-    '''Prepends a connection identifier to a logging message.'''
+    """Prepends a connection identifier to a logging message."""
     def process(self, msg, kwargs):
         conn_id = self.extra.get('conn_id', 'unknown')
         return f'[{conn_id}] {msg}', kwargs
 
 
 class CompactFormatter(logging.Formatter):
-    '''Strips the module from the logger name to leave the class only.'''
+    """Strips the module from the logger name to leave the class only."""
     def format(self, record):
         record.name = record.name.rpartition('.')[-1]
         return super().format(record)
 
 
 def make_logger(name, *, handler, level):
-    '''Return the root ElectrumX logger.'''
+    """Return the root ElectrumX logger."""
     logger = logging.getLogger(name)
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
@@ -63,7 +63,7 @@ def make_logger(name, *, handler, level):
 
 
 def class_logger(path, classname):
-    '''Return a hierarchical logger for a class.'''
+    """Return a hierarchical logger for a class."""
     return logging.getLogger(path).getChild(classname)
 
 
@@ -83,8 +83,8 @@ class cachedproperty:
 
 
 def formatted_time(t, sep=' '):
-    '''Return a number of seconds as a string in days, hours, mins and
-    maybe secs.'''
+    """Return a number of seconds as a string in days, hours, mins and
+    maybe secs."""
     t = int(t)
     fmts = (('{:d}d', 86400), ('{:02d}h', 3600), ('{:02d}m', 60))
     parts = []
@@ -136,7 +136,7 @@ def deep_getsizeof(obj):
 
 
 def subclasses(base_class, strict=True):
-    '''Return a list of subclasses of base_class in its module.'''
+    """Return a list of subclasses of base_class in its module."""
     def select(obj):
         return (inspect.isclass(obj) and issubclass(obj, base_class) and
                 (not strict or obj != base_class))
@@ -146,7 +146,7 @@ def subclasses(base_class, strict=True):
 
 
 def chunks(items, size):
-    '''Break up items, an iterable, into chunks of length size.'''
+    """Break up items, an iterable, into chunks of length size."""
     for i in range(0, len(items), size):
         yield items[i: i + size]
 
@@ -159,19 +159,19 @@ def resolve_limit(limit):
 
 
 def bytes_to_int(be_bytes):
-    '''Interprets a big-endian sequence of bytes as an integer'''
+    """Interprets a big-endian sequence of bytes as an integer"""
     return int.from_bytes(be_bytes, 'big')
 
 
 def int_to_bytes(value):
-    '''Converts an integer to a big-endian sequence of bytes'''
+    """Converts an integer to a big-endian sequence of bytes"""
     return value.to_bytes((value.bit_length() + 7) // 8, 'big')
 
 
 def increment_byte_string(bs):
-    '''Return the lexicographically next byte string of the same length.
+    """Return the lexicographically next byte string of the same length.
 
-    Return None if there is none (when the input is all 0xff bytes).'''
+    Return None if there is none (when the input is all 0xff bytes)."""
     for n in range(1, len(bs) + 1):
         if bs[-n] != 0xff:
             return bs[:-n] + bytes([bs[-n] + 1]) + bytes(n - 1)
@@ -179,7 +179,7 @@ def increment_byte_string(bs):
 
 
 class LogicalFile:
-    '''A logical binary file split across several separate files on disk.'''
+    """A logical binary file split across several separate files on disk."""
 
     def __init__(self, prefix, digits, file_size):
         digit_fmt = '{' + ':0{:d}d'.format(digits) + '}'
@@ -187,10 +187,10 @@ class LogicalFile:
         self.file_size = file_size
 
     def read(self, start, size=-1):
-        '''Read up to size bytes from the virtual file, starting at offset
+        """Read up to size bytes from the virtual file, starting at offset
         start, and return them.
 
-        If size is -1 all bytes are read.'''
+        If size is -1 all bytes are read."""
         parts = []
         while size != 0:
             try:
@@ -207,7 +207,7 @@ class LogicalFile:
         return b''.join(parts)
 
     def write(self, start, b):
-        '''Write the bytes-like object, b, to the underlying virtual file.'''
+        """Write the bytes-like object, b, to the underlying virtual file."""
         while b:
             size = min(len(b), self.file_size - (start % self.file_size))
             with self.open_file(start, True) as f:
@@ -216,10 +216,10 @@ class LogicalFile:
             start += size
 
     def open_file(self, start, create):
-        '''Open the virtual file and seek to start.  Return a file handle.
+        """Open the virtual file and seek to start.  Return a file handle.
         Raise FileNotFoundError if the file does not exist and create
         is False.
-        '''
+        """
         file_num, offset = divmod(start, self.file_size)
         filename = self.filename_fmt.format(file_num)
         f = open_file(filename, create)
@@ -228,7 +228,7 @@ class LogicalFile:
 
 
 def open_file(filename, create=False):
-    '''Open the file name.  Return its handle.'''
+    """Open the file name.  Return its handle."""
     try:
         return open(filename, 'rb+')
     except FileNotFoundError:
@@ -238,12 +238,12 @@ def open_file(filename, create=False):
 
 
 def open_truncate(filename):
-    '''Open the file name.  Return its handle.'''
+    """Open the file name.  Return its handle."""
     return open(filename, 'wb+')
 
 
 def address_string(address):
-    '''Return an address as a correctly formatted string.'''
+    """Return an address as a correctly formatted string."""
     fmt = '{}:{:d}'
     host, port = address
     try:
@@ -273,9 +273,9 @@ def is_valid_hostname(hostname):
 
 
 def protocol_tuple(s):
-    '''Converts a protocol version number, such as "1.0" to a tuple (1, 0).
+    """Converts a protocol version number, such as "1.0" to a tuple (1, 0).
 
-    If the version number is bad, (0, ) indicating version 0 is returned.'''
+    If the version number is bad, (0, ) indicating version 0 is returned."""
     try:
         return tuple(int(part) for part in s.split('.'))
     except Exception:
@@ -283,22 +283,22 @@ def protocol_tuple(s):
 
 
 def version_string(ptuple):
-    '''Convert a version tuple such as (1, 2) to "1.2".
-    There is always at least one dot, so (1, ) becomes "1.0".'''
+    """Convert a version tuple such as (1, 2) to "1.2".
+    There is always at least one dot, so (1, ) becomes "1.0"."""
     while len(ptuple) < 2:
         ptuple += (0, )
     return '.'.join(str(p) for p in ptuple)
 
 
 def protocol_version(client_req, min_tuple, max_tuple):
-    '''Given a client's protocol version string, return a pair of
+    """Given a client's protocol version string, return a pair of
     protocol tuples:
 
            (negotiated version, client min request)
 
     If the request is unsupported, the negotiated protocol tuple is
     None.
-    '''
+    """
     if client_req is None:
         client_min = client_max = min_tuple
     else:

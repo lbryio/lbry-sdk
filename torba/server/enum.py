@@ -5,10 +5,10 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-'''An enum-like type with reverse lookup.
+"""An enum-like type with reverse lookup.
 
 Source: Python Cookbook, http://code.activestate.com/recipes/67107/
-'''
+"""
 
 
 class EnumError(Exception):

@@ -5,7 +5,7 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-'''Peer management.'''
+"""Peer management."""
 
 import asyncio
 import random
@@ -39,7 +39,7 @@ def assert_good(message, result, instance):
 
 
 class PeerSession(RPCSession):
-    '''An outgoing session to a peer.'''
+    """An outgoing session to a peer."""
 
     async def handle_request(self, request):
         # We subscribe so might be unlucky enough to get a notification...
@@ -51,11 +51,11 @@ class PeerSession(RPCSession):
 
 
 class PeerManager:
-    '''Looks after the DB of peer network servers.
+    """Looks after the DB of peer network servers.
 
     Attempts to maintain a connection with up to 8 peers.
     Issues a 'peers.subscribe' RPC to them and tells them our data.
-    '''
+    """
     def __init__(self, env, db):
         self.logger = class_logger(__name__, self.__class__.__name__)
         # Initialise the Peer class
@@ -78,12 +78,12 @@ class PeerManager:
         self.group = TaskGroup()
 
     def _my_clearnet_peer(self):
-        '''Returns the clearnet peer representing this server, if any.'''
+        """Returns the clearnet peer representing this server, if any."""
         clearnet = [peer for peer in self.myselves if not peer.is_tor]
         return clearnet[0] if clearnet else None
 
     def _set_peer_statuses(self):
-        '''Set peer statuses.'''
+        """Set peer statuses."""
         cutoff = time.time() - STALE_SECS
         for peer in self.peers:
             if peer.bad:
@@ -96,10 +96,10 @@ class PeerManager:
                 peer.status = PEER_NEVER
 
     def _features_to_register(self, peer, remote_peers):
-        '''If we should register ourselves to the remote peer, which has
+        """If we should register ourselves to the remote peer, which has
         reported the given list of known peers, return the clearnet
         identity features to register, otherwise None.
-        '''
+        """
         # Announce ourself if not present.  Don't if disabled, we
         # are a non-public IP address, or to ourselves.
         if not self.env.peer_announce or peer in self.myselves:
@@ -114,7 +114,7 @@ class PeerManager:
         return my.features
 
     def _permit_new_onion_peer(self):
-        '''Accept a new onion peer only once per random time interval.'''
+        """Accept a new onion peer only once per random time interval."""
         now = time.time()
         if now < self.permit_onion_peer_time:
             return False
@@ -122,7 +122,7 @@ class PeerManager:
         return True
 
     async def _import_peers(self):
-        '''Import hard-coded peers from a file or the coin defaults.'''
+        """Import hard-coded peers from a file or the coin defaults."""
         imported_peers = self.myselves.copy()
         # Add the hard-coded ones unless only reporting ourself
         if self.env.peer_discovery != self.env.PD_SELF:
@@ -131,12 +131,12 @@ class PeerManager:
         await self._note_peers(imported_peers, limit=None)
 
     async def _detect_proxy(self):
-        '''Detect a proxy if we don't have one and some time has passed since
+        """Detect a proxy if we don't have one and some time has passed since
         the last attempt.
 
         If found self.proxy is set to a SOCKSProxy instance, otherwise
         None.
-        '''
+        """
         host = self.env.tor_proxy_host
         if self.env.tor_proxy_port is None:
             ports = [9050, 9150, 1080]
@@ -155,7 +155,7 @@ class PeerManager:
 
     async def _note_peers(self, peers, limit=2, check_ports=False,
                           source=None):
-        '''Add a limited number of peers that are not already present.'''
+        """Add a limited number of peers that are not already present."""
         new_peers = []
         for peer in peers:
             if not peer.is_public or (peer.is_tor and not self.proxy):
@@ -378,12 +378,12 @@ class PeerManager:
     # External interface
     #
     async def discover_peers(self):
-        '''Perform peer maintenance.  This includes
+        """Perform peer maintenance.  This includes
 
           1) Forgetting unreachable peers.
           2) Verifying connectivity of new peers.
           3) Retrying old peers at regular intervals.
-        '''
+        """
         if self.env.peer_discovery != self.env.PD_ON:
             self.logger.info('peer discovery is disabled')
             return
@@ -395,7 +395,7 @@ class PeerManager:
         self.group.add(self._import_peers())
 
     def info(self):
-        '''The number of peers.'''
+        """The number of peers."""
         self._set_peer_statuses()
         counter = Counter(peer.status for peer in self.peers)
         return {
@@ -407,11 +407,11 @@ class PeerManager:
         }
 
     async def add_localRPC_peer(self, real_name):
-        '''Add a peer passed by the admin over LocalRPC.'''
+        """Add a peer passed by the admin over LocalRPC."""
         await self._note_peers([Peer.from_real_name(real_name, 'RPC')])
 
     async def on_add_peer(self, features, source_info):
-        '''Add a peer (but only if the peer resolves to the source).'''
+        """Add a peer (but only if the peer resolves to the source)."""
         if not source_info:
             self.logger.info('ignored add_peer request: no source info')
             return False
@@ -449,12 +449,12 @@ class PeerManager:
         return permit
 
     def on_peers_subscribe(self, is_tor):
-        '''Returns the server peers as a list of (ip, host, details) tuples.
+        """Returns the server peers as a list of (ip, host, details) tuples.
 
         We return all peers we've connected to in the last day.
         Additionally, if we don't have onion routing, we return a few
         hard-coded onion servers.
-        '''
+        """
         cutoff = time.time() - STALE_SECS
         recent = [peer for peer in self.peers
                   if peer.last_good > cutoff and
@@ -485,12 +485,12 @@ class PeerManager:
         return [peer.to_tuple() for peer in peers]
 
     def proxy_peername(self):
-        '''Return the peername of the proxy, if there is a proxy, otherwise
-        None.'''
+        """Return the peername of the proxy, if there is a proxy, otherwise
+        None."""
         return self.proxy.peername if self.proxy else None
 
     def rpc_data(self):
-        '''Peer data for the peers RPC method.'''
+        """Peer data for the peers RPC method."""
         self._set_peer_statuses()
         descs = ['good', 'stale', 'never', 'bad']
 

@@ -5,7 +5,7 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-'''Mempool handling.'''
+"""Mempool handling."""
 
 import asyncio
 import itertools
@@ -39,48 +39,48 @@ class MemPoolTxSummary:
 
 
 class MemPoolAPI(ABC):
-    '''A concrete instance of this class is passed to the MemPool object
-    and used by it to query DB and blockchain state.'''
+    """A concrete instance of this class is passed to the MemPool object
+    and used by it to query DB and blockchain state."""
 
     @abstractmethod
     async def height(self):
-        '''Query bitcoind for its height.'''
+        """Query bitcoind for its height."""
 
     @abstractmethod
     def cached_height(self):
-        '''Return the height of bitcoind the last time it was queried,
+        """Return the height of bitcoind the last time it was queried,
         for any reason, without actually querying it.
-        '''
+        """
 
     @abstractmethod
     async def mempool_hashes(self):
-        '''Query bitcoind for the hashes of all transactions in its
-        mempool, returned as a list.'''
+        """Query bitcoind for the hashes of all transactions in its
+        mempool, returned as a list."""
 
     @abstractmethod
     async def raw_transactions(self, hex_hashes):
-        '''Query bitcoind for the serialized raw transactions with the given
+        """Query bitcoind for the serialized raw transactions with the given
         hashes.  Missing transactions are returned as None.
 
-        hex_hashes is an iterable of hexadecimal hash strings.'''
+        hex_hashes is an iterable of hexadecimal hash strings."""
 
     @abstractmethod
     async def lookup_utxos(self, prevouts):
-        '''Return a list of (hashX, value) pairs each prevout if unspent,
+        """Return a list of (hashX, value) pairs each prevout if unspent,
         otherwise return None if spent or not found.
 
         prevouts - an iterable of (hash, index) pairs
-        '''
+        """
 
     @abstractmethod
     async def on_mempool(self, touched, height):
-        '''Called each time the mempool is synchronized.  touched is a set of
+        """Called each time the mempool is synchronized.  touched is a set of
         hashXs touched since the previous call.  height is the
-        daemon's height at the time the mempool was obtained.'''
+        daemon's height at the time the mempool was obtained."""
 
 
 class MemPool:
-    '''Representation of the daemon's mempool.
+    """Representation of the daemon's mempool.
 
         coin - a coin class from coins.py
         api - an object implementing MemPoolAPI
@@ -91,7 +91,7 @@ class MemPool:
 
        tx:     tx_hash -> MemPoolTx
        hashXs: hashX   -> set of all hashes of txs touching the hashX
-    '''
+    """
 
     def __init__(self, coin, api, refresh_secs=5.0, log_status_secs=120.0):
         assert isinstance(api, MemPoolAPI)
@@ -107,7 +107,7 @@ class MemPool:
         self.lock = Lock()
 
     async def _logging(self, synchronized_event):
-        '''Print regular logs of mempool stats.'''
+        """Print regular logs of mempool stats."""
         self.logger.info('beginning processing of daemon mempool.  '
                          'This can take some time...')
         start = time.time()
@@ -156,12 +156,12 @@ class MemPool:
         self.cached_compact_histogram = compact
 
     def _accept_transactions(self, tx_map, utxo_map, touched):
-        '''Accept transactions in tx_map to the mempool if all their inputs
+        """Accept transactions in tx_map to the mempool if all their inputs
         can be found in the existing mempool or a utxo_map from the
         DB.
 
         Returns an (unprocessed tx_map, unspent utxo_map) pair.
-        '''
+        """
         hashXs = self.hashXs
         txs = self.txs
 
@@ -200,7 +200,7 @@ class MemPool:
         return deferred, {prevout: utxo_map[prevout] for prevout in unspent}
 
     async def _refresh_hashes(self, synchronized_event):
-        '''Refresh our view of the daemon's mempool.'''
+        """Refresh our view of the daemon's mempool."""
         while True:
             height = self.api.cached_height()
             hex_hashes = await self.api.mempool_hashes()
@@ -256,7 +256,7 @@ class MemPool:
         return touched
 
     async def _fetch_and_accept(self, hashes, all_hashes, touched):
-        '''Fetch a list of mempool transactions.'''
+        """Fetch a list of mempool transactions."""
         hex_hashes_iter = (hash_to_hex_str(hash) for hash in hashes)
         raw_txs = await self.api.raw_transactions(hex_hashes_iter)
 
@@ -303,7 +303,7 @@ class MemPool:
     #
 
     async def keep_synchronized(self, synchronized_event):
-        '''Keep the mempool synchronized with the daemon.'''
+        """Keep the mempool synchronized with the daemon."""
         await asyncio.wait([
             self._refresh_hashes(synchronized_event),
             self._refresh_histogram(synchronized_event),
@@ -311,10 +311,10 @@ class MemPool:
         ])
 
     async def balance_delta(self, hashX):
-        '''Return the unconfirmed amount in the mempool for hashX.
+        """Return the unconfirmed amount in the mempool for hashX.
 
         Can be positive or negative.
-        '''
+        """
         value = 0
         if hashX in self.hashXs:
             for hash in self.hashXs[hashX]:
@@ -324,16 +324,16 @@ class MemPool:
         return value
 
     async def compact_fee_histogram(self):
-        '''Return a compact fee histogram of the current mempool.'''
+        """Return a compact fee histogram of the current mempool."""
         return self.cached_compact_histogram
 
     async def potential_spends(self, hashX):
-        '''Return a set of (prev_hash, prev_idx) pairs from mempool
+        """Return a set of (prev_hash, prev_idx) pairs from mempool
         transactions that touch hashX.
 
         None, some or all of these may be spends of the hashX, but all
         actual spends of it (in the DB or mempool) will be included.
-        '''
+        """
         result = set()
         for tx_hash in self.hashXs.get(hashX, ()):
             tx = self.txs[tx_hash]
@@ -341,7 +341,7 @@ class MemPool:
         return result
 
     async def transaction_summaries(self, hashX):
-        '''Return a list of MemPoolTxSummary objects for the hashX.'''
+        """Return a list of MemPoolTxSummary objects for the hashX."""
         result = []
         for tx_hash in self.hashXs.get(hashX, ()):
             tx = self.txs[tx_hash]
@@ -350,12 +350,12 @@ class MemPool:
         return result
 
     async def unordered_UTXOs(self, hashX):
-        '''Return an unordered list of UTXO named tuples from mempool
+        """Return an unordered list of UTXO named tuples from mempool
         transactions that pay to hashX.
 
         This does not consider if any other mempool transactions spend
         the outputs.
-        '''
+        """
         utxos = []
         for tx_hash in self.hashXs.get(hashX, ()):
             tx = self.txs.get(tx_hash)

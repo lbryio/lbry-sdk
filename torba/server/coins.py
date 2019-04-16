@@ -24,11 +24,11 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-'''Module providing coin abstraction.
+"""Module providing coin abstraction.
 
 Anything coin-specific should go in this file and be subclassed where
 necessary for appropriate handling.
-'''
+"""
 
 from collections import namedtuple
 import re
@@ -55,11 +55,11 @@ OP_RETURN = OpCodes.OP_RETURN
 
 
 class CoinError(Exception):
-    '''Exception raised for coin-related errors.'''
+    """Exception raised for coin-related errors."""
 
 
 class Coin:
-    '''Base class of coin hierarchy.'''
+    """Base class of coin hierarchy."""
 
     REORG_LIMIT = 200
     # Not sure if these are coin-specific
@@ -88,9 +88,9 @@ class Coin:
 
     @classmethod
     def lookup_coin_class(cls, name, net):
-        '''Return a coin class given name and network.
+        """Return a coin class given name and network.
 
-        Raise an exception if unrecognised.'''
+        Raise an exception if unrecognised."""
         req_attrs = ['TX_COUNT', 'TX_COUNT_HEIGHT', 'TX_PER_BLOCK']
         for coin in util.subclasses(Coin):
             if (coin.NAME.lower() == name.lower() and
@@ -120,10 +120,10 @@ class Coin:
 
     @classmethod
     def genesis_block(cls, block):
-        '''Check the Genesis block is the right one for this coin.
+        """Check the Genesis block is the right one for this coin.
 
         Return the block less its unspendable coinbase.
-        '''
+        """
         header = cls.block_header(block, 0)
         header_hex_hash = hash_to_hex_str(cls.header_hash(header))
         if header_hex_hash != cls.GENESIS_HASH:
@@ -134,16 +134,16 @@ class Coin:
 
     @classmethod
     def hashX_from_script(cls, script):
-        '''Returns a hashX from a script, or None if the script is provably
+        """Returns a hashX from a script, or None if the script is provably
         unspendable so the output can be dropped.
-        '''
+        """
         if script and script[0] == OP_RETURN:
             return None
         return sha256(script).digest()[:HASHX_LEN]
 
     @staticmethod
     def lookup_xverbytes(verbytes):
-        '''Return a (is_xpub, coin_class) pair given xpub/xprv verbytes.'''
+        """Return a (is_xpub, coin_class) pair given xpub/xprv verbytes."""
         # Order means BTC testnet will override NMC testnet
         for coin in util.subclasses(Coin):
             if verbytes == coin.XPUB_VERBYTES:
@@ -154,23 +154,23 @@ class Coin:
 
     @classmethod
     def address_to_hashX(cls, address):
-        '''Return a hashX given a coin address.'''
+        """Return a hashX given a coin address."""
         return cls.hashX_from_script(cls.pay_to_address_script(address))
 
     @classmethod
     def P2PKH_address_from_hash160(cls, hash160):
-        '''Return a P2PKH address given a public key.'''
+        """Return a P2PKH address given a public key."""
         assert len(hash160) == 20
         return cls.ENCODE_CHECK(cls.P2PKH_VERBYTE + hash160)
 
     @classmethod
     def P2PKH_address_from_pubkey(cls, pubkey):
-        '''Return a coin address given a public key.'''
+        """Return a coin address given a public key."""
         return cls.P2PKH_address_from_hash160(hash160(pubkey))
 
     @classmethod
     def P2SH_address_from_hash160(cls, hash160):
-        '''Return a coin address given a hash160.'''
+        """Return a coin address given a hash160."""
         assert len(hash160) == 20
         return cls.ENCODE_CHECK(cls.P2SH_VERBYTES[0] + hash160)
 
@@ -184,10 +184,10 @@ class Coin:
 
     @classmethod
     def pay_to_address_script(cls, address):
-        '''Return a pubkey script that pays to a pubkey hash.
+        """Return a pubkey script that pays to a pubkey hash.
 
         Pass the address (either P2PKH or P2SH) in base58 form.
-        '''
+        """
         raw = cls.DECODE_CHECK(address)
 
         # Require version byte(s) plus hash160.
@@ -205,7 +205,7 @@ class Coin:
 
     @classmethod
     def privkey_WIF(cls, privkey_bytes, compressed):
-        '''Return the private key encoded in Wallet Import Format.'''
+        """Return the private key encoded in Wallet Import Format."""
         payload = bytearray(cls.WIF_BYTE) + privkey_bytes
         if compressed:
             payload.append(0x01)
@@ -213,48 +213,48 @@ class Coin:
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return hash'''
+        """Given a header return hash"""
         return double_sha256(header)
 
     @classmethod
     def header_prevhash(cls, header):
-        '''Given a header return previous hash'''
+        """Given a header return previous hash"""
         return header[4:36]
 
     @classmethod
     def static_header_offset(cls, height):
-        '''Given a header height return its offset in the headers file.
+        """Given a header height return its offset in the headers file.
 
         If header sizes change at some point, this is the only code
-        that needs updating.'''
+        that needs updating."""
         assert cls.STATIC_BLOCK_HEADERS
         return height * cls.BASIC_HEADER_SIZE
 
     @classmethod
     def static_header_len(cls, height):
-        '''Given a header height return its length.'''
+        """Given a header height return its length."""
         return (cls.static_header_offset(height + 1)
                 - cls.static_header_offset(height))
 
     @classmethod
     def block_header(cls, block, height):
-        '''Returns the block header given a block and its height.'''
+        """Returns the block header given a block and its height."""
         return block[:cls.static_header_len(height)]
 
     @classmethod
     def block(cls, raw_block, height):
-        '''Return a Block namedtuple given a raw block and its height.'''
+        """Return a Block namedtuple given a raw block and its height."""
         header = cls.block_header(raw_block, height)
         txs = cls.DESERIALIZER(raw_block, start=len(header)).read_tx_block()
         return Block(raw_block, header, txs)
 
     @classmethod
     def decimal_value(cls, value):
-        '''Return the number of standard coin units as a Decimal given a
+        """Return the number of standard coin units as a Decimal given a
         quantity of smallest units.
 
         For example 1 BTC is returned for 100 million satoshis.
-        '''
+        """
         return Decimal(value) / cls.VALUE_PER_COIN
 
     @classmethod
@@ -274,12 +274,12 @@ class AuxPowMixin:
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return hash'''
+        """Given a header return hash"""
         return double_sha256(header[:cls.BASIC_HEADER_SIZE])
 
     @classmethod
     def block_header(cls, block, height):
-        '''Return the AuxPow block header bytes'''
+        """Return the AuxPow block header bytes"""
         deserializer = cls.DESERIALIZER(block)
         return deserializer.read_header(height, cls.BASIC_HEADER_SIZE)
 
@@ -306,7 +306,7 @@ class EquihashMixin:
 
     @classmethod
     def block_header(cls, block, height):
-        '''Return the block header bytes'''
+        """Return the block header bytes"""
         deserializer = cls.DESERIALIZER(block)
         return deserializer.read_header(height, cls.BASIC_HEADER_SIZE)
 
@@ -318,7 +318,7 @@ class ScryptMixin:
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         if cls.HEADER_HASH is None:
             import scrypt
             cls.HEADER_HASH = lambda x: scrypt.hash(x, x, 1024, 1, 1, 32)
@@ -432,7 +432,7 @@ class BitcoinGold(EquihashMixin, BitcoinMixin, Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return hash'''
+        """Given a header return hash"""
         height, = util.unpack_le_uint32_from(header, 68)
         if height >= cls.FORK_HEIGHT:
             return double_sha256(header)
@@ -511,7 +511,7 @@ class Emercoin(Coin):
 
     @classmethod
     def block_header(cls, block, height):
-        '''Returns the block header given a block and its height.'''
+        """Returns the block header given a block and its height."""
         deserializer = cls.DESERIALIZER(block)
 
         if deserializer.is_merged_block():
@@ -520,7 +520,7 @@ class Emercoin(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return hash'''
+        """Given a header return hash"""
         return double_sha256(header[:cls.BASIC_HEADER_SIZE])
 
 
@@ -543,7 +543,7 @@ class BitcoinTestnetMixin:
 
 
 class BitcoinCashTestnet(BitcoinTestnetMixin, Coin):
-    '''Bitcoin Testnet for Bitcoin Cash daemons.'''
+    """Bitcoin Testnet for Bitcoin Cash daemons."""
     NAME = "BitcoinCash"
     PEERS = [
         'electrum-testnet-abc.criptolayer.net s50112',
@@ -563,7 +563,7 @@ class BitcoinCashRegtest(BitcoinCashTestnet):
 
 
 class BitcoinSegwitTestnet(BitcoinTestnetMixin, Coin):
-    '''Bitcoin Testnet for Core bitcoind >= 0.13.1.'''
+    """Bitcoin Testnet for Core bitcoind >= 0.13.1."""
     NAME = "BitcoinSegwit"
     DESERIALIZER = lib_tx.DeserializerSegWit
     PEERS = [
@@ -588,7 +588,7 @@ class BitcoinSegwitRegtest(BitcoinSegwitTestnet):
 
 
 class BitcoinNolnet(BitcoinCash):
-    '''Bitcoin Unlimited nolimit testnet.'''
+    """Bitcoin Unlimited nolimit testnet."""
     NET = "nolnet"
     GENESIS_HASH = ('0000000057e31bd2066c939a63b7b862'
                     '3bd0f10d8c001304bdfc1a7902ae6d35')
@@ -878,7 +878,7 @@ class Motion(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import x16r_hash
         return x16r_hash.getPoWHash(header)
 
@@ -912,7 +912,7 @@ class Dash(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import x11_hash
         return x11_hash.getPoWHash(header)
 
@@ -1014,7 +1014,7 @@ class FairCoin(Coin):
 
     @classmethod
     def block(cls, raw_block, height):
-        '''Return a Block namedtuple given a raw block and its height.'''
+        """Return a Block namedtuple given a raw block and its height."""
         if height > 0:
             return super().block(raw_block, height)
         else:
@@ -1465,7 +1465,7 @@ class Bitzeny(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import zny_yescrypt
         return zny_yescrypt.getPoWHash(header)
 
@@ -1513,7 +1513,7 @@ class Denarius(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import tribus_hash
         return tribus_hash.getPoWHash(header)
 
@@ -1552,11 +1552,11 @@ class Sibcoin(Dash):
 
     @classmethod
     def header_hash(cls, header):
-        '''
+        """
         Given a header return the hash for sibcoin.
         Need to download `x11_gost_hash` module
         Source code: https://github.com/ivansib/x11_gost_hash
-        '''
+        """
         import x11_gost_hash
         return x11_gost_hash.getPoWHash(header)
 
@@ -1724,7 +1724,7 @@ class BitcoinAtom(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return hash'''
+        """Given a header return hash"""
         header_to_be_hashed = header[:cls.BASIC_HEADER_SIZE]
         # New block header format has some extra flags in the end
         if len(header) == cls.HEADER_SIZE_POST_FORK:
@@ -1737,7 +1737,7 @@ class BitcoinAtom(Coin):
 
     @classmethod
     def block_header(cls, block, height):
-        '''Return the block header bytes'''
+        """Return the block header bytes"""
         deserializer = cls.DESERIALIZER(block)
         return deserializer.read_header(height, cls.BASIC_HEADER_SIZE)
 
@@ -1777,12 +1777,12 @@ class Decred(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         return cls.HEADER_HASH(header)
 
     @classmethod
     def block(cls, raw_block, height):
-        '''Return a Block namedtuple given a raw block and its height.'''
+        """Return a Block namedtuple given a raw block and its height."""
         if height > 0:
             return super().block(raw_block, height)
         else:
@@ -1837,11 +1837,11 @@ class Axe(Dash):
 
     @classmethod
     def header_hash(cls, header):
-        '''
+        """
         Given a header return the hash for AXE.
         Need to download `axe_hash` module
         Source code: https://github.com/AXErunners/axe_hash
-        '''
+        """
         import x11_hash
         return x11_hash.getPoWHash(header)
 
@@ -1867,11 +1867,11 @@ class Xuez(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''
+        """
         Given a header return the hash for Xuez.
         Need to download `xevan_hash` module
         Source code: https://github.com/xuez/xuez
-        '''
+        """
         version, = util.unpack_le_uint32_from(header)
 
         import xevan_hash
@@ -1915,7 +1915,7 @@ class Pac(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import x11_hash
         return x11_hash.getPoWHash(header)
 
@@ -1960,7 +1960,7 @@ class Polis(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import x11_hash
         return x11_hash.getPoWHash(header)
 
@@ -1989,7 +1989,7 @@ class ColossusXT(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import quark_hash
         return quark_hash.getPoWHash(header)
 
@@ -2018,7 +2018,7 @@ class GoByte(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import neoscrypt
         return neoscrypt.getPoWHash(header)
 
@@ -2047,7 +2047,7 @@ class Monoeci(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import x11_hash
         return x11_hash.getPoWHash(header)
 
@@ -2082,7 +2082,7 @@ class Minexcoin(EquihashMixin, Coin):
 
     @classmethod
     def block_header(cls, block, height):
-        '''Return the block header bytes'''
+        """Return the block header bytes"""
         deserializer = cls.DESERIALIZER(block)
         return deserializer.read_header(height, cls.HEADER_SIZE_NO_SOLUTION)
 
@@ -2116,7 +2116,7 @@ class Groestlcoin(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         return cls.grshash(header)
 
     ENCODE_CHECK = partial(Base58.encode_check, hash_fn=grshash)
@@ -2224,7 +2224,7 @@ class Bitg(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''Given a header return the hash.'''
+        """Given a header return the hash."""
         import quark_hash
         return quark_hash.getPoWHash(header)
 

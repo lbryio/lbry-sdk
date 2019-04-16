@@ -23,7 +23,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-'''Classes for JSONRPC versions 1.0 and 2.0, and a loose interpretation.'''
+"""Classes for JSONRPC versions 1.0 and 2.0, and a loose interpretation."""
 
 __all__ = ('JSONRPC', 'JSONRPCv1', 'JSONRPCv2', 'JSONRPCLoose',
            'JSONRPCAutoDetect', 'Request', 'Notification', 'Batch',
@@ -156,7 +156,7 @@ class ProtocolError(CodeMessageError):
 
 
 class JSONRPC(object):
-    '''Abstract base class that interprets and constructs JSON RPC messages.'''
+    """Abstract base class that interprets and constructs JSON RPC messages."""
 
     # Error codes.  See http://www.jsonrpc.org/specification
     PARSE_ERROR = -32700
@@ -172,24 +172,24 @@ class JSONRPC(object):
 
     @classmethod
     def _message_id(cls, message, require_id):
-        '''Validate the message is a dictionary and return its ID.
+        """Validate the message is a dictionary and return its ID.
 
         Raise an error if the message is invalid or the ID is of an
         invalid type.  If it has no ID, raise an error if require_id
         is True, otherwise return None.
-        '''
+        """
         raise NotImplementedError
 
     @classmethod
     def _validate_message(cls, message):
-        '''Validate other parts of the message other than those
-        done in _message_id.'''
+        """Validate other parts of the message other than those
+        done in _message_id."""
         pass
 
     @classmethod
     def _request_args(cls, request):
-        '''Validate the existence and type of the arguments passed
-        in the request dictionary.'''
+        """Validate the existence and type of the arguments passed
+        in the request dictionary."""
         raise NotImplementedError
 
     @classmethod
@@ -221,7 +221,7 @@ class JSONRPC(object):
 
     @classmethod
     def _message_to_payload(cls, message):
-        '''Returns a Python object or a ProtocolError.'''
+        """Returns a Python object or a ProtocolError."""
         try:
             return json.loads(message.decode())
         except UnicodeDecodeError:
@@ -245,7 +245,7 @@ class JSONRPC(object):
 
     @classmethod
     def message_to_item(cls, message):
-        '''Translate an unframed received message and return an
+        """Translate an unframed received message and return an
         (item, request_id) pair.
 
         The item can be a Request, Notification, Response or a list.
@@ -264,7 +264,7 @@ class JSONRPC(object):
         the response was bad.
 
         raises: ProtocolError
-        '''
+        """
         payload = cls._message_to_payload(message)
         if isinstance(payload, dict):
             if 'method' in payload:
@@ -282,19 +282,19 @@ class JSONRPC(object):
     # Message formation
     @classmethod
     def request_message(cls, item, request_id):
-        '''Convert an RPCRequest item to a message.'''
+        """Convert an RPCRequest item to a message."""
         assert isinstance(item, Request)
         return cls.encode_payload(cls.request_payload(item, request_id))
 
     @classmethod
     def notification_message(cls, item):
-        '''Convert an RPCRequest item to a message.'''
+        """Convert an RPCRequest item to a message."""
         assert isinstance(item, Notification)
         return cls.encode_payload(cls.request_payload(item, None))
 
     @classmethod
     def response_message(cls, result, request_id):
-        '''Convert a response result (or RPCError) to a message.'''
+        """Convert a response result (or RPCError) to a message."""
         if isinstance(result, CodeMessageError):
             payload = cls.error_payload(result, request_id)
         else:
@@ -303,7 +303,7 @@ class JSONRPC(object):
 
     @classmethod
     def batch_message(cls, batch, request_ids):
-        '''Convert a request Batch to a message.'''
+        """Convert a request Batch to a message."""
         assert isinstance(batch, Batch)
         if not cls.allow_batches:
             raise ProtocolError.invalid_request(
@@ -317,9 +317,9 @@ class JSONRPC(object):
 
     @classmethod
     def batch_message_from_parts(cls, messages):
-        '''Convert messages, one per batch item, into a batch message.  At
+        """Convert messages, one per batch item, into a batch message.  At
         least one message must be passed.
-        '''
+        """
         # Comma-separate the messages and wrap the lot in square brackets
         middle = b', '.join(messages)
         if not middle:
@@ -328,7 +328,7 @@ class JSONRPC(object):
 
     @classmethod
     def encode_payload(cls, payload):
-        '''Encode a Python object as JSON and convert it to bytes.'''
+        """Encode a Python object as JSON and convert it to bytes."""
         try:
             return json.dumps(payload).encode()
         except TypeError:
@@ -337,7 +337,7 @@ class JSONRPC(object):
 
 
 class JSONRPCv1(JSONRPC):
-    '''JSON RPC version 1.0.'''
+    """JSON RPC version 1.0."""
 
     allow_batches = False
 
@@ -392,7 +392,7 @@ class JSONRPCv1(JSONRPC):
 
     @classmethod
     def request_payload(cls, request, request_id):
-        '''JSON v1 request (or notification) payload.'''
+        """JSON v1 request (or notification) payload."""
         if isinstance(request.args, dict):
             raise ProtocolError.invalid_args(
                 'JSONRPCv1 does not support named arguments')
@@ -404,7 +404,7 @@ class JSONRPCv1(JSONRPC):
 
     @classmethod
     def response_payload(cls, result, request_id):
-        '''JSON v1 response payload.'''
+        """JSON v1 response payload."""
         return {
             'result': result,
             'error': None,
@@ -421,7 +421,7 @@ class JSONRPCv1(JSONRPC):
 
 
 class JSONRPCv2(JSONRPC):
-    '''JSON RPC version 2.0.'''
+    """JSON RPC version 2.0."""
 
     @classmethod
     def _message_id(cls, message, require_id):
@@ -477,7 +477,7 @@ class JSONRPCv2(JSONRPC):
 
     @classmethod
     def request_payload(cls, request, request_id):
-        '''JSON v2 request (or notification) payload.'''
+        """JSON v2 request (or notification) payload."""
         payload = {
             'jsonrpc': '2.0',
             'method': request.method,
@@ -492,7 +492,7 @@ class JSONRPCv2(JSONRPC):
 
     @classmethod
     def response_payload(cls, result, request_id):
-        '''JSON v2 response payload.'''
+        """JSON v2 response payload."""
         return {
             'jsonrpc': '2.0',
             'result': result,
@@ -509,7 +509,7 @@ class JSONRPCv2(JSONRPC):
 
 
 class JSONRPCLoose(JSONRPC):
-    '''A relaxed versin of JSON RPC.'''
+    """A relaxed versin of JSON RPC."""
 
     # Don't be so loose we accept any old message ID
     _message_id = JSONRPCv2._message_id
@@ -546,7 +546,7 @@ class JSONRPCAutoDetect(JSONRPCv2):
 
     @classmethod
     def detect_protocol(cls, message):
-        '''Attempt to detect the protocol from the message.'''
+        """Attempt to detect the protocol from the message."""
         main = cls._message_to_payload(message)
 
         def protocol_for_payload(payload):
@@ -581,13 +581,13 @@ class JSONRPCAutoDetect(JSONRPCv2):
 
 
 class JSONRPCConnection(object):
-    '''Maintains state of a JSON RPC connection, in particular
+    """Maintains state of a JSON RPC connection, in particular
     encapsulating the handling of request IDs.
 
     protocol - the JSON RPC protocol to follow
     max_response_size - responses over this size send an error response
         instead.
-    '''
+    """
 
     _id_counter = itertools.count()
 
@@ -684,7 +684,7 @@ class JSONRPCConnection(object):
     # External API
     #
     def send_request(self, request):
-        '''Send a Request.  Return a (message, event) pair.
+        """Send a Request.  Return a (message, event) pair.
 
         The message is an unframed message to send over the network.
         Wait on the event for the response; which will be in the
@@ -692,7 +692,7 @@ class JSONRPCConnection(object):
 
         Raises: ProtocolError if the request violates the protocol
         in some way..
-        '''
+        """
         request_id = next(self._id_counter)
         message = self._protocol.request_message(request, request_id)
         return message, self._event(request, request_id)
@@ -708,13 +708,13 @@ class JSONRPCConnection(object):
         return message, event
 
     def receive_message(self, message):
-        '''Call with an unframed message received from the network.
+        """Call with an unframed message received from the network.
 
         Raises: ProtocolError if the message violates the protocol in
         some way.  However, if it happened in a response that can be
         paired with a request, the ProtocolError is instead set in the
         result attribute of the send_request() that caused the error.
-        '''
+        """
         try:
             item, request_id = self._protocol.message_to_item(message)
         except ProtocolError as e:
@@ -743,7 +743,7 @@ class JSONRPCConnection(object):
             return self.receive_message(message)
 
     def cancel_pending_requests(self):
-        '''Cancel all pending requests.'''
+        """Cancel all pending requests."""
         exception = CancelledError()
         for request, event in self._requests.values():
             event.result = exception
@@ -751,7 +751,7 @@ class JSONRPCConnection(object):
         self._requests.clear()
 
     def pending_requests(self):
-        '''All sent requests that have not received a response.'''
+        """All sent requests that have not received a response."""
         return [request for request, event in self._requests.values()]
 
 

@@ -23,7 +23,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-'''Cryptograph hash functions and related classes.'''
+"""Cryptograph hash functions and related classes."""
 
 
 import hashlib
@@ -39,53 +39,53 @@ HASHX_LEN = 11
 
 
 def sha256(x):
-    '''Simple wrapper of hashlib sha256.'''
+    """Simple wrapper of hashlib sha256."""
     return _sha256(x).digest()
 
 
 def ripemd160(x):
-    '''Simple wrapper of hashlib ripemd160.'''
+    """Simple wrapper of hashlib ripemd160."""
     h = _new_hash('ripemd160')
     h.update(x)
     return h.digest()
 
 
 def double_sha256(x):
-    '''SHA-256 of SHA-256, as used extensively in bitcoin.'''
+    """SHA-256 of SHA-256, as used extensively in bitcoin."""
     return sha256(sha256(x))
 
 
 def hmac_sha512(key, msg):
-    '''Use SHA-512 to provide an HMAC.'''
+    """Use SHA-512 to provide an HMAC."""
     return _new_hmac(key, msg, _sha512).digest()
 
 
 def hash160(x):
-    '''RIPEMD-160 of SHA-256.
+    """RIPEMD-160 of SHA-256.
 
-    Used to make bitcoin addresses from pubkeys.'''
+    Used to make bitcoin addresses from pubkeys."""
     return ripemd160(sha256(x))
 
 
 def hash_to_hex_str(x):
-    '''Convert a big-endian binary hash to displayed hex string.
+    """Convert a big-endian binary hash to displayed hex string.
 
     Display form of a binary hash is reversed and converted to hex.
-    '''
+    """
     return bytes(reversed(x)).hex()
 
 
 def hex_str_to_hash(x):
-    '''Convert a displayed hex string to a binary hash.'''
+    """Convert a displayed hex string to a binary hash."""
     return bytes(reversed(hex_to_bytes(x)))
 
 
 class Base58Error(Exception):
-    '''Exception used for Base58 errors.'''
+    """Exception used for Base58 errors."""
 
 
 class Base58:
-    '''Class providing base 58 functionality.'''
+    """Class providing base 58 functionality."""
 
     chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
     assert len(chars) == 58
@@ -143,8 +143,8 @@ class Base58:
 
     @staticmethod
     def decode_check(txt, *, hash_fn=double_sha256):
-        '''Decodes a Base58Check-encoded string to a payload.  The version
-        prefixes it.'''
+        """Decodes a Base58Check-encoded string to a payload.  The version
+        prefixes it."""
         be_bytes = Base58.decode(txt)
         result, check = be_bytes[:-4], be_bytes[-4:]
         if check != hash_fn(result)[:4]:

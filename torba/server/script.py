@@ -24,7 +24,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 # and warranty status of this software.
 
-'''Script-related classes and functions.'''
+"""Script-related classes and functions."""
 
 
 import struct
@@ -37,7 +37,7 @@ from torba.server.util import unpack_le_uint16_from, unpack_le_uint32_from, \
 
 
 class ScriptError(Exception):
-    '''Exception used for script errors.'''
+    """Exception used for script errors."""
 
 
 OpCodes = Enumeration("Opcodes", [
@@ -92,9 +92,9 @@ def _match_ops(ops, pattern):
 
 
 class ScriptPubKey:
-    '''A class for handling a tx output script that gives conditions
+    """A class for handling a tx output script that gives conditions
     necessary for spending.
-    '''
+    """
 
     TO_ADDRESS_OPS = [OpCodes.OP_DUP, OpCodes.OP_HASH160, -1,
                       OpCodes.OP_EQUALVERIFY, OpCodes.OP_CHECKSIG]
@@ -106,7 +106,7 @@ class ScriptPubKey:
 
     @classmethod
     def pay_to(cls, handlers, script):
-        '''Parse a script, invoke the appropriate handler and
+        """Parse a script, invoke the appropriate handler and
         return the result.
 
         One of the following handlers is invoked:
@@ -115,7 +115,7 @@ class ScriptPubKey:
            handlers.pubkey(pubkey)
            handlers.unspendable()
            handlers.strange(script)
-        '''
+        """
         try:
             ops = Script.get_ops(script)
         except ScriptError:
@@ -163,7 +163,7 @@ class ScriptPubKey:
 
     @classmethod
     def multisig_script(cls, m, pubkeys):
-        '''Returns the script for a pay-to-multisig transaction.'''
+        """Returns the script for a pay-to-multisig transaction."""
         n = len(pubkeys)
         if not 1 <= m <= n <= 15:
             raise ScriptError('{:d} of {:d} multisig script not possible'
@@ -218,7 +218,7 @@ class Script:
 
     @classmethod
     def push_data(cls, data):
-        '''Returns the opcodes to push the data on the stack.'''
+        """Returns the opcodes to push the data on the stack."""
         assert isinstance(data, (bytes, bytearray))
 
         n = len(data)

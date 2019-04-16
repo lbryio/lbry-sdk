@@ -23,7 +23,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-'''Representation of a peer server.'''
+"""Representation of a peer server."""
 
 from ipaddress import ip_address
 
@@ -47,8 +47,8 @@ class Peer:
 
     def __init__(self, host, features, source='unknown', ip_addr=None,
                  last_good=0, last_try=0, try_count=0):
-        '''Create a peer given a host name (or IP address as a string),
-        a dictionary of features, and a record of the source.'''
+        """Create a peer given a host name (or IP address as a string),
+        a dictionary of features, and a record of the source."""
         assert isinstance(host, str)
         assert isinstance(features, dict)
         assert host in features.get('hosts', {})
@@ -83,14 +83,14 @@ class Peer:
 
     @classmethod
     def deserialize(cls, item):
-        '''Deserialize from a dictionary.'''
+        """Deserialize from a dictionary."""
         return cls(**item)
 
     def matches(self, peers):
-        '''Return peers whose host matches our hostname or IP address.
+        """Return peers whose host matches our hostname or IP address.
         Additionally include all peers whose IP address matches our
         hostname if that is an IP address.
-        '''
+        """
         candidates = (self.host.lower(), self.ip_addr)
         return [peer for peer in peers
                 if peer.host.lower() in candidates
@@ -100,7 +100,7 @@ class Peer:
         return self.host
 
     def update_features(self, features):
-        '''Update features in-place.'''
+        """Update features in-place."""
         try:
             tmp = Peer(self.host, features)
         except Exception:
@@ -115,8 +115,8 @@ class Peer:
                 setattr(self, feature, getattr(peer, feature))
 
     def connection_port_pairs(self):
-        '''Return a list of (kind, port) pairs to try when making a
-        connection.'''
+        """Return a list of (kind, port) pairs to try when making a
+        connection."""
         # Use a list not a set - it's important to try the registered
         # ports first.
         pairs = [('SSL', self.ssl_port), ('TCP', self.tcp_port)]
@@ -125,13 +125,13 @@ class Peer:
         return [pair for pair in pairs if pair[1]]
 
     def mark_bad(self):
-        '''Mark as bad to avoid reconnects but also to remember for a
-        while.'''
+        """Mark as bad to avoid reconnects but also to remember for a
+        while."""
         self.bad = True
 
     def check_ports(self, other):
-        '''Remember differing ports in case server operator changed them
-        or removed one.'''
+        """Remember differing ports in case server operator changed them
+        or removed one."""
         if other.ssl_port != self.ssl_port:
             self.other_port_pairs.add(('SSL', other.ssl_port))
         if other.tcp_port != self.tcp_port:
@@ -160,7 +160,7 @@ class Peer:
 
     @cachedproperty
     def ip_address(self):
-        '''The host as a python ip_address object, or None.'''
+        """The host as a python ip_address object, or None."""
         try:
             return ip_address(self.host)
         except ValueError:
@@ -174,7 +174,7 @@ class Peer:
         return tuple(self.ip_addr.split('.')[:2])
 
     def serialize(self):
-        '''Serialize to a dictionary.'''
+        """Serialize to a dictionary."""
         return {attr: getattr(self, attr) for attr in self.ATTRS}
 
     def _port(self, key):
@@ -202,28 +202,28 @@ class Peer:
 
     @cachedproperty
     def genesis_hash(self):
-        '''Returns None if no SSL port, otherwise the port as an integer.'''
+        """Returns None if no SSL port, otherwise the port as an integer."""
         return self._string('genesis_hash')
 
     @cachedproperty
     def ssl_port(self):
-        '''Returns None if no SSL port, otherwise the port as an integer.'''
+        """Returns None if no SSL port, otherwise the port as an integer."""
         return self._port('ssl_port')
 
     @cachedproperty
     def tcp_port(self):
-        '''Returns None if no TCP port, otherwise the port as an integer.'''
+        """Returns None if no TCP port, otherwise the port as an integer."""
         return self._port('tcp_port')
 
     @cachedproperty
     def server_version(self):
-        '''Returns the server version as a string if known, otherwise None.'''
+        """Returns the server version as a string if known, otherwise None."""
         return self._string('server_version')
 
     @cachedproperty
     def pruning(self):
-        '''Returns the pruning level as an integer.  None indicates no
-        pruning.'''
+        """Returns the pruning level as an integer.  None indicates no
+        pruning."""
         pruning = self._integer('pruning')
         if pruning and pruning > 0:
             return pruning
@@ -236,22 +236,22 @@ class Peer:
 
     @cachedproperty
     def protocol_min(self):
-        '''Minimum protocol version as a string, e.g., 1.0'''
+        """Minimum protocol version as a string, e.g., 1.0"""
         return self._protocol_version_string('protocol_min')
 
     @cachedproperty
     def protocol_max(self):
-        '''Maximum protocol version as a string, e.g., 1.1'''
+        """Maximum protocol version as a string, e.g., 1.1"""
         return self._protocol_version_string('protocol_max')
 
     def to_tuple(self):
-        '''The tuple ((ip, host, details) expected in response
-        to a peers subscription.'''
+        """The tuple ((ip, host, details) expected in response
+        to a peers subscription."""
         details = self.real_name().split()[1:]
         return (self.ip_addr or self.host, self.host, details)
 
     def real_name(self):
-        '''Real name of this peer as used on IRC.'''
+        """Real name of this peer as used on IRC."""
         def port_text(letter, port):
             if port == self.DEFAULT_PORTS.get(letter):
                 return letter
@@ -268,12 +268,12 @@ class Peer:
 
     @classmethod
     def from_real_name(cls, real_name, source):
-        '''Real name is a real name as on IRC, such as
+        """Real name is a real name as on IRC, such as
 
             "erbium1.sytes.net v1.0 s t"
 
         Returns an instance of this Peer class.
-        '''
+        """
         host = 'nohost'
         features = {}
         ports = {}
