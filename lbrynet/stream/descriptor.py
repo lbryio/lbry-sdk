@@ -200,7 +200,7 @@ class StreamDescriptor:
             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
             old_sort: bool = False,
             blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'],
-                                                                     None]] = None) -> 'StreamDescriptor':
+                                                                     asyncio.Task]] = None) -> 'StreamDescriptor':
         blobs: typing.List[BlobInfo] = []
 
         iv_generator = iv_generator or random_iv_generator()
