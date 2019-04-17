@@ -48,6 +48,7 @@ if typing.TYPE_CHECKING:
     from lbrynet.wallet.manager import LbryWalletManager
     from lbrynet.wallet.ledger import MainNetLedger
     from lbrynet.stream.stream_manager import StreamManager
+    from lbrynet.stream.managed_stream import ManagedStream
 
 log = logging.getLogger(__name__)
 
@@ -473,24 +474,19 @@ class Daemon(metaclass=JSONRPCServerType):
             name, claim_id = name_and_claim_id.split("/")
             uri = f"lbry://{name}#{claim_id}"
         stream = await self.jsonrpc_get(uri)
+        if isinstance(stream, dict):
+            raise web.HTTPServerError(text=stream['error'])
         raise web.HTTPFound(f"/stream/{stream.sd_hash}")
 
-    async def handle_stream_range_request(self, request: web.Request):
-        sd_hash = request.path.split("/stream/")[1]
-        if sd_hash not in self.stream_manager.streams:
-            return web.HTTPNotFound()
-        stream = self.stream_manager.streams[sd_hash]
-
-        get_range = request.headers.get('range', 'bytes=0-')
+    @staticmethod
+    def prepare_range_response_headers(get_range: str, stream: 'ManagedStream') -> typing.Tuple[typing.Dict[str, str],
+                                                                                                int, int]:
         if '=' in get_range:
             get_range = get_range.split('=')[1]
         start, end = get_range.split('-')
         size = 0
-        await self.stream_manager.start_stream(stream)
         for blob in stream.descriptor.blobs[:-1]:
-            size += 2097152 - 1 if blob.length == 2097152 else blob.length
-        size -= 15  # last padding is unguessable
-
+            size += blob.length - 1
         start = int(start)
         end = int(end) if end else size - 1
         skip_blobs = start // 2097150
@@ -504,18 +500,36 @@ class Daemon(metaclass=JSONRPCServerType):
             'Content-Length': str(final_size),
             'Content-Type': stream.mime_type
         }
+        return headers, size, skip_blobs
 
+    async def handle_stream_range_request(self, request: web.Request):
+        sd_hash = request.path.split("/stream/")[1]
+        if sd_hash not in self.stream_manager.streams:
+            return web.HTTPNotFound()
+        stream = self.stream_manager.streams[sd_hash]
+        if stream.status == 'stopped':
+            await self.stream_manager.start_stream(stream)
         if stream.delayed_stop:
             stream.delayed_stop.cancel()
+        headers, size, skip_blobs = self.prepare_range_response_headers(
+            request.headers.get('range', 'bytes=0-'), stream
+        )
         response = web.StreamResponse(
             status=206,
             headers=headers
         )
         await response.prepare(request)
+        wrote = 0
         async for blob_info, decrypted in stream.aiter_read_stream(skip_blobs):
-            await response.write(decrypted)
-            log.info("sent browser blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
-        await response.write_eof()
+            if (blob_info.blob_num == len(stream.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
+                decrypted += b'\x00' * (size - len(decrypted) - wrote)
+                await response.write_eof(decrypted)
+                break
+            else:
+                await response.write(decrypted)
+            wrote += len(decrypted)
+            log.info("streamed blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
+        response.force_close()
         return response
 
     async def _process_rpc_call(self, data):

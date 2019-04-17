@@ -107,20 +107,17 @@ class StreamDownloader:
         blob = await self.blob_downloader.download_blob(blob_info.blob_hash, blob_info.length)
         return blob
 
-    def _decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob'):
+    def decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob') -> bytes:
         return blob.decrypt(
             binascii.unhexlify(self.descriptor.key.encode()), binascii.unhexlify(blob_info.iv.encode())
         )
-
-    async def decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob') -> bytes:
-        return await self.loop.run_in_executor(None, self._decrypt_blob, blob_info, blob)
 
     async def read_blob(self, blob_info: 'BlobInfo') -> bytes:
         start = None
         if self.time_to_first_bytes is None:
             start = self.loop.time()
         blob = await self.download_stream_blob(blob_info)
-        decrypted = await self.decrypt_blob(blob_info, blob)
+        decrypted = self.decrypt_blob(blob_info, blob)
         if start:
             self.time_to_first_bytes = self.loop.time() - start
         return decrypted

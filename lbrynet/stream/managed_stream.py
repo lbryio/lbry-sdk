@@ -226,10 +226,12 @@ class ManagedStream:
                 self.rowid = self.blob_manager.storage.save_downloaded_file(
                     self.stream_hash, None, None, 0.0
                 )
+                self.download_directory = None
+                self._file_name = None
                 self.update_status(ManagedStream.STATUS_RUNNING)
                 await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_RUNNING)
             self.update_delayed_stop()
-        else:
+        elif not os.path.isfile(self.full_path):
             await self.save_file(file_name, download_directory)
             await self.started_writing.wait()
 

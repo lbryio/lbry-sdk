@@ -37,7 +37,7 @@ class BlobManager:
                 self.loop, blob_hash, length, self.blob_completed, self.blob_dir
             )
         else:
-            if length and is_valid_blobhash(blob_hash) and os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
+            if is_valid_blobhash(blob_hash) and os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
                 return BlobFile(
                     self.loop, blob_hash, length, self.blob_completed, self.blob_dir
                 )
@@ -47,6 +47,14 @@ class BlobManager:
 
     def get_blob(self, blob_hash, length: typing.Optional[int] = None):
         if blob_hash in self.blobs:
+            if self.config.save_blobs and isinstance(self.blobs[blob_hash], BlobBuffer):
+                buffer = self.blobs.pop(blob_hash)
+                if blob_hash in self.completed_blob_hashes:
+                    self.completed_blob_hashes.remove(blob_hash)
+                self.blobs[blob_hash] = self._get_blob(blob_hash, length)
+                if buffer.is_readable():
+                    with buffer.reader_context() as reader:
+                        self.blobs[blob_hash].write_blob(reader.read())
             if length and self.blobs[blob_hash].length is None:
                 self.blobs[blob_hash].set_length(length)
         else:
@@ -75,19 +83,17 @@ class BlobManager:
     def get_stream_descriptor(self, sd_hash):
         return StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_dir, self.get_blob(sd_hash))
 
-    def blob_completed(self, blob: AbstractBlob):
+    def blob_completed(self, blob: AbstractBlob) -> asyncio.Task:
         if blob.blob_hash is None:
             raise Exception("Blob hash is None")
         if not blob.length:
             raise Exception("Blob has a length of 0")
-        if not blob.get_is_verified():
-            raise Exception("Blob is not verified")
         if isinstance(blob, BlobFile):
             if blob.blob_hash not in self.completed_blob_hashes:
                 self.completed_blob_hashes.add(blob.blob_hash)
-            self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=True))
+            return self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=True))
         else:
-            self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=False))
+            return self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=False))
 
     def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
         """Returns of the blobhashes_to_check, which are valid"""

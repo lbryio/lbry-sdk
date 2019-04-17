@@ -32,8 +32,7 @@ class TestBlobManager(AsyncioTestCase):
         self.assertSetEqual(self.blob_manager.completed_blob_hashes, set())
 
         # make sure we can add the blob
-        self.blob_manager.blob_completed(self.blob_manager.get_blob(blob_hash, len(blob_bytes)))
-        await self.blob_manager.storage.add_blobs((blob_hash, len(blob_bytes)), finished=True)
+        await self.blob_manager.blob_completed(self.blob_manager.get_blob(blob_hash, len(blob_bytes)))
         self.assertSetEqual(self.blob_manager.completed_blob_hashes, {blob_hash})
 
         # stop the blob manager and restart it, make sure the blob is there
