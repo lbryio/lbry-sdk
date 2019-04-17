@@ -12,12 +12,13 @@ blockchain_name: lbrycrd_main
 data_dir: /home/lbry/.lbrynet
 download_directory: /home/lbry/downloads
 
-delete_blobs_on_remove: True
+save_blobs: true
+streaming_only: false
 dht_node_port: 4444
 peer_port: 3333
-use_upnp: True
+use_upnp: true
 
 #components_to_skip:
-#  - peer_protocol_server
 #  - hash_announcer
+#  - blob_server
 #  - dht
