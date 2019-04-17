@@ -223,7 +223,7 @@ class ManagedStream:
         await self.downloader.start(node)
         if not save_file and not file_name:
             if not await self.blob_manager.storage.file_exists(self.sd_hash):
-                self.rowid = self.blob_manager.storage.save_downloaded_file(
+                self.rowid = await self.blob_manager.storage.save_downloaded_file(
                     self.stream_hash, None, None, 0.0
                 )
                 self.download_directory = None
