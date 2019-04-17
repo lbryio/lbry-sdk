@@ -521,6 +521,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await response.prepare(request)
         wrote = 0
         async for blob_info, decrypted in stream.aiter_read_stream(skip_blobs):
+            log.info("streamed blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
             if (blob_info.blob_num == len(stream.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
                 decrypted += b'\x00' * (size - len(decrypted) - wrote)
                 await response.write_eof(decrypted)
@@ -528,7 +529,6 @@ class Daemon(metaclass=JSONRPCServerType):
             else:
                 await response.write(decrypted)
             wrote += len(decrypted)
-            log.info("streamed blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
         response.force_close()
         return response
 
