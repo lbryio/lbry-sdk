@@ -273,7 +273,6 @@ class Daemon(metaclass=JSONRPCServerType):
         app = web.Application()
         app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
         app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
-        app.router.add_get('/streams', self.handle_streams_index)
         app.router.add_get('/get/{claim_name}', self.handle_stream_get_request)
         app.router.add_get('/get/{claim_name}/{claim_id}', self.handle_stream_get_request)
         app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
@@ -455,15 +454,6 @@ class Daemon(metaclass=JSONRPCServerType):
         return web.Response(
             text=jsonrpc_dumps_pretty(result, ledger=ledger, include_protobuf=include_protobuf),
             content_type='application/json'
-        )
-
-    async def handle_streams_index(self, request: web.Request):
-        return web.Response(
-            body="<ul>" + "".join([
-                f'<li><a href="/stream/{sd_hash}">lbry://{stream.claim_name}</a></li>'
-                for sd_hash, stream in self.stream_manager.streams.items()
-            ]) + "</ul>",
-            content_type='text/html'
         )
 
     async def handle_stream_get_request(self, request: web.Request):
