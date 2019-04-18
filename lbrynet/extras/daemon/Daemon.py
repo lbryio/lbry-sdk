@@ -1616,6 +1616,45 @@ class Daemon(metaclass=JSONRPCServerType):
             result = True
         return result
 
+    @requires(STREAM_MANAGER_COMPONENT)
+    async def jsonrpc_file_save(self, file_name=None, download_directory=None, **kwargs):
+        """
+        Output a download to a file
+
+        Usage:
+            file_save [--file_name=<file_name>] [--download_directory=<download_directory>] [--sd_hash=<sd_hash>]
+                      [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
+                      [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
+                      [--channel_name=<channel_name>]
+
+        Options:
+            --file_name=<file_name>                      : (str) delete by file name in downloads folder
+            --download_directory=<download_directory>    : (str) delete by file name in downloads folder
+            --sd_hash=<sd_hash>                          : (str) delete by file sd hash
+            --stream_hash=<stream_hash>                  : (str) delete by file stream hash
+            --rowid=<rowid>                              : (int) delete by file row id
+            --claim_id=<claim_id>                        : (str) delete by file claim id
+            --txid=<txid>                                : (str) delete by file claim txid
+            --nout=<nout>                                : (int) delete by file claim nout
+            --claim_name=<claim_name>                    : (str) delete by file claim name
+            --channel_claim_id=<channel_claim_id>        : (str) delete by file channel claim id
+            --channel_name=<channel_name>                : (str) delete by file channel claim name
+
+        Returns: {File}
+        """
+
+        streams = self.stream_manager.get_filtered_streams(**kwargs)
+
+        if len(streams) > 1:
+            log.warning("There are %i matching files, use narrower filters to select one", len(streams))
+            return False
+        if not streams:
+            log.warning("There is no file to save")
+            return False
+        stream = streams[0]
+        await stream.save_file(file_name, download_directory)
+        return stream
+
     CLAIM_DOC = """
     List and search all types of claims.
     """
