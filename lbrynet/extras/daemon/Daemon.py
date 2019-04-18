@@ -3054,9 +3054,9 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             blobs = list(self.blob_manager.completed_blob_hashes)
         if needed:
-            blobs = [blob_hash for blob_hash in blobs if not self.blob_manager.get_blob(blob_hash).get_is_verified()]
+            blobs = [blob_hash for blob_hash in blobs if not self.blob_manager.is_blob_verified(blob_hash)]
         if finished:
-            blobs = [blob_hash for blob_hash in blobs if self.blob_manager.get_blob(blob_hash).get_is_verified()]
+            blobs = [blob_hash for blob_hash in blobs if self.blob_manager.is_blob_verified(blob_hash)]
         page_size = page_size or len(blobs)
         page = page or 0
         start_index = page * page_size

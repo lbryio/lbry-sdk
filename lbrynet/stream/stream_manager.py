@@ -147,7 +147,7 @@ class StreamManager:
         to_start = []
         await self.storage.sync_files_to_blobs()
         for file_info in await self.storage.get_all_lbry_files():
-            if not self.blob_manager.get_blob(file_info['sd_hash']).get_is_verified():
+            if not self.blob_manager.is_blob_verified(file_info['sd_hash']):
                 to_recover.append(file_info)
             to_start.append(file_info)
         if to_recover:
@@ -185,7 +185,7 @@ class StreamManager:
                 batch = []
                 while sd_hashes:
                     stream = self.streams[sd_hashes.pop()]
-                    if self.blob_manager.get_blob(stream.sd_hash).get_is_verified() and stream.blobs_completed:
+                    if self.blob_manager.is_blob_verified(stream.sd_hash) and stream.blobs_completed:
                         if not stream.fully_reflected.is_set():
                             host, port = random.choice(self.config.reflector_servers)
                             batch.append(stream.upload_to_reflector(host, port))

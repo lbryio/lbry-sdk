@@ -64,7 +64,7 @@ class StreamReflectorClient(asyncio.Protocol):
 
     async def send_descriptor(self) -> typing.Tuple[bool, typing.List[str]]:  # returns a list of needed blob hashes
         sd_blob = self.blob_manager.get_blob(self.descriptor.sd_hash)
-        assert sd_blob.get_is_verified(), "need to have a sd blob to send at this point"
+        assert self.blob_manager.is_blob_verified(self.descriptor.sd_hash), "need to have sd blob to send at this point"
         response = await self.send_request({
             'sd_blob_hash': sd_blob.blob_hash,
             'sd_blob_size': sd_blob.length
@@ -80,7 +80,7 @@ class StreamReflectorClient(asyncio.Protocol):
                 sent_sd = True
                 if not needed:
                     for blob in self.descriptor.blobs[:-1]:
-                        if self.blob_manager.get_blob(blob.blob_hash, blob.length).get_is_verified():
+                        if self.blob_manager.is_blob_verified(blob.blob_hash, blob.length):
                             needed.append(blob.blob_hash)
                 log.info("Sent reflector descriptor %s", sd_blob.blob_hash[:8])
                 self.reflected_blobs.append(sd_blob.blob_hash)
@@ -91,8 +91,8 @@ class StreamReflectorClient(asyncio.Protocol):
         return sent_sd, needed
 
     async def send_blob(self, blob_hash: str):
+        assert self.blob_manager.is_blob_verified(blob_hash), "need to have a blob to send at this point"
         blob = self.blob_manager.get_blob(blob_hash)
-        assert blob.get_is_verified(), "need to have a blob to send at this point"
         response = await self.send_request({
             'blob_hash': blob.blob_hash,
             'blob_size': blob.length

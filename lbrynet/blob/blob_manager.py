@@ -61,6 +61,15 @@ class BlobManager:
             self.blobs[blob_hash] = self._get_blob(blob_hash, length)
         return self.blobs[blob_hash]
 
+    def is_blob_verified(self, blob_hash: str, length: typing.Optional[int] = None) -> bool:
+        if not is_valid_blobhash(blob_hash):
+            raise ValueError(blob_hash)
+        if blob_hash in self.blobs:
+            return self.blobs[blob_hash].get_is_verified()
+        if not os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
+            return False
+        return self._get_blob(blob_hash, length).get_is_verified()
+
     async def setup(self) -> bool:
         def get_files_in_blob_dir() -> typing.Set[str]:
             if not self.blob_dir:
@@ -97,8 +106,7 @@ class BlobManager:
 
     def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
         """Returns of the blobhashes_to_check, which are valid"""
-        blobs = [self.get_blob(b) for b in blob_hashes]
-        return [blob.blob_hash for blob in blobs if blob.get_is_verified()]
+        return [blob_hash for blob_hash in blob_hashes if self.is_blob_verified(blob_hash)]
 
     def delete_blob(self, blob_hash: str):
         if not is_valid_blobhash(blob_hash):
