@@ -325,6 +325,11 @@ class Examples(CommandTestCase):
             'get', file_uri
         )
 
+        await r(
+            'Save a file to the downloads directory',
+            'file', 'save', f"--sd_hash=\"{file_list_result[0]['sd_hash']}\""
+        )
+
         # blobs
 
         bloblist = await r(

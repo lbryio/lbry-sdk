@@ -311,3 +311,24 @@ class RangeRequests(CommandTestCase):
         await self._test_range_requests()
         self.assertEqual(start_file_count, len(os.listdir(self.daemon.blob_manager.blob_dir)))
         self.assertEqual(blobs_in_stream, self.daemon.jsonrpc_file_list()[0].blobs_remaining)
+
+    async def test_file_save_streaming_only_save_blobs(self):
+        await self.test_streaming_only_with_blobs()
+        stream = self.daemon.jsonrpc_file_list()[0]
+        self.assertIsNone(stream.full_path)
+        self.server.stop_server()
+        await self.daemon.jsonrpc_file_save('test', self.daemon.conf.data_dir)
+        stream = self.daemon.jsonrpc_file_list()[0]
+        await stream.finished_writing.wait()
+        with open(stream.full_path, 'rb') as f:
+            self.assertEqual(self.data, f.read())
+
+    async def test_file_save_streaming_only_dont_save_blobs(self):
+        await self.test_streaming_only_without_blobs()
+        stream = self.daemon.jsonrpc_file_list()[0]
+        self.assertIsNone(stream.full_path)
+        await self.daemon.jsonrpc_file_save('test', self.daemon.conf.data_dir)
+        stream = self.daemon.jsonrpc_file_list()[0]
+        await stream.finished_writing.wait()
+        with open(stream.full_path, 'rb') as f:
+            self.assertEqual(self.data, f.read())
