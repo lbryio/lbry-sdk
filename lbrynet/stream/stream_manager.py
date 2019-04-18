@@ -185,14 +185,15 @@ class StreamManager:
                 batch = []
                 while sd_hashes:
                     stream = self.streams[sd_hashes.pop()]
-                    if not stream.fully_reflected.is_set():
-                        host, port = random.choice(self.config.reflector_servers)
-                        batch.append(stream.upload_to_reflector(host, port))
+                    if self.blob_manager.get_blob(stream.sd_hash).get_is_verified() and stream.blobs_completed:
+                        if not stream.fully_reflected.is_set():
+                            host, port = random.choice(self.config.reflector_servers)
+                            batch.append(stream.upload_to_reflector(host, port))
                     if len(batch) >= self.config.concurrent_reflector_uploads:
-                        await asyncio.gather(*batch)
+                        await asyncio.gather(*batch, loop=self.loop)
                         batch = []
                 if batch:
-                    await asyncio.gather(*batch)
+                    await asyncio.gather(*batch, loop=self.loop)
             await asyncio.sleep(300, loop=self.loop)
 
     async def start(self):
