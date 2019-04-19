@@ -162,6 +162,8 @@ class StreamDescriptor:
     @classmethod
     async def from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
                                           blob: AbstractBlob) -> 'StreamDescriptor':
+        if not blob.is_readable():
+            raise InvalidStreamDescriptorError(f"unreadable/missing blob: {blob.blob_hash}")
         return await loop.run_in_executor(None, cls._from_stream_descriptor_blob, loop, blob_dir, blob)
 
     @staticmethod
