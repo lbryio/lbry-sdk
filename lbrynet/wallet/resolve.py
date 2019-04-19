@@ -51,7 +51,7 @@ class Resolver:
         results = await asyncio.gather(*futs)
         return dict(list(map(lambda result: list(result.items())[0], results)))
 
-    @lru_cache(200)
+    @lru_cache(256)
     def _fetch_tx(self, txid):
         async def __fetch_parse(txid):
             return self.transaction_class(unhexlify(await self.network.get_transaction(txid)))
