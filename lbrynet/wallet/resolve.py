@@ -1,6 +1,8 @@
 import logging
 
 import asyncio
+from functools import lru_cache
+
 from cryptography.exceptions import InvalidSignature
 from binascii import unhexlify, hexlify
 
@@ -11,7 +13,6 @@ from lbrynet.schema.claim import Claim
 from google.protobuf.message import DecodeError
 from lbrynet.schema.uri import parse_lbry_uri, URIParseError
 from lbrynet.wallet.claim_proofs import verify_proof, InvalidProofError
-from lbrynet.wallet.transaction import Transaction
 
 log = logging.getLogger(__name__)
 
@@ -19,13 +20,9 @@ log = logging.getLogger(__name__)
 class Resolver:
 
     def __init__(self, ledger):
-        self.claim_trie_root = ledger.headers.claim_trie_root
-        self.height = ledger.headers.height
-        self.header_hash = ledger.headers.hash().decode()
         self.transaction_class = ledger.transaction_class
         self.network = ledger.network
         self.ledger = ledger
-        self._tx_cache = {}
 
     async def resolve(self, page, page_size, *uris):
         uris = set(uris)
@@ -34,35 +31,40 @@ class Resolver:
                 parsed_uri = parse_lbry_uri(uri)
                 if parsed_uri.claim_id:
                     validate_claim_id(parsed_uri.claim_id)
-            resolutions = await self.network.get_values_for_uris(self.header_hash, *uris)
+            claim_trie_root = self.ledger.headers.claim_trie_root
+            resolutions = await self.network.get_values_for_uris(self.ledger.headers.hash().decode(), *uris)
             if len(uris) > 1:
-                return await self._batch_handle(resolutions, uris, page, page_size)
-            return await self._handle_resolutions(resolutions, uris, page, page_size)
+                return await self._batch_handle(resolutions, uris, page, page_size, claim_trie_root)
+            return await self._handle_resolutions(resolutions, uris, page, page_size, claim_trie_root)
         except URIParseError as err:
             return {'error': err.args[0]}
         except Exception as e:
             log.exception(e)
             return {'error': str(e)}
 
-    async def _batch_handle(self, resolutions, uris, page, page_size):
+    async def _batch_handle(self, resolutions, uris, page, page_size, claim_trie_root):
         futs = []
         for uri in uris:
-            futs.append(asyncio.ensure_future(self._handle_resolutions(resolutions, [uri], page, page_size)))
+            futs.append(
+                asyncio.ensure_future(self._handle_resolutions(resolutions, [uri], page, page_size, claim_trie_root))
+            )
         results = await asyncio.gather(*futs)
         return dict(list(map(lambda result: list(result.items())[0], results)))
 
+    @lru_cache(200)
     def _fetch_tx(self, txid):
-        self._tx_cache[txid] = self._tx_cache.get(txid) or asyncio.ensure_future(self.network.get_transaction(txid))
-        return self._tx_cache[txid]
+        async def __fetch_parse(txid):
+            return self.transaction_class(unhexlify(await self.network.get_transaction(txid)))
+        return asyncio.ensure_future(__fetch_parse(txid))
 
-    async def _handle_resolutions(self, resolutions, requested_uris, page, page_size):
+    async def _handle_resolutions(self, resolutions, requested_uris, page, page_size, claim_trie_root):
         results = {}
         for uri in requested_uris:
             resolution = (resolutions or {}).get(uri, {})
             if resolution:
                 try:
                     results[uri] = _handle_claim_result(
-                        await self._handle_resolve_uri_response(uri, resolution, page, page_size),
+                        await self._handle_resolve_uri_response(uri, resolution, claim_trie_root, page, page_size),
                         uri
                     )
                 except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
@@ -72,9 +74,8 @@ class Resolver:
                 results[uri] = {'error': "URI lbry://{} cannot be resolved".format(uri.replace("lbry://", ""))}
         return results
 
-    async def _handle_resolve_uri_response(self, uri, resolution, page=0, page_size=10, raw=False):
+    async def _handle_resolve_uri_response(self, uri, resolution, claim_trie_root, page=0, page_size=10):
         result = {}
-        claim_trie_root = self.claim_trie_root
         parsed_uri = parse_lbry_uri(uri)
         certificate_response = None
         # parse an included certificate
@@ -328,10 +329,8 @@ def validate_claim_signature_and_get_channel_name(claim_result, certificate_clai
                                                   claim_tx=None, cert_tx=None):
     valid_signature = False
     if cert_tx and certificate_claim and claim_tx and claim_result:
-        tx = Transaction(unhexlify(claim_tx))
-        cert_tx = Transaction(unhexlify(cert_tx))
         try:
-            valid_signature = tx.outputs[claim_result['nout']].is_signed_by(
+            valid_signature = claim_tx.outputs[claim_result['nout']].is_signed_by(
                 cert_tx.outputs[certificate_claim['nout']], ledger
             )
         except InvalidSignature:
