@@ -638,17 +638,16 @@ class SQLiteStorage(SQLiteMixin):
             await self.save_supports(claim_id_to_supports)
 
     def save_claims_for_resolve(self, claim_infos):
-        to_save = []
+        to_save = {}
         for info in claim_infos:
             if 'value' in info:
                 if info['value']:
-                    to_save.append(info)
+                    to_save[info['claim_id']] = info
             else:
-                if 'certificate' in info and info['certificate']['value']:
-                    to_save.append(info['certificate'])
-                if 'claim' in info and info['claim']['value']:
-                    to_save.append(info['claim'])
-        return self.save_claims(to_save)
+                for key in ('certificate', 'claim'):
+                    if info.get(key, {}).get('value'):
+                        to_save[info[key]['claim_id']] = info[key]
+        return self.save_claims(to_save.values())
 
     @staticmethod
     def _save_content_claim(transaction, claim_outpoint, stream_hash):
