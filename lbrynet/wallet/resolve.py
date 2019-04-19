@@ -49,7 +49,7 @@ class Resolver:
         for uri in uris:
             futs.append(asyncio.ensure_future(self._handle_resolutions(resolutions, [uri], page, page_size)))
         results = await asyncio.gather(*futs)
-        return {uri: results[uri] for uri in results if uri in results}
+        return dict(list(map(lambda result: list(result.items())[0], results)))
 
     def _fetch_tx(self, txid):
         self._tx_cache[txid] = self._tx_cache.get(txid) or asyncio.ensure_future(self.network.get_transaction(txid))
