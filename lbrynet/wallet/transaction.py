@@ -114,7 +114,7 @@ class Output(BaseOutput):
         self.channel = channel
         self.claim.signing_channel_hash = channel.claim_hash
         digest = sha256(b''.join([
-            first_input_id or self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
+            first_input_id or self.tx_ref.tx.inputs[0].txo_ref.hash,
             self.claim.signing_channel_hash,
             self.claim.to_message_bytes()
         ]))
