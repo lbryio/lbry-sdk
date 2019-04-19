@@ -130,7 +130,7 @@ class TestSQLiteStorage(StorageTest):
         } for i in range(20)]
         expected_supports = {}
         for idx, claim_id in enumerate(claim_ids):
-            await self.storage.save_supports(claim_id, random_supports[idx*2:idx*2+2])
+            await self.storage.save_supports({claim_id: random_supports[idx*2:idx*2+2]})
             for random_support in random_supports[idx*2:idx*2+2]:
                 random_support['claim_id'] = claim_id
                 expected_supports.setdefault(claim_id, []).append(random_support)

@@ -539,16 +539,18 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # support functions # # # # # # # # #
 
-    def save_supports(self, claim_id, supports):
+    def save_supports(self, claim_id_to_supports: dict):
         # TODO: add 'address' to support items returned for a claim from lbrycrdd and lbryum-server
         def _save_support(transaction):
-            transaction.execute("delete from support where claim_id=?", (claim_id,))
-            for support in supports:
-                transaction.execute(
-                    "insert into support values (?, ?, ?, ?)",
-                    ("%s:%i" % (support['txid'], support['nout']), claim_id, lbc_to_dewies(support['amount']),
-                     support.get('address', ""))
-                )
+            bind = "({})".format(','.join(['?'] * len(claim_id_to_supports)))
+            transaction.execute(f"delete from support where claim_id in {bind}", list(claim_id_to_supports.keys()))
+            for claim_id, supports in claim_id_to_supports.items():
+                for support in supports:
+                    transaction.execute(
+                        "insert into support values (?, ?, ?, ?)",
+                        ("%s:%i" % (support['txid'], support['nout']), claim_id, lbc_to_dewies(support['amount']),
+                         support.get('address', ""))
+                    )
         return self.db.run(_save_support)
 
     def get_supports(self, *claim_ids):
@@ -576,7 +578,7 @@ class SQLiteStorage(SQLiteMixin):
     # # # # # # # # # claim functions # # # # # # # # #
 
     async def save_claims(self, claim_infos):
-        support_callbacks = []
+        claim_id_to_supports = {}
         update_file_callbacks = []
 
         def _save_claims(transaction):
@@ -602,7 +604,7 @@ class SQLiteStorage(SQLiteMixin):
                 # if this response doesn't have support info don't overwrite the existing
                 # support info
                 if 'supports' in claim_info:
-                    support_callbacks.append((claim_id, claim_info['supports']))
+                    claim_id_to_supports[claim_id] = claim_info['supports']
                 if not source_hash:
                     continue
                 stream_hash = transaction.execute(
@@ -632,10 +634,8 @@ class SQLiteStorage(SQLiteMixin):
         await self.db.run(_save_claims)
         if update_file_callbacks:
             await asyncio.wait(update_file_callbacks)
-        if support_callbacks:
-            await asyncio.wait([
-                self.save_supports(*args) for args in support_callbacks
-            ])
+        if claim_id_to_supports:
+            await self.save_supports(claim_id_to_supports)
 
     def save_claims_for_resolve(self, claim_infos):
         to_save = []

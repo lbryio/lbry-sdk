@@ -2522,13 +2522,13 @@ class Daemon(metaclass=JSONRPCServerType):
         if not preview:
             await tx.sign([account])
             await account.ledger.broadcast(tx)
-            await self.storage.save_supports(claim_id, [{
+            await self.storage.save_supports({claim_id: [{
                 'txid': tx.id,
                 'nout': tx.position,
                 'address': claim_address,
                 'claim_id': claim_id,
                 'amount': dewies_to_lbc(amount)
-            }])
+            }]})
             await self.analytics_manager.send_claim_action('new_support')
         else:
             await account.ledger.release_tx(tx)
