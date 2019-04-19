@@ -96,7 +96,7 @@ class Output(BaseOutput):
             ]
         else:
             pieces = [
-                self.tx_ref.tx.inputs[0].txo_ref.id.encode(),
+                self.tx_ref.tx.inputs[0].txo_ref.hash,
                 self.claim.signing_channel_hash,
                 self.claim.to_message_bytes()
             ]
