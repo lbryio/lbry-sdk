@@ -47,10 +47,7 @@ class MainNetLedger(BaseLedger):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
-
-    @property
-    def resolver(self):
-        return Resolver(self)
+        self.resolver = Resolver(self)
 
     def resolve(self, page, page_size, *uris):
         return self.resolver.resolve(page, page_size, *uris)
