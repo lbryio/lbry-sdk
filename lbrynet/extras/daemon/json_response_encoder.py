@@ -17,11 +17,22 @@ log = logging.getLogger(__name__)
 def encode_txo_doc():
     return {
         'txid': "hash of transaction in hex",
-        'height': "block where transaction was recorded",
         'nout': "position in the transaction",
+        'height': "block where transaction was recorded",
         'amount': "value of the txo as a decimal",
         'address': "address of who can spend the txo",
-        'confirmations': "number of confirmed blocks"
+        'confirmations': "number of confirmed blocks",
+        'is_change': "payment to change address, only available when it can be determined",
+        'is_mine': "payment to one of your accounts, only available when it can be determined",
+        'type': "one of 'claim', 'support' or 'payment'",
+        'claim_op': "when type is 'claim', this determines if it is 'create' or 'update'",
+        'name': "when type is 'claim' or 'support', this is the claim name",
+        'claim_id': "when type is 'claim' or 'support', this is the claim id",
+        'permanent_url': "when type is 'claim' or 'support', this is the long permanent claim URL",
+        'value': "when type is 'claim', this is the claim metadata",
+        'sub_type': "when type is 'claim', this determines if it is 'channel' or 'stream' claim",
+        'signing_channel': "for signed claims only, metadata of signing channel",
+        'is_channel_signature_valid': "for signed claims only, whether signature is valid",
     }
 
 
@@ -101,21 +112,7 @@ class JSONResponseEncoder(JSONEncoder):
         if isinstance(obj, Output):
             return self.encode_output(obj)
         if isinstance(obj, Claim):
-            claim_dict = obj.to_dict()
-            if obj.is_stream:
-                claim_dict['stream']['sd_hash'] = obj.stream.sd_hash
-                fee = claim_dict['stream'].get('fee', {})
-                if 'address' in fee:
-                    fee['address'] = obj.stream.fee.address
-                if 'amount' in fee:
-                    fee['amount'] = obj.stream.fee.amount
-                if 'languages' in claim_dict['stream']:
-                    claim_dict['stream']['languages'] = obj.stream.langtags
-            elif obj.is_channel:
-                claim_dict['channel']['public_key'] = obj.channel.public_key
-                if 'languages' in claim_dict['channel']:
-                    claim_dict['channel']['languages'] = obj.channel.langtags
-            return claim_dict
+            return self.encode_claim(obj)
         if isinstance(obj, datetime):
             return obj.strftime("%Y%m%dT%H:%M:%S")
         if isinstance(obj, Decimal):
@@ -142,9 +139,9 @@ class JSONResponseEncoder(JSONEncoder):
         output = {
             'txid': txo.tx_ref.id,
             'nout': txo.position,
+            'height': tx_height,
             'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger),
-            'height': tx_height,
             'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height
         }
         if txo.is_change is not None:
@@ -152,40 +149,46 @@ class JSONResponseEncoder(JSONEncoder):
         if txo.is_my_account is not None:
             output['is_mine'] = txo.is_my_account
 
+        if txo.script.is_claim_name:
+            output['type'] = 'claim'
+            output['claim_op'] = 'create'
+        elif txo.script.is_update_claim:
+            output['type'] = 'claim'
+            output['claim_op'] = 'update'
+        elif txo.script.is_support_claim:
+            output['type'] = 'support'
+        else:
+            output['type'] = 'payment'
+
         if txo.script.is_claim_involved:
             output.update({
                 'name': txo.claim_name,
                 'claim_id': txo.claim_id,
                 'permanent_url': txo.permanent_url,
             })
-
             if txo.script.is_claim_name or txo.script.is_update_claim:
-                claim = txo.claim
-                output['value'] = claim
-                if claim.is_signed:
-                    output['valid_signature'] = None
-                    if check_signature and txo.channel is not None:
-                        output['channel_name'] = txo.channel.claim_name
+                output['value'] = txo.claim
+                if txo.claim.is_channel:
+                    output['sub_type'] = 'channel'
+                elif txo.claim.is_stream:
+                    output['sub_type'] = 'stream'
+                if txo.channel is not None:
+                    output['signing_channel'] = {
+                        'name': txo.channel.claim_name,
+                        'claim_id': txo.channel.claim_id,
+                        'value': txo.channel.claim
+                    }
+                    if check_signature and txo.claim.is_signed:
+                        output['is_channel_signature_valid'] = False
                         try:
-                            output['valid_signature'] = txo.is_signed_by(txo.channel, self.ledger)
+                            output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.ledger)
                         except BadSignatureError:
-                            output['valid_signature'] = False
+                            pass
                         except ValueError:
                             log.exception(
                                 'txo.id: %s, txo.channel.id:%s, output: %s',
                                 txo.id, txo.channel.id, output
                             )
-                            output['valid_signature'] = False
-
-            if txo.script.is_claim_name:
-                output['type'] = 'claim'
-            elif txo.script.is_update_claim:
-                output['type'] = 'update'
-            elif txo.script.is_support_claim:
-                output['type'] = 'support'
-            else:
-                output['type'] = 'basic'
-
         return output
 
     def encode_input(self, txi):
@@ -204,3 +207,11 @@ class JSONResponseEncoder(JSONEncoder):
     @staticmethod
     def encode_file(managed_stream):
         return managed_stream.as_dict()
+
+    @staticmethod
+    def encode_claim(claim):
+        if claim.is_stream:
+            return claim.stream.to_dict()
+        elif claim.is_channel:
+            return claim.channel.to_dict()
+        return claim.to_dict()
