@@ -1631,8 +1631,8 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--allow_duplicate_name=<allow_duplicate_name>]
                            [--title=<title>] [--description=<description>]
                            [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                           [--contact_email=<contact_email>]
-                           [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
+                           [--email=<email>]
+                           [--website_url=<website_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
@@ -1681,8 +1681,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
                                                           ... --locations="{'country': 'US', 'state': 'NH'}"
 
-            --contact_email=<contact_email>: (str) email of channel owner
-            --homepage_url=<homepage_url>  : (str) homepage url
+            --email=<email>                : (str) email of channel owner
+            --website_url=<website_url>    : (str) website url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
             --cover_url=<cover_url>        : (str) url of cover image
             --account_id=<account_id>      : (str) id of the account to store channel
@@ -1740,8 +1740,8 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--tags=<tags>...] [--clear_tags]
                            [--languages=<languages>...] [--clear_languages]
                            [--locations=<locations>...] [--clear_locations]
-                           [--contact_email=<contact_email>]
-                           [--homepage_url=<homepage_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
+                           [--email=<email>]
+                           [--website_url=<website_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key] [--preview]
 
         Options:
@@ -1791,8 +1791,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
                                                           ... --locations="{'country': 'US', 'state': 'NH'}"
 
-            --contact_email=<contact_email>: (str) email of channel owner
-            --homepage_url=<homepage_url>  : (str) homepage url
+            --email=<email>                : (str) email of channel owner
+            --website_url=<website_url>    : (str) website url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
             --cover_url=<cover_url>        : (str) url of cover image
             --account_id=<account_id>      : (str) id of the account to store channel
