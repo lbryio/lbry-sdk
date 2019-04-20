@@ -28,7 +28,7 @@ class FileCommands(CommandTestCase):
 
     async def test_download_different_timeouts(self):
         tx = await self.stream_create('foo', '0.01')
-        sd_hash = tx['outputs'][0]['value']['stream']['sd_hash']
+        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         all_except_sd = [
             blob_hash for blob_hash in self.server.blob_manager.completed_blob_hashes if blob_hash != sd_hash
@@ -70,7 +70,7 @@ class FileCommands(CommandTestCase):
 
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
         tx = await self.stream_create('foo', '0.01')
-        sd_hash = tx['outputs'][0]['value']['stream']['sd_hash']
+        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         file_info = self.sout(self.daemon.jsonrpc_file_list())[0]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
@@ -89,7 +89,7 @@ class FileCommands(CommandTestCase):
 
     async def test_incomplete_downloads_retry(self):
         tx = await self.stream_create('foo', '0.01')
-        sd_hash = tx['outputs'][0]['value']['stream']['sd_hash']
+        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
             await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
@@ -129,7 +129,7 @@ class FileCommands(CommandTestCase):
     async def test_unban_recovers_stream(self):
         BlobDownloader.BAN_TIME = .5  # fixme: temporary field, will move to connection manager or a conf
         tx = await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
-        sd_hash = tx['outputs'][0]['value']['stream']['sd_hash']
+        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))[-2]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         # backup blob

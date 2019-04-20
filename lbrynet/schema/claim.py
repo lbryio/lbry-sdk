@@ -713,6 +713,9 @@ class Stream(BaseClaimSubType):
     def to_dict(self):
         claim = super().to_dict()
         claim.update(claim.pop('stream'))
+        if 'source' in claim:
+            if 'sd_hash' in claim['source']:
+                claim['source']['sd_hash'] = self.source.sd_hash
         fee = claim.get('fee', {})
         if 'address' in fee:
             fee['address'] = self.fee.address

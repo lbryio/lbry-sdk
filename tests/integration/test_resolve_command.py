@@ -1,4 +1,5 @@
 import json
+from binascii import hexlify
 from lbrynet.testcase import CommandTestCase
 
 
@@ -69,13 +70,14 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(claim['claim']['depth'], json.loads(tx_details)['confirmations'])
 
         # resolve handles invalid data
-        txid = await self.blockchain_claim_name("gibberish", "cafecafe", "0.1")
+        txid = await self.blockchain_claim_name(
+            "gibberish", hexlify(b"{'invalid':'json'}").decode(), "0.1")
         await self.generate(1)
         response = await self.resolve("lbry://gibberish")
         self.assertSetEqual({'lbry://gibberish'}, set(response))
         claim = response['lbry://gibberish']['claim']
         self.assertEqual(claim['name'], 'gibberish')
-        self.assertEqual(claim['hex'], 'cafecafe')
+        self.assertEqual(claim['hex'], hexlify(b"{'invalid':'json'}").decode())
         self.assertFalse(claim['decoded_claim'])
         self.assertEqual(claim['txid'], txid)
         self.assertEqual(claim['effective_amount'], "0.1")
