@@ -593,7 +593,7 @@ class SQLiteStorage(SQLiteMixin):
                 sequence = claim_info['claim_sequence']
                 certificate_id = claim_info['value'].signing_channel_id
                 try:
-                    source_hash = claim_info['value'].stream.sd_hash
+                    source_hash = claim_info['value'].stream.source.sd_hash
                 except (AttributeError, ValueError):
                     source_hash = None
                 serialized = binascii.hexlify(claim_info['value'].to_bytes())
@@ -670,7 +670,7 @@ class SQLiteStorage(SQLiteMixin):
         if not known_sd_hash:
             raise Exception("stream not found")
         # check the claim contains the same sd hash
-        if known_sd_hash[0] != claim.stream.sd_hash:
+        if known_sd_hash[0] != claim.stream.source.sd_hash:
             raise Exception("stream mismatch")
 
         # if there is a current claim associated to the file, check that the new claim is an update to it

@@ -358,6 +358,43 @@ class Fee:
         self._fee.currency = FeeMessage.USD
 
 
+class ClaimReference:
+
+    __slots__ = 'message',
+
+    def __init__(self, message):
+        self.message = message
+
+    @property
+    def claim_id(self) -> str:
+        return hexlify(self.claim_hash[::-1]).decode()
+
+    @claim_id.setter
+    def claim_id(self, claim_id: str):
+        self.claim_hash = unhexlify(claim_id)[::-1]
+
+    @property
+    def claim_hash(self) -> bytes:
+        return self.message.claim_hash
+
+    @claim_hash.setter
+    def claim_hash(self, claim_hash: bytes):
+        self.message.claim_hash = claim_hash
+
+
+class ClaimList(BaseMessageList[ClaimReference]):
+
+    __slots__ = ()
+    item_class = ClaimReference
+
+    def append(self, value):
+        self.add().claim_id = value
+
+    @property
+    def claim_ids(self) -> List[str]:
+        return [c.claim_id for c in self]
+
+
 class Language:
 
     __slots__ = 'message',
@@ -532,8 +569,41 @@ class BaseClaimSubType:
 
     __slots__ = 'claim', 'message'
 
+    object_fields = 'thumbnail',
+    repeat_fields = 'tags', 'languages', 'locations'
+
     def __init__(self, claim: Claim):
         self.claim = claim or Claim()
+
+    def to_dict(self):
+        claim = self.claim.to_dict()
+        if 'languages' in claim:
+            claim['languages'] = self.langtags
+        return claim
+
+    def update(self, **kwargs):
+        for key in list(kwargs):
+            for field in self.object_fields:
+                if key.startswith(f'{field}_'):
+                    attr = getattr(self, field)
+                    setattr(attr, key[len(f'{field}_'):], kwargs.pop(key))
+                    continue
+
+        for l in self.repeat_fields:
+            field = getattr(self, l)
+            if kwargs.pop(f'clear_{l}', False):
+                del field[:]
+            items = kwargs.pop(l, None)
+            if items is not None:
+                if isinstance(items, str):
+                    field.append(items)
+                elif isinstance(items, list):
+                    field.extend(items)
+                else:
+                    raise ValueError(f"Unknown {l} value: {items}")
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     @property
     def title(self) -> str:
@@ -571,33 +641,23 @@ class BaseClaimSubType:
     def locations(self) -> LocationList:
         return LocationList(self.claim.message.locations)
 
-    def to_dict(self):
-        return MessageToDict(self.message, preserving_proto_field_name=True)
-
-    def update(self, **kwargs):
-        for l in ('tags', 'languages', 'locations'):
-            if kwargs.pop(f'clear_{l}', False):
-                self.message.ClearField('tags')
-            items = kwargs.pop(l, None)
-            if items is not None:
-                if isinstance(items, str):
-                    getattr(self, l).append(items)
-                elif isinstance(items, list):
-                    getattr(self, l).extend(items)
-                else:
-                    raise ValueError(f"Unknown {l} value: {items}")
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
 
 class Channel(BaseClaimSubType):
 
     __slots__ = ()
 
+    object_fields = BaseClaimSubType.object_fields + ('cover',)
+    repeat_fields = BaseClaimSubType.repeat_fields + ('featured',)
+
     def __init__(self, claim: Claim = None):
         super().__init__(claim)
         self.message = self.claim.channel_message
+
+    def to_dict(self):
+        claim = super().to_dict()
+        claim.update(claim.pop('channel'))
+        claim['public_key'] = self.public_key
+        return claim
 
     @property
     def public_key(self) -> str:
@@ -616,33 +676,49 @@ class Channel(BaseClaimSubType):
         self.message.public_key = public_key
 
     @property
-    def contact_email(self) -> str:
-        return self.message.contact_email
+    def email(self) -> str:
+        return self.message.email
 
-    @contact_email.setter
-    def contact_email(self, contact_email: str):
-        self.message.contact_email = contact_email
+    @email.setter
+    def email(self, email: str):
+        self.message.email = email
 
     @property
-    def homepage_url(self) -> str:
-        return self.message.homepage_url
+    def website_url(self) -> str:
+        return self.message.website_url
 
-    @homepage_url.setter
-    def homepage_url(self, homepage_url: str):
-        self.message.homepage_url = homepage_url
+    @website_url.setter
+    def website_url(self, website_url: str):
+        self.message.website_url = website_url
 
     @property
     def cover(self) -> Source:
         return Source(self.message.cover)
+
+    @property
+    def featured(self) -> ClaimList:
+        return ClaimList(self.message.featured)
 
 
 class Stream(BaseClaimSubType):
 
     __slots__ = ()
 
+    object_fields = BaseClaimSubType.object_fields + ('source',)
+
     def __init__(self, claim: Claim = None):
         super().__init__(claim)
         self.message = self.claim.stream_message
+
+    def to_dict(self):
+        claim = super().to_dict()
+        claim.update(claim.pop('stream'))
+        fee = claim.get('fee', {})
+        if 'address' in fee:
+            fee['address'] = self.fee.address
+        if 'amount' in fee:
+            fee['amount'] = self.fee.amount
+        return claim
 
     def update(
             self, file_path=None, stream_type=None,
@@ -672,14 +748,17 @@ class Stream(BaseClaimSubType):
             if duration_was_not_set and file_path and isinstance(sub_obj, Playable):
                 sub_obj.set_duration_from_path(file_path)
 
+        if 'sd_hash' in kwargs:
+            self.source.sd_hash = kwargs.pop('sd_hash')
+
         super().update(**kwargs)
 
         if file_path is not None:
-            self.media_type = guess_media_type(file_path)
+            self.source.media_type = guess_media_type(file_path)
             if not os.path.isfile(file_path):
                 raise Exception(f"File does not exist: {file_path}")
-            self.file.size = os.path.getsize(file_path)
-            if self.file.size == 0:
+            self.source.size = os.path.getsize(file_path)
+            if self.source.size == 0:
                 raise Exception(f"Cannot publish empty file: {file_path}")
 
         if fee_amount and fee_currency:

@@ -353,7 +353,7 @@ class StreamManager:
         if existing:
             await self.start_stream(existing[0])
             return existing[0], None
-        existing = self.get_filtered_streams(sd_hash=claim.stream.sd_hash)
+        existing = self.get_filtered_streams(sd_hash=claim.stream.source.sd_hash)
         if existing and existing[0].claim_id != claim_id:
             raise ResolveError(f"stream for {existing[0].claim_id} collides with existing "
                                f"download {claim_id}")
@@ -437,7 +437,7 @@ class StreamManager:
 
         # download the stream
         download_id = binascii.hexlify(generate_id()).decode()
-        downloader = StreamDownloader(self.loop, self.config, self.blob_manager, claim.stream.sd_hash,
+        downloader = StreamDownloader(self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash,
                                       self.config.download_dir, file_name)
 
         stream = None
@@ -484,7 +484,7 @@ class StreamManager:
                     None if not stream else len(stream.downloader.blob_downloader.scores),
                     False if not downloader else downloader.added_fixed_peers,
                     self.config.fixed_peer_delay if not downloader else downloader.fixed_peers_delay,
-                    claim.stream.sd_hash, time_to_descriptor,
+                    claim.stream.source.sd_hash, time_to_descriptor,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].blob_hash,
                     None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,
                     time_to_first_bytes, None if not error else error.__class__.__name__

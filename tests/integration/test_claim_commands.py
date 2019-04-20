@@ -75,37 +75,39 @@ class ChannelCommands(CommandTestCase):
             'thumbnail_url': "https://co.ol/thumbnail.png",
             'languages': ["en-US"],
             'locations': ['US::Manchester'],
-            'contact_email': "human@email.com",
-            'homepage_url': "https://co.ol",
+            'email': "human@email.com",
+            'website_url': "https://co.ol",
             'cover_url': "https://co.ol/cover.png",
         }
         fixed_values = values.copy()
         fixed_values['languages'] = ['en-US']
         fixed_values['locations'] = [{'country': 'US', 'city': 'Manchester'}]
+        fixed_values['thumbnail'] = {'url': fixed_values.pop('thumbnail_url')}
+        fixed_values['cover'] = {'url': fixed_values.pop('cover_url')}
 
         # create new channel with all fields set
         tx = await self.out(self.channel_create('@bigchannel', **values))
         txo = tx['outputs'][0]
         self.assertEqual(
-            txo['value']['channel'],
-            {'public_key': txo['value']['channel']['public_key'], **fixed_values}
+            txo['value'],
+            {'public_key': txo['value']['public_key'], **fixed_values}
         )
 
         # create channel with nothing set
         tx = await self.out(self.channel_create('@lightchannel'))
         txo = tx['outputs'][0]
         self.assertEqual(
-            txo['value']['channel'],
-            {'public_key': txo['value']['channel']['public_key']}
+            txo['value'],
+            {'public_key': txo['value']['public_key']}
         )
 
         # create channel with just some tags
         tx = await self.out(self.channel_create('@updatedchannel', tags='blah'))
         txo = tx['outputs'][0]
         claim_id = txo['claim_id']
-        public_key = txo['value']['channel']['public_key']
+        public_key = txo['value']['public_key']
         self.assertEqual(
-            txo['value']['channel'],
+            txo['value'],
             {'public_key': public_key, 'tags': ['blah']}
         )
 
@@ -115,7 +117,7 @@ class ChannelCommands(CommandTestCase):
         fixed_values['public_key'] = public_key
         fixed_values['tags'].insert(0, 'blah')  # existing tag
         self.assertEqual(
-            txo['value']['channel'],
+            txo['value'],
             fixed_values
         )
 
@@ -124,7 +126,7 @@ class ChannelCommands(CommandTestCase):
         txo = tx['outputs'][0]
         fixed_values['tags'] = ['single']
         self.assertEqual(
-            txo['value']['channel'],
+            txo['value'],
             fixed_values
         )
 
@@ -132,7 +134,7 @@ class ChannelCommands(CommandTestCase):
         tx = await self.out(self.channel_update(claim_id, new_signing_key=True))
         txo = tx['outputs'][0]
         self.assertNotEqual(
-            txo['value']['channel']['public_key'],
+            txo['value']['public_key'],
             fixed_values['public_key']
         )
 
@@ -284,15 +286,12 @@ class StreamCommands(CommandTestCase):
         fixed_values = values.copy()
         fixed_values['languages'] = ['en']
         fixed_values['locations'] = [{'country': 'UA'}]
-
-        # create new channel with all fields set
-        tx = await self.out(self.stream_create('big', **values))
-        txo = tx['outputs'][0]
-        stream = txo['value']['stream']
-        fixed_values['sd_hash'] = stream['sd_hash']
-        fixed_values['file'] = stream['file']
-        fixed_values['media_type'] = 'application/octet-stream'
+        fixed_values['thumbnail'] = {'url': fixed_values.pop('thumbnail_url')}
         fixed_values['release_time'] = str(values['release_time'])
+        fixed_values['source'] = {
+            'media_type': 'application/octet-stream',
+            'size': '3'
+        }
         fixed_values['fee'] = {
             'address': fixed_values.pop('fee_address'),
             'amount': float(fixed_values.pop('fee_amount')),
@@ -302,16 +301,24 @@ class StreamCommands(CommandTestCase):
             'height': fixed_values.pop('video_height'),
             'width': fixed_values.pop('video_width')
         }
+
+        # create new channel with all fields set
+        tx = await self.out(self.stream_create('big', **values))
+        txo = tx['outputs'][0]
+        stream = txo['value']
+        fixed_values['source']['sd_hash'] = stream['source']['sd_hash']
         self.assertEqual(stream, fixed_values)
 
         # create channel with nothing set
         tx = await self.out(self.stream_create('light'))
         txo = tx['outputs'][0]
         self.assertEqual(
-            txo['value']['stream'], {
-                'file': {'size': '3'},
-                'media_type': 'application/octet-stream',
-                'sd_hash': txo['value']['stream']['sd_hash']
+            txo['value'], {
+                'source': {
+                    'size': '3',
+                    'media_type': 'application/octet-stream',
+                    'sd_hash': txo['value']['source']['sd_hash']
+                },
             }
         )
 
@@ -319,12 +326,14 @@ class StreamCommands(CommandTestCase):
         tx = await self.out(self.stream_create('updated', tags='blah'))
         txo = tx['outputs'][0]
         claim_id = txo['claim_id']
-        fixed_values['sd_hash'] = txo['value']['stream']['sd_hash']
+        fixed_values['source']['sd_hash'] = txo['value']['source']['sd_hash']
         self.assertEqual(
-            txo['value']['stream'], {
-                'file': {'size': '3'},
-                'media_type': 'application/octet-stream',
-                'sd_hash': fixed_values['sd_hash'],
+            txo['value'], {
+                'source': {
+                    'size': '3',
+                    'media_type': 'application/octet-stream',
+                    'sd_hash': fixed_values['source']['sd_hash'],
+                },
                 'tags': ['blah']
             }
         )
@@ -333,13 +342,13 @@ class StreamCommands(CommandTestCase):
         tx = await self.out(self.stream_update(claim_id, **values))
         txo = tx['outputs'][0]
         fixed_values['tags'].insert(0, 'blah')  # existing tag
-        self.assertEqual(txo['value']['stream'], fixed_values)
+        self.assertEqual(txo['value'], fixed_values)
 
         # clearing and settings tags
         tx = await self.out(self.stream_update(claim_id, tags='single', clear_tags=True))
         txo = tx['outputs'][0]
         fixed_values['tags'] = ['single']
-        self.assertEqual(txo['value']['stream'], fixed_values)
+        self.assertEqual(txo['value'], fixed_values)
 
         # send claim to someone else
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
@@ -441,7 +450,7 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(claim['txid'], tx4['outputs'][0]['txid'])
         self.assertEqual(claim['channel_name'], '@abc')
         self.assertEqual(claim['signature_is_valid'], True)
-        self.assertEqual(claim['value']['stream']['languages'], ['uk-UA'])
+        self.assertEqual(claim['value']['languages'], ['uk-UA'])
 
     async def test_claim_search(self):
         # search for channel claim
