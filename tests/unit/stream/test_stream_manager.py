@@ -64,8 +64,8 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
             claim_obj.stream.fee.usd = Decimal(fee['amount'])
     claim_obj.stream.title = "33rpm"
     claim_obj.stream.languages.append("en")
-    claim_obj.stream.sd_hash = sd_hash
-    claim_obj.stream.media_type = "image/png"
+    claim_obj.stream.source.sd_hash = sd_hash
+    claim_obj.stream.source.media_type = "image/png"
     claim['value'] = claim_obj
     claim['hex'] = binascii.hexlify(claim_obj.to_bytes()).decode()
 
