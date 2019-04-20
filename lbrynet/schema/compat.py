@@ -9,7 +9,10 @@ from lbrynet.schema.types.v1.fee_pb2 import Fee as FeeMessage
 
 
 def from_old_json_schema(claim, payload: bytes):
-    value = json.loads(payload)
+    try:
+        value = json.loads(payload)
+    except:
+        raise DecodeError('Could not parse JSON.')
     stream = claim.stream
     stream.source.sd_hash = value['sources']['lbry_sd_hash']
     stream.source.media_type = value.get(

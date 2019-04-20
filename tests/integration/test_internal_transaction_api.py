@@ -36,7 +36,7 @@ class BasicTransactionTest(IntegrationTestCase):
         channel_tx = await Transaction.create([], [channel_txo], [self.account], self.account)
 
         stream = Claim()
-        stream.stream.media_type = "video/mp4"
+        stream.stream.source.media_type = "video/mp4"
         stream_txo = Output.pay_claim_name_pubkey_hash(
             l2d('1.0'), 'foo', stream, self.account.ledger.address_to_hash160(address1)
         )
