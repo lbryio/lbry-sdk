@@ -80,7 +80,7 @@ jobs:
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
-        - python scripts/set_build.py
+        - python3 scripts/set_build.py
         - pip3 install -e .
       script:
         - pyinstaller -F -n lbrynet lbrynet/extras/cli.py
