@@ -99,6 +99,11 @@ class ManagedStream:
         return None if not self.stream_claim_info else self.stream_claim_info.claim.stream.to_dict()
 
     @property
+    def metadata_protobuf(self) -> bytes:
+        if self.stream_claim_info:
+            return binascii.hexlify(self.stream_claim_info.claim.to_bytes())
+
+    @property
     def blobs_completed(self) -> int:
         return sum([1 if self.blob_manager.get_blob(b.blob_hash).get_is_verified() else 0
                     for b in self.descriptor.blobs[:-1]])
@@ -159,6 +164,7 @@ class ManagedStream:
             'nout': self.nout,
             'outpoint': self.outpoint,
             'metadata': self.metadata,
+            'protobuf': self.metadata_protobuf,
             'channel_claim_id': self.channel_claim_id,
             'channel_name': self.channel_name,
             'claim_name': self.claim_name
