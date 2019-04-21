@@ -1622,16 +1622,16 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_create(
-            self, name, bid, allow_duplicate_name=False, account_id=None, claim_address=None, preview=False, **kwargs):
+            self, name, bid, allow_duplicate_name=False, account_id=None, claim_address=None,
+            preview=False, **kwargs):
         """
         Create a new channel by generating a channel private key and establishing an '@' prefixed claim.
 
         Usage:
             channel_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
                            [--allow_duplicate_name=<allow_duplicate_name>]
-                           [--title=<title>] [--description=<description>]
+                           [--title=<title>] [--description=<description>] [--email=<email>] [--featured=<featured>...]
                            [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                           [--email=<email>]
                            [--website_url=<website_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
@@ -1642,6 +1642,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --bid=<bid>                    : (decimal) amount to back the claim
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
+            --featured=<featured>          : (list) claim_ids of featured content in channel
             --tags=<tags>                  : (list) content tags
             --languages=<languages>        : (list) languages used by the channel,
                                                     using RFC 5646 format, eg:
@@ -1737,6 +1738,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             channel_update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
                            [--title=<title>] [--description=<description>]
+                           [--featured=<featured>...] [--clear_featured]
                            [--tags=<tags>...] [--clear_tags]
                            [--languages=<languages>...] [--clear_languages]
                            [--locations=<locations>...] [--clear_locations]
@@ -1749,6 +1751,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --bid=<bid>                    : (decimal) amount to back the claim
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
+            --clear_featured               : (bool) clear existing featured content (prior to adding new ones)
+            --featured=<featured>          : (list) claim_ids of featured content in channel
             --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --tags=<tags>                  : (list) add content tags
             --clear_languages              : (bool) clear existing languages (prior to adding new ones)
@@ -1825,9 +1829,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim_address = old_txo.get_address(account.ledger)
 
-        old_txo.claim.channel.update(**kwargs)
+        claim = Claim.from_bytes(old_txo.claim.to_bytes())
+        claim.channel.update(**kwargs)
         tx = await Transaction.claim_update(
-            old_txo, amount, claim_address, [account], account
+            old_txo, claim, amount, claim_address, [account], account
         )
         new_txo = tx.outputs[0]
 
@@ -1970,16 +1975,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
-                    [<stream_type> | --stream_type=<stream_type>]
                     [--tags=<tags>...] [--clear_tags]
                     [--languages=<languages>...] [--clear_languages]
                     [--locations=<locations>...] [--clear_locations]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>]
-                    [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
-                    [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
+                    [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
                     [--channel_id=<channel_id>] [--channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
@@ -1988,7 +1990,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
-            --stream_type=<stream_type>    : (str) type of stream
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -2045,17 +2046,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
-            --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
-            --image_width=<image_width>    : (int) image width
-            --image_height=<image_height>  : (int) image height
-            --video_width=<video_width>    : (int) video width
-            --video_height=<video_height>  : (int) video height
-            --video_duration=<duration>    : (int) video duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
-            --audio_duration=<duration>    : (int) audio duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
+            --release_time=<release_time>  : (int) original public release of content, seconds since UNIX epoch
+            --width=<width>                : (int) image/video width, automatically calculated from media file
+            --height=<height>              : (int) image/video height, automatically calculated from media file
+            --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of publisher channel
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
@@ -2094,16 +2088,13 @@ class Daemon(metaclass=JSONRPCServerType):
         Make a new stream claim and announce the associated file to lbrynet.
 
         Usage:
-            stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                    (<file_path> | --file_path=<file_path>) [<stream_type> | --stream_type=<stream_type>]
+            stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
                     [--allow_duplicate_name=<allow_duplicate_name>]
                     [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>]
-                    [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
-                    [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
+                    [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
                     [--channel_id=<channel_id>] [--channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
@@ -2114,7 +2105,6 @@ class Daemon(metaclass=JSONRPCServerType):
                                               given name. default: false.
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
-            --stream_type=<stream_type>    : (str) type of stream
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -2168,17 +2158,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
-            --duration=<duration>          : (int) audio/video duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
-            --image_width=<image_width>    : (int) image width
-            --image_height=<image_height>  : (int) image height
-            --video_width=<video_width>    : (int) video width
-            --video_height=<video_height>  : (int) video height
-            --video_duration=<duration>    : (int) video duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
-            --audio_duration=<duration>    : (int) audio duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
+            --release_time=<release_time>  : (int) original public release of content, seconds since UNIX epoch
+            --width=<width>                : (int) image/video width, automatically calculated from media file
+            --height=<height>              : (int) image/video height, automatically calculated from media file
+            --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
@@ -2249,9 +2232,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--stream_type=<stream_type>]
-                    [--video_width=<video_width>] [--video_height=<video_height>] [--video_duration=<video_duration>]
-                    [--image_width=<image_width>] [--image_height=<image_height>] [--audio_duration=<audio_duration>]
+                    [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
                     [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--clear_channel]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
@@ -2316,16 +2297,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --release_time=<duration>      : (int) original public release of content, seconds since UNIX epoch
-            --stream_type=<stream_type>    : (str) type of stream
-            --image_width=<image_width>    : (int) image width
-            --image_height=<image_height>  : (int) image height
-            --video_width=<video_width>    : (int) video width
-            --video_height=<video_height>  : (int) video height
-            --video_duration=<duration>    : (int) video duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
-            --audio_duration=<duration>    : (int) audio duration in seconds, an attempt will be made to
-                                                   calculate this automatically if not provided
+            --release_time=<release_time>  : (int) original public release of content, seconds since UNIX epoch
+            --width=<width>                : (int) image/video width, automatically calculated from media file
+            --height=<height>              : (int) image/video height, automatically calculated from media file
+            --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --clear_channel                : (bool) remove channel signature
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
@@ -2366,10 +2341,13 @@ class Daemon(metaclass=JSONRPCServerType):
         elif old_txo.claim.is_signed and not clear_channel:
             channel = old_txo.channel
 
-        kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
-        old_txo.claim.stream.update(**kwargs)
+        if 'fee_address' in kwargs:
+            self.valid_address_or_error(kwargs['fee_address'])
+
+        claim = Claim.from_bytes(old_txo.claim.to_bytes())
+        claim.stream.update(file_path=file_path, **kwargs)
         tx = await Transaction.claim_update(
-            old_txo, amount, claim_address, [account], account, channel
+            old_txo, claim, amount, claim_address, [account], account, channel
         )
         new_txo = tx.outputs[0]
 
@@ -3314,7 +3292,8 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'fee_address' in kwargs:
             self.valid_address_or_error(kwargs['fee_address'])
             return kwargs['fee_address']
-        return claim_address
+        if 'fee_currency' in kwargs or 'fee_amount' in kwargs:
+            return claim_address
 
     async def get_receiving_address(self, address: str, account: LBCAccount) -> str:
         if address is None:

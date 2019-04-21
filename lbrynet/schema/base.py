@@ -1,4 +1,5 @@
 from binascii import hexlify, unhexlify
+from typing import List, Iterator, TypeVar, Generic
 
 from google.protobuf.message import DecodeError
 from google.protobuf.json_format import MessageToDict
@@ -21,9 +22,10 @@ class Signable:
         self.unsigned_payload = None
         self.signing_channel_hash = None
 
-    @property
-    def is_undetermined(self):
-        return self.message.WhichOneof('type') is None
+    def clear_signature(self):
+        self.signature = None
+        self.unsigned_payload = None
+        self.signing_channel_hash = None
 
     @property
     def signing_channel_id(self):
@@ -72,3 +74,48 @@ class Signable:
 
     def __bytes__(self):
         return self.to_bytes()
+
+
+class Metadata:
+
+    __slots__ = 'message',
+
+    def __init__(self, message):
+        self.message = message
+
+
+I = TypeVar('I')
+
+
+class BaseMessageList(Metadata, Generic[I]):
+
+    __slots__ = ()
+
+    item_class = None
+
+    @property
+    def _message(self):
+        return self.message
+
+    def add(self) -> I:
+        return self.item_class(self._message.add())
+
+    def extend(self, values: List[str]):
+        for value in values:
+            self.append(value)
+
+    def append(self, value: str):
+        raise NotImplemented
+
+    def __len__(self):
+        return len(self._message)
+
+    def __iter__(self) -> Iterator[I]:
+        for item in self._message:
+            yield self.item_class(item)
+
+    def __getitem__(self, item) -> I:
+        return self.item_class(self._message[item])
+
+    def __delitem__(self, key):
+        del self._message[key]

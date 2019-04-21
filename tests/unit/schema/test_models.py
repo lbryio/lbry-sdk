@@ -1,7 +1,7 @@
 from unittest import TestCase
 from decimal import Decimal
 
-from lbrynet.schema.claim import Claim, Channel, Stream
+from lbrynet.schema.claim import Claim, Stream
 
 
 class TestClaimContainerAwareness(TestCase):
@@ -9,26 +9,12 @@ class TestClaimContainerAwareness(TestCase):
     def test_stream_claim(self):
         stream = Stream()
         claim = stream.claim
-        self.assertTrue(claim.is_stream)
-        self.assertFalse(claim.is_channel)
+        self.assertEqual(claim.claim_type, Claim.STREAM)
         claim = Claim.from_bytes(claim.to_bytes())
-        self.assertTrue(claim.is_stream)
-        self.assertFalse(claim.is_channel)
+        self.assertEqual(claim.claim_type, Claim.STREAM)
         self.assertIsNotNone(claim.stream)
         with self.assertRaisesRegex(ValueError, 'Claim is not a channel.'):
             print(claim.channel)
-
-    def test_channel_claim(self):
-        channel = Channel()
-        claim = channel.claim
-        self.assertFalse(claim.is_stream)
-        self.assertTrue(claim.is_channel)
-        claim = Claim.from_bytes(claim.to_bytes())
-        self.assertFalse(claim.is_stream)
-        self.assertTrue(claim.is_channel)
-        self.assertIsNotNone(claim.channel)
-        with self.assertRaisesRegex(ValueError, 'Claim is not a stream.'):
-            print(claim.stream)
 
 
 class TestFee(TestCase):

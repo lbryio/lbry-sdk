@@ -162,6 +162,13 @@ def guess_media_type(path):
     extension = ext.strip().lower()
     if extension[1:]:
         if extension in types_map:
-            return types_map[extension][0]
-        return f'application/x-ext-{extension[1:]}'
-    return 'application/octet-stream'
+            return types_map[extension]
+        return f'application/x-ext-{extension[1:]}', 'binary'
+    return 'application/octet-stream', 'binary'
+
+
+def guess_stream_type(media_type):
+    for media, stream in types_map.values():
+        if media == media_type:
+            return stream
+    return 'binary'

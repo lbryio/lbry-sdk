@@ -1,6 +1,9 @@
+import os.path
 import hashlib
 import tempfile
+import logging
 from binascii import unhexlify
+from urllib.request import urlopen
 
 import ecdsa
 
@@ -10,6 +13,9 @@ from lbrynet.schema.compat import OldClaimMessage
 
 from lbrynet.testcase import CommandTestCase
 from torba.client.hash import sha256, Base58
+
+
+log = logging.getLogger(__name__)
 
 
 class ChannelCommands(CommandTestCase):
@@ -69,74 +75,55 @@ class ChannelCommands(CommandTestCase):
 
     async def test_setting_channel_fields(self):
         values = {
-            'tags': ["cool", "awesome"],
             'title': "Cool Channel",
             'description': "Best channel on LBRY.",
             'thumbnail_url': "https://co.ol/thumbnail.png",
+            'tags': ["cool", "awesome"],
             'languages': ["en-US"],
             'locations': ['US::Manchester'],
             'email': "human@email.com",
             'website_url': "https://co.ol",
             'cover_url': "https://co.ol/cover.png",
+            'featured': ['cafe']
         }
         fixed_values = values.copy()
-        fixed_values['languages'] = ['en-US']
-        fixed_values['locations'] = [{'country': 'US', 'city': 'Manchester'}]
         fixed_values['thumbnail'] = {'url': fixed_values.pop('thumbnail_url')}
+        fixed_values['locations'] = [{'country': 'US', 'city': 'Manchester'}]
         fixed_values['cover'] = {'url': fixed_values.pop('cover_url')}
 
         # create new channel with all fields set
         tx = await self.out(self.channel_create('@bigchannel', **values))
-        txo = tx['outputs'][0]
-        self.assertEqual(
-            txo['value'],
-            {'public_key': txo['value']['public_key'], **fixed_values}
-        )
+        channel = tx['outputs'][0]['value']
+        self.assertEqual(channel, {'public_key': channel['public_key'], **fixed_values})
 
         # create channel with nothing set
         tx = await self.out(self.channel_create('@lightchannel'))
-        txo = tx['outputs'][0]
-        self.assertEqual(
-            txo['value'],
-            {'public_key': txo['value']['public_key']}
-        )
+        channel = tx['outputs'][0]['value']
+        self.assertEqual(channel, {'public_key': channel['public_key']})
 
-        # create channel with just some tags
-        tx = await self.out(self.channel_create('@updatedchannel', tags='blah'))
+        # create channel with just a featured claim
+        tx = await self.out(self.channel_create('@featurechannel', featured='beef'))
         txo = tx['outputs'][0]
-        claim_id = txo['claim_id']
-        public_key = txo['value']['public_key']
-        self.assertEqual(
-            txo['value'],
-            {'public_key': public_key, 'tags': ['blah']}
-        )
+        claim_id, channel = txo['claim_id'], txo['value']
+        fixed_values['public_key'] = channel['public_key']
+        self.assertEqual(channel, {'public_key': fixed_values['public_key'], 'featured': ['beef']})
 
         # update channel setting all fields
         tx = await self.out(self.channel_update(claim_id, **values))
-        txo = tx['outputs'][0]
-        fixed_values['public_key'] = public_key
-        fixed_values['tags'].insert(0, 'blah')  # existing tag
-        self.assertEqual(
-            txo['value'],
-            fixed_values
-        )
+        channel = tx['outputs'][0]['value']
+        fixed_values['featured'].insert(0, 'beef')  # existing featured claim
+        self.assertEqual(channel, fixed_values)
 
-        # clearing and settings tags
-        tx = await self.out(self.channel_update(claim_id, tags='single', clear_tags=True))
-        txo = tx['outputs'][0]
-        fixed_values['tags'] = ['single']
-        self.assertEqual(
-            txo['value'],
-            fixed_values
-        )
+        # clearing and settings featured content
+        tx = await self.out(self.channel_update(claim_id, featured='beefcafe', clear_featured=True))
+        channel = tx['outputs'][0]['value']
+        fixed_values['featured'] = ['beefcafe']
+        self.assertEqual(channel, fixed_values)
 
         # reset signing key
         tx = await self.out(self.channel_update(claim_id, new_signing_key=True))
-        txo = tx['outputs'][0]
-        self.assertNotEqual(
-            txo['value']['public_key'],
-            fixed_values['public_key']
-        )
+        channel = tx['outputs'][0]['value']
+        self.assertNotEqual(channel['public_key'], fixed_values['public_key'])
 
         # send channel to someone else
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
@@ -167,6 +154,19 @@ class ChannelCommands(CommandTestCase):
 
 
 class StreamCommands(CommandTestCase):
+
+    files_directory = os.path.join(os.path.dirname(__file__), 'files')
+    video_file_url = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4'
+    video_file_name = os.path.join(files_directory, 'ForBiggerEscapes.mp4')
+
+    def setUp(self):
+        if not os.path.exists(self.video_file_name):
+            if not os.path.exists(self.files_directory):
+                os.mkdir(self.files_directory)
+            log.info(f'downloading test video from {self.video_file_name}')
+            with urlopen(self.video_file_url) as response,\
+                    open(self.video_file_name, 'wb') as video_file:
+                video_file.write(response.read())
 
     async def test_create_stream_names(self):
         # claim new name
@@ -207,17 +207,17 @@ class StreamCommands(CommandTestCase):
         tx = await self.stream_update(claim_id, bid='3.0')
         self.assertEqual(tx['outputs'][0]['amount'], '3.0')
 
-        await self.assertBalance(self.account, '6.993384')
+        await self.assertBalance(self.account, '6.993337')
 
         # not enough funds
         with self.assertRaisesRegex(
                 InsufficientFundsError, "Not enough funds to cover this transaction."):
             await self.stream_create('foo2', '9.0')
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 1)
-        await self.assertBalance(self.account, '6.993384')
+        await self.assertBalance(self.account, '6.993337')
 
         # spend exactly amount available, no change
-        tx = await self.stream_create('foo3', '6.98527700')
+        tx = await self.stream_create('foo3', '6.98523')
         await self.assertBalance(self.account, '0.0')
         self.assertEqual(len(tx['outputs']), 1)  # no change
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
@@ -264,12 +264,12 @@ class StreamCommands(CommandTestCase):
 
     async def test_setting_stream_fields(self):
         values = {
-            'tags': ["cool", "awesome"],
             'title': "Cool Content",
             'description': "Best content on LBRY.",
             'thumbnail_url': "https://co.ol/thumbnail.png",
+            'tags': ["cool", "awesome"],
             'languages': ["en"],
-            'locations': ['{"country": "UA"}'],
+            'locations': ['{"country": "US"}'],
 
             'author': "Jules Verne",
             'license': 'Public Domain',
@@ -279,16 +279,13 @@ class StreamCommands(CommandTestCase):
             'fee_currency': 'usd',
             'fee_amount': '2.99',
             'fee_address': 'mmCsWAiXMUVecFQ3fVzUwvpT9XFMXno2Ca',
-
-            'video_width': 800,
-            'video_height': 600
         }
         fixed_values = values.copy()
-        fixed_values['languages'] = ['en']
-        fixed_values['locations'] = [{'country': 'UA'}]
+        fixed_values['locations'] = [{'country': 'US'}]
         fixed_values['thumbnail'] = {'url': fixed_values.pop('thumbnail_url')}
         fixed_values['release_time'] = str(values['release_time'])
         fixed_values['source'] = {
+            'hash': 'c0ddd62c7717180e7ffb8a15bb9674d3ec92592e0b7ac7d1d5289836b4553be2',
             'media_type': 'application/octet-stream',
             'size': '3'
         }
@@ -297,57 +294,68 @@ class StreamCommands(CommandTestCase):
             'amount': float(fixed_values.pop('fee_amount')),
             'currency': fixed_values.pop('fee_currency').upper()
         }
-        fixed_values['video'] = {
-            'height': fixed_values.pop('video_height'),
-            'width': fixed_values.pop('video_width')
-        }
 
-        # create new channel with all fields set
+        # create new stream with all fields set
         tx = await self.out(self.stream_create('big', **values))
-        txo = tx['outputs'][0]
-        stream = txo['value']
+        stream = tx['outputs'][0]['value']
+        fixed_values['source']['name'] = stream['source']['name']
         fixed_values['source']['sd_hash'] = stream['source']['sd_hash']
         self.assertEqual(stream, fixed_values)
 
-        # create channel with nothing set
+        # create stream with nothing set
         tx = await self.out(self.stream_create('light'))
-        txo = tx['outputs'][0]
+        stream = tx['outputs'][0]['value']
         self.assertEqual(
-            txo['value'], {
+            stream, {
                 'source': {
                     'size': '3',
                     'media_type': 'application/octet-stream',
-                    'sd_hash': txo['value']['source']['sd_hash']
+                    'name': stream['source']['name'],
+                    'hash': 'c0ddd62c7717180e7ffb8a15bb9674d3ec92592e0b7ac7d1d5289836b4553be2',
+                    'sd_hash': stream['source']['sd_hash']
                 },
             }
         )
 
-        # create channel with just some tags
-        tx = await self.out(self.stream_create('updated', tags='blah'))
+        # create stream with just some tags, langs and locations
+        tx = await self.out(self.stream_create('updated', tags='blah', languages='uk', locations='UA::Kyiv'))
         txo = tx['outputs'][0]
-        claim_id = txo['claim_id']
-        fixed_values['source']['sd_hash'] = txo['value']['source']['sd_hash']
+        claim_id, stream = txo['claim_id'], txo['value']
+        fixed_values['source']['name'] = stream['source']['name']
+        fixed_values['source']['sd_hash'] = stream['source']['sd_hash']
         self.assertEqual(
-            txo['value'], {
+            stream, {
                 'source': {
                     'size': '3',
                     'media_type': 'application/octet-stream',
+                    'name': fixed_values['source']['name'],
+                    'hash': 'c0ddd62c7717180e7ffb8a15bb9674d3ec92592e0b7ac7d1d5289836b4553be2',
                     'sd_hash': fixed_values['source']['sd_hash'],
                 },
-                'tags': ['blah']
+                'tags': ['blah'],
+                'languages': ['uk'],
+                'locations': [{'country': 'UA', 'city': 'Kyiv'}]
             }
         )
 
-        # update channel setting all fields
+        # update stream setting all fields, 'source' doesn't change
         tx = await self.out(self.stream_update(claim_id, **values))
-        txo = tx['outputs'][0]
+        stream = tx['outputs'][0]['value']
         fixed_values['tags'].insert(0, 'blah')  # existing tag
-        self.assertEqual(txo['value'], fixed_values)
+        fixed_values['languages'].insert(0, 'uk')  # existing language
+        fixed_values['locations'].insert(0, {'country': 'UA', 'city': 'Kyiv'})  # existing location
+        self.assertEqual(stream, fixed_values)
 
         # clearing and settings tags
-        tx = await self.out(self.stream_update(claim_id, tags='single', clear_tags=True))
+        tx = await self.out(self.stream_update(
+            claim_id, tags='single', clear_tags=True,
+            languages='pt', clear_languages=True,
+            locations='BR', clear_locations=True,
+        ))
         txo = tx['outputs'][0]
         fixed_values['tags'] = ['single']
+        fixed_values['languages'] = ['pt']
+        fixed_values['locations'] = [{'country': 'BR'}]
         self.assertEqual(txo['value'], fixed_values)
 
         # send claim to someone else
@@ -365,7 +373,55 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 1)
 
-    async def test_create_update_and_abandon_claim(self):
+    async def test_automatic_type_and_metadata_detection(self):
+        tx = await self.out(
+            self.daemon.jsonrpc_stream_create(
+                'chrome', '1.0', file_path=self.video_file_name
+            )
+        )
+        txo = tx['outputs'][0]
+        self.assertEqual(
+            txo['value'], {
+                'source': {
+                    'size': '2299653',
+                    'name': 'ForBiggerEscapes.mp4',
+                    'media_type': 'video/mp4',
+                    'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
+                    'sd_hash': txo['value']['source']['sd_hash'],
+                },
+                'video': {
+                    'width': 1280,
+                    'height': 720,
+                    'duration': 15
+                }
+            }
+        )
+
+    async def test_overriding_automatic_metadata_detection(self):
+        tx = await self.out(
+            self.daemon.jsonrpc_stream_create(
+                'chrome', '1.0', file_path=self.video_file_name, width=99, height=88, duration=9
+            )
+        )
+        txo = tx['outputs'][0]
+        self.assertEqual(
+            txo['value'], {
+                'source': {
+                    'size': '2299653',
+                    'name': 'ForBiggerEscapes.mp4',
+                    'media_type': 'video/mp4',
+                    'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
+                    'sd_hash': txo['value']['source']['sd_hash'],
+                },
+                'video': {
+                    'width': 99,
+                    'height': 88,
+                    'duration': 9
+                }
+            }
+        )
+
+    async def test_create_update_and_abandon_stream(self):
         await self.assertBalance(self.account, '10.0')
 
         tx = await self.stream_create(bid='2.5')  # creates new claim
@@ -385,8 +441,8 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
         self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim_id)
         self.assertEqual(txs[0]['value'], '0.0')
-        self.assertEqual(txs[0]['fee'], '-0.000184')
-        await self.assertBalance(self.account, '8.979709')
+        self.assertEqual(txs[0]['fee'], '-0.0002075')
+        await self.assertBalance(self.account, '8.9796855')
 
         await self.stream_abandon(claim_id)
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
@@ -395,9 +451,9 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim_id)
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.000107')
-        await self.assertBalance(self.account, '9.979602')
+        await self.assertBalance(self.account, '9.9795785')
 
-    async def test_abandoning_claim_at_loss(self):
+    async def test_abandoning_stream_at_loss(self):
         await self.assertBalance(self.account, '10.0')
         tx = await self.stream_create(bid='0.0001')
         await self.assertBalance(self.account, '9.979793')
