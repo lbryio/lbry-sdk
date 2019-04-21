@@ -441,13 +441,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
+        include_protobuf = data.get('params', {}).pop('include_protobuf', False)
         result = await self._process_rpc_call(data)
         ledger = None
         if 'wallet' in self.component_manager.get_components_status():
             # self.ledger only available if wallet component is not skipped
             ledger = self.ledger
         return web.Response(
-            text=jsonrpc_dumps_pretty(result, ledger=ledger),
+            text=jsonrpc_dumps_pretty(result, ledger=ledger, include_protobuf=include_protobuf),
             content_type='application/json'
         )
 

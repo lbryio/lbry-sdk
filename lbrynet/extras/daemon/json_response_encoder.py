@@ -98,9 +98,10 @@ def encode_file_doc():
 
 class JSONResponseEncoder(JSONEncoder):
 
-    def __init__(self, *args, ledger: MainNetLedger, **kwargs):
+    def __init__(self, *args, ledger: MainNetLedger, include_protobuf=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.ledger = ledger
+        self.include_protobuf = include_protobuf
 
     def default(self, obj):  # pylint: disable=method-hidden
         if isinstance(obj, Account):
@@ -168,6 +169,8 @@ class JSONResponseEncoder(JSONEncoder):
             })
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 output['value'] = txo.claim
+                if self.include_protobuf:
+                    output['protobuf'] = hexlify(txo.claim.to_bytes())
                 output['sub_type'] = txo.claim.claim_type
                 if txo.channel is not None:
                     output['signing_channel'] = {
