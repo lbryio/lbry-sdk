@@ -168,10 +168,7 @@ class JSONResponseEncoder(JSONEncoder):
             })
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 output['value'] = txo.claim
-                if txo.claim.is_channel:
-                    output['sub_type'] = 'channel'
-                elif txo.claim.is_stream:
-                    output['sub_type'] = 'stream'
+                output['sub_type'] = txo.claim.claim_type
                 if txo.channel is not None:
                     output['signing_channel'] = {
                         'name': txo.channel.claim_name,
@@ -210,8 +207,4 @@ class JSONResponseEncoder(JSONEncoder):
 
     @staticmethod
     def encode_claim(claim):
-        if claim.is_stream:
-            return claim.stream.to_dict()
-        elif claim.is_channel:
-            return claim.channel.to_dict()
-        return claim.to_dict()
+        return getattr(claim, claim.claim_type).to_dict()

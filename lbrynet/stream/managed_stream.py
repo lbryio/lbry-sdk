@@ -125,7 +125,7 @@ class ManagedStream:
 
     def as_dict(self) -> typing.Dict:
         full_path = self.full_path if self.output_file_exists else None
-        mime_type = guess_media_type(os.path.basename(self.descriptor.suggested_file_name))
+        mime_type = guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
 
         if self.downloader and self.downloader.written_bytes:
             written_bytes = self.downloader.written_bytes

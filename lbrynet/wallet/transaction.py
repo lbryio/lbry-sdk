@@ -122,6 +122,10 @@ class Output(BaseOutput):
         self.claim.signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
         self.script.generate()
 
+    def clear_signature(self):
+        self.channel = None
+        self.claim.clear_signature()
+
     def generate_channel_private_key(self):
         private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
         self.private_key = private_key.to_pem().decode()
@@ -188,15 +192,17 @@ class Transaction(BaseTransaction):
 
     @classmethod
     def claim_update(
-            cls, previous_claim: Output, amount: int, holding_address: str,
+            cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
             funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
-            previous_claim.claim, ledger.address_to_hash160(holding_address)
+            claim, ledger.address_to_hash160(holding_address)
         )
         if signing_channel is not None:
             updated_claim.sign(signing_channel, b'placeholder txid:nout')
+        else:
+            updated_claim.clear_signature()
         return cls.create(
             [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account, sign=False
         )

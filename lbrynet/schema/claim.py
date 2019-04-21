@@ -1,76 +1,85 @@
-import os.path
-import json
-from string import ascii_letters
-from typing import List, Tuple, Iterator, TypeVar, Generic
-from decimal import Decimal, ROUND_UP
+import logging
+from typing import List
 from binascii import hexlify, unhexlify
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import DecodeError
+from hachoir.core.log import log as hachoir_log
 from hachoir.parser import createParser as binary_file_parser
 from hachoir.metadata import extractMetadata as binary_file_metadata
-from hachoir.core.log import log as hachoir_log
-
-from torba.client.hash import Base58
-from torba.client.constants import COIN
 
 from lbrynet.schema import compat
 from lbrynet.schema.base import Signable
-from lbrynet.schema.mime_types import guess_media_type
-from lbrynet.schema.types.v2.claim_pb2 import (
-    Claim as ClaimMessage,
-    Fee as FeeMessage,
-    Location as LocationMessage,
-    Language as LanguageMessage
+from lbrynet.schema.mime_types import guess_media_type, guess_stream_type
+from lbrynet.schema.attrs import (
+    Source, Playable, Dimmensional, Fee, Image, Video, Audio,
+    LanguageList, LocationList, ClaimList, ClaimReference
 )
+from lbrynet.schema.types.v2.claim_pb2 import Claim as ClaimMessage
 
 
 hachoir_log.use_print = False
+log = logging.getLogger(__name__)
 
 
 class Claim(Signable):
 
+    STREAM = 'stream'
+    CHANNEL = 'channel'
+    COLLECTION = 'collection'
+    REPOST = 'repost'
+
     __slots__ = 'version',
+
     message_class = ClaimMessage
 
-    def __init__(self, claim_message=None):
-        super().__init__(claim_message)
+    def __init__(self, message=None):
+        super().__init__(message)
         self.version = 2
 
     @property
+    def claim_type(self) -> str:
+        return self.message.WhichOneof('type')
+
+    def get_message(self, type_name):
+        message = getattr(self.message, type_name)
+        if self.claim_type is None:
+            message.SetInParent()
+        if self.claim_type != type_name:
+            raise ValueError(f'Claim is not a {type_name}.')
+        return message
+
+    @property
     def is_stream(self):
-        return self.message.WhichOneof('type') == 'stream'
-
-    @property
-    def is_channel(self):
-        return self.message.WhichOneof('type') == 'channel'
-
-    @property
-    def stream_message(self):
-        if self.is_undetermined:
-            self.message.stream.SetInParent()
-        if not self.is_stream:
-            raise ValueError('Claim is not a stream.')
-        return self.message.stream
+        return self.claim_type == self.STREAM
 
     @property
     def stream(self) -> 'Stream':
         return Stream(self)
 
     @property
-    def channel_message(self):
-        if self.is_undetermined:
-            self.message.channel.SetInParent()
-        if not self.is_channel:
-            raise ValueError('Claim is not a channel.')
-        return self.message.channel
+    def is_channel(self):
+        return self.claim_type == self.CHANNEL
 
     @property
     def channel(self) -> 'Channel':
         return Channel(self)
 
-    def to_dict(self):
-        return MessageToDict(self.message, preserving_proto_field_name=True)
+    @property
+    def is_repost(self):
+        return self.claim_type == self.REPOST
+
+    @property
+    def repost(self) -> 'Repost':
+        return Repost(self)
+
+    @property
+    def is_collection(self):
+        return self.claim_type == self.COLLECTION
+
+    @property
+    def collection(self) -> 'Collection':
+        return Collection(self)
 
     @classmethod
     def from_bytes(cls, data: bytes) -> 'Claim':
@@ -89,494 +98,21 @@ class Claim(Signable):
             return claim
 
 
-I = TypeVar('I')
-
-
-class BaseMessageList(Generic[I]):
-
-    __slots__ = 'message',
-
-    item_class = None
-
-    def __init__(self, message):
-        self.message = message
-
-    def add(self) -> I:
-        return self.item_class(self.message.add())
-
-    def extend(self, values: List[str]):
-        for value in values:
-            self.append(value)
-
-    def append(self, value: str):
-        raise NotImplemented
-
-    def __len__(self):
-        return len(self.message)
-
-    def __iter__(self) -> Iterator[I]:
-        for lang in self.message:
-            yield self.item_class(lang)
-
-    def __getitem__(self, item) -> I:
-        return self.item_class(self.message[item])
-
-
-class Dimmensional:
-
-    __slots__ = ()
-
-    @property
-    def width(self) -> int:
-        return self.message.width
-
-    @width.setter
-    def width(self, width: int):
-        self.message.width = width
-
-    @property
-    def height(self) -> int:
-        return self.message.height
-
-    @height.setter
-    def height(self, height: int):
-        self.message.height = height
-
-    @property
-    def dimensions(self) -> Tuple[int, int]:
-        return self.width, self.height
-
-    @dimensions.setter
-    def dimensions(self, dimensions: Tuple[int, int]):
-        self.message.width, self.message.height = dimensions
-
-
-class Playable:
-
-    __slots__ = ()
-
-    @property
-    def duration(self) -> int:
-        return self.message.duration
-
-    @duration.setter
-    def duration(self, duration: int):
-        self.message.duration = duration
-
-    def set_duration_from_path(self, file_path):
-        try:
-            file_metadata = binary_file_metadata(binary_file_parser(file_path))
-            self.duration = file_metadata.getValues('duration')[0].seconds
-        except:
-            pass
-
-
-class Image(Dimmensional):
-
-    __slots__ = 'message',
-
-    def __init__(self, image_message):
-        self.message = image_message
-
-
-class Video(Dimmensional, Playable):
-
-    __slots__ = 'message',
-
-    def __init__(self, video_message):
-        self.message = video_message
-
-
-class Audio(Playable):
-
-    __slots__ = 'message',
-
-    def __init__(self, audio_message):
-        self.message = audio_message
-
-
-class Source:
-
-    __slots__ = 'message',
-
-    def __init__(self, file_message):
-        self.message = file_message
-
-    @property
-    def name(self) -> str:
-        return self.message.name
-
-    @name.setter
-    def name(self, name: str):
-        self.message.name = name
-
-    @property
-    def size(self) -> int:
-        return self.message.size
-
-    @size.setter
-    def size(self, size: int):
-        self.message.size = size
-
-    @property
-    def media_type(self) -> str:
-        return self.message.media_type
-
-    @media_type.setter
-    def media_type(self, media_type: str):
-        self.message.media_type = media_type
-
-    @property
-    def sd_hash(self) -> str:
-        return hexlify(self.message.sd_hash).decode()
-
-    @sd_hash.setter
-    def sd_hash(self, sd_hash: str):
-        self.message.sd_hash = unhexlify(sd_hash.encode())
-
-    @property
-    def sd_hash_bytes(self) -> bytes:
-        return self.message.sd_hash
-
-    @sd_hash_bytes.setter
-    def sd_hash_bytes(self, sd_hash: bytes):
-        self.message.sd_hash = sd_hash
-
-    @property
-    def url(self) -> str:
-        return self.message.url
-
-    @url.setter
-    def url(self, url: str):
-        self.message.url = url
-
-
-class Fee:
-
-    __slots__ = '_fee',
-
-    def __init__(self, fee_message):
-        self._fee = fee_message
-
-    @property
-    def currency(self) -> str:
-        return FeeMessage.Currency.Name(self._fee.currency)
-
-    @property
-    def address(self) -> str:
-        return Base58.encode(self._fee.address)
-
-    @address.setter
-    def address(self, address: str):
-        self._fee.address = Base58.decode(address)
-
-    @property
-    def address_bytes(self) -> bytes:
-        return self._fee.address
-
-    @address_bytes.setter
-    def address_bytes(self, address: bytes):
-        self._fee.address = address
-
-    @property
-    def amount(self) -> Decimal:
-        if self.currency == 'LBC':
-            return self.lbc
-        if self.currency == 'BTC':
-            return self.btc
-        if self.currency == 'USD':
-            return self.usd
-
-    DEWIES = Decimal(COIN)
-
-    @property
-    def lbc(self) -> Decimal:
-        if self._fee.currency != FeeMessage.LBC:
-            raise ValueError('LBC can only be returned for LBC fees.')
-        return Decimal(self._fee.amount / self.DEWIES)
-
-    @lbc.setter
-    def lbc(self, amount: Decimal):
-        self.dewies = int(amount * self.DEWIES)
-
-    @property
-    def dewies(self) -> int:
-        if self._fee.currency != FeeMessage.LBC:
-            raise ValueError('Dewies can only be returned for LBC fees.')
-        return self._fee.amount
-
-    @dewies.setter
-    def dewies(self, amount: int):
-        self._fee.amount = amount
-        self._fee.currency = FeeMessage.LBC
-
-    SATOSHIES = Decimal(COIN)
-
-    @property
-    def btc(self) -> Decimal:
-        if self._fee.currency != FeeMessage.BTC:
-            raise ValueError('BTC can only be returned for BTC fees.')
-        return Decimal(self._fee.amount / self.SATOSHIES)
-
-    @btc.setter
-    def btc(self, amount: Decimal):
-        self.satoshis = int(amount * self.SATOSHIES)
-
-    @property
-    def satoshis(self) -> int:
-        if self._fee.currency != FeeMessage.BTC:
-            raise ValueError('Satoshies can only be returned for BTC fees.')
-        return self._fee.amount
-
-    @satoshis.setter
-    def satoshis(self, amount: int):
-        self._fee.amount = amount
-        self._fee.currency = FeeMessage.BTC
-
-    PENNIES = Decimal('100.0')
-    PENNY = Decimal('0.01')
-
-    @property
-    def usd(self) -> Decimal:
-        if self._fee.currency != FeeMessage.USD:
-            raise ValueError('USD can only be returned for USD fees.')
-        return Decimal(self._fee.amount / self.PENNIES)
-
-    @usd.setter
-    def usd(self, amount: Decimal):
-        self.pennies = int(amount.quantize(self.PENNY, ROUND_UP) * self.PENNIES)
-
-    @property
-    def pennies(self) -> int:
-        if self._fee.currency != FeeMessage.USD:
-            raise ValueError('Pennies can only be returned for USD fees.')
-        return self._fee.amount
-
-    @pennies.setter
-    def pennies(self, amount: int):
-        self._fee.amount = amount
-        self._fee.currency = FeeMessage.USD
-
-
-class ClaimReference:
-
-    __slots__ = 'message',
-
-    def __init__(self, message):
-        self.message = message
-
-    @property
-    def claim_id(self) -> str:
-        return hexlify(self.claim_hash[::-1]).decode()
-
-    @claim_id.setter
-    def claim_id(self, claim_id: str):
-        self.claim_hash = unhexlify(claim_id)[::-1]
-
-    @property
-    def claim_hash(self) -> bytes:
-        return self.message.claim_hash
-
-    @claim_hash.setter
-    def claim_hash(self, claim_hash: bytes):
-        self.message.claim_hash = claim_hash
-
-
-class ClaimList(BaseMessageList[ClaimReference]):
-
-    __slots__ = ()
-    item_class = ClaimReference
-
-    def append(self, value):
-        self.add().claim_id = value
-
-    @property
-    def claim_ids(self) -> List[str]:
-        return [c.claim_id for c in self]
-
-
-class Language:
-
-    __slots__ = 'message',
-
-    def __init__(self, message):
-        self.message = message
-
-    @property
-    def langtag(self) -> str:
-        langtag = []
-        if self.language:
-            langtag.append(self.language)
-        if self.script:
-            langtag.append(self.script)
-        if self.region:
-            langtag.append(self.region)
-        return '-'.join(langtag)
-
-    @langtag.setter
-    def langtag(self, langtag: str):
-        parts = langtag.split('-')
-        self.language = parts.pop(0)
-        if parts and len(parts[0]) == 4:
-            self.script = parts.pop(0)
-        if parts and len(parts[0]) == 2:
-            self.region = parts.pop(0)
-        assert not parts, f"Failed to parse language tag: {langtag}"
-
-    @property
-    def language(self) -> str:
-        if self.message.language:
-            return LanguageMessage.Language.Name(self.message.language)
-
-    @language.setter
-    def language(self, language: str):
-        self.message.language = LanguageMessage.Language.Value(language)
-
-    @property
-    def script(self) -> str:
-        if self.message.script:
-            return LanguageMessage.Script.Name(self.message.script)
-
-    @script.setter
-    def script(self, script: str):
-        self.message.script = LanguageMessage.Script.Value(script)
-
-    @property
-    def region(self) -> str:
-        if self.message.region:
-            return LocationMessage.Country.Name(self.message.region)
-
-    @region.setter
-    def region(self, region: str):
-        self.message.region = LocationMessage.Country.Value(region)
-
-
-class LanguageList(BaseMessageList[Language]):
-    __slots__ = ()
-    item_class = Language
-
-    def append(self, value: str):
-        self.add().langtag = value
-
-
-class Location:
-
-    __slots__ = 'message',
-
-    def __init__(self, message):
-        self.message = message
-
-    def from_value(self, value):
-        if isinstance(value, str) and value.startswith('{'):
-            value = json.loads(value)
-
-        if isinstance(value, dict):
-            for key, val in value.items():
-                setattr(self, key, val)
-
-        elif isinstance(value, str):
-            parts = value.split(':')
-            if len(parts) > 2 or (parts[0] and parts[0][0] in ascii_letters):
-                country = parts and parts.pop(0)
-                if country:
-                    self.country = country
-                state = parts and parts.pop(0)
-                if state:
-                    self.state = state
-                city = parts and parts.pop(0)
-                if city:
-                    self.city = city
-                code = parts and parts.pop(0)
-                if code:
-                    self.code = code
-            latitude = parts and parts.pop(0)
-            if latitude:
-                self.latitude = latitude
-            longitude = parts and parts.pop(0)
-            if longitude:
-                self.longitude = longitude
-
-        else:
-            raise ValueError(f'Could not parse country value: {value}')
-
-    @property
-    def country(self) -> str:
-        if self.message.country:
-            return LocationMessage.Country.Name(self.message.country)
-
-    @country.setter
-    def country(self, country: str):
-        self.message.country = LocationMessage.Country.Value(country)
-
-    @property
-    def state(self) -> str:
-        return self.message.state
-
-    @state.setter
-    def state(self, state: str):
-        self.message.state = state
-
-    @property
-    def city(self) -> str:
-        return self.message.city
-
-    @city.setter
-    def city(self, city: str):
-        self.message.city = city
-
-    @property
-    def code(self) -> str:
-        return self.message.code
-
-    @code.setter
-    def code(self, code: str):
-        self.message.code = code
-
-    GPS_PRECISION = Decimal('10000000')
-
-    @property
-    def latitude(self) -> str:
-        if self.message.latitude:
-            return str(Decimal(self.message.latitude) / self.GPS_PRECISION)
-
-    @latitude.setter
-    def latitude(self, latitude: str):
-        latitude = Decimal(latitude)
-        assert -90 <= latitude <= 90, "Latitude must be between -90 and 90 degrees."
-        self.message.latitude = int(latitude * self.GPS_PRECISION)
-
-    @property
-    def longitude(self) -> str:
-        if self.message.longitude:
-            return str(Decimal(self.message.longitude) / self.GPS_PRECISION)
-
-    @longitude.setter
-    def longitude(self, longitude: str):
-        longitude = Decimal(longitude)
-        assert -180 <= longitude <= 180, "Longitude must be between -180 and 180 degrees."
-        self.message.longitude = int(longitude * self.GPS_PRECISION)
-
-
-class LocationList(BaseMessageList[Location]):
-    __slots__ = ()
-    item_class = Location
-
-    def append(self, value):
-        self.add().from_value(value)
-
-
-class BaseClaimSubType:
+class BaseClaim:
 
     __slots__ = 'claim', 'message'
 
+    claim_type = None
     object_fields = 'thumbnail',
     repeat_fields = 'tags', 'languages', 'locations'
 
-    def __init__(self, claim: Claim):
+    def __init__(self, claim: Claim = None):
         self.claim = claim or Claim()
+        self.message = self.claim.get_message(self.claim_type)
 
     def to_dict(self):
-        claim = self.claim.to_dict()
+        claim = MessageToDict(self.claim.message, preserving_proto_field_name=True)
+        claim.update(claim.pop(self.claim_type))
         if 'languages' in claim:
             claim['languages'] = self.langtags
         return claim
@@ -642,78 +178,19 @@ class BaseClaimSubType:
         return LocationList(self.claim.message.locations)
 
 
-class Channel(BaseClaimSubType):
+class Stream(BaseClaim):
 
     __slots__ = ()
 
-    object_fields = BaseClaimSubType.object_fields + ('cover',)
-    repeat_fields = BaseClaimSubType.repeat_fields + ('featured',)
+    claim_type = Claim.STREAM
 
-    def __init__(self, claim: Claim = None):
-        super().__init__(claim)
-        self.message = self.claim.channel_message
+    object_fields = BaseClaim.object_fields + ('source',)
 
     def to_dict(self):
         claim = super().to_dict()
-        claim.update(claim.pop('channel'))
-        claim['public_key'] = self.public_key
-        return claim
-
-    @property
-    def public_key(self) -> str:
-        return hexlify(self.message.public_key).decode()
-
-    @public_key.setter
-    def public_key(self, sd_public_key: str):
-        self.message.public_key = unhexlify(sd_public_key.encode())
-
-    @property
-    def public_key_bytes(self) -> bytes:
-        return self.message.public_key
-
-    @public_key_bytes.setter
-    def public_key_bytes(self, public_key: bytes):
-        self.message.public_key = public_key
-
-    @property
-    def email(self) -> str:
-        return self.message.email
-
-    @email.setter
-    def email(self, email: str):
-        self.message.email = email
-
-    @property
-    def website_url(self) -> str:
-        return self.message.website_url
-
-    @website_url.setter
-    def website_url(self, website_url: str):
-        self.message.website_url = website_url
-
-    @property
-    def cover(self) -> Source:
-        return Source(self.message.cover)
-
-    @property
-    def featured(self) -> ClaimList:
-        return ClaimList(self.message.featured)
-
-
-class Stream(BaseClaimSubType):
-
-    __slots__ = ()
-
-    object_fields = BaseClaimSubType.object_fields + ('source',)
-
-    def __init__(self, claim: Claim = None):
-        super().__init__(claim)
-        self.message = self.claim.stream_message
-
-    def to_dict(self):
-        claim = super().to_dict()
-        claim.update(claim.pop('stream'))
         if 'source' in claim:
+            if 'hash' in claim['source']:
+                claim['source']['hash'] = self.source.file_hash
             if 'sd_hash' in claim['source']:
                 claim['source']['sd_hash'] = self.source.sd_hash
         fee = claim.get('fee', {})
@@ -723,58 +200,39 @@ class Stream(BaseClaimSubType):
             fee['amount'] = self.fee.amount
         return claim
 
-    def update(
-            self, file_path=None, stream_type=None,
-            fee_currency=None, fee_amount=None, fee_address=None,
-            **kwargs):
-
-        duration_was_not_set = True
-        sub_types = ('image', 'video', 'audio')
-        for key in list(kwargs.keys()):
-            for sub_type in sub_types:
-                if key.startswith(f'{sub_type}_'):
-                    stream_type = sub_type
-                    sub_obj = getattr(self, sub_type)
-                    sub_obj_attr = key[len(f'{sub_type}_'):]
-                    setattr(sub_obj, sub_obj_attr, kwargs.pop(key))
-                    if sub_obj_attr == 'duration':
-                        duration_was_not_set = False
-                    break
-
-        if stream_type is not None:
-            if stream_type not in sub_types:
-                raise Exception(
-                    f"stream_type of '{stream_type}' is not valid, must be one of: {sub_types}"
-                )
-
-            sub_obj = getattr(self, stream_type)
-            if duration_was_not_set and file_path and isinstance(sub_obj, Playable):
-                sub_obj.set_duration_from_path(file_path)
+    def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
+        self.fee.update(
+            kwargs.pop('fee_address', None),
+            kwargs.pop('fee_currency', None),
+            kwargs.pop('fee_amount', None)
+        )
 
         if 'sd_hash' in kwargs:
             self.source.sd_hash = kwargs.pop('sd_hash')
 
-        super().update(**kwargs)
-
+        stream_type = None
         if file_path is not None:
-            self.source.media_type = guess_media_type(file_path)
-            if not os.path.isfile(file_path):
-                raise Exception(f"File does not exist: {file_path}")
-            self.source.size = os.path.getsize(file_path)
-            if self.source.size == 0:
-                raise Exception(f"Cannot publish empty file: {file_path}")
+            stream_type = self.source.update(file_path=file_path)
+        elif self.source.name:
+            self.source.media_type, stream_type = guess_media_type(self.source.name)
+        elif self.source.media_type:
+            stream_type = guess_stream_type(self.source.media_type)
 
-        if fee_amount and fee_currency:
-            if fee_address:
-                self.fee.address = fee_address
-            if fee_currency.lower() == 'lbc':
-                self.fee.lbc = Decimal(fee_amount)
-            elif fee_currency.lower() == 'btc':
-                self.fee.btc = Decimal(fee_amount)
-            elif fee_currency.lower() == 'usd':
-                self.fee.usd = Decimal(fee_amount)
-            else:
-                raise Exception(f'Unknown currency type: {fee_currency}')
+        if stream_type in ('image', 'video', 'audio'):
+            media = getattr(self, stream_type)
+            media_args = {'file_metadata': None}
+            try:
+                media_args['file_metadata'] = binary_file_metadata(binary_file_parser(file_path))
+            except:
+                log.exception('Could not read file metadata.')
+            if isinstance(media, Playable):
+                media_args['duration'] = duration
+            if isinstance(media, Dimmensional):
+                media_args['height'] = height
+                media_args['width'] = width
+            media.update(**media_args)
+
+        super().update(**kwargs)
 
     @property
     def author(self) -> str:
@@ -831,3 +289,90 @@ class Stream(BaseClaimSubType):
     @property
     def audio(self) -> Audio:
         return Audio(self.message.audio)
+
+
+class Channel(BaseClaim):
+
+    __slots__ = ()
+
+    claim_type = Claim.CHANNEL
+
+    object_fields = BaseClaim.object_fields + ('cover',)
+    repeat_fields = BaseClaim.repeat_fields + ('featured',)
+
+    def to_dict(self):
+        claim = super().to_dict()
+        claim['public_key'] = self.public_key
+        if 'featured' in claim:
+            claim['featured'] = self.featured.ids
+        return claim
+
+    @property
+    def public_key(self) -> str:
+        return hexlify(self.message.public_key).decode()
+
+    @public_key.setter
+    def public_key(self, sd_public_key: str):
+        self.message.public_key = unhexlify(sd_public_key.encode())
+
+    @property
+    def public_key_bytes(self) -> bytes:
+        return self.message.public_key
+
+    @public_key_bytes.setter
+    def public_key_bytes(self, public_key: bytes):
+        self.message.public_key = public_key
+
+    @property
+    def email(self) -> str:
+        return self.message.email
+
+    @email.setter
+    def email(self, email: str):
+        self.message.email = email
+
+    @property
+    def website_url(self) -> str:
+        return self.message.website_url
+
+    @website_url.setter
+    def website_url(self, website_url: str):
+        self.message.website_url = website_url
+
+    @property
+    def cover(self) -> Source:
+        return Source(self.message.cover)
+
+    @property
+    def featured(self) -> ClaimList:
+        return ClaimList(self.message.featured)
+
+
+class Repost(BaseClaim):
+
+    __slots__ = ()
+
+    claim_type = Claim.REPOST
+
+    @property
+    def reference(self) -> ClaimReference:
+        return ClaimReference(self.message)
+
+
+class Collection(BaseClaim):
+
+    __slots__ = ()
+
+    claim_type = Claim.COLLECTION
+
+    repeat_fields = BaseClaim.repeat_fields + ('claims',)
+
+    def to_dict(self):
+        claim = super().to_dict()
+        if 'claim_references' in claim:
+            claim['claim_references'] = self.claims.ids
+        return claim
+
+    @property
+    def claims(self) -> ClaimList:
+        return ClaimList(self.message)
