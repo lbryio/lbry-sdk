@@ -406,7 +406,7 @@ class StreamManager:
         if 'error' in resolved:
             raise ResolveError(f"error resolving stream: {resolved['error']}")
 
-        claim = Claim.from_bytes(binascii.unhexlify(resolved['hex']))
+        claim = Claim.from_bytes(binascii.unhexlify(resolved['protobuf']))
         outpoint = f"{resolved['txid']}:{resolved['nout']}"
         resolved_time = self.loop.time() - start_time
 
