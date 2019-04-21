@@ -77,7 +77,7 @@ class ResolveCommand(CommandTestCase):
         self.assertSetEqual({'lbry://gibberish'}, set(response))
         claim = response['lbry://gibberish']['claim']
         self.assertEqual(claim['name'], 'gibberish')
-        self.assertEqual(claim['hex'], hexlify(b"{'invalid':'json'}").decode())
+        self.assertEqual(claim['protobuf'], hexlify(b"{'invalid':'json'}").decode())
         self.assertFalse(claim['decoded_claim'])
         self.assertEqual(claim['txid'], txid)
         self.assertEqual(claim['effective_amount'], "0.1")
