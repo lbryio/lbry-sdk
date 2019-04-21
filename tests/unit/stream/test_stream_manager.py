@@ -67,7 +67,7 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
     claim_obj.stream.source.sd_hash = sd_hash
     claim_obj.stream.source.media_type = "image/png"
     claim['value'] = claim_obj
-    claim['hex'] = binascii.hexlify(claim_obj.to_bytes()).decode()
+    claim['protobuf'] = binascii.hexlify(claim_obj.to_bytes()).decode()
 
     async def mock_resolve(*args):
         await storage.save_claims([claim])
