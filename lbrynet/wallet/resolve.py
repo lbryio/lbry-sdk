@@ -347,7 +347,7 @@ def _decode_claim_result(claim):
         return claim
     if 'value' not in claim:
         log.warning('Got an invalid claim while parsing, please report: %s', claim)
-        claim['hex'] = None
+        claim['protobuf'] = None
         claim['value'] = None
         backend_message = ' SDK message: ' + claim.get('error', '')
         claim['error'] = "Failed to parse: missing value." + backend_message
@@ -355,11 +355,11 @@ def _decode_claim_result(claim):
     try:
         if not isinstance(claim['value'], Claim):
             claim['value'] = Claim.from_bytes(unhexlify(claim['value']))
-        claim['hex'] = hexlify(claim['value'].to_bytes())
+        claim['protobuf'] = hexlify(claim['value'].to_bytes())
         claim['decoded_claim'] = True
     except DecodeError:
         claim['decoded_claim'] = False
-        claim['hex'] = claim['value']
+        claim['protobuf'] = claim['value']
         claim['value'] = None
     return claim
 
