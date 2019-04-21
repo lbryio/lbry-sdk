@@ -25,12 +25,13 @@ def encode_txo_doc():
         'is_change': "payment to change address, only available when it can be determined",
         'is_mine': "payment to one of your accounts, only available when it can be determined",
         'type': "one of 'claim', 'support' or 'payment'",
-        'claim_op': "when type is 'claim', this determines if it is 'create' or 'update'",
         'name': "when type is 'claim' or 'support', this is the claim name",
         'claim_id': "when type is 'claim' or 'support', this is the claim id",
+        'claim_op': "when type is 'claim', this determines if it is 'create' or 'update'",
+        'value': "when type is 'claim' or 'support' with payload, this is the decoded protobuf payload",
+        'value_type': "determines the type of the 'value' field: 'channel', 'stream', etc",
+        'protobuf': "hex encoded raw protobuf version of 'value' field",
         'permanent_url': "when type is 'claim' or 'support', this is the long permanent claim URL",
-        'value': "when type is 'claim', this is the claim metadata",
-        'sub_type': "when type is 'claim', this determines if it is 'channel' or 'stream' claim",
         'signing_channel': "for signed claims only, metadata of signing channel",
         'is_channel_signature_valid': "for signed claims only, whether signature is valid",
     }
@@ -169,9 +170,9 @@ class JSONResponseEncoder(JSONEncoder):
             })
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 output['value'] = txo.claim
+                output['value_type'] = txo.claim.claim_type
                 if self.include_protobuf:
                     output['protobuf'] = hexlify(txo.claim.to_bytes())
-                output['sub_type'] = txo.claim.claim_type
                 if txo.channel is not None:
                     output['signing_channel'] = {
                         'name': txo.channel.claim_name,
