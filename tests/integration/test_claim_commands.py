@@ -358,6 +358,15 @@ class StreamCommands(CommandTestCase):
         fixed_values['locations'] = [{'country': 'BR'}]
         self.assertEqual(txo['value'], fixed_values)
 
+        # modifying hash/size/name
+        fixed_values['source']['name'] = 'changed_name'
+        fixed_values['source']['hash'] = 'cafebeef'
+        fixed_values['source']['size'] = '42'
+        tx = await self.out(self.stream_update(
+            claim_id, file_name='changed_name', file_hash='cafebeef', file_size=42
+        ))
+        self.assertEqual(tx['outputs'][0]['value'], fixed_values)
+
         # send claim to someone else
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
