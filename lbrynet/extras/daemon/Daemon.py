@@ -2231,6 +2231,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             stream_update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>] [--file_path=<file_path>]
+                    [--file_name=<file_name>] [--file_size=<file_size>] [--file_hash=<file_hash>]
                     [--tags=<tags>...] [--clear_tags]
                     [--languages=<languages>...] [--clear_languages]
                     [--locations=<locations>...] [--clear_locations]
@@ -2246,6 +2247,9 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>          : (str) id of the stream claim to update
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --file_name=<file_name>        : (str) override file name, defaults to name from file_path.
+            --file_size=<file_size>        : (str) override file size, otherwise automatically computed.
+            --file_hash=<file_hash>        : (str) override file hash, otherwise automatically computed.
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use

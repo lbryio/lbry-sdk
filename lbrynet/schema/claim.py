@@ -212,6 +212,12 @@ class Stream(BaseClaim):
 
         if 'sd_hash' in kwargs:
             self.source.sd_hash = kwargs.pop('sd_hash')
+        if 'file_size' in kwargs:
+            self.source.size = kwargs.pop('file_size')
+        if 'file_name' in kwargs:
+            self.source.name = kwargs.pop('file_name')
+        if 'file_hash' in kwargs:
+            self.source.file_hash = kwargs.pop('file_hash')
 
         stream_type = None
         if file_path is not None:
