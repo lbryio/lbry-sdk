@@ -4,7 +4,9 @@ import json
 import inspect
 import tempfile
 import asyncio
+import time
 from docopt import docopt
+from binascii import unhexlify
 from textwrap import indent
 from lbrynet.extras.cli import set_kwargs, get_argument_parser
 from lbrynet.extras.daemon.Daemon import (
@@ -173,7 +175,7 @@ class Examples(CommandTestCase):
         # channels
 
         channel = await r(
-            'Create a channel claim',
+            'Create a channel claim without metadata',
             'channel', 'create', '@channel', '1.0'
         )
         channel_id = channel['outputs'][0]['claim_id']
@@ -200,13 +202,28 @@ class Examples(CommandTestCase):
         await self.generate(1)
         await self.on_transaction_dict(channel)
 
+        big_channel = await r(
+            'Create a channel claim with all metadata',
+            'channel', 'create', '@bigchannel', '1.0',
+            '--title="Big Channel"', '--description="A channel with lots of videos."',
+            '--email="creator@smallmedia.com"', '--tags=music', '--tags=art',
+            '--languages=pt-BR', '--languages=uk', '--locations=BR', '--locations=UA::Kiyv',
+            '--website_url="http://smallmedia.com"', '--thumbnail_url="http://smallmedia.com/logo.jpg"',
+            '--cover_url="http://smallmedia.com/logo.jpg"'
+        )
+        await self.on_transaction_dict(big_channel)
+        await self.generate(1)
+        await self.on_transaction_dict(big_channel)
+        await self.daemon.jsonrpc_channel_abandon(big_channel['outputs'][0]['claim_id'])
+        await self.generate(1)
+
         # stream claims
 
         with tempfile.NamedTemporaryFile() as file:
             file.write(b'hello world')
             file.flush()
             stream = await r(
-                'Create a stream claim',
+                'Create a stream claim without metadata',
                 'stream', 'create', 'astream', '1.0', file.name
             )
             await self.on_transaction_dict(stream)
@@ -217,7 +234,7 @@ class Examples(CommandTestCase):
         stream = await r(
             'Update a stream claim to add channel',
             'stream', 'update', stream_id,
-            f"--channel_id=\"{channel_id}\""
+            f'--channel_id="{channel_id}"'
         )
         await self.on_transaction_dict(stream)
         await self.generate(1)
@@ -245,13 +262,37 @@ class Examples(CommandTestCase):
 
         await r(
             'Search for all claims in channel',
-            'claim', 'search', f"--channel_id=\"{channel_id}\""
+            'claim', 'search', f'--channel_id="{channel_id}"'
         )
 
         await r(
             'Search for claims matching a name',
-            'claim', 'search', f"--name=\"{stream_name}\""
+            'claim', 'search', f'--name="{stream_name}"'
         )
+
+        with tempfile.NamedTemporaryFile(suffix='.png') as file:
+            file.write(unhexlify(
+                b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
+                b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
+                b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
+                b'9454e44ae426082'
+            ))
+            file.flush()
+            big_stream = await r(
+                'Create an image stream claim with all metadata and fee',
+                'stream', 'create', 'blank-image', '1.0', file.name,
+                '--tags=blank', '--tags=art', '--languages=en', '--locations=US:NH:Manchester',
+                '--fee_currency=LBC', '--fee_amount=0.3',
+                '--title="Blank Image"', '--description="A blank PNG that is 5x7."', '--author=Picaso',
+                '--license="Public Domain"', '--license_url=http://public-domain.org',
+                '--thumbnail_url="http://smallmedia.com/thumbnail.jpg"', f'--release_time={int(time.time())}',
+                f'--channel_id="{channel_id}"'
+            )
+            await self.on_transaction_dict(big_stream)
+            await self.generate(1)
+            await self.on_transaction_dict(big_stream)
+            await self.daemon.jsonrpc_channel_abandon(big_stream['outputs'][0]['claim_id'])
+            await self.generate(1)
 
         # files
 

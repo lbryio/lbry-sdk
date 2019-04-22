@@ -198,6 +198,9 @@ class Stream(BaseClaim):
             fee['address'] = self.fee.address
         if 'amount' in fee:
             fee['amount'] = self.fee.amount
+        stream_type = self.message.WhichOneof('type')
+        if stream_type:
+            claim['stream_type'] = stream_type
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
