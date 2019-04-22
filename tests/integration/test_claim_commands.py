@@ -373,7 +373,39 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 1)
 
-    async def test_automatic_type_and_metadata_detection(self):
+    async def test_automatic_type_and_metadata_detection_for_image(self):
+        with tempfile.NamedTemporaryFile(suffix='.png') as file:
+            file.write(unhexlify(
+                b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
+                b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
+                b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
+                b'9454e44ae426082'
+            ))
+            file.flush()
+            tx = await self.out(
+                self.daemon.jsonrpc_stream_create(
+                    'blank-image', '1.0', file_path=file.name
+                )
+            )
+            txo = tx['outputs'][0]
+            self.assertEqual(
+                txo['value'], {
+                    'source': {
+                        'size': '99',
+                        'name': os.path.basename(file.name),
+                        'media_type': 'image/png',
+                        'hash': '06003bbee8aece0543ed9d9cecc48be1d996cfeff9837a1aed1d961caeda82af',
+                        'sd_hash': txo['value']['source']['sd_hash'],
+                    },
+                    'stream_type': 'image',
+                    'image': {
+                        'width': 5,
+                        'height': 7
+                    }
+                }
+            )
+
+    async def test_automatic_type_and_metadata_detection_for_video(self):
         tx = await self.out(
             self.daemon.jsonrpc_stream_create(
                 'chrome', '1.0', file_path=self.video_file_name
@@ -389,6 +421,7 @@ class StreamCommands(CommandTestCase):
                     'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
                     'sd_hash': txo['value']['source']['sd_hash'],
                 },
+                'stream_type': 'video',
                 'video': {
                     'width': 1280,
                     'height': 720,
@@ -413,6 +446,7 @@ class StreamCommands(CommandTestCase):
                     'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
                     'sd_hash': txo['value']['source']['sd_hash'],
                 },
+                'stream_type': 'video',
                 'video': {
                     'width': 99,
                     'height': 88,
