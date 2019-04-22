@@ -169,6 +169,15 @@ class Resolver:
                 claim_result['signature_is_valid'] = validate_claim_signature_and_get_channel_name(
                     claim_result, certificate, self.ledger, claim_tx=claim_tx, cert_tx=cert_tx
                 )
+                # fixme: workaround while json encoder isnt used here
+                if cert_tx:
+                    channel_txo = cert_tx.outputs[certificate['nout']]
+                    claim_result['signing_channel'] = {
+                        'name': channel_txo.claim_name,
+                        'claim_id': channel_txo.claim_id,
+                        'value': channel_txo.claim
+                    }
+                    claim_result['is_channel_signature_valid'] = claim_result['signature_is_valid']
 
         if 'amount' in claim_result:
             claim_result['amount'] = dewies_to_lbc(claim_result['amount'])
