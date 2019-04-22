@@ -80,7 +80,7 @@ class Output(BaseOutput):
     @property
     def permanent_url(self) -> str:
         if self.script.is_claim_involved:
-            return f"{self.claim_name}#{self.claim_id}"
+            return f"lbry://{self.claim_name}#{self.claim_id}"
         raise ValueError('No claim associated.')
 
     @property
