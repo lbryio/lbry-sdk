@@ -1097,7 +1097,9 @@ class Daemon(metaclass=JSONRPCServerType):
             account_unlock (<password> | --password=<password>) [<account_id> | --account_id=<account_id>]
 
         Options:
-            --account_id=<account_id>        : (str) id for the account to unlock
+            --password=<password>        : (str) password to use for unlocking
+            --account_id=<account_id>    : (str) id for the account to unlock, unlocks default account
+                                                 if not provided
 
         Returns:
             (bool) true if account is unlocked, otherwise false
@@ -1151,7 +1153,9 @@ class Daemon(metaclass=JSONRPCServerType):
                             [<account_id> | --account_id=<account_id>]
 
         Options:
-            --account_id=<account_id>        : (str) id for the account to encrypt
+            --new_password=<new_password>    : (str) password to encrypt account
+            --account_id=<account_id>        : (str) id for the account to encrypt, encrypts
+                                                     default account if not provided
 
         Returns:
             (bool) true if wallet is decrypted, otherwise false
