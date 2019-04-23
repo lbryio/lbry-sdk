@@ -1,7 +1,9 @@
-import aiohttp
-import aiohttp.web
 import os
 import hashlib
+import asyncio
+import aiohttp
+import aiohttp.web
+
 from lbrynet.utils import aiohttp_request
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from lbrynet.testcase import CommandTestCase
@@ -319,9 +321,32 @@ class RangeRequests(CommandTestCase):
         self.server.stop_server()
         await self.daemon.jsonrpc_file_save('test', self.daemon.conf.data_dir)
         stream = self.daemon.jsonrpc_file_list()[0]
+        self.assertIsNotNone(stream.full_path)
         await stream.finished_writing.wait()
         with open(stream.full_path, 'rb') as f:
             self.assertEqual(self.data, f.read())
+        await self.daemon.jsonrpc_file_delete(delete_from_download_dir=True, sd_hash=stream.sd_hash)
+
+    async def test_file_save_stop_before_finished_streaming_only(self, wait_for_start_writing=False):
+        await self.test_streaming_only_with_blobs()
+        stream = self.daemon.jsonrpc_file_list()[0]
+        self.assertIsNone(stream.full_path)
+        self.server.stop_server()
+        await self.daemon.jsonrpc_file_save('test', self.daemon.conf.data_dir)
+        stream = self.daemon.jsonrpc_file_list()[0]
+        path = stream.full_path
+        self.assertIsNotNone(path)
+        if wait_for_start_writing:
+            await stream.started_writing.wait()
+            self.assertTrue(os.path.isfile(path))
+        await self._restart_stream_manager()
+        stream = self.daemon.jsonrpc_file_list()[0]
+
+        self.assertIsNone(stream.full_path)
+        self.assertFalse(os.path.isfile(path))
+
+    async def test_file_save_stop_before_finished_streaming_only_wait_for_start(self):
+        return await self.test_file_save_stop_before_finished_streaming_only(wait_for_start_writing=True)
 
     async def test_file_save_streaming_only_dont_save_blobs(self):
         await self.test_streaming_only_without_blobs()
