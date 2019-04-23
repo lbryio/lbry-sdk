@@ -62,6 +62,8 @@ class HashBlobWriter:
             self.close_handle()
 
     def close_handle(self):
+        if not self.finished.done():
+            self.finished.cancel()
         if self.buffer is not None:
             self.buffer.close()
             self.buffer = None

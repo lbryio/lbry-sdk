@@ -145,18 +145,17 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.buf = b''
 
     async def download_blob(self, blob: 'AbstractBlob') -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
+        blob_hash = blob.blob_hash
         if blob.get_is_verified() or not blob.is_writeable():
             return 0, self.transport
         try:
-
-            self.blob, self.writer, self._blob_bytes_received = blob, blob.get_blob_writer(self.peer_address,
-                                                                                           self.peer_port), 0
+            self._blob_bytes_received = 0
+            self.blob, self.writer = blob, blob.get_blob_writer(self.peer_address, self.peer_port)
             self._response_fut = asyncio.Future(loop=self.loop)
             return await self._download_blob()
         except OSError as e:
-            log.error("race happened downloading from %s:%i", self.peer_address, self.peer_port)
             # i'm not sure how to fix this race condition - jack
-            log.exception(e)
+            log.exception("race happened downloading %s from %s:%i", blob_hash, self.peer_address, self.peer_port)
             return self._blob_bytes_received, self.transport
         except asyncio.TimeoutError:
             if self._response_fut and not self._response_fut.done():
