@@ -151,12 +151,12 @@ class StreamManager:
 
         if self.config.streaming_only:
             to_set_as_streaming = []
-            for index in range(len(to_start)):
-                file_name = path_or_none(to_start[index]['file_name'])
-                download_dir = path_or_none(to_start[index]['download_directory'])
+            for file_info in to_start:
+                file_name = path_or_none(file_info['file_name'])
+                download_dir = path_or_none(file_info['download_directory'])
                 if file_name and download_dir and not os.path.isfile(os.path.join(file_name, download_dir)):
-                    to_start[index]['file_name'], to_start[index]['download_directory'] = '{stream}', '{stream}'
-                    to_set_as_streaming.append(to_start[index]['stream_hash'])
+                    file_info['file_name'], file_info['download_directory'] = '{stream}', '{stream}'
+                    to_set_as_streaming.append(file_info['stream_hash'])
 
             if to_set_as_streaming:
                 await self.storage.set_files_as_streaming(to_set_as_streaming)
