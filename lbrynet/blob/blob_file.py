@@ -79,7 +79,7 @@ class AbstractBlob:
         self.length = length
         self.blob_completed_callback = blob_completed_callback
         self.blob_directory = blob_directory
-        self.writers: typing.List[HashBlobWriter] = []
+        self.writers: typing.Dict[typing.Tuple[typing.Optional[str], typing.Optional[int]], HashBlobWriter] = {}
         self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
         self.writing: asyncio.Event = asyncio.Event(loop=self.loop)
         self.readers: typing.List[typing.BinaryIO] = []
@@ -99,7 +99,7 @@ class AbstractBlob:
     @contextlib.contextmanager
     def reader_context(self) -> typing.ContextManager[typing.BinaryIO]:
         if not self.is_readable():
-            raise OSError("not readable")
+            raise OSError(f"{str(type(self))} not readable, {len(self.readers)} readers {len(self.writers)} writers")
         with self._reader_context() as reader:
             try:
                 self.readers.append(reader)
@@ -142,7 +142,8 @@ class AbstractBlob:
 
     def close(self):
         while self.writers:
-            self.writers.pop().finished.cancel()
+            peer, writer = self.writers.popitem()
+            writer.finished.cancel()
         while self.readers:
             reader = self.readers.pop()
             if reader:
@@ -198,10 +199,13 @@ class AbstractBlob:
             else:
                 self.verified.set()
 
-    def get_blob_writer(self) -> HashBlobWriter:
+    def get_blob_writer(self, peer_address: typing.Optional[str] = None,
+                        peer_port: typing.Optional[int] = None) -> HashBlobWriter:
+        if (peer_address, peer_port) in self.writers:
+            log.exception("attempted to download blob twice from %s:%s", peer_address, peer_port)
         fut = asyncio.Future(loop=self.loop)
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
-        self.writers.append(writer)
+        self.writers[(peer_address, peer_port)] = writer
 
         def writer_finished_callback(finished: asyncio.Future):
             try:
@@ -210,18 +214,18 @@ class AbstractBlob:
                     raise err
                 verified_bytes = finished.result()
                 while self.writers:
-                    other = self.writers.pop()
+                    _, other = self.writers.popitem()
                     if other is not writer:
                         other.finished.cancel()
                 self.save_verified_blob(verified_bytes)
                 return
             except (InvalidBlobHashError, InvalidDataError) as error:
-                log.debug("writer error downloading %s: %s", self.blob_hash[:8], str(error))
+                log.warning("writer error downloading %s: %s", self.blob_hash[:8], str(error))
             except (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             finally:
-                if writer in self.writers:
-                    self.writers.remove(writer)
+                if (peer_address, peer_port) in self.writers:
+                    self.writers.pop((peer_address, peer_port))
         fut.add_done_callback(writer_finished_callback)
         return writer
 
@@ -292,10 +296,11 @@ class BlobFile(AbstractBlob):
     def is_writeable(self) -> bool:
         return super().is_writeable() and not os.path.isfile(self.file_path)
 
-    def get_blob_writer(self) -> HashBlobWriter:
+    def get_blob_writer(self, peer_address: typing.Optional[str] = None,
+                        peer_port: typing.Optional[str] = None) -> HashBlobWriter:
         if self.file_exists:
             raise OSError(f"File already exists '{self.file_path}'")
-        return super().get_blob_writer()
+        return super().get_blob_writer(peer_address, peer_port)
 
     @contextlib.contextmanager
     def _reader_context(self) -> typing.ContextManager[typing.BinaryIO]:

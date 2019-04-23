@@ -148,8 +148,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if blob.get_is_verified() or not blob.is_writeable():
             return 0, self.transport
         try:
-            blob.get_blob_writer()
-            self.blob, self.writer, self._blob_bytes_received = blob, blob.get_blob_writer(), 0
+
+            self.blob, self.writer, self._blob_bytes_received = blob, blob.get_blob_writer(self.peer_address,
+                                                                                           self.peer_port), 0
             self._response_fut = asyncio.Future(loop=self.loop)
             return await self._download_blob()
         except OSError as e:

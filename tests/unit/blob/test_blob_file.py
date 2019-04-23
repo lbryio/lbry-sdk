@@ -41,7 +41,7 @@ class TestBlob(AsyncioTestCase):
 
     async def _test_close_writers_on_finished(self, blob_class=AbstractBlob, blob_directory=None):
         blob = self._get_blob(blob_class, blob_directory=blob_directory)
-        writers = [blob.get_blob_writer() for _ in range(5)]
+        writers = [blob.get_blob_writer('1.2.3.4', port) for port in range(5)]
         self.assertEqual(5, len(blob.writers))
 
         # test that writing too much causes the writer to fail with InvalidDataError and to be removed
