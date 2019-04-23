@@ -109,7 +109,7 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         await self._add_blob_to_server(blob_hash, mock_blob_bytes)
 
-        second_client_blob = self.client_blob_manager.get_blob(blob_hash)
+        second_client_blob = second_client_blob_manager.get_blob(blob_hash)
 
         # download the blob
         await asyncio.gather(
@@ -121,6 +121,62 @@ class TestBlobExchange(BlobExchangeTestBase):
         )
         await second_client_blob.verified.wait()
         self.assertEqual(second_client_blob.get_is_verified(), True)
+
+    async def test_blob_writers_concurrency(self):
+        blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
+        mock_blob_bytes = b'1' * ((2 * 2 ** 20) - 1)
+        blob = self.server_blob_manager.get_blob(blob_hash)
+        write_blob = blob._write_blob
+        write_called_count = 0
+
+        def wrap_write_blob(blob_bytes):
+            nonlocal write_called_count
+            write_called_count += 1
+            write_blob(blob_bytes)
+        blob._write_blob = wrap_write_blob
+
+        writer1 = blob.get_blob_writer(peer_port=1)
+        writer2 = blob.get_blob_writer(peer_port=2)
+        reader1_ctx_before_write = blob.reader_context()
+
+        with self.assertRaises(OSError):
+            blob.get_blob_writer(peer_port=2)
+        with self.assertRaises(OSError):
+            with blob.reader_context():
+                pass
+
+        blob.set_length(len(mock_blob_bytes))
+        results = {}
+
+        def check_finished_callback(writer, num):
+            def inner(writer_future: asyncio.Future):
+                results[num] = writer_future.result()
+            writer.finished.add_done_callback(inner)
+
+        check_finished_callback(writer1, 1)
+        check_finished_callback(writer2, 2)
+
+        def write_task(writer):
+            async def _inner():
+                writer.write(mock_blob_bytes)
+            return self.loop.create_task(_inner())
+
+        await asyncio.gather(write_task(writer1), write_task(writer2), loop=self.loop)
+
+        self.assertDictEqual({1: mock_blob_bytes, 2: mock_blob_bytes}, results)
+        self.assertEqual(1, write_called_count)
+        self.assertTrue(blob.get_is_verified())
+        self.assertDictEqual({}, blob.writers)
+
+        with reader1_ctx_before_write as f:
+            self.assertEqual(mock_blob_bytes, f.read())
+        with blob.reader_context() as f:
+            self.assertEqual(mock_blob_bytes, f.read())
+        with blob.reader_context() as f:
+            blob.close()
+            with self.assertRaises(ValueError):
+                f.read()
+        self.assertListEqual([], blob.readers)
 
     async def test_host_different_blobs_to_multiple_peers_at_once(self):
         blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"

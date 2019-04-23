@@ -143,7 +143,8 @@ class AbstractBlob:
     def close(self):
         while self.writers:
             peer, writer = self.writers.popitem()
-            writer.finished.cancel()
+            if writer and writer.finished and not writer.finished.done() and not self.loop.is_closed():
+                writer.finished.cancel()
         while self.readers:
             reader = self.readers.pop()
             if reader:
@@ -206,6 +207,12 @@ class AbstractBlob:
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
         self.writers[(peer_address, peer_port)] = writer
 
+        def remove_writer(_):
+            if (peer_address, peer_port) in self.writers:
+                del self.writers[(peer_address, peer_port)]
+
+        fut.add_done_callback(remove_writer)
+
         def writer_finished_callback(finished: asyncio.Future):
             try:
                 err = finished.exception()
@@ -215,16 +222,13 @@ class AbstractBlob:
                 while self.writers:
                     _, other = self.writers.popitem()
                     if other is not writer:
-                        other.finished.cancel()
+                        other.close_handle()
                 self.save_verified_blob(verified_bytes)
-                return
             except (InvalidBlobHashError, InvalidDataError) as error:
                 log.warning("writer error downloading %s: %s", self.blob_hash[:8], str(error))
             except (DownloadCancelledError, asyncio.CancelledError, asyncio.TimeoutError):
                 pass
-            finally:
-                if (peer_address, peer_port) in self.writers:
-                    self.writers.pop((peer_address, peer_port))
+
         fut.add_done_callback(writer_finished_callback)
         return writer
 
