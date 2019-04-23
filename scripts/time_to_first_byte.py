@@ -90,15 +90,16 @@ async def main(uris=None, allow_fees=False):
     print("**********************************************")
 
     resolvable = []
-    for name in uris:
-        resolved = await daemon_rpc(conf, 'resolve', name)
+    async def __resolve(name):
+        resolved = await daemon_rpc(conf, 'resolve', urls=[name])
         if 'error' not in resolved.get(name, {}):
-            if ("fee" not in resolved[name]['claim']['value']['stream']) or allow_fees:
+            if ("fee" not in resolved[name]['claim']['value']) or allow_fees:
                 resolvable.append(name)
             else:
                 print(f"{name} has a fee, skipping it")
         else:
             print(f"failed to resolve {name}: {resolved[name]['error']}")
+    await asyncio.gather(*(__resolve(name) for name in uris))
     print(f"attempting to download {len(resolvable)}/{len(uris)} frontpage streams")
 
     first_byte_times = []
@@ -113,7 +114,7 @@ async def main(uris=None, allow_fees=False):
     for i, uri in enumerate(resolvable):
         start = time.time()
         try:
-            await daemon_rpc(conf, 'get', uri)
+            await daemon_rpc(conf, 'get', uri=uri)
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")

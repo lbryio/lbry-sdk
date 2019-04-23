@@ -25,7 +25,7 @@ def display(data):
     print(json.dumps(data, indent=2))
 
 
-async def execute_command(conf, method, params):
+async def execute_command(conf, method, params, callback=display):
     async with aiohttp.ClientSession() as session:
         try:
             message = {'method': method, 'params': params}
@@ -33,12 +33,12 @@ async def execute_command(conf, method, params):
                 try:
                     data = await resp.json()
                     if 'result' in data:
-                        display(data['result'])
+                        return callback(data['result'])
                     elif 'error' in data:
                         if 'message' in data['error']:
-                            display(data['error']['message'])
+                            return callback(data['error']['message'])
                         else:
-                            display(data['error'])
+                            return callback(data['error'])
                 except Exception as e:
                     log.exception('Could not process response from server:', exc_info=e)
         except aiohttp.ClientConnectionError:
