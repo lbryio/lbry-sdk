@@ -54,13 +54,7 @@ comparison_operators = {
 
 
 def path_or_none(p) -> typing.Optional[str]:
-    try:
-        return binascii.unhexlify(p).decode()
-    except binascii.Error as err:
-        if p == '{stream}':
-            return None
-        raise err
-
+    return None if p == '{stream}' else binascii.unhexlify(p).decode()
 
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
@@ -154,6 +148,18 @@ class StreamManager:
             # if self.blob_manager._save_blobs:
             #     log.info("Attempting to recover %i streams", len(to_recover))
             await self.recover_streams(to_recover)
+
+        if self.config.streaming_only:
+            to_set_as_streaming = []
+            for index in range(len(to_start)):
+                file_name = path_or_none(to_start[index]['file_name'])
+                download_dir = path_or_none(to_start[index]['download_directory'])
+                if file_name and download_dir and not os.path.isfile(os.path.join(file_name, download_dir)):
+                    to_start[index]['file_name'], to_start[index]['download_directory'] = '{stream}', '{stream}'
+                    to_set_as_streaming.append(to_start[index]['stream_hash'])
+
+            if to_set_as_streaming:
+                await self.storage.set_files_as_streaming(to_set_as_streaming)
 
         log.info("Initializing %i files", len(to_start))
         if to_start:

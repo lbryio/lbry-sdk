@@ -425,7 +425,7 @@ class SQLiteStorage(SQLiteMixin):
         return self.db.run(_sync_blobs)
 
     def sync_files_to_blobs(self):
-        def _sync_blobs(transaction: sqlite3.Connection) -> typing.Set[str]:
+        def _sync_blobs(transaction: sqlite3.Connection):
             transaction.executemany(
                 "update file set status='stopped' where stream_hash=?",
                 transaction.execute(
@@ -434,6 +434,15 @@ class SQLiteStorage(SQLiteMixin):
                 ).fetchall()
             )
         return self.db.run(_sync_blobs)
+
+    def set_files_as_streaming(self, stream_hashes: typing.List[str]):
+        def _set_streaming(transaction: sqlite3.Connection):
+            transaction.executemany(
+                "update file set file_name='{stream}', download_directory='{stream}' where stream_hash=?",
+                [(stream_hash, ) for stream_hash in stream_hashes]
+            )
+
+        return self.db.run(_set_streaming)
 
     # # # # # # # # # stream functions # # # # # # # # #
 
@@ -526,10 +535,15 @@ class SQLiteStorage(SQLiteMixin):
         log.debug("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute("update file set status=? where stream_hash=?", (new_status, stream_hash))
 
-    def change_file_download_dir_and_file_name(self, stream_hash: str, download_dir: str, file_name: str):
-        return self.db.execute("update file set download_directory=?, file_name=? where stream_hash=?", (
-            binascii.hexlify(download_dir.encode()).decode(), binascii.hexlify(file_name.encode()).decode(),
-            stream_hash
+    async def change_file_download_dir_and_file_name(self, stream_hash: str, download_dir: typing.Optional[str],
+                                                     file_name: typing.Optional[str]):
+        if not file_name or not download_dir:
+            encoded_file_name, encoded_download_dir = "{stream}", "{stream}"
+        else:
+            encoded_file_name = binascii.hexlify(file_name.encode()).decode()
+            encoded_download_dir = binascii.hexlify(download_dir.encode()).decode()
+        return await self.db.execute("update file set download_directory=?, file_name=? where stream_hash=?", (
+            encoded_download_dir, encoded_file_name, stream_hash,
         ))
 
     async def recover_streams(self, descriptors_and_sds: typing.List[typing.Tuple['StreamDescriptor', 'BlobFile']],
