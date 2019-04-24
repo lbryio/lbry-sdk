@@ -484,6 +484,8 @@ class Config(CLIConfig):
     node_rpc_timeout = Float("Timeout when making a DHT request", constants.rpc_timeout)
 
     # blob announcement and download
+    save_blobs = Toggle("Save encrypted blob files for hosting, otherwise download blobs to memory only.", True)
+
     announce_head_and_sd_only = Toggle(
         "Announce only the descriptor and first (rather than all) data blob for a stream to the DHT", True,
         previous_names=['announce_head_blobs_only']
@@ -537,6 +539,7 @@ class Config(CLIConfig):
     cache_time = Integer("Time to cache resolved claims", 150)  # TODO: use this
 
     # daemon
+    save_files = Toggle("Save downloaded files when calling `get` by default", True)
     components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
     share_usage_data = Toggle(
         "Whether to share usage stats and diagnostic info with LBRY.", True,

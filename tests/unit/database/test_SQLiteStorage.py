@@ -7,7 +7,7 @@ from torba.testcase import AsyncioTestCase
 from lbrynet.conf import Config
 from lbrynet.extras.daemon.storage import SQLiteStorage
 from lbrynet.blob.blob_info import BlobInfo
-from lbrynet.blob.blob_manager import BlobFileManager
+from lbrynet.blob.blob_manager import BlobManager
 from lbrynet.stream.descriptor import StreamDescriptor
 from tests.test_utils import random_lbry_hash
 
@@ -68,17 +68,18 @@ fake_claim_info = {
 
 class StorageTest(AsyncioTestCase):
     async def asyncSetUp(self):
-        self.storage = SQLiteStorage(Config(), ':memory:')
+        self.conf = Config()
+        self.storage = SQLiteStorage(self.conf, ':memory:')
         self.blob_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.blob_dir)
-        self.blob_manager = BlobFileManager(asyncio.get_event_loop(), self.blob_dir, self.storage)
+        self.blob_manager = BlobManager(asyncio.get_event_loop(), self.blob_dir, self.storage, self.conf)
         await self.storage.open()
 
     async def asyncTearDown(self):
         await self.storage.close()
 
     async def store_fake_blob(self, blob_hash, length=100):
-        await self.storage.add_completed_blob(blob_hash, length)
+        await self.storage.add_blobs((blob_hash, length), finished=True)
 
     async def store_fake_stream(self, stream_hash, blobs=None, file_name="fake_file", key="DEADBEEF"):
         blobs = blobs or [BlobInfo(1, 100, "DEADBEEF", random_lbry_hash())]

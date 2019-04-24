@@ -524,6 +524,10 @@ class KademliaProtocol(DatagramProtocol):
             response = await asyncio.wait_for(response_fut, self.rpc_timeout)
             self.peer_manager.report_last_replied(peer.address, peer.udp_port)
             return response
+        except asyncio.CancelledError:
+            if not response_fut.done():
+                response_fut.cancel()
+            raise
         except (asyncio.TimeoutError, RemoteException):
             self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
@@ -540,7 +544,7 @@ class KademliaProtocol(DatagramProtocol):
 
     async def _send(self, peer: 'KademliaPeer', message: typing.Union[RequestDatagram, ResponseDatagram,
                                                                       ErrorDatagram]):
-        if not self.transport:
+        if not self.transport or self.transport.is_closing():
             raise TransportNotConnected()
 
         data = message.bencode()

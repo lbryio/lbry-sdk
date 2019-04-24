@@ -8,7 +8,7 @@ from collections import OrderedDict
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbrynet.blob import MAX_BLOB_SIZE
 from lbrynet.blob.blob_info import BlobInfo
-from lbrynet.blob.blob_file import BlobFile
+from lbrynet.blob.blob_file import AbstractBlob, BlobFile
 from lbrynet.cryptoutils import get_lbry_hash_obj
 from lbrynet.error import InvalidStreamDescriptorError
 
@@ -108,29 +108,30 @@ class StreamDescriptor:
         h.update(self.old_sort_json())
         return h.hexdigest()
 
-    async def make_sd_blob(self, blob_file_obj: typing.Optional[BlobFile] = None,
-                           old_sort: typing.Optional[bool] = False):
+    async def make_sd_blob(self, blob_file_obj: typing.Optional[AbstractBlob] = None,
+                           old_sort: typing.Optional[bool] = False,
+                           blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None):
         sd_hash = self.calculate_sd_hash() if not old_sort else self.calculate_old_sort_sd_hash()
         if not old_sort:
             sd_data = self.as_json()
         else:
             sd_data = self.old_sort_json()
-        sd_blob = blob_file_obj or BlobFile(self.loop, self.blob_dir, sd_hash, len(sd_data))
+        sd_blob = blob_file_obj or BlobFile(self.loop, sd_hash, len(sd_data), blob_completed_callback, self.blob_dir)
         if blob_file_obj:
             blob_file_obj.set_length(len(sd_data))
         if not sd_blob.get_is_verified():
-            writer = sd_blob.open_for_writing()
+            writer = sd_blob.get_blob_writer()
             writer.write(sd_data)
+
         await sd_blob.verified.wait()
         sd_blob.close()
         return sd_blob
 
     @classmethod
     def _from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
-                                     blob: BlobFile) -> 'StreamDescriptor':
-        assert os.path.isfile(blob.file_path)
-        with open(blob.file_path, 'rb') as f:
-            json_bytes = f.read()
+                                     blob: AbstractBlob) -> 'StreamDescriptor':
+        with blob.reader_context() as blob_reader:
+            json_bytes = blob_reader.read()
         try:
             decoded = json.loads(json_bytes.decode())
         except json.JSONDecodeError:
@@ -160,8 +161,10 @@ class StreamDescriptor:
 
     @classmethod
     async def from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
-                                          blob: BlobFile) -> 'StreamDescriptor':
-        return await loop.run_in_executor(None, lambda: cls._from_stream_descriptor_blob(loop, blob_dir, blob))
+                                          blob: AbstractBlob) -> 'StreamDescriptor':
+        if not blob.is_readable():
+            raise InvalidStreamDescriptorError(f"unreadable/missing blob: {blob.blob_hash}")
+        return await loop.run_in_executor(None, cls._from_stream_descriptor_blob, loop, blob_dir, blob)
 
     @staticmethod
     def get_blob_hashsum(b: typing.Dict):
@@ -194,11 +197,12 @@ class StreamDescriptor:
         return h.hexdigest()
 
     @classmethod
-    async def create_stream(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
-                            file_path: str, key: typing.Optional[bytes] = None,
-                            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
-                            old_sort: bool = False) -> 'StreamDescriptor':
-
+    async def create_stream(
+            cls, loop: asyncio.BaseEventLoop, blob_dir: str, file_path: str, key: typing.Optional[bytes] = None,
+            iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
+            old_sort: bool = False,
+            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'],
+                                                                     asyncio.Task]] = None) -> 'StreamDescriptor':
         blobs: typing.List[BlobInfo] = []
 
         iv_generator = iv_generator or random_iv_generator()
@@ -207,7 +211,7 @@ class StreamDescriptor:
         for blob_bytes in file_reader(file_path):
             blob_num += 1
             blob_info = await BlobFile.create_from_unencrypted(
-                    loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num
+                    loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, blob_completed_callback
                 )
             blobs.append(blob_info)
         blobs.append(
@@ -216,7 +220,7 @@ class StreamDescriptor:
             loop, blob_dir, os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path),
             blobs
         )
-        sd_blob = await descriptor.make_sd_blob(old_sort=old_sort)
+        sd_blob = await descriptor.make_sd_blob(old_sort=old_sort, blob_completed_callback=blob_completed_callback)
         descriptor.sd_hash = sd_blob.blob_hash
         return descriptor
 
@@ -228,7 +232,7 @@ class StreamDescriptor:
         return self.lower_bound_decrypted_length() + (AES.block_size // 8)
 
     @classmethod
-    async def recover(cls, blob_dir: str, sd_blob: 'BlobFile', stream_hash: str, stream_name: str,
+    async def recover(cls, blob_dir: str, sd_blob: 'AbstractBlob', stream_hash: str, stream_name: str,
                       suggested_file_name: str, key: str,
                       blobs: typing.List['BlobInfo']) -> typing.Optional['StreamDescriptor']:
         descriptor = cls(asyncio.get_event_loop(), blob_dir, stream_name, key, suggested_file_name,

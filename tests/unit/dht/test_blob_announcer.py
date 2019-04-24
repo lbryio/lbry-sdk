@@ -78,8 +78,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
         blob2 = binascii.hexlify(b'2' * 48).decode()
 
         async with self._test_network_context():
-            await self.storage.add_completed_blob(blob1, 1024)
-            await self.storage.add_completed_blob(blob2, 1024)
+            await self.storage.add_blobs((blob1, 1024), (blob2, 1024), finished=True)
             await self.storage.db.execute(
                 "update blob set next_announce_time=0, should_announce=1 where blob_hash in (?, ?)",
                 (blob1, blob2)

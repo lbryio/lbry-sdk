@@ -518,8 +518,12 @@ class StreamCommands(CommandTestCase):
             file.flush()
             tx1 = await self.publish('foo', bid='1.0', file_path=file.name)
 
+        self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
+
         # doesn't error on missing arguments when doing an update stream
         tx2 = await self.publish('foo', tags='updated')
+
+        self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
         self.assertEqual(
             tx1['outputs'][0]['claim_id'],
             tx2['outputs'][0]['claim_id']
@@ -530,12 +534,14 @@ class StreamCommands(CommandTestCase):
         with self.assertRaisesRegex(Exception, "There are 2 claims for 'foo'"):
             await self.daemon.jsonrpc_publish('foo')
 
+        self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
         # abandon duplicate stream
         await self.stream_abandon(tx3['outputs'][0]['claim_id'])
 
         # publish to a channel
         await self.channel_create('@abc')
         tx3 = await self.publish('foo', channel_name='@abc')
+        self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
         r = await self.resolve('lbry://@abc/foo')
         self.assertEqual(
             r['lbry://@abc/foo']['claim']['claim_id'],
@@ -544,6 +550,7 @@ class StreamCommands(CommandTestCase):
 
         # publishing again re-signs with the same channel
         tx4 = await self.publish('foo', languages='uk-UA')
+        self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
         r = await self.resolve('lbry://@abc/foo')
         claim = r['lbry://@abc/foo']['claim']
         self.assertEqual(claim['txid'], tx4['outputs'][0]['txid'])

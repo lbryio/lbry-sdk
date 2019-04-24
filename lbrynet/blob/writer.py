@@ -44,16 +44,15 @@ class HashBlobWriter:
         self._hashsum.update(data)
         self.len_so_far += len(data)
         if self.len_so_far > expected_length:
-            self.close_handle()
             self.finished.set_exception(InvalidDataError(
                 f'Length so far is greater than the expected length. {self.len_so_far} to {expected_length}'
             ))
+            self.close_handle()
             return
         self.buffer.write(data)
         if self.len_so_far == expected_length:
             blob_hash = self.calculate_blob_hash()
             if blob_hash != self.expected_blob_hash:
-                self.close_handle()
                 self.finished.set_exception(InvalidBlobHashError(
                     f"blob hash is {blob_hash} vs expected {self.expected_blob_hash}"
                 ))
@@ -62,6 +61,8 @@ class HashBlobWriter:
             self.close_handle()
 
     def close_handle(self):
+        if not self.finished.done():
+            self.finished.cancel()
         if self.buffer is not None:
             self.buffer.close()
             self.buffer = None

@@ -40,7 +40,7 @@ from lbrynet.extras.daemon.comment_client import jsonrpc_batch, jsonrpc_post, rp
 
 
 if typing.TYPE_CHECKING:
-    from lbrynet.blob.blob_manager import BlobFileManager
+    from lbrynet.blob.blob_manager import BlobManager
     from lbrynet.dht.node import Node
     from lbrynet.extras.daemon.Components import UPnPComponent
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
@@ -48,6 +48,7 @@ if typing.TYPE_CHECKING:
     from lbrynet.wallet.manager import LbryWalletManager
     from lbrynet.wallet.ledger import MainNetLedger
     from lbrynet.stream.stream_manager import StreamManager
+    from lbrynet.stream.managed_stream import ManagedStream
 
 log = logging.getLogger(__name__)
 
@@ -272,6 +273,9 @@ class Daemon(metaclass=JSONRPCServerType):
         app = web.Application()
         app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
         app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
+        app.router.add_get('/get/{claim_name}', self.handle_stream_get_request)
+        app.router.add_get('/get/{claim_name}/{claim_id}', self.handle_stream_get_request)
+        app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
         app.router.add_post('/', self.handle_old_jsonrpc)
         self.runner = web.AppRunner(app)
 
@@ -296,7 +300,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.component_manager.get_component(EXCHANGE_RATE_MANAGER_COMPONENT)
 
     @property
-    def blob_manager(self) -> typing.Optional['BlobFileManager']:
+    def blob_manager(self) -> typing.Optional['BlobManager']:
         return self.component_manager.get_component(BLOB_COMPONENT)
 
     @property
@@ -451,6 +455,72 @@ class Daemon(metaclass=JSONRPCServerType):
             text=jsonrpc_dumps_pretty(result, ledger=ledger, include_protobuf=include_protobuf),
             content_type='application/json'
         )
+
+    async def handle_stream_get_request(self, request: web.Request):
+        name_and_claim_id = request.path.split("/get/")[1]
+        if "/" not in name_and_claim_id:
+            uri = f"lbry://{name_and_claim_id}"
+        else:
+            name, claim_id = name_and_claim_id.split("/")
+            uri = f"lbry://{name}#{claim_id}"
+        stream = await self.jsonrpc_get(uri)
+        if isinstance(stream, dict):
+            raise web.HTTPServerError(text=stream['error'])
+        raise web.HTTPFound(f"/stream/{stream.sd_hash}")
+
+    @staticmethod
+    def prepare_range_response_headers(get_range: str, stream: 'ManagedStream') -> typing.Tuple[typing.Dict[str, str],
+                                                                                                int, int]:
+        if '=' in get_range:
+            get_range = get_range.split('=')[1]
+        start, end = get_range.split('-')
+        size = 0
+        for blob in stream.descriptor.blobs[:-1]:
+            size += blob.length - 1
+        start = int(start)
+        end = int(end) if end else size - 1
+        skip_blobs = start // 2097150
+        skip = skip_blobs * 2097151
+        start = skip
+        final_size = end - start + 1
+
+        headers = {
+            'Accept-Ranges': 'bytes',
+            'Content-Range': f'bytes {start}-{end}/{size}',
+            'Content-Length': str(final_size),
+            'Content-Type': stream.mime_type
+        }
+        return headers, size, skip_blobs
+
+    async def handle_stream_range_request(self, request: web.Request):
+        sd_hash = request.path.split("/stream/")[1]
+        if sd_hash not in self.stream_manager.streams:
+            return web.HTTPNotFound()
+        stream = self.stream_manager.streams[sd_hash]
+        if stream.status == 'stopped':
+            await self.stream_manager.start_stream(stream)
+        if stream.delayed_stop:
+            stream.delayed_stop.cancel()
+        headers, size, skip_blobs = self.prepare_range_response_headers(
+            request.headers.get('range', 'bytes=0-'), stream
+        )
+        response = web.StreamResponse(
+            status=206,
+            headers=headers
+        )
+        await response.prepare(request)
+        wrote = 0
+        async for blob_info, decrypted in stream.aiter_read_stream(skip_blobs):
+            log.info("streamed blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
+            if (blob_info.blob_num == len(stream.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
+                decrypted += b'\x00' * (size - len(decrypted) - wrote)
+                await response.write_eof(decrypted)
+                break
+            else:
+                await response.write(decrypted)
+            wrote += len(decrypted)
+        response.force_close()
+        return response
 
     async def _process_rpc_call(self, data):
         args = data.get('params', {})
@@ -827,24 +897,26 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               STREAM_MANAGER_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_get(self, uri, file_name=None, timeout=None):
+    async def jsonrpc_get(self, uri, file_name=None, timeout=None, save_file=None):
         """
         Download stream from a LBRY name.
 
         Usage:
-            get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>]
+            get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>] [--save_file]
 
 
         Options:
             --uri=<uri>              : (str) uri of the content to download
-            --file_name=<file_name>  : (str) specified name for the downloaded file
+            --file_name=<file_name>  : (str) specified name for the downloaded file, overrides the stream file name
             --timeout=<timeout>      : (int) download timeout in number of seconds
+            --save_file              : (bool) save the file to the downloads directory
 
         Returns: {File}
         """
+        save_file = save_file if save_file is not None else self.conf.save_files
         try:
             stream = await self.stream_manager.download_stream_from_uri(
-                uri, self.exchange_rate_manager, file_name, timeout
+                uri, self.exchange_rate_manager, timeout, file_name, save_file=save_file
             )
             if not stream:
                 raise DownloadSDTimeout(uri)
@@ -1534,6 +1606,45 @@ class Daemon(metaclass=JSONRPCServerType):
             result = True
         return result
 
+    @requires(STREAM_MANAGER_COMPONENT)
+    async def jsonrpc_file_save(self, file_name=None, download_directory=None, **kwargs):
+        """
+        Output a download to a file
+
+        Usage:
+            file_save [--file_name=<file_name>] [--download_directory=<download_directory>] [--sd_hash=<sd_hash>]
+                      [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
+                      [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
+                      [--channel_name=<channel_name>]
+
+        Options:
+            --file_name=<file_name>                      : (str) delete by file name in downloads folder
+            --download_directory=<download_directory>    : (str) delete by file name in downloads folder
+            --sd_hash=<sd_hash>                          : (str) delete by file sd hash
+            --stream_hash=<stream_hash>                  : (str) delete by file stream hash
+            --rowid=<rowid>                              : (int) delete by file row id
+            --claim_id=<claim_id>                        : (str) delete by file claim id
+            --txid=<txid>                                : (str) delete by file claim txid
+            --nout=<nout>                                : (int) delete by file claim nout
+            --claim_name=<claim_name>                    : (str) delete by file claim name
+            --channel_claim_id=<channel_claim_id>        : (str) delete by file channel claim id
+            --channel_name=<channel_name>                : (str) delete by file channel claim name
+
+        Returns: {File}
+        """
+
+        streams = self.stream_manager.get_filtered_streams(**kwargs)
+
+        if len(streams) > 1:
+            log.warning("There are %i matching files, use narrower filters to select one", len(streams))
+            return False
+        if not streams:
+            log.warning("There is no file to save")
+            return False
+        stream = streams[0]
+        await stream.save_file(file_name, download_directory)
+        return stream
+
     CLAIM_DOC = """
     List and search all types of claims.
     """
@@ -2210,9 +2321,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(claim.stream.source.sd_hash)
-            if stream_hash:
-                await self.storage.save_content_claim(stream_hash, new_txo.id)
+            await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
         else:
             await account.ledger.release_tx(tx)
@@ -2365,6 +2474,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 file_stream = await self.stream_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
+                stream_hash = file_stream.stream_hash
+            else:
+                stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
             if channel:
                 new_txo.sign(channel)
             await tx.sign([account])
@@ -2372,9 +2484,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
-            stream_hash = await self.storage.get_stream_hash_for_sd_hash(new_txo.claim.stream.source.sd_hash)
-            if stream_hash:
-                await self.storage.save_content_claim(stream_hash, new_txo.id)
+            await self.storage.save_content_claim(stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
         else:
             await account.ledger.release_tx(tx)
@@ -2934,9 +3044,9 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             blobs = list(self.blob_manager.completed_blob_hashes)
         if needed:
-            blobs = [blob_hash for blob_hash in blobs if not self.blob_manager.get_blob(blob_hash).get_is_verified()]
+            blobs = [blob_hash for blob_hash in blobs if not self.blob_manager.is_blob_verified(blob_hash)]
         if finished:
-            blobs = [blob_hash for blob_hash in blobs if self.blob_manager.get_blob(blob_hash).get_is_verified()]
+            blobs = [blob_hash for blob_hash in blobs if self.blob_manager.is_blob_verified(blob_hash)]
         page_size = page_size or len(blobs)
         page = page or 0
         start_index = page * page_size

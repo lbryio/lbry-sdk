@@ -1,21 +1,22 @@
 import asyncio
 import typing
 import logging
-from lbrynet.utils import drain_tasks
+from lbrynet.utils import drain_tasks, cache_concurrent
 from lbrynet.blob_exchange.client import request_blob
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.dht.node import Node
     from lbrynet.dht.peer import KademliaPeer
-    from lbrynet.blob.blob_manager import BlobFileManager
-    from lbrynet.blob.blob_file import BlobFile
+    from lbrynet.blob.blob_manager import BlobManager
+    from lbrynet.blob.blob_file import AbstractBlob
 
 log = logging.getLogger(__name__)
 
 
 class BlobDownloader:
     BAN_TIME = 10.0  # fixme: when connection manager gets implemented, move it out from here
-    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobFileManager',
+
+    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  peer_queue: asyncio.Queue):
         self.loop = loop
         self.config = config
@@ -27,7 +28,7 @@ class BlobDownloader:
         self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
         self.time_since_last_blob = loop.time()
 
-    def should_race_continue(self, blob: 'BlobFile'):
+    def should_race_continue(self, blob: 'AbstractBlob'):
         if len(self.active_connections) >= self.config.max_connections_per_download:
             return False
         # if a peer won 3 or more blob races and is active as a downloader, stop the race so bandwidth improves
@@ -36,9 +37,9 @@ class BlobDownloader:
         # for peer, task in self.active_connections.items():
         #   if self.scores.get(peer, 0) >= 0 and self.rounds_won.get(peer, 0) >= 3 and not task.done():
         #       return False
-        return not (blob.get_is_verified() or blob.file_exists)
+        return not (blob.get_is_verified() or not blob.is_writeable())
 
-    async def request_blob_from_peer(self, blob: 'BlobFile', peer: 'KademliaPeer'):
+    async def request_blob_from_peer(self, blob: 'AbstractBlob', peer: 'KademliaPeer'):
         if blob.get_is_verified():
             return
         self.scores[peer] = self.scores.get(peer, 0) - 1  # starts losing score, to account for cancelled ones
@@ -61,7 +62,7 @@ class BlobDownloader:
             rough_speed = (bytes_received / (self.loop.time() - start)) if bytes_received else 0
             self.scores[peer] = rough_speed
 
-    async def new_peer_or_finished(self, blob: 'BlobFile'):
+    async def new_peer_or_finished(self, blob: 'AbstractBlob'):
         async def get_and_re_add_peers():
             try:
                 new_peers = await asyncio.wait_for(self.peer_queue.get(), timeout=1.0)
@@ -89,7 +90,8 @@ class BlobDownloader:
         for banned_peer in forgiven:
             self.ignored.pop(banned_peer)
 
-    async def download_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'BlobFile':
+    @cache_concurrent
+    async def download_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'AbstractBlob':
         blob = self.blob_manager.get_blob(blob_hash, length)
         if blob.get_is_verified():
             return blob
@@ -98,7 +100,7 @@ class BlobDownloader:
                 batch: typing.List['KademliaPeer'] = []
                 while not self.peer_queue.empty():
                     batch.extend(self.peer_queue.get_nowait())
-                batch.sort(key=lambda peer: self.scores.get(peer, 0), reverse=True)
+                batch.sort(key=lambda p: self.scores.get(p, 0), reverse=True)
                 log.debug(
                     "running, %d peers, %d ignored, %d active",
                     len(batch), len(self.ignored), len(self.active_connections)
@@ -113,15 +115,26 @@ class BlobDownloader:
                 await self.new_peer_or_finished(blob)
                 self.cleanup_active()
                 if batch:
-                    self.peer_queue.put_nowait(set(batch).difference(self.ignored))
+                    to_re_add = list(set(batch).difference(self.ignored))
+                    if to_re_add:
+                        self.peer_queue.put_nowait(to_re_add)
+                    else:
+                        self.clearbanned()
                 else:
                     self.clearbanned()
             blob.close()
             log.debug("downloaded %s", blob_hash[:8])
             return blob
         finally:
+            re_add = set()
             while self.active_connections:
-                self.active_connections.popitem()[1].cancel()
+                peer, t = self.active_connections.popitem()
+                t.cancel()
+                re_add.add(peer)
+            re_add = re_add.difference(self.ignored)
+            if re_add:
+                self.peer_queue.put_nowait(list(re_add))
+            blob.close()
 
     def close(self):
         self.scores.clear()
@@ -130,8 +143,8 @@ class BlobDownloader:
             transport.close()
 
 
-async def download_blob(loop, config: 'Config', blob_manager: 'BlobFileManager', node: 'Node',
-                        blob_hash: str) -> 'BlobFile':
+async def download_blob(loop, config: 'Config', blob_manager: 'BlobManager', node: 'Node',
+                        blob_hash: str) -> 'AbstractBlob':
     search_queue = asyncio.Queue(loop=loop, maxsize=config.max_connections_per_download)
     search_queue.put_nowait(blob_hash)
     peer_queue, accumulate_task = node.accumulate_peers(search_queue)

@@ -1,12 +1,13 @@
 import asyncio
-from torba.testcase import AsyncioTestCase
+from unittest import mock, TestCase
 from lbrynet.dht.protocol.data_store import DictDataStore
 from lbrynet.dht.peer import PeerManager
 
 
-class DataStoreTests(AsyncioTestCase):
+class DataStoreTests(TestCase):
     def setUp(self):
-        self.loop = asyncio.get_event_loop()
+        self.loop = mock.Mock(spec=asyncio.BaseEventLoop)
+        self.loop.time = lambda: 0.0
         self.peer_manager = PeerManager(self.loop)
         self.data_store = DictDataStore(self.loop, self.peer_manager)
 
