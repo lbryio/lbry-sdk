@@ -83,7 +83,7 @@ class FileCommands(CommandTestCase):
         self.assertNotIn('error', resp)
         self.assertTrue(os.path.isfile(path))
         self.daemon.stream_manager.stop()
-        await asyncio.sleep(0, loop=self.loop)
+        await asyncio.sleep(0.01, loop=self.loop)  # FIXME: this sleep should not be needed
         self.assertFalse(os.path.isfile(path))
 
     async def test_incomplete_downloads_retry(self):
