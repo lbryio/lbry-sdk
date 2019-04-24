@@ -92,7 +92,7 @@ class StreamManager:
     async def start_stream(self, stream: ManagedStream):
         stream.update_status(ManagedStream.STATUS_RUNNING)
         await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_RUNNING)
-        await stream.setup(self.node, save_file=not self.config.streaming_only)
+        await stream.setup(self.node, save_file=self.config.save_files)
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
     async def recover_streams(self, file_infos: typing.List[typing.Dict]):
@@ -149,7 +149,7 @@ class StreamManager:
             #     log.info("Attempting to recover %i streams", len(to_recover))
             await self.recover_streams(to_recover)
 
-        if self.config.streaming_only:
+        if not self.config.save_files:
             to_set_as_streaming = []
             for file_info in to_start:
                 file_name = path_or_none(file_info['file_name'])
@@ -381,7 +381,7 @@ class StreamManager:
                 log.info("paid fee of %s for %s", fee_amount, uri)
 
             download_directory = download_directory or self.config.download_dir
-            if not file_name and (self.config.streaming_only or not save_file):
+            if not file_name and (not self.config.save_files or not save_file):
                 download_dir, file_name = None, None
             stream = ManagedStream(
                 self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash, download_directory,

@@ -913,7 +913,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {File}
         """
-        save_file = save_file if save_file is not None else not self.conf.streaming_only
+        save_file = save_file if save_file is not None else self.conf.save_files
         try:
             stream = await self.stream_manager.download_stream_from_uri(
                 uri, self.exchange_rate_manager, timeout, file_name, save_file=save_file

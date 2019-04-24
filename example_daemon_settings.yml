@@ -13,7 +13,7 @@ data_dir: /home/lbry/.lbrynet
 download_directory: /home/lbry/downloads
 
 save_blobs: true
-streaming_only: false
+save_files: false
 dht_node_port: 4444
 peer_port: 3333
 use_upnp: true

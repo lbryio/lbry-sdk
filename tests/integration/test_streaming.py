@@ -1,6 +1,5 @@
 import os
 import hashlib
-import asyncio
 import aiohttp
 import aiohttp.web
 
@@ -25,9 +24,9 @@ class RangeRequests(CommandTestCase):
         await self.daemon.stream_manager.start()
         return
 
-    async def _setup_stream(self, data: bytes, save_blobs: bool = True, streaming_only: bool = True):
+    async def _setup_stream(self, data: bytes, save_blobs: bool = True, save_files: bool = False):
         self.daemon.conf.save_blobs = save_blobs
-        self.daemon.conf.streaming_only = streaming_only
+        self.daemon.conf.save_files = save_files
         self.data = data
         await self.stream_create('foo', '0.01', data=self.data)
         if save_blobs:
@@ -192,9 +191,9 @@ class RangeRequests(CommandTestCase):
             len(files_in_download_dir), len(current_files_in_download_dir)
         )
 
-    async def test_stream_and_save_with_blobs(self):
+    async def test_stream_and_save_file_with_blobs(self):
         self.data = get_random_bytes((MAX_BLOB_SIZE - 1) * 4)
-        await self._setup_stream(self.data, streaming_only=False)
+        await self._setup_stream(self.data, save_files=True)
 
         await self._test_range_requests()
         streams = self.daemon.jsonrpc_file_list()
@@ -246,9 +245,9 @@ class RangeRequests(CommandTestCase):
         with open(stream.full_path, 'rb') as f:
             self.assertEqual(self.data, f.read())
 
-    async def test_stream_and_save_without_blobs(self):
+    async def test_stream_and_save_file_without_blobs(self):
         self.data = get_random_bytes((MAX_BLOB_SIZE - 1) * 4)
-        await self._setup_stream(self.data, streaming_only=False)
+        await self._setup_stream(self.data, save_files=True)
         self.daemon.conf.save_blobs = False
 
         await self._test_range_requests()

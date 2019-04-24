@@ -539,7 +539,7 @@ class Config(CLIConfig):
     cache_time = Integer("Time to cache resolved claims", 150)  # TODO: use this
 
     # daemon
-    streaming_only = Toggle("Only stream downloaded files, do not write files to the downloads directory", False)
+    save_files = Toggle("Save downloaded files when calling `get` by default", True)
     components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
     share_usage_data = Toggle(
         "Whether to share usage stats and diagnostic info with LBRY.", True,
