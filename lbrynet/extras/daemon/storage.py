@@ -54,10 +54,6 @@ class StoredStreamClaim:
     def nout(self) -> typing.Optional[int]:
         return None if not self.outpoint else int(self.outpoint.split(":")[1])
 
-    @property
-    def metadata(self) -> typing.Optional[typing.Dict]:
-        return None if not self.claim else self.claim.claim_dict['stream']['metadata']
-
     def as_dict(self) -> typing.Dict:
         return {
             "name": self.claim_name,
