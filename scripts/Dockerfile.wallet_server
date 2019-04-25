@@ -25,6 +25,9 @@ RUN python3.7 -m pip install --upgrade pip setuptools
 # get torba
 RUN python3.7 -m pip install --user git+https://github.com/lbryio/torba.git#egg=torba
 
+# get uvloop
+RUN python3.7 -m pip install --user uvloop
+
 # copy lbrynet
 RUN mkdir projects/
 COPY . projects/lbry
@@ -46,4 +49,5 @@ ENV DB_DIRECTORY=$db_dir
 ENV BANDWIDTH_LIMIT=1000000000000000000000000000000000000000000
 ENV MAX_SESSIONS=1000000000
 ENV MAX_SEND=1000000000000000000
+ENV EVENT_LOOP_POLICY=uvloop
 ENTRYPOINT ["/home/lbry/.local/bin/torba-server"]
