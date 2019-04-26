@@ -1675,25 +1675,27 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_search(
             self, name=None, claim_id=None, txid=None, nout=None,
-            channel_id=None, winning=False, page=1, page_size=10):
+            channel_id=None, channel_name=None, winning=False, page=1, page_size=10):
         """
         Search for stream and channel claims on the blockchain.
 
-        Use --channel_id=<channel_id> to list all stream claims in a channel.
+        Use --channel_id=<channel_id> or --channel_name=<channel_name> to list all stream claims in a channel.
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
-                         [--channel_id=<channel_id>] [--winning] [--page=<page>] [--page_size=<page_size>]
+                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--winning] [--page=<page>]
+                         [--page_size=<page_size>]
 
         Options:
-            --name=<name>             : (str) find claims with this name
-            --claim_id=<claim_id>     : (str) find a claim with this claim_id
-            --txid=<txid>             : (str) find a claim with this txid:nout
-            --nout=<nout>             : (str) find a claim with this txid:nout
-            --channel_id=<channel_id> : (str) limit search to specific channel claim id (returns stream claims)
-            --winning                 : (bool) limit to winning claims
-            --page=<page>             : (int) page to return during paginating
-            --page_size=<page_size>   : (int) number of items on page during pagination
+            --name=<name>                 : (str) find claims with this name
+            --claim_id=<claim_id>         : (str) find a claim with this claim_id
+            --txid=<txid>                 : (str) find a claim with this txid:nout
+            --nout=<nout>                 : (str) find a claim with this txid:nout
+            --channel_id=<channel_id>     : (str) limit search to specific channel claim id (returns stream claims)
+            --channel_name=<channel_name> : (str) limit search to specific channel name (returns stream claims)
+            --winning                     : (bool) limit to winning claims
+            --page=<page>                 : (int) page to return during paginating
+            --page_size=<page_size>       : (int) number of items on page during pagination
 
         Returns: {Paginated[Output]}
         """
@@ -1708,10 +1710,13 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = await self.wallet_manager.get_claim_by_outpoint(txid, int(nout))
             if claim and claim != 'claim not found':
                 claims = {'claims': [claim]}
-        elif channel_id is not None:
-            claim = await self.wallet_manager.get_claim_by_claim_id(channel_id)
-            if claim and claim != 'claim not found':
-                channel_url = f"{claim['name']}#{claim['claim_id']}"
+        elif channel_id is not None or channel_name is not None:
+            channel_url = f"{channel_name}{('#' + str(channel_id)) if channel_id else ''}" if channel_name else None
+            if channel_id and not channel_name:
+                claim = await self.wallet_manager.get_claim_by_claim_id(channel_id)
+                if claim and claim != 'claim not found':
+                    channel_url = f"{claim['name']}#{claim['claim_id']}"
+            if channel_url:
                 resolve = await self.resolve(channel_url, page=page, page_size=page_size)
                 resolve = resolve.get(channel_url, {})
                 claims = resolve.get('claims_in_channel', []) or []
