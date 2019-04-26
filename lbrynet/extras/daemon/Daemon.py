@@ -2349,7 +2349,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--tags=<tags>...] [--clear_tags]
                     [--languages=<languages>...] [--clear_languages]
                     [--locations=<locations>...] [--clear_locations]
-                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
+                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
+                    [--fee_address=<fee_address>] [--clear_fee]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
@@ -2368,6 +2369,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
                                                    value from --claim_address if not provided
+            --clear_fee                    : (bool) clear previously set fee
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
             --author=<author>              : (str) author of the publication. The usage for this field is not

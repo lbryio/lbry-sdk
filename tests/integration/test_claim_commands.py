@@ -346,7 +346,7 @@ class StreamCommands(CommandTestCase):
         fixed_values['locations'].insert(0, {'country': 'UA', 'city': 'Kyiv'})  # existing location
         self.assertEqual(stream, fixed_values)
 
-        # clearing and settings tags
+        # clearing and settings tags, languages and locations
         tx = await self.out(self.stream_update(
             claim_id, tags='single', clear_tags=True,
             languages='pt', clear_languages=True,
@@ -356,6 +356,12 @@ class StreamCommands(CommandTestCase):
         fixed_values['tags'] = ['single']
         fixed_values['languages'] = ['pt']
         fixed_values['locations'] = [{'country': 'BR'}]
+        self.assertEqual(txo['value'], fixed_values)
+
+        # clearing fee
+        tx = await self.out(self.stream_update(claim_id, clear_fee=True))
+        txo = tx['outputs'][0]
+        del fixed_values['fee']
         self.assertEqual(txo['value'], fixed_values)
 
         # modifying hash/size/name
