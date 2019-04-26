@@ -595,6 +595,13 @@ class StreamCommands(CommandTestCase):
 
         claims = await self.claim_search(channel_id=channel_id)
         self.assertEqual(len(claims), 3)
+        # same is expected using name or name#claim_id urls
+        claims = await self.claim_search(channel_name="@abc")
+        self.assertEqual(len(claims), 3)
+        claims = await self.claim_search(channel_name="@abc", channel_id=channel_id)
+        self.assertEqual(len(claims), 3)
+        claims = await self.claim_search(channel_name=f"@abc#{channel_id}")
+        self.assertEqual(len(claims), 3)
 
         await self.stream_abandon(claim_id=claims[0]['claim_id'])
         await self.stream_abandon(claim_id=claims[1]['claim_id'])
