@@ -1852,7 +1852,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_update(
             self, claim_id, bid=None, account_id=None, claim_address=None,
-            new_signing_key=False, preview=False, **kwargs):
+            new_signing_key=False, preview=False, replace=False, **kwargs):
         """
         Update an existing channel claim.
 
@@ -1865,7 +1865,8 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--locations=<locations>...] [--clear_locations]
                            [--email=<email>]
                            [--website_url=<website_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
-                           [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key] [--preview]
+                           [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key]
+                           [--preview] [--replace]
 
         Options:
             --claim_id=<claim_id>          : (str) claim_id of the channel to update
@@ -1923,6 +1924,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>      : (str) id of the account to store channel
             --claim_address=<claim_address>: (str) address where the channel is sent
             --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
+            --replace                      : (bool) instead of modifying specific values on
+                                                    the channel, this will clear all existing values
+                                                    and only save passed in values, useful for form
+                                                    submissions where all values are always set
             --preview                      : (bool) do not broadcast the transaction
 
         Returns: {Transaction}
@@ -1950,7 +1955,11 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim_address = old_txo.get_address(account.ledger)
 
-        claim = Claim.from_bytes(old_txo.claim.to_bytes())
+        if replace:
+            claim = Claim()
+            claim.channel.public_key_bytes = old_txo.claim.channel.public_key_bytes
+        else:
+            claim = Claim.from_bytes(old_txo.claim.to_bytes())
         claim.channel.update(**kwargs)
         tx = await Transaction.claim_update(
             old_txo, claim, amount, claim_address, [account], account
@@ -2092,13 +2101,11 @@ class Daemon(metaclass=JSONRPCServerType):
               conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_publish(self, name, **kwargs):
         """
-        Create or update a stream claim at a given name (use 'stream create/update' for more control).
+        Create or replace a stream claim at a given name (use 'stream create/update' for more control).
 
         Usage:
             publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
-                    [--tags=<tags>...] [--clear_tags]
-                    [--languages=<languages>...] [--clear_languages]
-                    [--locations=<locations>...] [--clear_locations]
+                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
@@ -2122,9 +2129,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                              who is not the publisher and is not represented by the channel. For
                                              example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
                                              by published to a channel such as '@classics', or to no channel at all
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --tags=<tags>                  : (list) add content tags
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
             --languages=<languages>        : (list) languages used by the channel,
                                                     using RFC 5646 format, eg:
                                                     for English `--languages=en`
@@ -2132,7 +2137,6 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     for Spanish (Mexican) `--languages=es-MX`
                                                     for Chinese (Simplified) `--languages=zh-Hans`
                                                     for Chinese (Traditional) `--languages=zh-Hant`
-            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
             --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
                                                     `country` code and a `state`, `city` and a postal
                                                     `code` along with a `latitude` and `longitude`.
@@ -2193,7 +2197,7 @@ class Daemon(metaclass=JSONRPCServerType):
             return await self.jsonrpc_stream_create(name, **kwargs)
         elif len(claims) == 1:
             assert claims[0].claim.is_stream, f"Claim at name '{name}' is not a stream claim."
-            return await self.jsonrpc_stream_update(claims[0].claim_id, **kwargs)
+            return await self.jsonrpc_stream_update(claims[0].claim_id, replace=True, **kwargs)
         raise Exception(
             f"There are {len(claims)} claims for '{name}', please use 'stream update' command "
             f"to update a specific stream claim."
@@ -2339,7 +2343,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self, claim_id, bid=None, file_path=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
             account_id=None, claim_address=None,
-            preview=False, **kwargs):
+            preview=False, replace=False, **kwargs):
         """
         Update an existing stream claim and if a new file is provided announce it to lbrynet.
 
@@ -2356,7 +2360,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
                     [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--clear_channel]
                     [--channel_account_id=<channel_account_id>...]
-                    [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
+                    [--account_id=<account_id>] [--claim_address=<claim_address>]
+                    [--preview] [--replace]
 
         Options:
             --claim_id=<claim_id>          : (str) id of the stream claim to update
@@ -2433,6 +2438,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>      : (str) account to use for funding the transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
+            --replace                      : (bool) instead of modifying specific values on
+                                                    the stream, this will clear all existing values
+                                                    and only save passed in values, useful for form
+                                                    submissions where all values are always set
             --preview                      : (bool) do not broadcast the transaction
 
         Returns: {Transaction}
@@ -2442,7 +2451,7 @@ class Daemon(metaclass=JSONRPCServerType):
         existing_claims = await account.get_claims(claim_id=claim_id)
         if len(existing_claims) != 1:
             raise Exception(
-                f"Can't find the claim '{claim_id}' in account '{account_id}'."
+                f"Can't find the claim '{claim_id}' in account '{account.id}'."
             )
         old_txo = existing_claims[0]
         if not old_txo.claim.is_stream:
@@ -2469,8 +2478,20 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'fee_address' in kwargs:
             self.valid_address_or_error(kwargs['fee_address'])
 
-        claim = Claim.from_bytes(old_txo.claim.to_bytes())
-        claim.stream.update(file_path=file_path, **kwargs)
+        if replace:
+            claim = Claim()
+            claim.stream.message.source.CopyFrom(
+                old_txo.claim.stream.message.source
+            )
+            stream_type = old_txo.claim.stream.stream_type
+            if stream_type:
+                old_stream_type = getattr(old_txo.claim.stream.message, stream_type)
+                new_stream_type = getattr(claim.stream.message, stream_type)
+                new_stream_type.CopyFrom(old_stream_type)
+            claim.stream.update(file_path=file_path, **kwargs)
+        else:
+            claim = Claim.from_bytes(old_txo.claim.to_bytes())
+            claim.stream.update(file_path=file_path, **kwargs)
         tx = await Transaction.claim_update(
             old_txo, claim, amount, claim_address, [account], account, channel
         )
