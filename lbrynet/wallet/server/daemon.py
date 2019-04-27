@@ -53,8 +53,3 @@ class LBCDaemon(Daemon):
     async def claimname(self, name, hexvalue, amount):
         '''Claim a name, used for functional tests only.'''
         return await self._send_single('claimname', (name, hexvalue, float(amount)))
-
-    @handles_errors
-    async def generate(self, number_of_blocks):
-        '''Generates regtest blocks, used for functional tests only.'''
-        return await self._send_single('generate', (int(number_of_blocks),))
