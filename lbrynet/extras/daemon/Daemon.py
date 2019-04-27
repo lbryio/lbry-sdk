@@ -310,7 +310,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @classmethod
     def get_api_definitions(cls):
         prefix = 'jsonrpc_'
-        not_grouped = ['block_show', 'report_bug', 'routing_table_get']
+        not_grouped = ['routing_table_get']
         api = {
             'groups': {
                 group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
@@ -2901,23 +2901,6 @@ class Daemon(metaclass=JSONRPCServerType):
             None
         """
         return self.get_account_or_default(account_id).release_all_outputs()
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_block_show(self, blockhash=None, height=None):
-        """
-        Get contents of a block
-
-        Usage:
-            block_show (<blockhash> | --blockhash=<blockhash>) | (<height> | --height=<height>)
-
-        Options:
-            --blockhash=<blockhash>  : (str) hash of the block to look up
-            --height=<height>        : (int) height of the block to look up
-
-        Returns:
-            (dict) Requested block
-        """
-        return self.wallet_manager.get_block(blockhash, height)
 
     BLOB_DOC = """
     Blob management.

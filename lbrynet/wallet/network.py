@@ -3,9 +3,6 @@ from torba.client.basenetwork import BaseNetwork
 
 class Network(BaseNetwork):
 
-    def get_block(self, block_hash):
-        return self.rpc('blockchain.block.get_block', block_hash)
-
     def get_server_height(self):
         return self.rpc('blockchain.block.get_server_height')
 

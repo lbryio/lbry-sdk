@@ -783,8 +783,7 @@ class StreamCommands(CommandTestCase):
         self.assertNotEqual(r1c, r2c)
 
         await self.generate(50)
-        head = await self.daemon.jsonrpc_block_show()
-        self.assertTrue(head['height'] > 250)
+        self.assertTrue(self.ledger.headers.height > 250)
 
         r3 = await self.daemon.jsonrpc_resolve(urls='lbry://ΣίσυφοςﬁÆ')
         r4 = await self.daemon.jsonrpc_resolve(urls='lbry://ΣΊΣΥΦΟσFIæ')
