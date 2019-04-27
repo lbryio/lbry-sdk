@@ -280,6 +280,11 @@ class StreamCommands(CommandTestCase):
                 'hovercraft5', '0.1', channel_name='@baz', channel_account_id=[account1_id]
             )
 
+    async def test_preview_works_with_signed_streams(self):
+        await self.out(self.channel_create('@spam', '1.0'))
+        signed = await self.out(self.stream_create('bar', '1.0', channel_name='@spam', preview=True, confirm=False))
+        self.assertTrue(signed['outputs'][0]['is_channel_signature_valid'])
+
     async def test_publish_updates_file_list(self):
         tx = await self.out(self.stream_create(title='created'))
         txo = tx['outputs'][0]

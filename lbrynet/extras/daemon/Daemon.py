@@ -199,7 +199,7 @@ class JSONRPCError:
         self.data = {} if data is None else data
         self.traceback = []
         if traceback is not None:
-            trace_lines = traceback.split("\n")
+            self.traceback = trace_lines = traceback.split("\n")
             for i, t in enumerate(trace_lines):
                 if "--- <exception caught here> ---" in t:
                     if len(trace_lines) > i + 1:
@@ -451,8 +451,17 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'wallet' in self.component_manager.get_components_status():
             # self.ledger only available if wallet component is not skipped
             ledger = self.ledger
+        try:
+            encoded_result = jsonrpc_dumps_pretty(
+                result, ledger=ledger, include_protobuf=include_protobuf)
+        except:
+            log.exception('Failed to encode JSON RPC result:')
+            encoded_result = jsonrpc_dumps_pretty(JSONRPCError(
+                'After successfully executing the command, failed to encode result for JSON RPC response.',
+                JSONRPCError.CODE_APPLICATION_ERROR, format_exc()
+            ), ledger=ledger)
         return web.Response(
-            text=jsonrpc_dumps_pretty(result, ledger=ledger, include_protobuf=include_protobuf),
+            text=encoded_result,
             content_type='application/json'
         )
 
@@ -2321,13 +2330,17 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         new_txo = tx.outputs[0]
 
+        file_stream = None
         if not preview:
             file_stream = await self.stream_manager.create_stream(file_path)
             claim.stream.source.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
-            if channel:
-                new_txo.sign(channel)
-            await tx.sign([account])
+
+        if channel:
+            new_txo.sign(channel)
+        await tx.sign([account])
+
+        if not preview:
             await account.ledger.broadcast(tx)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
@@ -2500,6 +2513,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         new_txo = tx.outputs[0]
 
+        stream_hash = None
         if not preview:
             old_stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
             if file_path is not None:
@@ -2512,9 +2526,12 @@ class Daemon(metaclass=JSONRPCServerType):
                 stream_hash = file_stream.stream_hash
             else:
                 stream_hash = old_stream_hash
-            if channel:
-                new_txo.sign(channel)
-            await tx.sign([account])
+
+        if channel:
+            new_txo.sign(channel)
+        await tx.sign([account])
+
+        if not preview:
             await account.ledger.broadcast(tx)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
