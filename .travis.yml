@@ -10,7 +10,7 @@ jobs:
       name: "pylint lbrynet"
       install:
         - pip install astroid pylint
-        - pip install git+https://github.com/lbryio/torba.git#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@sqltrie#egg=torba
         - pip install -e .
       script: pylint lbrynet
 
@@ -18,7 +18,7 @@ jobs:
       name: "Unit Tests"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@sqltrie#egg=torba
         - pip install -e .
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -vv tests.unit
@@ -38,7 +38,7 @@ jobs:
     - name: "Run Examples"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@sqltrie#egg=torba
         - pip install -e .
       script:
         - HOME=/tmp coverage run -p --source=lbrynet scripts/generate_json_api.py
