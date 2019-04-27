@@ -258,15 +258,26 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(channels[0]['name'], '@baz')
 
         # defaults to using all accounts to lookup channel
-        await self.stream_create('hovercraft1', channel_id=baz_id)
+        await self.stream_create('hovercraft1', '0.1', channel_id=baz_id)
         self.assertEqual((await self.claim_search('hovercraft1'))[0]['channel_name'], '@baz')
-        # uses only the specific accounts which contains the channel
-        await self.stream_create('hovercraft2', channel_id=baz_id, channel_account_id=[account2_id])
+        # lookup by channel_name in all accounts
+        await self.stream_create('hovercraft2', '0.1', channel_name='@baz')
         self.assertEqual((await self.claim_search('hovercraft2'))[0]['channel_name'], '@baz')
+        # uses only the specific accounts which contains the channel
+        await self.stream_create('hovercraft3', '0.1', channel_id=baz_id, channel_account_id=[account2_id])
+        self.assertEqual((await self.claim_search('hovercraft3'))[0]['channel_name'], '@baz')
+        # lookup by channel_name in specific account
+        await self.stream_create('hovercraft4', '0.1', channel_name='@baz', channel_account_id=[account2_id])
+        self.assertEqual((await self.claim_search('hovercraft4'))[0]['channel_name'], '@baz')
         # fails when specifying account which does not contain channel
         with self.assertRaisesRegex(ValueError, "Couldn't find channel with channel_id"):
             await self.stream_create(
-                'hovercraft3', channel_id=baz_id, channel_account_id=[account1_id]
+                'hovercraft5', '0.1', channel_id=baz_id, channel_account_id=[account1_id]
+            )
+        # fail with channel_name
+        with self.assertRaisesRegex(ValueError, "Couldn't find channel with channel_name '@baz'"):
+            await self.stream_create(
+                'hovercraft5', '0.1', channel_name='@baz', channel_account_id=[account1_id]
             )
 
     async def test_publish_updates_file_list(self):

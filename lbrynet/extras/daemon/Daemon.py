@@ -1751,18 +1751,21 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             channel_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
                            [--allow_duplicate_name=<allow_duplicate_name>]
-                           [--title=<title>] [--description=<description>] [--email=<email>] [--featured=<featured>...]
+                           [--title=<title>] [--description=<description>] [--email=<email>]
+                           [--website_url=<website_url>] [--featured=<featured>...]
                            [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                           [--website_url=<website_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
+                           [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
             --name=<name>                  : (str) name of the channel prefixed with '@'
+            --bid=<bid>                    : (decimal) amount to back the claim
         --allow_duplicate_name=<allow_duplicate_name> : (bool) create new channel even if one already exists with
                                               given name. default: false.
-            --bid=<bid>                    : (decimal) amount to back the claim
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
+            --email=<email>                : (str) email of channel owner
+            --website_url=<website_url>    : (str) website url
             --featured=<featured>          : (list) claim_ids of featured content in channel
             --tags=<tags>                  : (list) content tags
             --languages=<languages>        : (list) languages used by the channel,
@@ -1803,8 +1806,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
                                                           ... --locations="{'country': 'US', 'state': 'NH'}"
 
-            --email=<email>                : (str) email of channel owner
-            --website_url=<website_url>    : (str) website url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
             --cover_url=<cover_url>        : (str) url of cover image
             --account_id=<account_id>      : (str) id of the account to store channel
@@ -1858,13 +1859,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             channel_update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
-                           [--title=<title>] [--description=<description>]
+                           [--title=<title>] [--description=<description>] [--email=<email>]
+                           [--website_url=<website_url>]
                            [--featured=<featured>...] [--clear_featured]
                            [--tags=<tags>...] [--clear_tags]
                            [--languages=<languages>...] [--clear_languages]
                            [--locations=<locations>...] [--clear_locations]
-                           [--email=<email>]
-                           [--website_url=<website_url>] [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
+                           [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key]
                            [--preview] [--replace]
 
@@ -1873,11 +1874,12 @@ class Daemon(metaclass=JSONRPCServerType):
             --bid=<bid>                    : (decimal) amount to back the claim
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
-            --clear_featured               : (bool) clear existing featured content (prior to adding new ones)
+            --email=<email>                : (str) email of channel owner
+            --website_url=<website_url>    : (str) website url
             --featured=<featured>          : (list) claim_ids of featured content in channel
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
+            --clear_featured               : (bool) clear existing featured content (prior to adding new ones)
             --tags=<tags>                  : (list) add content tags
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
+            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --languages=<languages>        : (list) languages used by the channel,
                                                     using RFC 5646 format, eg:
                                                     for English `--languages=en`
@@ -1885,7 +1887,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     for Spanish (Mexican) `--languages=es-MX`
                                                     for Chinese (Simplified) `--languages=zh-Hans`
                                                     for Chinese (Traditional) `--languages=zh-Hant`
-            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
+            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
             --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
                                                     `country` code and a `state`, `city` and a postal
                                                     `code` along with a `latitude` and `longitude`.
@@ -1917,18 +1919,17 @@ class Daemon(metaclass=JSONRPCServerType):
 
                                                           ... --locations="{'country': 'US', 'state': 'NH'}"
 
-            --email=<email>                : (str) email of channel owner
-            --website_url=<website_url>    : (str) website url
+            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
             --cover_url=<cover_url>        : (str) url of cover image
             --account_id=<account_id>      : (str) id of the account to store channel
             --claim_address=<claim_address>: (str) address where the channel is sent
             --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
+            --preview                      : (bool) do not broadcast the transaction
             --replace                      : (bool) instead of modifying specific values on
                                                     the channel, this will clear all existing values
                                                     and only save passed in values, useful for form
                                                     submissions where all values are always set
-            --preview                      : (bool) do not broadcast the transaction
 
         Returns: {Transaction}
         """
@@ -2105,12 +2106,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
-                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
-                    [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
+                    [--title=<title>] [--description=<description>] [--author=<author>]
+                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id>] [--channel_name=<channel_name>]
+                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
@@ -2215,21 +2216,21 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
                     [--allow_duplicate_name=<allow_duplicate_name>]
-                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
+                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id>] [--channel_name=<channel_name>]
+                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
 
         Options:
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
-        --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
-                                              given name. default: false.
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+        --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
+                                              given name. default: false.
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -2288,6 +2289,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
+            --channel_name=<channel_name>  : (str) name of the publisher channel
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for funding the transaction
@@ -2350,15 +2352,15 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             stream_update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>] [--file_path=<file_path>]
                     [--file_name=<file_name>] [--file_size=<file_size>] [--file_hash=<file_hash>]
+                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
+                    [--fee_address=<fee_address>] [--clear_fee]
+                    [--title=<title>] [--description=<description>] [--author=<author>]
                     [--tags=<tags>...] [--clear_tags]
                     [--languages=<languages>...] [--clear_languages]
                     [--locations=<locations>...] [--clear_locations]
-                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
-                    [--fee_address=<fee_address>] [--clear_fee]
-                    [--title=<title>] [--description=<description>] [--author=<author>] [--language=<language>]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--clear_channel]
+                    [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>]
                     [--preview] [--replace]
@@ -2382,9 +2384,8 @@ class Daemon(metaclass=JSONRPCServerType):
                                              who is not the publisher and is not represented by the channel. For
                                              example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
                                              by published to a channel such as '@classics', or to no channel at all
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --tags=<tags>                  : (list) add content tags
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
+            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
             --languages=<languages>        : (list) languages used by the channel,
                                                     using RFC 5646 format, eg:
                                                     for English `--languages=en`
@@ -2392,7 +2393,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     for Spanish (Mexican) `--languages=es-MX`
                                                     for Chinese (Simplified) `--languages=zh-Hans`
                                                     for Chinese (Traditional) `--languages=zh-Hant`
-            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
+            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
             --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
                                                     `country` code and a `state`, `city` and a postal
                                                     `code` along with a `latitude` and `longitude`.
@@ -2424,6 +2425,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
                                                           ... --locations="{'country': 'US', 'state': 'NH'}"
 
+            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
             --license=<license>            : (str) publication license
             --license_url=<license_url>    : (str) publication license url
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
@@ -2432,17 +2434,18 @@ class Daemon(metaclass=JSONRPCServerType):
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
+            --channel_name=<channel_name>  : (str) name of the publisher channel
             --clear_channel                : (bool) remove channel signature
           --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for funding the transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
+            --preview                      : (bool) do not broadcast the transaction
             --replace                      : (bool) instead of modifying specific values on
                                                     the stream, this will clear all existing values
                                                     and only save passed in values, useful for form
                                                     submissions where all values are always set
-            --preview                      : (bool) do not broadcast the transaction
 
         Returns: {Transaction}
         """
@@ -3454,7 +3457,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def get_channel_or_none(self, account_ids: List[str], channel_id: str = None, channel_name: str = None,
                                   for_signing: bool = False) -> Output:
-        if channel_id is not None:
+        if channel_id is not None or channel_name is not None:
             return await self.get_channel_or_error(account_ids, channel_id, channel_name, for_signing)
 
     async def get_channel_or_error(self, account_ids: List[str], channel_id: str = None, channel_name: str = None,
