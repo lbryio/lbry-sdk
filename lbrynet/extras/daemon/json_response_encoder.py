@@ -144,7 +144,8 @@ class JSONResponseEncoder(JSONEncoder):
             'height': tx_height,
             'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger),
-            'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height
+            'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
+            'timestamp': self.ledger.headers[tx_height]['timestamp'] if tx_height > 0 else None
         }
         if txo.is_change is not None:
             output['is_change'] = txo.is_change
