@@ -2498,13 +2498,17 @@ class Daemon(metaclass=JSONRPCServerType):
         new_txo = tx.outputs[0]
 
         if not preview:
+            old_stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
             if file_path is not None:
+                if old_stream_hash:
+                    stream_to_delete = self.stream_manager.get_stream_by_stream_hash(old_stream_hash)
+                    await self.stream_manager.delete_stream(stream_to_delete, delete_file=False)
                 file_stream = await self.stream_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
                 stream_hash = file_stream.stream_hash
             else:
-                stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
+                stream_hash = old_stream_hash
             if channel:
                 new_txo.sign(channel)
             await tx.sign([account])

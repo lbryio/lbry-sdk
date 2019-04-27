@@ -269,6 +269,31 @@ class StreamCommands(CommandTestCase):
                 'hovercraft3', channel_id=baz_id, channel_account_id=[account1_id]
             )
 
+    async def test_publish_updates_file_list(self):
+        tx = await self.out(self.stream_create(title='created'))
+        txo = tx['outputs'][0]
+        claim_id, expected = txo['claim_id'], txo['value']
+        files = self.sout(self.daemon.jsonrpc_file_list())
+        self.assertEqual(1, len(files))
+        self.assertEqual(tx['txid'], files[0]['txid'])
+        self.assertEqual(expected, files[0]['metadata'])
+
+        # update with metadata-only changes
+        tx = await self.out(self.stream_update(claim_id, title='update 1'))
+        files = self.sout(self.daemon.jsonrpc_file_list())
+        expected['title'] = 'update 1'
+        self.assertEqual(1, len(files))
+        self.assertEqual(tx['txid'], files[0]['txid'])
+        self.assertEqual(expected, files[0]['metadata'])
+
+        # update with new data
+        tx = await self.out(self.stream_update(claim_id, title='update 2', data=b'updated data'))
+        expected = tx['outputs'][0]['value']
+        files = self.sout(self.daemon.jsonrpc_file_list())
+        self.assertEqual(1, len(files))
+        self.assertEqual(tx['txid'], files[0]['txid'])
+        self.assertEqual(expected, files[0]['metadata'])
+
     async def test_setting_stream_fields(self):
         values = {
             'title': "Cool Content",
