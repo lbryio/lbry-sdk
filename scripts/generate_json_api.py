@@ -82,10 +82,6 @@ class Examples(CommandTestCase):
             'Get settings',
             'settings', 'get'
         )
-        await r(
-            'Show contents of the first block.',
-            'block_show', '--height=1'
-        )
 
         # accounts
 
