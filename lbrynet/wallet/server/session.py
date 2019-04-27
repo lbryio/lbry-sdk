@@ -41,7 +41,6 @@ class LBRYElectrumX(ElectrumX):
             'blockchain.claimtrie.getvaluesforuris': self.claimtrie_getvalueforuris,
             'blockchain.claimtrie.getclaimssignedbyid': self.claimtrie_getclaimssignedbyid,
             'blockchain.block.get_server_height': self.get_server_height,
-            'blockchain.block.get_block': self.get_block,
         }
         # fixme: methods we use but shouldnt be using anymore. To be removed when torba goes out
         handlers.update({
@@ -103,9 +102,6 @@ class LBRYElectrumX(ElectrumX):
         if verbose not in (True, False):
             verbose = False
         return await self.daemon_request('getrawtransaction', tx_hash, verbose)
-
-    async def get_block(self, block_hash):
-        return await self.daemon.deserialised_block(block_hash)
 
     async def get_server_height(self):
         return self.bp.height
