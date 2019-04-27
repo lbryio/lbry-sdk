@@ -445,6 +445,6 @@ class LBRYDB(DB):
         super().close()
         self.sql.close()
 
-    async def _open_dbs(self, *args):
-        await super()._open_dbs(*args)
+    async def _open_dbs(self, *args, **kwargs):
+        await super()._open_dbs(*args, **kwargs)
         self.sql.open()
