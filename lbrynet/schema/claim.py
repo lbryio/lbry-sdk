@@ -233,10 +233,11 @@ class Stream(BaseClaim):
         if stream_type in ('image', 'video', 'audio'):
             media = getattr(self, stream_type)
             media_args = {'file_metadata': None}
-            try:
-                media_args['file_metadata'] = binary_file_metadata(binary_file_parser(file_path))
-            except:
-                log.exception('Could not read file metadata.')
+            if file_path is not None:
+                try:
+                    media_args['file_metadata'] = binary_file_metadata(binary_file_parser(file_path))
+                except:
+                    log.exception('Could not read file metadata.')
             if isinstance(media, Playable):
                 media_args['duration'] = duration
             if isinstance(media, Dimmensional):
@@ -289,6 +290,10 @@ class Stream(BaseClaim):
     @property
     def source(self) -> Source:
         return Source(self.message.source)
+
+    @property
+    def stream_type(self) -> str:
+        return self.message.WhichOneof('type')
 
     @property
     def image(self) -> Image:

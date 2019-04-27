@@ -125,6 +125,13 @@ class ChannelCommands(CommandTestCase):
         channel = tx['outputs'][0]['value']
         self.assertNotEqual(channel['public_key'], fixed_values['public_key'])
 
+        # replace mode (clears everything except public_key)
+        tx = await self.out(self.channel_update(claim_id, replace=True, title='foo', email='new@email.com'))
+        self.assertEqual(
+            tx['outputs'][0]['value'],
+            {'public_key': channel['public_key'], 'title': 'foo', 'email': 'new@email.com'}
+        )
+
         # send channel to someone else
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
@@ -469,6 +476,42 @@ class StreamCommands(CommandTestCase):
                 }
             }
         )
+
+    async def test_replace_mode_preserves_source_and_type(self):
+        expected = {
+            'tags': ['blah'],
+            'languages': ['uk'],
+            'locations': [{'country': 'UA', 'city': 'Kyiv'}],
+            'source': {
+                'size': '2299653',
+                'name': 'ForBiggerEscapes.mp4',
+                'media_type': 'video/mp4',
+                'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
+            },
+            'stream_type': 'video',
+            'video': {
+                'width': 1280,
+                'height': 720,
+                'duration': 15
+            }
+        }
+        tx = await self.out(self.daemon.jsonrpc_stream_create(
+            'chrome', '1.0', file_path=self.video_file_name,
+            tags='blah', languages='uk', locations='UA::Kyiv'
+        ))
+        await self.on_transaction_dict(tx)
+        txo = tx['outputs'][0]
+        expected['source']['sd_hash'] = txo['value']['source']['sd_hash']
+        self.assertEqual(txo['value'], expected)
+        tx = await self.out(self.daemon.jsonrpc_stream_update(
+            txo['claim_id'], title='new title', replace=True
+        ))
+        txo = tx['outputs'][0]
+        expected['title'] = 'new title'
+        del expected['tags']
+        del expected['languages']
+        del expected['locations']
+        self.assertEqual(txo['value'], expected)
 
     async def test_create_update_and_abandon_stream(self):
         await self.assertBalance(self.account, '10.0')
