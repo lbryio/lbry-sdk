@@ -75,7 +75,7 @@ class StreamManager:
 
     async def _update_content_claim(self, stream: ManagedStream):
         claim_info = await self.storage.get_content_claim(stream.stream_hash)
-        stream.set_claim(claim_info, claim_info['value'])
+        self.streams.setdefault(stream.sd_hash, stream).set_claim(claim_info, claim_info['value'])
 
     async def stop_stream(self, stream: ManagedStream):
         stream.stop_download()
