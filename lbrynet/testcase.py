@@ -154,6 +154,9 @@ class CommandTestCase(IntegrationTestCase):
     def blockchain_claim_name(self, name: str, value: str, amount: str):
         return self.blockchain._cli_cmnd('claimname', name, value, amount)
 
+    def blockchain_update_name(self, txid: str, value: str, amount: str):
+        return self.blockchain._cli_cmnd('updateclaim', txid, value, amount)
+
     async def out(self, awaitable):
         """ Serializes lbrynet API results to JSON then loads and returns it as dictionary. """
         return json.loads(jsonrpc_dumps_pretty(await awaitable, ledger=self.ledger))['result']

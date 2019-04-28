@@ -1,7 +1,9 @@
 import asyncio
 import logging
 import os
+from binascii import unhexlify, hexlify
 
+from lbrynet.schema import Claim
 from lbrynet.testcase import CommandTestCase
 from lbrynet.blob_exchange.downloader import BlobDownloader
 
@@ -25,6 +27,24 @@ class FileCommands(CommandTestCase):
 
         await self.daemon.jsonrpc_get('lbry://foo')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
+
+    async def test_file_list_updated_metadata_on_resolve(self):
+        await self.stream_create('foo', '0.01')
+        claim = await self.daemon.resolve('lbry://foo')
+        claim = claim['lbry://foo']['claim']['protobuf'].decode()
+        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        txid = await self.blockchain_claim_name('bar', claim, '0.01')
+        await self.blockchain.generate(1)
+        await asyncio.sleep(1)
+        await self.daemon.jsonrpc_get('lbry://bar')
+        claim = Claim.from_bytes(unhexlify(claim))
+        claim.stream.description = "fix typos, fix the world"
+        await self.blockchain_update_name(txid, hexlify(claim.to_bytes()).decode(), '0.01')
+        await self.blockchain.generate(1)
+        await asyncio.sleep(1)
+        await self.daemon.jsonrpc_resolve('lbry://bar')
+        file_list = self.daemon.jsonrpc_file_list()
+        self.assertEqual(file_list[0].stream_claim_info.claim.stream.description, claim.stream.description)
 
     async def test_download_different_timeouts(self):
         tx = await self.stream_create('foo', '0.01')
