@@ -351,6 +351,7 @@ class StreamManager:
             # resume or update an existing stream, if the stream changed download it and delete the old one after
             updated_stream, to_replace = await self._check_update_or_replace(outpoint, resolved['claim_id'], claim)
             if updated_stream:
+                log.info("already have stream for %s", uri)
                 return updated_stream
 
             content_fee = None
