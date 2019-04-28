@@ -164,12 +164,10 @@ class ManagedStream:
         return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
 
     def as_dict(self) -> typing.Dict:
-        if self.written_bytes:
-            written_bytes = self.written_bytes
-        elif self.output_file_exists:
+        if not self.written_bytes and self.output_file_exists:
             written_bytes = os.stat(self.full_path).st_size
         else:
-            written_bytes = None
+            written_bytes = self.written_bytes
         return {
             'completed': self.finished,
             'file_name': self.file_name,
