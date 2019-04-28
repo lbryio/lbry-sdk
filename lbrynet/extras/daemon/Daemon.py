@@ -3524,6 +3524,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims_for_resolve([
                 value for value in results.values() if 'error' not in value
             ])
+            await asyncio.create_task(self.stream_manager.check_from_resolve_response(results))
         return results
 
     async def get_claims_for_name(self, name: str):

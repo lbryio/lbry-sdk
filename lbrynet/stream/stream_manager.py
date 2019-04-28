@@ -5,6 +5,9 @@ import binascii
 import logging
 import random
 from decimal import Decimal
+
+from google.protobuf.message import DecodeError
+
 from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError
 from lbrynet.error import DownloadSDTimeout, DownloadDataTimeout, ResolveTimeout
 from lbrynet.utils import cache_concurrent
@@ -285,6 +288,21 @@ class StreamManager:
             if reverse:
                 streams.reverse()
         return streams
+
+    async def check_from_resolve_response(self, resolutions: dict):
+        futs = []
+        for uri, resolution in resolutions.items():
+            resolved = resolution if 'value' in resolution else resolution.get('claim')
+            if not resolved:
+                continue
+            outpoint = f"{resolved['txid']}:{resolved['nout']}"
+            try:
+                claim = Claim.from_bytes(binascii.unhexlify(resolved['protobuf']))
+            except DecodeError:
+                log.warning("Got an update for %s, but it doesn't decode. Skipping it.")
+                continue
+            futs.append(self._check_update_or_replace(outpoint, resolved['claim_id'], claim))
+        return await asyncio.gather(*futs)
 
     async def _check_update_or_replace(self, outpoint: str, claim_id: str, claim: Claim) -> typing.Tuple[
                                                        typing.Optional[ManagedStream], typing.Optional[ManagedStream]]:
