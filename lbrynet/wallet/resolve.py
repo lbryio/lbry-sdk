@@ -152,6 +152,8 @@ class Resolver:
         if not claim_result or 'value' not in claim_result:
             return claim_result
         claim_result = _decode_claim_result(claim_result)
+        if claim_result.get('height'):
+            claim_result['timestamp'] = self.ledger.headers[claim_result['height']]['timestamp']
 
         if claim_result['value']:
             claim_result['has_signature'] = False
@@ -300,6 +302,7 @@ def _verify_proof(name, claim_trie_root, result, ledger):
             'claim_sequence': result['claim_sequence'],
             'address': output.get_address(ledger),
             'valid_at_height': result['valid_at_height'],
+            'timestamp': ledger.headers[result['height']]['timestamp'],
             'supports': result['supports']
         }
         return r
