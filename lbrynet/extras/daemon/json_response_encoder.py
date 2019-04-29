@@ -206,9 +206,16 @@ class JSONResponseEncoder(JSONEncoder):
         result['is_default'] = self.ledger.accounts[0] == account
         return result
 
-    @staticmethod
-    def encode_file(managed_stream):
-        return managed_stream.as_dict()
+    def encode_file(self, managed_stream):
+        file = managed_stream.as_dict()
+        tx_height = managed_stream.stream_claim_info.height
+        best_height = self.ledger.headers.height
+        file.update({
+            'height': tx_height,
+            'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
+            'timestamp': self.ledger.headers[tx_height]['timestamp'] if tx_height > 0 else None
+        })
+        return file
 
     @staticmethod
     def encode_claim(claim):
