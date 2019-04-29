@@ -45,7 +45,7 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
         "claim_id": "c49566d631226492317d06ad7fdbe1ed32925124",
         "claim_sequence": 1,
         "decoded_claim": True,
-        "depth": 1057,
+        "confirmations": 1057,
         "effective_amount": "0.1",
         "has_signature": False,
         "height": 514081,

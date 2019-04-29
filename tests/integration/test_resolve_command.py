@@ -73,9 +73,9 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(claim['certificate']['name'], '@abc')
         self.assertEqual(claim['claims_in_channel'], 0)
 
-        # resolve has correct depth
+        # resolve has correct confirmations
         tx_details = await self.blockchain.get_raw_transaction(claim['claim']['txid'])
-        self.assertEqual(claim['claim']['depth'], json.loads(tx_details)['confirmations'])
+        self.assertEqual(claim['claim']['confirmations'], json.loads(tx_details)['confirmations'])
 
         # resolve handles invalid data
         txid = await self.blockchain_claim_name(

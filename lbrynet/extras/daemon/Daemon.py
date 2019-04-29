@@ -842,7 +842,8 @@ class Daemon(metaclass=JSONRPCServerType):
                         'claim_sequence': (int) claim sequence number (or -1 if unknown),
                         'decoded_claim': (bool) whether or not the claim value was decoded,
                         'height': (int) claim height,
-                        'depth': (int) claim depth,
+                        'confirmations': (int) claim depth,
+                        'timestamp': (int) timestamp of the block that included this claim tx,
                         'has_signature': (bool) included if decoded_claim
                         'name': (str) claim name,
                         'permanent_url': (str) permanent url of the certificate claim,
