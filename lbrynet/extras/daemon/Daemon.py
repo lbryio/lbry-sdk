@@ -35,7 +35,7 @@ from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.account import Account as LBCAccount
 from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbrynet.schema.claim import Claim
-from lbrynet.schema.uri import parse_lbry_uri, URIParseError
+from lbrynet.schema.url import URL
 from lbrynet.extras.daemon.comment_client import jsonrpc_batch, jsonrpc_post, rpc_body
 
 
@@ -868,15 +868,16 @@ class Daemon(metaclass=JSONRPCServerType):
         valid_urls = set()
         for u in urls:
             try:
-                parse_lbry_uri(u)
+                URL.parse(u)
                 valid_urls.add(u)
-            except URIParseError:
-                results[u] = {"error": "%s is not a valid url" % u}
+            except ValueError:
+                results[u] = {"error": f"{u} is not a valid url"}
 
-        resolved = await self.resolve(*tuple(valid_urls))
+        resolved = await self.resolve(list(valid_urls))
 
         for resolved_uri in resolved:
-            results[resolved_uri] = resolved[resolved_uri]
+            results[resolved_uri] = resolved[resolved_uri] if resolved[resolved_uri] is not None else \
+                                    {"error": f"{resolved_uri} did not resolve to a claim"}
 
         return results
 
@@ -1671,7 +1672,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
-                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_winning] [--page=<page>]
+                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling] [--page=<page>]
                          [--page_size=<page_size>]
 
         Options:
@@ -1681,7 +1682,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --nout=<nout>                 : (str) find a claim with this txid:nout
             --channel_id=<channel_id>     : (str) limit search to specific channel claim id (returns stream claims)
             --channel_name=<channel_name> : (str) limit search to specific channel name (returns stream claims)
-            --is_winning                     : (bool) limit to winning claims
+            --is_controlling              : (bool) limit to controlling claims for their respective name
             --page=<page>                 : (int) page to return during paginating
             --page_size=<page_size>       : (int) number of items on page during pagination
 
@@ -1689,10 +1690,10 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
         kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})
-        page = await self.ledger.claim_search(**kwargs)
+        txos, offset, total = await self.ledger.claim_search(**kwargs)
         return {
-            "items": page.txos, "page": page_num, "page_size": page_size,
-            "total_pages": int((page.total + (page_size-1)) / page_size)
+            "items": txos, "page": page_num, "page_size": page_size,
+            "total_pages": int((total + (page_size-1)) / page_size)
         }
 
     CHANNEL_DOC = """
@@ -3371,16 +3372,16 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise Exception(
                     "Stream name cannot be blank."
                 )
-            parsed = parse_lbry_uri(name)
-            if parsed.is_channel:
+            parsed = URL.parse(name)
+            if parsed.has_channel:
                 raise Exception(
                     "Stream names cannot start with '@' symbol. This is reserved for channels claims."
                 )
-            if parsed.name != name:
+            if not parsed.has_stream or parsed.stream.name != name:
                 raise Exception(
                     "Stream name has invalid characters."
                 )
-        except (TypeError, URIParseError):
+        except (TypeError, ValueError):
             raise Exception("Invalid stream name.")
 
     @staticmethod
@@ -3390,12 +3391,12 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise Exception(
                     "Channel name cannot be blank."
                 )
-            parsed = parse_lbry_uri(name)
-            if not parsed.is_channel:
+            parsed = URL.parse(name)
+            if not parsed.has_channel:
                 raise Exception("Channel names must start with '@' symbol.")
-            if parsed.name != name:
+            if parsed.channel.name != name:
                 raise Exception("Channel name has invalid character")
-        except (TypeError, URIParseError):
+        except (TypeError, ValueError):
             raise Exception("Invalid channel name.")
 
     def get_fee_address(self, kwargs: dict, claim_address: str) -> str:
@@ -3471,22 +3472,13 @@ class Daemon(metaclass=JSONRPCServerType):
         except ValueError as e:
             raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
 
-    async def resolve(self, *uris, **kwargs):
-        page = kwargs.get('page', 0)
-        page_size = kwargs.get('page_size', 10)
-        ledger: MainNetLedger = self.default_account.ledger
-        results = await ledger.resolve(page, page_size, *uris)
-        if 'error' not in results:
-            await self.storage.save_claims_for_resolve([
-                value for value in results.values() if 'error' not in value
-            ])
+    async def resolve(self, urls):
+        results = await self.ledger.resolve(urls)
+        #if 'error' not in results:
+        #    await self.storage.save_claims_for_resolve([
+        #        value for value in results.values() if isinstance(value, Output)
+        #    ])
         return results
-
-    async def get_claims_for_name(self, name: str):
-        response = await self.ledger.network.get_claims_for_name(name)
-        resolutions = await self.resolve(*(f"{claim['name']}#{claim['claim_id']}" for claim in response['claims']))
-        response['claims'] = [value.get('claim', value.get('certificate')) for value in resolutions.values()]
-        return response
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
         return {

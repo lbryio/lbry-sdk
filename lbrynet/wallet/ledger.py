@@ -1,10 +1,10 @@
 import asyncio
 import logging
 from binascii import unhexlify
-from typing import Optional
+from typing import Tuple, List, Dict
 
 from torba.client.baseledger import BaseLedger
-from lbrynet.schema.page import Page
+from lbrynet.schema.result import Outputs
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.wallet.resolve import Resolver
 from lbrynet.wallet.account import Account
@@ -51,21 +51,24 @@ class MainNetLedger(BaseLedger):
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
         self.resolver = Resolver(self)
 
-    def resolve(self, page, page_size, *uris):
-        return self.resolver.resolve(page, page_size, *uris)
+    async def _inflate_outputs(self, query):
+        outputs = Outputs.from_base64(await query)
+        txs = []
+        if len(outputs.txs) > 0:
+            txs = await asyncio.gather(*(self.cache_transaction(*tx) for tx in outputs.txs))
+        return outputs.inflate(txs), outputs.offset, outputs.total
 
-    async def claim_search(self, **kwargs) -> Page:
-        return Page.from_base64(await self.network.claim_search(**kwargs))
+    async def resolve(self, urls):
+        txos = (await self._inflate_outputs(self.network.resolve(urls)))[0]
+        assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
+        return {url: txo for url, txo in zip(urls, txos)}
 
-    async def get_claim_by_claim_id(self, claim_id) -> Optional[Output]:
-        page = await self.claim_search(claim_id=claim_id)
-        if page.txos:
-            return page.txos[0]
+    async def claim_search(self, **kwargs) -> Tuple[List, int, int]:
+        return await self._inflate_outputs(self.network.claim_search(**kwargs))
 
-    async def get_claim_by_outpoint(self, txid, nout) -> Optional[Output]:
-        page = await self.claim_search(txid=txid, nout=nout)
-        if page.txos:
-            return page.txos[0]
+    async def get_claim_by_claim_id(self, claim_id) -> Dict[str, Output]:
+        for claim in (await self.claim_search(claim_id=claim_id))[0]:
+            return claim
 
     async def start(self):
         await super().start()

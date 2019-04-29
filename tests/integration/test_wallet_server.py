@@ -7,7 +7,7 @@ class TestClaimtrie(CommandTestCase):
         return tx['outputs'][0]['claim_id']
 
     async def assertWinningClaim(self, name, tx):
-        other = (await self.out(self.daemon.jsonrpc_claim_search(name=name, is_winning=True)))['items'][0]
+        other = (await self.out(self.daemon.jsonrpc_claim_search(name=name, is_controlling=True)))['items'][0]
         self.assertEqual(self.get_claim_id(tx), other['claim_id'])
 
     async def test_designed_edge_cases(self):

@@ -8,6 +8,7 @@ from torba.server.util import class_logger
 from torba.client.basedatabase import query, constraints_to_sql
 from google.protobuf.message import DecodeError
 
+from lbrynet.schema.url import URL, normalize_name
 from lbrynet.wallet.transaction import Transaction, Output
 
 
@@ -19,46 +20,36 @@ class SQLDB:
         pragma journal_mode=WAL;
     """
 
-    CREATE_TX_TABLE = """
-        create table if not exists tx (
-            tx_hash bytes primary key,
-            raw bytes not null,
-            position integer not null,
-            height integer not null
-        );
-    """
-
     CREATE_CLAIM_TABLE = """
         create table if not exists claim (
             claim_hash bytes primary key,
-            tx_hash bytes not null,
-            txo_hash bytes not null,
-            height integer not null,
-            activation_height integer,
-            amount integer not null,
-            effective_amount integer not null default 0,
-            trending_amount integer not null default 0,
+            normalized text not null,
             claim_name text not null,
-            channel_hash bytes
+            is_channel bool not null,
+            txo_hash bytes not null,
+            tx_position integer not null,
+            height integer not null,
+            amount integer not null,
+            channel_hash bytes,
+            activation_height integer,
+            effective_amount integer not null default 0,
+            trending_amount integer not null default 0
         );
-        create index if not exists claim_tx_hash_idx on claim (tx_hash);
+        create index if not exists claim_normalized_idx on claim (normalized);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
-        create index if not exists claim_activation_height_idx on claim (activation_height);
         create index if not exists claim_channel_hash_idx on claim (channel_hash);
-        create index if not exists claim_claim_name_idx on claim (claim_name);
+        create index if not exists claim_activation_height_idx on claim (activation_height);
     """
 
     CREATE_SUPPORT_TABLE = """
         create table if not exists support (
             txo_hash bytes primary key,
-            tx_hash bytes not null,
-            claim_hash bytes not null,
-            position integer not null,
+            tx_position integer not null,
             height integer not null,
-            amount integer not null,
-            is_comment bool not null default false
+            claim_hash bytes not null,
+            amount integer not null
         );
-        create index if not exists support_tx_hash_idx on support (tx_hash);
+        create index if not exists support_txo_hash_idx on support (txo_hash);
         create index if not exists support_claim_hash_idx on support (claim_hash, height);
     """
 
@@ -75,7 +66,7 @@ class SQLDB:
 
     CREATE_CLAIMTRIE_TABLE = """
         create table if not exists claimtrie (
-            claim_name text primary key,
+            normalized text primary key,
             claim_hash bytes not null,
             last_take_over_height integer not null
         );
@@ -84,7 +75,6 @@ class SQLDB:
 
     CREATE_TABLES_QUERY = (
         PRAGMAS +
-        CREATE_TX_TABLE +
         CREATE_CLAIM_TABLE +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
@@ -140,56 +130,61 @@ class SQLDB:
     def commit(self):
         self.execute('commit;')
 
-    def insert_txs(self, txs: Set[Transaction]):
-        if txs:
-            self.db.executemany(
-                "INSERT INTO tx (tx_hash, raw, position, height) VALUES (?, ?, ?, ?)",
-                [(sqlite3.Binary(tx.hash), sqlite3.Binary(tx.raw), tx.position, tx.height) for tx in txs]
-            )
-
     def _upsertable_claims(self, txos: Set[Output]):
         claims, tags = [], []
         for txo in txos:
             tx = txo.tx_ref.tx
+
             try:
                 assert txo.claim_name
+                assert txo.normalized_name
             except (AssertionError, UnicodeDecodeError):
                 self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
                 continue
+
+            txo_hash = sqlite3.Binary(txo.ref.hash)
+            claim_record = {
+                'claim_hash': sqlite3.Binary(txo.claim_hash),
+                'normalized': txo.normalized_name,
+                'claim_name': txo.claim_name,
+                'is_channel': False,
+                'txo_hash': txo_hash,
+                'tx_position': tx.position,
+                'height': tx.height,
+                'amount': txo.amount,
+                'channel_hash': None,
+            }
+            claims.append(claim_record)
+
             try:
                 claim = txo.claim
-                if claim.is_channel:
-                    metadata = claim.channel
-                else:
-                    metadata = claim.stream
             except DecodeError:
                 self.logger.exception(f"Could not parse claim protobuf for {tx.id}:{txo.position}.")
                 continue
-            txo_hash = sqlite3.Binary(txo.ref.hash)
-            channel_hash = sqlite3.Binary(claim.signing_channel_hash) if claim.signing_channel_hash else None
-            claims.append({
-                'claim_hash': sqlite3.Binary(txo.claim_hash),
-                'tx_hash': sqlite3.Binary(tx.hash),
-                'txo_hash': txo_hash,
-                'channel_hash': channel_hash,
-                'amount': txo.amount,
-                'claim_name': txo.claim_name,
-                'height': tx.height
-            })
-            for tag in metadata.tags:
+
+            claim_record['is_channel'] = claim.is_channel
+            if claim.signing_channel_hash:
+                claim_record['channel_hash'] = sqlite3.Binary(claim.signing_channel_hash)
+            for tag in claim.message.tags:
                 tags.append((tag, txo_hash, tx.height))
+
         if tags:
             self.db.executemany(
                 "INSERT INTO tag (tag, txo_hash, height) VALUES (?, ?, ?)", tags
             )
+
         return claims
 
     def insert_claims(self, txos: Set[Output]):
         claims = self._upsertable_claims(txos)
         if claims:
             self.db.executemany(
-                "INSERT INTO claim (claim_hash, tx_hash, txo_hash, channel_hash, amount, claim_name, height) "
-                "VALUES (:claim_hash, :tx_hash, :txo_hash, :channel_hash, :amount, :claim_name, :height) ",
+                "INSERT INTO claim ("
+                "   claim_hash, normalized, claim_name, is_channel, txo_hash,"
+                "   tx_position, height, amount, channel_hash) "
+                "VALUES ("
+                "   :claim_hash, :normalized, :claim_name, :is_channel, :txo_hash,"
+                "   :tx_position, :height, :amount, :channel_hash) ",
                 claims
             )
 
@@ -198,8 +193,8 @@ class SQLDB:
         if claims:
             self.db.executemany(
                 "UPDATE claim SET "
-                "    tx_hash=:tx_hash, txo_hash=:txo_hash, channel_hash=:channel_hash, "
-                "    amount=:amount, height=:height "
+                "   is_channel=:is_channel, txo_hash=:txo_hash, tx_position=:tx_position,"
+                "   height=:height, amount=:amount, channel_hash=:channel_hash "
                 "WHERE claim_hash=:claim_hash;",
                 claims
             )
@@ -231,14 +226,15 @@ class SQLDB:
         for txo in txos:
             tx = txo.tx_ref.tx
             supports.append((
-                sqlite3.Binary(txo.ref.hash), sqlite3.Binary(tx.hash),
-                sqlite3.Binary(txo.claim_hash), tx.position, tx.height,
-                txo.amount, False
+                sqlite3.Binary(txo.ref.hash), tx.position, tx.height,
+                sqlite3.Binary(txo.claim_hash), txo.amount
             ))
         if supports:
             self.db.executemany(
-                "INSERT INTO support (txo_hash, tx_hash, claim_hash, position, height, amount, is_comment) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)", supports
+                "INSERT INTO support ("
+                "   txo_hash, tx_position, height, claim_hash, amount"
+                ") "
+                "VALUES (?, ?, ?, ?, ?)", supports
             )
 
     def delete_other_txos(self, txo_hashes: Set[bytes]):
@@ -247,21 +243,13 @@ class SQLDB:
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
 
-    def delete_dereferenced_transactions(self):
-        self.execute("""
-            DELETE FROM tx WHERE (
-                (SELECT COUNT(*) FROM claim WHERE claim.tx_hash=tx.tx_hash) +
-                (SELECT COUNT(*) FROM support WHERE support.tx_hash=tx.tx_hash)
-                ) = 0
-        """)
-
     def _make_claims_without_competition_become_controlling(self, height):
         self.execute(f"""
-            INSERT INTO claimtrie (claim_name, claim_hash, last_take_over_height)
-            SELECT claim.claim_name, claim.claim_hash, {height} FROM claim
-                LEFT JOIN claimtrie USING (claim_name)
+            INSERT INTO claimtrie (normalized, claim_hash, last_take_over_height)
+            SELECT claim.normalized, claim.claim_hash, {height} FROM claim
+                LEFT JOIN claimtrie USING (normalized)
                 WHERE claimtrie.claim_hash IS NULL
-                GROUP BY claim.claim_name HAVING COUNT(*) = 1
+                GROUP BY claim.normalized HAVING COUNT(*) = 1
         """)
         self.execute(f"""
             UPDATE claim SET activation_height = {height}
@@ -295,25 +283,25 @@ class SQLDB:
                 (
                     {height} -
                     (SELECT last_take_over_height FROM claimtrie
-                     WHERE claimtrie.claim_name=claim.claim_name)
+                     WHERE claimtrie.normalized=claim.normalized)
                 ) / 32 AS INT))
             WHERE activation_height IS NULL
         """)
 
     def get_overtakings(self):
         return self.execute(f"""
-            SELECT winner.claim_name, winner.claim_hash FROM (
-                SELECT claim_name, claim_hash, MAX(effective_amount)
-                FROM claim GROUP BY claim_name
-            ) AS winner JOIN claimtrie USING (claim_name)
+            SELECT winner.normalized, winner.claim_hash FROM (
+                SELECT normalized, claim_hash, MAX(effective_amount)
+                FROM claim GROUP BY normalized
+            ) AS winner JOIN claimtrie USING (normalized)
             WHERE claimtrie.claim_hash <> winner.claim_hash
         """)
 
     def _perform_overtake(self, height):
         for overtake in self.get_overtakings():
             self.execute(
-                f"UPDATE claim SET activation_height = {height} WHERE claim_name = ?",
-                (overtake['claim_name'],)
+                f"UPDATE claim SET activation_height = {height} WHERE normalized = ?",
+                (overtake['normalized'],)
             )
             self.execute(
                 f"UPDATE claimtrie SET claim_hash = ?, last_take_over_height = {height}",
@@ -329,34 +317,37 @@ class SQLDB:
         self._update_effective_amount(height)
         self._perform_overtake(height)
 
-    def get_transactions(self, tx_hashes):
-        cur = self.db.cursor()
-        cur.execute(*query("SELECT * FROM tx", tx_hash__in=tx_hashes))
-        return cur.fetchall()
-
     def get_claims(self, cols, **constraints):
-        if 'is_winning' in constraints:
+        if 'is_controlling' in constraints:
             constraints['claimtrie.claim_hash__is_not_null'] = ''
-            del constraints['is_winning']
-        if 'name' in constraints:
-            constraints['claim.claim_name__like'] = constraints.pop('name')
+            del constraints['is_controlling']
+
         if 'claim_id' in constraints:
             constraints['claim.claim_hash'] = sqlite3.Binary(
                 unhexlify(constraints.pop('claim_id'))[::-1]
             )
+        if 'name' in constraints:
+            constraints['claim.normalized'] = normalize_name(constraints.pop('name'))
+
+        if 'channel' in constraints:
+            url = URL.parse(constraints.pop('channel'))
+            if url.channel.claim_id:
+                constraints['channel_id'] = url.channel.claim_id
+            else:
+                constraints['channel_name'] = url.channel.name
         if 'channel_id' in constraints:
-            constraints['claim.channel_hash'] = sqlite3.Binary(
-                unhexlify(constraints.pop('channel_id'))[::-1]
-            )
+            constraints['channel_hash'] = unhexlify(constraints.pop('channel_id'))[::-1]
+        if 'channel_hash' in constraints:
+            constraints['channel.claim_hash'] = sqlite3.Binary(constraints.pop('channel_hash'))
+        if 'channel_name' in constraints:
+            constraints['channel.normalized'] = normalize_name(constraints.pop('channel_name'))
+
         if 'txid' in constraints:
             tx_hash = unhexlify(constraints.pop('txid'))[::-1]
-            if 'nout' in constraints:
-                nout = constraints.pop('nout')
-                constraints['claim.txo_hash'] = sqlite3.Binary(
-                    tx_hash + struct.pack('<I', nout)
-                )
-            else:
-                constraints['claim.tx_hash'] = sqlite3.Binary(tx_hash)
+            nout = constraints.pop('nout', 0)
+            constraints['claim.txo_hash'] = sqlite3.Binary(
+                tx_hash + struct.pack('<I', nout)
+            )
         cur = self.db.cursor()
         cur.execute(*query(
             f"""
@@ -374,31 +365,68 @@ class SQLDB:
         count = self.get_claims('count(*)', **constraints)
         return count[0][0]
 
+    def _search(self, **constraints):
+        return self.get_claims(
+            """
+            claimtrie.claim_hash as is_controlling,
+            claim.claim_hash, claim.txo_hash, claim.height,
+            claim.activation_height, claim.effective_amount, claim.trending_amount,
+            channel.txo_hash as channel_txo_hash, channel.height as channel_height,
+            channel.activation_height as channel_activation_height,
+            channel.effective_amount as channel_effective_amount,
+            channel.trending_amount as channel_trending_amount,
+            CASE WHEN claim.is_channel=1 THEN (
+                SELECT COUNT(*) FROM claim as claim_in_channel
+                WHERE claim_in_channel.channel_hash=claim.claim_hash
+             ) ELSE 0 END AS claims_in_channel
+            """, **constraints
+        )
+
     SEARCH_PARAMS = {
-        'name', 'claim_id', 'txid', 'nout', 'channel_id', 'is_winning', 'limit', 'offset'
+        'name', 'claim_id', 'txid', 'nout',
+        'channel', 'channel_id', 'channel_name',
+        'is_controlling', 'limit', 'offset'
     }
 
-    def claim_search(self, constraints) -> Tuple[List, List, int, int]:
+    def search(self, constraints) -> Tuple[List, int, int]:
         assert set(constraints).issubset(self.SEARCH_PARAMS), \
             f"Search query contains invalid arguments: {set(constraints).difference(self.SEARCH_PARAMS)}"
         total = self.get_claims_count(**constraints)
         constraints['offset'] = abs(constraints.get('offset', 0))
         constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-        constraints['order_by'] = ["claim.height DESC", "claim.claim_name ASC"]
-        txo_rows = self.get_claims(
-            """
-            claim.txo_hash, channel.txo_hash as channel_txo_hash,
-            claim.activation_height, claimtrie.claim_hash as is_winning,
-            claim.effective_amount, claim.trending_amount
-            """, **constraints
-        )
-        tx_hashes = set()
-        for claim in txo_rows:
-            tx_hashes.add(claim['txo_hash'][:32])
-            if claim['channel_txo_hash'] is not None:
-                tx_hashes.add(claim['channel_txo_hash'][:32])
-        tx_rows = self.get_transactions([sqlite3.Binary(h) for h in tx_hashes])
-        return tx_rows, txo_rows, constraints['offset'], total
+        constraints['order_by'] = ["claim.height DESC", "claim.normalized ASC"]
+        txo_rows = self._search(**constraints)
+        return txo_rows, constraints['offset'], total
+
+    def resolve(self, urls) -> List:
+        result = []
+        for raw_url in urls:
+            try:
+                url = URL.parse(raw_url)
+            except ValueError as e:
+                result.append(e)
+                continue
+            channel = None
+            if url.has_channel:
+                matches = self._search(is_controlling=True, **url.channel.to_dict())
+                if matches:
+                    channel = matches[0]
+                else:
+                    result.append(LookupError(f'Could not find channel in "{raw_url}".'))
+                    continue
+            if url.has_stream:
+                query = url.stream.to_dict()
+                if channel is not None:
+                    query['channel_hash'] = channel['claim_hash']
+                matches = self._search(is_controlling=True, **query)
+                if matches:
+                    result.append(matches[0])
+                else:
+                    result.append(LookupError(f'Could not find stream in "{raw_url}".'))
+                    continue
+            else:
+                result.append(channel)
+        return result
 
     def advance_txs(self, height, all_txs):
         sql, txs = self, set()
@@ -428,7 +456,6 @@ class SQLDB:
         sql.abandon_claims(abandon_claim_hashes)
         sql.clear_claim_metadata(stale_claim_metadata_txo_hashes)
         sql.delete_other_txos(delete_txo_hashes)
-        sql.insert_txs(txs)
         sql.insert_claims(insert_claims)
         sql.update_claims(update_claims)
         sql.insert_supports(insert_supports)

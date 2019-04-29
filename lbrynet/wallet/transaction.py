@@ -14,6 +14,7 @@ from ecdsa.util import sigencode_der
 from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput, ReadOnlyList
 from torba.client.hash import hash160, sha256, Base58
 from lbrynet.schema.claim import Claim
+from lbrynet.schema.url import normalize_name
 from lbrynet.wallet.account import Account
 from lbrynet.wallet.script import InputScript, OutputScript
 
@@ -73,6 +74,10 @@ class Output(BaseOutput):
         if self.script.is_claim_involved:
             return self.script.values['claim_name'].decode()
         raise ValueError('No claim_name associated.')
+
+    @property
+    def normalized_name(self) -> str:
+        return normalize_name(self.claim_name)
 
     @property
     def claim(self) -> Claim:

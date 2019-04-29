@@ -18,7 +18,6 @@ class LBRYBlockProcessor(BlockProcessor):
         self.sql.begin()
         try:
             super().advance_blocks(blocks)
-            self.sql.delete_dereferenced_transactions()
         except:
             self.logger.exception(f'Error while advancing transaction in new block.')
             raise

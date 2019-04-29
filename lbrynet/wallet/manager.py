@@ -200,12 +200,7 @@ class LbryWalletManager(BaseWalletManager):
                 _raw = await self.ledger.network.get_transaction(txid)
             except CodeMessageError as e:
                 return {'success': False, 'code': e.code, 'message': e.message}
-            # this is a workaround for the current protocol. Should be fixed when lbryum support is over and we
-            # are able to use the modern get_transaction call, which accepts verbose to show height and other fields
-            height = await self.ledger.network.get_transaction_height(txid)
             tx = self.ledger.transaction_class(unhexlify(_raw))
-            if tx and height > 0:
-                await self.ledger.maybe_verify_transaction(tx, height + 1)  # off by one from server side, yes...
         return tx
 
     @staticmethod

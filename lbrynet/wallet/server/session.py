@@ -7,8 +7,8 @@ from torba.server.hash import hash_to_hex_str
 from torba.server.session import ElectrumX
 from torba.server import util
 
-from lbrynet.schema.page import Page
-from lbrynet.schema.uri import parse_lbry_uri, CLAIM_ID_MAX_LENGTH, URIParseError
+from lbrynet.schema.result import Outputs
+from lbrynet.schema.url import URL
 from lbrynet.wallet.server.block_processor import LBRYBlockProcessor
 from lbrynet.wallet.server.db import LBRYDB
 
@@ -29,6 +29,7 @@ class LBRYElectrumX(ElectrumX):
         handlers = {
             'blockchain.transaction.get_height': self.transaction_get_height,
             'blockchain.claimtrie.search': self.claimtrie_search,
+            'blockchain.claimtrie.resolve': self.claimtrie_resolve,
             'blockchain.claimtrie.getclaimbyid': self.claimtrie_getclaimbyid,
             'blockchain.claimtrie.getclaimsforname': self.claimtrie_getclaimsforname,
             'blockchain.claimtrie.getclaimsbyids': self.claimtrie_getclaimsbyids,
@@ -43,6 +44,14 @@ class LBRYElectrumX(ElectrumX):
             'blockchain.block.get_server_height': self.get_server_height,
         }
         self.request_handlers.update(handlers)
+
+    async def claimtrie_search(self, **kwargs):
+        if 'claim_id' in kwargs:
+            self.assert_claim_id(kwargs['claim_id'])
+        return Outputs.to_base64(*self.db.sql.search(kwargs))
+
+    async def claimtrie_resolve(self, *urls):
+        return Outputs.to_base64(self.db.sql.resolve(urls))
 
     async def get_server_height(self):
         return self.bp.height
@@ -137,11 +146,6 @@ class LBRYElectrumX(ElectrumX):
             del claims['nLastTakeoverHeight']
             return claims
         return {}
-
-    async def claimtrie_search(self, **kwargs):
-        if 'claim_id' in kwargs:
-            self.assert_claim_id(kwargs['claim_id'])
-        return Page.to_base64(*self.db.sql.claim_search(kwargs))
 
     async def batched_formatted_claims_from_daemon(self, claim_ids):
         claims = await self.daemon.getclaimsbyids(claim_ids)
@@ -252,21 +256,22 @@ class LBRYElectrumX(ElectrumX):
         uri = uri
         block_hash = block_hash
         try:
-            parsed_uri = parse_lbry_uri(uri)
-        except URIParseError as err:
-            return {'error': err.message}
+            parsed_uri = URL.parse(uri)
+        except ValueError as err:
+            return {'error': err.args[0]}
         result = {}
 
-        if parsed_uri.contains_channel:
+        if parsed_uri.has_channel:
             certificate = None
 
             # TODO: this is also done on the else, refactor
-            if parsed_uri.claim_id:
-                if len(parsed_uri.claim_id) < CLAIM_ID_MAX_LENGTH:
-                    certificate_info = self.claimtrie_getpartialmatch(parsed_uri.name, parsed_uri.claim_id)
+            if parsed_uri.channel.claim_id:
+                if len(parsed_uri.channel.claim_id) < 40:
+                    certificate_info = self.claimtrie_getpartialmatch(
+                        parsed_uri.channel.name, parsed_uri.channel.claim_id)
                 else:
-                    certificate_info = await self.claimtrie_getclaimbyid(parsed_uri.claim_id)
-                if certificate_info and self.claim_matches_name(certificate_info, parsed_uri.name):
+                    certificate_info = await self.claimtrie_getclaimbyid(parsed_uri.channel.claim_id)
+                if certificate_info and self.claim_matches_name(certificate_info, parsed_uri.channel.name):
                     certificate = {'resolution_type': CLAIM_ID, 'result': certificate_info}
             elif parsed_uri.claim_sequence:
                 certificate_info = await self.claimtrie_getnthclaimforname(parsed_uri.name, parsed_uri.claim_sequence)
@@ -297,7 +302,7 @@ class LBRYElectrumX(ElectrumX):
         else:
             claim = None
             if parsed_uri.claim_id:
-                if len(parsed_uri.claim_id) < CLAIM_ID_MAX_LENGTH:
+                if len(parsed_uri.claim_id) < 40:
                     claim_info = self.claimtrie_getpartialmatch(parsed_uri.name, parsed_uri.claim_id)
                 else:
                     claim_info = await self.claimtrie_getclaimbyid(parsed_uri.claim_id)
