@@ -94,7 +94,7 @@ class Account(BaseAccount):
                     )
                     results['migrate-failed'] += 1
                     continue
-                claims = await self.ledger.network.get_claims_by_ids(maybe_claim_id)
+                claims = await self.ledger.network.get_claims_by_ids([maybe_claim_id])
                 if maybe_claim_id not in claims:
                     log.warning(
                         "Failed to migrate claim '%s', server did not return any claim information.",

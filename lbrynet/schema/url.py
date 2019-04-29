@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from typing import NamedTuple, Tuple
 
 
@@ -39,11 +40,29 @@ def _create_url_regex():
 URL_REGEX = _create_url_regex()
 
 
+def normalize_name(name):
+    return unicodedata.normalize('NFD', name).casefold()
+
+
 class PathSegment(NamedTuple):
     name: str
     claim_id: str = None
     sequence: int = None
     amount_order: int = None
+
+    @property
+    def normalized(self):
+        return normalize_name(self.name)
+
+    def to_dict(self):
+        q = {'name': self.name}
+        if self.claim_id is not None:
+            q['claim_id'] = self.claim_id
+        if self.sequence is not None:
+            q['sequence'] = self.sequence
+        if self.amount_order is not None:
+            q['amount_order'] = self.amount_order
+        return q
 
     def __str__(self):
         if self.claim_id is not None:
@@ -68,16 +87,16 @@ class URL(NamedTuple):
         return self.stream is not None
 
     @property
-    def parts(self) -> Tuple:
-        if self.has_channel:
-            if self.has_stream:
-                return self.channel, self.stream
-            return self.channel,
-        return self.stream,
+    def has_stream_in_channel(self):
+        return self.has_channel and self.has_stream
 
     @property
-    def first(self):
-        return self.parts[0]
+    def parts(self) -> Tuple:
+        if self.has_stream_in_channel:
+            return self.channel, self.stream
+        if self.has_channel:
+            return self.channel,
+        return self.stream,
 
     def __str__(self):
         return f"lbry://{'/'.join(str(p) for p in self.parts)}"

@@ -12,7 +12,7 @@ from lbrynet.utils import cache_concurrent
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import Claim
-from lbrynet.schema.uri import parse_lbry_uri
+from lbrynet.schema.url import URL
 from lbrynet.extras.daemon.storage import lbc_to_dewies
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
@@ -324,11 +324,10 @@ class StreamManager:
 
         try:
             # resolve the claim
-            parsed_uri = parse_lbry_uri(uri)
-            if parsed_uri.is_channel:
+            if not URL.parse(uri).has_stream:
                 raise ResolveError("cannot download a channel claim, specify a /path")
             try:
-                resolved_result = await asyncio.wait_for(self.wallet.ledger.resolve(0, 1, uri), resolve_timeout)
+                resolved_result = await asyncio.wait_for(self.wallet.ledger.resolve(uri), resolve_timeout)
             except asyncio.TimeoutError:
                 raise ResolveTimeout(uri)
             await self.storage.save_claims_for_resolve([

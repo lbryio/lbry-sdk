@@ -10,7 +10,7 @@ from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
 from lbrynet.schema.claim import Claim
 from google.protobuf.message import DecodeError
-from lbrynet.schema.uri import parse_lbry_uri, URIParseError
+from lbrynet.schema.url import URL
 from lbrynet.wallet.claim_proofs import verify_proof, InvalidProofError
 
 log = logging.getLogger(__name__)
@@ -27,9 +27,9 @@ class Resolver:
         uris = set(uris)
         try:
             for uri in uris:
-                parsed_uri = parse_lbry_uri(uri)
-                if parsed_uri.claim_id:
-                    validate_claim_id(parsed_uri.claim_id)
+                for part in URL.parse(uri).parts:
+                    if part.claim_id:
+                        validate_claim_id(part.claim_id)
             claim_trie_root = self.ledger.headers.claim_trie_root
             resolutions = await self.network.get_values_for_uris(self.ledger.headers.hash().decode(), *uris)
             if len(uris) > 1:
@@ -162,7 +162,7 @@ class Resolver:
                 if certificate is None:
                     log.info("fetching certificate to check claim signature")
                     channel_id = claim_result['value'].signing_channel_id
-                    certificate = (await self.network.get_claims_by_ids(channel_id)).get(channel_id)
+                    certificate = (await self.network.get_claims_by_ids([channel_id])).get(channel_id)
                     if not certificate:
                         log.warning('Certificate %s not found', channel_id)
                 claim_result['channel_name'] = certificate['name'] if certificate else None
@@ -238,7 +238,7 @@ class Resolver:
         async def iter_validate_channel_claims():
             formatted_claims = []
             for claim_ids in queries:
-                batch_result = await self.network.get_claims_by_ids(*claim_ids)
+                batch_result = await self.network.get_claims_by_ids(claim_ids)
                 for claim_id in claim_ids:
                     claim = batch_result[claim_id]
                     if claim['name'] == claim_names[claim_id]:

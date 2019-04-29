@@ -3,7 +3,11 @@ from decimal import Decimal
 from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
+
 from ecdsa import BadSignatureError
+from cryptography.exceptions import InvalidSignature
+from google.protobuf.message import DecodeError
+
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.ledger import MainNetLedger, Account
 from lbrynet.wallet.transaction import Transaction, Output
@@ -167,31 +171,38 @@ class JSONResponseEncoder(JSONEncoder):
         if txo.script.is_claim_involved:
             output.update({
                 'name': txo.claim_name,
+                'normalized': txo.normalized_name,
                 'claim_id': txo.claim_id,
                 'permanent_url': txo.permanent_url,
+                'meta': txo.meta
             })
             if txo.script.is_claim_name or txo.script.is_update_claim:
-                output['value'] = txo.claim
-                output['value_type'] = txo.claim.claim_type
-                if self.include_protobuf:
-                    output['protobuf'] = hexlify(txo.claim.to_bytes())
-                if txo.channel is not None:
-                    output['signing_channel'] = {
-                        'name': txo.channel.claim_name,
-                        'claim_id': txo.channel.claim_id,
-                        'value': txo.channel.claim
-                    }
-                    if check_signature and txo.claim.is_signed:
-                        output['is_channel_signature_valid'] = False
-                        try:
-                            output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.ledger)
-                        except BadSignatureError:
-                            pass
-                        except ValueError:
-                            log.exception(
-                                'txo.id: %s, txo.channel.id:%s, output: %s',
-                                txo.id, txo.channel.id, output
-                            )
+                try:
+                    output['value'] = txo.claim
+                    output['value_type'] = txo.claim.claim_type
+                    if self.include_protobuf:
+                        output['protobuf'] = hexlify(txo.claim.to_bytes())
+                    if txo.channel is not None:
+                        output['signing_channel'] = {
+                            'name': txo.channel.claim_name,
+                            'normalized': txo.channel.normalized_name,
+                            'claim_id': txo.channel.claim_id,
+                            'value': txo.channel.claim,
+                            'meta': txo.channel.meta
+                        }
+                        if check_signature and txo.claim.is_signed:
+                            output['is_channel_signature_valid'] = False
+                            try:
+                                output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.ledger)
+                            except (BadSignatureError, InvalidSignature):
+                                pass
+                            except ValueError:
+                                log.exception(
+                                    'txo.id: %s, txo.channel.id:%s, output: %s',
+                                    txo.id, txo.channel.id, output
+                                )
+                except DecodeError:
+                    pass
         return output
 
     def encode_input(self, txi):
