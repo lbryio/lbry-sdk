@@ -38,6 +38,14 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(claim['claim']['channel_name'], '@abc')
         self.assertEqual(claim['certificate']['name'], '@abc')
         self.assertEqual(claim['claims_in_channel'], 0)
+        self.assertEqual(
+            claim['claim']['timestamp'],
+            self.ledger.headers[claim['claim']['height']]['timestamp']
+        )
+        self.assertEqual(
+            claim['certificate']['timestamp'],
+            self.ledger.headers[claim['certificate']['height']]['timestamp']
+        )
 
         # resolving claim foo by itself
         response = await self.resolve('lbry://foo')
