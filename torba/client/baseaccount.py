@@ -256,7 +256,7 @@ class BaseAccount:
             if seed:
                 private_key = cls.get_private_key_from_seed(ledger, seed, '')
                 public_key = private_key.public_key
-            elif private_key:
+            elif private_key_string:
                 private_key = from_extended_key_string(ledger, private_key_string)
                 public_key = private_key.public_key
         if public_key is None:
