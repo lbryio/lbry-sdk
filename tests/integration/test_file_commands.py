@@ -28,6 +28,23 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_get('lbry://foo')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
 
+    async def test_file_list_fields(self):
+        await self.stream_create('foo', '0.01')
+        file_list = self.sout(self.daemon.jsonrpc_file_list())
+        self.assertEqual(
+            file_list[0]['timestamp'],
+            None
+        )
+        self.assertEqual(file_list[0]['confirmations'], -1)
+        await self.daemon.jsonrpc_resolve('foo')
+        file_list = self.sout(self.daemon.jsonrpc_file_list())
+        self.assertEqual(
+            file_list[0]['timestamp'],
+            self.ledger.headers[file_list[0]['height']]['timestamp']
+        )
+        self.assertEqual(file_list[0]['confirmations'], 1)
+
+
     async def test_file_list_updated_metadata_on_resolve(self):
         await self.stream_create('foo', '0.01')
         claim = await self.daemon.resolve('lbry://foo')
