@@ -22,12 +22,12 @@ from lbrynet.schema.types.v2.claim_pb2 import (
 log = logging.getLogger(__name__)
 
 
-def calculate_sha256_file_hash(file_path):
-    sha256 = hashlib.sha256()
+def calculate_sha384_file_hash(file_path):
+    sha384 = hashlib.sha384()
     with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(128 * sha256.block_size), b''):
-            sha256.update(chunk)
-    return sha256.digest()
+        for chunk in iter(lambda: f.read(128 * sha384.block_size), b''):
+            sha384.update(chunk)
+    return sha384.digest()
 
 
 class Dimmensional(Metadata):
@@ -130,7 +130,7 @@ class Source(Metadata):
             self.size = os.path.getsize(file_path)
             if self.size == 0:
                 raise Exception(f"Cannot publish empty file: {file_path}")
-            self.file_hash_bytes = calculate_sha256_file_hash(file_path)
+            self.file_hash_bytes = calculate_sha384_file_hash(file_path)
             return stream_type
 
     @property
