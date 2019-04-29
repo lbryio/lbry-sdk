@@ -151,11 +151,15 @@ class CommandTestCase(IntegrationTestCase):
         await self.blockchain.generate(blocks)
         await self.ledger.on_header.where(self.blockchain.is_expected_block)
 
-    def blockchain_claim_name(self, name: str, value: str, amount: str):
-        return self.blockchain._cli_cmnd('claimname', name, value, amount)
+    async def blockchain_claim_name(self, name: str, value: str, amount: str):
+        txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)
+        await self.generate(1)
+        return txid
 
-    def blockchain_update_name(self, txid: str, value: str, amount: str):
-        return self.blockchain._cli_cmnd('updateclaim', txid, value, amount)
+    async def blockchain_update_name(self, txid: str, value: str, amount: str):
+        txid = await self.blockchain._cli_cmnd('updateclaim', txid, value, amount)
+        await self.generate(1)
+        return txid
 
     async def out(self, awaitable):
         """ Serializes lbrynet API results to JSON then loads and returns it as dictionary. """

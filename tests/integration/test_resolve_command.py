@@ -72,7 +72,6 @@ class ResolveCommand(CommandTestCase):
         # resolve handles invalid data
         txid = await self.blockchain_claim_name(
             "gibberish", hexlify(b"{'invalid':'json'}").decode(), "0.1")
-        await self.generate(1)
         response = await self.resolve("lbry://gibberish")
         self.assertSetEqual({'lbry://gibberish'}, set(response))
         claim = response['lbry://gibberish']['claim']
