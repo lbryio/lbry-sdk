@@ -154,6 +154,8 @@ class Resolver:
         claim_result = _decode_claim_result(claim_result)
         if claim_result.get('height'):
             claim_result['timestamp'] = self.ledger.headers[claim_result['height']]['timestamp']
+        if claim_result.get('depth'):
+            claim_result['confirmations'] = claim_result.pop('depth')
 
         if claim_result['value']:
             claim_result['has_signature'] = False
@@ -298,7 +300,7 @@ def _verify_proof(name, claim_trie_root, result, ledger):
             'amount': output.amount,
             'effective_amount': output.amount + support_amount,
             'height': result['height'],
-            'depth': result['depth'],
+            'confirmations': result['depth'],
             'claim_sequence': result['claim_sequence'],
             'address': output.get_address(ledger),
             'valid_at_height': result['valid_at_height'],
