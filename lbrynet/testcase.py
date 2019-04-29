@@ -151,14 +151,16 @@ class CommandTestCase(IntegrationTestCase):
         await self.blockchain.generate(blocks)
         await self.ledger.on_header.where(self.blockchain.is_expected_block)
 
-    async def blockchain_claim_name(self, name: str, value: str, amount: str):
+    async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
         txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)
-        await self.generate(1)
+        if confirm:
+            await self.generate(1)
         return txid
 
-    async def blockchain_update_name(self, txid: str, value: str, amount: str):
+    async def blockchain_update_name(self, txid: str, value: str, amount: str, confirm=True):
         txid = await self.blockchain._cli_cmnd('updateclaim', txid, value, amount)
-        await self.generate(1)
+        if confirm:
+            await self.generate(1)
         return txid
 
     async def out(self, awaitable):
