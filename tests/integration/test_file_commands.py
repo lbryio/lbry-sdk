@@ -34,12 +34,10 @@ class FileCommands(CommandTestCase):
         claim = claim['lbry://foo']['claim']['protobuf'].decode()
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         txid = await self.blockchain_claim_name('bar', claim, '0.01')
-        await self.generate(1)
         await self.daemon.jsonrpc_get('lbry://bar')
         claim = Claim.from_bytes(unhexlify(claim))
         claim.stream.description = "fix typos, fix the world"
         await self.blockchain_update_name(txid, hexlify(claim.to_bytes()).decode(), '0.01')
-        await self.generate(1)
         await self.daemon.jsonrpc_resolve('lbry://bar')
         file_list = self.daemon.jsonrpc_file_list()
         self.assertEqual(file_list[0].stream_claim_info.claim.stream.description, claim.stream.description)
