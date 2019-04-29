@@ -214,14 +214,14 @@ class StreamCommands(CommandTestCase):
         tx = await self.stream_update(claim_id, bid='3.0')
         self.assertEqual(tx['outputs'][0]['amount'], '3.0')
 
-        await self.assertBalance(self.account, '6.993337')
+        await self.assertBalance(self.account, '6.993319')
 
         # not enough funds
         with self.assertRaisesRegex(
                 InsufficientFundsError, "Not enough funds to cover this transaction."):
             await self.stream_create('foo2', '9.0')
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 1)
-        await self.assertBalance(self.account, '6.993337')
+        await self.assertBalance(self.account, '6.993319')
 
         # spend exactly amount available, no change
         tx = await self.stream_create('foo3', '6.98523')
@@ -333,7 +333,7 @@ class StreamCommands(CommandTestCase):
         fixed_values['thumbnail'] = {'url': fixed_values.pop('thumbnail_url')}
         fixed_values['release_time'] = str(values['release_time'])
         fixed_values['source'] = {
-            'hash': 'c0ddd62c7717180e7ffb8a15bb9674d3ec92592e0b7ac7d1d5289836b4553be2',
+            'hash': '56bf5dbae43f77a63d075b0f2ae9c7c3e3098db93779c7f9840da0f4db9c2f8c8454f4edd1373e2b64ee2e68350d916e',
             'media_type': 'application/octet-stream',
             'size': '3'
         }
@@ -359,7 +359,7 @@ class StreamCommands(CommandTestCase):
                     'size': '3',
                     'media_type': 'application/octet-stream',
                     'name': stream['source']['name'],
-                    'hash': 'c0ddd62c7717180e7ffb8a15bb9674d3ec92592e0b7ac7d1d5289836b4553be2',
+                    'hash': '56bf5dbae43f77a63d075b0f2ae9c7c3e3098db93779c7f9840da0f4db9c2f8c8454f4edd1373e2b64ee2e68350d916e',
                     'sd_hash': stream['source']['sd_hash']
                 },
             }
@@ -377,7 +377,7 @@ class StreamCommands(CommandTestCase):
                     'size': '3',
                     'media_type': 'application/octet-stream',
                     'name': fixed_values['source']['name'],
-                    'hash': 'c0ddd62c7717180e7ffb8a15bb9674d3ec92592e0b7ac7d1d5289836b4553be2',
+                    'hash': '56bf5dbae43f77a63d075b0f2ae9c7c3e3098db93779c7f9840da0f4db9c2f8c8454f4edd1373e2b64ee2e68350d916e',
                     'sd_hash': fixed_values['source']['sd_hash'],
                 },
                 'tags': ['blah'],
@@ -457,7 +457,7 @@ class StreamCommands(CommandTestCase):
                         'size': '99',
                         'name': os.path.basename(file.name),
                         'media_type': 'image/png',
-                        'hash': '06003bbee8aece0543ed9d9cecc48be1d996cfeff9837a1aed1d961caeda82af',
+                        'hash': '6c7df435d412c603390f593ef658c199817c7830ba3f16b7eadd8f99fa50e85dbd0d2b3dc61eadc33fe096e3872d1545',
                         'sd_hash': txo['value']['source']['sd_hash'],
                     },
                     'stream_type': 'image',
@@ -481,7 +481,7 @@ class StreamCommands(CommandTestCase):
                     'size': '2299653',
                     'name': 'ForBiggerEscapes.mp4',
                     'media_type': 'video/mp4',
-                    'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
+                    'hash': '5f6811c83c1616df06f10bf5309ca61edb5ff949a9c1212ce784602d837bfdfc1c3db1e0580ef7bd1dadde41d8acf315',
                     'sd_hash': txo['value']['source']['sd_hash'],
                 },
                 'stream_type': 'video',
@@ -506,7 +506,7 @@ class StreamCommands(CommandTestCase):
                     'size': '2299653',
                     'name': 'ForBiggerEscapes.mp4',
                     'media_type': 'video/mp4',
-                    'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
+                    'hash': '5f6811c83c1616df06f10bf5309ca61edb5ff949a9c1212ce784602d837bfdfc1c3db1e0580ef7bd1dadde41d8acf315',
                     'sd_hash': txo['value']['source']['sd_hash'],
                 },
                 'stream_type': 'video',
@@ -527,7 +527,7 @@ class StreamCommands(CommandTestCase):
                 'size': '2299653',
                 'name': 'ForBiggerEscapes.mp4',
                 'media_type': 'video/mp4',
-                'hash': 'f846d9c7f5ed28f0ed47e9d9b4198a03075e6df967ac54078af85ea1bf0ddd87',
+                'hash': '5f6811c83c1616df06f10bf5309ca61edb5ff949a9c1212ce784602d837bfdfc1c3db1e0580ef7bd1dadde41d8acf315',
             },
             'stream_type': 'video',
             'video': {
@@ -574,8 +574,8 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
         self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim_id)
         self.assertEqual(txs[0]['value'], '0.0')
-        self.assertEqual(txs[0]['fee'], '-0.0002075')
-        await self.assertBalance(self.account, '8.9796855')
+        self.assertEqual(txs[0]['fee'], '-0.0002165')
+        await self.assertBalance(self.account, '8.9796765')
 
         await self.stream_abandon(claim_id)
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
@@ -584,7 +584,7 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim_id)
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.000107')
-        await self.assertBalance(self.account, '9.9795785')
+        await self.assertBalance(self.account, '9.9795695')
 
     async def test_abandoning_stream_at_loss(self):
         await self.assertBalance(self.account, '10.0')
