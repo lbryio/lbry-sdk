@@ -231,7 +231,7 @@ class ManagedStream:
                 self.update_status(ManagedStream.STATUS_RUNNING)
                 await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_RUNNING)
             self.update_delayed_stop()
-        elif not os.path.isfile(self.full_path):
+        else:
             await self.save_file(file_name, download_directory)
             await self.started_writing.wait()
 
