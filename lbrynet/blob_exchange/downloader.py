@@ -27,7 +27,6 @@ class BlobDownloader:
         self.scores: typing.Dict['KademliaPeer', int] = {}
         self.failures: typing.Dict['KademliaPeer', int] = {}
         self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
-        self.time_since_last_blob = loop.time()
 
     def should_race_continue(self, blob: 'AbstractBlob'):
         if len(self.active_connections) >= self.config.max_connections_per_download:
@@ -50,8 +49,6 @@ class BlobDownloader:
             self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
             self.config.blob_download_timeout, connected_transport=transport
         )
-        if bytes_received == blob.get_length():
-            self.time_since_last_blob = self.loop.time()
         if not transport and peer not in self.ignored:
             self.ignored[peer] = self.loop.time()
             log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
@@ -77,11 +74,8 @@ class BlobDownloader:
 
     def clearbanned(self):
         now = self.loop.time()
-        if now - self.time_since_last_blob > 60.0:
-            return
-        timeout_for = lambda peer: (self.failures.get(peer, 0) ** self.BAN_FACTOR) - 1.0
+        timeout_for = lambda peer: min(30.0, (self.failures.get(peer, 0) ** self.BAN_FACTOR) - 1.0)
         forgiven = [banned_peer for banned_peer, when in self.ignored.items() if now - when > timeout_for(banned_peer)]
-        log.warning([(timeout_for(peer), when) for peer, when in self.ignored.items()])
         self.peer_queue.put_nowait(forgiven)
         for banned_peer in forgiven:
             self.ignored.pop(banned_peer)
