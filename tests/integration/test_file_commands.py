@@ -159,7 +159,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual('finished', file_info['status'])
 
     async def test_unban_recovers_stream(self):
-        BlobDownloader.BAN_TIME = .5  # fixme: temporary field, will move to connection manager or a conf
+        BlobDownloader.BAN_FACTOR = .5  # fixme: temporary field, will move to connection manager or a conf
         tx = await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
         sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))[-2]
