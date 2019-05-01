@@ -11,7 +11,7 @@ from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 from lbrynet.conf import Config
 from lbrynet.schema.uri import parse_lbry_uri
 from lbrynet.extras.daemon.client import daemon_rpc
-from lbrynet.extras import system_info, cli
+from lbrynet.extras import system_info
 
 
 def extract_uris(response):
@@ -58,7 +58,7 @@ def variance(times):
     return round(sum(((i - mean) ** 2.0 for i in times)) / (len(times) - 1), 3)
 
 
-async def wait_for_done(conf, uri):
+async def wait_for_done(conf, uri, timeout):
     name = uri.split("#")[0]
     last_complete = 0
     hang_count = 0
@@ -73,11 +73,11 @@ async def wait_for_done(conf, uri):
         else:
             hang_count += 1
             await asyncio.sleep(1.0)
-        if hang_count > 10:
+        if hang_count > timeout:
             return False, file['blobs_completed'], file['blobs_in_stream']
 
 
-async def main(uris=None, allow_fees=False):
+async def main(uris=None, cmd_args=None):
     if not uris:
         uris = await get_frontpage_uris()
     conf = Config()
@@ -93,7 +93,7 @@ async def main(uris=None, allow_fees=False):
     async def __resolve(name):
         resolved = await daemon_rpc(conf, 'resolve', urls=[name])
         if 'error' not in resolved.get(name, {}):
-            if ("fee" not in resolved[name]['claim']['value']) or allow_fees:
+            if ("fee" not in resolved[name]['claim']['value']) or cmd_args.allow_fees:
                 resolvable.append(name)
             else:
                 print(f"{name} has a fee, skipping it")
@@ -114,11 +114,13 @@ async def main(uris=None, allow_fees=False):
     for i, uri in enumerate(resolvable):
         start = time.time()
         try:
-            await daemon_rpc(conf, 'get', uri=uri)
+            await daemon_rpc(conf, 'get', uri=uri, save_file=True)
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
-            downloaded, amount_downloaded, blobs_in_stream = await wait_for_done(conf, uri)
+            downloaded, amount_downloaded, blobs_in_stream = await wait_for_done(
+                conf, uri, cmd_args.stall_download_timeout
+            )
             if downloaded:
                 download_successes.append(uri)
             else:
@@ -130,8 +132,10 @@ async def main(uris=None, allow_fees=False):
         except:
             print(f"{i + 1}/{len(uris)} - failed to start {uri}")
             failed_to_start.append(uri)
-            return
-        # await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
+            if cmd_args.exit_on_error:
+                return
+        if cmd_args.delete_after_download:
+            await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
         await asyncio.sleep(0.1)
 
     print("**********************************************")
@@ -160,9 +164,11 @@ async def main(uris=None, allow_fees=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir")
-    parser.add_argument("--wallet_dir")
-    parser.add_argument("--download_directory")
+    #parser.add_argument("--data_dir")
+    #parser.add_argument("--wallet_dir")
+    #parser.add_argument("--download_directory")
     parser.add_argument("--allow_fees", action='store_true')
-    args = parser.parse_args()
-    asyncio.run(main(allow_fees=args.allow_fees))
+    parser.add_argument("--exit_on_error", action='store_true')
+    parser.add_argument("--stall_download_timeout", default=10)
+    parser.add_argument("--delete_after_download", action='store_true')
+    asyncio.run(main(cmd_args=parser.parse_args()))
