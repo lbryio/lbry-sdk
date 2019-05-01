@@ -118,23 +118,24 @@ async def main(uris=None, cmd_args=None):
             first_byte = time.time()
             first_byte_times.append(first_byte - start)
             print(f"{i + 1}/{len(resolvable)} - {first_byte - start} {uri}")
-            downloaded, amount_downloaded, blobs_in_stream = await wait_for_done(
-                conf, uri, cmd_args.stall_download_timeout
-            )
-            if downloaded:
-                download_successes.append(uri)
-            else:
-                download_failures.append(uri)
-            mbs = round((blobs_in_stream * (MAX_BLOB_SIZE - 1)) / (time.time() - start) / 1000000, 2)
-            download_speeds.append(mbs)
-            print(f"downloaded {amount_downloaded}/{blobs_in_stream} blobs for {uri} at "
-                  f"{mbs}mb/s")
+            if not cmd_args.head_blob_only:
+                downloaded, amount_downloaded, blobs_in_stream = await wait_for_done(
+                    conf, uri, cmd_args.stall_download_timeout
+                )
+                if downloaded:
+                    download_successes.append(uri)
+                else:
+                    download_failures.append(uri)
+                mbs = round((blobs_in_stream * (MAX_BLOB_SIZE - 1)) / (time.time() - start) / 1000000, 2)
+                download_speeds.append(mbs)
+                print(f"downloaded {amount_downloaded}/{blobs_in_stream} blobs for {uri} at "
+                      f"{mbs}mb/s")
         except Exception as e:
             print(f"{i + 1}/{len(uris)} - failed to start {uri}: {e}")
             failed_to_start.append(uri)
             if cmd_args.exit_on_error:
                 return
-        if cmd_args.delete_after_download:
+        if cmd_args.delete_after_download or cmd_args.head_blob_only:
             await daemon_rpc(conf, 'file_delete', delete_from_download_dir=True, claim_name=parse_lbry_uri(uri).name)
         await asyncio.sleep(0.1)
 
@@ -171,4 +172,5 @@ if __name__ == "__main__":
     parser.add_argument("--exit_on_error", action='store_true')
     parser.add_argument("--stall_download_timeout", default=10, type=int)
     parser.add_argument("--delete_after_download", action='store_true')
+    parser.add_argument("--head_blob_only", action='store_true')
     asyncio.run(main(cmd_args=parser.parse_args()))
