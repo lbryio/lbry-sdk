@@ -145,12 +145,13 @@ async def main(uris=None, cmd_args=None):
              f"Best first byte time: {round(min(first_byte_times), 2)}\n" \
              f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}s\n" \
              f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}s\n" \
-             f"Variance: {variance(first_byte_times)}\n" \
-             f"Downloaded {len(download_successes)}/{len(resolvable)}\n" \
-             f"Best stream download speed: {round(max(download_speeds), 2)}mb/s\n" \
-             f"Worst stream download speed: {round(min(download_speeds), 2)}mb/s\n" \
-             f"95% confidence download speed: {confidence(download_speeds, 1.984, False)}mb/s\n" \
-             f"99% confidence download speed:  {confidence(download_speeds, 2.626, False)}mb/s\n"
+             f"Variance: {variance(first_byte_times)}\n"
+    if not cmd_args.head_blob_only:
+        result += f"Downloaded {len(download_successes)}/{len(resolvable)}\n" \
+                  f"Best stream download speed: {round(max(download_speeds), 2)}mb/s\n" \
+                  f"Worst stream download speed: {round(min(download_speeds), 2)}mb/s\n" \
+                  f"95% confidence download speed: {confidence(download_speeds, 1.984, False)}mb/s\n" \
+                  f"99% confidence download speed:  {confidence(download_speeds, 2.626, False)}mb/s\n"
 
     if failed_to_start:
         result += "\nFailed to start:" + "\n".join([f for f in failed_to_start])
