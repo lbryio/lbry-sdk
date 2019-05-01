@@ -135,6 +135,15 @@ class PeerManager:
 
 
 class KademliaPeer:
+    __slots__ = [
+        'loop',
+        '_node_id',
+        'address',
+        'udp_port',
+        'tcp_port',
+        'protocol_version',
+    ]
+
     def __init__(self, loop: asyncio.BaseEventLoop, address: str, node_id: typing.Optional[bytes] = None,
                  udp_port: typing.Optional[int] = None, tcp_port: typing.Optional[int] = None):
         if node_id is not None:

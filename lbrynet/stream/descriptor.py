@@ -47,6 +47,17 @@ def file_reader(file_path: str):
 
 
 class StreamDescriptor:
+    __slots__ = [
+        'loop',
+        'blob_dir',
+        'stream_name',
+        'key',
+        'suggested_file_name',
+        'blobs',
+        'stream_hash',
+        'sd_hash'
+    ]
+
     def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, stream_name: str, key: str,
                  suggested_file_name: str, blobs: typing.List[BlobInfo], stream_hash: typing.Optional[str] = None,
                  sd_hash: typing.Optional[str] = None):
