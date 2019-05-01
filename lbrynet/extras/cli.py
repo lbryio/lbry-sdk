@@ -14,7 +14,7 @@ from aiohttp.web import GracefulExit
 
 from lbrynet import __name__ as lbrynet_name, __version__ as lbrynet_version
 from lbrynet.extras.daemon.loggly_handler import get_loggly_handler
-from lbrynet.conf import Config, CLIConfig
+from lbrynet.conf import Config, CLIConfig, NOT_SET
 from lbrynet.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger(lbrynet_name)
@@ -235,6 +235,14 @@ def main(argv=None):
         return 0
 
     elif args.command == 'start':
+        ## If the --api argument was not provided to the start command,
+        ## check to see if it was given on the main parser and use that instead:
+        if args.api is NOT_SET:
+            try:
+                if argv.index('--api') < argv.index('start'):
+                    conf.api = args.api = argv[argv.index('--api') + 1]
+            except (ValueError, IndexError):
+                pass
 
         if args.help:
             args.start_parser.print_help()
