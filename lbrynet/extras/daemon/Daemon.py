@@ -2927,10 +2927,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         blob = await download_blob(asyncio.get_event_loop(), self.conf, self.blob_manager, self.dht_node, blob_hash)
         if read:
-            with open(blob.file_path, 'rb') as handle:
+            with blob.reader_context() as handle:
                 return handle.read().decode()
-        else:
-            return "Downloaded blob %s" % blob_hash
+        elif isinstance(blob, BlobBuffer):
+            log.warning("manually downloaded blob buffer could have missed garbage collection, clearing it")
+            blob.delete()
+        return "Downloaded blob %s" % blob_hash
 
     @requires(BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_blob_delete(self, blob_hash):
