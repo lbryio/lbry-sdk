@@ -1,7 +1,7 @@
 import asyncio
 import typing
 import logging
-from lbrynet.utils import drain_tasks, cache_concurrent
+from lbrynet.utils import cache_concurrent
 from lbrynet.blob_exchange.client import request_blob
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
