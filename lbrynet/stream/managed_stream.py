@@ -305,11 +305,11 @@ class ManagedStream:
         if not os.path.isdir(self.download_directory):
             log.warning("download directory '%s' does not exist, attempting to make it", self.download_directory)
             os.mkdir(self.download_directory)
-        self._file_name = await get_next_available_file_name(
-            self.loop, self.download_directory,
-            file_name or self._file_name or self.descriptor.suggested_file_name
-        )
         if not await self.blob_manager.storage.file_exists(self.sd_hash):
+            self._file_name = await get_next_available_file_name(
+                self.loop, self.download_directory,
+                file_name or self._file_name or self.descriptor.suggested_file_name
+            )
             self.rowid = self.blob_manager.storage.save_downloaded_file(
                 self.stream_hash, self.file_name, self.download_directory, 0.0
             )
