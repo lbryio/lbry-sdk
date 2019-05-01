@@ -44,6 +44,18 @@ class FileCommands(CommandTestCase):
         )
         self.assertEqual(file_list[0]['confirmations'], 1)
 
+    async def test_get_doesnt_touch_user_written_files_between_calls(self):
+        await self.stream_create('foo', '0.01', data=bytes([0] * (2 << 23)))
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
+        first_path = (await self.daemon.jsonrpc_get('lbry://foo', save_file=True)).full_path
+        await self.wait_files_to_complete()
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
+        with open(first_path, 'wb') as f:
+            f.write(b' ')
+            f.flush()
+        second_path = await self.daemon.jsonrpc_get('lbry://foo', save_file=True)
+        await self.wait_files_to_complete()
+        self.assertNotEquals(first_path, second_path)
 
     async def test_file_list_updated_metadata_on_resolve(self):
         await self.stream_create('foo', '0.01')
