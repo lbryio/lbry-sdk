@@ -18,7 +18,7 @@ from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbrynet import utils
 from lbrynet.conf import Config, Setting
-from lbrynet.blob.blob_file import is_valid_blobhash
+from lbrynet.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbrynet.blob_exchange.downloader import download_blob
 from lbrynet.error import DownloadSDTimeout, ComponentsNotStarted
 from lbrynet.error import NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
@@ -477,59 +477,11 @@ class Daemon(metaclass=JSONRPCServerType):
             raise web.HTTPServerError(text=stream['error'])
         raise web.HTTPFound(f"/stream/{stream.sd_hash}")
 
-    @staticmethod
-    def prepare_range_response_headers(get_range: str, stream: 'ManagedStream') -> typing.Tuple[typing.Dict[str, str],
-                                                                                                int, int]:
-        if '=' in get_range:
-            get_range = get_range.split('=')[1]
-        start, end = get_range.split('-')
-        size = 0
-        for blob in stream.descriptor.blobs[:-1]:
-            size += blob.length - 1
-        start = int(start)
-        end = int(end) if end else size - 1
-        skip_blobs = start // 2097150
-        skip = skip_blobs * 2097151
-        start = skip
-        final_size = end - start + 1
-
-        headers = {
-            'Accept-Ranges': 'bytes',
-            'Content-Range': f'bytes {start}-{end}/{size}',
-            'Content-Length': str(final_size),
-            'Content-Type': stream.mime_type
-        }
-        return headers, size, skip_blobs
-
     async def handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
         if sd_hash not in self.stream_manager.streams:
             return web.HTTPNotFound()
-        stream = self.stream_manager.streams[sd_hash]
-        if stream.status == 'stopped':
-            await self.stream_manager.start_stream(stream)
-        if stream.delayed_stop:
-            stream.delayed_stop.cancel()
-        headers, size, skip_blobs = self.prepare_range_response_headers(
-            request.headers.get('range', 'bytes=0-'), stream
-        )
-        response = web.StreamResponse(
-            status=206,
-            headers=headers
-        )
-        await response.prepare(request)
-        wrote = 0
-        async for blob_info, decrypted in stream.aiter_read_stream(skip_blobs):
-            log.info("streamed blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
-            if (blob_info.blob_num == len(stream.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
-                decrypted += b'\x00' * (size - len(decrypted) - wrote)
-                await response.write_eof(decrypted)
-                break
-            else:
-                await response.write(decrypted)
-            wrote += len(decrypted)
-        response.force_close()
-        return response
+        return await self.stream_manager.stream_partial_content(request, sd_hash)
 
     async def _process_rpc_call(self, data):
         args = data.get('params', {})
@@ -924,7 +876,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {File}
         """
-        save_file = save_file if save_file is not None else self.conf.save_files
         try:
             stream = await self.stream_manager.download_stream_from_uri(
                 uri, self.exchange_rate_manager, timeout, file_name, save_file=save_file
@@ -1554,7 +1505,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.stream_manager.start_stream(stream)
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
-            await self.stream_manager.stop_stream(stream)
+            await stream.stop()
             msg = "Stopped download"
         else:
             msg = (

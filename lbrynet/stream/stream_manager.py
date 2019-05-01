@@ -5,8 +5,9 @@ import binascii
 import logging
 import random
 from decimal import Decimal
+from aiohttp.web import Request
 from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError
-from lbrynet.error import DownloadSDTimeout, DownloadDataTimeout, ResolveTimeout
+from lbrynet.error import ResolveTimeout, DownloadDataTimeout
 from lbrynet.utils import cache_concurrent
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.managed_stream import ManagedStream
@@ -56,6 +57,7 @@ comparison_operators = {
 def path_or_none(p) -> typing.Optional[str]:
     return None if p == '{stream}' else binascii.unhexlify(p).decode()
 
+
 class StreamManager:
     def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  wallet: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node'],
@@ -76,24 +78,6 @@ class StreamManager:
     async def _update_content_claim(self, stream: ManagedStream):
         claim_info = await self.storage.get_content_claim(stream.stream_hash)
         self.streams.setdefault(stream.sd_hash, stream).set_claim(claim_info, claim_info['value'])
-
-    async def stop_stream(self, stream: ManagedStream):
-        stream.stop_download()
-        if not stream.finished and stream.output_file_exists:
-            try:
-                os.remove(stream.full_path)
-            except OSError as err:
-                log.warning("Failed to delete partial download %s from downloads directory: %s", stream.full_path,
-                            str(err))
-        if stream.running:
-            stream.update_status(ManagedStream.STATUS_STOPPED)
-            await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_STOPPED)
-
-    async def start_stream(self, stream: ManagedStream):
-        stream.update_status(ManagedStream.STATUS_RUNNING)
-        await self.storage.change_file_status(stream.stream_hash, ManagedStream.STATUS_RUNNING)
-        await stream.setup(self.node, save_file=self.config.save_files)
-        self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
     async def recover_streams(self, file_infos: typing.List[typing.Dict]):
         to_restore = []
@@ -150,6 +134,7 @@ class StreamManager:
             await self.recover_streams(to_recover)
 
         if not self.config.save_files:
+            # set files that have been deleted manually to streaming mode
             to_set_as_streaming = []
             for file_info in to_start:
                 file_name = path_or_none(file_info['file_name'])
@@ -176,7 +161,7 @@ class StreamManager:
         if not self.node:
             log.warning("no DHT node given, resuming downloads trusting that we can contact reflector")
         t = [
-            self.loop.create_task(self.start_stream(stream)) for stream in self.streams.values()
+            self.loop.create_task(stream.start(node=self.node)) for stream in self.streams.values()
             if stream.running
         ]
         if t:
@@ -214,7 +199,7 @@ class StreamManager:
             self.re_reflect_task.cancel()
         while self.streams:
             _, stream = self.streams.popitem()
-            stream.stop_download()
+            stream.stop_tasks()
         while self.update_stream_finished_futs:
             self.update_stream_finished_futs.pop().cancel()
         while self.running_reflector_uploads:
@@ -236,7 +221,7 @@ class StreamManager:
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: typing.Optional[bool] = False):
-        await self.stop_stream(stream)
+        stream.stop_tasks()
         if stream.sd_hash in self.streams:
             del self.streams[stream.sd_hash]
         blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
@@ -290,21 +275,16 @@ class StreamManager:
                                                        typing.Optional[ManagedStream], typing.Optional[ManagedStream]]:
         existing = self.get_filtered_streams(outpoint=outpoint)
         if existing:
-            if existing[0].status == ManagedStream.STATUS_STOPPED:
-                await self.start_stream(existing[0])
             return existing[0], None
         existing = self.get_filtered_streams(sd_hash=claim.stream.source.sd_hash)
         if existing and existing[0].claim_id != claim_id:
-            raise ResolveError(f"stream for {existing[0].claim_id} collides with existing "
-                               f"download {claim_id}")
+            raise ResolveError(f"stream for {existing[0].claim_id} collides with existing download {claim_id}")
         if existing:
             log.info("claim contains a metadata only update to a stream we have")
             await self.storage.save_content_claim(
                 existing[0].stream_hash, outpoint
             )
             await self._update_content_claim(existing[0])
-            if not existing[0].running:
-                await self.start_stream(existing[0])
             return existing[0], None
         else:
             existing_for_claim_id = self.get_filtered_streams(claim_id=claim_id)
@@ -318,13 +298,23 @@ class StreamManager:
                                        timeout: typing.Optional[float] = None,
                                        file_name: typing.Optional[str] = None,
                                        download_directory: typing.Optional[str] = None,
-                                       save_file: bool = True, resolve_timeout: float = 3.0) -> ManagedStream:
+                                       save_file: typing.Optional[bool] = None,
+                                       resolve_timeout: float = 3.0) -> ManagedStream:
         timeout = timeout or self.config.download_timeout
         start_time = self.loop.time()
         resolved_time = None
         stream = None
         error = None
         outpoint = None
+        if save_file is None:
+            save_file = self.config.save_files
+        if file_name and not save_file:
+            save_file = True
+        if save_file:
+            download_directory = download_directory or self.config.download_dir
+        else:
+            download_directory = None
+
         try:
             # resolve the claim
             parsed_uri = parse_lbry_uri(uri)
@@ -352,6 +342,9 @@ class StreamManager:
             updated_stream, to_replace = await self._check_update_or_replace(outpoint, resolved['claim_id'], claim)
             if updated_stream:
                 log.info("already have stream for %s", uri)
+                if save_file and updated_stream.output_file_exists:
+                    save_file = False
+                await updated_stream.start(node=self.node, timeout=timeout, save_now=save_file)
                 return updated_stream
 
             content_fee = None
@@ -381,30 +374,18 @@ class StreamManager:
 
                 log.info("paid fee of %s for %s", fee_amount, uri)
 
-            download_directory = download_directory or self.config.download_dir
-            if not file_name and (not self.config.save_files or not save_file):
-                download_dir, file_name = None, None
             stream = ManagedStream(
                 self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash, download_directory,
                 file_name, ManagedStream.STATUS_RUNNING, content_fee=content_fee,
                 analytics_manager=self.analytics_manager
             )
             log.info("starting download for %s", uri)
-            try:
-                await asyncio.wait_for(stream.setup(
-                    self.node, save_file=save_file, file_name=file_name, download_directory=download_directory
-                ), timeout, loop=self.loop)
-            except asyncio.TimeoutError:
-                if not stream.descriptor:
-                    raise DownloadSDTimeout(stream.sd_hash)
-                raise DownloadDataTimeout(stream.sd_hash)
-            finally:
-                if stream.descriptor:
-                    if to_replace:  # delete old stream now that the replacement has started downloading
-                        await self.delete_stream(to_replace)
-                    stream.set_claim(resolved, claim)
-                    await self.storage.save_content_claim(stream.stream_hash, outpoint)
-                    self.streams[stream.sd_hash] = stream
+            await stream.start(self.node, timeout, save_now=save_file)
+            if to_replace:  # delete old stream now that the replacement has started downloading
+                await self.delete_stream(to_replace)
+            self.streams[stream.sd_hash] = stream
+            stream.set_claim(resolved, claim)
+            await self.storage.save_content_claim(stream.stream_hash, outpoint)
             return stream
         except DownloadDataTimeout as err:  # forgive data timeout, dont delete stream
             error = err
@@ -435,3 +416,6 @@ class StreamManager:
                 )
             if error:
                 raise error
+
+    async def stream_partial_content(self, request: Request, sd_hash: str):
+        return await self.streams[sd_hash].stream_file(request, self.node)

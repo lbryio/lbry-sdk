@@ -40,7 +40,7 @@ class TestManagedStream(BlobExchangeTestBase):
             self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir
         )
 
-    async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None):
+    async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None, stop_when_done=True):
         await self.setup_stream(blob_count)
         mock_node = mock.Mock(spec=Node)
 
@@ -51,10 +51,11 @@ class TestManagedStream(BlobExchangeTestBase):
             return q2, self.loop.create_task(_task())
 
         mock_node.accumulate_peers = mock_accumulate_peers or _mock_accumulate_peers
-        await self.stream.setup(mock_node, save_file=True)
+        await self.stream.save_file(node=mock_node)
         await self.stream.finished_writing.wait()
         self.assertTrue(os.path.isfile(self.stream.full_path))
-        self.stream.stop_download()
+        if stop_when_done:
+            await self.stream.stop()
         self.assertTrue(os.path.isfile(self.stream.full_path))
         with open(self.stream.full_path, 'rb') as f:
             self.assertEqual(f.read(), self.stream_bytes)
@@ -62,6 +63,18 @@ class TestManagedStream(BlobExchangeTestBase):
 
     async def test_transfer_stream(self):
         await self._test_transfer_stream(10)
+        self.assertEqual(self.stream.status, "finished")
+        self.assertFalse(self.stream._running.is_set())
+
+    async def test_delayed_stop(self):
+        await self._test_transfer_stream(10, stop_when_done=False)
+        self.assertEqual(self.stream.status, "finished")
+        self.assertTrue(self.stream._running.is_set())
+        await asyncio.sleep(0.5, loop=self.loop)
+        self.assertTrue(self.stream._running.is_set())
+        await asyncio.sleep(0.6, loop=self.loop)
+        self.assertEqual(self.stream.status, "finished")
+        self.assertFalse(self.stream._running.is_set())
 
     @unittest.SkipTest
     async def test_transfer_hundred_blob_stream(self):
@@ -85,11 +98,12 @@ class TestManagedStream(BlobExchangeTestBase):
 
         mock_node.accumulate_peers = _mock_accumulate_peers
 
-        await self.stream.setup(mock_node, save_file=True)
+        await self.stream.save_file(node=mock_node)
         await self.stream.finished_writing.wait()
         self.assertTrue(os.path.isfile(self.stream.full_path))
         with open(self.stream.full_path, 'rb') as f:
             self.assertEqual(f.read(), self.stream_bytes)
+        await self.stream.stop()
         # self.assertIs(self.server_from_client.tcp_last_down, None)
         # self.assertIsNot(bad_peer.tcp_last_down, None)
 
@@ -125,7 +139,7 @@ class TestManagedStream(BlobExchangeTestBase):
                 with open(os.path.join(self.client_blob_manager.blob_dir, blob_info.blob_hash), "rb+") as handle:
                     handle.truncate()
                     handle.flush()
-        await self.stream.setup()
+        await self.stream.save_file()
         await self.stream.finished_writing.wait()
         if corrupt:
             return self.assertFalse(os.path.isfile(os.path.join(self.client_dir, "test_file")))

@@ -3,7 +3,9 @@ import asyncio
 import typing
 import logging
 import binascii
+from aiohttp.web import Request, StreamResponse
 from lbrynet.utils import generate_id
+from lbrynet.error import DownloadSDTimeout, DownloadDataTimeout
 from lbrynet.schema.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
@@ -40,6 +42,33 @@ class ManagedStream:
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
+    __slots__ = [
+        'loop',
+        'config',
+        'blob_manager',
+        'sd_hash',
+        'download_directory',
+        '_file_name',
+        '_status',
+        'stream_claim_info',
+        'download_id',
+        'rowid',
+        'written_bytes',
+        'content_fee',
+        'downloader',
+        'analytics_manager',
+        'fully_reflected',
+        'file_output_task',
+        'delayed_stop_task',
+        'streaming_responses',
+        'streaming',
+        '_running',
+        'saving',
+        'finished_writing',
+        'started_writing',
+
+    ]
+
     def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  sd_hash: str, download_directory: typing.Optional[str] = None, file_name: typing.Optional[str] = None,
                  status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None,
@@ -61,9 +90,13 @@ class ManagedStream:
         self.content_fee = content_fee
         self.downloader = StreamDownloader(self.loop, self.config, self.blob_manager, sd_hash, descriptor)
         self.analytics_manager = analytics_manager
+
         self.fully_reflected = asyncio.Event(loop=self.loop)
         self.file_output_task: typing.Optional[asyncio.Task] = None
-        self.delayed_stop: typing.Optional[asyncio.Handle] = None
+        self.delayed_stop_task: typing.Optional[asyncio.Task] = None
+        self.streaming_responses: typing.List[StreamResponse] = []
+        self.streaming = asyncio.Event(loop=self.loop)
+        self._running = asyncio.Event(loop=self.loop)
         self.saving = asyncio.Event(loop=self.loop)
         self.finished_writing = asyncio.Event(loop=self.loop)
         self.started_writing = asyncio.Event(loop=self.loop)
@@ -84,9 +117,10 @@ class ManagedStream:
     def status(self) -> str:
         return self._status
 
-    def update_status(self, status: str):
+    async def update_status(self, status: str):
         assert status in [self.STATUS_RUNNING, self.STATUS_STOPPED, self.STATUS_FINISHED]
         self._status = status
+        await self.blob_manager.storage.change_file_status(self.stream_hash, status)
 
     @property
     def finished(self) -> bool:
@@ -216,47 +250,85 @@ class ManagedStream:
         return cls(loop, config, blob_manager, descriptor.sd_hash, os.path.dirname(file_path),
                    os.path.basename(file_path), status=cls.STATUS_FINISHED, rowid=row_id, descriptor=descriptor)
 
-    async def setup(self, node: typing.Optional['Node'] = None, save_file: typing.Optional[bool] = True,
-                    file_name: typing.Optional[str] = None, download_directory: typing.Optional[str] = None):
-        await self.downloader.start(node)
-        if not save_file and not file_name:
-            if not await self.blob_manager.storage.file_exists(self.sd_hash):
-                self.rowid = await self.blob_manager.storage.save_downloaded_file(
-                    self.stream_hash, None, None, 0.0
-                )
-                self.download_directory = None
-                self._file_name = None
-                self.update_status(ManagedStream.STATUS_RUNNING)
-                await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_RUNNING)
-            self.update_delayed_stop()
-        else:
-            await self.save_file(file_name, download_directory)
-            await self.started_writing.wait()
+    async def start(self, node: typing.Optional['Node'] = None, timeout: typing.Optional[float] = None,
+                    save_now: bool = False):
+        timeout = timeout or self.config.download_timeout
+        if self._running.is_set():
+            return
+        self._running.set()
+        start_time = self.loop.time()
+        try:
+            await asyncio.wait_for(self.downloader.start(node), timeout, loop=self.loop)
+            if save_now:
+                await asyncio.wait_for(self.save_file(node=node), timeout - (self.loop.time() - start_time),
+                                       loop=self.loop)
+        except asyncio.TimeoutError:
+            self._running.clear()
+            if not self.descriptor:
+                raise DownloadSDTimeout(self.sd_hash)
+            raise DownloadDataTimeout(self.sd_hash)
 
-    def update_delayed_stop(self):
-        def _delayed_stop():
-            log.info("Stopping inactive download for stream %s", self.sd_hash)
-            self.stop_download()
+        if self.delayed_stop_task and not self.delayed_stop_task.done():
+            self.delayed_stop_task.cancel()
+        self.delayed_stop_task = self.loop.create_task(self._delayed_stop())
+        if not await self.blob_manager.storage.file_exists(self.sd_hash):
+            if save_now:
+                file_name, download_dir = self._file_name, self.download_directory
+            else:
+                file_name, download_dir = None, None
+            self.rowid = await self.blob_manager.storage.save_downloaded_file(
+                self.stream_hash, file_name, download_dir, 0.0
+            )
+        if self.status != self.STATUS_RUNNING:
+            await self.update_status(self.STATUS_RUNNING)
 
-        if self.delayed_stop:
-            self.delayed_stop.cancel()
-        self.delayed_stop = self.loop.call_later(60, _delayed_stop)
+    async def stop(self, finished: bool = False):
+        """
+        Stop any running save/stream tasks as well as the downloader and update the status in the database
+        """
 
-    async def aiter_read_stream(self, start_blob_num: typing.Optional[int] = 0) -> typing.AsyncIterator[
-                                                                                    typing.Tuple['BlobInfo', bytes]]:
+        self.stop_tasks()
+        if (finished and self.status != self.STATUS_FINISHED) or self.status == self.STATUS_RUNNING:
+            await self.update_status(self.STATUS_FINISHED if finished else self.STATUS_STOPPED)
+
+    async def _aiter_read_stream(self, start_blob_num: typing.Optional[int] = 0)\
+            -> typing.AsyncIterator[typing.Tuple['BlobInfo', bytes]]:
         if start_blob_num >= len(self.descriptor.blobs[:-1]):
             raise IndexError(start_blob_num)
         for i, blob_info in enumerate(self.descriptor.blobs[start_blob_num:-1]):
             assert i + start_blob_num == blob_info.blob_num
-            if self.delayed_stop:
-                self.delayed_stop.cancel()
-            try:
-                decrypted = await self.downloader.read_blob(blob_info)
-                yield (blob_info, decrypted)
-            except asyncio.CancelledError:
-                if not self.saving.is_set() and not self.finished_writing.is_set():
-                    self.update_delayed_stop()
-                raise
+            decrypted = await self.downloader.read_blob(blob_info)
+            yield (blob_info, decrypted)
+
+    async def stream_file(self, request: Request, node: typing.Optional['Node'] = None) -> StreamResponse:
+        await self.start(node)
+        headers, size, skip_blobs = self._prepare_range_response_headers(request.headers.get('range', 'bytes=0-'))
+        response = StreamResponse(
+            status=206,
+            headers=headers
+        )
+        await response.prepare(request)
+        self.streaming_responses.append(response)
+        self.streaming.set()
+        try:
+            wrote = 0
+            async for blob_info, decrypted in self._aiter_read_stream(skip_blobs):
+                if (blob_info.blob_num == len(self.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
+                    decrypted += b'\x00' * (size - len(decrypted) - wrote)
+                    await response.write_eof(decrypted)
+                else:
+                    await response.write(decrypted)
+                wrote += len(decrypted)
+                log.info("streamed %sblob %i/%i", "(closing stream) " if response._eof_sent else "",
+                         blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
+                if response._eof_sent:
+                    break
+            return response
+        finally:
+            response.force_close()
+            if response in self.streaming_responses:
+                self.streaming_responses.remove(response)
+                self.streaming.clear()
 
     async def _save_file(self, output_path: str):
         log.debug("save file %s -> %s", self.sd_hash, output_path)
@@ -265,15 +337,14 @@ class ManagedStream:
         self.started_writing.clear()
         try:
             with open(output_path, 'wb') as file_write_handle:
-                async for blob_info, decrypted in self.aiter_read_stream():
+                async for blob_info, decrypted in self._aiter_read_stream():
                     log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
                     file_write_handle.write(decrypted)
                     file_write_handle.flush()
                     self.written_bytes += len(decrypted)
                     if not self.started_writing.is_set():
                         self.started_writing.set()
-            self.update_status(ManagedStream.STATUS_FINISHED)
-            await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_FINISHED)
+            await self.update_status(ManagedStream.STATUS_FINISHED)
             if self.analytics_manager:
                 self.loop.create_task(self.analytics_manager.send_download_finished(
                     self.download_id, self.claim_name, self.sd_hash
@@ -289,12 +360,11 @@ class ManagedStream:
         finally:
             self.saving.clear()
 
-    async def save_file(self, file_name: typing.Optional[str] = None, download_directory: typing.Optional[str] = None):
-        if self.file_output_task and not self.file_output_task.done():
+    async def save_file(self, file_name: typing.Optional[str] = None, download_directory: typing.Optional[str] = None,
+                        node: typing.Optional['Node'] = None):
+        await self.start(node)
+        if self.file_output_task and not self.file_output_task.done():  # cancel an already running save task
             self.file_output_task.cancel()
-        if self.delayed_stop:
-            self.delayed_stop.cancel()
-            self.delayed_stop = None
         self.download_directory = download_directory or self.download_directory or self.config.download_dir
         if not self.download_directory:
             raise ValueError("no directory to download to")
@@ -303,28 +373,26 @@ class ManagedStream:
         if not os.path.isdir(self.download_directory):
             log.warning("download directory '%s' does not exist, attempting to make it", self.download_directory)
             os.mkdir(self.download_directory)
-        if not await self.blob_manager.storage.file_exists(self.sd_hash):
-            self._file_name = await get_next_available_file_name(
-                self.loop, self.download_directory,
-                file_name or self._file_name or self.descriptor.suggested_file_name
-            )
-            self.rowid = self.blob_manager.storage.save_downloaded_file(
-                self.stream_hash, self.file_name, self.download_directory, 0.0
-            )
-        else:
-            await self.blob_manager.storage.change_file_download_dir_and_file_name(
-                self.stream_hash, self.download_directory, self.file_name
-            )
-        self.update_status(ManagedStream.STATUS_RUNNING)
-        await self.blob_manager.storage.change_file_status(self.stream_hash, ManagedStream.STATUS_RUNNING)
+        self._file_name = await get_next_available_file_name(
+            self.loop, self.download_directory,
+            file_name or self._file_name or self.descriptor.suggested_file_name
+        )
+        await self.blob_manager.storage.change_file_download_dir_and_file_name(
+            self.stream_hash, self.download_directory, self.file_name
+        )
+        await self.update_status(ManagedStream.STATUS_RUNNING)
         self.written_bytes = 0
         self.file_output_task = self.loop.create_task(self._save_file(self.full_path))
+        await self.started_writing.wait()
 
-    def stop_download(self):
+    def stop_tasks(self):
         if self.file_output_task and not self.file_output_task.done():
             self.file_output_task.cancel()
         self.file_output_task = None
+        while self.streaming_responses:
+            self.streaming_responses.pop().force_close()
         self.downloader.stop()
+        self._running.clear()
 
     async def upload_to_reflector(self, host: str, port: int) -> typing.List[str]:
         sent = []
@@ -365,3 +433,43 @@ class ManagedStream:
             binascii.hexlify(claim.to_bytes()).decode(), claim.signing_channel_id, claim_info['address'],
             claim_info['claim_sequence'], claim_info.get('channel_name')
         )
+
+    async def update_content_claim(self, claim_info: typing.Optional[typing.Dict] = None):
+        if not claim_info:
+            claim_info = await self.blob_manager.storage.get_content_claim(self.stream_hash)
+        self.set_claim(claim_info, claim_info['value'])
+
+    async def _delayed_stop(self):
+        stalled_count = 0
+        while self._running.is_set():
+            if self.saving.is_set() or self.streaming.is_set():
+                stalled_count = 0
+            else:
+                stalled_count += 1
+            if stalled_count > 1:
+                log.info("Stopping inactive download for stream %s", self.sd_hash)
+                await self.stop()
+                return
+            await asyncio.sleep(1, loop=self.loop)
+
+    def _prepare_range_response_headers(self, get_range: str) -> typing.Tuple[typing.Dict[str, str], int, int]:
+        if '=' in get_range:
+            get_range = get_range.split('=')[1]
+        start, end = get_range.split('-')
+        size = 0
+        for blob in self.descriptor.blobs[:-1]:
+            size += blob.length - 1
+        start = int(start)
+        end = int(end) if end else size - 1
+        skip_blobs = start // 2097150
+        skip = skip_blobs * 2097151
+        start = skip
+        final_size = end - start + 1
+
+        headers = {
+            'Accept-Ranges': 'bytes',
+            'Content-Range': f'bytes {start}-{end}/{size}',
+            'Content-Length': str(final_size),
+            'Content-Type': self.mime_type
+        }
+        return headers, size, skip_blobs
