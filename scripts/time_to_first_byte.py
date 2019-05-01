@@ -129,8 +129,8 @@ async def main(uris=None, cmd_args=None):
             download_speeds.append(mbs)
             print(f"downloaded {amount_downloaded}/{blobs_in_stream} blobs for {uri} at "
                   f"{mbs}mb/s")
-        except:
-            print(f"{i + 1}/{len(uris)} - failed to start {uri}")
+        except Exception as e:
+            print(f"{i + 1}/{len(uris)} - failed to start {uri}: {e}")
             failed_to_start.append(uri)
             if cmd_args.exit_on_error:
                 return
@@ -169,6 +169,6 @@ if __name__ == "__main__":
     #parser.add_argument("--download_directory")
     parser.add_argument("--allow_fees", action='store_true')
     parser.add_argument("--exit_on_error", action='store_true')
-    parser.add_argument("--stall_download_timeout", default=10)
+    parser.add_argument("--stall_download_timeout", default=10, type=int)
     parser.add_argument("--delete_after_download", action='store_true')
     asyncio.run(main(cmd_args=parser.parse_args()))
