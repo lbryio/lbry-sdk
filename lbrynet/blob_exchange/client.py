@@ -168,6 +168,10 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         except asyncio.CancelledError:
             self.close()
             raise
+        finally:
+            if self.writer and not self.writer.closed():
+                self.writer.close_handle()
+                self.writer = None
 
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
