@@ -439,6 +439,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 await self.component_manager.stop()
             else:
                 self.component_startup_task.cancel()
+        await self.runner.shutdown()
         await self.runner.cleanup()
         if self.analytics_manager.is_started:
             self.analytics_manager.stop()

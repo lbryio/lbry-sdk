@@ -94,7 +94,7 @@ class ManagedStream:
         self.fully_reflected = asyncio.Event(loop=self.loop)
         self.file_output_task: typing.Optional[asyncio.Task] = None
         self.delayed_stop_task: typing.Optional[asyncio.Task] = None
-        self.streaming_responses: typing.List[StreamResponse] = []
+        self.streaming_responses: typing.List[typing.Tuple[Request, StreamResponse]] = []
         self.streaming = asyncio.Event(loop=self.loop)
         self._running = asyncio.Event(loop=self.loop)
         self.saving = asyncio.Event(loop=self.loop)
@@ -311,7 +311,7 @@ class ManagedStream:
             headers=headers
         )
         await response.prepare(request)
-        self.streaming_responses.append(response)
+        self.streaming_responses.append((request, response))
         self.streaming.set()
         try:
             wrote = 0
@@ -329,8 +329,9 @@ class ManagedStream:
             return response
         finally:
             response.force_close()
-            if response in self.streaming_responses:
-                self.streaming_responses.remove(response)
+            if (request, response) in self.streaming_responses:
+                self.streaming_responses.remove((request, response))
+            if not self.streaming_responses:
                 self.streaming.clear()
 
     async def _save_file(self, output_path: str):
@@ -394,7 +395,9 @@ class ManagedStream:
             self.file_output_task.cancel()
         self.file_output_task = None
         while self.streaming_responses:
-            self.streaming_responses.pop().force_close()
+            req, response = self.streaming_responses.pop()
+            response.force_close()
+            req.transport.close()
         self.downloader.stop()
         self._running.clear()
 
