@@ -133,6 +133,22 @@ class TestBlob(AsyncioTestCase):
         await self._test_close_writers_on_finished(BlobBuffer)
         await self._test_close_writers_on_finished(BlobFile, tmp_dir)
 
+    async def test_concurrency_and_premature_closes(self):
+        blob_directory = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(blob_directory))
+        blob = self._get_blob(BlobBuffer, blob_directory=blob_directory)
+        writer = blob.get_blob_writer('1.1.1.1', 1337)
+        self.assertEqual(1, len(blob.writers))
+        with self.assertRaises(OSError):
+            blob.get_blob_writer('1.1.1.1', 1337)
+        writer.close_handle()
+        self.assertTrue(blob.writers[('1.1.1.1', 1337)].closed())
+        writer = blob.get_blob_writer('1.1.1.1', 1337)
+        self.assertEqual(blob.writers[('1.1.1.1', 1337)], writer)
+        writer.close_handle()
+        await asyncio.sleep(0.000000001)  # flush callbacks
+        self.assertEqual(0, len(blob.writers))
+
     async def test_delete(self):
         blob_buffer = await self._test_create_blob(BlobBuffer)
         self.assertIsInstance(blob_buffer, BlobBuffer)

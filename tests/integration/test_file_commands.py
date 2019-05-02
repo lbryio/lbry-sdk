@@ -44,6 +44,18 @@ class FileCommands(CommandTestCase):
         )
         self.assertEqual(file_list[0]['confirmations'], 1)
 
+    async def test_get_doesnt_touch_user_written_files_between_calls(self):
+        await self.stream_create('foo', '0.01', data=bytes([0] * (2 << 23)))
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
+        first_path = (await self.daemon.jsonrpc_get('lbry://foo', save_file=True)).full_path
+        await self.wait_files_to_complete()
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
+        with open(first_path, 'wb') as f:
+            f.write(b' ')
+            f.flush()
+        second_path = await self.daemon.jsonrpc_get('lbry://foo', save_file=True)
+        await self.wait_files_to_complete()
+        self.assertNotEquals(first_path, second_path)
 
     async def test_file_list_updated_metadata_on_resolve(self):
         await self.stream_create('foo', '0.01')
@@ -67,12 +79,12 @@ class FileCommands(CommandTestCase):
             blob_hash for blob_hash in self.server.blob_manager.completed_blob_hashes if blob_hash != sd_hash
         ]
         await self.server.blob_manager.delete_blobs(all_except_sd)
-        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
+        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
         self.assertEqual('Failed to download data blobs for sd hash %s within timeout' % sd_hash, resp['error'])
-        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'), "data timeout didnt create a file")
         await self.server.blob_manager.delete_blobs([sd_hash])
-        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
+        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
         self.assertEqual('Failed to download sd blob %s within timeout' % sd_hash, resp['error'])
 
@@ -159,7 +171,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual('finished', file_info['status'])
 
     async def test_unban_recovers_stream(self):
-        BlobDownloader.BAN_TIME = .5  # fixme: temporary field, will move to connection manager or a conf
+        BlobDownloader.BAN_FACTOR = .5  # fixme: temporary field, will move to connection manager or a conf
         tx = await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
         sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))[-2]

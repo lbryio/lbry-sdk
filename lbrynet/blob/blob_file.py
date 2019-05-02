@@ -201,7 +201,7 @@ class AbstractBlob:
 
     def get_blob_writer(self, peer_address: typing.Optional[str] = None,
                         peer_port: typing.Optional[int] = None) -> HashBlobWriter:
-        if (peer_address, peer_port) in self.writers:
+        if (peer_address, peer_port) in self.writers and not self.writers[(peer_address, peer_port)].closed():
             raise OSError(f"attempted to download blob twice from {peer_address}:{peer_port}")
         fut = asyncio.Future(loop=self.loop)
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut)

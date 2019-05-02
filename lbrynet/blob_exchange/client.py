@@ -35,6 +35,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
             return
+        if not self._response_fut:
+            log.warning("Protocol received data before expected, probable race on keep alive. Closing transport.")
+            return self.close()
         if self._blob_bytes_received and not self.writer.closed():
             return self._write(data)
 
@@ -165,6 +168,10 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         except asyncio.CancelledError:
             self.close()
             raise
+        finally:
+            if self.writer and not self.writer.closed():
+                self.writer.close_handle()
+                self.writer = None
 
     def connection_made(self, transport: asyncio.Transport):
         self.transport = transport
