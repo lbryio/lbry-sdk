@@ -74,6 +74,7 @@ class StreamManager:
         self.re_reflect_task: asyncio.Task = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
         self.running_reflector_uploads: typing.List[asyncio.Task] = []
+        self.started = asyncio.Event(loop=self.loop)
 
     async def _update_content_claim(self, stream: ManagedStream):
         claim_info = await self.storage.get_content_claim(stream.stream_hash)
@@ -191,6 +192,7 @@ class StreamManager:
         await self.load_streams_from_database()
         self.resume_downloading_task = self.loop.create_task(self.resume())
         self.re_reflect_task = self.loop.create_task(self.reflect_streams())
+        self.started.set()
 
     def stop(self):
         if self.resume_downloading_task and not self.resume_downloading_task.done():
@@ -204,6 +206,7 @@ class StreamManager:
             self.update_stream_finished_futs.pop().cancel()
         while self.running_reflector_uploads:
             self.running_reflector_uploads.pop().cancel()
+        self.started.clear()
 
     async def create_stream(self, file_path: str, key: typing.Optional[bytes] = None,
                             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:

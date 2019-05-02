@@ -473,6 +473,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             name, claim_id = name_and_claim_id.split("/")
             uri = f"lbry://{name}#{claim_id}"
+        if not self.stream_manager.started.is_set():
+            await self.stream_manager.started.wait()
         stream = await self.jsonrpc_get(uri)
         if isinstance(stream, dict):
             raise web.HTTPServerError(text=stream['error'])
@@ -480,6 +482,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
+        if not self.stream_manager.started.is_set():
+            await self.stream_manager.started.wait()
         if sd_hash not in self.stream_manager.streams:
             return web.HTTPNotFound()
         return await self.stream_manager.stream_partial_content(request, sd_hash)
