@@ -255,6 +255,7 @@ class ManagedStream:
         timeout = timeout or self.config.download_timeout
         if self._running.is_set():
             return
+        log.info("start downloader for lbry://%s#%s (sd hash %s...)", self.claim_name, self.claim_id, self.sd_hash[:6])
         self._running.set()
         start_time = self.loop.time()
         try:
@@ -301,6 +302,8 @@ class ManagedStream:
             yield (blob_info, decrypted)
 
     async def stream_file(self, request: Request, node: typing.Optional['Node'] = None) -> StreamResponse:
+        log.info("stream file to browser for lbry://%s#%s (sd hash %s...)", self.claim_name, self.claim_id,
+                 self.sd_hash[:6])
         await self.start(node)
         headers, size, skip_blobs = self._prepare_range_response_headers(request.headers.get('range', 'bytes=0-'))
         response = StreamResponse(
@@ -319,7 +322,7 @@ class ManagedStream:
                 else:
                     await response.write(decrypted)
                 wrote += len(decrypted)
-                log.info("streamed %sblob %i/%i", "(closing stream) " if response._eof_sent else "",
+                log.info("sent browser %sblob %i/%i", "(final) " if response._eof_sent else "",
                          blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
                 if response._eof_sent:
                     break
@@ -331,7 +334,8 @@ class ManagedStream:
                 self.streaming.clear()
 
     async def _save_file(self, output_path: str):
-        log.debug("save file %s -> %s", self.sd_hash, output_path)
+        log.info("save file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id, self.sd_hash[:6],
+                 output_path)
         self.saving.set()
         self.finished_writing.clear()
         self.started_writing.clear()
@@ -352,7 +356,7 @@ class ManagedStream:
             self.finished_writing.set()
         except Exception as err:
             if os.path.isfile(output_path):
-                log.info("removing incomplete download %s for %s", output_path, self.sd_hash)
+                log.warning("removing incomplete download %s for %s", output_path, self.sd_hash)
                 os.remove(output_path)
             if not isinstance(err, asyncio.CancelledError):
                 log.exception("unexpected error encountered writing file for stream %s", self.sd_hash)
@@ -447,7 +451,8 @@ class ManagedStream:
             else:
                 stalled_count += 1
             if stalled_count > 1:
-                log.info("Stopping inactive download for stream %s", self.sd_hash)
+                log.info("stopping inactive download for lbry://%s#%s (%s...)", self.claim_name, self.claim_id,
+                         self.sd_hash[:6])
                 await self.stop()
                 return
             await asyncio.sleep(1, loop=self.loop)
