@@ -53,7 +53,7 @@ class BlobDownloader:
             log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
             self.failures[peer] = 0
             self.connections[peer] = transport
-            elapsed = self.loop.time - start
+            elapsed = self.loop.time() - start
             self.scores[peer] = bytes_received / elapsed if bytes_received and elapsed else 0
 
     async def new_peer_or_finished(self):

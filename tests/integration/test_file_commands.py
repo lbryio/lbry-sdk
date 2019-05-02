@@ -79,12 +79,12 @@ class FileCommands(CommandTestCase):
             blob_hash for blob_hash in self.server.blob_manager.completed_blob_hashes if blob_hash != sd_hash
         ]
         await self.server.blob_manager.delete_blobs(all_except_sd)
-        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
+        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
         self.assertEqual('Failed to download data blobs for sd hash %s within timeout' % sd_hash, resp['error'])
-        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'), "data timeout didnt create a file")
         await self.server.blob_manager.delete_blobs([sd_hash])
-        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2)
+        resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
         self.assertEqual('Failed to download sd blob %s within timeout' % sd_hash, resp['error'])
 

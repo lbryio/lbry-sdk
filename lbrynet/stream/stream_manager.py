@@ -397,12 +397,17 @@ class StreamManager:
                 if not stream.descriptor:
                     raise DownloadSDTimeout(stream.sd_hash)
                 raise DownloadDataTimeout(stream.sd_hash)
-            if to_replace:  # delete old stream now that the replacement has started downloading
-                await self.delete_stream(to_replace)
-            stream.set_claim(resolved, claim)
-            await self.storage.save_content_claim(stream.stream_hash, outpoint)
-            self.streams[stream.sd_hash] = stream
+            finally:
+                if stream.descriptor:
+                    if to_replace:  # delete old stream now that the replacement has started downloading
+                        await self.delete_stream(to_replace)
+                    stream.set_claim(resolved, claim)
+                    await self.storage.save_content_claim(stream.stream_hash, outpoint)
+                    self.streams[stream.sd_hash] = stream
             return stream
+        except DownloadDataTimeout as err:  # forgive data timeout, dont delete stream
+            error = err
+            raise
         except Exception as err:
             error = err
             if stream and stream.descriptor:
