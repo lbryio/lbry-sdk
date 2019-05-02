@@ -53,8 +53,8 @@ class BlobDownloader:
             log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
             self.failures[peer] = 0
             self.connections[peer] = transport
-            rough_speed = (bytes_received / (self.loop.time() - start)) if bytes_received else 0
-            self.scores[peer] = rough_speed
+            elapsed = self.loop.time - start
+            self.scores[peer] = bytes_received / elapsed if bytes_received and elapsed else 0
 
     async def new_peer_or_finished(self):
         active_tasks = list(self.active_connections.values()) + [asyncio.sleep(1)]
