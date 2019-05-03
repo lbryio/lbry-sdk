@@ -4,6 +4,7 @@ import typing
 import binascii
 from lbrynet.error import InvalidBlobHashError, InvalidDataError
 from lbrynet.blob_exchange.serialization import BlobResponse, BlobRequest
+from lbrynet.utils import cache_concurrent
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import AbstractBlob
     from lbrynet.blob.writer import HashBlobWriter
@@ -158,8 +159,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             return await self._download_blob()
         except OSError as e:
             # i'm not sure how to fix this race condition - jack
-            log.exception("race happened downloading %s from %s:%i", blob_hash, self.peer_address, self.peer_port)
-            return self._blob_bytes_received, self.transport
+            log.warning("race happened downloading %s from %s:%i", blob_hash, self.peer_address, self.peer_port)
+            # return self._blob_bytes_received, self.transport
+            raise
         except asyncio.TimeoutError:
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.cancel()
@@ -184,6 +186,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.close()
 
 
+@cache_concurrent
 async def request_blob(loop: asyncio.BaseEventLoop, blob: 'AbstractBlob', address: str, tcp_port: int,
                        peer_connect_timeout: float, blob_download_timeout: float,
                        connected_transport: asyncio.Transport = None)\
