@@ -356,7 +356,7 @@ class ManagedStream:
                 ))
             self.finished_writing.set()
             log.info("finished saving file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id,
-                     self.sd_hash[:6])
+                     self.sd_hash[:6], self.full_path)
         except Exception as err:
             if os.path.isfile(output_path):
                 log.warning("removing incomplete download %s for %s", output_path, self.sd_hash)
