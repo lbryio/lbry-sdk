@@ -439,10 +439,13 @@ class Daemon(metaclass=JSONRPCServerType):
                 await self.component_manager.stop()
             else:
                 self.component_startup_task.cancel()
+        log.info("stopped api components")
         await self.runner.shutdown()
         await self.runner.cleanup()
+        log.info("stopped api server")
         if self.analytics_manager.is_started:
             self.analytics_manager.stop()
+        log.info("finished shutting down")
 
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
