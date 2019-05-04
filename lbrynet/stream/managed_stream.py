@@ -317,7 +317,7 @@ class ManagedStream:
             wrote = 0
             async for blob_info, decrypted in self._aiter_read_stream(skip_blobs):
                 if (blob_info.blob_num == len(self.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
-                    decrypted += b'\x00' * (size - len(decrypted) - wrote)
+                    decrypted += (b'\x00' * (size - len(decrypted) - wrote - (skip_blobs * 2097151)))
                     await response.write_eof(decrypted)
                 else:
                     await response.write(decrypted)
