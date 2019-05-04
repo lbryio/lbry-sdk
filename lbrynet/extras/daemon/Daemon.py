@@ -979,7 +979,7 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires("wallet")
-    def jsonrpc_account_list(self, account_id=None, confirmations=6,
+    def jsonrpc_account_list(self, account_id=None, confirmations=0,
                              include_claims=False, show_seed=False):
         """
         List details of all of the accounts or a specific account.
