@@ -95,3 +95,20 @@ class TestAccount(AsyncioTestCase):
         account = Account.from_dict(self.ledger, Wallet(), account_data)
         account_data['ledger'] = 'lbc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())
+
+    async def test_save_max_gap(self):
+        account = Account.generate(
+            self.ledger, Wallet(), 'lbryum', {
+                    'name': 'deterministic-chain',
+                    'receiving': {'gap': 3, 'maximum_uses_per_address': 2},
+                    'change': {'gap': 4, 'maximum_uses_per_address': 2}
+                }
+        )
+        self.assertEqual(account.receiving.gap, 3)
+        self.assertEqual(account.change.gap, 4)
+        await account.save_max_gap()
+        self.assertEqual(account.receiving.gap, 20)
+        self.assertEqual(account.change.gap, 6)
+        # doesn't fail for single-address account
+        account2 = Account.generate(self.ledger, Wallet(), 'lbryum', {'name': 'single-address'})
+        await account2.save_max_gap()
