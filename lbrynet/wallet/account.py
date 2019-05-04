@@ -4,7 +4,7 @@ import binascii
 from hashlib import sha256
 from string import hexdigits
 
-from torba.client.baseaccount import BaseAccount
+from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
 from torba.client.basetransaction import TXORef
 
 
@@ -167,10 +167,11 @@ class Account(BaseAccount):
             ))
 
     async def save_max_gap(self):
-        gap = await self.get_max_gap()
-        self.receiving.gap = max(20, gap['max_receiving_gap'] + 1)
-        self.change.gap = max(6, gap['max_change_gap'] + 1)
-        self.wallet.save()
+        if issubclass(self.address_generator, HierarchicalDeterministic):
+            gap = await self.get_max_gap()
+            self.receiving.gap = max(20, gap['max_receiving_gap'] + 1)
+            self.change.gap = max(6, gap['max_change_gap'] + 1)
+            self.wallet.save()
 
     def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
