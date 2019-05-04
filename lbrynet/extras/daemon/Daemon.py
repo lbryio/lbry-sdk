@@ -433,14 +433,15 @@ class Daemon(metaclass=JSONRPCServerType):
         self.component_startup_task = asyncio.create_task(self.component_manager.start())
         await self.component_startup_task
 
-    async def stop(self):
+    async def stop(self, shutdown_runner=True):
         if self.component_startup_task is not None:
             if self.component_startup_task.done():
                 await self.component_manager.stop()
             else:
                 self.component_startup_task.cancel()
         log.info("stopped api components")
-        await self.runner.shutdown()
+        if shutdown_runner:
+            await self.runner.shutdown()
         await self.runner.cleanup()
         log.info("stopped api server")
         if self.analytics_manager.is_started:

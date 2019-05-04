@@ -54,7 +54,7 @@ class AccountSynchronization(AsyncioTestCase):
 
     async def asyncTearDown(self):
         self.wallet_component._running = False
-        await self.daemon.stop()
+        await self.daemon.stop(shutdown_runner=False)
 
     @mock.patch('time.time', mock.Mock(return_value=12345))
     def test_sync(self):

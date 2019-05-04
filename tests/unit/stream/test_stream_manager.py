@@ -337,7 +337,7 @@ class TestStreamManager(BlobExchangeTestBase):
         for blob_hash in [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]:
             blob_status = await self.client_storage.get_blob_status(blob_hash)
             self.assertEqual('pending', blob_status)
-        self.assertEqual('stopped', self.stream_manager.streams[self.sd_hash].status)
+        self.assertEqual('finished', self.stream_manager.streams[self.sd_hash].status)
 
         sd_blob = self.client_blob_manager.get_blob(stream.sd_hash)
         self.assertTrue(sd_blob.file_exists)

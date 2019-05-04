@@ -340,9 +340,11 @@ class RangeRequests(CommandTestCase):
             self.assertTrue(os.path.isfile(path))
         await self._restart_stream_manager()
         stream = self.daemon.jsonrpc_file_list()[0]
-
-        self.assertIsNone(stream.full_path)
+        self.assertIsNotNone(stream.full_path)
         self.assertFalse(os.path.isfile(path))
+        if wait_for_start_writing:
+            await stream.started_writing.wait()
+            self.assertTrue(os.path.isfile(path))
 
     async def test_file_save_stop_before_finished_streaming_only_wait_for_start(self):
         return await self.test_file_save_stop_before_finished_streaming_only(wait_for_start_writing=True)

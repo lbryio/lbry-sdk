@@ -7,7 +7,7 @@ import random
 from decimal import Decimal
 from aiohttp.web import Request
 from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError
-from lbrynet.error import ResolveTimeout, DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.error import ResolveTimeout
 from lbrynet.utils import cache_concurrent
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.managed_stream import ManagedStream
