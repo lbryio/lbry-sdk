@@ -30,7 +30,7 @@ class Resolver:
             for uri in uris:
                 parsed_uri = parse_lbry_uri(uri)
                 if parsed_uri.claim_id:
-                    validate_claim_id(parsed_uri.claim_id)
+                    validate_claim_id(parsed_uri.claim_id, for_resolve=True)
             claim_trie_root = self.ledger.headers.claim_trie_root
             resolutions = await self.network.get_values_for_uris(self.ledger.headers.hash().decode(), *uris)
             if len(uris) > 1:
@@ -141,6 +141,14 @@ class Resolver:
                 result['claims_in_channel'] = claims_in_channel
         elif 'error' not in result:
             return {'error': 'claim not found', 'success': False, 'uri': str(parsed_uri)}
+
+        # add canonical_url to claim result, the logic now is a little finicky, there can be a few edge cases..?
+        if result.get('claim') and result.get('certificate'):
+            claim_canonical_url = "{}/{}".format(
+                result['certificate']['canonical_url'],
+                result['claim']["name"]
+            )
+            result['claim']['canonical_url'] = claim_canonical_url
 
         # invalid signatures can only return outside a channel
         if result.get('claim', {}).get('has_signature', False):

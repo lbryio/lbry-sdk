@@ -97,7 +97,6 @@ class LBRYDB(DB):
             else:
                 delete_outpoint(key)
         for key, claim_id in self.canonical_url_cache.items():
-            self.logger.info("HERE HERE HERE HERE {}, {}".format(key, claim_id))
             if claim_id:
                 write_canonical_url(key, claim_id)
         self.logger.info('flushed at height {:,d} with {:,d} claims, {:,d} outpoints '

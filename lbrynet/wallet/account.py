@@ -11,9 +11,11 @@ from torba.client.basetransaction import TXORef
 log = logging.getLogger(__name__)
 
 
-def validate_claim_id(claim_id):
-    if not len(claim_id) == 40:
+def validate_claim_id(claim_id, for_resolve=False):
+    if not for_resolve and not len(claim_id) == 40:
         raise Exception("Incorrect claimid length: %i" % len(claim_id))
+    if for_resolve and not len(claim_id) <= 40:
+        raise Exception("claimid length should be <= 40. : %i" % len(claim_id))
     if isinstance(claim_id, bytes):
         claim_id = claim_id.decode('utf-8')
     if set(claim_id).difference(hexdigits):
