@@ -300,7 +300,8 @@ class SQLDB:
     def _perform_overtake(self, height):
         for overtake in self.get_overtakings():
             self.execute(
-                f"UPDATE claim SET activation_height = {height} WHERE normalized = ?",
+                f"UPDATE claim SET activation_height = {height} WHERE normalized = ? "
+                f"AND (activation_height IS NULL OR activation_height > {height})",
                 (overtake['normalized'],)
             )
             self.execute(
@@ -319,8 +320,17 @@ class SQLDB:
 
     def get_claims(self, cols, **constraints):
         if 'is_controlling' in constraints:
-            constraints['claimtrie.claim_hash__is_not_null'] = ''
+            if {'sequence', 'amount_order'}.isdisjoint(constraints):
+                constraints['claimtrie.claim_hash__is_not_null'] = ''
             del constraints['is_controlling']
+        if 'sequence' in constraints:
+            constraints['order_by'] = 'claim.activation_height ASC'
+            constraints['offset'] = int(constraints.pop('sequence')) - 1
+            constraints['limit'] = 1
+        if 'amount_order' in constraints:
+            constraints['order_by'] = 'claim.effective_amount DESC'
+            constraints['offset'] = int(constraints.pop('amount_order')) - 1
+            constraints['limit'] = 1
 
         if 'claim_id' in constraints:
             constraints['claim.claim_hash'] = sqlite3.Binary(
@@ -348,15 +358,13 @@ class SQLDB:
             constraints['claim.txo_hash'] = sqlite3.Binary(
                 tx_hash + struct.pack('<I', nout)
             )
-        cur = self.db.cursor()
-        cur.execute(*query(
+        return self.db.execute(*query(
             f"""
             SELECT {cols} FROM claim
             LEFT JOIN claimtrie USING (claim_hash)
             LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
             """, **constraints
-        ))
-        return cur.fetchall()
+        )).fetchall()
 
     def get_claims_count(self, **constraints):
         constraints.pop('offset', None)

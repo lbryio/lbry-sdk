@@ -6,9 +6,20 @@ from lbrynet.testcase import CommandTestCase
 
 class ResolveCommand(CommandTestCase):
 
-    async def test_resolve(self):
-        tx = await self.channel_create('@abc', '0.01')
-        channel_id = tx['outputs'][0]['claim_id']
+    def get_claim_id(self, tx):
+        return tx['outputs'][0]['claim_id']
+
+    async def assertResolvesToClaimId(self, name, claim_id):
+        other = (await self.resolve(name))[name]
+        if claim_id is None:
+            self.assertIn('error', other)
+        else:
+            self.assertEqual(claim_id, other['claim_id'])
+
+    async def test_resolve_response(self):
+        channel_id = self.get_claim_id(
+            await self.channel_create('@abc', '0.01')
+        )
 
         # resolving a channel @abc
         response = await self.resolve('lbry://@abc')
@@ -69,6 +80,45 @@ class ResolveCommand(CommandTestCase):
         claim = response['lbry://gibberish']
         self.assertEqual(claim['name'], 'gibberish')
         self.assertNotIn('value', claim)
+
+    async def test_winning_by_effective_amount(self):
+        # first one remains winner unless something else changes
+        claim_id1 = self.get_claim_id(
+            await self.channel_create('@foo', allow_duplicate_name=True))
+        await self.assertResolvesToClaimId('@foo', claim_id1)
+        claim_id2 = self.get_claim_id(
+            await self.channel_create('@foo', allow_duplicate_name=True))
+        await self.assertResolvesToClaimId('@foo', claim_id1)
+        claim_id3 = self.get_claim_id(
+            await self.channel_create('@foo', allow_duplicate_name=True))
+        await self.assertResolvesToClaimId('@foo', claim_id1)
+        # supports change the winner
+        await self.support_create(claim_id3, '0.09')
+        await self.assertResolvesToClaimId('@foo', claim_id3)
+        await self.support_create(claim_id2, '0.19')
+        await self.assertResolvesToClaimId('@foo', claim_id2)
+        await self.support_create(claim_id1, '0.19')
+        await self.assertResolvesToClaimId('@foo', claim_id1)
+
+    async def test_advanced_resolve(self):
+        claim_id1 = self.get_claim_id(
+            await self.stream_create('foo', '0.7', allow_duplicate_name=True))
+        claim_id2 = self.get_claim_id(
+            await self.stream_create('foo', '0.8', allow_duplicate_name=True))
+        claim_id3 = self.get_claim_id(
+            await self.stream_create('foo', '0.9', allow_duplicate_name=True))
+        # plain winning claim
+        await self.assertResolvesToClaimId('foo', claim_id3)
+        # sequence resolution
+        await self.assertResolvesToClaimId('foo:1', claim_id1)
+        await self.assertResolvesToClaimId('foo:2', claim_id2)
+        await self.assertResolvesToClaimId('foo:3', claim_id3)
+        await self.assertResolvesToClaimId('foo:4', None)
+        # amount order resolution
+        await self.assertResolvesToClaimId('foo$1', claim_id3)
+        await self.assertResolvesToClaimId('foo$2', claim_id2)
+        await self.assertResolvesToClaimId('foo$3', claim_id1)
+        await self.assertResolvesToClaimId('foo$4', None)
 
     async def _test_resolve_abc_foo(self):
         response = await self.resolve('lbry://@abc/foo')
