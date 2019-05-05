@@ -27,9 +27,10 @@ jobs:
         - bash <(curl -s https://codecov.io/bash)
 
     - name: "Integration Tests"
+      cache: false
       install:
         - pip install tox-travis coverage
-        - pushd .. && git clone --single-branch --branch sqltrie https://github.com/lbryio/torba.git && pushd torba && git branch && popd && popd
+        - pushd .. && git clone --single-branch --branch sqltrie https://github.com/lbryio/torba.git && popd
       script: tox
       after_success:
         - coverage combine tests/
