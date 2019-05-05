@@ -181,13 +181,7 @@ class JSONResponseEncoder(JSONEncoder):
                     if self.include_protobuf:
                         output['protobuf'] = hexlify(txo.claim.to_bytes())
                     if txo.channel is not None:
-                        output['signing_channel'] = {
-                            'name': txo.channel.claim_name,
-                            'normalized': txo.channel.normalized_name,
-                            'claim_id': txo.channel.claim_id,
-                            'value': txo.channel.claim,
-                            'meta': self.encode_claim_meta(txo.channel.meta)
-                        }
+                        output['signing_channel'] = txo.channel
                         if check_signature and txo.claim.is_signed:
                             output['is_channel_signature_valid'] = False
                             if txo.channel:
