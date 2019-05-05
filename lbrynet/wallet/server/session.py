@@ -61,9 +61,7 @@ class LBRYElectrumX(ElectrumX):
         transaction_info = await self.daemon.getrawtransaction(tx_hash, True)
         if transaction_info and 'hex' in transaction_info and 'confirmations' in transaction_info:
             # an unconfirmed transaction from lbrycrdd will not have a 'confirmations' field
-            height = self.db.db_height
-            height = height - transaction_info['confirmations']
-            return height
+            return (self.db.db_height - transaction_info['confirmations']) + 1
         elif transaction_info and 'hex' in transaction_info:
             return -1
         return None

@@ -17,7 +17,7 @@ class TransactionCommandsTestCase(CommandTestCase):
         sendtxid = await self.blockchain.send_to_address(change_address, 10)
         tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
         self.assertEqual(tx.id, sendtxid)
-        self.assertEqual(tx.height, -2)
+        self.assertEqual(tx.height, -1)
         await self.generate(1)
         tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
         self.assertEqual(tx.height, self.ledger.headers.height)
