@@ -34,7 +34,7 @@ class Resolver:
             if len(uris) > 1:
                 return await self._batch_handle(resolutions, uris, page, page_size, claim_trie_root)
             return await self._handle_resolutions(resolutions, uris, page, page_size, claim_trie_root)
-        except URIParseError as err:
+        except ValueError as err:
             return {'error': err.args[0]}
         except Exception as e:
             log.exception(e)
@@ -72,7 +72,7 @@ class Resolver:
 
     async def _handle_resolve_uri_response(self, uri, resolution, claim_trie_root, page=0, page_size=10):
         result = {}
-        parsed_uri = parse_lbry_uri(uri)
+        parsed_uri = URL.parse(uri)
         certificate_response = None
         # parse an included certificate
         if 'certificate' in resolution:
@@ -80,7 +80,7 @@ class Resolver:
             certificate_resolution_type = resolution['certificate']['resolution_type']
             if certificate_resolution_type == "winning" and certificate_response:
                 if 'height' in certificate_response:
-                    certificate_response = _verify_proof(parsed_uri.name,
+                    certificate_response = _verify_proof(parsed_uri.stream.name,
                                                        claim_trie_root,
                                                        certificate_response,
                                                        ledger=self.ledger)
@@ -95,7 +95,7 @@ class Resolver:
             claim_resolution_type = resolution['claim']['resolution_type']
             if claim_resolution_type == "winning" and claim_response:
                 if 'height' in claim_response:
-                    claim_response = _verify_proof(parsed_uri.name,
+                    claim_response = _verify_proof(parsed_uri.stream.name,
                                                    claim_trie_root,
                                                    claim_response,
                                                    ledger=self.ledger)
@@ -140,7 +140,7 @@ class Resolver:
 
         # invalid signatures can only return outside a channel
         if result.get('claim', {}).get('has_signature', False):
-            if parsed_uri.path and not result['claim']['signature_is_valid']:
+            if parsed_uri.has_stream and not result['claim']['signature_is_valid']:
                 return {'error': 'claim not found', 'success': False, 'uri': str(parsed_uri)}
         return result
 
