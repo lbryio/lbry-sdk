@@ -77,12 +77,11 @@ class FileCommands(CommandTestCase):
 
     async def test_file_list_updated_metadata_on_resolve(self):
         await self.stream_create('foo', '0.01')
-        claim = await self.daemon.resolve('lbry://foo')
-        claim = claim['lbry://foo']['claim']['protobuf'].decode()
+        txo = (await self.daemon.resolve(['lbry://foo']))['lbry://foo']
+        claim = txo.claim
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
-        txid = await self.blockchain_claim_name('bar', claim, '0.01')
+        txid = await self.blockchain_claim_name('bar', hexlify(claim.to_bytes()).decode(), '0.01')
         await self.daemon.jsonrpc_get('lbry://bar')
-        claim = Claim.from_bytes(unhexlify(claim))
         claim.stream.description = "fix typos, fix the world"
         await self.blockchain_update_name(txid, hexlify(claim.to_bytes()).decode(), '0.01')
         await self.daemon.jsonrpc_resolve('lbry://bar')
