@@ -912,14 +912,15 @@ class Daemon(metaclass=JSONRPCServerType):
         Download stream from a LBRY name.
 
         Usage:
-            get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>] [--save_file]
+            get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>]
+                [--save_file=<save_file>]
 
 
         Options:
             --uri=<uri>              : (str) uri of the content to download
             --file_name=<file_name>  : (str) specified name for the downloaded file, overrides the stream file name
             --timeout=<timeout>      : (int) download timeout in number of seconds
-            --save_file              : (bool) save the file to the downloads directory
+            --save_file=<save_file>  : (bool) save the file to the downloads directory
 
         Returns: {File}
         """
