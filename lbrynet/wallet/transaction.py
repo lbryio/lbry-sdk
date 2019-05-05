@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from ecdsa.util import sigencode_der
+from cryptography.exceptions import InvalidSignature
 
 from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput, ReadOnlyList
 from torba.client.hash import hash160, sha256, Base58
@@ -116,9 +116,13 @@ class Output(BaseOutput):
         signature = hexlify(self.claim.signature)
         r = int(signature[:int(len(signature)/2)], 16)
         s = int(signature[int(len(signature)/2):], 16)
-        encoded_sig = sigencode_der(r, s, len(signature)*4)
-        public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
-        return True
+        encoded_sig = ecdsa.util.sigencode_der(r, s, len(signature)*4)
+        try:
+            public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
+            return True
+        except (ValueError, InvalidSignature):
+            pass
+        return False
 
     def sign(self, channel: 'Output', first_input_id=None):
         self.channel = channel

@@ -4,8 +4,6 @@ from binascii import hexlify
 from datetime import datetime
 from json import JSONEncoder
 
-from ecdsa import BadSignatureError
-from cryptography.exceptions import InvalidSignature
 from google.protobuf.message import DecodeError
 
 from lbrynet.schema.claim import Claim
@@ -192,15 +190,8 @@ class JSONResponseEncoder(JSONEncoder):
                         }
                         if check_signature and txo.claim.is_signed:
                             output['is_channel_signature_valid'] = False
-                            try:
+                            if txo.channel:
                                 output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.ledger)
-                            except (BadSignatureError, InvalidSignature):
-                                pass
-                            except ValueError:
-                                log.exception(
-                                    'txo.id: %s, txo.channel.id:%s, output: %s',
-                                    txo.id, txo.channel.id, output
-                                )
                 except DecodeError:
                     pass
         return output

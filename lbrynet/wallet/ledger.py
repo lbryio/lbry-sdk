@@ -3,8 +3,12 @@ import logging
 from binascii import unhexlify
 from typing import Tuple, List, Dict
 
+from ecdsa import BadSignatureError
+from cryptography.exceptions import InvalidSignature
+
 from torba.client.baseledger import BaseLedger
 from lbrynet.schema.result import Outputs
+from lbrynet.schema.url import URL
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.wallet.resolve import Resolver
 from lbrynet.wallet.account import Account
@@ -61,7 +65,16 @@ class MainNetLedger(BaseLedger):
     async def resolve(self, urls):
         txos = (await self._inflate_outputs(self.network.resolve(urls)))[0]
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
-        return {url: txo for url, txo in zip(urls, txos)}
+        result = {}
+        for url, txo in zip(urls, txos):
+            if txo and URL.parse(url).has_channel:
+                if not txo.channel or not txo.is_signed_by(txo.channel, self):
+                    txo = None
+            if txo:
+                result[url] = txo
+            else:
+                result[url] = {'error': f'{url} did not resolve to a claim'}
+        return result
 
     async def claim_search(self, **kwargs) -> Tuple[List, int, int]:
         return await self._inflate_outputs(self.network.claim_search(**kwargs))
