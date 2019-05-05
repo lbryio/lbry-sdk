@@ -34,9 +34,11 @@ class TestSQLDB(unittest.TestCase):
         self.sql = SQLDB(':memory:')
         self.sql.open()
         self._current_height = 0
+        self._txos = {}
 
     def _make_tx(self, output):
         tx = get_tx().add_outputs([output])
+        self._txos[output.ref.hash] = output
         return OldWalletServerTransaction(tx), tx.hash
 
     def get_channel(self, title, amount, name='@foo'):
@@ -68,8 +70,8 @@ class TestSQLDB(unittest.TestCase):
         )
 
     def get_controlling(self):
-        for claim in self.sql.execute("select claim.*, raw from claimtrie natural join claim natural join tx"):
-            txo = Transaction(claim['raw']).outputs[0]
+        for claim in self.sql.execute("select claim.* from claimtrie natural join claim"):
+            txo = self._txos[claim['txo_hash']]
             controlling = txo.claim.stream.title, claim['amount'], claim['effective_amount'], claim['activation_height']
             return controlling
 
@@ -77,9 +79,8 @@ class TestSQLDB(unittest.TestCase):
         controlling = self.get_controlling()
         active = []
         for claim in self.sql.execute(
-                f"select claim.*, raw from claim join tx using (tx_hash) "
-                f"where activation_height <= {self._current_height}"):
-            txo = Transaction(claim['raw']).outputs[0]
+                f"select * from claim where activation_height <= {self._current_height}"):
+            txo = self._txos[claim['txo_hash']]
             if controlling and controlling[0] == txo.claim.stream.title:
                 continue
             active.append((txo.claim.stream.title, claim['amount'], claim['effective_amount'], claim['activation_height']))
@@ -88,9 +89,8 @@ class TestSQLDB(unittest.TestCase):
     def get_accepted(self):
         accepted = []
         for claim in self.sql.execute(
-                f"select claim.*, raw from claim join tx using (tx_hash) "
-                f"where activation_height > {self._current_height}"):
-            txo = Transaction(claim['raw']).outputs[0]
+                f"select * from claim where activation_height > {self._current_height}"):
+            txo = self._txos[claim['txo_hash']]
             accepted.append((txo.claim.stream.title, claim['amount'], claim['effective_amount'], claim['activation_height']))
         return accepted
 
@@ -151,19 +151,19 @@ class TestSQLDB(unittest.TestCase):
         state(
             controlling=('Claim D', 300*COIN, 300*COIN, 1051),
             active=[
-                ('Claim A', 10*COIN, 24*COIN, 1051),
-                ('Claim B', 20*COIN, 20*COIN, 1051),
+                ('Claim A', 10*COIN, 24*COIN, 13),
+                ('Claim B', 20*COIN, 20*COIN, 1031),
                 ('Claim C', 50*COIN, 50*COIN, 1051)],
             accepted=[]
         )
         # beyond example
         advance(1052, [self.get_stream_update(stream, 290*COIN)])
         state(
-            controlling=('Claim A', 290*COIN, 304*COIN, 1052),
+            controlling=('Claim A', 290*COIN, 304*COIN, 13),
             active=[
-                ('Claim B', 20*COIN, 20*COIN, 1052),
-                ('Claim C', 50*COIN, 50*COIN, 1052),
-                ('Claim D', 300*COIN, 300*COIN, 1052),
+                ('Claim B', 20*COIN, 20*COIN, 1031),
+                ('Claim C', 50*COIN, 50*COIN, 1051),
+                ('Claim D', 300*COIN, 300*COIN, 1051),
             ],
             accepted=[]
         )
