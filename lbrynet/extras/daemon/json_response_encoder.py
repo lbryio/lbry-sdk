@@ -172,7 +172,7 @@ class JSONResponseEncoder(JSONEncoder):
                 'normalized': txo.normalized_name,
                 'claim_id': txo.claim_id,
                 'permanent_url': txo.permanent_url,
-                'meta': txo.meta
+                'meta': self.encode_claim_meta(txo.meta)
             })
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 try:
@@ -186,7 +186,7 @@ class JSONResponseEncoder(JSONEncoder):
                             'normalized': txo.channel.normalized_name,
                             'claim_id': txo.channel.claim_id,
                             'value': txo.channel.claim,
-                            'meta': txo.channel.meta
+                            'meta': self.encode_claim_meta(txo.channel.meta)
                         }
                         if check_signature and txo.claim.is_signed:
                             output['is_channel_signature_valid'] = False
@@ -195,6 +195,13 @@ class JSONResponseEncoder(JSONEncoder):
                 except DecodeError:
                     pass
         return output
+
+    def encode_claim_meta(self, meta):
+        if isinstance(meta.get('effective_amount'), int):
+            meta['effective_amount'] = dewies_to_lbc(meta['effective_amount'])
+        if isinstance(meta.get('trending_amount'), int):
+            meta['trending_amount'] = dewies_to_lbc(meta['trending_amount'])
+        return meta
 
     def encode_input(self, txi):
         return self.encode_output(txi.txo_ref.txo, False) if txi.txo_ref.txo is not None else {

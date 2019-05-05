@@ -64,7 +64,7 @@ class MainNetLedger(BaseLedger):
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
-            if txo and URL.parse(url).has_channel:
+            if txo and URL.parse(url).has_stream_in_channel:
                 if not txo.channel or not txo.is_signed_by(txo.channel, self):
                     txo = None
             if txo:
