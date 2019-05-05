@@ -137,7 +137,7 @@ types_map = {
     '.zip': ('application/zip', 'binary'),
 
     # These are non-standard types, commonly found in the wild.
-    '.cbr': ('application/vnd.comicbook+zip', 'document'),
+    '.cbr': ('application/vnd.comicbook-rar', 'document'),
     '.cbz': ('application/vnd.comicbook+zip', 'document'),
     '.lbry': ('application/x-ext-lbry', 'document'),
     '.mid': ('audio/midi', 'audio'),
