@@ -197,10 +197,12 @@ class LbryWalletManager(BaseWalletManager):
         tx = await self.db.get_transaction(txid=txid)
         if not tx:
             try:
-                _raw = await self.ledger.network.get_transaction(txid)
+                raw = await self.ledger.network.get_transaction(txid)
+                height = await self.ledger.network.get_transaction_height(txid)
             except CodeMessageError as e:
                 return {'success': False, 'code': e.code, 'message': e.message}
-            tx = self.ledger.transaction_class(unhexlify(_raw))
+            tx = self.ledger.transaction_class(unhexlify(raw))
+            await self.ledger.maybe_verify_transaction(tx, height)
         return tx
 
     @staticmethod
