@@ -88,6 +88,7 @@ class Resolver:
                                                        claim_trie_root,
                                                        certificate_response,
                                                        ledger=self.ledger)
+                    certificate_response['canonical_url'] = resolution["certificate"]["result"]["canonical_url"]
             elif certificate_resolution_type not in ['winning', 'claim_id', 'sequence']:
                 raise Exception(f"unknown response type: {certificate_resolution_type}")
             result['certificate'] = await self.parse_and_validate_claim_result(certificate_response)
