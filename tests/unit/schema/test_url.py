@@ -13,7 +13,10 @@ class TestURLParsing(unittest.TestCase):
 
     def _assert_url(self, url_string, **kwargs):
         url = URL.parse(url_string)
-        self.assertEqual(url_string, str(url))
+        if url_string.startswith('lbry://'):
+            self.assertEqual(url_string, str(url))
+        else:
+            self.assertEqual(f'lbry://{url_string}', str(url))
         present = {}
         for key in kwargs:
             for segment_name in self.segments:
