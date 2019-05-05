@@ -3234,7 +3234,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception(claim_info['error'])
         if claim_info["page"] == 0:
             return {'page': 1, 'page_size': 0, 'comments': []}
-        claim_uri = claim_info["items"][0]['permanent_url']
+        claim_uri = claim_info["items"][0].permanent_url
         # These two cases need separation since getting replies requires a bit of magic
         # to reduce request count from O(n^2) to O(1)
         if parent_comment_id:
@@ -3351,7 +3351,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim_data = await self.jsonrpc_claim_search(claim_id=claim_id)
             if 'error' not in claim_data and claim_data['total_pages'] == 1:
-                uri = claim_data['items'][0]['permanent_url']
+                uri = claim_data['items'][0].permanent_url
                 comment_id = await jsonrpc_post(url, 'comment', uri=uri,
                                                 poster=channel_id, message=message)
             else:

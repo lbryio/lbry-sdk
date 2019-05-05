@@ -34,12 +34,12 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(claim['signing_channel']['name'], '@abc')
         self.assertTrue(claim['is_channel_signature_valid'])
         self.assertEqual(
-            claim['claim']['timestamp'],
-            self.ledger.headers[claim['claim']['height']]['timestamp']
+            claim['timestamp'],
+            self.ledger.headers[claim['height']]['timestamp']
         )
         self.assertEqual(
-            claim['certificate']['timestamp'],
-            self.ledger.headers[claim['certificate']['height']]['timestamp']
+            claim['signing_channel']['timestamp'],
+            self.ledger.headers[claim['signing_channel']['height']]['timestamp']
         )
 
         # resolving claim foo by itself
