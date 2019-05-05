@@ -132,6 +132,9 @@ class BaseNetwork:
     def get_transaction(self, tx_hash):
         return self.rpc('blockchain.transaction.get', [tx_hash])
 
+    def get_transaction_height(self, tx_hash):
+        return self.rpc('blockchain.transaction.get_height', [tx_hash])
+
     def get_merkle(self, tx_hash, height):
         return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height])
 
