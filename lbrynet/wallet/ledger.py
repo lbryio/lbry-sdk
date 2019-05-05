@@ -3,9 +3,6 @@ import logging
 from binascii import unhexlify
 from typing import Tuple, List, Dict
 
-from ecdsa import BadSignatureError
-from cryptography.exceptions import InvalidSignature
-
 from torba.client.baseledger import BaseLedger
 from lbrynet.schema.result import Outputs
 from lbrynet.schema.url import URL
