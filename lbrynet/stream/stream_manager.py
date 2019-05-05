@@ -7,7 +7,7 @@ import random
 from decimal import Decimal
 from aiohttp.web import Request
 from lbrynet.error import ResolveError, InvalidStreamDescriptorError, KeyFeeAboveMaxAllowed, InsufficientFundsError
-from lbrynet.error import ResolveTimeout
+from lbrynet.error import ResolveTimeout, DownloadDataTimeout
 from lbrynet.utils import cache_concurrent
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.managed_stream import ManagedStream
@@ -375,13 +375,23 @@ class StreamManager:
                 analytics_manager=self.analytics_manager
             )
             log.info("starting download for %s", uri)
-            await stream.start(self.node, timeout, save_now=save_file)
+
+            before_download = self.loop.time()
+            await stream.start(self.node, timeout)
+            stream.set_claim(resolved, claim)
             if to_replace:  # delete old stream now that the replacement has started downloading
                 await self.delete_stream(to_replace)
             self.streams[stream.sd_hash] = stream
-            stream.set_claim(resolved, claim)
+
+            self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
             await self.storage.save_content_claim(stream.stream_hash, outpoint)
+            if save_file:
+                await asyncio.wait_for(stream.save_file(node=self.node), timeout - (self.loop.time() - before_download),
+                                       loop=self.loop)
             return stream
+        except asyncio.TimeoutError:
+            error = DownloadDataTimeout(stream.sd_hash)
+            raise error
         except Exception as err:  # forgive data timeout, dont delete stream
             error = err
             raise

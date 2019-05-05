@@ -1511,7 +1511,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running:
-            await self.stream_manager.start_stream(stream)
+            await stream.save_file(node=self.stream_manager.node)
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
             await stream.stop()

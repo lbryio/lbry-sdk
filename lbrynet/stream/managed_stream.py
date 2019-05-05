@@ -5,7 +5,7 @@ import logging
 import binascii
 from aiohttp.web import Request, StreamResponse
 from lbrynet.utils import generate_id
-from lbrynet.error import DownloadSDTimeout, DownloadDataTimeout
+from lbrynet.error import DownloadSDTimeout
 from lbrynet.schema.mime_types import guess_media_type
 from lbrynet.stream.downloader import StreamDownloader
 from lbrynet.stream.descriptor import StreamDescriptor
@@ -257,17 +257,11 @@ class ManagedStream:
             return
         log.info("start downloader for lbry://%s#%s (sd hash %s...)", self.claim_name, self.claim_id, self.sd_hash[:6])
         self._running.set()
-        start_time = self.loop.time()
         try:
             await asyncio.wait_for(self.downloader.start(node), timeout, loop=self.loop)
-            if save_now:
-                await asyncio.wait_for(self.save_file(node=node), timeout - (self.loop.time() - start_time),
-                                       loop=self.loop)
         except asyncio.TimeoutError:
             self._running.clear()
-            if not self.descriptor:
-                raise DownloadSDTimeout(self.sd_hash)
-            raise DownloadDataTimeout(self.sd_hash)
+            raise DownloadSDTimeout(self.sd_hash)
 
         if self.delayed_stop_task and not self.delayed_stop_task.done():
             self.delayed_stop_task.cancel()
