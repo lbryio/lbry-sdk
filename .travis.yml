@@ -29,7 +29,7 @@ jobs:
     - name: "Integration Tests"
       install:
         - pip install tox-travis coverage
-        - pushd .. && git clone --single-branch --branch sqltrie https://github.com/lbryio/torba.git && popd
+        - pushd .. && git clone --single-branch --branch sqltrie https://github.com/lbryio/torba.git && git branch && popd
       script: tox
       after_success:
         - coverage combine tests/
