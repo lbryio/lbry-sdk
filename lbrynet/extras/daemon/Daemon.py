@@ -3474,10 +3474,11 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def resolve(self, urls):
         results = await self.ledger.resolve(urls)
-        #if 'error' not in results:
-        #    await self.storage.save_claims_for_resolve([
-        #        value for value in results.values() if isinstance(value, Output)
-        #    ])
+        if results:
+            claims = self.stream_manager._convert_to_old_resolve_output(results)
+            await self.storage.save_claims_for_resolve([
+                value for value in claims.values() if 'error' not in value
+            ])
         return results
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):

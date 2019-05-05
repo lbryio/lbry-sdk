@@ -13,7 +13,8 @@ from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.stream.managed_stream import ManagedStream
 from lbrynet.schema.claim import Claim
 from lbrynet.schema.url import URL
-from lbrynet.extras.daemon.storage import lbc_to_dewies
+from lbrynet.extras.daemon.storage import lbc_to_dewies, dewies_to_lbc
+from lbrynet.wallet.transaction import Output
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
     from lbrynet.blob.blob_manager import BlobManager
@@ -300,6 +301,33 @@ class StreamManager:
                 return None, existing_for_claim_id[0]
         return None, None
 
+    def _convert_to_old_resolve_output(self, resolves):
+        result = {}
+        for url, txo in resolves.items():
+            if isinstance(txo, Output):
+                tx_height = txo.tx_ref.height
+                best_height = self.wallet.ledger.headers.height
+                result[url] = {
+                    'name': txo.claim_name,
+                    'value': txo.claim,
+                    'protobuf': binascii.hexlify(txo.claim.to_bytes()),
+                    'claim_id': txo.claim_id,
+                    'txid': txo.tx_ref.id,
+                    'nout': txo.position,
+                    'amount': dewies_to_lbc(txo.amount),
+                    'effective_amount': txo.meta.get('effective_amount', 0),
+                    'height': tx_height,
+                    'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
+                    'claim_sequence': -1,
+                    'address': txo.get_address(self.wallet.ledger),
+                    'valid_at_height': txo.meta.get('activation_height', None),
+                    'timestamp': self.wallet.ledger.headers[tx_height]['timestamp'],
+                    'supports': []
+                }
+            else:
+                result[url] = txo
+        return result
+
     @cache_concurrent
     async def download_stream_from_uri(self, uri, exchange_rate_manager: 'ExchangeRateManager',
                                        timeout: typing.Optional[float] = None,
@@ -327,7 +355,9 @@ class StreamManager:
             if not URL.parse(uri).has_stream:
                 raise ResolveError("cannot download a channel claim, specify a /path")
             try:
-                resolved_result = await asyncio.wait_for(self.wallet.ledger.resolve(uri), resolve_timeout)
+                resolved_result = self._convert_to_old_resolve_output(
+                    await asyncio.wait_for(self.wallet.ledger.resolve([uri]), resolve_timeout)
+                )
             except asyncio.TimeoutError:
                 raise ResolveTimeout(uri)
             await self.storage.save_claims_for_resolve([
