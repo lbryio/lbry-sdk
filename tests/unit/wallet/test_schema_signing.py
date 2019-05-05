@@ -49,8 +49,7 @@ class TestSigningAndValidatingClaim(AsyncioTestCase):
     def test_fail_to_validate_on_wrong_channel(self):
         stream = self.get_stream()
         stream.sign(self.get_channel())
-        with self.assertRaises(InvalidSignature):
-            self.assertTrue(stream.is_signed_by(self.get_channel()))
+        self.assertFalse(stream.is_signed_by(self.get_channel()))
 
     def test_fail_to_validate_altered_claim(self):
         channel = self.get_channel()
@@ -58,8 +57,7 @@ class TestSigningAndValidatingClaim(AsyncioTestCase):
         stream.sign(channel)
         self.assertTrue(stream.is_signed_by(channel))
         stream.claim.stream.title = 'hello'
-        with self.assertRaises(InvalidSignature):
-            self.assertTrue(stream.is_signed_by(channel))
+        self.assertFalse(stream.is_signed_by(channel))
 
     def test_valid_private_key_for_cert(self):
         channel = self.get_channel()

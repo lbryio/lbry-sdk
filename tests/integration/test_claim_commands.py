@@ -830,7 +830,9 @@ class StreamCommands(CommandTestCase):
         response = await self.resolve('bad_example')
         self.assertFalse(response['bad_example']['is_channel_signature_valid'])
         response = await self.resolve('@olds/bad_example')
-        self.assertFalse(response['@olds/bad_example']['is_channel_signature_valid'])
+        self.assertEqual(response, {
+            '@olds/bad_example': {'error': '@olds/bad_example did not resolve to a claim'}
+        })
 
 
 def generate_signed_legacy(address: bytes, output: Output):
