@@ -322,7 +322,7 @@ class SOCKSProxy(object):
             return sock
         except Exception as e:
             # Don't close - see https://github.com/kyuupichan/aiorpcX/issues/8
-            if sys.platform.startswith('linux'):
+            if sys.platform.startswith('linux') or sys.platform == "darwin":
                 sock.close()
             return e
 
