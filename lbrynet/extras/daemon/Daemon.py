@@ -13,6 +13,7 @@ from binascii import hexlify, unhexlify
 from traceback import format_exc
 from aiohttp import web
 from functools import wraps
+from google.protobuf.message import DecodeError
 from torba.client.wallet import Wallet
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
@@ -3475,10 +3476,13 @@ class Daemon(metaclass=JSONRPCServerType):
     async def resolve(self, urls):
         results = await self.ledger.resolve(urls)
         if results:
-            claims = self.stream_manager._convert_to_old_resolve_output(results)
-            await self.storage.save_claims_for_resolve([
-                value for value in claims.values() if 'error' not in value
-            ])
+            try:
+                claims = self.stream_manager._convert_to_old_resolve_output(results)
+                await self.storage.save_claims_for_resolve([
+                    value for value in claims.values() if 'error' not in value
+                ])
+            except DecodeError:
+                pass
         return results
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
