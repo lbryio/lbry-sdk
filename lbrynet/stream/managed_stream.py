@@ -255,7 +255,7 @@ class ManagedStream:
         timeout = timeout or self.config.download_timeout
         if self._running.is_set():
             return
-        log.info("start downloader for lbry://%s#%s (sd hash %s...)", self.claim_name, self.claim_id, self.sd_hash[:6])
+        log.info("start downloader for stream (sd hash: %s)", self.sd_hash)
         self._running.set()
         try:
             await asyncio.wait_for(self.downloader.start(node), timeout, loop=self.loop)
@@ -286,13 +286,13 @@ class ManagedStream:
         if (finished and self.status != self.STATUS_FINISHED) or self.status == self.STATUS_RUNNING:
             await self.update_status(self.STATUS_FINISHED if finished else self.STATUS_STOPPED)
 
-    async def _aiter_read_stream(self, start_blob_num: typing.Optional[int] = 0)\
+    async def _aiter_read_stream(self, start_blob_num: typing.Optional[int] = 0, connection_id: int = 0)\
             -> typing.AsyncIterator[typing.Tuple['BlobInfo', bytes]]:
         if start_blob_num >= len(self.descriptor.blobs[:-1]):
             raise IndexError(start_blob_num)
         for i, blob_info in enumerate(self.descriptor.blobs[start_blob_num:-1]):
             assert i + start_blob_num == blob_info.blob_num
-            decrypted = await self.downloader.read_blob(blob_info)
+            decrypted = await self.downloader.read_blob(blob_info, connection_id)
             yield (blob_info, decrypted)
 
     async def stream_file(self, request: Request, node: typing.Optional['Node'] = None) -> StreamResponse:
@@ -309,7 +309,7 @@ class ManagedStream:
         self.streaming.set()
         try:
             wrote = 0
-            async for blob_info, decrypted in self._aiter_read_stream(skip_blobs):
+            async for blob_info, decrypted in self._aiter_read_stream(skip_blobs, connection_id=2):
                 if (blob_info.blob_num == len(self.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
                     decrypted += (b'\x00' * (size - len(decrypted) - wrote - (skip_blobs * 2097151)))
                     await response.write_eof(decrypted)
@@ -336,7 +336,7 @@ class ManagedStream:
         self.started_writing.clear()
         try:
             with open(output_path, 'wb') as file_write_handle:
-                async for blob_info, decrypted in self._aiter_read_stream():
+                async for blob_info, decrypted in self._aiter_read_stream(connection_id=1):
                     log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
                     file_write_handle.write(decrypted)
                     file_write_handle.flush()

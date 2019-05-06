@@ -189,7 +189,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 @cache_concurrent
 async def request_blob(loop: asyncio.BaseEventLoop, blob: 'AbstractBlob', address: str, tcp_port: int,
                        peer_connect_timeout: float, blob_download_timeout: float,
-                       connected_transport: asyncio.Transport = None)\
+                       connected_transport: asyncio.Transport = None, connection_id: int = 0)\
         -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
     """
     Returns [<downloaded blob>, <keep connection>]

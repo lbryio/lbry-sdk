@@ -33,7 +33,7 @@ class BlobDownloader:
             return False
         return not (blob.get_is_verified() or not blob.is_writeable())
 
-    async def request_blob_from_peer(self, blob: 'AbstractBlob', peer: 'KademliaPeer'):
+    async def request_blob_from_peer(self, blob: 'AbstractBlob', peer: 'KademliaPeer', connection_id: int = 0):
         if blob.get_is_verified():
             return
         self.scores[peer] = self.scores.get(peer, 0) - 1  # starts losing score, to account for cancelled ones
@@ -41,7 +41,7 @@ class BlobDownloader:
         start = self.loop.time()
         bytes_received, transport = await request_blob(
             self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
-            self.config.blob_download_timeout, connected_transport=transport
+            self.config.blob_download_timeout, connected_transport=transport, connection_id=connection_id
         )
         if not transport and peer not in self.ignored:
             self.ignored[peer] = self.loop.time()
@@ -74,7 +74,8 @@ class BlobDownloader:
         ))
 
     @cache_concurrent
-    async def download_blob(self, blob_hash: str, length: typing.Optional[int] = None) -> 'AbstractBlob':
+    async def download_blob(self, blob_hash: str, length: typing.Optional[int] = None,
+                            connection_id: int = 0) -> 'AbstractBlob':
         blob = self.blob_manager.get_blob(blob_hash, length)
         if blob.get_is_verified():
             return blob
@@ -94,7 +95,7 @@ class BlobDownloader:
                         break
                     if peer not in self.active_connections and peer not in self.ignored:
                         log.debug("request %s from %s:%i", blob_hash[:8], peer.address, peer.tcp_port)
-                        t = self.loop.create_task(self.request_blob_from_peer(blob, peer))
+                        t = self.loop.create_task(self.request_blob_from_peer(blob, peer, connection_id))
                         self.active_connections[peer] = t
                 await self.new_peer_or_finished()
                 self.cleanup_active()
