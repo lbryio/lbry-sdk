@@ -153,21 +153,12 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
 
 
 def store_stream(transaction: sqlite3.Connection, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
-    # add the head blob and set it to be announced
-    transaction.execute(
-        "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?),  (?, ?, ?, ?, ?, ?, ?)",
-        (
-            sd_blob.blob_hash, sd_blob.length, 0, 1, "pending", 0, 0,
-            descriptor.blobs[0].blob_hash, descriptor.blobs[0].length, 0, 1, "pending", 0, 0
-        )
+    # add all blobs, except the last one, which is empty
+    transaction.executemany(
+        "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+        [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
+         for blob in descriptor.blobs[:-1] + [sd_blob]]
     )
-    # add the rest of the blobs with announcement off
-    if len(descriptor.blobs) > 2:
-        transaction.executemany(
-            "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-            [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
-             for blob in descriptor.blobs[1:-1]]
-        )
     # associate the blobs to the stream
     transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?)",
                         (descriptor.stream_hash, sd_blob.blob_hash, descriptor.key,
@@ -178,6 +169,11 @@ def store_stream(transaction: sqlite3.Connection, sd_blob: 'BlobFile', descripto
         "insert or ignore into stream_blob values (?, ?, ?, ?)",
         [(descriptor.stream_hash, blob.blob_hash, blob.blob_num, blob.iv)
          for blob in descriptor.blobs]
+    )
+    # ensure should_announce is set regardless if insert was ignored
+    transaction.execute(
+        "update blob set should_announce=1 where blob_hash in (?, ?)",
+        (sd_blob.blob_hash, descriptor.blobs[0].blob_hash,)
     )
 
 
