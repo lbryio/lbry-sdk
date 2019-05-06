@@ -342,7 +342,7 @@ class StreamManager:
                 if save_file and updated_stream.output_file_exists:
                     save_file = False
                 await updated_stream.start(node=self.node, timeout=timeout, save_now=save_file)
-                if save_file or file_name or download_directory:
+                if not updated_stream.output_file_exists and (save_file or file_name or download_directory):
                     await updated_stream.save_file(
                         file_name=file_name, download_directory=download_directory, node=self.node
                     )
