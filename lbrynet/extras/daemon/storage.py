@@ -157,7 +157,7 @@ def store_stream(transaction: sqlite3.Connection, sd_blob: 'BlobFile', descripto
     transaction.executemany(
         "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
         [(blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
-         for blob in descriptor.blobs[:-1] + [sd_blob]]
+         for blob in (descriptor.blobs[:-1] if len(descriptor.blobs) > 1 else descriptor.blobs) + [sd_blob]]
     )
     # associate the blobs to the stream
     transaction.execute("insert or ignore into stream values (?, ?, ?, ?, ?)",
