@@ -154,6 +154,8 @@ class StreamManager:
         t = [
             self.loop.create_task(
                 stream.start(node=self.node, save_now=(stream.full_path is not None))
+                if not stream.full_path else
+                stream.save_file(node=self.node)
             ) for stream in self.streams.values() if stream.running
         ]
         if t:
