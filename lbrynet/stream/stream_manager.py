@@ -345,6 +345,7 @@ class StreamManager:
                 return updated_stream
 
             content_fee = None
+            fee_amount, fee_address = None, None
 
             # check that the fee is payable
             if not to_replace and claim.stream.has_fee:
@@ -365,12 +366,6 @@ class StreamManager:
                     raise InsufficientFundsError(msg)
                 fee_address = claim.stream.fee.address
 
-                content_fee = await self.wallet.send_amount_to_address(
-                    lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
-                )
-
-                log.info("paid fee of %s for %s", fee_amount, uri)
-
             stream = ManagedStream(
                 self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash, download_directory,
                 file_name, ManagedStream.STATUS_RUNNING, content_fee=content_fee,
@@ -383,8 +378,13 @@ class StreamManager:
             stream.set_claim(resolved, claim)
             if to_replace:  # delete old stream now that the replacement has started downloading
                 await self.delete_stream(to_replace)
-            self.streams[stream.sd_hash] = stream
+            elif fee_address:
+                content_fee = await self.wallet.send_amount_to_address(
+                    lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
+                )
+                log.info("paid fee of %s for %s", fee_amount, uri)
 
+            self.streams[stream.sd_hash] = stream
             self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
             await self.storage.save_content_claim(stream.stream_hash, outpoint)
             if save_file:
