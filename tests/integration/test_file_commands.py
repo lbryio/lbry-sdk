@@ -28,6 +28,24 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_get('lbry://foo')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
 
+    async def test_announces(self):
+        # announces on publish
+        self.assertEqual(await self.daemon.storage.get_blobs_to_announce(), [])
+        await self.stream_create('foo', '0.01')
+        stream = self.daemon.jsonrpc_file_list()[0]
+        self.assertSetEqual(
+            set(await self.daemon.storage.get_blobs_to_announce()),
+            {stream.sd_hash, stream.descriptor.blobs[0].blob_hash}
+        )
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(delete_all=True))
+        # announces on download
+        self.assertEqual(await self.daemon.storage.get_blobs_to_announce(), [])
+        stream = await self.daemon.jsonrpc_get('foo')
+        self.assertSetEqual(
+            set(await self.daemon.storage.get_blobs_to_announce()),
+            {stream.sd_hash, stream.descriptor.blobs[0].blob_hash}
+        )
+
     async def test_file_list_fields(self):
         await self.stream_create('foo', '0.01')
         file_list = self.sout(self.daemon.jsonrpc_file_list())
