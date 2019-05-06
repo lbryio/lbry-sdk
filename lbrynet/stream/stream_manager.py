@@ -379,9 +379,10 @@ class StreamManager:
             if to_replace:  # delete old stream now that the replacement has started downloading
                 await self.delete_stream(to_replace)
             elif fee_address:
-                content_fee = await self.wallet.send_amount_to_address(
+                stream.content_fee = await self.wallet.send_amount_to_address(
                     lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
                 )
+
                 log.info("paid fee of %s for %s", fee_amount, uri)
 
             self.streams[stream.sd_hash] = stream
