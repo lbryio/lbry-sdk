@@ -203,7 +203,7 @@ class ManagedStream:
         else:
             written_bytes = self.written_bytes
         return {
-            'completed': self.finished,
+            'completed': self.output_file_exists and self.status in ('stopped', 'finished'),
             'file_name': self.file_name,
             'download_directory': self.download_directory,
             'points_paid': 0.0,
