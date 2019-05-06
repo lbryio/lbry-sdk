@@ -358,6 +358,26 @@ class SQLDB:
             constraints['claim.txo_hash'] = sqlite3.Binary(
                 tx_hash + struct.pack('<I', nout)
             )
+
+        any_tags = constraints.pop('any_tags', [])[:100]
+        if any_tags:
+            constraints.update({
+                f'$any_tags{i}': tag for i, tag in enumerate(any_tags)
+            })
+            constraints['claim.txo_hash__in'] = """
+                SELECT DISTINCT txo_hash FROM tag WHERE tag IN ({})
+            """.format(', '.join(f':$any_tags{i}' for i in range(len(any_tags))))
+
+        all_tags = constraints.pop('all_tags', [])[:100]
+        if all_tags:
+            constraints['$all_tags_count'] = len(all_tags)
+            constraints.update({
+                f'$all_tags{i}': tag for i, tag in enumerate(all_tags)
+            })
+            constraints['claim.txo_hash__in'] = """
+                SELECT txo_hash FROM tag WHERE tag IN ({}) GROUP BY txo_hash HAVING COUNT(tag) = :$all_tags_count
+            """.format(', '.join(f':$all_tags{i}' for i in range(len(all_tags))))
+
         return self.db.execute(*query(
             f"""
             SELECT {cols} FROM claim
@@ -393,6 +413,9 @@ class SQLDB:
     SEARCH_PARAMS = {
         'name', 'claim_id', 'txid', 'nout',
         'channel', 'channel_id', 'channel_name',
+        'any_tags', 'all_tags',
+        'any_locations', 'all_locations',
+        'any_languages', 'all_languages',
         'is_controlling', 'limit', 'offset'
     }
 
