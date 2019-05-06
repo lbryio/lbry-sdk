@@ -1669,23 +1669,32 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         Search for stream and channel claims on the blockchain.
 
-        Use --channel_id=<channel_id> or --channel_name=<channel_name> to list all stream claims in a channel.
+        Use --channel_id=<channel_id> to list all stream claims in a channel.
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
-                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling] [--page=<page>]
-                         [--page_size=<page_size>]
+                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling]
+                         [--any_tags=<any_tags>...] [--all_tags=<all_tags>...]
+                         [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
+                         [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
+                         [--page=<page>] [--page_size=<page_size>]
 
         Options:
-            --name=<name>                 : (str) find claims with this name
-            --claim_id=<claim_id>         : (str) find a claim with this claim_id
-            --txid=<txid>                 : (str) find a claim with this txid:nout
-            --nout=<nout>                 : (str) find a claim with this txid:nout
-            --channel_id=<channel_id>     : (str) limit search to specific channel claim id (returns stream claims)
-            --channel_name=<channel_name> : (str) limit search to specific channel name (returns stream claims)
-            --is_controlling              : (bool) limit to controlling claims for their respective name
-            --page=<page>                 : (int) page to return during paginating
-            --page_size=<page_size>       : (int) number of items on page during pagination
+            --name=<name>                   : (str) find claims with this name
+            --claim_id=<claim_id>           : (str) find a claim with this claim_id
+            --txid=<txid>                   : (str) find a claim with this txid:nout
+            --nout=<nout>                   : (str) find a claim with this txid:nout
+            --channel_id=<channel_id>       : (str) limit search to specific channel claim id (returns stream claims)
+            --channel_name=<channel_name>   : (str) limit search to specific channel name (returns stream claims)
+            --is_controlling                : (bool) limit to controlling claims for their respective name
+            --any_tags=<any_tags>           : (list) find claims containing any of the tags
+            --all_tags=<all_tags>           : (list) find claims containing every tag
+            --any_languages=<any_languages> : (list) find claims containing any of the languages
+            --all_languages=<all_languages> : (list) find claims containing every language
+            --any_locations=<any_locations> : (list) find claims containing any of the locations
+            --all_locations=<all_locations> : (list) find claims containing every location
+            --page=<page>                   : (int) page to return during paginating
+            --page_size=<page_size>         : (int) number of items on page during pagination
 
         Returns: {Paginated[Output]}
         """
