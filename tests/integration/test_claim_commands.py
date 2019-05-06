@@ -1,21 +1,139 @@
 import os.path
-import hashlib
 import tempfile
 import logging
 from binascii import unhexlify
 from urllib.request import urlopen
 
-import ecdsa
 
-from lbrynet.wallet.transaction import Transaction, Output
 from torba.client.errors import InsufficientFundsError
-from lbrynet.schema.compat import OldClaimMessage
 
 from lbrynet.testcase import CommandTestCase
-from torba.client.hash import sha256, Base58
 
 
 log = logging.getLogger(__name__)
+
+
+class ClaimSearchCommand(CommandTestCase):
+
+    async def create_channel(self):
+        self.channel = await self.channel_create('@abc', '1.0')
+        self.channel_id = self.channel['outputs'][0]['claim_id']
+
+    async def create_lots_of_streams(self):
+        tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
+        await self.confirm_tx(tx.id)
+        # 4 claims per block, 3 blocks. Sorted by height (descending) then claim name (ascending).
+        self.streams = []
+        for j in range(3):
+            same_height_claims = []
+            for k in range(3):
+                claim_tx = await self.stream_create(
+                    f'c{j}-{k}', '0.000001', channel_id=self.channel_id, confirm=False)
+                same_height_claims.append(claim_tx['outputs'][0]['name'])
+                await self.on_transaction_dict(claim_tx)
+            claim_tx = await self.stream_create(
+                f'c{j}-4', '0.000001', channel_id=self.channel_id, confirm=True)
+            same_height_claims.append(claim_tx['outputs'][0]['name'])
+            self.streams = same_height_claims + self.streams
+
+    async def assertFindsClaim(self, claim, **kwargs):
+        await self.assertFindsClaims([claim], **kwargs)
+
+    async def assertFindsClaims(self, claims, **kwargs):
+        results = await self.claim_search(**kwargs)
+        self.assertEqual(len(claims), len(results))
+        for claim, result in zip(claims, results):
+            self.assertEqual(
+                (claim['txid'], claim['outputs'][0]['claim_id']),
+                (result['txid'], result['claim_id'])
+            )
+
+    async def test_basic_claim_search(self):
+        await self.create_channel()
+        channel2 = await self.channel_create('@abc', '0.1', allow_duplicate_name=True)
+        channel_id2 = channel2['outputs'][0]['claim_id']
+
+        # finding a channel
+        await self.assertFindsClaims([channel2, self.channel], name='@abc')
+        await self.assertFindsClaim(self.channel, name='@abc', is_controlling=True)
+        await self.assertFindsClaim(self.channel, claim_id=self.channel_id)
+        await self.assertFindsClaim(self.channel, txid=self.channel['txid'], nout=0)
+        await self.assertFindsClaim(channel2, claim_id=channel_id2)
+        await self.assertFindsClaim(channel2, txid=channel2['txid'], nout=0)
+
+        signed = await self.stream_create('on-channel-claim', '0.001', channel_id=self.channel_id)
+        signed2 = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel_id2,
+                                           allow_duplicate_name=True)
+        unsigned = await self.stream_create('unsigned', '0.0001')
+
+        # finding claims with and without a channel
+        await self.assertFindsClaims([signed2, signed], name='on-channel-claim')
+        await self.assertFindsClaim(signed, name='on-channel-claim', channel_id=self.channel_id)
+        await self.assertFindsClaim(signed2, name='on-channel-claim', channel_id=channel_id2)
+        await self.assertFindsClaim(unsigned, name='unsigned')
+        await self.assertFindsClaim(unsigned, txid=unsigned['txid'], nout=0)
+        await self.assertFindsClaim(unsigned, claim_id=unsigned['outputs'][0]['claim_id'])
+
+        two = await self.stream_create('on-channel-claim-2', '0.0001', channel_id=self.channel_id)
+        three = await self.stream_create('on-channel-claim-3', '0.0001', channel_id=self.channel_id)
+
+        # three streams in channel, zero streams in abandoned channel
+        claims = [three, two, signed]
+        await self.assertFindsClaims(claims, channel_id=self.channel_id)
+        await self.assertFindsClaims([three, two, signed2, signed], channel_name="@abc")
+        await self.assertFindsClaims(claims, channel_name="@abc", channel_id=self.channel_id)
+        await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
+        await self.channel_abandon(claim_id=self.channel_id)
+        await self.assertFindsClaims([], channel_id=self.channel_id)
+        await self.assertFindsClaims([signed2], channel_name="@abc")
+        await self.assertFindsClaims([], channel_name="@abc", channel_id=self.channel_id)
+        await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}")
+
+        # abandoned stream won't show up for streams in channel search
+        await self.stream_abandon(txid=signed2['txid'], nout=0)
+        await self.assertFindsClaims([], channel_name="@abc")
+
+    async def test_pagination(self):
+        await self.create_channel()
+        await self.create_lots_of_streams()
+
+        page = await self.claim_search(page_size=20, channel_id=self.channel_id)
+        page_claim_ids = [item['name'] for item in page]
+        self.assertEqual(page_claim_ids, self.streams)
+
+        page = await self.claim_search(page_size=6, channel_id=self.channel_id)
+        page_claim_ids = [item['name'] for item in page]
+        self.assertEqual(page_claim_ids, self.streams[:6])
+
+        page = await self.claim_search(page=2, page_size=6, channel_id=self.channel_id)
+        page_claim_ids = [item['name'] for item in page]
+        self.assertEqual(page_claim_ids, self.streams[6:])
+
+        out_of_bounds = await self.claim_search(page=2, page_size=20, channel_id=self.channel_id)
+        self.assertEqual(out_of_bounds, [])
+
+    async def test_tag_search(self):
+        claim1 = await self.stream_create('claim1', tags=['abc'])
+        claim2 = await self.stream_create('claim2', tags=['abc', 'def'])
+        claim3 = await self.stream_create('claim3', tags=['abc', 'ghi', 'jkl'])
+        claim4 = await self.stream_create('claim4', tags=['abc', 'ghi', 'mno'])
+        claim5 = await self.stream_create('claim5', tags=['pqr'])
+
+        # any_tags
+        await self.assertFindsClaims([claim5, claim4, claim3, claim2, claim1], any_tags=['abc', 'pqr'])
+        await self.assertFindsClaims([claim4, claim3, claim2, claim1], any_tags=['abc'])
+        await self.assertFindsClaims([claim4, claim3, claim2, claim1], any_tags=['abc', 'ghi'])
+        await self.assertFindsClaims([claim4, claim3], any_tags=['ghi'])
+        await self.assertFindsClaims([claim4, claim3], any_tags=['ghi', 'xyz'])
+        await self.assertFindsClaims([], any_tags=['xyz'])
+
+        # all_tags
+        await self.assertFindsClaims([], all_tags=['abc', 'pqr'])
+        await self.assertFindsClaims([claim4, claim3, claim2, claim1], all_tags=['abc'])
+        await self.assertFindsClaims([claim4, claim3], all_tags=['abc', 'ghi'])
+        await self.assertFindsClaims([claim4, claim3], all_tags=['ghi'])
+        await self.assertFindsClaims([], all_tags=['ghi', 'xyz'])
+        await self.assertFindsClaims([], all_tags=['xyz'])
 
 
 class ChannelCommands(CommandTestCase):
@@ -670,207 +788,6 @@ class StreamCommands(CommandTestCase):
         self.assertNotIn('signing_channel', claim)
         self.assertEqual(claim['value']['languages'], ['uk-UA'])
 
-    async def test_claim_search(self):
-        # search for channel claim
-        channel = await self.channel_create('@abc', '1.0')
-        channel_id, txid = channel['outputs'][0]['claim_id'], channel['txid']
-        value = channel['outputs'][0]['value']
-
-        claims = await self.claim_search(name='@abc')
-        self.assertEqual(claims[0]['value'], value)
-
-        claims = await self.claim_search(txid=txid, nout=0)
-        self.assertEqual(claims[0]['value'], value)
-
-        claims = await self.claim_search(claim_id=channel_id)
-        self.assertEqual(claims[0]['value'], value)
-
-        await self.channel_abandon(txid=txid, nout=0)
-        self.assertEqual(len(await self.claim_search(txid=txid, nout=0)), 0)
-
-        # search stream claims
-        channel = await self.channel_create('@abc', '1.0')
-        channel_id, txid = channel['outputs'][0]['claim_id'], channel['txid']
-
-        signed = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel_id)
-        unsigned = await self.stream_create('unsigned', '0.0001')
-
-        claims = await self.claim_search(name='on-channel-claim')
-        self.assertEqual(claims[0]['value'], signed['outputs'][0]['value'])
-
-        claims = await self.claim_search(name='unsigned')
-        self.assertEqual(claims[0]['value'], unsigned['outputs'][0]['value'])
-
-        # list streams in a channel
-        await self.stream_create('on-channel-claim-2', '0.0001', channel_id=channel_id)
-        await self.stream_create('on-channel-claim-3', '0.0001', channel_id=channel_id)
-
-        claims = await self.claim_search(channel_id=channel_id)
-        self.assertEqual(len(claims), 3)
-        # same is expected using name or name#claim_id urls
-        claims = await self.claim_search(channel_name="@abc")
-        self.assertEqual(len(claims), 3)
-        claims = await self.claim_search(channel_name="@abc", channel_id=channel_id)
-        self.assertEqual(len(claims), 3)
-        claims = await self.claim_search(channel=f"@abc#{channel_id}")
-        self.assertEqual(len(claims), 3)
-
-        await self.stream_abandon(claim_id=claims[0]['claim_id'])
-        await self.stream_abandon(claim_id=claims[1]['claim_id'])
-        await self.stream_abandon(claim_id=claims[2]['claim_id'])
-
-        claims = await self.claim_search(channel_id=channel_id)
-        self.assertEqual(len(claims), 0)
-
-        tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
-        await self.confirm_tx(tx.id)
-
-        # 4 claims per block, 3 blocks. Sorted by height (descending) then claim name (ascending).
-        claims = []
-        for j in range(3):
-            same_height_claims = []
-            for k in range(3):
-                claim_tx = await self.stream_create(f'c{j}-{k}', '0.000001', channel_id=channel_id, confirm=False)
-                same_height_claims.append(claim_tx['outputs'][0]['name'])
-                await self.on_transaction_dict(claim_tx)
-            claim_tx = await self.stream_create(f'c{j}-4', '0.000001', channel_id=channel_id, confirm=True)
-            same_height_claims.append(claim_tx['outputs'][0]['name'])
-            claims = same_height_claims + claims
-
-        page = await self.claim_search(page_size=20, channel_id=channel_id)
-        page_claim_ids = [item['name'] for item in page]
-        self.assertEqual(page_claim_ids, claims)
-
-        page = await self.claim_search(page_size=6, channel_id=channel_id)
-        page_claim_ids = [item['name'] for item in page]
-        self.assertEqual(page_claim_ids, claims[:6])
-
-        out_of_bounds = await self.claim_search(page=2, page_size=20, channel_id=channel_id)
-        self.assertEqual(out_of_bounds, [])
-
-    async def test_abandoned_channel_with_signed_claims(self):
-        channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
-        orphan_claim = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel['claim_id'])
-        await self.channel_abandon(txid=channel['txid'], nout=0)
-        channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
-        orphan_claim_id = orphan_claim['outputs'][0]['claim_id']
-
-        # Original channel doesnt exists anymore, so the signature is invalid. For invalid signatures, resolution is
-        # only possible outside a channel
-        response = await self.resolve('lbry://@abc/on-channel-claim')
-        self.assertEqual(response, {
-            'lbry://@abc/on-channel-claim': {'error': 'lbry://@abc/on-channel-claim did not resolve to a claim'}
-        })
-        response = await self.resolve('lbry://on-channel-claim')
-        self.assertNotIn('is_channel_signature_valid', response['lbry://on-channel-claim'])
-        direct_uri = 'lbry://on-channel-claim#' + orphan_claim_id
-        response = await self.resolve(direct_uri)
-        self.assertNotIn('is_channel_signature_valid', response[direct_uri])
-        await self.stream_abandon(claim_id=orphan_claim_id)
-
-        uri = 'lbry://@abc/on-channel-claim'
-        # now, claim something on this channel (it will update the invalid claim, but we save and forcefully restore)
-        valid_claim = await self.stream_create('on-channel-claim', '0.00000001', channel_id=channel['claim_id'])
-        # resolves normally
-        response = await self.resolve(uri)
-        self.assertTrue(response[uri]['is_channel_signature_valid'])
-
-        # ooops! claimed a valid conflict! (this happens on the wild, mostly by accident or race condition)
-        await self.stream_create(
-            'on-channel-claim', '0.00000001', channel_id=channel['claim_id'], allow_duplicate_name=True
-        )
-
-        # it still resolves! but to the older claim
-        response = await self.resolve(uri)
-        self.assertTrue(response[uri]['is_channel_signature_valid'])
-        self.assertEqual(response[uri]['txid'], valid_claim['txid'])
-        claims = await self.claim_search(name='on-channel-claim')
-        self.assertEqual(2, len(claims))
-        self.assertEqual(
-            {channel['claim_id']}, {claim['signing_channel']['claim_id'] for claim in claims}
-        )
-
-    async def test_normalization_resolution(self):
-
-        one = 'ΣίσυφοςﬁÆ'
-        two = 'ΣΊΣΥΦΟσFIæ'
-
-        _ = await self.stream_create(one, '0.1')
-        c = await self.stream_create(two, '0.2')
-
-        winner_id = c['outputs'][0]['claim_id']
-
-        r1 = await self.resolve(f'lbry://{one}')
-        r2 = await self.resolve(f'lbry://{two}')
-
-        self.assertEqual(winner_id, r1[f'lbry://{one}']['claim_id'])
-        self.assertEqual(winner_id, r2[f'lbry://{two}']['claim_id'])
-
-    async def test_resolve_old_claim(self):
-        channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0')
-        await self.confirm_tx(channel.id)
-        address = channel.outputs[0].get_address(self.account.ledger)
-        claim = generate_signed_legacy(address, channel.outputs[0])
-        tx = await Transaction.claim_create('example', claim.SerializeToString(), 1, address, [self.account], self.account)
-        await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
-
-        response = await self.resolve('@olds/example')
-        self.assertTrue(response['@olds/example']['is_channel_signature_valid'])
-
-        claim.publisherSignature.signature = bytes(reversed(claim.publisherSignature.signature))
-        tx = await Transaction.claim_create(
-            'bad_example', claim.SerializeToString(), 1, address, [self.account], self.account
-        )
-        await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
-
-        response = await self.resolve('bad_example')
-        self.assertFalse(response['bad_example']['is_channel_signature_valid'])
-        response = await self.resolve('@olds/bad_example')
-        self.assertEqual(response, {
-            '@olds/bad_example': {'error': '@olds/bad_example did not resolve to a claim'}
-        })
-
-
-def generate_signed_legacy(address: bytes, output: Output):
-    decoded_address = Base58.decode(address)
-    claim = OldClaimMessage()
-    claim.ParseFromString(unhexlify(
-        '080110011aee04080112a604080410011a2b4865726520617265203520526561736f6e73204920e29da4e'
-        'fb88f204e657874636c6f7564207c20544c4722920346696e64206f7574206d6f72652061626f7574204e'
-        '657874636c6f75643a2068747470733a2f2f6e657874636c6f75642e636f6d2f0a0a596f752063616e206'
-        '6696e64206d65206f6e20746865736520736f6369616c733a0a202a20466f72756d733a2068747470733a'
-        '2f2f666f72756d2e6865617679656c656d656e742e696f2f0a202a20506f64636173743a2068747470733'
-        'a2f2f6f6666746f706963616c2e6e65740a202a2050617472656f6e3a2068747470733a2f2f7061747265'
-        '6f6e2e636f6d2f7468656c696e757867616d65720a202a204d657263683a2068747470733a2f2f7465657'
-        '37072696e672e636f6d2f73746f7265732f6f6666696369616c2d6c696e75782d67616d65720a202a2054'
-        '77697463683a2068747470733a2f2f7477697463682e74762f786f6e64616b0a202a20547769747465723'
-        'a2068747470733a2f2f747769747465722e636f6d2f7468656c696e757867616d65720a0a2e2e2e0a6874'
-        '7470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d4672546442434f535f66632a0'
-        'f546865204c696e75782047616d6572321c436f7079726967687465642028636f6e746163742061757468'
-        '6f722938004a2968747470733a2f2f6265726b2e6e696e6a612f7468756d626e61696c732f46725464424'
-        '34f535f666352005a001a41080110011a30040e8ac6e89c061f982528c23ad33829fd7146435bf7a4cc22'
-        'f0bff70c4fe0b91fd36da9a375e3e1c171db825bf5d1f32209766964656f2f6d70342a5c080110031a406'
-        '2b2dd4c45e364030fbfad1a6fefff695ebf20ea33a5381b947753e2a0ca359989a5cc7d15e5392a0d354c'
-        '0b68498382b2701b22c03beb8dcb91089031b871e72214feb61536c007cdf4faeeaab4876cb397feaf6b51'
-    ))
-    claim.ClearField("publisherSignature")
-    digest = sha256(b''.join([
-        decoded_address,
-        claim.SerializeToString(),
-        output.claim_hash[::-1]
-    ]))
-    private_key = ecdsa.SigningKey.from_pem(output.private_key, hashfunc=hashlib.sha256)
-    signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
-    claim.publisherSignature.version = 1
-    claim.publisherSignature.signatureType = 1
-    claim.publisherSignature.signature = signature
-    claim.publisherSignature.certificateId = output.claim_hash[::-1]
-    return claim
-
 
 class SupportCommands(CommandTestCase):
 
@@ -949,5 +866,3 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
-
-
