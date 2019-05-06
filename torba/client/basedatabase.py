@@ -87,6 +87,9 @@ class AIOSQLite:
 def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
     sql, values = [], {}
     for key, constraint in constraints.items():
+        tag = '0'
+        if '#' in key:
+            key, tag = key[:key.index('#')], key[key.index('#')+1:]
         col, op, key = key, '=', key.replace('.', '_')
         if key.startswith('$'):
             values[key] = constraint
@@ -120,8 +123,8 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
                 if isinstance(constraint, (list, set, tuple)):
                     keys = []
                     for i, val in enumerate(constraint):
-                        keys.append(f':{key}{i}')
-                        values[f'{key}{i}'] = val
+                        keys.append(f':{key}{tag}_{i}')
+                        values[f'{key}{tag}_{i}'] = val
                     sql.append(f'{col} {op} ({", ".join(keys)})')
                 elif isinstance(constraint, str):
                     sql.append(f'{col} {op} ({constraint})')
@@ -129,12 +132,12 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
                     raise ValueError(f"{col} requires a list, set or string as constraint value.")
             continue
         elif key.endswith('__any'):
-            where, subvalues = constraints_to_sql(constraint, ' OR ', key+'_')
+            where, subvalues = constraints_to_sql(constraint, ' OR ', key+tag+'_')
             sql.append(f'({where})')
             values.update(subvalues)
             continue
-        sql.append(f'{col} {op} :{prepend_key}{key}')
-        values[prepend_key+key] = constraint
+        sql.append(f'{col} {op} :{prepend_key}{key}{tag}')
+        values[prepend_key+key+tag] = constraint
     return joiner.join(sql) if sql else '', values
 
 
