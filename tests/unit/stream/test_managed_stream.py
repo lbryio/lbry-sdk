@@ -151,26 +151,6 @@ class TestManagedStream(BlobExchangeTestBase):
     async def test_create_and_decrypt_multi_blob_stream(self):
         await self.test_create_and_decrypt_one_blob_stream(10)
 
-    # async def test_create_managed_stream_announces(self):
-    #     # setup a blob manager
-    #     storage = SQLiteStorage(Config(), ":memory:")
-    #     await storage.open()
-    #     tmp_dir = tempfile.mkdtemp()
-    #     self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-    #     blob_manager = BlobManager(self.loop, tmp_dir, storage)
-    #     stream_manager = StreamManager(self.loop, Config(), blob_manager, None, storage, None)
-    #     # create the stream
-    #     download_dir = tempfile.mkdtemp()
-    #     self.addCleanup(lambda: shutil.rmtree(download_dir))
-    #     file_path = os.path.join(download_dir, "test_file")
-    #     with open(file_path, 'wb') as f:
-    #         f.write(b'testtest')
-    #
-    #     stream = await stream_manager.create_stream(file_path)
-    #     self.assertEqual(
-    #         [stream.sd_hash, stream.descriptor.blobs[0].blob_hash],
-    #         await storage.get_blobs_to_announce())
-
     # async def test_create_truncate_and_handle_stream(self):
     #     # The purpose of this test is just to make sure it can finish even if a blob is corrupt/truncated
     #     await asyncio.wait_for(self.test_create_and_decrypt_one_blob_stream(corrupt=True), timeout=5)

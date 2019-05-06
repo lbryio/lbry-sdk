@@ -62,3 +62,8 @@ class TestStreamAssembler(AsyncioTestCase):
 
         sent = await self.stream.upload_to_reflector('127.0.0.1', 5566)
         self.assertListEqual(sent, [])
+
+    async def test_announces(self):
+        to_announce = await self.storage.get_blobs_to_announce()
+        self.assertIn(self.stream.sd_hash, to_announce, "sd blob not set to announce")
+        self.assertIn(self.stream.descriptor.blobs[0].blob_hash, to_announce, "head blob not set to announce")
