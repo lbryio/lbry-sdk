@@ -135,6 +135,19 @@ class ClaimSearchCommand(CommandTestCase):
         await self.assertFindsClaims([], all_tags=['ghi', 'xyz'])
         await self.assertFindsClaims([], all_tags=['xyz'])
 
+        # not_tags
+        await self.assertFindsClaims([], not_tags=['abc', 'pqr'])
+        await self.assertFindsClaims([claim5], not_tags=['abc'])
+        await self.assertFindsClaims([claim5], not_tags=['abc', 'ghi'])
+        await self.assertFindsClaims([claim5, claim2, claim1], not_tags=['ghi'])
+        await self.assertFindsClaims([claim5, claim2, claim1], not_tags=['ghi', 'xyz'])
+        await self.assertFindsClaims([claim5, claim4, claim3, claim2, claim1], not_tags=['xyz'])
+
+        # combinations
+        await self.assertFindsClaims([claim3], all_tags=['abc', 'ghi'], not_tags=['mno'])
+        await self.assertFindsClaims([claim3], all_tags=['abc', 'ghi'], any_tags=['jkl'], not_tags=['mno'])
+        await self.assertFindsClaims([claim4, claim3, claim2], all_tags=['abc'], any_tags=['def', 'ghi'])
+
 
 class ChannelCommands(CommandTestCase):
 

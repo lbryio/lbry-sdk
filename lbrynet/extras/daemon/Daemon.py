@@ -1674,9 +1674,11 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
                          [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling]
-                         [--any_tags=<any_tags>...] [--all_tags=<all_tags>...]
+                         [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
                          [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
+                         [--not_languages=<not_languages>...]
                          [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
+                         [--not_locations=<not_locations>...]
                          [--page=<page>] [--page_size=<page_size>]
 
         Options:
@@ -1689,10 +1691,13 @@ class Daemon(metaclass=JSONRPCServerType):
             --is_controlling                : (bool) limit to controlling claims for their respective name
             --any_tags=<any_tags>           : (list) find claims containing any of the tags
             --all_tags=<all_tags>           : (list) find claims containing every tag
+            --not_tags=<not_tags>           : (list) find claims not containing any of these tags
             --any_languages=<any_languages> : (list) find claims containing any of the languages
             --all_languages=<all_languages> : (list) find claims containing every language
+            --not_languages=<not_languages> : (list) find claims not containing any of these languages
             --any_locations=<any_locations> : (list) find claims containing any of the locations
             --all_locations=<all_locations> : (list) find claims containing every location
+            --not_locations=<not_locations> : (list) find claims not containing any of these locations
             --page=<page>                   : (int) page to return during paginating
             --page_size=<page_size>         : (int) number of items on page during pagination
 
