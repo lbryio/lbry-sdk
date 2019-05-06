@@ -378,6 +378,15 @@ class SQLDB:
                 SELECT txo_hash FROM tag WHERE tag IN ({}) GROUP BY txo_hash HAVING COUNT(tag) = :$all_tags_count
             """.format(', '.join(f':$all_tags{i}' for i in range(len(all_tags))))
 
+        not_tags = constraints.pop('not_tags', [])[:100]
+        if not_tags:
+            constraints.update({
+                f'$not_tags{i}': tag for i, tag in enumerate(not_tags)
+            })
+            constraints['claim.txo_hash__not_in'] = """
+                SELECT DISTINCT txo_hash FROM tag WHERE tag IN ({})
+            """.format(', '.join(f':$not_tags{i}' for i in range(len(not_tags))))
+
         return self.db.execute(*query(
             f"""
             SELECT {cols} FROM claim
@@ -413,9 +422,9 @@ class SQLDB:
     SEARCH_PARAMS = {
         'name', 'claim_id', 'txid', 'nout',
         'channel', 'channel_id', 'channel_name',
-        'any_tags', 'all_tags',
-        'any_locations', 'all_locations',
-        'any_languages', 'all_languages',
+        'any_tags', 'all_tags', 'not_tags',
+        'any_locations', 'all_locations', 'not_locations',
+        'any_languages', 'all_languages', 'not_languages',
         'is_controlling', 'limit', 'offset'
     }
 
