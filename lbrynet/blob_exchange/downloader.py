@@ -27,6 +27,7 @@ class BlobDownloader:
         self.scores: typing.Dict['KademliaPeer', int] = {}
         self.failures: typing.Dict['KademliaPeer', int] = {}
         self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
+        self.is_running = asyncio.Event(loop=self.loop)
 
     def should_race_continue(self, blob: 'AbstractBlob'):
         if len(self.active_connections) >= self.config.max_connections_per_download:
@@ -79,8 +80,9 @@ class BlobDownloader:
         blob = self.blob_manager.get_blob(blob_hash, length)
         if blob.get_is_verified():
             return blob
+        self.is_running.set()
         try:
-            while not blob.get_is_verified():
+            while not blob.get_is_verified() and self.is_running.is_set():
                 batch: typing.Set['KademliaPeer'] = set()
                 while not self.peer_queue.empty():
                     batch.update(self.peer_queue.get_nowait())
@@ -107,6 +109,7 @@ class BlobDownloader:
     def close(self):
         self.scores.clear()
         self.ignored.clear()
+        self.is_running.clear()
         for transport in self.connections.values():
             transport.close()
 
