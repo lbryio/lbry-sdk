@@ -342,6 +342,10 @@ class StreamManager:
                 if save_file and updated_stream.output_file_exists:
                     save_file = False
                 await updated_stream.start(node=self.node, timeout=timeout, save_now=save_file)
+                if save_file or file_name or download_directory:
+                    await updated_stream.save_file(
+                        file_name=file_name, download_directory=download_directory, node=self.node
+                    )
                 return updated_stream
 
             content_fee = None
@@ -382,7 +386,6 @@ class StreamManager:
                 stream.content_fee = await self.wallet.send_amount_to_address(
                     lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
                 )
-
                 log.info("paid fee of %s for %s", fee_amount, uri)
 
             self.streams[stream.sd_hash] = stream
