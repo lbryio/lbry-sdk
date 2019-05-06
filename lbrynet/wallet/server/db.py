@@ -12,6 +12,49 @@ from lbrynet.schema.url import URL, normalize_name
 from lbrynet.wallet.transaction import Transaction, Output
 
 
+ATTRIBUTE_ARRAY_MAX_LENGTH = 100
+
+
+def _apply_constraints_for_array_attributes(constraints, attr):
+    any_items = constraints.pop(f'any_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+    if any_items:
+        constraints.update({
+            f'$any_{attr}{i}': item for i, item in enumerate(any_items)
+        })
+        values = ', '.join(
+            f':$any_{attr}{i}' for i in range(len(any_items))
+        )
+        constraints[f'claim.txo_hash__in#_any_{attr}'] = f"""
+            SELECT DISTINCT txo_hash FROM {attr} WHERE {attr} IN ({values})
+        """
+
+    all_items = constraints.pop(f'all_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+    if all_items:
+        constraints[f'$all_{attr}_count'] = len(all_items)
+        constraints.update({
+            f'$all_{attr}{i}': item for i, item in enumerate(all_items)
+        })
+        values = ', '.join(
+            f':$all_{attr}{i}' for i in range(len(all_items))
+        )
+        constraints[f'claim.txo_hash__in#_all_{attr}'] = f"""
+            SELECT txo_hash FROM {attr} WHERE {attr} IN ({values})
+            GROUP BY txo_hash HAVING COUNT({attr}) = :$all_{attr}_count
+        """
+
+    not_items = constraints.pop(f'not_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+    if not_items:
+        constraints.update({
+            f'$not_{attr}{i}': item for i, item in enumerate(not_items)
+        })
+        values = ', '.join(
+            f':$not_{attr}{i}' for i in range(len(not_items))
+        )
+        constraints[f'claim.txo_hash__not_in#_not_{attr}'] = f"""
+            SELECT DISTINCT txo_hash FROM {attr} WHERE {attr} IN ({values})
+        """
+
+
 class SQLDB:
 
     TRENDING_BLOCKS = 300  # number of blocks over which to calculate trending
@@ -359,33 +402,9 @@ class SQLDB:
                 tx_hash + struct.pack('<I', nout)
             )
 
-        any_tags = constraints.pop('any_tags', [])[:100]
-        if any_tags:
-            constraints.update({
-                f'$any_tags{i}': tag for i, tag in enumerate(any_tags)
-            })
-            constraints['claim.txo_hash__in'] = """
-                SELECT DISTINCT txo_hash FROM tag WHERE tag IN ({})
-            """.format(', '.join(f':$any_tags{i}' for i in range(len(any_tags))))
-
-        all_tags = constraints.pop('all_tags', [])[:100]
-        if all_tags:
-            constraints['$all_tags_count'] = len(all_tags)
-            constraints.update({
-                f'$all_tags{i}': tag for i, tag in enumerate(all_tags)
-            })
-            constraints['claim.txo_hash__in'] = """
-                SELECT txo_hash FROM tag WHERE tag IN ({}) GROUP BY txo_hash HAVING COUNT(tag) = :$all_tags_count
-            """.format(', '.join(f':$all_tags{i}' for i in range(len(all_tags))))
-
-        not_tags = constraints.pop('not_tags', [])[:100]
-        if not_tags:
-            constraints.update({
-                f'$not_tags{i}': tag for i, tag in enumerate(not_tags)
-            })
-            constraints['claim.txo_hash__not_in'] = """
-                SELECT DISTINCT txo_hash FROM tag WHERE tag IN ({})
-            """.format(', '.join(f':$not_tags{i}' for i in range(len(not_tags))))
+        _apply_constraints_for_array_attributes(constraints, 'tag')
+        _apply_constraints_for_array_attributes(constraints, 'language')
+        _apply_constraints_for_array_attributes(constraints, 'location')
 
         return self.db.execute(*query(
             f"""
