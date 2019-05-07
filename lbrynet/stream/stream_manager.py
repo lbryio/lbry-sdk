@@ -21,6 +21,7 @@ if typing.TYPE_CHECKING:
     from lbrynet.extras.daemon.analytics import AnalyticsManager
     from lbrynet.extras.daemon.storage import SQLiteStorage, StoredStreamClaim
     from lbrynet.wallet import LbryWalletManager
+    from lbrynet.wallet.transaction import Transaction
     from lbrynet.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 log = logging.getLogger(__name__)
@@ -55,7 +56,9 @@ comparison_operators = {
 
 
 def path_or_none(p) -> typing.Optional[str]:
-    return None if p == '{stream}' else binascii.unhexlify(p).decode()
+    if not p:
+        return
+    return binascii.unhexlify(p).decode()
 
 
 class StreamManager:
@@ -70,8 +73,8 @@ class StreamManager:
         self.node = node
         self.analytics_manager = analytics_manager
         self.streams: typing.Dict[str, ManagedStream] = {}
-        self.resume_downloading_task: asyncio.Task = None
-        self.re_reflect_task: asyncio.Task = None
+        self.resume_saving_task: typing.Optional[asyncio.Task] = None
+        self.re_reflect_task: typing.Optional[asyncio.Task] = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
         self.running_reflector_uploads: typing.List[asyncio.Task] = []
         self.started = asyncio.Event(loop=self.loop)
@@ -84,7 +87,8 @@ class StreamManager:
         to_restore = []
 
         async def recover_stream(sd_hash: str, stream_hash: str, stream_name: str,
-                                 suggested_file_name: str, key: str) -> typing.Optional[StreamDescriptor]:
+                                 suggested_file_name: str, key: str,
+                                 content_fee: typing.Optional['Transaction']) -> typing.Optional[StreamDescriptor]:
             sd_blob = self.blob_manager.get_blob(sd_hash)
             blobs = await self.storage.get_blobs_for_stream(stream_hash)
             descriptor = await StreamDescriptor.recover(
@@ -92,12 +96,13 @@ class StreamManager:
             )
             if not descriptor:
                 return
-            to_restore.append((descriptor, sd_blob))
+            to_restore.append((descriptor, sd_blob, content_fee))
 
         await asyncio.gather(*[
             recover_stream(
                 file_info['sd_hash'], file_info['stream_hash'], binascii.unhexlify(file_info['stream_name']).decode(),
-                binascii.unhexlify(file_info['suggested_file_name']).decode(), file_info['key']
+                binascii.unhexlify(file_info['suggested_file_name']).decode(), file_info['key'],
+                file_info['content_fee']
             ) for file_info in file_infos
         ])
 
@@ -109,7 +114,7 @@ class StreamManager:
 
     async def add_stream(self, rowid: int, sd_hash: str, file_name: typing.Optional[str],
                          download_directory: typing.Optional[str], status: str,
-                         claim: typing.Optional['StoredStreamClaim']):
+                         claim: typing.Optional['StoredStreamClaim'], content_fee: typing.Optional['Transaction']):
         try:
             descriptor = await self.blob_manager.get_stream_descriptor(sd_hash)
         except InvalidStreamDescriptorError as err:
@@ -117,16 +122,18 @@ class StreamManager:
             return
         stream = ManagedStream(
             self.loop, self.config, self.blob_manager, descriptor.sd_hash, download_directory, file_name, status,
-            claim, rowid=rowid, descriptor=descriptor, analytics_manager=self.analytics_manager
+            claim, content_fee=content_fee, rowid=rowid, descriptor=descriptor,
+            analytics_manager=self.analytics_manager
         )
         self.streams[sd_hash] = stream
+        self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
-    async def load_streams_from_database(self):
+    async def load_and_resume_streams_from_database(self):
         to_recover = []
         to_start = []
 
-        # this will set streams marked as finished and are missing blobs as being stopped
-        # await self.storage.sync_files_to_blobs()
+        await self.storage.update_manually_removed_files_since_last_run()
+
         for file_info in await self.storage.get_all_lbry_files():
             # if the sd blob is not verified, try to reconstruct it from the database
             # this could either be because the blob files were deleted manually or save_blobs was not true when
@@ -138,29 +145,33 @@ class StreamManager:
             await self.recover_streams(to_recover)
 
         log.info("Initializing %i files", len(to_start))
-        if to_start:
-            await asyncio.gather(*[
-                self.add_stream(
-                    file_info['rowid'], file_info['sd_hash'], path_or_none(file_info['file_name']),
-                    path_or_none(file_info['download_directory']), file_info['status'],
-                    file_info['claim']
-                ) for file_info in to_start
-            ])
+        to_resume_saving = []
+        add_stream_tasks = []
+        for file_info in to_start:
+            file_name = path_or_none(file_info['file_name'])
+            download_directory = path_or_none(file_info['download_directory'])
+            if file_name and download_directory and not file_info['saved_file'] and file_info['status'] == 'running':
+                to_resume_saving.append((file_name, download_directory, file_info['sd_hash']))
+            add_stream_tasks.append(self.loop.create_task(self.add_stream(
+                file_info['rowid'], file_info['sd_hash'], file_name,
+                download_directory, file_info['status'],
+                file_info['claim'], file_info['content_fee']
+            )))
+        if add_stream_tasks:
+            await asyncio.gather(*add_stream_tasks, loop=self.loop)
         log.info("Started stream manager with %i files", len(self.streams))
-
-    async def resume(self):
         if not self.node:
             log.warning("no DHT node given, resuming downloads trusting that we can contact reflector")
-        t = [
-            self.loop.create_task(
-                stream.start(node=self.node, save_now=(stream.full_path is not None))
-                if not stream.full_path else
-                stream.save_file(node=self.node)
-            ) for stream in self.streams.values() if stream.running
-        ]
-        if t:
-            log.info("resuming %i downloads", len(t))
-            await asyncio.gather(*t, loop=self.loop)
+        if to_resume_saving:
+            self.resume_saving_task = self.loop.create_task(self.resume(to_resume_saving))
+
+    async def resume(self, to_resume_saving):
+        log.info("Resuming saving %i files", len(to_resume_saving))
+        await asyncio.gather(
+            *(self.streams[sd_hash].save_file(file_name, download_directory, node=self.node)
+              for (file_name, download_directory, sd_hash) in to_resume_saving),
+            loop=self.loop
+        )
 
     async def reflect_streams(self):
         while True:
@@ -182,14 +193,13 @@ class StreamManager:
             await asyncio.sleep(300, loop=self.loop)
 
     async def start(self):
-        await self.load_streams_from_database()
-        self.resume_downloading_task = self.loop.create_task(self.resume())
+        await self.load_and_resume_streams_from_database()
         self.re_reflect_task = self.loop.create_task(self.reflect_streams())
         self.started.set()
 
     def stop(self):
-        if self.resume_downloading_task and not self.resume_downloading_task.done():
-            self.resume_downloading_task.cancel()
+        if self.resume_saving_task and not self.resume_saving_task.done():
+            self.resume_saving_task.cancel()
         if self.re_reflect_task and not self.re_reflect_task.done():
             self.re_reflect_task.cancel()
         while self.streams:
@@ -387,6 +397,7 @@ class StreamManager:
                     lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
                 )
                 log.info("paid fee of %s for %s", fee_amount, uri)
+                await self.storage.save_content_fee(stream.stream_hash, stream.content_fee)
 
             self.streams[stream.sd_hash] = stream
             self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
