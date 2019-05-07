@@ -8,7 +8,7 @@ def do_migration(conf):
     cursor = connection.cursor()
 
     query = "select stream_hash, sd_hash from main.stream"
-    for stream_hash, sd_hash in cursor.execute(query):
+    for stream_hash, sd_hash in cursor.execute(query).fetchall():
         head_blob_hash = cursor.execute(
             "select blob_hash from stream_blob where position = 0 and stream_hash = ?",
             (stream_hash,)
