@@ -58,14 +58,14 @@ class StreamDownloader:
 
         self.fixed_peers_handle = self.loop.call_later(self.fixed_peers_delay, _delayed_add_fixed_peers)
 
-    async def load_descriptor(self):
+    async def load_descriptor(self, connection_id: int = 0):
         # download or get the sd blob
         sd_blob = self.blob_manager.get_blob(self.sd_hash)
         if not sd_blob.get_is_verified():
             try:
                 now = self.loop.time()
                 sd_blob = await asyncio.wait_for(
-                    self.blob_downloader.download_blob(self.sd_hash),
+                    self.blob_downloader.download_blob(self.sd_hash, connection_id),
                     self.config.blob_download_timeout, loop=self.loop
                 )
                 log.info("downloaded sd blob %s", self.sd_hash)
@@ -79,7 +79,7 @@ class StreamDownloader:
         )
         log.info("loaded stream manifest %s", self.sd_hash)
 
-    async def start(self, node: typing.Optional['Node'] = None):
+    async def start(self, node: typing.Optional['Node'] = None, connection_id: int = 0):
         # set up peer accumulation
         if node:
             self.node = node
@@ -90,7 +90,7 @@ class StreamDownloader:
         log.info("searching for peers for stream %s", self.sd_hash)
 
         if not self.descriptor:
-            await self.load_descriptor()
+            await self.load_descriptor(connection_id)
 
         # add the head blob to the peer search
         self.search_queue.put_nowait(self.descriptor.blobs[0].blob_hash)
@@ -101,10 +101,10 @@ class StreamDownloader:
                 self.blob_manager.get_blob(self.sd_hash, length=self.descriptor.length), self.descriptor
             )
 
-    async def download_stream_blob(self, blob_info: 'BlobInfo') -> 'AbstractBlob':
+    async def download_stream_blob(self, blob_info: 'BlobInfo', connection_id: int = 0) -> 'AbstractBlob':
         if not filter(lambda blob: blob.blob_hash == blob_info.blob_hash, self.descriptor.blobs[:-1]):
             raise ValueError(f"blob {blob_info.blob_hash} is not part of stream with sd hash {self.sd_hash}")
-        blob = await self.blob_downloader.download_blob(blob_info.blob_hash, blob_info.length)
+        blob = await self.blob_downloader.download_blob(blob_info.blob_hash, blob_info.length, connection_id)
         return blob
 
     def decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob') -> bytes:
@@ -112,11 +112,11 @@ class StreamDownloader:
             binascii.unhexlify(self.descriptor.key.encode()), binascii.unhexlify(blob_info.iv.encode())
         )
 
-    async def read_blob(self, blob_info: 'BlobInfo') -> bytes:
+    async def read_blob(self, blob_info: 'BlobInfo', connection_id: int = 0) -> bytes:
         start = None
         if self.time_to_first_bytes is None:
             start = self.loop.time()
-        blob = await self.download_stream_blob(blob_info)
+        blob = await self.download_stream_blob(blob_info, connection_id)
         decrypted = self.decrypt_blob(blob_info, blob)
         if start:
             self.time_to_first_bytes = self.loop.time() - start

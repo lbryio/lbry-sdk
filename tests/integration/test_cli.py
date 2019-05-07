@@ -29,7 +29,7 @@ class CLIIntegrationTest(AsyncioTestCase):
         await self.daemon.start()
 
     async def asyncTearDown(self):
-        await self.daemon.stop()
+        await self.daemon.stop(shutdown_runner=False)
 
     def test_cli_status_command_with_auth(self):
         actual_output = StringIO()

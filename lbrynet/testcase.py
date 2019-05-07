@@ -124,7 +124,7 @@ class CommandTestCase(IntegrationTestCase):
     async def asyncTearDown(self):
         await super().asyncTearDown()
         self.wallet_component._running = False
-        await self.daemon.stop()
+        await self.daemon.stop(shutdown_runner=False)
 
     async def confirm_tx(self, txid):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """

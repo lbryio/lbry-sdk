@@ -225,7 +225,7 @@ class TestStreamManager(BlobExchangeTestBase):
         )
         self.assertEqual(stored_status, "running")
 
-        await self.stream_manager.stop_stream(stream)
+        await stream.stop()
 
         self.assertFalse(stream.finished)
         self.assertFalse(stream.running)
@@ -235,7 +235,7 @@ class TestStreamManager(BlobExchangeTestBase):
         )
         self.assertEqual(stored_status, "stopped")
 
-        await self.stream_manager.start_stream(stream)
+        await stream.save_file(node=self.stream_manager.node)
         await stream.finished_writing.wait()
         await asyncio.sleep(0, loop=self.loop)
         self.assertTrue(stream.finished)
@@ -337,7 +337,7 @@ class TestStreamManager(BlobExchangeTestBase):
         for blob_hash in [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]:
             blob_status = await self.client_storage.get_blob_status(blob_hash)
             self.assertEqual('pending', blob_status)
-        self.assertEqual('stopped', self.stream_manager.streams[self.sd_hash].status)
+        self.assertEqual('finished', self.stream_manager.streams[self.sd_hash].status)
 
         sd_blob = self.client_blob_manager.get_blob(stream.sd_hash)
         self.assertTrue(sd_blob.file_exists)

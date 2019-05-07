@@ -18,7 +18,7 @@ from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbrynet import utils
 from lbrynet.conf import Config, Setting
-from lbrynet.blob.blob_file import is_valid_blobhash
+from lbrynet.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbrynet.blob_exchange.downloader import download_blob
 from lbrynet.error import DownloadSDTimeout, ComponentsNotStarted
 from lbrynet.error import NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
@@ -433,15 +433,20 @@ class Daemon(metaclass=JSONRPCServerType):
         self.component_startup_task = asyncio.create_task(self.component_manager.start())
         await self.component_startup_task
 
-    async def stop(self):
+    async def stop(self, shutdown_runner=True):
         if self.component_startup_task is not None:
             if self.component_startup_task.done():
                 await self.component_manager.stop()
             else:
                 self.component_startup_task.cancel()
+        log.info("stopped api components")
+        if shutdown_runner:
+            await self.runner.shutdown()
         await self.runner.cleanup()
+        log.info("stopped api server")
         if self.analytics_manager.is_started:
             self.analytics_manager.stop()
+        log.info("finished shutting down")
 
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
@@ -472,64 +477,20 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             name, claim_id = name_and_claim_id.split("/")
             uri = f"lbry://{name}#{claim_id}"
+        if not self.stream_manager.started.is_set():
+            await self.stream_manager.started.wait()
         stream = await self.jsonrpc_get(uri)
         if isinstance(stream, dict):
             raise web.HTTPServerError(text=stream['error'])
         raise web.HTTPFound(f"/stream/{stream.sd_hash}")
 
-    @staticmethod
-    def prepare_range_response_headers(get_range: str, stream: 'ManagedStream') -> typing.Tuple[typing.Dict[str, str],
-                                                                                                int, int]:
-        if '=' in get_range:
-            get_range = get_range.split('=')[1]
-        start, end = get_range.split('-')
-        size = 0
-        for blob in stream.descriptor.blobs[:-1]:
-            size += blob.length - 1
-        start = int(start)
-        end = int(end) if end else size - 1
-        skip_blobs = start // 2097150
-        skip = skip_blobs * 2097151
-        start = skip
-        final_size = end - start + 1
-
-        headers = {
-            'Accept-Ranges': 'bytes',
-            'Content-Range': f'bytes {start}-{end}/{size}',
-            'Content-Length': str(final_size),
-            'Content-Type': stream.mime_type
-        }
-        return headers, size, skip_blobs
-
     async def handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
+        if not self.stream_manager.started.is_set():
+            await self.stream_manager.started.wait()
         if sd_hash not in self.stream_manager.streams:
             return web.HTTPNotFound()
-        stream = self.stream_manager.streams[sd_hash]
-        if stream.status == 'stopped':
-            await self.stream_manager.start_stream(stream)
-        if stream.delayed_stop:
-            stream.delayed_stop.cancel()
-        headers, size, skip_blobs = self.prepare_range_response_headers(
-            request.headers.get('range', 'bytes=0-'), stream
-        )
-        response = web.StreamResponse(
-            status=206,
-            headers=headers
-        )
-        await response.prepare(request)
-        wrote = 0
-        async for blob_info, decrypted in stream.aiter_read_stream(skip_blobs):
-            log.info("streamed blob %i/%i", blob_info.blob_num + 1, len(stream.descriptor.blobs) - 1)
-            if (blob_info.blob_num == len(stream.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
-                decrypted += b'\x00' * (size - len(decrypted) - wrote)
-                await response.write_eof(decrypted)
-                break
-            else:
-                await response.write(decrypted)
-            wrote += len(decrypted)
-        response.force_close()
-        return response
+        return await self.stream_manager.stream_partial_content(request, sd_hash)
 
     async def _process_rpc_call(self, data):
         args = data.get('params', {})
@@ -907,27 +868,30 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               STREAM_MANAGER_COMPONENT,
               conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_get(self, uri, file_name=None, timeout=None, save_file=None):
+    async def jsonrpc_get(self, uri, file_name=None, download_directory=None, timeout=None, save_file=None):
         """
         Download stream from a LBRY name.
 
         Usage:
-            get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>]
-                [--save_file=<save_file>]
+            get <uri> [<file_name> | --file_name=<file_name>]
+             [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
+             [--save_file=<save_file>]
 
 
         Options:
             --uri=<uri>              : (str) uri of the content to download
             --file_name=<file_name>  : (str) specified name for the downloaded file, overrides the stream file name
+            --download_directory=<download_directory>  : (str) full path to the directory to download into
             --timeout=<timeout>      : (int) download timeout in number of seconds
             --save_file=<save_file>  : (bool) save the file to the downloads directory
 
         Returns: {File}
         """
-        save_file = save_file if save_file is not None else self.conf.save_files
+        if download_directory and not os.path.isdir(download_directory):
+            return {"error": f"specified download directory \"{download_directory}\" does not exist"}
         try:
             stream = await self.stream_manager.download_stream_from_uri(
-                uri, self.exchange_rate_manager, timeout, file_name, save_file=save_file
+                uri, self.exchange_rate_manager, timeout, file_name, download_directory, save_file=save_file
             )
             if not stream:
                 raise DownloadSDTimeout(uri)
@@ -1551,10 +1515,10 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running:
-            await self.stream_manager.start_stream(stream)
+            await stream.save_file(node=self.stream_manager.node)
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
-            await self.stream_manager.stop_stream(stream)
+            await stream.stop()
             msg = "Stopped download"
         else:
             msg = (
@@ -2927,10 +2891,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         blob = await download_blob(asyncio.get_event_loop(), self.conf, self.blob_manager, self.dht_node, blob_hash)
         if read:
-            with open(blob.file_path, 'rb') as handle:
+            with blob.reader_context() as handle:
                 return handle.read().decode()
-        else:
-            return "Downloaded blob %s" % blob_hash
+        elif isinstance(blob, BlobBuffer):
+            log.warning("manually downloaded blob buffer could have missed garbage collection, clearing it")
+            blob.delete()
+        return "Downloaded blob %s" % blob_hash
 
     @requires(BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_blob_delete(self, blob_hash):

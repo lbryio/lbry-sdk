@@ -2,6 +2,13 @@ import typing
 
 
 class BlobInfo:
+    __slots__ = [
+        'blob_hash',
+        'blob_num',
+        'length',
+        'iv',
+    ]
+
     def __init__(self, blob_num: int, length: int, iv: str, blob_hash: typing.Optional[str] = None):
         self.blob_hash = blob_hash
         self.blob_num = blob_num
