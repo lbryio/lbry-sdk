@@ -198,21 +198,31 @@ class ManagedStream:
         return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
 
     def as_dict(self) -> typing.Dict:
-        if not self.written_bytes and self.output_file_exists:
-            written_bytes = os.stat(self.full_path).st_size
+        full_path = self.full_path
+        file_name = self.file_name
+        download_directory = self.download_directory
+        if self.full_path and self.output_file_exists:
+            if self.written_bytes:
+                written_bytes = self.written_bytes
+            else:
+                written_bytes = os.stat(self.full_path).st_size
         else:
-            written_bytes = self.written_bytes
+            full_path = None
+            file_name = None
+            download_directory = None
+            written_bytes = None
         return {
-            'completed': self.output_file_exists and self.status in ('stopped', 'finished'),
-            'file_name': self.file_name,
-            'download_directory': self.download_directory,
+            'completed': (self.output_file_exists and self.status in ('stopped', 'finished')) or all(
+                self.blob_manager.is_blob_verified(b.blob_hash) for b in self.descriptor.blobs[:-1]),
+            'file_name': file_name,
+            'download_directory': download_directory,
             'points_paid': 0.0,
             'stopped': not self.running,
             'stream_hash': self.stream_hash,
             'stream_name': self.descriptor.stream_name,
             'suggested_file_name': self.descriptor.suggested_file_name,
             'sd_hash': self.descriptor.sd_hash,
-            'download_path': self.full_path,
+            'download_path': full_path,
             'mime_type': self.mime_type,
             'key': self.descriptor.key,
             'total_bytes_lower_bound': self.descriptor.lower_bound_decrypted_length(),
@@ -231,7 +241,7 @@ class ManagedStream:
             'channel_claim_id': self.channel_claim_id,
             'channel_name': self.channel_name,
             'claim_name': self.claim_name,
-            'content_fee': self.content_fee  # TODO: this isn't in the database
+            'content_fee': self.content_fee
         }
 
     @classmethod
@@ -377,7 +387,7 @@ class ManagedStream:
             os.mkdir(self.download_directory)
         self._file_name = await get_next_available_file_name(
             self.loop, self.download_directory,
-            file_name or self._file_name or self.descriptor.suggested_file_name
+            file_name or self.descriptor.suggested_file_name
         )
         await self.blob_manager.storage.change_file_download_dir_and_file_name(
             self.stream_hash, self.download_directory, self.file_name
