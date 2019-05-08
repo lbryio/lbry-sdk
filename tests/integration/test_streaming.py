@@ -97,7 +97,7 @@ class RangeRequests(CommandTestCase):
     async def test_range_requests_no_padding_size_from_claim(self):
         size = ((MAX_BLOB_SIZE - 1) * 4) - 14
         await self.test_range_requests_0_padded_bytes(size, padding=b'', file_size=size,
-                                                      expected_range=f"bytes 0-{size}/{size+1}")
+                                                      expected_range=f"bytes 0-{size-1}/{size}")
 
     async def test_range_requests_15_padded_bytes(self):
         await self.test_range_requests_0_padded_bytes(
