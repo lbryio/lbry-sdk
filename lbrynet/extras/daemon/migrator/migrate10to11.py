@@ -8,6 +8,14 @@ def do_migration(conf):
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
 
+    current_columns = []
+    for col_info in cursor.execute("pragma table_info('file');").fetchall():
+        current_columns.append(col_info[1])
+    if 'content_fee' in current_columns or 'saved_file' in current_columns:
+        connection.close()
+        print("already migrated")
+        return
+
     cursor.execute(
         "pragma foreign_keys=off;"
     )
@@ -32,7 +40,7 @@ def do_migration(conf):
                     saved_file = 1
                 else:
                     download_dir, file_name = None, None
-            except (OSError, ValueError):
+            except Exception:
                 download_dir, file_name = None, None
         else:
             download_dir, file_name = None, None
