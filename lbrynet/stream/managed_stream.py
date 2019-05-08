@@ -338,6 +338,11 @@ class ManagedStream:
             if not self.streaming_responses:
                 self.streaming.clear()
 
+    @staticmethod
+    def _write_decrypted_blob(handle: typing.IO, data: bytes):
+        handle.write(data)
+        handle.flush()
+
     async def _save_file(self, output_path: str):
         log.info("save file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id, self.sd_hash[:6],
                  output_path)
@@ -348,8 +353,7 @@ class ManagedStream:
             with open(output_path, 'wb') as file_write_handle:
                 async for blob_info, decrypted in self._aiter_read_stream(connection_id=1):
                     log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
-                    file_write_handle.write(decrypted)
-                    file_write_handle.flush()
+                    await self.loop.run_in_executor(None, self._write_decrypted_blob, file_write_handle, decrypted)
                     self.written_bytes += len(decrypted)
                     if not self.started_writing.is_set():
                         self.started_writing.set()
