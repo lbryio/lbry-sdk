@@ -215,8 +215,6 @@ class Stream(BaseClaim):
 
         if 'sd_hash' in kwargs:
             self.source.sd_hash = kwargs.pop('sd_hash')
-        if 'file_size' in kwargs:
-            self.source.size = kwargs.pop('file_size')
         if 'file_name' in kwargs:
             self.source.name = kwargs.pop('file_name')
         if 'file_hash' in kwargs:
@@ -229,6 +227,9 @@ class Stream(BaseClaim):
             self.source.media_type, stream_type = guess_media_type(self.source.name)
         elif self.source.media_type:
             stream_type = guess_stream_type(self.source.media_type)
+
+        if 'file_size' in kwargs:
+            self.source.size = kwargs.pop('file_size')
 
         if stream_type in ('image', 'video', 'audio'):
             media = getattr(self, stream_type)

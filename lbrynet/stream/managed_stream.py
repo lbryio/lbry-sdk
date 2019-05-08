@@ -462,8 +462,18 @@ class ManagedStream:
             get_range = get_range.split('=')[1]
         start, end = get_range.split('-')
         size = 0
+
         for blob in self.descriptor.blobs[:-1]:
             size += blob.length - 1
+        if self.stream_claim_info and self.stream_claim_info.claim.stream.source.size:
+            size_from_claim = int(self.stream_claim_info.claim.stream.source.size)
+            if not size_from_claim <= size <= size_from_claim + 16:
+                raise ValueError("claim contains implausible stream size")
+            log.debug("using stream size from claim")
+            size = size_from_claim
+        elif self.stream_claim_info:
+            log.debug("estimating stream size")
+
         start = int(start)
         end = int(end) if end else size - 1
         skip_blobs = start // 2097150
