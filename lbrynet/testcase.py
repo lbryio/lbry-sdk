@@ -172,27 +172,43 @@ class CommandTestCase(IntegrationTestCase):
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
     async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True, **kwargs):
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(data)
-            file.flush()
-            claim = await self.out(
-                self.daemon.jsonrpc_stream_create(name, bid, file_path=file.name, **kwargs)
-            )
-            self.assertEqual(claim['outputs'][0]['name'], name)
-            if confirm:
-                await self.on_transaction_dict(claim)
-                await self.generate(1)
-                await self.on_transaction_dict(claim)
-            return claim
+        file = tempfile.NamedTemporaryFile()
+
+        def cleanup():
+            try:
+                file.close()
+            except FileNotFoundError:
+                pass
+
+        self.addCleanup(cleanup)
+        file.write(data)
+        file.flush()
+        claim = await self.out(
+            self.daemon.jsonrpc_stream_create(name, bid, file_path=file.name, **kwargs)
+        )
+        self.assertEqual(claim['outputs'][0]['name'], name)
+        if confirm:
+            await self.on_transaction_dict(claim)
+            await self.generate(1)
+            await self.on_transaction_dict(claim)
+        return claim
 
     async def stream_update(self, claim_id, data=None, confirm=True, **kwargs):
         if data:
-            with tempfile.NamedTemporaryFile() as file:
-                file.write(data)
-                file.flush()
-                claim = await self.out(
-                    self.daemon.jsonrpc_stream_update(claim_id, file_path=file.name, **kwargs)
-                )
+            file = tempfile.NamedTemporaryFile()
+            file.write(data)
+            file.flush()
+
+            def cleanup():
+                try:
+                    file.close()
+                except FileNotFoundError:
+                    pass
+
+            self.addCleanup(cleanup)
+            claim = await self.out(
+                self.daemon.jsonrpc_stream_update(claim_id, file_path=file.name, **kwargs)
+            )
         else:
             claim = await self.out(self.daemon.jsonrpc_stream_update(claim_id, **kwargs))
         self.assertIsNotNone(claim['outputs'][0]['name'])

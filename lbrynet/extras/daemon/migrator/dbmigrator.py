@@ -24,6 +24,8 @@ def migrate_db(conf, start, end):
             from .migrate8to9 import do_migration
         elif current == 9:
             from .migrate9to10 import do_migration
+        elif current == 10:
+            from .migrate10to11 import do_migration
         else:
             raise Exception("DB migration of version {} to {} is not available".format(current,
                                                                                        current+1))

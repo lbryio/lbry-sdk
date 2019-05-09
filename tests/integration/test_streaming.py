@@ -24,11 +24,11 @@ class RangeRequests(CommandTestCase):
         await self.daemon.stream_manager.start()
         return
 
-    async def _setup_stream(self, data: bytes, save_blobs: bool = True, save_files: bool = False):
+    async def _setup_stream(self, data: bytes, save_blobs: bool = True, save_files: bool = False, file_size=0):
         self.daemon.conf.save_blobs = save_blobs
         self.daemon.conf.save_files = save_files
         self.data = data
-        await self.stream_create('foo', '0.01', data=self.data)
+        await self.stream_create('foo', '0.01', data=self.data, file_size=file_size)
         if save_blobs:
             self.assertTrue(len(os.listdir(self.daemon.blob_manager.blob_dir)) > 1)
         await self.daemon.jsonrpc_file_list()[0].fully_reflected.wait()
@@ -70,9 +70,10 @@ class RangeRequests(CommandTestCase):
         self.assertEqual('bytes 0-14/15', content_range)
 
     async def test_range_requests_0_padded_bytes(self, size: int = (MAX_BLOB_SIZE - 1) * 4,
-                                                 expected_range: str = 'bytes 0-8388603/8388604', padding=b''):
+                                                 expected_range: str = 'bytes 0-8388603/8388604', padding=b'',
+                                                 file_size=0):
         self.data = get_random_bytes(size)
-        await self._setup_stream(self.data)
+        await self._setup_stream(self.data, file_size=file_size)
         streamed, content_range, content_length = await self._test_range_requests()
         self.assertEqual(len(self.data + padding), content_length)
         self.assertEqual(streamed, self.data + padding)
@@ -92,6 +93,11 @@ class RangeRequests(CommandTestCase):
         await self.test_range_requests_0_padded_bytes(
             ((MAX_BLOB_SIZE - 1) * 4) - 14, padding=b'\x00' * 14
         )
+
+    async def test_range_requests_no_padding_size_from_claim(self):
+        size = ((MAX_BLOB_SIZE - 1) * 4) - 14
+        await self.test_range_requests_0_padded_bytes(size, padding=b'', file_size=size,
+                                                      expected_range=f"bytes 0-{size-1}/{size}")
 
     async def test_range_requests_15_padded_bytes(self):
         await self.test_range_requests_0_padded_bytes(

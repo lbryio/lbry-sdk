@@ -198,21 +198,31 @@ class ManagedStream:
         return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
 
     def as_dict(self) -> typing.Dict:
-        if not self.written_bytes and self.output_file_exists:
-            written_bytes = os.stat(self.full_path).st_size
+        full_path = self.full_path
+        file_name = self.file_name
+        download_directory = self.download_directory
+        if self.full_path and self.output_file_exists:
+            if self.written_bytes:
+                written_bytes = self.written_bytes
+            else:
+                written_bytes = os.stat(self.full_path).st_size
         else:
-            written_bytes = self.written_bytes
+            full_path = None
+            file_name = None
+            download_directory = None
+            written_bytes = None
         return {
-            'completed': self.output_file_exists and self.status in ('stopped', 'finished'),
-            'file_name': self.file_name,
-            'download_directory': self.download_directory,
+            'completed': (self.output_file_exists and self.status in ('stopped', 'finished')) or all(
+                self.blob_manager.is_blob_verified(b.blob_hash) for b in self.descriptor.blobs[:-1]),
+            'file_name': file_name,
+            'download_directory': download_directory,
             'points_paid': 0.0,
             'stopped': not self.running,
             'stream_hash': self.stream_hash,
             'stream_name': self.descriptor.stream_name,
             'suggested_file_name': self.descriptor.suggested_file_name,
             'sd_hash': self.descriptor.sd_hash,
-            'download_path': self.full_path,
+            'download_path': full_path,
             'mime_type': self.mime_type,
             'key': self.descriptor.key,
             'total_bytes_lower_bound': self.descriptor.lower_bound_decrypted_length(),
@@ -231,7 +241,7 @@ class ManagedStream:
             'channel_claim_id': self.channel_claim_id,
             'channel_name': self.channel_name,
             'claim_name': self.claim_name,
-            'content_fee': self.content_fee  # TODO: this isn't in the database
+            'content_fee': self.content_fee
         }
 
     @classmethod
@@ -328,6 +338,11 @@ class ManagedStream:
             if not self.streaming_responses:
                 self.streaming.clear()
 
+    @staticmethod
+    def _write_decrypted_blob(handle: typing.IO, data: bytes):
+        handle.write(data)
+        handle.flush()
+
     async def _save_file(self, output_path: str):
         log.info("save file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id, self.sd_hash[:6],
                  output_path)
@@ -338,8 +353,7 @@ class ManagedStream:
             with open(output_path, 'wb') as file_write_handle:
                 async for blob_info, decrypted in self._aiter_read_stream(connection_id=1):
                     log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
-                    file_write_handle.write(decrypted)
-                    file_write_handle.flush()
+                    await self.loop.run_in_executor(None, self._write_decrypted_blob, file_write_handle, decrypted)
                     self.written_bytes += len(decrypted)
                     if not self.started_writing.is_set():
                         self.started_writing.set()
@@ -351,6 +365,7 @@ class ManagedStream:
             self.finished_writing.set()
             log.info("finished saving file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id,
                      self.sd_hash[:6], self.full_path)
+            await self.blob_manager.storage.set_saved_file(self.stream_hash)
         except Exception as err:
             if os.path.isfile(output_path):
                 log.warning("removing incomplete download %s for %s", output_path, self.sd_hash)
@@ -376,7 +391,7 @@ class ManagedStream:
             os.mkdir(self.download_directory)
         self._file_name = await get_next_available_file_name(
             self.loop, self.download_directory,
-            file_name or self._file_name or self.descriptor.suggested_file_name
+            file_name or self.descriptor.suggested_file_name
         )
         await self.blob_manager.storage.change_file_download_dir_and_file_name(
             self.stream_hash, self.download_directory, self.file_name
@@ -461,8 +476,18 @@ class ManagedStream:
             get_range = get_range.split('=')[1]
         start, end = get_range.split('-')
         size = 0
+
         for blob in self.descriptor.blobs[:-1]:
             size += blob.length - 1
+        if self.stream_claim_info and self.stream_claim_info.claim.stream.source.size:
+            size_from_claim = int(self.stream_claim_info.claim.stream.source.size)
+            if not size_from_claim <= size <= size_from_claim + 16:
+                raise ValueError("claim contains implausible stream size")
+            log.debug("using stream size from claim")
+            size = size_from_claim
+        elif self.stream_claim_info:
+            log.debug("estimating stream size")
+
         start = int(start)
         end = int(end) if end else size - 1
         skip_blobs = start // 2097150

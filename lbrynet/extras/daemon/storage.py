@@ -8,6 +8,7 @@ import time
 from torba.client.basedatabase import SQLiteMixin
 from lbrynet.conf import Config
 from lbrynet.wallet.dewies import dewies_to_lbc, lbc_to_dewies
+from lbrynet.wallet.transaction import Transaction
 from lbrynet.schema.claim import Claim
 from lbrynet.dht.constants import data_expiration
 from lbrynet.blob.blob_info import BlobInfo
@@ -114,8 +115,8 @@ def _batched_select(transaction, query, parameters, batch_size=900):
 def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Dict]:
     files = []
     signed_claims = {}
-    for (rowid, stream_hash, file_name, download_dir, data_rate, status, _, sd_hash, stream_key,
-         stream_name, suggested_file_name, *claim_args) in _batched_select(
+    for (rowid, stream_hash, file_name, download_dir, data_rate, status, saved_file, raw_content_fee, _,
+         sd_hash, stream_key, stream_name, suggested_file_name, *claim_args) in _batched_select(
             transaction, "select file.rowid, file.*, stream.*, c.* "
                          "from file inner join stream on file.stream_hash=stream.stream_hash "
                          "inner join content_claim cc on file.stream_hash=cc.stream_hash "
@@ -141,7 +142,11 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
                 "key": stream_key,
                 "stream_name": stream_name,                  # hex
                 "suggested_file_name": suggested_file_name,  # hex
-                "claim": claim
+                "claim": claim,
+                "saved_file": bool(saved_file),
+                "content_fee": None if not raw_content_fee else Transaction(
+                    binascii.unhexlify(raw_content_fee)
+                )
             }
         )
     for claim_name, claim_id in _batched_select(
@@ -188,16 +193,20 @@ def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor
 
 
 def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typing.Optional[str],
-               download_directory: typing.Optional[str], data_payment_rate: float, status: str) -> int:
+               download_directory: typing.Optional[str], data_payment_rate: float, status: str,
+               content_fee: typing.Optional[Transaction]) -> int:
     if not file_name and not download_directory:
-        encoded_file_name, encoded_download_dir = "{stream}", "{stream}"
+        encoded_file_name, encoded_download_dir = None, None
     else:
         encoded_file_name = binascii.hexlify(file_name.encode()).decode()
         encoded_download_dir = binascii.hexlify(download_directory.encode()).decode()
     transaction.execute(
-        "insert or replace into file values (?, ?, ?, ?, ?)",
-        (stream_hash, encoded_file_name, encoded_download_dir, data_payment_rate, status)
+        "insert or replace into file values (?, ?, ?, ?, ?, ?, ?)",
+        (stream_hash, encoded_file_name, encoded_download_dir, data_payment_rate, status,
+         1 if (file_name and download_directory and os.path.isfile(os.path.join(download_directory, file_name))) else 0,
+         None if not content_fee else content_fee.raw.decode())
     )
+
     return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
 
 
@@ -246,10 +255,12 @@ class SQLiteStorage(SQLiteMixin):
 
             create table if not exists file (
                 stream_hash text primary key not null references stream,
-                file_name text not null,
-                download_directory text not null,
+                file_name text,
+                download_directory text,
                 blob_data_rate real not null,
-                status text not null
+                status text not null,
+                saved_file integer not null,
+                content_fee text
             );
 
             create table if not exists content_claim (
@@ -430,7 +441,7 @@ class SQLiteStorage(SQLiteMixin):
     def set_files_as_streaming(self, stream_hashes: typing.List[str]):
         def _set_streaming(transaction: sqlite3.Connection):
             transaction.executemany(
-                "update file set file_name='{stream}', download_directory='{stream}' where stream_hash=?",
+                "update file set file_name=null, download_directory=null where stream_hash=?",
                 [(stream_hash, ) for stream_hash in stream_hashes]
             )
 
@@ -509,16 +520,42 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # file stuff # # # # # # # # #
 
-    def save_downloaded_file(self, stream_hash, file_name, download_directory,
-                             data_payment_rate) -> typing.Awaitable[int]:
+    def save_downloaded_file(self, stream_hash: str, file_name: typing.Optional[str],
+                             download_directory: typing.Optional[str], data_payment_rate: float,
+                             content_fee: typing.Optional[Transaction] = None) -> typing.Awaitable[int]:
         return self.save_published_file(
-            stream_hash, file_name, download_directory, data_payment_rate, status="running"
+            stream_hash, file_name, download_directory, data_payment_rate, status="running",
+            content_fee=content_fee
         )
 
     def save_published_file(self, stream_hash: str, file_name: typing.Optional[str],
                             download_directory: typing.Optional[str], data_payment_rate: float,
-                            status="finished") -> typing.Awaitable[int]:
-        return self.db.run(store_file, stream_hash, file_name, download_directory, data_payment_rate, status)
+                            status: str = "finished",
+                            content_fee: typing.Optional[Transaction] = None) -> typing.Awaitable[int]:
+        return self.db.run(store_file, stream_hash, file_name, download_directory, data_payment_rate, status,
+                           content_fee)
+
+    async def update_manually_removed_files_since_last_run(self):
+        """
+        Update files that have been removed from the downloads directory since the last run
+        """
+        def update_manually_removed_files(transaction: sqlite3.Connection):
+            removed = []
+            for (stream_hash, download_directory, file_name) in transaction.execute(
+                    "select stream_hash, download_directory, file_name from file where saved_file=1"
+            ).fetchall():
+                if download_directory and file_name and os.path.isfile(
+                        os.path.join(binascii.unhexlify(download_directory.encode()).decode(),
+                                     binascii.unhexlify(file_name.encode()).decode())):
+                    continue
+                else:
+                    removed.append((stream_hash,))
+            if removed:
+                transaction.executemany(
+                    "update file set file_name=null, download_directory=null, saved_file=0 where stream_hash=?",
+                    removed
+                )
+        return await self.db.run(update_manually_removed_files)
 
     def get_all_lbry_files(self) -> typing.Awaitable[typing.List[typing.Dict]]:
         return self.db.run(get_all_lbry_files)
@@ -530,7 +567,7 @@ class SQLiteStorage(SQLiteMixin):
     async def change_file_download_dir_and_file_name(self, stream_hash: str, download_dir: typing.Optional[str],
                                                      file_name: typing.Optional[str]):
         if not file_name or not download_dir:
-            encoded_file_name, encoded_download_dir = "{stream}", "{stream}"
+            encoded_file_name, encoded_download_dir = None, None
         else:
             encoded_file_name = binascii.hexlify(file_name.encode()).decode()
             encoded_download_dir = binascii.hexlify(download_dir.encode()).decode()
@@ -538,18 +575,34 @@ class SQLiteStorage(SQLiteMixin):
             encoded_download_dir, encoded_file_name, stream_hash,
         ))
 
-    async def recover_streams(self, descriptors_and_sds: typing.List[typing.Tuple['StreamDescriptor', 'BlobFile']],
+    async def save_content_fee(self, stream_hash: str, content_fee: Transaction):
+        return await self.db.execute("update file set content_fee=? where stream_hash=?", (
+            binascii.hexlify(content_fee.raw), stream_hash,
+        ))
+
+    async def set_saved_file(self, stream_hash: str):
+        return await self.db.execute("update file set saved_file=1 where stream_hash=?", (
+            stream_hash,
+        ))
+
+    async def clear_saved_file(self, stream_hash: str):
+        return await self.db.execute("update file set saved_file=0 where stream_hash=?", (
+            stream_hash,
+        ))
+
+    async def recover_streams(self, descriptors_and_sds: typing.List[typing.Tuple['StreamDescriptor', 'BlobFile',
+                                                                                  typing.Optional[Transaction]]],
                               download_directory: str):
         def _recover(transaction: sqlite3.Connection):
-            stream_hashes = [d.stream_hash for d, s in descriptors_and_sds]
-            for descriptor, sd_blob in descriptors_and_sds:
+            stream_hashes = [x[0].stream_hash for x in descriptors_and_sds]
+            for descriptor, sd_blob, content_fee in descriptors_and_sds:
                 content_claim = transaction.execute(
                     "select * from content_claim where stream_hash=?", (descriptor.stream_hash, )
                 ).fetchone()
                 delete_stream(transaction, descriptor)  # this will also delete the content claim
                 store_stream(transaction, sd_blob, descriptor)
                 store_file(transaction, descriptor.stream_hash, os.path.basename(descriptor.suggested_file_name),
-                           download_directory, 0.0, 'stopped')
+                           download_directory, 0.0, 'stopped', content_fee=content_fee)
                 if content_claim:
                     transaction.execute("insert or ignore into content_claim values (?, ?)", content_claim)
             transaction.executemany(

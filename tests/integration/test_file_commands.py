@@ -239,6 +239,7 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
         await self.assertBalance(self.account, '9.925679')
         response = await self.daemon.jsonrpc_get('lbry://icanpay')
+        raw_content_fee = response.content_fee.raw
         await self.ledger.wait(response.content_fee)
         await self.assertBalance(self.account, '8.925555')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
@@ -252,3 +253,10 @@ class FileCommands(CommandTestCase):
         self.assertEqual(
             await self.blockchain.get_balance(), starting_balance + block_reward_and_claim_fee
         )
+
+        # restart the daemon and make sure the fee is still there
+
+        self.daemon.stream_manager.stop()
+        await self.daemon.stream_manager.start()
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
+        self.assertEqual(self.daemon.jsonrpc_file_list()[0].content_fee.raw, raw_content_fee)
