@@ -403,7 +403,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.runner.setup()
 
         try:
-            site = web.TCPSite(self.runner, self.conf.api_host, self.conf.api_port)
+            site = web.TCPSite(self.runner, self.conf.api_host, self.conf.api_port, shutdown_timeout=.5)
             await site.start()
             log.info('lbrynet API listening on TCP %s:%i', *site._server.sockets[0].getsockname()[:2])
         except OSError as e:
