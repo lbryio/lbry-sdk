@@ -6,6 +6,7 @@ from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
 from binascii import hexlify, unhexlify
+from google.protobuf.json_format import MessageToDict
 
 from torba.client.hash import Base58
 from torba.client.constants import COIN
@@ -445,6 +446,14 @@ class Location(Metadata):
 
         else:
             raise ValueError(f'Could not parse country value: {value}')
+
+    def to_dict(self):
+        d = MessageToDict(self.message)
+        if self.message.longitude:
+            d['longitude'] = self.longitude
+        if self.message.latitude:
+            d['latitude'] = self.latitude
+        return d
 
     @property
     def country(self) -> str:
