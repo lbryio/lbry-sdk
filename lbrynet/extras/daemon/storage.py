@@ -204,7 +204,7 @@ def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typ
         "insert or replace into file values (?, ?, ?, ?, ?, ?, ?)",
         (stream_hash, encoded_file_name, encoded_download_dir, data_payment_rate, status,
          1 if (file_name and download_directory and os.path.isfile(os.path.join(download_directory, file_name))) else 0,
-         None if not content_fee else content_fee.raw.decode())
+         None if not content_fee else binascii.hexlify(content_fee.raw).decode())
     )
 
     return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
