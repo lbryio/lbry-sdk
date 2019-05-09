@@ -445,7 +445,8 @@ class BaseDatabase(SQLiteMixin):
         if 'order_by' not in constraints:
             constraints['order_by'] = ["tx.height=0 DESC", "tx.height DESC", "tx.position DESC"]
         rows = await self.select_txos(
-            "tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, chain, account", **constraints
+            "tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, chain, account",
+            **constraints
         )
         txos = []
         txs = {}
