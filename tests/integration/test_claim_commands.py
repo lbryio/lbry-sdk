@@ -317,7 +317,7 @@ class StreamCommands(CommandTestCase):
             'thumbnail_url': "https://co.ol/thumbnail.png",
             'tags': ["cool", "awesome"],
             'languages': ["en"],
-            'locations': ['{"country": "US"}'],
+            'locations': ['US:NH:Manchester:03101:42.990605:-71.460989'],
 
             'author': "Jules Verne",
             'license': 'Public Domain',
@@ -329,7 +329,14 @@ class StreamCommands(CommandTestCase):
             'fee_address': 'mmCsWAiXMUVecFQ3fVzUwvpT9XFMXno2Ca',
         }
         fixed_values = values.copy()
-        fixed_values['locations'] = [{'country': 'US'}]
+        fixed_values['locations'] = [{
+            'country': 'US',
+            'state': 'NH',
+            'city': 'Manchester',
+            'code': '03101',
+            'latitude': '42.990605',
+            'longitude': '-71.460989'
+        }]
         fixed_values['thumbnail'] = {'url': fixed_values.pop('thumbnail_url')}
         fixed_values['release_time'] = str(values['release_time'])
         fixed_values['source'] = {
@@ -339,7 +346,7 @@ class StreamCommands(CommandTestCase):
         }
         fixed_values['fee'] = {
             'address': fixed_values.pop('fee_address'),
-            'amount': float(fixed_values.pop('fee_amount')),
+            'amount': fixed_values.pop('fee_amount'),
             'currency': fixed_values.pop('fee_currency').upper()
         }
 

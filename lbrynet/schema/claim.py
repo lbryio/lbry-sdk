@@ -115,6 +115,8 @@ class BaseClaim:
         claim.update(claim.pop(self.claim_type))
         if 'languages' in claim:
             claim['languages'] = self.langtags
+        if 'locations' in claim:
+            claim['locations'] = [l.to_dict() for l in self.locations]
         return claim
 
     def update(self, **kwargs):
@@ -197,7 +199,7 @@ class Stream(BaseClaim):
         if 'address' in fee:
             fee['address'] = self.fee.address
         if 'amount' in fee:
-            fee['amount'] = self.fee.amount
+            fee['amount'] = str(self.fee.amount)
         stream_type = self.message.WhichOneof('type')
         if stream_type:
             claim['stream_type'] = stream_type
