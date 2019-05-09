@@ -17,10 +17,10 @@ class MockAsyncGen:
         return self
 
     async def __anext__(self):
+        await asyncio.sleep(self.delay, loop=self.loop)
         if self.count > self.stop_cnt - 1:
             raise StopAsyncIteration()
         self.count += 1
-        await asyncio.sleep(self.delay, loop=self.loop)
         return self.result
 
     async def aclose(self):
@@ -47,6 +47,18 @@ class TestAsyncGeneratorJunction(AsyncioTestCase):
         await self._test_junction(expected_order, fast_gen, slow_gen)
         self.assertEqual(fast_gen.called_close, True)
         self.assertEqual(slow_gen.called_close, True)
+
+    async def test_nothing_to_yield(self):
+        async def __nothing():
+            for _ in []:
+                yield self.fail("nada")
+        await self._test_junction([], __nothing())
+
+    async def test_fast_iteratiors(self):
+        async def __gotta_go_fast():
+            for _ in range(10):
+                yield 0
+        await self._test_junction([0]*40, __gotta_go_fast(), __gotta_go_fast(), __gotta_go_fast(), __gotta_go_fast())
 
     @unittest.SkipTest
     async def test_one_stopped_first(self):

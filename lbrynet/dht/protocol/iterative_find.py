@@ -169,7 +169,9 @@ class IterativeFinder:
             log.warning(str(err))
             self.active.discard(peer)
             return
-        except (RemoteException, TransportNotConnected):
+        except TransportNotConnected:
+            return self.aclose()
+        except RemoteException:
             return
         return await self._handle_probe_result(peer, response)
 
