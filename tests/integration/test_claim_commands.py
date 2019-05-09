@@ -536,14 +536,17 @@ class StreamCommands(CommandTestCase):
                 'duration': 15
             }
         }
+        channel = await self.channel_create('@chan')
         tx = await self.out(self.daemon.jsonrpc_stream_create(
             'chrome', '1.0', file_path=self.video_file_name,
-            tags='blah', languages='uk', locations='UA::Kyiv'
+            tags='blah', languages='uk', locations='UA::Kyiv',
+            channel_id=channel['outputs'][0]['claim_id']
         ))
         await self.on_transaction_dict(tx)
         txo = tx['outputs'][0]
         expected['source']['sd_hash'] = txo['value']['source']['sd_hash']
         self.assertEqual(txo['value'], expected)
+        self.assertEqual(txo['signing_channel']['name'], '@chan')
         tx = await self.out(self.daemon.jsonrpc_stream_update(
             txo['claim_id'], title='new title', replace=True
         ))
@@ -553,6 +556,7 @@ class StreamCommands(CommandTestCase):
         del expected['languages']
         del expected['locations']
         self.assertEqual(txo['value'], expected)
+        self.assertNotIn('signing_channel', txo)
 
     async def test_create_update_and_abandon_stream(self):
         await self.assertBalance(self.account, '10.0')
