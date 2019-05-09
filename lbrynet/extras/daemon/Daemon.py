@@ -2454,7 +2454,7 @@ class Daemon(metaclass=JSONRPCServerType):
         channel = None
         if channel_id or channel_name:
             channel = await self.get_channel_or_error(channel_account_id, channel_id, channel_name, for_signing=True)
-        elif old_txo.claim.is_signed and not clear_channel:
+        elif old_txo.claim.is_signed and not clear_channel and not replace:
             channel = old_txo.channel
 
         if 'fee_address' in kwargs:
