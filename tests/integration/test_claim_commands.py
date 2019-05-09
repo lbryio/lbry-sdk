@@ -421,19 +421,27 @@ class StreamCommands(CommandTestCase):
         ))
         self.assertEqual(tx['outputs'][0]['value'], fixed_values)
 
+        # stream_update re-signs with the same channel
+        channel_id = (await self.channel_create('@chan'))['outputs'][0]['claim_id']
+        tx = await self.stream_update(claim_id, channel_id=channel_id)
+        self.assertEqual(tx['outputs'][0]['signing_channel']['name'], '@chan')
+        tx = await self.stream_update(claim_id, title='channel re-signs')
+        self.assertEqual(tx['outputs'][0]['value']['title'], 'channel re-signs')
+        self.assertEqual(tx['outputs'][0]['signing_channel']['name'], '@chan')
+
         # send claim to someone else
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         # before sending
-        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 4)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 0)
 
         other_address = await account2.receiving.get_or_create_usable_address()
         tx = await self.out(self.stream_update(claim_id, claim_address=other_address))
 
         # after sending
-        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 3)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 1)
 
     async def test_automatic_type_and_metadata_detection_for_image(self):
@@ -642,14 +650,13 @@ class StreamCommands(CommandTestCase):
             tx3['outputs'][0]['claim_id']
         )
 
-        # publishing again re-signs with the same channel
+        # publishing again clears channel
         tx4 = await self.publish('foo', languages='uk-UA')
         self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
-        r = await self.resolve('lbry://@abc/foo')
-        claim = r['lbry://@abc/foo']['claim']
+        r = await self.resolve('lbry://foo')
+        claim = r['lbry://foo']['claim']
         self.assertEqual(claim['txid'], tx4['outputs'][0]['txid'])
-        self.assertEqual(claim['channel_name'], '@abc')
-        self.assertEqual(claim['signature_is_valid'], True)
+        self.assertNotIn('channel_name', claim)
         self.assertEqual(claim['value']['languages'], ['uk-UA'])
 
     async def test_claim_search(self):
