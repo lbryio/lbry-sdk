@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 class BlobDownloader:
     BAN_FACTOR = 2.0  # fixme: when connection manager gets implemented, move it out from here
+    BAN_CAP = 30.0*60.0  # maximum time a node remains banned before being retried
 
     def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  peer_queue: asyncio.Queue):
@@ -71,7 +72,7 @@ class BlobDownloader:
         now = self.loop.time()
         self.ignored = dict((
             (peer, when) for (peer, when) in self.ignored.items()
-            if (now - when) < min(30.0, (self.failures.get(peer, 0) ** self.BAN_FACTOR))
+            if (now - when) < min(self.BAN_CAP, (self.failures.get(peer, 0) ** self.BAN_FACTOR))
         ))
 
     @cache_concurrent
