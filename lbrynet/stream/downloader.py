@@ -104,7 +104,10 @@ class StreamDownloader:
     async def download_stream_blob(self, blob_info: 'BlobInfo', connection_id: int = 0) -> 'AbstractBlob':
         if not filter(lambda blob: blob.blob_hash == blob_info.blob_hash, self.descriptor.blobs[:-1]):
             raise ValueError(f"blob {blob_info.blob_hash} is not part of stream with sd hash {self.sd_hash}")
-        blob = await self.blob_downloader.download_blob(blob_info.blob_hash, blob_info.length, connection_id)
+        blob = await asyncio.wait_for(
+            self.blob_downloader.download_blob(blob_info.blob_hash, blob_info.length, connection_id),
+            self.config.blob_download_timeout * 10, loop=self.loop
+        )
         return blob
 
     def decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob') -> bytes:

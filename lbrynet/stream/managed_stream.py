@@ -66,7 +66,7 @@ class ManagedStream:
         'saving',
         'finished_writing',
         'started_writing',
-
+        'finished_write_attempt'
     ]
 
     def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
@@ -100,6 +100,7 @@ class ManagedStream:
         self.saving = asyncio.Event(loop=self.loop)
         self.finished_writing = asyncio.Event(loop=self.loop)
         self.started_writing = asyncio.Event(loop=self.loop)
+        self.finished_write_attempt = asyncio.Event(loop=self.loop)
 
     @property
     def descriptor(self) -> StreamDescriptor:
@@ -347,6 +348,7 @@ class ManagedStream:
         log.info("save file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id, self.sd_hash[:6],
                  output_path)
         self.saving.set()
+        self.finished_write_attempt.clear()
         self.finished_writing.clear()
         self.started_writing.clear()
         try:
@@ -370,11 +372,22 @@ class ManagedStream:
             if os.path.isfile(output_path):
                 log.warning("removing incomplete download %s for %s", output_path, self.sd_hash)
                 os.remove(output_path)
-            if not isinstance(err, asyncio.CancelledError):
+            self.written_bytes = 0
+            if isinstance(err, asyncio.TimeoutError):
+                self.downloader.stop()
+                await self.blob_manager.storage.change_file_download_dir_and_file_name(
+                    self.stream_hash, None, None
+                )
+                self._file_name, self.download_directory = None, None
+                await self.blob_manager.storage.clear_saved_file(self.stream_hash)
+                await self.update_status(self.STATUS_STOPPED)
+                return
+            elif not isinstance(err, asyncio.CancelledError):
                 log.exception("unexpected error encountered writing file for stream %s", self.sd_hash)
             raise err
         finally:
             self.saving.clear()
+            self.finished_write_attempt.set()
 
     async def save_file(self, file_name: typing.Optional[str] = None, download_directory: typing.Optional[str] = None,
                         node: typing.Optional['Node'] = None):

@@ -105,7 +105,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
 
             _, task = last.accumulate_peers(search_q, peer_q)
             found_peers = await peer_q.get()
-            task.cancel()
+            await task
 
             self.assertEqual(1, len(found_peers))
             self.assertEqual(self.node.protocol.node_id, found_peers[0].node_id)
