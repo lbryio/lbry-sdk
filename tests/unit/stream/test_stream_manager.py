@@ -311,10 +311,14 @@ class TestStreamManager(BlobExchangeTestBase):
     async def test_non_head_data_timeout(self):
         await self.setup_stream_manager()
         with open(os.path.join(self.server_dir, self.sd_hash), 'r') as sdf:
-            head_blob_hash = json.loads(sdf.read())['blobs'][-2]['blob_hash']
-        self.server_blob_manager.delete_blob(head_blob_hash)
+            last_blob_hash = json.loads(sdf.read())['blobs'][-2]['blob_hash']
+        self.server_blob_manager.delete_blob(last_blob_hash)
         self.client_config.blob_download_timeout = 0.1
         stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await stream.started_writing.wait()
+        self.assertEqual('running', stream.status)
+        self.assertIsNotNone(stream.full_path)
+        self.assertGreater(stream.written_bytes, 0)
         await stream.finished_write_attempt.wait()
         self.assertEqual('stopped', stream.status)
         self.assertIsNone(stream.full_path)
