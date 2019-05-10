@@ -201,7 +201,6 @@ class Node:
         try:
             async with peer_generator as junction:
                 yield junction
-            await peer_generator.finished.wait()
         finally:
             if add_hashes_task and not (add_hashes_task.done() or add_hashes_task.cancelled()):
                 add_hashes_task.cancel()
