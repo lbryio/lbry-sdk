@@ -207,7 +207,7 @@ class PingQueue:
             try:
                 if self._protocol.peer_manager.peer_is_good(peer):
                     if peer not in self._protocol.routing_table.get_peers():
-                        await self._protocol.add_peer(peer)
+                        self._protocol.add_peer(peer)
                     return
                 await self._protocol.get_rpc_peer(peer).ping()
             except asyncio.TimeoutError:
@@ -268,11 +268,19 @@ class KademliaProtocol(DatagramProtocol):
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)
         self.rpc_timeout = rpc_timeout
         self._split_lock = asyncio.Lock(loop=self.loop)
+        self._to_remove: typing.Set['KademliaPeer'] = set()
+        self._to_add: typing.Set['KademliaPeer'] = set()
+        self.maintaing_routing_task: typing.Optional[asyncio.Task] = None
 
     def get_rpc_peer(self, peer: 'KademliaPeer') -> RemoteKademliaRPC:
         return RemoteKademliaRPC(self.loop, self.peer_manager, self, peer)
 
+    def start(self, force_delay=None):
+        self.maintaing_routing_task = asyncio.create_task(self.routing_table_task(force_delay))
+
     def stop(self):
+        if self.maintaing_routing_task:
+            self.maintaing_routing_task.cancel()
         if self.transport:
             self.disconnect()
 
@@ -299,6 +307,7 @@ class KademliaProtocol(DatagramProtocol):
         return args, {}
 
     async def _add_peer(self, peer: 'KademliaPeer'):
+        log.debug("Trying to add %s:%d", peer.address, peer.udp_port)
         for p in self.routing_table.get_peers():
             if (p.address, p.udp_port) == (peer.address, peer.udp_port) and p.node_id != peer.node_id:
                 self.routing_table.remove_peer(p)
@@ -363,11 +372,23 @@ class KademliaProtocol(DatagramProtocol):
                     self.routing_table.buckets[bucket_index].remove_peer(to_replace)
                 return await self._add_peer(peer)
 
-    async def add_peer(self, peer: 'KademliaPeer') -> bool:
+    def add_peer(self, peer: 'KademliaPeer') -> bool:
         if peer.node_id == self.node_id:
             return False
-        async with self._split_lock:
-            return await self._add_peer(peer)
+        self._to_add.add(peer)
+
+    async def routing_table_task(self, force_delay=None):
+        while True:
+            while self._to_remove:
+                async with self._split_lock:
+                    peer = self._to_remove.pop()
+                    log.debug("Trying to remove %s:%d", peer.address, peer.udp_port)
+                    self.routing_table.remove_peer(peer)
+                    self.routing_table.join_buckets()
+            while self._to_add:
+                async with self._split_lock:
+                    await self._add_peer(self._to_add.pop())
+            await asyncio.sleep(force_delay or constants.rpc_timeout)
 
     async def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):
         assert sender_contact.node_id != self.node_id, (binascii.hexlify(sender_contact.node_id)[:8].decode(),
@@ -416,7 +437,7 @@ class KademliaProtocol(DatagramProtocol):
                 self.ping_queue.enqueue_maybe_ping(peer)
             # only add a requesting contact to the routing table if it has replied to one of our requests
             elif is_good is True:
-                await self.add_peer(peer)
+                self.add_peer(peer)
         except ValueError as err:
             log.debug("error raised handling %s request from %s:%i - %s(%s)",
                       request_datagram.method, peer.address, peer.udp_port, str(type(err)),
@@ -459,7 +480,7 @@ class KademliaProtocol(DatagramProtocol):
             self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():
                 df.set_result(response_datagram)
-                await self.add_peer(peer)
+                self.add_peer(peer)
             else:
                 log.warning("%s:%i replied, but after we cancelled the request attempt",
                             peer.address, peer.udp_port)
@@ -531,9 +552,7 @@ class KademliaProtocol(DatagramProtocol):
         except (asyncio.TimeoutError, RemoteException):
             self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
-                async with self._split_lock:
-                    self.routing_table.remove_peer(peer)
-                    self.routing_table.join_buckets()
+                self._to_remove.add(peer)
             raise
 
     async def send_response(self, peer: 'KademliaPeer', response: ResponseDatagram):

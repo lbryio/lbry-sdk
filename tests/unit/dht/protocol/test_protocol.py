@@ -99,6 +99,7 @@ class TestProtocol(AsyncioTestCase):
             self.loop, PeerManager(self.loop), node_id, address, udp_port, tcp_port
         )
         await self.loop.create_datagram_endpoint(lambda: proto, (address, 4444))
+        proto.start(0.1)
         return proto, other_peer.peer_manager.get_kademlia_peer(node_id, address, udp_port=udp_port)
 
     async def test_add_peer_after_handle_request(self):
@@ -112,6 +113,7 @@ class TestProtocol(AsyncioTestCase):
                 self.loop, PeerManager(self.loop), node_id1, '1.2.3.4', 4444, 3333
             )
             await self.loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
+            peer1.start(0.1)
 
             peer2, peer_2_from_peer_1 = await self._make_protocol(peer1, node_id2, '1.2.3.5', 4444, 3333)
             peer3, peer_3_from_peer_1 = await self._make_protocol(peer1, node_id3, '1.2.3.6', 4444, 3333)
@@ -119,6 +121,7 @@ class TestProtocol(AsyncioTestCase):
 
             # peers who reply should be added
             await peer1.get_rpc_peer(peer_2_from_peer_1).ping()
+            await asyncio.sleep(0.5)
             self.assertListEqual([peer_2_from_peer_1], peer1.routing_table.get_peers())
             peer1.routing_table.remove_peer(peer_2_from_peer_1)
 
@@ -137,6 +140,7 @@ class TestProtocol(AsyncioTestCase):
             self.assertEqual(0, len(peer1.ping_queue._pending_contacts))
             pong = await peer1_from_peer4.ping()
             self.assertEqual(b'pong', pong)
+            await asyncio.sleep(0.5)
             self.assertEqual(1, len(peer1.routing_table.get_peers()))
             self.assertEqual(0, len(peer1.ping_queue._pending_contacts))
             peer1.routing_table.buckets[0].peers.clear()

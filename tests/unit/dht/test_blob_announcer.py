@@ -21,6 +21,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
         await self.storage.open()
         self.peer_manager = PeerManager(self.loop)
         self.node = Node(self.loop, self.peer_manager, node_id, 4444, 4444, 3333, address)
+        self.node.protocol.start(0.1)
         await self.node.start_listening(address)
         self.blob_announcer = BlobAnnouncer(self.loop, self.node, self.storage)
         for node_id, address in peer_addresses:
@@ -30,9 +31,10 @@ class TestBlobAnnouncer(AsyncioTestCase):
     async def add_peer(self, node_id, address, add_to_routing_table=True):
         n = Node(self.loop, PeerManager(self.loop), node_id, 4444, 4444, 3333, address)
         await n.start_listening(address)
+        n.protocol.start(0.1)
         self.nodes.update({len(self.nodes): n})
         if add_to_routing_table:
-            await self.node.protocol.add_peer(
+            self.node.protocol.add_peer(
                 self.peer_manager.get_kademlia_peer(
                     n.protocol.node_id, n.protocol.external_ip, n.protocol.udp_port
                 )
@@ -98,6 +100,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
             await self.chain_peer(constants.generate_id(12), '1.2.3.12')
             await self.chain_peer(constants.generate_id(13), '1.2.3.13')
             await self.chain_peer(constants.generate_id(14), '1.2.3.14')
+            await self.advance(61.0)
 
             last = self.nodes[len(self.nodes) - 1]
             search_q, peer_q = asyncio.Queue(loop=self.loop), asyncio.Queue(loop=self.loop)

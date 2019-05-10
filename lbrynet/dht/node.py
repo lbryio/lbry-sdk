@@ -101,6 +101,7 @@ class Node:
             self._refresh_task.cancel()
         if self.protocol and self.protocol.ping_queue.running:
             self.protocol.ping_queue.stop()
+            self.protocol.stop()
         if self.listening_port is not None:
             self.listening_port.close()
         self._join_task = None
@@ -113,6 +114,7 @@ class Node:
                 lambda: self.protocol, (interface, self.internal_udp_port)
             )
             log.info("DHT node listening on UDP %s:%i", interface, self.internal_udp_port)
+            self.protocol.start()
         else:
             log.warning("Already bound to port %s", self.listening_port)
 
@@ -130,7 +132,8 @@ class Node:
         if known_node_urls:
             for host, port in known_node_urls:
                 address = await resolve_host(host, port, proto='udp')
-                if (address, port) not in known_node_addresses and address != self.protocol.external_ip:
+                if (address, port) not in known_node_addresses and\
+                        (address, port) != (self.protocol.external_ip, self.protocol.udp_port):
                     known_node_addresses.append((address, port))
                     url_to_addr[address] = host
 
