@@ -2162,6 +2162,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
+        log.info("publishing: name: %s params: %s", name, kwargs)
         self.valid_stream_name_or_error(name)
         account = self.get_account_or_default(kwargs.get('account_id'))
         claims = await account.get_claims(claim_name=name)
