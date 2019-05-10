@@ -545,8 +545,8 @@ class SQLiteStorage(SQLiteMixin):
                     "select stream_hash, download_directory, file_name from file where saved_file=1"
             ).fetchall():
                 if download_directory and file_name and os.path.isfile(
-                        os.path.join(binascii.unhexlify(download_directory.encode()).decode(),
-                                     binascii.unhexlify(file_name.encode()).decode())):
+                        os.path.join(binascii.unhexlify(download_directory).decode(),
+                                     binascii.unhexlify(file_name).decode())):
                     continue
                 else:
                     removed.append((stream_hash,))
