@@ -586,6 +586,10 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.020107')
         await self.assertBalance(self.account, '7.479893')
+        self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
+
+        await self.daemon.jsonrpc_file_delete(delete_all=True)
+        self.assertEqual(0, len(self.daemon.jsonrpc_file_list()))
 
         await self.stream_update(claim_id, bid='1.0')  # updates previous claim
         txs = await self.out(self.daemon.jsonrpc_transaction_list())

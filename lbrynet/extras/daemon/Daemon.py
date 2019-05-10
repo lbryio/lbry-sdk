@@ -2503,7 +2503,8 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
-            await self.storage.save_content_claim(stream_hash, new_txo.id)
+            if stream_hash:
+                await self.storage.save_content_claim(stream_hash, new_txo.id)
             await self.analytics_manager.send_claim_action('publish')
         else:
             await account.ledger.release_tx(tx)
