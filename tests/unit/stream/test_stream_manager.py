@@ -308,6 +308,26 @@ class TestStreamManager(BlobExchangeTestBase):
         self.server_blob_manager.delete_blob(head_blob_hash)
         await self._test_download_error_analytics_on_start(DownloadDataTimeout, timeout=1)
 
+    async def test_non_head_data_timeout(self):
+        await self.setup_stream_manager()
+        with open(os.path.join(self.server_dir, self.sd_hash), 'r') as sdf:
+            head_blob_hash = json.loads(sdf.read())['blobs'][-2]['blob_hash']
+        self.server_blob_manager.delete_blob(head_blob_hash)
+        self.client_config.blob_download_timeout = 0.1
+        stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        await stream.finished_write_attempt.wait()
+        self.assertEqual('stopped', stream.status)
+        self.assertIsNone(stream.full_path)
+        self.assertEqual(0, stream.written_bytes)
+
+        self.stream_manager.stop()
+        await self.stream_manager.start()
+        self.assertEqual(1, len(self.stream_manager.streams))
+        stream = list(self.stream_manager.streams.values())[0]
+        self.assertEqual('stopped', stream.status)
+        self.assertIsNone(stream.full_path)
+        self.assertEqual(0, stream.written_bytes)
+
     async def test_download_then_recover_stream_on_startup(self, old_sort=False):
         expected_analytics_events = [
             'Time To First Bytes',
