@@ -99,7 +99,7 @@ class TestProtocol(AsyncioTestCase):
             self.loop, PeerManager(self.loop), node_id, address, udp_port, tcp_port
         )
         await self.loop.create_datagram_endpoint(lambda: proto, (address, 4444))
-        proto.start(0.1)
+        proto.start()
         return proto, other_peer.peer_manager.get_kademlia_peer(node_id, address, udp_port=udp_port)
 
     async def test_add_peer_after_handle_request(self):
@@ -113,7 +113,7 @@ class TestProtocol(AsyncioTestCase):
                 self.loop, PeerManager(self.loop), node_id1, '1.2.3.4', 4444, 3333
             )
             await self.loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
-            peer1.start(0.1)
+            peer1.start()
 
             peer2, peer_2_from_peer_1 = await self._make_protocol(peer1, node_id2, '1.2.3.5', 4444, 3333)
             peer3, peer_3_from_peer_1 = await self._make_protocol(peer1, node_id3, '1.2.3.6', 4444, 3333)

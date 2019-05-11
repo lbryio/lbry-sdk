@@ -2,11 +2,8 @@ import logging
 import asyncio
 import typing
 import binascii
-import contextlib
 from lbrynet.utils import resolve_host
 from lbrynet.dht import constants
-from lbrynet.dht.error import RemoteException
-from lbrynet.dht.protocol.async_generator_junction import AsyncGeneratorJunction
 from lbrynet.dht.protocol.distance import Distance
 from lbrynet.dht.protocol.iterative_find import IterativeNodeFinder, IterativeValueFinder
 from lbrynet.dht.protocol.protocol import KademliaProtocol
@@ -138,28 +135,13 @@ class Node:
                     url_to_addr[address] = host
 
         if known_node_addresses:
-            while not self.protocol.routing_table.get_peers():
-                success = False
-                # ping the seed nodes, this will set their node ids (since we don't know them ahead of time)
-                for address, port in known_node_addresses:
-                    peer = self.protocol.get_rpc_peer(KademliaPeer(self.loop, address, udp_port=port))
-                    try:
-                        await peer.ping()
-                        success = True
-                    except asyncio.TimeoutError:
-                        log.warning("seed node (%s:%i) timed out in %s", url_to_addr.get(address, address), port,
-                                    round(self.protocol.rpc_timeout, 2))
-                if success:
-                    break
-            # now that we have the seed nodes in routing, to an iterative lookup of our own id to populate the buckets
-            # in the routing table with good peers who are near us
-            async with self.peer_search_junction(self.protocol.node_id, max_results=16) as junction:
-                async for peers in junction:
-                    for peer in peers:
-                        try:
-                            await self.protocol.get_rpc_peer(peer).ping()
-                        except (asyncio.TimeoutError, RemoteException):
-                            pass
+            peers = [
+                KademliaPeer(self.loop, address, udp_port=port)
+                for (address, port) in known_node_addresses
+            ]
+            while not len(self.protocol.routing_table.get_peers()):
+                peers.extend(await self.peer_search(self.protocol.node_id, shortlist=peers, count=32))
+                self.protocol.ping_queue.enqueue_maybe_ping(*peers, delay=0.0)
 
         log.info("Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
                  self.protocol.routing_table.buckets_with_contacts())
@@ -186,61 +168,40 @@ class Node:
         return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
                                     key, bottom_out_limit, max_results, None, shortlist)
 
-    @contextlib.asynccontextmanager
-    async def stream_peer_search_junction(self, hash_queue: asyncio.Queue, bottom_out_limit=20,
-                                          max_results=-1) -> AsyncGeneratorJunction:
-        peer_generator = AsyncGeneratorJunction(self.loop)
-
-        async def _add_hashes_from_queue():
-            while True:
-                blob_hash = await hash_queue.get()
-                peer_generator.add_generator(
-                    self.get_iterative_value_finder(
-                        binascii.unhexlify(blob_hash.encode()), bottom_out_limit=bottom_out_limit,
-                        max_results=max_results
-                    )
-                )
-        add_hashes_task = self.loop.create_task(_add_hashes_from_queue())
-        try:
-            async with peer_generator as junction:
-                yield junction
-        finally:
-            if add_hashes_task and not (add_hashes_task.done() or add_hashes_task.cancelled()):
-                add_hashes_task.cancel()
-
-    def peer_search_junction(self, node_id: bytes, max_results=constants.k*2,
-                             bottom_out_limit=20) -> AsyncGeneratorJunction:
-        peer_generator = AsyncGeneratorJunction(self.loop)
-        peer_generator.add_generator(
-            self.get_iterative_node_finder(
-                node_id, bottom_out_limit=bottom_out_limit, max_results=max_results
-            )
-        )
-        return peer_generator
-
     async def peer_search(self, node_id: bytes, count=constants.k, max_results=constants.k*2,
-                          bottom_out_limit=20) -> typing.List['KademliaPeer']:
-        accumulated: typing.List['KademliaPeer'] = []
-        async with self.peer_search_junction(node_id, max_results=max_results,
-                                             bottom_out_limit=bottom_out_limit) as junction:
-            async for peers in junction:
-                accumulated.extend(peers)
+                          bottom_out_limit=20, shortlist: typing.Optional[typing.List] = None
+                          ) -> typing.List['KademliaPeer']:
+        peers = []
+        async for iteration_peers in self.get_iterative_node_finder(
+                node_id, shortlist=shortlist, bottom_out_limit=bottom_out_limit, max_results=max_results):
+            peers.extend(iteration_peers)
         distance = Distance(node_id)
-        accumulated.sort(key=lambda peer: distance(peer.node_id))
-        return accumulated[:count]
+        peers.sort(key=lambda peer: distance(peer.node_id))
+        return peers[:count]
 
     async def _accumulate_search_junction(self, search_queue: asyncio.Queue,
                                           result_queue: asyncio.Queue):
-        async with self.stream_peer_search_junction(search_queue) as search_junction:  # pylint: disable=E1701
-            async for peers in search_junction:
-                if peers:
-                    result_queue.put_nowait([
-                        peer for peer in peers
-                        if not (
-                                peer.address == self.protocol.external_ip
-                                and peer.tcp_port == self.protocol.peer_port
-                        )
-                    ])
+        ongoing = {}
+        async def __start_producing_task():
+            while True:
+                blob_hash = await search_queue.get()
+                ongoing[blob_hash] = asyncio.create_task(self._value_producer(blob_hash, result_queue))
+        ongoing[''] = asyncio.create_task(__start_producing_task())
+        try:
+            while True:
+                await asyncio.wait(ongoing.values(), return_when='FIRST_COMPLETED')
+                for key in list(ongoing.keys())[:]:
+                    if key and ongoing[key].done():
+                        ongoing[key] = asyncio.create_task(self._value_producer(key, result_queue))
+        finally:
+            for task in ongoing.values():
+                task.cancel()
+
+    async def _value_producer(self, blob_hash: str, result_queue: asyncio.Queue):
+        log.info("Searching %s", blob_hash[:8])
+        async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
+            result_queue.put_nowait(results)
+        log.info("Search expired %s", blob_hash[:8])
 
     def accumulate_peers(self, search_queue: asyncio.Queue,
                          peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[
