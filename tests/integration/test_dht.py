@@ -12,7 +12,7 @@ class DHTIntegrationTest(AsyncioTestCase):
     async def asyncSetUp(self):
         import logging
         logging.getLogger('asyncio').setLevel(logging.ERROR)
-        logging.getLogger('lbrynet.dht').setLevel(logging.DEBUG)
+        logging.getLogger('lbrynet.dht').setLevel(logging.WARN)
         self.nodes = []
         self.known_node_addresses = []
 
