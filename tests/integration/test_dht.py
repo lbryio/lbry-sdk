@@ -63,7 +63,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         await asyncio.sleep(.3)  # let pending events settle
         self.assertFalse(node.protocol.routing_table.get_peers())
         for network_node in self.nodes[:-1]:
-            await network_node.start_listening('127.0.0.1')
+            network_node.start('127.0.0.1', self.known_node_addresses)
         self.assertFalse(node.protocol.routing_table.get_peers())
         timeout = 20
         while not node.protocol.routing_table.get_peers():
