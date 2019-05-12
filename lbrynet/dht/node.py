@@ -91,7 +91,7 @@ class Node:
             log.info("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
                      len(stored_to), len(peers))
         else:
-            log.warning("Failed announcing %s, stored to 0 peers")
+            log.warning("Failed announcing %s, stored to 0 peers", blob_hash[:8])
         return stored_to
 
     def stop(self) -> None:
