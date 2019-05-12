@@ -60,6 +60,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         for network_node in self.nodes[:-1]:
             network_node.stop()
         await node.refresh_node(True)
+        await asyncio.sleep(.3)  # let pending events settle
         self.assertFalse(node.protocol.routing_table.get_peers())
         for network_node in self.nodes[:-1]:
             await network_node.start_listening('127.0.0.1')
@@ -77,3 +78,11 @@ class DHTIntegrationTest(AsyncioTestCase):
         blob_hash = hexlify(constants.generate_id(1337)).decode()
         peers = await node.announce_blob(blob_hash)
         self.assertEqual(len(peers), 0)
+
+    async def test_get_token_on_announce(self):
+        await self.setup_network(2, seed_nodes=2)
+        node1, node2 = self.nodes
+        node1.protocol.peer_manager.clear_token(node2.protocol.node_id)
+        blob_hash = hexlify(constants.generate_id(1337)).decode()
+        node_ids = await node1.announce_blob(blob_hash)
+        self.assertIn(node2.protocol.node_id, node_ids)
