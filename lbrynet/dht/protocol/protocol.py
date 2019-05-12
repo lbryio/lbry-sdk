@@ -191,12 +191,14 @@ class PingQueue:
         self._process_task: asyncio.Task = None
         self._running = False
         self._running_pings: typing.Set[asyncio.Task] = set()
+        self._default_delay = constants.maybe_ping_delay
 
     @property
     def running(self):
         return self._running
 
-    def enqueue_maybe_ping(self, *peers: 'KademliaPeer', delay: float = constants.maybe_ping_delay):
+    def enqueue_maybe_ping(self, *peers: 'KademliaPeer', delay: typing.Optional[float] = None):
+        delay = delay if delay is not None else self._default_delay
         now = self._loop.time()
         for peer in peers:
             if peer not in self._pending_contacts or now + delay < self._pending_contacts[peer]:
@@ -390,7 +392,7 @@ class KademliaProtocol(DatagramProtocol):
             while self._to_add:
                 async with self._split_lock:
                     await self._add_peer(self._to_add.pop())
-            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(0.2))
+            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1))
             self._wakeup_routing_task.clear()
 
     def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):

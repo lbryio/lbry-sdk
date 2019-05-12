@@ -28,7 +28,7 @@ class Node:
         self._join_task: asyncio.Task = None
         self._refresh_task: asyncio.Task = None
 
-    async def refresh_node(self):
+    async def refresh_node(self, force_once=False):
         while True:
             # remove peers with expired blob announcements from the datastore
             self.protocol.data_store.removed_expired_peers()
@@ -55,6 +55,8 @@ class Node:
                     peers = await self.peer_search(node_ids.pop())
                     total_peers.extend(peers)
             else:
+                if force_once:
+                    break
                 fut = asyncio.Future(loop=self.loop)
                 self.loop.call_later(constants.refresh_interval // 4, fut.set_result, None)
                 await fut
@@ -64,6 +66,8 @@ class Node:
             to_ping = [peer for peer in set(total_peers) if self.protocol.peer_manager.peer_is_good(peer) is not True]
             if to_ping:
                 self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
+            if force_once:
+                break
 
             fut = asyncio.Future(loop=self.loop)
             self.loop.call_later(constants.refresh_interval, fut.set_result, None)
