@@ -628,12 +628,15 @@ class KademliaProtocol(DatagramProtocol):
         return True
 
     async def store_to_peer(self, hash_value: bytes, peer: 'KademliaPeer') -> typing.Tuple[bytes, bool]:
-        try:
+        async def __store():
             res = await self.get_rpc_peer(peer).store(hash_value)
             if res != b"OK":
                 raise ValueError(res)
             log.debug("Stored %s to %s", binascii.hexlify(hash_value).decode()[:8], peer)
             return peer.node_id, True
+
+        try:
+            return await __store()
         except asyncio.TimeoutError:
             log.debug("Timeout while storing blob_hash %s at %s", binascii.hexlify(hash_value).decode()[:8], peer)
         except ValueError as err:
@@ -641,6 +644,10 @@ class KademliaProtocol(DatagramProtocol):
         except Exception as err:
             if 'Invalid token' in str(err):
                 self.peer_manager.clear_token(peer.node_id)
+                try:
+                    return await __store()
+                except:
+                    return peer.node_id, False
             else:
                 log.exception("Unexpected error while storing blob_hash")
         return peer.node_id, False
