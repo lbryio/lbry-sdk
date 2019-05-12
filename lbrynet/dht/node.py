@@ -74,24 +74,25 @@ class Node:
             await fut
 
     async def announce_blob(self, blob_hash: str) -> typing.List[bytes]:
-        announced_to_node_ids = []
-        while not announced_to_node_ids:
-            hash_value = binascii.unhexlify(blob_hash.encode())
-            assert len(hash_value) == constants.hash_length
-            peers = await self.peer_search(hash_value)
+        hash_value = binascii.unhexlify(blob_hash.encode())
+        assert len(hash_value) == constants.hash_length
+        peers = await self.peer_search(hash_value)
 
-            if not self.protocol.external_ip:
-                raise Exception("Cannot determine external IP")
-            log.debug("Store to %i peers", len(peers))
-            for peer in peers:
-                log.debug("store to %s %s %s", peer.address, peer.udp_port, peer.tcp_port)
-            stored_to_tup = await asyncio.gather(
-                *(self.protocol.store_to_peer(hash_value, peer) for peer in peers), loop=self.loop
-            )
-            announced_to_node_ids.extend([node_id for node_id, contacted in stored_to_tup if contacted])
+        if not self.protocol.external_ip:
+            raise Exception("Cannot determine external IP")
+        log.debug("Store to %i peers", len(peers))
+        for peer in peers:
+            log.debug("store to %s %s %s", peer.address, peer.udp_port, peer.tcp_port)
+        stored_to_tup = await asyncio.gather(
+            *(self.protocol.store_to_peer(hash_value, peer) for peer in peers), loop=self.loop
+        )
+        stored_to = [node_id for node_id, contacted in stored_to_tup if contacted]
+        if stored_to:
             log.info("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
-                     len(announced_to_node_ids), len(peers))
-        return announced_to_node_ids
+                     len(stored_to), len(peers))
+        else:
+            log.warning("Failed announcing %s, stored to 0 peers")
+        return stored_to
 
     def stop(self) -> None:
         if self.joined.is_set():

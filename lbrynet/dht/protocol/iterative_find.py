@@ -276,8 +276,7 @@ class IterativeNodeFinder(IterativeFinder):
         not_yet_yielded.sort(key=lambda peer: self.distance(peer.node_id))
         to_yield = not_yet_yielded[:min(constants.k, len(not_yet_yielded))]
         if to_yield:
-            for peer in to_yield:
-                self.yielded_peers.add(peer)
+            self.yielded_peers.update(to_yield)
             self.iteration_queue.put_nowait(to_yield)
         if finish:
             self.iteration_queue.put_nowait(None)

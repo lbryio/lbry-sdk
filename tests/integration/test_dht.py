@@ -1,4 +1,5 @@
 import asyncio
+from binascii import hexlify
 
 from lbrynet.dht import constants
 from lbrynet.dht.node import Node
@@ -6,7 +7,7 @@ from lbrynet.dht.peer import PeerManager, KademliaPeer
 from torba.testcase import AsyncioTestCase
 
 
-class CLIIntegrationTest(AsyncioTestCase):
+class DHTIntegrationTest(AsyncioTestCase):
 
     async def asyncSetUp(self):
         import logging
@@ -24,15 +25,12 @@ class CLIIntegrationTest(AsyncioTestCase):
             self.nodes.append(node)
             self.known_node_addresses.append(('127.0.0.1', node_port))
             await node.start_listening('127.0.0.1')
+            self.addCleanup(node.stop)
         for node in self.nodes:
             node.protocol.rpc_timeout = .2
             node.protocol.ping_queue._default_delay = .5
             node.start('127.0.0.1', self.known_node_addresses[:1])
         await asyncio.gather(*[node.joined.wait() for node in self.nodes])
-
-    async def asyncTearDown(self):
-        for node in self.nodes:
-            node.stop()
 
     async def test_replace_bad_nodes(self):
         await self.setup_network(20)
@@ -55,3 +53,9 @@ class CLIIntegrationTest(AsyncioTestCase):
             self.assertIn(peer.node_id, good_nodes)
 
 
+    async def test_announce_no_peers(self):
+        await self.setup_network(1)
+        node = self.nodes[0]
+        blob_hash = hexlify(constants.generate_id(1337)).decode()
+        peers = await node.announce_blob(blob_hash)
+        self.assertEqual(len(peers), 0)
