@@ -16,7 +16,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         self.nodes = []
         self.known_node_addresses = []
 
-    async def setup_network(self, size: int, start_port=40000):
+    async def setup_network(self, size: int, start_port=40000, seed_nodes=1):
         for i in range(size):
             node_port = start_port + i
             node = Node(self.loop, PeerManager(self.loop), node_id=constants.generate_id(i),
@@ -29,7 +29,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         for node in self.nodes:
             node.protocol.rpc_timeout = .2
             node.protocol.ping_queue._default_delay = .5
-            node.start('127.0.0.1', self.known_node_addresses[:1])
+            node.start('127.0.0.1', self.known_node_addresses[:seed_nodes])
         await asyncio.gather(*[node.joined.wait() for node in self.nodes])
 
     async def test_replace_bad_nodes(self):
@@ -52,6 +52,24 @@ class DHTIntegrationTest(AsyncioTestCase):
         for peer in node.protocol.routing_table.get_peers():
             self.assertIn(peer.node_id, good_nodes)
 
+    async def test_re_join(self):
+        await self.setup_network(20, seed_nodes=10)
+        node = self.nodes[-1]
+        self.assertTrue(node.joined.is_set())
+        self.assertTrue(node.protocol.routing_table.get_peers())
+        for network_node in self.nodes[:-1]:
+            network_node.stop()
+        await node.refresh_node(True)
+        self.assertFalse(node.protocol.routing_table.get_peers())
+        for network_node in self.nodes[:-1]:
+            await network_node.start_listening('127.0.0.1')
+        self.assertFalse(node.protocol.routing_table.get_peers())
+        timeout = 20
+        while not node.protocol.routing_table.get_peers():
+            await asyncio.sleep(.1)
+            timeout -= 1
+            if not timeout:
+                self.fail("node didnt join back after 2 seconds")
 
     async def test_announce_no_peers(self):
         await self.setup_network(1)

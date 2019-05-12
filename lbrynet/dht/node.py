@@ -144,9 +144,21 @@ class Node:
                 KademliaPeer(self.loop, address, udp_port=port)
                 for (address, port) in known_node_addresses
             ]
-            while not len(self.protocol.routing_table.get_peers()):
-                peers.extend(await self.peer_search(self.protocol.node_id, shortlist=peers, count=32))
-                self.protocol.ping_queue.enqueue_maybe_ping(*peers, delay=0.0)
+            while True:
+                if not self.protocol.routing_table.get_peers():
+                    if self.joined.is_set():
+                        self.joined.clear()
+                    self.protocol.peer_manager.reset()
+                    self.protocol.ping_queue.enqueue_maybe_ping(*peers, delay=0.0)
+                    peers.extend(await self.peer_search(self.protocol.node_id, shortlist=peers, count=32))
+                    if self.protocol.routing_table.get_peers():
+                        self.joined.set()
+                        log.info(
+                            "Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
+                            self.protocol.routing_table.buckets_with_contacts())
+                    else:
+                        continue
+                await asyncio.sleep(1, loop=self.loop)
 
         log.info("Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
                  self.protocol.routing_table.buckets_with_contacts())
@@ -186,27 +198,25 @@ class Node:
 
     async def _accumulate_search_junction(self, search_queue: asyncio.Queue,
                                           result_queue: asyncio.Queue):
-        ongoing = {}
+        tasks = []
         async def __start_producing_task():
             while True:
                 blob_hash = await search_queue.get()
-                ongoing[blob_hash] = asyncio.create_task(self._value_producer(blob_hash, result_queue))
-        ongoing[''] = asyncio.create_task(__start_producing_task())
+                tasks.append(asyncio.create_task(self._value_producer(blob_hash, result_queue)))
+        tasks.append(asyncio.create_task(__start_producing_task()))
         try:
-            while True:
-                await asyncio.wait(ongoing.values(), return_when='FIRST_COMPLETED')
-                for key in list(ongoing.keys())[:]:
-                    if key and ongoing[key].done():
-                        ongoing[key] = asyncio.create_task(self._value_producer(key, result_queue))
+            await asyncio.wait(tasks)
         finally:
-            for task in ongoing.values():
+            for task in tasks:
                 task.cancel()
 
     async def _value_producer(self, blob_hash: str, result_queue: asyncio.Queue):
-        log.info("Searching %s", blob_hash[:8])
-        async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
-            result_queue.put_nowait(results)
-        log.info("Search expired %s", blob_hash[:8])
+        for interval in range(1000):
+            log.info("Searching %s", blob_hash[:8])
+            async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
+                result_queue.put_nowait(results)
+            log.info("Search expired %s", blob_hash[:8])
+            await asyncio.sleep(interval ** 2)
 
     def accumulate_peers(self, search_queue: asyncio.Queue,
                          peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[

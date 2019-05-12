@@ -86,7 +86,8 @@ class TestBlobAnnouncer(AsyncioTestCase):
             to_announce = await self.storage.get_blobs_to_announce()
             self.assertEqual(2, len(to_announce))
             self.blob_announcer.start(batch_size=1)  # so it covers batching logic
-            await self.advance(61.0)
+            # takes 60 seconds to start, but we advance 120 to ensure it processed all batches
+            await self.advance(60.0 * 2)
             to_announce = await self.storage.get_blobs_to_announce()
             self.assertEqual(0, len(to_announce))
             self.blob_announcer.stop()

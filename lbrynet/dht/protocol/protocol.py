@@ -275,6 +275,7 @@ class KademliaProtocol(DatagramProtocol):
         self._wakeup_routing_task = asyncio.Event(loop=self.loop)
         self.maintaing_routing_task: typing.Optional[asyncio.Task] = None
 
+    @functools.lru_cache(128)
     def get_rpc_peer(self, peer: 'KademliaPeer') -> RemoteKademliaRPC:
         return RemoteKademliaRPC(self.loop, self.peer_manager, self, peer)
 

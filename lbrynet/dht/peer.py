@@ -32,6 +32,10 @@ class PeerManager:
         self._node_id_reverse_mapping: typing.Dict[bytes, typing.Tuple[str, int]] = {}
         self._node_tokens: typing.Dict[bytes, (float, bytes)] = {}
 
+    def reset(self):
+        for statistic in (self._rpc_failures, self._last_replied, self._last_sent, self._last_requested):
+            statistic.clear()
+
     def report_failure(self, address: str, udp_port: int):
         now = self._loop.time()
         _, previous = self._rpc_failures.pop((address, udp_port), (None, None))

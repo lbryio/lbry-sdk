@@ -33,7 +33,7 @@ class BlobAnnouncer:
         while batch_size:
             if not self.node.joined.is_set():
                 await self.node.joined.wait()
-            await asyncio.sleep(60)
+            await asyncio.sleep(60, loop=self.loop)
             if not self.node.protocol.routing_table.get_peers():
                 log.warning("No peers in DHT, announce round skipped")
                 continue
