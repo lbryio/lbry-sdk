@@ -171,14 +171,14 @@ class Node:
             )
         )
 
-    def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List] = None,
+    def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                   bottom_out_limit: int = constants.bottom_out_limit,
                                   max_results: int = constants.k) -> IterativeNodeFinder:
 
         return IterativeNodeFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
                                    key, bottom_out_limit, max_results, None, shortlist)
 
-    def get_iterative_value_finder(self, key: bytes, shortlist: typing.Optional[typing.List] = None,
+    def get_iterative_value_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                    bottom_out_limit: int = 40,
                                    max_results: int = -1) -> IterativeValueFinder:
 
@@ -186,7 +186,7 @@ class Node:
                                     key, bottom_out_limit, max_results, None, shortlist)
 
     async def peer_search(self, node_id: bytes, count=constants.k, max_results=constants.k*2,
-                          bottom_out_limit=20, shortlist: typing.Optional[typing.List] = None
+                          bottom_out_limit=20, shortlist: typing.Optional[typing.List['KademliaPeer']] = None
                           ) -> typing.List['KademliaPeer']:
         peers = []
         async for iteration_peers in self.get_iterative_node_finder(
@@ -202,7 +202,7 @@ class Node:
         try:
             while True:
                 blob_hash = await search_queue.get()
-                tasks.append(asyncio.create_task(self._value_producer(blob_hash, result_queue)))
+                tasks.append(self.loop.create_task(self._value_producer(blob_hash, result_queue)))
         finally:
             for task in tasks:
                 task.cancel()
@@ -214,5 +214,5 @@ class Node:
     def accumulate_peers(self, search_queue: asyncio.Queue,
                          peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[
                          asyncio.Queue, asyncio.Task]:
-        q = peer_queue or asyncio.Queue()
-        return q, asyncio.create_task(self._accumulate_search_junction(search_queue, q))
+        q = peer_queue or asyncio.Queue(loop=self.loop)
+        return q, self.loop.create_task(self._accumulate_search_junction(search_queue, q))
