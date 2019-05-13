@@ -32,7 +32,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
         await n.start_listening(address)
         self.nodes.update({len(self.nodes): n})
         if add_to_routing_table:
-            await self.node.protocol.add_peer(
+            self.node.protocol.add_peer(
                 self.peer_manager.get_kademlia_peer(
                     n.protocol.node_id, n.protocol.external_ip, n.protocol.udp_port
                 )
@@ -86,7 +86,8 @@ class TestBlobAnnouncer(AsyncioTestCase):
             to_announce = await self.storage.get_blobs_to_announce()
             self.assertEqual(2, len(to_announce))
             self.blob_announcer.start(batch_size=1)  # so it covers batching logic
-            await self.advance(61.0)
+            # takes 60 seconds to start, but we advance 120 to ensure it processed all batches
+            await self.advance(60.0 * 2)
             to_announce = await self.storage.get_blobs_to_announce()
             self.assertEqual(0, len(to_announce))
             self.blob_announcer.stop()
@@ -98,6 +99,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
             await self.chain_peer(constants.generate_id(12), '1.2.3.12')
             await self.chain_peer(constants.generate_id(13), '1.2.3.13')
             await self.chain_peer(constants.generate_id(14), '1.2.3.14')
+            await self.advance(61.0)
 
             last = self.nodes[len(self.nodes) - 1]
             search_q, peer_q = asyncio.Queue(loop=self.loop), asyncio.Queue(loop=self.loop)
@@ -105,7 +107,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
 
             _, task = last.accumulate_peers(search_q, peer_q)
             found_peers = await peer_q.get()
-            await task
+            task.cancel()
 
             self.assertEqual(1, len(found_peers))
             self.assertEqual(self.node.protocol.node_id, found_peers[0].node_id)

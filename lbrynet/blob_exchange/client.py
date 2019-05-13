@@ -31,8 +31,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.closed = asyncio.Event(loop=self.loop)
 
     def data_received(self, data: bytes):
-        log.debug("%s:%d -- got %s bytes -- %s bytes on buffer -- %s blob bytes received",
-                  self.peer_address, self.peer_port, len(data), len(self.buf), self._blob_bytes_received)
+        #log.debug("%s:%d -- got %s bytes -- %s bytes on buffer -- %s blob bytes received",
+        #          self.peer_address, self.peer_port, len(data), len(self.buf), self._blob_bytes_received)
         if not self.transport or self.transport.is_closing():
             log.warning("transport closing, but got more bytes from %s:%i\n%s", self.peer_address, self.peer_port,
                         binascii.hexlify(data))

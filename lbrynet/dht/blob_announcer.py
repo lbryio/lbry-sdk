@@ -33,6 +33,10 @@ class BlobAnnouncer:
         while batch_size:
             if not self.node.joined.is_set():
                 await self.node.joined.wait()
+            await asyncio.sleep(60, loop=self.loop)
+            if not self.node.protocol.routing_table.get_peers():
+                log.warning("No peers in DHT, announce round skipped")
+                continue
             self.announce_queue.extend(await self.storage.get_blobs_to_announce())
             log.debug("announcer task wake up, %d blobs to announce", len(self.announce_queue))
             while len(self.announce_queue):
@@ -45,7 +49,6 @@ class BlobAnnouncer:
                 if announced:
                     await self.storage.update_last_announced_blobs(announced)
                     log.info("announced %i blobs", len(announced))
-            await asyncio.sleep(60)
 
     def start(self, batch_size: typing.Optional[int] = 10):
         assert not self.announce_task or self.announce_task.done(), "already running"

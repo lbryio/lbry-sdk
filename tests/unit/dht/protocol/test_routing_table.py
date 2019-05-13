@@ -57,7 +57,7 @@ class TestRouting(AsyncioTestCase):
                     node.protocol.node_id, node.protocol.external_ip,
                     udp_port=node.protocol.udp_port
                 )
-                added = await node_1.protocol.add_peer(peer)
+                added = await node_1.protocol._add_peer(peer)
                 self.assertEqual(True, added)
                 contact_cnt += 1
 
@@ -88,7 +88,7 @@ class TestRouting(AsyncioTestCase):
                 # set all of the peers to good (as to not attempt pinging stale ones during split)
                 node_1.protocol.peer_manager.report_last_replied(peer.address, peer.udp_port)
                 node_1.protocol.peer_manager.report_last_replied(peer.address, peer.udp_port)
-                await node_1.protocol.add_peer(peer)
+                await node_1.protocol._add_peer(peer)
                 # check that bucket 0 is always the one covering the local node id
                 self.assertEqual(True, node_1.protocol.routing_table.buckets[0].key_in_range(node_1.protocol.node_id))
             self.assertEqual(40, len(node_1.protocol.routing_table.get_peers()))

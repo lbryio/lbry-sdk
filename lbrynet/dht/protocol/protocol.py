@@ -191,12 +191,14 @@ class PingQueue:
         self._process_task: asyncio.Task = None
         self._running = False
         self._running_pings: typing.Set[asyncio.Task] = set()
+        self._default_delay = constants.maybe_ping_delay
 
     @property
     def running(self):
         return self._running
 
-    def enqueue_maybe_ping(self, *peers: 'KademliaPeer', delay: float = constants.maybe_ping_delay):
+    def enqueue_maybe_ping(self, *peers: 'KademliaPeer', delay: typing.Optional[float] = None):
+        delay = delay if delay is not None else self._default_delay
         now = self._loop.time()
         for peer in peers:
             if peer not in self._pending_contacts or now + delay < self._pending_contacts[peer]:
@@ -207,7 +209,7 @@ class PingQueue:
             try:
                 if self._protocol.peer_manager.peer_is_good(peer):
                     if peer not in self._protocol.routing_table.get_peers():
-                        await self._protocol.add_peer(peer)
+                        self._protocol.add_peer(peer)
                     return
                 await self._protocol.get_rpc_peer(peer).ping()
             except asyncio.TimeoutError:
@@ -268,11 +270,21 @@ class KademliaProtocol(DatagramProtocol):
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)
         self.rpc_timeout = rpc_timeout
         self._split_lock = asyncio.Lock(loop=self.loop)
+        self._to_remove: typing.Set['KademliaPeer'] = set()
+        self._to_add: typing.Set['KademliaPeer'] = set()
+        self._wakeup_routing_task = asyncio.Event(loop=self.loop)
+        self.maintaing_routing_task: typing.Optional[asyncio.Task] = None
 
+    @functools.lru_cache(128)
     def get_rpc_peer(self, peer: 'KademliaPeer') -> RemoteKademliaRPC:
         return RemoteKademliaRPC(self.loop, self.peer_manager, self, peer)
 
+    def start(self):
+        self.maintaing_routing_task = self.loop.create_task(self.routing_table_task())
+
     def stop(self):
+        if self.maintaing_routing_task:
+            self.maintaing_routing_task.cancel()
         if self.transport:
             self.disconnect()
 
@@ -363,13 +375,30 @@ class KademliaProtocol(DatagramProtocol):
                     self.routing_table.buckets[bucket_index].remove_peer(to_replace)
                 return await self._add_peer(peer)
 
-    async def add_peer(self, peer: 'KademliaPeer') -> bool:
+    def add_peer(self, peer: 'KademliaPeer'):
         if peer.node_id == self.node_id:
             return False
-        async with self._split_lock:
-            return await self._add_peer(peer)
+        self._to_add.add(peer)
+        self._wakeup_routing_task.set()
 
-    async def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):
+    def remove_peer(self, peer: 'KademliaPeer'):
+        self._to_remove.add(peer)
+        self._wakeup_routing_task.set()
+
+    async def routing_table_task(self):
+        while True:
+            while self._to_remove:
+                async with self._split_lock:
+                    peer = self._to_remove.pop()
+                    self.routing_table.remove_peer(peer)
+                    self.routing_table.join_buckets()
+            while self._to_add:
+                async with self._split_lock:
+                    await self._add_peer(self._to_add.pop())
+            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1, loop=self.loop), loop=self.loop)
+            self._wakeup_routing_task.clear()
+
+    def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):
         assert sender_contact.node_id != self.node_id, (binascii.hexlify(sender_contact.node_id)[:8].decode(),
                                                         binascii.hexlify(self.node_id)[:8].decode())
         method = message.method
@@ -396,11 +425,11 @@ class KademliaProtocol(DatagramProtocol):
             key, = a
             result = self.node_rpc.find_value(sender_contact, key)
 
-        await self.send_response(
+        self.send_response(
             sender_contact, ResponseDatagram(RESPONSE_TYPE, message.rpc_id, self.node_id, result),
         )
 
-    async def handle_request_datagram(self, address: typing.Tuple[str, int], request_datagram: RequestDatagram):
+    def handle_request_datagram(self, address: typing.Tuple[str, int], request_datagram: RequestDatagram):
         # This is an RPC method request
         self.peer_manager.report_last_requested(address[0], address[1])
         try:
@@ -408,7 +437,7 @@ class KademliaProtocol(DatagramProtocol):
         except IndexError:
             peer = self.peer_manager.get_kademlia_peer(request_datagram.node_id, address[0], address[1])
         try:
-            await self._handle_rpc(peer, request_datagram)
+            self._handle_rpc(peer, request_datagram)
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
             # will be added to our routing table if successful
             is_good = self.peer_manager.peer_is_good(peer)
@@ -416,12 +445,12 @@ class KademliaProtocol(DatagramProtocol):
                 self.ping_queue.enqueue_maybe_ping(peer)
             # only add a requesting contact to the routing table if it has replied to one of our requests
             elif is_good is True:
-                await self.add_peer(peer)
+                self.add_peer(peer)
         except ValueError as err:
             log.debug("error raised handling %s request from %s:%i - %s(%s)",
                       request_datagram.method, peer.address, peer.udp_port, str(type(err)),
                       str(err))
-            await self.send_error(
+            self.send_error(
                 peer,
                 ErrorDatagram(ERROR_TYPE, request_datagram.rpc_id, self.node_id, str(type(err)).encode(),
                               str(err).encode())
@@ -430,13 +459,13 @@ class KademliaProtocol(DatagramProtocol):
             log.warning("error raised handling %s request from %s:%i - %s(%s)",
                         request_datagram.method, peer.address, peer.udp_port, str(type(err)),
                         str(err))
-            await self.send_error(
+            self.send_error(
                 peer,
                 ErrorDatagram(ERROR_TYPE, request_datagram.rpc_id, self.node_id, str(type(err)).encode(),
                               str(err).encode())
             )
 
-    async def handle_response_datagram(self, address: typing.Tuple[str, int], response_datagram: ResponseDatagram):
+    def handle_response_datagram(self, address: typing.Tuple[str, int], response_datagram: ResponseDatagram):
         # Find the message that triggered this response
         if response_datagram.rpc_id in self.sent_messages:
             peer, df, request = self.sent_messages[response_datagram.rpc_id]
@@ -459,7 +488,7 @@ class KademliaProtocol(DatagramProtocol):
             self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():
                 df.set_result(response_datagram)
-                await self.add_peer(peer)
+                self.add_peer(peer)
             else:
                 log.warning("%s:%i replied, but after we cancelled the request attempt",
                             peer.address, peer.udp_port)
@@ -510,15 +539,15 @@ class KademliaProtocol(DatagramProtocol):
             return
 
         if isinstance(message, RequestDatagram):
-            self.loop.create_task(self.handle_request_datagram(address, message))
+            self.handle_request_datagram(address, message)
         elif isinstance(message, ErrorDatagram):
             self.handle_error_datagram(address, message)
         else:
             assert isinstance(message, ResponseDatagram), "sanity"
-            self.loop.create_task(self.handle_response_datagram(address, message))
+            self.handle_response_datagram(address, message)
 
     async def send_request(self, peer: 'KademliaPeer', request: RequestDatagram) -> ResponseDatagram:
-        await self._send(peer, request)
+        self._send(peer, request)
         response_fut = self.sent_messages[request.rpc_id][1]
         try:
             response = await asyncio.wait_for(response_fut, self.rpc_timeout)
@@ -531,18 +560,16 @@ class KademliaProtocol(DatagramProtocol):
         except (asyncio.TimeoutError, RemoteException):
             self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
-                async with self._split_lock:
-                    self.routing_table.remove_peer(peer)
-                    self.routing_table.join_buckets()
+                self.remove_peer(peer)
             raise
 
-    async def send_response(self, peer: 'KademliaPeer', response: ResponseDatagram):
-        await self._send(peer, response)
+    def send_response(self, peer: 'KademliaPeer', response: ResponseDatagram):
+        self._send(peer, response)
 
-    async def send_error(self, peer: 'KademliaPeer', error: ErrorDatagram):
-        await self._send(peer, error)
+    def send_error(self, peer: 'KademliaPeer', error: ErrorDatagram):
+        self._send(peer, error)
 
-    async def _send(self, peer: 'KademliaPeer', message: typing.Union[RequestDatagram, ResponseDatagram,
+    def _send(self, peer: 'KademliaPeer', message: typing.Union[RequestDatagram, ResponseDatagram,
                                                                       ErrorDatagram]):
         if not self.transport or self.transport.is_closing():
             raise TransportNotConnected()
@@ -602,12 +629,15 @@ class KademliaProtocol(DatagramProtocol):
         return True
 
     async def store_to_peer(self, hash_value: bytes, peer: 'KademliaPeer') -> typing.Tuple[bytes, bool]:
-        try:
+        async def __store():
             res = await self.get_rpc_peer(peer).store(hash_value)
             if res != b"OK":
                 raise ValueError(res)
             log.debug("Stored %s to %s", binascii.hexlify(hash_value).decode()[:8], peer)
             return peer.node_id, True
+
+        try:
+            return await __store()
         except asyncio.TimeoutError:
             log.debug("Timeout while storing blob_hash %s at %s", binascii.hexlify(hash_value).decode()[:8], peer)
         except ValueError as err:
@@ -615,6 +645,10 @@ class KademliaProtocol(DatagramProtocol):
         except Exception as err:
             if 'Invalid token' in str(err):
                 self.peer_manager.clear_token(peer.node_id)
+                try:
+                    return await __store()
+                except:
+                    return peer.node_id, False
             else:
                 log.exception("Unexpected error while storing blob_hash")
         return peer.node_id, False

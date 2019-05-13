@@ -83,6 +83,8 @@ class StreamDownloader:
         # set up peer accumulation
         if node:
             self.node = node
+            if self.accumulate_task and not self.accumulate_task.done():
+                self.accumulate_task.cancel()
             _, self.accumulate_task = self.node.accumulate_peers(self.search_queue, self.peer_queue)
         await self.add_fixed_peers()
         # start searching for peers for the sd hash

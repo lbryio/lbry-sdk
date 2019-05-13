@@ -37,7 +37,6 @@ class BlobDownloader:
     async def request_blob_from_peer(self, blob: 'AbstractBlob', peer: 'KademliaPeer', connection_id: int = 0):
         if blob.get_is_verified():
             return
-        self.scores[peer] = self.scores.get(peer, 0) - 1  # starts losing score, to account for cancelled ones
         transport = self.connections.get(peer)
         start = self.loop.time()
         bytes_received, transport = await request_blob(
@@ -55,17 +54,18 @@ class BlobDownloader:
             self.failures[peer] = 0
             self.connections[peer] = transport
             elapsed = self.loop.time() - start
-            self.scores[peer] = bytes_received / elapsed if bytes_received and elapsed else 0
+            self.scores[peer] = bytes_received / elapsed if bytes_received and elapsed else 1
 
     async def new_peer_or_finished(self):
         active_tasks = list(self.active_connections.values()) + [asyncio.sleep(1)]
         await asyncio.wait(active_tasks, loop=self.loop, return_when='FIRST_COMPLETED')
 
     def cleanup_active(self):
+        if not self.active_connections and not self.connections:
+            self.clearbanned()
         to_remove = [peer for (peer, task) in self.active_connections.items() if task.done()]
         for peer in to_remove:
             del self.active_connections[peer]
-        self.clearbanned()
 
     def clearbanned(self):
         now = self.loop.time()
