@@ -199,13 +199,10 @@ class Node:
     async def _accumulate_search_junction(self, search_queue: asyncio.Queue,
                                           result_queue: asyncio.Queue):
         tasks = []
-        async def __start_producing_task():
+        try:
             while True:
                 blob_hash = await search_queue.get()
                 tasks.append(asyncio.create_task(self._value_producer(blob_hash, result_queue)))
-        tasks.append(asyncio.create_task(__start_producing_task()))
-        try:
-            await asyncio.wait(tasks)
         finally:
             for task in tasks:
                 task.cancel()
