@@ -208,12 +208,8 @@ class Node:
                 task.cancel()
 
     async def _value_producer(self, blob_hash: str, result_queue: asyncio.Queue):
-        for interval in range(1000):
-            log.info("Searching %s", blob_hash[:8])
-            async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
-                result_queue.put_nowait(results)
-            log.info("Search expired %s", blob_hash[:8])
-            await asyncio.sleep(interval ** 2)
+        async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
+            result_queue.put_nowait(results)
 
     def accumulate_peers(self, search_queue: asyncio.Queue,
                          peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[

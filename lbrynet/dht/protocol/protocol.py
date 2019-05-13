@@ -311,7 +311,6 @@ class KademliaProtocol(DatagramProtocol):
         return args, {}
 
     async def _add_peer(self, peer: 'KademliaPeer'):
-        log.debug("Trying to add %s:%d", peer.address, peer.udp_port)
         for p in self.routing_table.get_peers():
             if (p.address, p.udp_port) == (peer.address, peer.udp_port) and p.node_id != peer.node_id:
                 self.routing_table.remove_peer(p)
@@ -391,7 +390,6 @@ class KademliaProtocol(DatagramProtocol):
             while self._to_remove:
                 async with self._split_lock:
                     peer = self._to_remove.pop()
-                    log.debug("Trying to remove %s:%d", peer.address, peer.udp_port)
                     self.routing_table.remove_peer(peer)
                     self.routing_table.join_buckets()
             while self._to_add:
