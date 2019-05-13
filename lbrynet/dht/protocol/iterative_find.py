@@ -141,13 +141,10 @@ class IterativeFinder:
 
     def _add_active(self, peer):
         if peer not in self.active and peer.node_id and peer.node_id != self.protocol.node_id:
-            if self.peer_manager.peer_is_good(peer) is not False:
-                self.active.add(peer)
-                if self._is_closer(peer):
-                    self.prev_closest_peer = self.closest_peer
-                    self.closest_peer = peer
-            else:
-                self.protocol.ping_queue.enqueue_maybe_ping(peer, 0.0)
+            self.active.add(peer)
+            if self._is_closer(peer):
+                self.prev_closest_peer = self.closest_peer
+                self.closest_peer = peer
 
     async def _handle_probe_result(self, peer: 'KademliaPeer', response: FindResponse):
         self._add_active(peer)
@@ -276,7 +273,10 @@ class IterativeNodeFinder(IterativeFinder):
 
     def put_result(self, from_iter: typing.Iterable['KademliaPeer'], finish=False):
         not_yet_yielded = [
-            peer for peer in from_iter if peer not in self.yielded_peers and peer.node_id != self.protocol.node_id
+            peer for peer in from_iter
+            if peer not in self.yielded_peers
+               and peer.node_id != self.protocol.node_id
+               and self.peer_manager.peer_is_good(peer) is not False
         ]
         not_yet_yielded.sort(key=lambda peer: self.distance(peer.node_id))
         to_yield = not_yet_yielded[:min(constants.k, len(not_yet_yielded))]

@@ -111,4 +111,5 @@ class DHTIntegrationTest(AsyncioTestCase):
         # now a search happens, which removes bad peers while contacting them
         self.assertTrue(node1.protocol.routing_table.get_peers())
         await node1.peer_search(node2.protocol.node_id)
-        self.assertIn(peer, node1.protocol.ping_queue._pending_contacts)
+        await asyncio.sleep(.3)  # let pending events settle
+        self.assertFalse(node1.protocol.routing_table.get_peers())
