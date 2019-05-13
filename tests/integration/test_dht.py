@@ -27,7 +27,7 @@ class DHTIntegrationTest(AsyncioTestCase):
             await node.start_listening('127.0.0.1')
             self.addCleanup(node.stop)
         for node in self.nodes:
-            node.protocol.rpc_timeout = .2
+            node.protocol.rpc_timeout = .5
             node.protocol.ping_queue._default_delay = .5
             node.start('127.0.0.1', self.known_node_addresses[:seed_nodes])
         await asyncio.gather(*[node.joined.wait() for node in self.nodes])
@@ -109,6 +109,6 @@ class DHTIntegrationTest(AsyncioTestCase):
         self.assertFalse(node1.protocol.peer_manager.peer_is_good(peer))
 
         # now a search happens, which removes bad peers while contacting them
-        self.assertNotIn(peer, node1.protocol._to_remove)
+        self.assertTrue(node1.protocol.routing_table.get_peers())
         await node1.peer_search(node2.protocol.node_id)
-        self.assertIn(peer, node1.protocol._to_remove)
+        self.assertFalse(node1.protocol.routing_table.get_peers())

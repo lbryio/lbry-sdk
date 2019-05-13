@@ -62,10 +62,11 @@ class BlobDownloader:
         await asyncio.wait(active_tasks, loop=self.loop, return_when='FIRST_COMPLETED')
 
     def cleanup_active(self):
+        if not self.active_connections:
+            self.clearbanned()
         to_remove = [peer for (peer, task) in self.active_connections.items() if task.done()]
         for peer in to_remove:
             del self.active_connections[peer]
-        self.clearbanned()
 
     def clearbanned(self):
         now = self.loop.time()

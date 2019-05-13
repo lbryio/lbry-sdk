@@ -147,7 +147,7 @@ class IterativeFinder:
                     self.prev_closest_peer = self.closest_peer
                     self.closest_peer = peer
             else:
-                self.protocol.remove_peer(peer)
+                self.protocol.ping_queue.enqueue_maybe_ping(peer, 0.0)
 
     async def _handle_probe_result(self, peer: 'KademliaPeer', response: FindResponse):
         self._add_active(peer)
