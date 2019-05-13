@@ -92,3 +92,23 @@ class DHTIntegrationTest(AsyncioTestCase):
         node2.protocol.node_rpc.refresh_token()
         node_ids = await node1.announce_blob(blob_hash)
         self.assertIn(node2.protocol.node_id, node_ids)
+
+    async def test_peer_search_removes_bad_peers(self):
+        # that's an edge case discovered by Tom, but an important one
+        # imagine that you only got bad peers and refresh will happen in one hour
+        # instead of failing for one hour we should be able to recover by scheduling pings to bad peers we find
+        await self.setup_network(2, seed_nodes=2)
+        node1, node2 = self.nodes
+        node2.stop()
+        # forcefully make it a bad peer but dont remove it from routing table
+        address, port, node_id = node2.protocol.external_ip, node2.protocol.udp_port, node2.protocol.node_id
+        peer = KademliaPeer(self.loop, address, node_id, port)
+        self.assertTrue(node1.protocol.peer_manager.peer_is_good(peer))
+        node1.protocol.peer_manager.report_failure(node2.protocol.external_ip, node2.protocol.udp_port)
+        node1.protocol.peer_manager.report_failure(node2.protocol.external_ip, node2.protocol.udp_port)
+        self.assertFalse(node1.protocol.peer_manager.peer_is_good(peer))
+
+        # now a search happens, which removes bad peers while contacting them
+        self.assertTrue(node1.protocol.routing_table.get_peers())
+        await node1.peer_search(node2.protocol.node_id)
+        self.assertFalse(node1.protocol.routing_table.get_peers())
