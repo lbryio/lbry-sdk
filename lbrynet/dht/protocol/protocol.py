@@ -280,7 +280,7 @@ class KademliaProtocol(DatagramProtocol):
         return RemoteKademliaRPC(self.loop, self.peer_manager, self, peer)
 
     def start(self):
-        self.maintaing_routing_task = asyncio.create_task(self.routing_table_task())
+        self.maintaing_routing_task = self.loop.create_task(self.routing_table_task())
 
     def stop(self):
         if self.maintaing_routing_task:
@@ -395,7 +395,7 @@ class KademliaProtocol(DatagramProtocol):
             while self._to_add:
                 async with self._split_lock:
                     await self._add_peer(self._to_add.pop())
-            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1))
+            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1, loop=self.loop), loop=self.loop)
             self._wakeup_routing_task.clear()
 
     def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):
