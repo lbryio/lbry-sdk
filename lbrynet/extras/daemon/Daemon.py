@@ -270,14 +270,17 @@ class Daemon(metaclass=JSONRPCServerType):
         self.stop_event = asyncio.Event()
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
-        app = web.Application()
-        app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
-        app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
-        app.router.add_get('/get/{claim_name}', self.handle_stream_get_request)
-        app.router.add_get('/get/{claim_name}/{claim_id}', self.handle_stream_get_request)
-        app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
-        app.router.add_post('/', self.handle_old_jsonrpc)
-        self.runner = web.AppRunner(app)
+        rpc_app = web.Application()
+        rpc_app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
+        rpc_app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
+        rpc_app.router.add_post('/', self.handle_old_jsonrpc)
+        self.rpc_runner = web.AppRunner(rpc_app)
+
+        streaming_app = web.Application()
+        streaming_app.router.add_get('/get/{claim_name}', self.handle_stream_get_request)
+        streaming_app.router.add_get('/get/{claim_name}/{claim_id}', self.handle_stream_get_request)
+        streaming_app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
+        self.streaming_runner = web.AppRunner(streaming_app)
 
     @property
     def dht_node(self) -> typing.Optional['Node']:
@@ -400,12 +403,20 @@ class Daemon(metaclass=JSONRPCServerType):
         log.debug("Settings: %s", json.dumps(self.conf.settings_dict, indent=2))
         log.info("Platform: %s", json.dumps(system_info.get_platform(), indent=2))
         await self.analytics_manager.send_server_startup()
-        await self.runner.setup()
+        await self.rpc_runner.setup()
+        await self.streaming_runner.setup()
 
         try:
-            site = web.TCPSite(self.runner, self.conf.api_host, self.conf.api_port, shutdown_timeout=.5)
-            await site.start()
-            log.info('lbrynet API listening on TCP %s:%i', *site._server.sockets[0].getsockname()[:2])
+            rpc_site = web.TCPSite(self.rpc_runner, self.conf.api_host, self.conf.api_port, shutdown_timeout=.5)
+            await rpc_site.start()
+            log.info('lbrynet API listening on TCP %s:%i', *rpc_site._server.sockets[0].getsockname()[:2])
+
+            streaming_site = web.TCPSite(self.streaming_runner, self.conf.streaming_host, self.conf.streaming_port,
+                                         shutdown_timeout=.5)
+            await streaming_site.start()
+            log.info('lbrynet media server listening on TCP %s:%i',
+                     *streaming_site._server.sockets[0].getsockname()[:2])
+
         except OSError as e:
             log.error('lbrynet API failed to bind TCP %s for listening. Daemon is already running or this port is '
                       'already in use by another application.', self.conf.api)
@@ -441,8 +452,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 self.component_startup_task.cancel()
         log.info("stopped api components")
         if shutdown_runner:
-            await self.runner.shutdown()
-        await self.runner.cleanup()
+            await self.rpc_runner.shutdown()
+            await self.streaming_runner.shutdown()
+        await self.rpc_runner.cleanup()
+        await self.streaming_runner.cleanup()
         log.info("stopped api server")
         if self.analytics_manager.is_started:
             self.analytics_manager.stop()
@@ -471,6 +484,8 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     async def handle_stream_get_request(self, request: web.Request):
+        if not self.conf.streaming_get:
+            raise web.HTTPForbidden()
         name_and_claim_id = request.path.split("/get/")[1]
         if "/" not in name_and_claim_id:
             uri = f"lbry://{name_and_claim_id}"
