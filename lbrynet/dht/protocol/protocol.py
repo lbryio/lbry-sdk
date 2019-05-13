@@ -376,10 +376,14 @@ class KademliaProtocol(DatagramProtocol):
                     self.routing_table.buckets[bucket_index].remove_peer(to_replace)
                 return await self._add_peer(peer)
 
-    def add_peer(self, peer: 'KademliaPeer') -> bool:
+    def add_peer(self, peer: 'KademliaPeer'):
         if peer.node_id == self.node_id:
             return False
         self._to_add.add(peer)
+        self._wakeup_routing_task.set()
+
+    def remove_peer(self, peer: 'KademliaPeer'):
+        self._to_remove.add(peer)
         self._wakeup_routing_task.set()
 
     async def routing_table_task(self):
@@ -558,8 +562,7 @@ class KademliaProtocol(DatagramProtocol):
         except (asyncio.TimeoutError, RemoteException):
             self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
-                self._to_remove.add(peer)
-                self._wakeup_routing_task.set()
+                self.remove_peer(peer)
             raise
 
     def send_response(self, peer: 'KademliaPeer', response: ResponseDatagram):

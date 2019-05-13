@@ -181,6 +181,9 @@ class IterativeFinder:
             if added >= constants.alpha:
                 break
             origin_address = (peer.address, peer.udp_port)
+            if self.peer_manager.peer_is_good(peer) is False:
+                self.protocol.remove_peer(peer)
+                continue
             if origin_address in self.exclude:
                 continue
             if peer.node_id == self.protocol.node_id:

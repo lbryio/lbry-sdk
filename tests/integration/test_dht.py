@@ -109,6 +109,6 @@ class DHTIntegrationTest(AsyncioTestCase):
         self.assertFalse(node1.protocol.peer_manager.peer_is_good(peer))
 
         # now a search happens, which removes bad peers while contacting them
-        self.assertTrue(node1.protocol.routing_table.get_peers())
+        self.assertNotIn(peer, node1.protocol._to_remove)
         await node1.peer_search(node2.protocol.node_id)
-        self.assertFalse(node1.protocol.routing_table.get_peers())
+        self.assertIn(peer, node1.protocol._to_remove)
