@@ -67,6 +67,7 @@ def encode_account_doc():
 
 def encode_file_doc():
     return {
+        'streaming_url': '(str) url to stream the file using range requests',
         'completed': '(bool) true if download is completed',
         'file_name': '(str) name of file',
         'download_directory': '(str) download directory',
