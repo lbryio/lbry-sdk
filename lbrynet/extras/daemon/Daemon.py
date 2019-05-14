@@ -418,8 +418,7 @@ class Daemon(metaclass=JSONRPCServerType):
                      *streaming_site._server.sockets[0].getsockname()[:2])
 
         except OSError as e:
-            log.error('lbrynet API failed to bind TCP %s for listening. Daemon is already running or this port is '
-                      'already in use by another application.', self.conf.api)
+            log.error('lbrynet API failed to bind TCP %s for listening: %s', self.conf.api, e)
             await self.analytics_manager.send_server_startup_error(str(e))
             raise SystemExit()
 
