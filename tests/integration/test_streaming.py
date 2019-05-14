@@ -35,14 +35,15 @@ class RangeRequests(CommandTestCase):
         await self.daemon.jsonrpc_file_delete(delete_from_download_dir=True, claim_name='foo')
         self.assertEqual(0, len(os.listdir(self.daemon.blob_manager.blob_dir)))
         # await self._restart_stream_manager()
-        await self.daemon.runner.setup()
-        site = aiohttp.web.TCPSite(self.daemon.runner, self.daemon.conf.api_host, self.daemon.conf.api_port)
+        await self.daemon.streaming_runner.setup()
+        site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,
+                                   self.daemon.conf.streaming_port)
         await site.start()
         self.assertListEqual(self.daemon.jsonrpc_file_list(), [])
 
     async def _test_range_requests(self):
         name = 'foo'
-        url = f'http://{self.daemon.conf.api_host}:{self.daemon.conf.api_port}/get/{name}'
+        url = f'http://{self.daemon.conf.streaming_host}:{self.daemon.conf.streaming_port}/get/{name}'
 
         async with aiohttp_request('get', url) as req:
             self.assertEqual(req.headers.get('Content-Type'), 'application/octet-stream')
@@ -103,6 +104,14 @@ class RangeRequests(CommandTestCase):
         await self.test_range_requests_0_padded_bytes(
             ((MAX_BLOB_SIZE - 1) * 4) - 15, padding=b'\x00' * 15
         )
+
+    async def test_forbidden(self):
+        self.data = get_random_bytes(1000)
+        await self._setup_stream(self.data, file_size=1000)
+        url = f'http://{self.daemon.conf.streaming_host}:{self.daemon.conf.streaming_port}/get/foo'
+        self.daemon.conf.streaming_get = False
+        async with aiohttp_request('get', url) as req:
+            self.assertEqual(403, req.status)
 
     async def test_range_requests_last_block_of_last_blob_padding(self):
         self.data = get_random_bytes(((MAX_BLOB_SIZE - 1) * 4) - 16)

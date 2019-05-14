@@ -546,6 +546,21 @@ class Config(CLIConfig):
         previous_names=['upload_log', 'upload_log', 'share_debug_info']
     )
 
+    # media server
+
+    streaming_server = String('Host name and port to serve streaming media over range requests',
+                              'localhost:5280', metavar='HOST:PORT')
+    streaming_get = Toggle("Enable the /get endpoint for the streaming media server. "
+                           "Disable to prevent new streams from being added.", True)
+
+    @property
+    def streaming_host(self):
+        return self.streaming_server.split(':')[0]
+
+    @property
+    def streaming_port(self):
+        return int(self.streaming_server.split(':')[1])
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_default_paths()
