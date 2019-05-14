@@ -6,7 +6,6 @@ from binascii import unhexlify
 from torba.server.db import DB
 from torba.server.util import class_logger
 from torba.client.basedatabase import query, constraints_to_sql
-from google.protobuf.message import DecodeError
 
 from lbrynet.schema.url import URL, normalize_name
 from lbrynet.wallet.transaction import Transaction, Output
