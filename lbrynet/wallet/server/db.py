@@ -181,8 +181,8 @@ class SQLDB:
             try:
                 assert txo.claim_name
                 assert txo.normalized_name
-            except (AssertionError, UnicodeDecodeError):
-                self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
+            except:
+                #self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
                 continue
 
             txo_hash = sqlite3.Binary(txo.ref.hash)
@@ -201,8 +201,8 @@ class SQLDB:
 
             try:
                 claim = txo.claim
-            except DecodeError:
-                self.logger.exception(f"Could not parse claim protobuf for {tx.id}:{txo.position}.")
+            except:
+                #self.logger.exception(f"Could not parse claim protobuf for {tx.id}:{txo.position}.")
                 continue
 
             claim_record['is_channel'] = claim.is_channel
@@ -348,18 +348,19 @@ class SQLDB:
                 (overtake['normalized'],)
             )
             self.execute(
-                f"UPDATE claimtrie SET claim_hash = ?, last_take_over_height = {height}",
-                (sqlite3.Binary(overtake['claim_hash']),)
+                f"UPDATE claimtrie SET claim_hash = ?, last_take_over_height = {height} WHERE normalized = ?",
+                (sqlite3.Binary(overtake['claim_hash']), overtake['normalized'])
             )
 
-    def update_claimtrie(self, height):
-        self._make_claims_without_competition_become_controlling(height)
-        self._update_trending_amount(height)
-        self._update_effective_amount(height)
-        self._set_activation_height(height)
-        self._perform_overtake(height)
-        self._update_effective_amount(height)
-        self._perform_overtake(height)
+    def update_claimtrie(self, height, timer):
+        r = timer.run
+        r(self._make_claims_without_competition_become_controlling, height)
+        r(self._update_trending_amount, height)
+        r(self._update_effective_amount, height)
+        r(self._set_activation_height, height)
+        r(self._perform_overtake, height)
+        r(self._update_effective_amount, height)
+        r(self._perform_overtake, height)
 
     def get_claims(self, cols, **constraints):
         if 'is_controlling' in constraints:
@@ -487,14 +488,18 @@ class SQLDB:
                 result.append(channel)
         return result
 
-    def advance_txs(self, height, all_txs):
+    def advance_txs(self, height, all_txs, timer):
         sql, txs = self, set()
         abandon_claim_hashes, stale_claim_metadata_txo_hashes = set(), set()
         insert_claims, update_claims = set(), set()
         delete_txo_hashes, insert_supports = set(), set()
         for position, (etx, txid) in enumerate(all_txs):
-            tx = Transaction(etx.serialize(), height=height, position=position)
-            claim_abandon_map, delete_txo_hashes = sql.split_inputs_into_claims_and_other(tx.inputs)
+            tx = timer.run(
+                Transaction, etx.serialize(), height=height, position=position
+            )
+            claim_abandon_map, delete_txo_hashes = timer.run(
+                sql.split_inputs_into_claims_and_other, tx.inputs
+            )
             stale_claim_metadata_txo_hashes.update(claim_abandon_map)
             for output in tx.outputs:
                 if output.is_support:
@@ -512,13 +517,14 @@ class SQLDB:
                             del claim_abandon_map[txo_hash]
                             break
             abandon_claim_hashes.update(claim_abandon_map.values())
-        sql.abandon_claims(abandon_claim_hashes)
-        sql.clear_claim_metadata(stale_claim_metadata_txo_hashes)
-        sql.delete_other_txos(delete_txo_hashes)
-        sql.insert_claims(insert_claims)
-        sql.update_claims(update_claims)
-        sql.insert_supports(insert_supports)
-        sql.update_claimtrie(height)
+        r = timer.run
+        r(sql.abandon_claims, abandon_claim_hashes)
+        r(sql.clear_claim_metadata, stale_claim_metadata_txo_hashes)
+        r(sql.delete_other_txos, delete_txo_hashes)
+        r(sql.insert_claims, insert_claims)
+        r(sql.update_claims, update_claims)
+        r(sql.insert_supports, insert_supports)
+        r(sql.update_claimtrie, height, forward_timer=True)
 
 
 class LBRYDB(DB):
