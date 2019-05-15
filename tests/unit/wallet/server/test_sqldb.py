@@ -3,6 +3,7 @@ from torba.client.constants import COIN, NULL_HASH32
 
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.server.db import SQLDB
+from lbrynet.wallet.server.block_processor import Timer
 from lbrynet.wallet.transaction import Transaction, Input, Output
 
 
@@ -31,13 +32,17 @@ class OldWalletServerTransaction:
 class TestSQLDB(unittest.TestCase):
 
     def setUp(self):
-        self.sql = SQLDB(':memory:')
+        self.first_sync = False
+        self.sql = SQLDB(self, ':memory:')
+        self.timer = Timer('BlockProcessor')
         self.sql.open()
         self._current_height = 0
         self._txos = {}
 
-    def _make_tx(self, output):
+    def _make_tx(self, output, txi=None):
         tx = get_tx().add_outputs([output])
+        if txi is not None:
+            tx.add_inputs([txi])
         self._txos[output.ref.hash] = output
         return OldWalletServerTransaction(tx), tx.hash
 
@@ -58,7 +63,8 @@ class TestSQLDB(unittest.TestCase):
         return self._make_tx(
             Output.pay_update_claim_pubkey_hash(
                 amount, claim.claim_name, claim.claim_id, claim.claim, b'abc'
-            )
+            ),
+            Input.spend(claim)
         )
 
     def get_support(self, tx, amount):
@@ -95,8 +101,10 @@ class TestSQLDB(unittest.TestCase):
         return accepted
 
     def advance(self, height, txs):
+        #for skipped_height in range(self._current_height+1, height):
+        #    self.sql.advance_txs(skipped_height, [], self.timer)
         self._current_height = height
-        self.sql.advance_txs(height, txs)
+        self.sql.advance_txs(height, txs, self.timer)
 
     def state(self, controlling=None, active=None, accepted=None):
         self.assertEqual(controlling or [], self.get_controlling())
