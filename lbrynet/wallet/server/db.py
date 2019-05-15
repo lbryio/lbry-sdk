@@ -349,7 +349,7 @@ class SQLDB:
         """
         if claim_hashes:
             self.execute(
-                f"{sql} OR (activation_height <= {height} AND claim_hash IN ({','.join('?' for _ in claim_hashes)}))",
+                f"{sql} OR (claim_hash IN ({','.join('?' for _ in claim_hashes)}) AND activation_height <= {height})",
                 [sqlite3.Binary(claim_hash) for claim_hash in claim_hashes]
             )
         else:
@@ -376,6 +376,11 @@ class SQLDB:
                 (sqlite3.Binary(overtake['claim_hash']), overtake['normalized'])
             )
 
+    def _copy(self, height):
+        if height > 50:
+            self.execute(f"DROP TABLE claimtrie{height-50}")
+        self.execute(f"CREATE TABLE claimtrie{height} AS SELECT * FROM claimtrie")
+
     def update_claimtrie(self, height, removed_claims, new_claims, recalc_claims, timer):
         r = timer.run
         r(self._make_claims_without_competition_become_controlling, height)
@@ -386,6 +391,7 @@ class SQLDB:
         r(self._perform_overtake, height)
         r(self._update_effective_amount, height)
         r(self._perform_overtake, height)
+        #r(self._copy, height)
 
     def get_claims(self, cols, **constraints):
         if 'is_controlling' in constraints:
@@ -522,8 +528,8 @@ class SQLDB:
         recalc_claims = set()
         insert_supports = set()
         delete_supports = set()
+        body_timer.stop()
         for position, (etx, txid) in enumerate(all_txs):
-            body_timer.stop()
             tx = timer.run(
                 Transaction, etx.serialize(), height=height, position=position
             )
