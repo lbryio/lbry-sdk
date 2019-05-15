@@ -49,7 +49,7 @@ class Timer:
                 print('='*100)
         else:
             print(
-                f"{' '*depth} {self.total/60:.2f}mins {self.name}"
+                f"{'  '*depth} {self.total/60:4.2f}mins {self.name}"
                 # f"{self.total/self.count:.5f}sec/call, "
             )
         for sub_timer in self.sub_timers.values():
@@ -83,7 +83,7 @@ class LBRYBlockProcessor(BlockProcessor):
         timer = self.timer.sub_timers['advance_blocks']
         undo = timer.run(super().advance_txs, height, txs, timer_name='super().advance_txs')
         timer.run(self.sql.advance_txs, height, txs, forward_timer=True)
-        if height % 20000 == 0:
+        if height % 10000 == 0:
             self.timer.show(height=height)
         return undo
 
