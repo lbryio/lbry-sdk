@@ -17,6 +17,10 @@ After installing python 3, you'll need to install some additional libraries depe
 
 macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
 
+These environment variables also need to be set
+1. PYTHONUNBUFFERED=1
+2. EVENT_NOKQUEUE=1
+
 Remaining dependencies can then be installed by running:
 
 ```
