@@ -190,7 +190,7 @@ class LBRYElectrumX(ElectrumX):
         claims = await self.daemon.getclaimsforname(name)
         if claims:
             claims['claims'] = [self.format_claim_from_daemon(claim, name) for claim in claims['claims']]
-            claims['supports_without_claims'] = claims['supports without claims']
+            claims['supports_without_claims'] = []  # fixme temporary
             del claims['supports without claims']
             claims['last_takeover_height'] = claims['nLastTakeoverHeight']
             del claims['nLastTakeoverHeight']
@@ -224,7 +224,9 @@ class LBRYElectrumX(ElectrumX):
             #  raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
             return {}
         address = info.address.decode()
-        supports = self.format_supports_from_daemon(claim.get('supports', []))
+        # fixme: temporary
+        #supports = self.format_supports_from_daemon(claim.get('supports', []))
+        supports = []
 
         amount = get_from_possible_keys(claim, 'amount', 'nAmount')
         height = get_from_possible_keys(claim, 'height', 'nHeight')
