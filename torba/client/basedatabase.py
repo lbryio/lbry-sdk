@@ -131,8 +131,13 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
                 else:
                     raise ValueError(f"{col} requires a list, set or string as constraint value.")
             continue
-        elif key.endswith('__any'):
+        elif key.endswith('__any') or key.endswith('__or'):
             where, subvalues = constraints_to_sql(constraint, ' OR ', key+tag+'_')
+            sql.append(f'({where})')
+            values.update(subvalues)
+            continue
+        elif key.endswith('__and'):
+            where, subvalues = constraints_to_sql(constraint, ' AND ', key+tag+'_')
             sql.append(f'({where})')
             values.update(subvalues)
             continue
