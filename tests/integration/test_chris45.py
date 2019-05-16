@@ -138,8 +138,6 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # It obviously did! Because, blockchain baby \O/
         self.assertEqual(resolve_result[uri]['claim']['amount'], '1.0')
         self.assertEqual(resolve_result[uri]['claim']['effective_amount'], '1.2')
-        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['amount'], '0.2')
-        self.assertEqual(resolve_result[uri]['claim']['supports'][0]['txid'], tx['txid'])
         await self.generate(5)
 
         # Now he also wanted to support the original creator of the Award Winning Novel
@@ -152,8 +150,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And again checks if it went to the just right place
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri))
         # Which it obviously did. Because....?????
-        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['amount'], '0.3')
-        self.assertEqual(resolve_result[uri]['claim']['supports'][1]['txid'], tx['txid'])
+        self.assertEqual(resolve_result[uri]['claim']['effective_amount'], '1.5')
         await self.generate(5)
 
         # Seeing the ravishing success of his novel Chris adds support to his claim too
@@ -163,8 +160,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And check if his support showed up
         resolve_result = await self.out(self.daemon.jsonrpc_resolve(uri))
         # It did!
-        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['amount'], '0.4')
-        self.assertEqual(resolve_result[uri]['claim']['supports'][2]['txid'], tx['txid'])
+        self.assertEqual(resolve_result[uri]['claim']['effective_amount'], '1.9')
         await self.generate(5)
 
         # Now Ramsey who is a singer by profession, is preparing for his new "gig". He has everything in place for that
