@@ -1,11 +1,10 @@
 import logging
 
 import asyncio
-from functools import lru_cache
 
 from cryptography.exceptions import InvalidSignature
 from binascii import unhexlify, hexlify
-
+from lbrynet.utils import lru_cache_concurrent
 from lbrynet.wallet.account import validate_claim_id
 from lbrynet.wallet.dewies import dewies_to_lbc
 from lbrynet.error import UnknownNameError, UnknownClaimID, UnknownURI, UnknownOutpoint
@@ -51,11 +50,9 @@ class Resolver:
         results = await asyncio.gather(*futs)
         return dict(list(map(lambda result: list(result.items())[0], results)))
 
-    @lru_cache(256)
-    def _fetch_tx(self, txid):
-        async def __fetch_parse(txid):
-            return self.transaction_class(unhexlify(await self.network.get_transaction(txid)))
-        return asyncio.ensure_future(__fetch_parse(txid))
+    @lru_cache_concurrent(256)
+    async def _fetch_tx(self, txid):
+        return self.transaction_class(unhexlify(await self.network.get_transaction(txid)))
 
     async def _handle_resolutions(self, resolutions, requested_uris, page, page_size, claim_trie_root):
         results = {}

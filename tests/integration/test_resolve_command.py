@@ -1,3 +1,4 @@
+import asyncio
 import json
 from binascii import hexlify
 from lbrynet.testcase import CommandTestCase
@@ -88,3 +89,56 @@ class ResolveCommand(CommandTestCase):
         self.assertFalse(claim['decoded_claim'])
         self.assertEqual(claim['txid'], txid)
         self.assertEqual(claim['effective_amount'], "0.1")
+
+    async def _test_resolve_abc_foo(self):
+        response = await self.resolve('lbry://@abc/foo')
+        claim = response['lbry://@abc/foo']
+        self.assertIn('certificate', claim)
+        self.assertIn('claim', claim)
+        self.assertEqual(claim['claim']['name'], 'foo')
+        self.assertEqual(claim['claim']['channel_name'], '@abc')
+        self.assertEqual(claim['certificate']['name'], '@abc')
+        self.assertEqual(claim['claims_in_channel'], 0)
+        self.assertEqual(
+            claim['claim']['timestamp'],
+            self.ledger.headers[claim['claim']['height']]['timestamp']
+        )
+        self.assertEqual(
+            claim['certificate']['timestamp'],
+            self.ledger.headers[claim['certificate']['height']]['timestamp']
+        )
+
+    async def test_resolve_lru_cache_doesnt_persist_errors(self):
+        original_get_transaction = self.daemon.wallet_manager.ledger.network.get_transaction
+
+        async def timeout_get_transaction(txid):
+            fut = self.loop.create_future()
+
+            def delayed_raise_cancelled_error():
+                fut.set_exception(asyncio.CancelledError())
+
+            self.loop.call_soon(delayed_raise_cancelled_error)
+            return await fut
+
+        tx = await self.channel_create('@abc', '0.01')
+        channel_id = tx['outputs'][0]['claim_id']
+        await self.stream_create('foo', '0.01', channel_id=channel_id)
+
+        # raise a cancelled error from get_transaction
+        self.daemon.wallet_manager.ledger.network.get_transaction = timeout_get_transaction
+        with self.assertRaises(KeyError):
+            await self._test_resolve_abc_foo()
+
+        # restore the real get_transaction that doesn't cancel, it should be called and the result cached
+        self.daemon.wallet_manager.ledger.network.get_transaction = original_get_transaction
+        await self._test_resolve_abc_foo()
+        called_again = asyncio.Event(loop=self.loop)
+
+        def check_result_cached(txid):
+            called_again.set()
+            return original_get_transaction(txid)
+
+        # check that the result was cached
+        self.daemon.wallet_manager.ledger.network.get_transaction = check_result_cached
+        await self._test_resolve_abc_foo()
+        self.assertFalse(called_again.is_set())
