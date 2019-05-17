@@ -15,6 +15,7 @@ import contextlib
 import certifi
 import aiohttp
 import functools
+import collections
 from lbrynet.schema.claim import Claim
 from lbrynet.cryptoutils import get_lbry_hash_obj
 
@@ -199,6 +200,59 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
         proto=socket.IPPROTO_TCP if proto == 'tcp' else socket.IPPROTO_UDP,
         type=socket.SOCK_STREAM if proto == 'tcp' else socket.SOCK_DGRAM
     ))[0][4][0]
+
+
+class LRUCache:
+    __slots__ = [
+        'capacity',
+        'cache'
+    ]
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.cache = collections.OrderedDict()
+
+    def get(self, key):
+        value = self.cache.pop(key)
+        self.cache[key] = value
+        return value
+
+    def set(self, key, value):
+        try:
+            self.cache.pop(key)
+        except KeyError:
+            if len(self.cache) >= self.capacity:
+                self.cache.popitem(last=False)
+        self.cache[key] = value
+
+    def __contains__(self, item) -> bool:
+        return item in self.cache
+
+
+def lru_cache_concurrent(cache_size: int):
+    if not cache_size > 0:
+        raise ValueError("invalid cache size")
+    concurrent_cache = {}
+    lru_cache = LRUCache(cache_size)
+
+    def wrapper(async_fn):
+
+        @functools.wraps(async_fn)
+        async def _inner(*args, **kwargs):
+            key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
+            if key in lru_cache:
+                return lru_cache.get(key)
+
+            concurrent_cache[key] = concurrent_cache.get(key) or asyncio.create_task(async_fn(*args, **kwargs))
+
+            try:
+                result = await concurrent_cache[key]
+                lru_cache.set(key, result)
+                return result
+            finally:
+                concurrent_cache.pop(key, None)
+        return _inner
+    return wrapper
 
 
 def get_ssl_context() -> ssl.SSLContext:
