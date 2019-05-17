@@ -8,12 +8,15 @@ log = logging.getLogger(__name__)
 
 
 def get_platform() -> dict:
+    os_system = platform.system()
+    if os.environ and 'ANDROID_ARGUMENT' in os.environ:
+        os_system = 'android'
     p = {
         "processor": platform.processor(),
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "os_release": platform.release(),
-        "os_system": platform.system(),
+        "os_system": os_system,
         "lbrynet_version": lbrynet_version,
         "build": build_type.BUILD,  # CI server sets this during build step
     }
