@@ -1599,7 +1599,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_save(self, file_name=None, download_directory=None, **kwargs):
         """
-        Output a download to a file
+        Start saving a file to disk.
 
         Usage:
             file_save [--file_name=<file_name>] [--download_directory=<download_directory>] [--sd_hash=<sd_hash>]
@@ -1608,17 +1608,17 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--channel_name=<channel_name>]
 
         Options:
-            --file_name=<file_name>                      : (str) delete by file name in downloads folder
-            --download_directory=<download_directory>    : (str) delete by file name in downloads folder
-            --sd_hash=<sd_hash>                          : (str) delete by file sd hash
-            --stream_hash=<stream_hash>                  : (str) delete by file stream hash
-            --rowid=<rowid>                              : (int) delete by file row id
-            --claim_id=<claim_id>                        : (str) delete by file claim id
-            --txid=<txid>                                : (str) delete by file claim txid
-            --nout=<nout>                                : (int) delete by file claim nout
-            --claim_name=<claim_name>                    : (str) delete by file claim name
-            --channel_claim_id=<channel_claim_id>        : (str) delete by file channel claim id
-            --channel_name=<channel_name>                : (str) delete by file channel claim name
+            --file_name=<file_name>                      : (str) file name to save to
+            --download_directory=<download_directory>    : (str) directory to save into
+            --sd_hash=<sd_hash>                          : (str) save file with matching sd hash
+            --stream_hash=<stream_hash>                  : (str) save file with matching stream hash
+            --rowid=<rowid>                              : (int) save file with matching row id
+            --claim_id=<claim_id>                        : (str) save file with matching claim id
+            --txid=<txid>                                : (str) save file with matching claim txid
+            --nout=<nout>                                : (int) save file with matching claim nout
+            --claim_name=<claim_name>                    : (str) save file with matching claim name
+            --channel_claim_id=<channel_claim_id>        : (str) save file with matching channel claim id
+            --channel_name=<channel_name>                : (str) save file with matching channel claim name
 
         Returns: {File}
         """
