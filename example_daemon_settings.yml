@@ -4,8 +4,9 @@
 share_usage_data: True
 
 lbryum_servers:
-  - lbryumx1.lbry.io:50001
-  - lbryumx2.lbry.io:50001
+  - lbryumx1.lbry.com:50001
+  - lbryumx2.lbry.com:50001
+  - lbryumx4.lbry.com:50001
 
 blockchain_name: lbrycrd_main
 

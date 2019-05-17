@@ -520,14 +520,15 @@ class Config(CLIConfig):
         ('reflector.lbry.io', 5566)
     ])
     lbryum_servers = Servers("SPV wallet servers", [
-        ('lbryumx1.lbry.io', 50001),
-        ('lbryumx2.lbry.io', 50001)
+        ('lbryumx1.lbry.com', 50001), # US EAST
+        ('lbryumx2.lbry.com', 50001), # US EAST
+        ('lbryumx4.lbry.com', 50001)  #EU
     ])
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
-        ('lbrynet1.lbry.io', 4444),  # US EAST
-        ('lbrynet2.lbry.io', 4444),  # US WEST
-        ('lbrynet3.lbry.io', 4444),  # EU
-        ('lbrynet4.lbry.io', 4444)  # ASIA
+        ('lbrynet1.lbry.com', 4444),  # US EAST
+        ('lbrynet2.lbry.com', 4444),  # US WEST
+        ('lbrynet3.lbry.com', 4444),  # EU
+        ('lbrynet4.lbry.com', 4444)  # ASIA
     ])
 
     # comment server uses a single string because requests are made to the /api resource
