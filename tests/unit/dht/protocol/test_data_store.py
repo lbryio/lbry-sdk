@@ -16,9 +16,21 @@ class DataStoreTests(TestCase):
         peer = self.peer_manager.get_kademlia_peer(node_id, address, udp_port)
         peer.update_tcp_port(tcp_port)
         before = self.data_store.get_peers_for_blob(blob)
-        self.data_store.add_peer_to_blob(peer, blob, peer.compact_address_tcp(), 0, 0, peer.node_id)
+        self.data_store.add_peer_to_blob(peer, blob)
         self.assertListEqual(before + [peer], self.data_store.get_peers_for_blob(blob))
         return peer
+
+    def test_refresh_peer_to_blob(self):
+        blob = b'f' * 48
+        self.assertListEqual([], self.data_store.get_peers_for_blob(blob))
+        peer = self._test_add_peer_to_blob(blob=blob, node_id=b'a' * 48, address='1.2.3.4')
+        self.assertTrue(self.data_store.has_peers_for_blob(blob))
+        self.assertEqual(len(self.data_store.get_peers_for_blob(blob)), 1)
+        self.assertEqual(self.data_store._data_store[blob][0][1], 0)
+        self.loop.time = lambda: 100.0
+        self.assertEqual(self.data_store._data_store[blob][0][1], 0)
+        self.data_store.add_peer_to_blob(peer, blob)
+        self.assertEqual(self.data_store._data_store[blob][0][1], 100)
 
     def test_add_peer_to_blob(self, blob=b'f' * 48, peers=None):
         peers = peers or [
@@ -67,8 +79,8 @@ class DataStoreTests(TestCase):
         self.assertEqual(len(self.data_store.get_storing_contacts()), len(peers))
 
         # expire the first peer from blob1
-        first = self.data_store._data_store[blob1][0]
-        self.data_store._data_store[blob1][0] = (first[0], first[1], first[2], -86401, first[4])
+        first = self.data_store._data_store[blob1][0][0]
+        self.data_store._data_store[blob1][0] = (first, -86401)
         self.assertEqual(len(self.data_store.get_storing_contacts()), len(peers))
         self.data_store.removed_expired_peers()
         self.assertEqual(len(self.data_store.get_peers_for_blob(blob1)), len(peers) - 1)
@@ -76,18 +88,18 @@ class DataStoreTests(TestCase):
         self.assertEqual(len(self.data_store.get_storing_contacts()), len(peers))
 
         # expire the first peer from blob2
-        first = self.data_store._data_store[blob2][0]
-        self.data_store._data_store[blob2][0] = (first[0], first[1], first[2], -86401, first[4])
+        first = self.data_store._data_store[blob2][0][0]
+        self.data_store._data_store[blob2][0] = (first, -86401)
         self.data_store.removed_expired_peers()
         self.assertEqual(len(self.data_store.get_peers_for_blob(blob1)), len(peers) - 1)
         self.assertEqual(len(self.data_store.get_peers_for_blob(blob2)), len(peers) - 1)
         self.assertEqual(len(self.data_store.get_storing_contacts()), len(peers) - 1)
 
         # expire the second and third peers from blob1
-        first = self.data_store._data_store[blob2][0]
-        self.data_store._data_store[blob1][0] = (first[0], first[1], first[2], -86401, first[4])
-        second = self.data_store._data_store[blob2][1]
-        self.data_store._data_store[blob1][1] = (second[0], second[1], second[2], -86401, second[4])
+        first = self.data_store._data_store[blob2][0][0]
+        self.data_store._data_store[blob1][0] = (first, -86401)
+        second = self.data_store._data_store[blob2][1][0]
+        self.data_store._data_store[blob1][1] = (second, -86401)
         self.data_store.removed_expired_peers()
         self.assertEqual(len(self.data_store.get_peers_for_blob(blob1)), 0)
         self.assertEqual(len(self.data_store.get_peers_for_blob(blob2)), len(peers) - 1)

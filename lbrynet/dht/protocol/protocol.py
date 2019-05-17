@@ -45,19 +45,19 @@ class KademliaRPC:
     def ping():
         return b'pong'
 
-    def store(self, rpc_contact: 'KademliaPeer', blob_hash: bytes, token: bytes, port: int,
-              original_publisher_id: bytes, age: int) -> bytes:
-        if original_publisher_id is None:
-            original_publisher_id = rpc_contact.node_id
+    def store(self, rpc_contact: 'KademliaPeer', blob_hash: bytes, token: bytes, port: int) -> bytes:
+        if len(blob_hash) != constants.hash_bits // 8:
+            raise ValueError(f"invalid length of blob hash: {len(blob_hash)}")
+        if not 0 < port < 65535:
+            raise ValueError(f"invalid tcp port: {port}")
         rpc_contact.update_tcp_port(port)
-        if self.loop.time() - self.protocol.started_listening_time < constants.token_secret_refresh_interval:
-            pass
-        elif not self.verify_token(token, rpc_contact.compact_ip()):
-            raise ValueError("Invalid token")
-        now = int(self.loop.time())
-        originally_published = now - age
+        if not self.verify_token(token, rpc_contact.compact_ip()):
+            if self.loop.time() - self.protocol.started_listening_time < constants.token_secret_refresh_interval:
+                pass
+            else:
+                raise ValueError("Invalid token")
         self.protocol.data_store.add_peer_to_blob(
-            rpc_contact, blob_hash, rpc_contact.compact_address_tcp(), now, originally_published, original_publisher_id
+            rpc_contact, blob_hash
         )
         return b'OK'
 
@@ -416,7 +416,7 @@ class KademliaProtocol(DatagramProtocol):
             result = self.node_rpc.ping()
         elif method == b'store':
             blob_hash, token, port, original_publisher_id, age = a
-            result = self.node_rpc.store(sender_contact, blob_hash, token, port, original_publisher_id, age)
+            result = self.node_rpc.store(sender_contact, blob_hash, token, port)
         elif method == b'findNode':
             key, = a
             result = self.node_rpc.find_node(sender_contact, key)
