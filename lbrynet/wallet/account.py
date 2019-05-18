@@ -1,11 +1,12 @@
+import hashlib
 import json
 import logging
-import binascii
 from hashlib import sha256
 from string import hexdigits
 
+import ecdsa
+
 from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
-from torba.client.basetransaction import TXORef
 
 
 log = logging.getLogger(__name__)
@@ -37,12 +38,14 @@ class Account(BaseAccount):
         super().apply(d)
         self.channel_keys.update(d.get('certificates', {}))
 
-    def add_channel_private_key(self, ref: TXORef, private_key):
-        assert ref.id not in self.channel_keys, 'Trying to add a duplicate channel private key.'
-        self.channel_keys[ref.id] = private_key
+    def add_channel_private_key(self, channel_pubkey_hash, ref_id, private_key):
+        assert channel_pubkey_hash not in self.channel_keys, 'Trying to add a duplicate channel private key.'
+        assert ref_id not in self.channel_keys, 'Trying to add a duplicate channel private key.'
+        self.channel_keys[ref_id] = private_key
+        self.channel_keys[channel_pubkey_hash] = private_key
 
-    def get_channel_private_key(self, ref: TXORef):
-        return self.channel_keys.get(ref.id)
+    def get_channel_private_key(self, channel_pubkey_hash):
+        return self.channel_keys.get(channel_pubkey_hash)
 
     async def maybe_migrate_certificates(self):
         if not self.channel_keys:
@@ -51,110 +54,43 @@ class Account(BaseAccount):
         addresses = {}
         results = {
             'total': 0,
-            'not-a-claim-tx': 0,
+            'old-tx-pri-key-map': 0,
             'migrate-success': 0,
             'migrate-failed': 0,
             'previous-success': 0,
             'previous-corrupted': 0
         }
-        double_hex_encoded_to_pop = []
 
-        for maybe_claim_id in list(self.channel_keys):
-            if ':' not in maybe_claim_id:
-                try:
-                    validate_claim_id(maybe_claim_id)
-                    continue
-                except Exception:
-                    try:
-                        maybe_claim_id_bytes = maybe_claim_id
-                        if isinstance(maybe_claim_id_bytes, str):
-                            maybe_claim_id_bytes = maybe_claim_id_bytes.encode()
-                        decoded_double_hex = binascii.unhexlify(maybe_claim_id_bytes).decode()
-                        validate_claim_id(decoded_double_hex)
-                        if decoded_double_hex in self.channel_keys:
-                            log.warning("don't know how to migrate certificate %s", decoded_double_hex)
-                        else:
-                            log.info("claim id was double hex encoded, fixing it")
-                            double_hex_encoded_to_pop.append((maybe_claim_id, decoded_double_hex))
-                    except Exception:
-                        continue
+        new_channel_keys = {}
 
-        for double_encoded_claim_id, correct_claim_id in double_hex_encoded_to_pop:
-            self.channel_keys[correct_claim_id] = self.channel_keys.pop(double_encoded_claim_id)
-
-        for maybe_claim_id in list(self.channel_keys):
+        for maybe_outpoint in self.channel_keys:
             results['total'] += 1
-            if ':' not in maybe_claim_id:
+            if ':' in maybe_outpoint:
+                results['old-tx-pri-key-map'] += 1
                 try:
-                    validate_claim_id(maybe_claim_id)
+                    private_key_pem = self.channel_keys[maybe_outpoint]
+                    pubkey_hash = self._get_pubkey_address_from_private_key_pem(private_key_pem)
+
+                    if pubkey_hash not in new_channel_keys and pubkey_hash not in self.channel_keys:
+                        new_channel_keys[pubkey_hash] = private_key_pem
+                        results['migrate-success'] += 1
                 except Exception as e:
-                    log.warning(
-                        "Failed to migrate claim '%s': %s",
-                        maybe_claim_id, str(e)
-                    )
                     results['migrate-failed'] += 1
-                    continue
-                claims = await self.ledger.network.get_claims_by_ids([maybe_claim_id])
-                if maybe_claim_id not in claims:
-                    log.warning(
-                        "Failed to migrate claim '%s', server did not return any claim information.",
-                        maybe_claim_id
-                    )
-                    results['migrate-failed'] += 1
-                    continue
-                claim = claims[maybe_claim_id]
-                tx = None
-                if claim:
-                    tx = await self.ledger.db.get_transaction(txid=claim['txid'])
-                else:
-                    log.warning(maybe_claim_id)
-                if tx is not None:
-                    txo = tx.outputs[claim['nout']]
-                    if not txo.script.is_claim_involved:
-                        results['not-a-claim-tx'] += 1
-                        raise ValueError(
-                            "Certificate with claim_id {} doesn't point to a valid transaction."
-                            .format(maybe_claim_id)
-                        )
-                    tx_nout = '{txid}:{nout}'.format(**claim)
-                    self.channel_keys[tx_nout] = self.channel_keys[maybe_claim_id]
-                    del self.channel_keys[maybe_claim_id]
-                    log.info(
-                        "Migrated certificate with claim_id '%s' ('%s') to a new look up key %s.",
-                        maybe_claim_id, txo.script.values['claim_name'], tx_nout
-                    )
-                    results['migrate-success'] += 1
-                else:
-                    if claim:
-                        addresses.setdefault(claim['address'], 0)
-                        addresses[claim['address']] += 1
-                        log.warning(
-                            "Failed to migrate claim '%s', it's not associated with any of your addresses.",
-                            maybe_claim_id
-                        )
-                    else:
-                        log.warning(
-                            "Failed to migrate claim '%s', it appears abandoned.",
-                            maybe_claim_id
-                        )
-                    results['migrate-failed'] += 1
+                    log.warning("Failed to migrate certificate for %s, incorrect private key: %s",
+                                maybe_outpoint, str(e))
             else:
                 try:
-                    txid, nout = maybe_claim_id.split(':')
-                    tx = await self.ledger.db.get_transaction(txid=txid)
-                    if not tx:
-                        log.warning(
-                            "Claim migration failed to find a transaction for outpoint %s", maybe_claim_id
-                        )
-                        results['previous-corrupted'] += 1
-                        continue
-                    if tx.outputs[int(nout)].script.is_claim_involved:
+                    pubkey_hash = self._get_pubkey_address_from_private_key_pem(self.channel_keys[maybe_outpoint])
+                    if pubkey_hash == maybe_outpoint:
                         results['previous-success'] += 1
                     else:
                         results['previous-corrupted'] += 1
-                except Exception:
-                    log.exception("Couldn't verify certificate with look up key: %s", maybe_claim_id)
+                except Exception as e:
+                    log.warning("Corrupt public:private key-pair: %s", str(e))
                     results['previous-corrupted'] += 1
+
+        for key in new_channel_keys:
+            self.channel_keys[key] = new_channel_keys[key]
 
         self.wallet.save()
         log.info('verifying and possibly migrating certificates:')
@@ -239,3 +175,9 @@ class Account(BaseAccount):
 
     async def release_all_outputs(self):
         await self.ledger.db.release_all_outputs(self)
+
+    def _get_pubkey_address_from_private_key_pem(self, private_key_pem):
+        private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=hashlib.sha256)
+
+        public_key_der = private_key.get_verifying_key().to_der()
+        return self.ledger.public_key_to_address(public_key_der)
