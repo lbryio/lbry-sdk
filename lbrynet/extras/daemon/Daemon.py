@@ -1869,7 +1869,10 @@ class Daemon(metaclass=JSONRPCServerType):
         if not preview:
             await tx.sign([account])
             await account.ledger.broadcast(tx)
-            account.add_channel_private_key(txo.ref, txo.private_key)
+            channel_pubkey_hash = account.ledger.public_key_to_address(
+                txo.claim.channel.public_key_bytes
+            )
+            account.add_channel_private_key(channel_pubkey_hash, txo.ref.id, txo.private_key)
             self.default_wallet.save()
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
@@ -2007,7 +2010,10 @@ class Daemon(metaclass=JSONRPCServerType):
         if not preview:
             await tx.sign([account])
             await account.ledger.broadcast(tx)
-            account.add_channel_private_key(new_txo.ref, new_txo.private_key)
+            channel_pubkey_hash = account.ledger.public_key_to_address(
+                new_txo.claim.channel.public_key_bytes
+            )
+            account.add_channel_private_key(channel_pubkey_hash, new_txo.ref.id, new_txo.private_key)
             self.default_wallet.save()
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
