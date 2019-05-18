@@ -503,7 +503,7 @@ class SQLDB:
                 column = order_by[1:] if is_asc else order_by
                 if column not in self.ORDER_FIELDS:
                     raise NameError(f'{column} is not a valid order_by field')
-                elif column == 'name':
+                if column == 'name':
                     column = 'normalized'
                 sql_order_by.append(
                     f"claim.{column} ASC" if is_asc else f"claim.{column} DESC"

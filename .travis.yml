@@ -10,7 +10,7 @@ jobs:
       name: "pylint lbrynet"
       install:
         - pip install astroid pylint
-        - pip install git+https://github.com/lbryio/torba.git@sqltrie#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@master#egg=torba
         - pip install -e .
       script: pylint lbrynet
 
@@ -18,7 +18,7 @@ jobs:
       name: "Unit Tests"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git@sqltrie#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@master#egg=torba
         - pip install -e .
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -vv tests.unit
@@ -30,7 +30,7 @@ jobs:
       cache: false
       install:
         - pip install tox-travis coverage
-        - pushd .. && git clone --single-branch --branch sqltrie https://github.com/lbryio/torba.git && popd
+        - pushd .. && git clone --single-branch --branch master https://github.com/lbryio/torba.git && popd
       script: tox
       after_success:
         - coverage combine tests/
@@ -39,7 +39,7 @@ jobs:
     - name: "Run Examples"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git@sqltrie#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@master#egg=torba
         - pip install -e .
       script:
         - HOME=/tmp coverage run -p --source=lbrynet scripts/generate_json_api.py
