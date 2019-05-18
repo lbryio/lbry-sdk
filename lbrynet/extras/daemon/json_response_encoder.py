@@ -138,7 +138,7 @@ class JSONResponseEncoder(JSONEncoder):
             'hex': hexlify(tx.raw).decode(),
         }
 
-    def encode_output(self, txo, check_signature=True):
+    def encode_output(self, txo, check_signature=True, include_meta=True):
         tx_height = txo.tx_ref.height
         best_height = self.ledger.headers.height
         output = {
@@ -171,9 +171,10 @@ class JSONResponseEncoder(JSONEncoder):
                 'name': txo.claim_name,
                 'normalized': txo.normalized_name,
                 'claim_id': txo.claim_id,
-                'permanent_url': txo.permanent_url,
-                'meta': self.encode_claim_meta(txo.meta)
+                'permanent_url': txo.permanent_url
             })
+            if include_meta:
+                output['meta'] = self.encode_claim_meta(txo.meta)
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 try:
                     output['value'] = txo.claim
@@ -181,7 +182,7 @@ class JSONResponseEncoder(JSONEncoder):
                     if self.include_protobuf:
                         output['protobuf'] = hexlify(txo.claim.to_bytes())
                     if txo.channel is not None:
-                        output['signing_channel'] = txo.channel
+                        output['signing_channel'] = self.encode_output(txo.channel, include_meta=False)
                         if check_signature and txo.claim.is_signed:
                             output['is_channel_signature_valid'] = False
                             if txo.channel:
@@ -191,10 +192,10 @@ class JSONResponseEncoder(JSONEncoder):
         return output
 
     def encode_claim_meta(self, meta):
-        if isinstance(meta.get('effective_amount'), int):
-            meta['effective_amount'] = dewies_to_lbc(meta['effective_amount'])
-        if isinstance(meta.get('trending_amount'), int):
-            meta['trending_amount'] = dewies_to_lbc(meta['trending_amount'])
+        for key, value in meta.items():
+            if key.endswith('_amount') or key.startswith('trending_'):
+                if isinstance(value, int):
+                    meta[key] = dewies_to_lbc(value)
         return meta
 
     def encode_input(self, txi):

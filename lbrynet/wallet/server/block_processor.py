@@ -79,11 +79,11 @@ class LBRYBlockProcessor(BlockProcessor):
         finally:
             self.sql.commit()
 
-    def advance_txs(self, height, txs):
+    def advance_txs(self, height, txs, header):
         timer = self.timer.sub_timers['advance_blocks']
-        undo = timer.run(super().advance_txs, height, txs, timer_name='super().advance_txs')
-        timer.run(self.sql.advance_txs, height, txs, forward_timer=True)
-        if height % 10000 == 0:
+        undo = timer.run(super().advance_txs, height, txs, header, timer_name='super().advance_txs')
+        timer.run(self.sql.advance_txs, height, txs, header, forward_timer=True)
+        if (height % 10000 == 0 or not self.db.first_sync) and self.logger.isEnabledFor(20):
             self.timer.show(height=height)
         return undo
 

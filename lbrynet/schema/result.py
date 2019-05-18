@@ -23,7 +23,14 @@ class Outputs:
             'is_controlling': message.is_controlling,
             'activation_height': message.activation_height,
             'effective_amount': message.effective_amount,
-            'trending_amount': message.trending_amount,
+            'support_amount': message.support_amount,
+            'claims_in_channel': message.claims_in_channel,
+            'trending_daily': message.trending_daily,
+            'trending_day_one': message.trending_day_one,
+            'trending_day_two': message.trending_day_two,
+            'trending_weekly': message.trending_weekly,
+            'trending_week_one': message.trending_week_one,
+            'trending_week_two': message.trending_week_two,
         }
         try:
             if txo.claim.is_channel:
@@ -89,14 +96,17 @@ class Outputs:
             txo_message.claim.is_controlling = bool(txo['is_controlling'])
             txo_message.claim.activation_height = txo['activation_height']
             txo_message.claim.effective_amount = txo['effective_amount']
-            txo_message.claim.trending_amount = txo['trending_amount']
+            txo_message.claim.support_amount = txo['support_amount']
             txo_message.claim.claims_in_channel = txo['claims_in_channel']
+            txo_message.claim.trending_daily = txo['trending_daily']
+            txo_message.claim.trending_day_one = txo['trending_day_one']
+            txo_message.claim.trending_day_two = txo['trending_day_two']
+            txo_message.claim.trending_weekly = txo['trending_weekly']
+            txo_message.claim.trending_week_one = txo['trending_week_one']
+            txo_message.claim.trending_week_two = txo['trending_week_two']
             if txo['channel_txo_hash']:
                 channel = txo_message.claim.channel
                 channel.height = txo['channel_height']
                 channel.tx_hash = txo['channel_txo_hash'][:32]
                 channel.nout, = struct.unpack('<I', txo['channel_txo_hash'][32:])
-                channel.claim.activation_height = txo['channel_activation_height']
-                channel.claim.effective_amount = txo['channel_effective_amount']
-                channel.claim.trending_amount = txo['channel_trending_amount']
         return page.SerializeToString()
