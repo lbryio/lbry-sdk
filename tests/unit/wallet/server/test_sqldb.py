@@ -181,7 +181,30 @@ class TestSQLDB(unittest.TestCase):
             accepted=[]
         )
 
-    def test_competing_claims_in_single_block_height_wins(self):
+    def test_competing_claims_subsequent_blocks_height_wins(self):
+        advance, state = self.advance, self.state
+        advance(13, [self.get_stream('Claim A', 10*COIN)])
+        state(
+            controlling=('Claim A', 10*COIN, 10*COIN, 13),
+            active=[],
+            accepted=[]
+        )
+        advance(14, [self.get_stream('Claim B', 10*COIN)])
+        state(
+            controlling=('Claim A', 10*COIN, 10*COIN, 13),
+            active=[('Claim B', 10*COIN, 10*COIN, 14)],
+            accepted=[]
+        )
+        advance(15, [self.get_stream('Claim C', 10*COIN)])
+        state(
+            controlling=('Claim A', 10*COIN, 10*COIN, 13),
+            active=[
+                ('Claim B', 10*COIN, 10*COIN, 14),
+                ('Claim C', 10*COIN, 10*COIN, 15)],
+            accepted=[]
+        )
+
+    def test_competing_claims_in_single_block_position_wins(self):
         advance, state = self.advance, self.state
         stream = self.get_stream('Claim A', 10*COIN)
         stream2 = self.get_stream('Claim B', 10*COIN)

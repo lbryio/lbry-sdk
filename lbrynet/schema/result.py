@@ -25,12 +25,10 @@ class Outputs:
             'effective_amount': message.effective_amount,
             'support_amount': message.support_amount,
             'claims_in_channel': message.claims_in_channel,
-            'trending_daily': message.trending_daily,
-            'trending_day_one': message.trending_day_one,
-            'trending_day_two': message.trending_day_two,
-            'trending_weekly': message.trending_weekly,
-            'trending_week_one': message.trending_week_one,
-            'trending_week_two': message.trending_week_two,
+            'trending_group': message.trending_group,
+            'trending_mixed': message.trending_mixed,
+            'trending_local': message.trending_local,
+            'trending_global': message.trending_global,
         }
         try:
             if txo.claim.is_channel:
@@ -98,12 +96,10 @@ class Outputs:
             txo_message.claim.effective_amount = txo['effective_amount']
             txo_message.claim.support_amount = txo['support_amount']
             txo_message.claim.claims_in_channel = txo['claims_in_channel']
-            txo_message.claim.trending_daily = txo['trending_daily']
-            txo_message.claim.trending_day_one = txo['trending_day_one']
-            txo_message.claim.trending_day_two = txo['trending_day_two']
-            txo_message.claim.trending_weekly = txo['trending_weekly']
-            txo_message.claim.trending_week_one = txo['trending_week_one']
-            txo_message.claim.trending_week_two = txo['trending_week_two']
+            txo_message.claim.trending_group = txo['trending_group']
+            txo_message.claim.trending_mixed = txo['trending_mixed']
+            txo_message.claim.trending_local = txo['trending_local']
+            txo_message.claim.trending_global = txo['trending_global']
             if txo['channel_txo_hash']:
                 channel = txo_message.claim.channel
                 channel.height = txo['channel_height']

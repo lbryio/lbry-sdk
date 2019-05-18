@@ -1671,13 +1671,19 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Use --channel_id=<channel_id> to list all stream claims in a channel.
 
+        Arguments marked with "supports equality constraints" allow prepending the
+        value with an equality constraint such as '>', '>=', '<', '<=', eg.
+        --height=">400000" would limit results to only claims above 400k block height
+
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
                          [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling]
                          [--order_by=<order_by>...]
-                         [--published_since=<published_since>] [--released_since=<released_since>]
-                         [--block_height=<block_height>] [--after_block_height=<after_block_height>]
-                         [--before_block_height=<before_block_height>]
+                         [--height=<height>] [--publish_time=<publish_time>] [--release_time=<release_time>]
+                         [--amount=<amount>] [--effective_amount=<effective_amount>]
+                         [--support_amount=<support_amount>] [--trending_group=<trending_group>]
+                         [--trending_mixed=<trending_mixed>] [--trending_local=<trending_local>]
+                         [--trending_global=<trending_global] [--activation_height=<activation_height>]
                          [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
                          [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
                          [--not_languages=<not_languages>...]
@@ -1695,18 +1701,46 @@ class Daemon(metaclass=JSONRPCServerType):
             --is_controlling                : (bool) limit to controlling claims for their respective name
             --order_by=<order_by>           : (str) field to order by, default is descending order, to do an
                                                     ascending order prepend ^ to the field name, eg. '^amount'
-                                                    available fields: 'name', 'block_height', 'release_time',
-                                                    'publish_time', 'amount', 'effective_amount', 'support_amount',
-                                                    'trending_amount'
-        --published_since=<published_since> : (int) limit to claims confirmed into blocks on or after
-                                                    this UTC timestamp
-          --released_since=<released_since> : (int) limit to claims self-described as having been
+                                                    available fields: 'name', 'height', 'release_time',
+                                                    'publish_time', 'amount', 'effective_amount',
+                                                    'support_amount', 'trending_group', 'trending_mixed',
+                                                    'trending_local', 'trending_global', 'activation_height'
+            --height=<height>               : (int) limit by block height (supports equality constraints)
+        --activation_height=<activation_height>: (int) height at which claim starts competing for name
+                                                    (supports equality constraints)
+            --publish_time=<publish_time>   : (int) limit by UTC timestamp of containing block (supports
+                                                    equality constraints)
+            --release_time=<release_time>   : (int) limit to claims self-described as having been
                                                     released to the public on or after this UTC
                                                     timestamp, when claim does not provide
-                                                    a release time the block time is used instead
-            --block_height=<block_height>   : (int) limit to claims at specific block height
-        --after_block_height=<after_block_height> : (int) limit to claims after specific block height
-        --before_block_height=<before_block_height> : (int) limit to claims before specific block height
+                                                    a release time the publish time is used instead
+                                                    (supports equality constraints)
+            --amount=<amount>               : (int) limit by claim value (supports equality constraints)
+           --support_amount=<support_amount>: (int) limit by supports and tips recieved (supports
+                                                    equality constraints)
+        --effective_amount=<effective_amount>: (int) limit by total value (initial claim value plus
+                                                     all tips and supports received), this amount is
+                                                     blank until claim has reached activation height
+                                                     (supports equality constraints)
+           --trending_group=<trending_group>: (int) group numbers 1 through 4 representing the
+                                                    trending groups of the content: 4 means
+                                                    content is trending globally and independently,
+                                                    3 means content is not trending globally but is
+                                                    trending independently (locally), 2 means it is
+                                                    trending globally but not independently and 1
+                                                    means it's not trending globally or locally
+                                                    (supports equality constraints)
+           --trending_mixed=<trending_mixed>: (int) trending amount taken from the global or local
+                                                    value depending on the trending group:
+                                                    4 - global value, 3 - local value, 2 - global
+                                                    value, 1 - local value (supports equality
+                                                    constraints)
+           --trending_local=<trending_local>: (int) trending value calculated relative only to
+                                                    the individual contents past history (supports
+                                                    equality constraints)
+         --trending_global=<trending_global>: (int) trending value calculated relative to all
+                                                    trending content globally (supports
+                                                    equality constraints)
             --any_tags=<any_tags>           : (list) find claims containing any of the tags
             --all_tags=<all_tags>           : (list) find claims containing every tag
             --not_tags=<not_tags>           : (list) find claims not containing any of these tags

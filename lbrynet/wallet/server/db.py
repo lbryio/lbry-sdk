@@ -56,8 +56,7 @@ def _apply_constraints_for_array_attributes(constraints, attr):
 
 class SQLDB:
 
-    TRENDING_24_HOURS = 720
-    TRENDING_WEEK = TRENDING_24_HOURS * 7
+    DAY_BLOCKS = 720
 
     PRAGMAS = """
         pragma journal_mode=WAL;
@@ -79,13 +78,12 @@ class SQLDB:
             amount integer not null,
             effective_amount integer not null default 0,
             support_amount integer not null default 0,
-            trending_daily integer not null default 0,
-            trending_day_one integer not null default 0,
-            trending_day_two integer not null default 0,
-            trending_weekly integer not null default 0,
-            trending_week_one integer not null default 0,
-            trending_week_two integer not null default 0
+            trending_group integer not null default 0,
+            trending_mixed integer not null default 0,
+            trending_local integer not null default 0,
+            trending_global integer not null default 0
         );
+
         create index if not exists claim_normalized_idx on claim (normalized);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_channel_hash_idx on claim (channel_hash);
@@ -93,8 +91,21 @@ class SQLDB:
         create index if not exists claim_publish_time_idx on claim (publish_time);
         create index if not exists claim_height_idx on claim (height);
         create index if not exists claim_activation_height_idx on claim (activation_height);
-        create index if not exists claim_trending_daily_idx on claim (trending_daily);
-        create index if not exists claim_trending_weekly_idx on claim (trending_weekly);
+
+        create index if not exists claim_trending_group_idx on claim (trending_group);
+        create index if not exists claim_trending_mixed_idx on claim (trending_mixed);
+        create index if not exists claim_trending_local_idx on claim (trending_local);
+        create index if not exists claim_trending_global_idx on claim (trending_global);
+    """
+
+    CREATE_TREND_TABLE = """
+        create table if not exists trend (
+            claim_hash bytes not null,
+            height integer not null,
+            amount integer not null,
+            primary key (claim_hash, height)
+        ) without rowid;
+        create index if not exists trend_claim_hash_idx on trend (claim_hash);
     """
 
     CREATE_SUPPORT_TABLE = """
@@ -132,6 +143,7 @@ class SQLDB:
     CREATE_TABLES_QUERY = (
         PRAGMAS +
         CREATE_CLAIM_TABLE +
+        CREATE_TREND_TABLE +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
         CREATE_TAG_TABLE
@@ -279,22 +291,19 @@ class SQLDB:
                 self.execute(*self._delete_sql(table, {'claim_hash__in': binary_claim_hashes}))
 
     def split_inputs_into_claims_supports_and_other(self, txis):
-        txo_hashes = set(txi.txo_ref.hash for txi in txis)
-        claim_txo_hashes = set()
-        claims = {}
-        for claim in self.execute(*query(
-                "SELECT txo_hash, claim_hash, normalized FROM claim",
-                txo_hash__in=[sqlite3.Binary(txo_hash) for txo_hash in txo_hashes])):
-            claim_txo_hashes.add(claim[0])
-            claims[claim[1]] = claim[2]
-        txo_hashes -= set(claim_txo_hashes)
+        txo_hashes = {txi.txo_ref.hash for txi in txis}
+        claims = self.execute(*query(
+            "SELECT txo_hash, claim_hash, normalized FROM claim",
+            txo_hash__in=[sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]
+        )).fetchall()
+        txo_hashes -= {r['txo_hash'] for r in claims}
         supports = {}
         if txo_hashes:
-            supports = dict(self.execute(*query(
+            supports = self.execute(*query(
                 "SELECT txo_hash, claim_hash FROM support",
                 txo_hash__in=[sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]
-            )))
-            txo_hashes -= set(supports)
+            )).fetchall()
+            txo_hashes -= {r['txo_hash'] for r in supports}
         return claims, supports, txo_hashes
 
     def insert_supports(self, txos: Set[Output]):
@@ -320,6 +329,7 @@ class SQLDB:
             ))
 
     def _update_trending_amount(self, height):
+        return
         day_ago = height-self.TRENDING_24_HOURS
         two_day_ago = height-self.TRENDING_24_HOURS*2
         week_ago = height-self.TRENDING_WEEK
@@ -388,19 +398,24 @@ class SQLDB:
             WHERE activation_height IS NULL
         """)
 
-    def _perform_overtake(self, height, changed):
-        constraint = f"normalized IN ({','.join('?' for _ in changed)}) OR " if changed else ""
+    def _perform_overtake(self, height, changed_claim_hashes, deleted_names):
+        deleted_names_sql = claim_hashes_sql = ""
+        if changed_claim_hashes:
+            claim_hashes_sql = f"OR claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})"
+        if deleted_names:
+            deleted_names_sql = f"OR normalized IN ({','.join('?' for _ in deleted_names)})"
         overtakes = self.execute(f"""
             SELECT winner.normalized, winner.claim_hash, claimtrie.claim_hash AS current_winner FROM (
                 SELECT normalized, claim_hash FROM claim
-                WHERE {constraint}
-                    normalized IN (SELECT normalized FROM claim WHERE activation_height={height})
-                ORDER BY effective_amount, height, tx_position DESC
+                WHERE normalized IN (
+                        SELECT normalized FROM claim WHERE activation_height={height} {claim_hashes_sql}
+                    ) {deleted_names_sql}
+                ORDER BY effective_amount ASC, height DESC, tx_position DESC
+                -- the order by is backwards, because GROUP BY picks last row
             ) AS winner LEFT JOIN claimtrie USING (normalized)
             GROUP BY winner.normalized
-            HAVING current_winner IS NULL
-                OR current_winner <> winner.claim_hash
-        """, changed)
+            HAVING current_winner IS NULL OR current_winner <> winner.claim_hash
+        """, changed_claim_hashes+deleted_names)
         for overtake in overtakes:
             if overtake['current_winner']:
                 self.execute(
@@ -425,19 +440,19 @@ class SQLDB:
             self.execute(f"DROP TABLE claimtrie{height-50}")
         self.execute(f"CREATE TABLE claimtrie{height} AS SELECT * FROM claimtrie")
 
-    def update_claimtrie(self, height, changed_names, amount_affected_claim_hashes, timer):
+    def update_claimtrie(self, height, changed_claim_hashes, deleted_names, timer):
         binary_claim_hashes = [
-            sqlite3.Binary(claim_hash) for claim_hash in amount_affected_claim_hashes
+            sqlite3.Binary(claim_hash) for claim_hash in changed_claim_hashes
         ]
         r = timer.run
         r(self._calculate_activation_height, height)
         r(self._update_support_amount, binary_claim_hashes)
 
         r(self._update_effective_amount, height, binary_claim_hashes)
-        r(self._perform_overtake, height, list(changed_names))
+        r(self._perform_overtake, height, binary_claim_hashes, list(deleted_names))
 
         r(self._update_effective_amount, height)
-        r(self._perform_overtake, height, [])
+        r(self._perform_overtake, height, [], [])
 
         if not self.main.first_sync:
             r(self._update_trending_amount, height)
@@ -446,54 +461,46 @@ class SQLDB:
         insert_claims = set()
         update_claims = set()
         delete_claim_hashes = set()
-        deleted_and_inserted_names = set()
-        amount_affected_claim_hashes = set()
         insert_supports = set()
-        delete_supports = set()
+        delete_support_txo_hashes = set()
+        recalculate_claim_hashes = set()  # added/deleted supports, added/updated claim
+        deleted_claim_names = set()
         body_timer = timer.add_timer('body')
         for position, (etx, txid) in enumerate(all_txs):
             tx = timer.run(
                 Transaction, etx.serialize(), height=height, position=position
             )
+            # Inputs
             spent_claims, spent_supports, spent_other = timer.run(
                 self.split_inputs_into_claims_supports_and_other, tx.inputs
             )
             body_timer.start()
-            delete_claim_hashes.update(spent_claims.keys())
-            deleted_and_inserted_names.update(spent_claims.values())
-            amount_affected_claim_hashes.update(spent_supports.values())
-            delete_supports.update(spent_supports)
+            delete_claim_hashes.update({r['claim_hash'] for r in spent_claims})
+            delete_support_txo_hashes.update({r['txo_hash'] for r in spent_supports})
+            deleted_claim_names.update({r['normalized'] for r in spent_claims})
+            recalculate_claim_hashes.update({r['claim_hash'] for r in spent_supports})
+            # Outputs
             for output in tx.outputs:
                 if output.is_support:
                     insert_supports.add(output)
-                    amount_affected_claim_hashes.add(output.claim_hash)
+                    recalculate_claim_hashes.add(output.claim_hash)
                 elif output.script.is_claim_name:
                     insert_claims.add(output)
-                    try:
-                        deleted_and_inserted_names.add(output.normalized_name)
-                    except:
-                        self.logger.exception(
-                            f"Could not decode claim name for claim_id: {output.claim_id}, "
-                            f"txid: {output.tx_ref.id}, nout: {output.position}.")
-                        print(output.script.values['claim_name'])
-                        continue
+                    recalculate_claim_hashes.add(output.claim_hash)
                 elif output.script.is_update_claim:
                     claim_hash = output.claim_hash
                     if claim_hash in delete_claim_hashes:
                         delete_claim_hashes.remove(claim_hash)
                     update_claims.add(output)
-                    amount_affected_claim_hashes.add(claim_hash)
+                    recalculate_claim_hashes.add(output.claim_hash)
             body_timer.stop()
         r = timer.run
         r(self.delete_claims, delete_claim_hashes)
-        r(self.delete_supports, delete_supports)
+        r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
         r(self.update_claims, update_claims, header)
         r(self.insert_supports, insert_supports)
-        r(self.update_claimtrie, height,
-          deleted_and_inserted_names,
-          amount_affected_claim_hashes,
-          forward_timer=True)
+        r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
 
     def get_claims(self, cols, **constraints):
         if 'order_by' in constraints:
@@ -598,8 +605,8 @@ class SQLDB:
             claimtrie.claim_hash as is_controlling,
             claim.claim_hash, claim.txo_hash, claim.height,
             claim.activation_height, claim.effective_amount, claim.support_amount,
-            claim.trending_daily, claim.trending_day_one, claim.trending_day_two,
-            claim.trending_weekly, claim.trending_week_one, claim.trending_week_two,
+            claim.trending_group, claim.trending_mixed,
+            claim.trending_local, claim.trending_global,
             CASE WHEN claim.is_channel=1 THEN (
                 SELECT COUNT(*) FROM claim as claim_in_channel
                 WHERE claim_in_channel.channel_hash=claim.claim_hash
@@ -609,10 +616,10 @@ class SQLDB:
         )
 
     INTEGER_PARAMS = {
-        'height', 'release_time', 'publish_time',
+        'height', 'activation_height', 'release_time', 'publish_time',
         'amount', 'effective_amount', 'support_amount',
-        'trending_daily', 'trending_day_one', 'trending_day_two',
-        'trending_weekly', 'trending_week_one', 'trending_week_two'
+        'trending_group', 'trending_mixed',
+        'trending_local', 'trending_global',
     }
 
     SEARCH_PARAMS = {

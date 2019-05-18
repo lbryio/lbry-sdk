@@ -102,7 +102,7 @@ class ResolveCommand(CommandTestCase):
         await self.assertResolvesToClaimId('@foo', claim_id3)
         await self.support_create(claim_id2, '0.19')
         await self.assertResolvesToClaimId('@foo', claim_id2)
-        await self.support_create(claim_id1, '0.19')
+        await self.support_create(claim_id1, '0.29')
         await self.assertResolvesToClaimId('@foo', claim_id1)
 
     async def test_advanced_resolve(self):
