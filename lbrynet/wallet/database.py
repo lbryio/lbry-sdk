@@ -63,7 +63,10 @@ class WalletDatabase(BaseDatabase):
                 if txo.claim.is_signed:
                     channel_ids.add(txo.claim.signing_channel_id)
                 if txo.claim.is_channel and my_account is not None:
-                    txo.private_key = my_account.get_channel_private_key(txo.ref)
+                    channel_pubkey_hash = my_account.ledger.public_key_to_address(
+                        txo.claim.channel.public_key_bytes
+                    )
+                    txo.private_key = my_account.get_channel_private_key(channel_pubkey_hash)
 
         if channel_ids:
             channels = {
