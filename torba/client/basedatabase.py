@@ -110,6 +110,8 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
             col, op = col[:-len('__lte')], '<='
         elif key.endswith('__gt'):
             col, op = col[:-len('__gt')], '>'
+        elif key.endswith('__gte'):
+            col, op = col[:-len('__gte')], '>='
         elif key.endswith('__like'):
             col, op = col[:-len('__like')], 'LIKE'
         elif key.endswith('__not_like'):
@@ -166,7 +168,7 @@ def query(select, **constraints):
         sql.append('WHERE')
         sql.append(where)
 
-    if order_by is not None:
+    if order_by:
         sql.append('ORDER BY')
         if isinstance(order_by, str):
             sql.append(order_by)
