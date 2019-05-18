@@ -23,8 +23,8 @@ def _apply_constraints_for_array_attributes(constraints, attr):
         values = ', '.join(
             f':$any_{attr}{i}' for i in range(len(any_items))
         )
-        constraints[f'claim.txo_hash__in#_any_{attr}'] = f"""
-            SELECT DISTINCT txo_hash FROM {attr} WHERE {attr} IN ({values})
+        constraints[f'claim.claim_hash__in#_any_{attr}'] = f"""
+            SELECT DISTINCT claim_hash FROM {attr} WHERE {attr} IN ({values})
         """
 
     all_items = constraints.pop(f'all_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
@@ -36,9 +36,9 @@ def _apply_constraints_for_array_attributes(constraints, attr):
         values = ', '.join(
             f':$all_{attr}{i}' for i in range(len(all_items))
         )
-        constraints[f'claim.txo_hash__in#_all_{attr}'] = f"""
-            SELECT txo_hash FROM {attr} WHERE {attr} IN ({values})
-            GROUP BY txo_hash HAVING COUNT({attr}) = :$all_{attr}_count
+        constraints[f'claim.claim_hash__in#_all_{attr}'] = f"""
+            SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            GROUP BY claim_hash HAVING COUNT({attr}) = :$all_{attr}_count
         """
 
     not_items = constraints.pop(f'not_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
@@ -49,14 +49,15 @@ def _apply_constraints_for_array_attributes(constraints, attr):
         values = ', '.join(
             f':$not_{attr}{i}' for i in range(len(not_items))
         )
-        constraints[f'claim.txo_hash__not_in#_not_{attr}'] = f"""
-            SELECT DISTINCT txo_hash FROM {attr} WHERE {attr} IN ({values})
+        constraints[f'claim.claim_hash__not_in#_not_{attr}'] = f"""
+            SELECT DISTINCT claim_hash FROM {attr} WHERE {attr} IN ({values})
         """
 
 
 class SQLDB:
 
-    TRENDING_BLOCKS = 300  # number of blocks over which to calculate trending
+    TRENDING_24_HOURS = 720
+    TRENDING_WEEK = TRENDING_24_HOURS * 7
 
     PRAGMAS = """
         pragma journal_mode=WAL;
@@ -71,17 +72,29 @@ class SQLDB:
             txo_hash bytes not null,
             tx_position integer not null,
             height integer not null,
-            amount integer not null,
             channel_hash bytes,
+            release_time integer,
+            publish_time integer,
             activation_height integer,
+            amount integer not null,
             effective_amount integer not null default 0,
             support_amount integer not null default 0,
-            trending_amount integer not null default 0
+            trending_daily integer not null default 0,
+            trending_day_one integer not null default 0,
+            trending_day_two integer not null default 0,
+            trending_weekly integer not null default 0,
+            trending_week_one integer not null default 0,
+            trending_week_two integer not null default 0
         );
         create index if not exists claim_normalized_idx on claim (normalized);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_channel_hash_idx on claim (channel_hash);
+        create index if not exists claim_release_time_idx on claim (release_time);
+        create index if not exists claim_publish_time_idx on claim (publish_time);
+        create index if not exists claim_height_idx on claim (height);
         create index if not exists claim_activation_height_idx on claim (activation_height);
+        create index if not exists claim_trending_daily_idx on claim (trending_daily);
+        create index if not exists claim_trending_weekly_idx on claim (trending_weekly);
     """
 
     CREATE_SUPPORT_TABLE = """
@@ -174,7 +187,7 @@ class SQLDB:
     def commit(self):
         self.execute('commit;')
 
-    def _upsertable_claims(self, txos: Set[Output], clear_first=False):
+    def _upsertable_claims(self, txos: Set[Output], header, clear_first=False):
         claim_hashes, claims, tags = [], [], []
         for txo in txos:
             tx = txo.tx_ref.tx
@@ -198,6 +211,8 @@ class SQLDB:
                 'height': tx.height,
                 'amount': txo.amount,
                 'channel_hash': None,
+                'publish_time': header['timestamp'],
+                'release_time': header['timestamp']
             }
             claims.append(claim_record)
 
@@ -207,6 +222,8 @@ class SQLDB:
                 #self.logger.exception(f"Could not parse claim protobuf for {tx.id}:{txo.position}.")
                 continue
 
+            if claim.is_stream and claim.stream.release_time:
+                claim_record['release_time'] = claim.stream.release_time
             claim_record['is_channel'] = claim.is_channel
             if claim.signing_channel_hash:
                 claim_record['channel_hash'] = sqlite3.Binary(claim.signing_channel_hash)
@@ -223,26 +240,27 @@ class SQLDB:
 
         return claims
 
-    def insert_claims(self, txos: Set[Output]):
-        claims = self._upsertable_claims(txos)
+    def insert_claims(self, txos: Set[Output], header):
+        claims = self._upsertable_claims(txos, header)
         if claims:
-            self.db.executemany(
-                "INSERT INTO claim ("
-                "   claim_hash, normalized, claim_name, is_channel, txo_hash,"
-                "   tx_position, height, amount, channel_hash) "
-                "VALUES ("
-                "   :claim_hash, :normalized, :claim_name, :is_channel, :txo_hash,"
-                "   :tx_position, :height, :amount, :channel_hash) ",
-                claims
-            )
+            self.db.executemany("""
+                INSERT INTO claim (
+                    claim_hash, normalized, claim_name, is_channel, txo_hash, tx_position,
+                    height, amount, channel_hash, release_time, publish_time, activation_height)
+                VALUES (
+                    :claim_hash, :normalized, :claim_name, :is_channel, :txo_hash, :tx_position,
+                    :height, :amount, :channel_hash, :release_time, :publish_time,
+                    CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END
+                )""", claims)
 
-    def update_claims(self, txos: Set[Output]):
-        claims = self._upsertable_claims(txos, clear_first=True)
+    def update_claims(self, txos: Set[Output], header):
+        claims = self._upsertable_claims(txos, header, clear_first=True)
         if claims:
             self.db.executemany(
                 "UPDATE claim SET "
                 "   is_channel=:is_channel, txo_hash=:txo_hash, tx_position=:tx_position,"
-                "   height=:height, amount=:amount, channel_hash=:channel_hash "
+                "   height=:height, amount=:amount, channel_hash=:channel_hash,"
+                "   release_time=:release_time, publish_time=:publish_time "
                 "WHERE claim_hash=:claim_hash;",
                 claims
             )
@@ -302,12 +320,36 @@ class SQLDB:
             ))
 
     def _update_trending_amount(self, height):
+        day_ago = height-self.TRENDING_24_HOURS
+        two_day_ago = height-self.TRENDING_24_HOURS*2
+        week_ago = height-self.TRENDING_WEEK
+        two_week_ago = height-self.TRENDING_WEEK*2
         self.execute(f"""
             UPDATE claim SET
-                trending_amount = COALESCE(
-                    (SELECT SUM(amount) FROM support WHERE support.claim_hash=claim.claim_hash
-                     AND support.height > {height-self.TRENDING_BLOCKS}), 0
+                trending_day_one = COALESCE(
+                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
+                     AND height >= {day_ago}), 0
+                ),
+                trending_day_two = COALESCE(
+                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
+                     AND {day_ago} > height and height >= {two_day_ago}
+                     ), 0
+                ),
+                trending_week_one = COALESCE(
+                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
+                     AND height >= {week_ago}
+                     ), 0
+                ),
+                trending_week_two = COALESCE(
+                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
+                     AND {week_ago} > height and height >= {two_week_ago}
+                     ), 0
                 )
+        """)
+        self.execute(f"""
+            UPDATE claim SET
+                trending_daily = trending_day_one - trending_day_two,
+                trending_weekly = trending_week_one - trending_week_two
         """)
 
     def _update_support_amount(self, claim_hashes):
@@ -320,64 +362,62 @@ class SQLDB:
                 WHERE claim_hash IN ({','.join('?' for _ in claim_hashes)})
             """, claim_hashes)
 
-    def _make_claims_without_competition_become_controlling(self, height, changed, timer):
-        if not changed:
-            return
+    def _update_effective_amount(self, height, claim_hashes=None):
+        self.execute(
+            f"UPDATE claim SET effective_amount = amount + support_amount "
+            f"WHERE activation_height = {height}"
+        )
+        if claim_hashes:
+            self.execute(
+                f"UPDATE claim SET effective_amount = amount + support_amount "
+                f"WHERE activation_height < {height} "
+                f"  AND claim_hash IN ({','.join('?' for _ in claim_hashes)})",
+                claim_hashes
+            )
 
-        t = timer.add_timer('insert into claimtrie')
-        t.start()
-        self.execute(f"""
-            INSERT INTO claimtrie (normalized, claim_hash, last_take_over_height)
-            SELECT claim.normalized, claim.claim_hash, {height} FROM claim
-                WHERE normalized IN ({','.join('?' for _ in changed)}) AND
-                      normalized NOT IN (SELECT normalized FROM claimtrie)
-                GROUP BY normalized HAVING COUNT(*) = 1
-        """, list(changed))
-        t.stop()
-
-        t = timer.add_timer('set activation_height to current height for default winner')
-        t.start()
-        self.execute(f"""
-            UPDATE claim SET activation_height = {height}
-            WHERE (activation_height IS NULL OR activation_height > {height})
-              AND EXISTS(SELECT * FROM claimtrie WHERE claimtrie.claim_hash=claim.claim_hash)
-        """)
-        t.stop()
-
-        t = timer.add_timer('calculate activation_height for contentious claim name')
-        t.start()
+    def _calculate_activation_height(self, height):
+        last_take_over_height = f"""COALESCE(
+            (SELECT last_take_over_height FROM claimtrie
+            WHERE claimtrie.normalized=claim.normalized),
+            {height}
+        )
+        """
         self.execute(f"""
             UPDATE claim SET activation_height = 
-                {height} +
-                min(4032, cast(({height} - (SELECT last_take_over_height FROM claimtrie
-                                            WHERE claimtrie.normalized=claim.normalized)) / 32 AS INT))
+                {height} + min(4032, cast(({height} - {last_take_over_height}) / 32 AS INT))
             WHERE activation_height IS NULL
         """)
-        t.stop()
 
-    def _update_effective_amount(self, constraints):
-        where, values = constraints_to_sql(constraints)
-        self.execute("UPDATE claim SET effective_amount = amount + support_amount WHERE "+where, values)
-
-    def _perform_overtake(self, height, constraints):
-        where, values = constraints_to_sql(constraints)
+    def _perform_overtake(self, height, changed):
+        constraint = f"normalized IN ({','.join('?' for _ in changed)}) OR " if changed else ""
         overtakes = self.execute(f"""
-            SELECT winner.normalized, winner.claim_hash FROM claimtrie JOIN (
-                SELECT normalized, claim_hash, MAX(effective_amount)
-                FROM claim WHERE normalized IN (SELECT normalized FROM claim WHERE {where})
-                GROUP BY normalized
-            ) AS winner USING (normalized) WHERE claimtrie.claim_hash <> winner.claim_hash
-        """, values)
+            SELECT winner.normalized, winner.claim_hash, claimtrie.claim_hash AS current_winner FROM (
+                SELECT normalized, claim_hash FROM claim
+                WHERE {constraint}
+                    normalized IN (SELECT normalized FROM claim WHERE activation_height={height})
+                ORDER BY effective_amount, height, tx_position DESC
+            ) AS winner LEFT JOIN claimtrie USING (normalized)
+            GROUP BY winner.normalized
+            HAVING current_winner IS NULL
+                OR current_winner <> winner.claim_hash
+        """, changed)
         for overtake in overtakes:
+            if overtake['current_winner']:
+                self.execute(
+                    f"UPDATE claimtrie SET claim_hash = ?, last_take_over_height = {height} "
+                    f"WHERE normalized = ?",
+                    (sqlite3.Binary(overtake['claim_hash']), overtake['normalized'])
+                )
+            else:
+                self.execute(
+                    f"INSERT INTO claimtrie (claim_hash, normalized, last_take_over_height) "
+                    f"VALUES (?, ?, {height})",
+                    (sqlite3.Binary(overtake['claim_hash']), overtake['normalized'])
+                )
             self.execute(
                 f"UPDATE claim SET activation_height = {height} WHERE normalized = ? "
                 f"AND (activation_height IS NULL OR activation_height > {height})",
                 (overtake['normalized'],)
-            )
-            self.execute(
-                f"UPDATE claimtrie SET claim_hash = ?, last_take_over_height = {height} "
-                f"WHERE normalized = ?",
-                (sqlite3.Binary(overtake['claim_hash']), overtake['normalized'])
             )
 
     def _copy(self, height):
@@ -385,41 +425,29 @@ class SQLDB:
             self.execute(f"DROP TABLE claimtrie{height-50}")
         self.execute(f"CREATE TABLE claimtrie{height} AS SELECT * FROM claimtrie")
 
-    def update_claimtrie(self, height, changed_names, recalc_claims, timer):
-        binary_recalc_claims = [sqlite3.Binary(claim_hash) for claim_hash in recalc_claims]
+    def update_claimtrie(self, height, changed_names, amount_affected_claim_hashes, timer):
+        binary_claim_hashes = [
+            sqlite3.Binary(claim_hash) for claim_hash in amount_affected_claim_hashes
+        ]
         r = timer.run
-        r(self._make_claims_without_competition_become_controlling, height, changed_names, forward_timer=True)
-        r(self._update_support_amount, binary_recalc_claims)
+        r(self._calculate_activation_height, height)
+        r(self._update_support_amount, binary_claim_hashes)
+
+        r(self._update_effective_amount, height, binary_claim_hashes)
+        r(self._perform_overtake, height, list(changed_names))
+
+        r(self._update_effective_amount, height)
+        r(self._perform_overtake, height, [])
+
         if not self.main.first_sync:
             r(self._update_trending_amount, height)
 
-        if binary_recalc_claims:
-            claims_filter = {
-                '__or': {
-                    'activation_height': height,
-                    '__and': {
-                        'claim_hash__in': binary_recalc_claims,
-                        'activation_height__lte': height
-                    }
-                }
-            }
-        else:
-            claims_filter = {
-                'activation_height': height
-            }
-
-        r(self._update_effective_amount, claims_filter)
-        r(self._perform_overtake, height, claims_filter)
-        r(self._update_effective_amount, {'activation_height': height})
-        r(self._perform_overtake, height, {'activation_height': height})
-        #r(self._copy, height)
-
-    def advance_txs(self, height, all_txs, timer):
+    def advance_txs(self, height, all_txs, header, timer):
         insert_claims = set()
         update_claims = set()
-        delete_claims = set()
-        changed_names = set()
-        recalc_claims = set()
+        delete_claim_hashes = set()
+        deleted_and_inserted_names = set()
+        amount_affected_claim_hashes = set()
         insert_supports = set()
         delete_supports = set()
         body_timer = timer.add_timer('body')
@@ -431,34 +459,69 @@ class SQLDB:
                 self.split_inputs_into_claims_supports_and_other, tx.inputs
             )
             body_timer.start()
-            delete_claims.update(spent_claims.keys())
-            changed_names.update(spent_claims.values())
-            recalc_claims.update(spent_supports.values())
+            delete_claim_hashes.update(spent_claims.keys())
+            deleted_and_inserted_names.update(spent_claims.values())
+            amount_affected_claim_hashes.update(spent_supports.values())
             delete_supports.update(spent_supports)
             for output in tx.outputs:
                 if output.is_support:
                     insert_supports.add(output)
-                    recalc_claims.add(output.claim_hash)
+                    amount_affected_claim_hashes.add(output.claim_hash)
                 elif output.script.is_claim_name:
                     insert_claims.add(output)
-                    recalc_claims.add(output.claim_hash)
-                    changed_names.add(output.normalized_name)
+                    try:
+                        deleted_and_inserted_names.add(output.normalized_name)
+                    except:
+                        self.logger.exception(
+                            f"Could not decode claim name for claim_id: {output.claim_id}, "
+                            f"txid: {output.tx_ref.id}, nout: {output.position}.")
+                        print(output.script.values['claim_name'])
+                        continue
                 elif output.script.is_update_claim:
                     claim_hash = output.claim_hash
-                    if claim_hash in delete_claims:
-                        delete_claims.remove(claim_hash)
+                    if claim_hash in delete_claim_hashes:
+                        delete_claim_hashes.remove(claim_hash)
                     update_claims.add(output)
-                    recalc_claims.add(claim_hash)
+                    amount_affected_claim_hashes.add(claim_hash)
             body_timer.stop()
         r = timer.run
-        r(self.delete_claims, delete_claims)
+        r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_supports)
-        r(self.insert_claims, insert_claims)
-        r(self.update_claims, update_claims)
+        r(self.insert_claims, insert_claims, header)
+        r(self.update_claims, update_claims, header)
         r(self.insert_supports, insert_supports)
-        r(self.update_claimtrie, height, changed_names, recalc_claims, forward_timer=True)
+        r(self.update_claimtrie, height,
+          deleted_and_inserted_names,
+          amount_affected_claim_hashes,
+          forward_timer=True)
 
     def get_claims(self, cols, **constraints):
+        if 'order_by' in constraints:
+            sql_order_by = []
+            for order_by in constraints['order_by']:
+                is_asc = order_by.startswith('^')
+                column = order_by[1:] if is_asc else order_by
+                if column not in self.ORDER_FIELDS:
+                    raise NameError(f'{column} is not a valid order_by field')
+                elif column == 'name':
+                    column = 'normalized'
+                sql_order_by.append(
+                    f"claim.{column} ASC" if is_asc else f"claim.{column} DESC"
+                )
+            constraints['order_by'] = sql_order_by
+
+        ops = {'<=': '__lte', '>=': '__gte', '<': '__lt', '>': '__gt'}
+        for constraint in self.INTEGER_PARAMS:
+            if constraint in constraints:
+                value = constraints.pop(constraint)
+                postfix = ''
+                if isinstance(value, str):
+                    if len(value) >= 2 and value[:2] in ops:
+                        postfix, value = ops[value[:2]], int(value[2:])
+                    elif len(value) >= 1 and value[0] in ops:
+                        postfix, value = ops[value[0]], int(value[1:])
+                constraints[f'claim.{constraint}{postfix}'] = value
+
         if 'is_controlling' in constraints:
             if {'sequence', 'amount_order'}.isdisjoint(constraints):
                 constraints['claimtrie.claim_hash__is_not_null'] = ''
@@ -503,13 +566,24 @@ class SQLDB:
         _apply_constraints_for_array_attributes(constraints, 'language')
         _apply_constraints_for_array_attributes(constraints, 'location')
 
-        return self.db.execute(*query(
-            f"""
+        try:
+            return self.db.execute(*query(
+                f"""
+                SELECT {cols} FROM claim
+                LEFT JOIN claimtrie USING (claim_hash)
+                LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
+                """, **constraints
+            )).fetchall()
+        except:
+            self.logger.exception('Failed to execute claim search query:')
+            print(query(
+                f"""
             SELECT {cols} FROM claim
             LEFT JOIN claimtrie USING (claim_hash)
             LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
             """, **constraints
-        )).fetchall()
+            ))
+            raise
 
     def get_claims_count(self, **constraints):
         constraints.pop('offset', None)
@@ -523,17 +597,23 @@ class SQLDB:
             """
             claimtrie.claim_hash as is_controlling,
             claim.claim_hash, claim.txo_hash, claim.height,
-            claim.activation_height, claim.effective_amount, claim.trending_amount,
-            channel.txo_hash as channel_txo_hash, channel.height as channel_height,
-            channel.activation_height as channel_activation_height,
-            channel.effective_amount as channel_effective_amount,
-            channel.trending_amount as channel_trending_amount,
+            claim.activation_height, claim.effective_amount, claim.support_amount,
+            claim.trending_daily, claim.trending_day_one, claim.trending_day_two,
+            claim.trending_weekly, claim.trending_week_one, claim.trending_week_two,
             CASE WHEN claim.is_channel=1 THEN (
                 SELECT COUNT(*) FROM claim as claim_in_channel
                 WHERE claim_in_channel.channel_hash=claim.claim_hash
-             ) ELSE 0 END AS claims_in_channel
+             ) ELSE 0 END AS claims_in_channel,
+            channel.txo_hash as channel_txo_hash, channel.height as channel_height
             """, **constraints
         )
+
+    INTEGER_PARAMS = {
+        'height', 'release_time', 'publish_time',
+        'amount', 'effective_amount', 'support_amount',
+        'trending_daily', 'trending_day_one', 'trending_day_two',
+        'trending_weekly', 'trending_week_one', 'trending_week_two'
+    }
 
     SEARCH_PARAMS = {
         'name', 'claim_id', 'txid', 'nout',
@@ -541,8 +621,12 @@ class SQLDB:
         'any_tags', 'all_tags', 'not_tags',
         'any_locations', 'all_locations', 'not_locations',
         'any_languages', 'all_languages', 'not_languages',
-        'is_controlling', 'limit', 'offset'
-    }
+        'is_controlling', 'limit', 'offset', 'order_by'
+    } | INTEGER_PARAMS
+
+    ORDER_FIELDS = {
+        'name',
+    } | INTEGER_PARAMS
 
     def search(self, constraints) -> Tuple[List, int, int]:
         assert set(constraints).issubset(self.SEARCH_PARAMS), \
@@ -550,7 +634,8 @@ class SQLDB:
         total = self.get_claims_count(**constraints)
         constraints['offset'] = abs(constraints.get('offset', 0))
         constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-        constraints['order_by'] = ["claim.height DESC", "claim.normalized ASC"]
+        if 'order_by' not in constraints:
+            constraints['order_by'] = ["height", "^name"]
         txo_rows = self._search(**constraints)
         return txo_rows, constraints['offset'], total
 

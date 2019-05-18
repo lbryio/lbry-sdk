@@ -148,6 +148,22 @@ class ClaimSearchCommand(CommandTestCase):
         await self.assertFindsClaims([claim3], all_tags=['abc', 'ghi'], any_tags=['jkl'], not_tags=['mno'])
         await self.assertFindsClaims([claim4, claim3, claim2], all_tags=['abc'], any_tags=['def', 'ghi'])
 
+    async def test_order_by(self):
+        height = await self.ledger.network.get_server_height()
+        claims = [await self.stream_create(f'claim{i}') for i in range(5)]
+
+        await self.assertFindsClaims(claims, order_by=["^height"])
+        await self.assertFindsClaims(list(reversed(claims)), order_by=["height"])
+
+        await self.assertFindsClaims([claims[0]], height=height+1)
+        await self.assertFindsClaims([claims[4]], height=height+5)
+        await self.assertFindsClaims(claims[:1], height=f'<{height+2}', order_by=["^height"])
+        await self.assertFindsClaims(claims[:2], height=f'<={height+2}', order_by=["^height"])
+        await self.assertFindsClaims(claims[2:], height=f'>{height+2}', order_by=["^height"])
+        await self.assertFindsClaims(claims[1:], height=f'>={height+2}', order_by=["^height"])
+
+        await self.assertFindsClaims(claims, order_by=["^name"])
+
 
 class ChannelCommands(CommandTestCase):
 

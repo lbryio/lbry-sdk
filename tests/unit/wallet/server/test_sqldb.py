@@ -67,6 +67,13 @@ class TestSQLDB(unittest.TestCase):
             Input.spend(claim)
         )
 
+    def get_stream_abandon(self, tx):
+        claim = Transaction(tx[0].serialize()).outputs[0]
+        return self._make_tx(
+            Output.pay_pubkey_hash(claim.amount, b'abc'),
+            Input.spend(claim)
+        )
+
     def get_support(self, tx, amount):
         claim = Transaction(tx[0].serialize()).outputs[0]
         return self._make_tx(
@@ -101,10 +108,8 @@ class TestSQLDB(unittest.TestCase):
         return accepted
 
     def advance(self, height, txs):
-        #for skipped_height in range(self._current_height+1, height):
-        #    self.sql.advance_txs(skipped_height, [], self.timer)
         self._current_height = height
-        self.sql.advance_txs(height, txs, self.timer)
+        self.sql.advance_txs(height, txs, {'timestamp': 1}, self.timer)
 
     def state(self, controlling=None, active=None, accepted=None):
         self.assertEqual(controlling or [], self.get_controlling())
@@ -173,5 +178,61 @@ class TestSQLDB(unittest.TestCase):
                 ('Claim C', 50*COIN, 50*COIN, 1051),
                 ('Claim D', 300*COIN, 300*COIN, 1051),
             ],
+            accepted=[]
+        )
+
+    def test_competing_claims_in_single_block_height_wins(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        stream2 = self.get_stream('Claim B', 10*COIN)
+        advance(13, [stream, stream2])
+        state(
+            controlling=('Claim A', 10*COIN, 10*COIN, 13),
+            active=[('Claim B', 10*COIN, 10*COIN, 13)],
+            accepted=[]
+        )
+
+    def test_competing_claims_in_single_block_effective_amount_wins(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        stream2 = self.get_stream('Claim B', 11*COIN)
+        advance(13, [stream, stream2])
+        state(
+            controlling=('Claim B', 11*COIN, 11*COIN, 13),
+            active=[('Claim A', 10*COIN, 10*COIN, 13)],
+            accepted=[]
+        )
+
+    def test_winning_claim_deleted(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        stream2 = self.get_stream('Claim B', 11*COIN)
+        advance(13, [stream, stream2])
+        state(
+            controlling=('Claim B', 11*COIN, 11*COIN, 13),
+            active=[('Claim A', 10*COIN, 10*COIN, 13)],
+            accepted=[]
+        )
+        advance(14, [self.get_stream_abandon(stream2)])
+        state(
+            controlling=('Claim A', 10*COIN, 10*COIN, 13),
+            active=[],
+            accepted=[]
+        )
+
+    def test_winning_claim_deleted_and_new_claim_becomes_winner(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        stream2 = self.get_stream('Claim B', 11*COIN)
+        advance(13, [stream, stream2])
+        state(
+            controlling=('Claim B', 11*COIN, 11*COIN, 13),
+            active=[('Claim A', 10*COIN, 10*COIN, 13)],
+            accepted=[]
+        )
+        advance(15, [self.get_stream_abandon(stream2), self.get_stream('Claim C', 12*COIN)])
+        state(
+            controlling=('Claim C', 12*COIN, 12*COIN, 15),
+            active=[('Claim A', 10*COIN, 10*COIN, 13)],
             accepted=[]
         )

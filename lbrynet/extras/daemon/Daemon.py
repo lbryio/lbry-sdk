@@ -1674,6 +1674,10 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
                          [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling]
+                         [--order_by=<order_by>...]
+                         [--published_since=<published_since>] [--released_since=<released_since>]
+                         [--block_height=<block_height>] [--after_block_height=<after_block_height>]
+                         [--before_block_height=<before_block_height>]
                          [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
                          [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
                          [--not_languages=<not_languages>...]
@@ -1689,6 +1693,20 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_id=<channel_id>       : (str) limit search to specific channel claim id (returns stream claims)
             --channel_name=<channel_name>   : (str) limit search to specific channel name (returns stream claims)
             --is_controlling                : (bool) limit to controlling claims for their respective name
+            --order_by=<order_by>           : (str) field to order by, default is descending order, to do an
+                                                    ascending order prepend ^ to the field name, eg. '^amount'
+                                                    available fields: 'name', 'block_height', 'release_time',
+                                                    'publish_time', 'amount', 'effective_amount', 'support_amount',
+                                                    'trending_amount'
+        --published_since=<published_since> : (int) limit to claims confirmed into blocks on or after
+                                                    this UTC timestamp
+          --released_since=<released_since> : (int) limit to claims self-described as having been
+                                                    released to the public on or after this UTC
+                                                    timestamp, when claim does not provide
+                                                    a release time the block time is used instead
+            --block_height=<block_height>   : (int) limit to claims at specific block height
+        --after_block_height=<after_block_height> : (int) limit to claims after specific block height
+        --before_block_height=<before_block_height> : (int) limit to claims before specific block height
             --any_tags=<any_tags>           : (list) find claims containing any of the tags
             --all_tags=<all_tags>           : (list) find claims containing every tag
             --not_tags=<not_tags>           : (list) find claims not containing any of these tags
