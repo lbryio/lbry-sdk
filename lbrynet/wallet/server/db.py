@@ -9,6 +9,9 @@ from torba.client.basedatabase import query, constraints_to_sql
 
 from lbrynet.schema.url import URL, normalize_name
 from lbrynet.wallet.transaction import Transaction, Output
+from lbrynet.wallet.server.trending import (
+    CREATE_TREND_TABLE, calculate_trending, register_trending_functions
+)
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
@@ -56,8 +59,6 @@ def _apply_constraints_for_array_attributes(constraints, attr):
 
 class SQLDB:
 
-    DAY_BLOCKS = 720
-
     PRAGMAS = """
         pragma journal_mode=WAL;
     """
@@ -96,16 +97,6 @@ class SQLDB:
         create index if not exists claim_trending_mixed_idx on claim (trending_mixed);
         create index if not exists claim_trending_local_idx on claim (trending_local);
         create index if not exists claim_trending_global_idx on claim (trending_global);
-    """
-
-    CREATE_TREND_TABLE = """
-        create table if not exists trend (
-            claim_hash bytes not null,
-            height integer not null,
-            amount integer not null,
-            primary key (claim_hash, height)
-        ) without rowid;
-        create index if not exists trend_claim_hash_idx on trend (claim_hash);
     """
 
     CREATE_SUPPORT_TABLE = """
@@ -159,6 +150,7 @@ class SQLDB:
         self.db = sqlite3.connect(self._db_path, isolation_level=None, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(self.CREATE_TABLES_QUERY)
+        register_trending_functions(self.db)
 
     def close(self):
         self.db.close()
@@ -328,39 +320,6 @@ class SQLDB:
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
 
-    def _update_trending_amount(self, height):
-        day_ago = height-self.TRENDING_24_HOURS
-        two_day_ago = height-self.TRENDING_24_HOURS*2
-        week_ago = height-self.TRENDING_WEEK
-        two_week_ago = height-self.TRENDING_WEEK*2
-        self.execute(f"""
-            UPDATE claim SET
-                trending_day_one = COALESCE(
-                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
-                     AND height >= {day_ago}), 0
-                ),
-                trending_day_two = COALESCE(
-                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
-                     AND {day_ago} > height and height >= {two_day_ago}
-                     ), 0
-                ),
-                trending_week_one = COALESCE(
-                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
-                     AND height >= {week_ago}
-                     ), 0
-                ),
-                trending_week_two = COALESCE(
-                    (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
-                     AND {week_ago} > height and height >= {two_week_ago}
-                     ), 0
-                )
-        """)
-        self.execute(f"""
-            UPDATE claim SET
-                trending_daily = trending_day_one - trending_day_two,
-                trending_weekly = trending_week_one - trending_week_two
-        """)
-
     def _update_support_amount(self, claim_hashes):
         if claim_hashes:
             self.execute(f"""
@@ -440,10 +399,11 @@ class SQLDB:
         self.execute(f"CREATE TABLE claimtrie{height} AS SELECT * FROM claimtrie")
 
     def update_claimtrie(self, height, changed_claim_hashes, deleted_names, timer):
+        r = timer.run
         binary_claim_hashes = [
             sqlite3.Binary(claim_hash) for claim_hash in changed_claim_hashes
         ]
-        r = timer.run
+
         r(self._calculate_activation_height, height)
         r(self._update_support_amount, binary_claim_hashes)
 
@@ -452,9 +412,6 @@ class SQLDB:
 
         r(self._update_effective_amount, height)
         r(self._perform_overtake, height, [], [])
-
-        #if not self.main.first_sync:
-        #    r(self._update_trending_amount, height)
 
     def advance_txs(self, height, all_txs, header, timer):
         insert_claims = set()
@@ -500,6 +457,8 @@ class SQLDB:
         r(self.update_claims, update_claims, header)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
+        if not self.main.first_sync:
+            r(calculate_trending, self.db, height)
 
     def get_claims(self, cols, **constraints):
         if 'order_by' in constraints:

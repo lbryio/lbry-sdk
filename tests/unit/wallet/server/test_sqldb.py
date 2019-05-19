@@ -1,8 +1,10 @@
 import unittest
+from binascii import hexlify
 from torba.client.constants import COIN, NULL_HASH32
 
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.server.db import SQLDB
+from lbrynet.wallet.server.trending import TRENDING_WINDOW
 from lbrynet.wallet.server.block_processor import Timer
 from lbrynet.wallet.transaction import Transaction, Input, Output
 
@@ -19,6 +21,10 @@ def get_input():
 
 def get_tx():
     return Transaction().add_inputs([get_input()])
+
+
+def claim_id(claim_hash):
+    return hexlify(claim_hash[::-1]).decode()
 
 
 class OldWalletServerTransaction:
@@ -110,6 +116,7 @@ class TestSQLDB(unittest.TestCase):
     def advance(self, height, txs):
         self._current_height = height
         self.sql.advance_txs(height, txs, {'timestamp': 1}, self.timer)
+        return [otx[0].tx.outputs[0] for otx in txs]
 
     def state(self, controlling=None, active=None, accepted=None):
         self.assertEqual(controlling or [], self.get_controlling())
@@ -259,3 +266,25 @@ class TestSQLDB(unittest.TestCase):
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
             accepted=[]
         )
+
+    def test_trending(self):
+        advance, state = self.advance, self.state
+        no_trend = self.get_stream('Claim A', COIN)
+        downwards = self.get_stream('Claim B', COIN)
+        up_small = self.get_stream('Claim C', COIN)
+        up_medium = self.get_stream('Claim D', COIN)
+        up_biggly = self.get_stream('Claim E', COIN)
+        claims = advance(1, [up_biggly, up_medium, up_small, no_trend, downwards])
+        for window in range(1, 8):
+            advance(TRENDING_WINDOW * window, [
+                self.get_support(downwards, (20-window)*COIN),
+                self.get_support(up_small, int(20+(window/10)*COIN)),
+                self.get_support(up_medium, (20+(window*(2 if window == 7 else 1)))*COIN),
+                self.get_support(up_biggly, (20+(window*(3 if window == 7 else 1)))*COIN),
+            ])
+        results = self.sql._search(order_by=['trending_local'])
+        self.assertEqual([c.claim_id for c in claims], [claim_id(c['claim_hash']) for c in results])
+        self.assertEqual([10, 6, 2, 0, -2], [int(c['trending_local']) for c in results])
+        self.assertEqual([53, 38, -32, 0, -6], [int(c['trending_global']) for c in results])
+        self.assertEqual([4, 4, 2, 0, 1], [int(c['trending_group']) for c in results])
+        self.assertEqual([53, 38, 2, 0, -6], [int(c['trending_mixed']) for c in results])
