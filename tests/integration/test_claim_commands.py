@@ -255,7 +255,7 @@ class ChannelCommands(CommandTestCase):
         fixed_values['public_key'] = channel['public_key']
         self.assertEqual(channel, {'public_key': fixed_values['public_key'], 'featured': ['beef']})
 
-        # update channel setting all fields
+        # update channel "@featurechannel" setting all fields
         tx = await self.out(self.channel_update(claim_id, **values))
         channel = tx['outputs'][0]['value']
         fixed_values['featured'].insert(0, 'beef')  # existing featured claim
@@ -301,6 +301,8 @@ class ChannelCommands(CommandTestCase):
         # send the private key too
         txoid = f"{tx['outputs'][0]['txid']}:{tx['outputs'][0]['nout']}"
         account2.channel_keys[txoid] = self.account.channel_keys[txoid]
+        channel_pubkey_address_hash = self.account.ledger.public_key_to_address(unhexlify(channel['public_key']))
+        account2.channel_keys[channel_pubkey_address_hash] = self.account.channel_keys[channel_pubkey_address_hash]
 
         # now should have private key
         txo = (await account2.get_channels())[0]
