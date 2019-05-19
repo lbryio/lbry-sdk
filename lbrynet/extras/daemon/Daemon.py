@@ -1672,8 +1672,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Use --channel_id=<channel_id> to list all stream claims in a channel.
 
         Arguments marked with "supports equality constraints" allow prepending the
-        value with an equality constraint such as '>', '>=', '<', '<=', eg.
-        --height=">400000" would limit results to only claims above 400k block height
+        value with an equality constraint such as '>', '>=', '<' and '<='
+        eg. --height=">400000" would limit results to only claims above 400k block height.
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
