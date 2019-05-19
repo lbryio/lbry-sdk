@@ -1,3 +1,5 @@
+# temporary fix for https://github.com/PyCQA/pylint/issues/2820
+# pylint: disable=no-value-for-parameter
 from torba.client.basenetwork import BaseNetwork
 
 
