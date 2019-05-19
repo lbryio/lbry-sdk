@@ -329,7 +329,6 @@ class SQLDB:
             ))
 
     def _update_trending_amount(self, height):
-        return
         day_ago = height-self.TRENDING_24_HOURS
         two_day_ago = height-self.TRENDING_24_HOURS*2
         week_ago = height-self.TRENDING_WEEK
@@ -454,8 +453,8 @@ class SQLDB:
         r(self._update_effective_amount, height)
         r(self._perform_overtake, height, [], [])
 
-        if not self.main.first_sync:
-            r(self._update_trending_amount, height)
+        #if not self.main.first_sync:
+        #    r(self._update_trending_amount, height)
 
     def advance_txs(self, height, all_txs, header, timer):
         insert_claims = set()
