@@ -38,11 +38,13 @@ class Account(BaseAccount):
         super().apply(d)
         self.channel_keys.update(d.get('certificates', {}))
 
-    def add_channel_private_key(self, channel_pubkey_hash, ref_id, private_key):
-        assert channel_pubkey_hash not in self.channel_keys, 'Trying to add a duplicate channel private key.'
+    def add_channel_private_key(self, channel_name, channel_pubkey_hash, ref_id, private_key):
         assert ref_id not in self.channel_keys, 'Trying to add a duplicate channel private key.'
         self.channel_keys[ref_id] = private_key
-        self.channel_keys[channel_pubkey_hash] = private_key
+        if channel_pubkey_hash not in self.channel_keys:
+            self.channel_keys[channel_pubkey_hash] = private_key
+        else:
+            log.info("Public-Private key mapping for the channel %s already exists. Skipping...", channel_name)
 
     def get_channel_private_key(self, channel_pubkey_hash):
         return self.channel_keys.get(channel_pubkey_hash)
