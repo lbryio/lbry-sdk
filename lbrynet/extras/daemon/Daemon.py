@@ -1903,7 +1903,7 @@ class Daemon(metaclass=JSONRPCServerType):
             channel_pubkey_hash = account.ledger.public_key_to_address(
                 txo.claim.channel.public_key_bytes
             )
-            account.add_channel_private_key(txo.claim_name, channel_pubkey_hash, txo.id, txo.private_key)
+            account.add_channel_private_key(txo.claim_name, channel_pubkey_hash, txo.private_key)
             self.default_wallet.save()
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
@@ -2044,7 +2044,7 @@ class Daemon(metaclass=JSONRPCServerType):
             channel_pubkey_hash = account.ledger.public_key_to_address(
                 new_txo.claim.channel.public_key_bytes
             )
-            account.add_channel_private_key(new_txo.claim_name, channel_pubkey_hash, new_txo.id, new_txo.private_key)
+            account.add_channel_private_key(new_txo.claim_name, channel_pubkey_hash, new_txo.private_key)
             self.default_wallet.save()
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
