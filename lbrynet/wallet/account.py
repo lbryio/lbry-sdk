@@ -38,9 +38,7 @@ class Account(BaseAccount):
         super().apply(d)
         self.channel_keys.update(d.get('certificates', {}))
 
-    def add_channel_private_key(self, channel_name, channel_pubkey_hash, ref_id, private_key):
-        assert ref_id not in self.channel_keys, 'Trying to add a duplicate channel private key.'
-        self.channel_keys[ref_id] = private_key
+    def add_channel_private_key(self, channel_name, channel_pubkey_hash, private_key):
         if channel_pubkey_hash not in self.channel_keys:
             self.channel_keys[channel_pubkey_hash] = private_key
         else:
@@ -53,10 +51,8 @@ class Account(BaseAccount):
         if not self.channel_keys:
             return
 
-        addresses = {}
         results = {
             'total': 0,
-            'old-tx-pri-key-map': 0,
             'migrate-success': 0,
             'migrate-failed': 0,
             'previous-success': 0,
@@ -68,7 +64,6 @@ class Account(BaseAccount):
         for maybe_outpoint in self.channel_keys:
             results['total'] += 1
             if ':' in maybe_outpoint:
-                results['old-tx-pri-key-map'] += 1
                 try:
                     private_key_pem = self.channel_keys[maybe_outpoint]
                     pubkey_hash = self._get_pubkey_address_from_private_key_pem(private_key_pem)
@@ -91,18 +86,13 @@ class Account(BaseAccount):
                     log.warning("Corrupt public:private key-pair: %s", str(e))
                     results['previous-corrupted'] += 1
 
+        self.channel_keys.clear()
         for key in new_channel_keys:
             self.channel_keys[key] = new_channel_keys[key]
 
         self.wallet.save()
         log.info('verifying and possibly migrating certificates:')
         log.info(json.dumps(results, indent=2))
-        if addresses:
-            log.warning('failed for addresses:')
-            log.warning(json.dumps(
-                [{'address': a, 'number of certificates': c} for a, c in addresses.items()],
-                indent=2
-            ))
 
     async def save_max_gap(self):
         if issubclass(self.address_generator, HierarchicalDeterministic):
