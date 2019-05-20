@@ -413,7 +413,7 @@ class SQLDB:
         r(self._update_effective_amount, height)
         r(self._perform_overtake, height, [], [])
 
-    def advance_txs(self, height, all_txs, header, timer):
+    def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = set()
         update_claims = set()
         delete_claim_hashes = set()
@@ -457,8 +457,7 @@ class SQLDB:
         r(self.update_claims, update_claims, header)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
-        if not self.main.first_sync:
-            r(calculate_trending, self.db, height)
+        r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
 
     def get_claims(self, cols, **constraints):
         if 'order_by' in constraints:

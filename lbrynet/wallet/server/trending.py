@@ -47,7 +47,11 @@ def register_trending_functions(connection):
     connection.create_aggregate("zscore", 1, ZScore)
 
 
-def calculate_trending(db, height):
+def calculate_trending(db, height, is_first_sync, final_height):
+    # don't start tracking until we're at the end of initial sync
+    if is_first_sync and height < (final_height - (TRENDING_WINDOW*TRENDING_DATA_POINTS)):
+        return
+
     if height % TRENDING_WINDOW != 0:
         return
 

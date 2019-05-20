@@ -39,6 +39,7 @@ class TestSQLDB(unittest.TestCase):
 
     def setUp(self):
         self.first_sync = False
+        self.daemon_height = 1
         self.sql = SQLDB(self, ':memory:')
         self.timer = Timer('BlockProcessor')
         self.sql.open()
@@ -115,7 +116,7 @@ class TestSQLDB(unittest.TestCase):
 
     def advance(self, height, txs):
         self._current_height = height
-        self.sql.advance_txs(height, txs, {'timestamp': 1}, self.timer)
+        self.sql.advance_txs(height, txs, {'timestamp': 1}, self.daemon_height, self.timer)
         return [otx[0].tx.outputs[0] for otx in txs]
 
     def state(self, controlling=None, active=None, accepted=None):
