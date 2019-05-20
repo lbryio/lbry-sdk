@@ -363,13 +363,15 @@ class SQLDB:
         if deleted_names:
             deleted_names_sql = f"OR normalized IN ({','.join('?' for _ in deleted_names)})"
         overtakes = self.execute(f"""
-            SELECT winner.normalized, winner.claim_hash, claimtrie.claim_hash AS current_winner FROM (
-                SELECT normalized, claim_hash FROM claim
+            SELECT winner.normalized, winner.claim_hash,
+                   claimtrie.claim_hash AS current_winner,
+                   MAX(winner.effective_amount)
+            FROM (
+                SELECT normalized, claim_hash, effective_amount FROM claim
                 WHERE normalized IN (
-                        SELECT normalized FROM claim WHERE activation_height={height} {claim_hashes_sql}
-                    ) {deleted_names_sql}
-                ORDER BY effective_amount ASC, height DESC, tx_position DESC
-                -- the order by is backwards, because GROUP BY picks last row
+                    SELECT normalized FROM claim WHERE activation_height={height} {claim_hashes_sql}
+                ) {deleted_names_sql}
+                ORDER BY effective_amount DESC, height ASC, tx_position ASC
             ) AS winner LEFT JOIN claimtrie USING (normalized)
             GROUP BY winner.normalized
             HAVING current_winner IS NULL OR current_winner <> winner.claim_hash
