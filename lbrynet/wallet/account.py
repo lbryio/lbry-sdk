@@ -53,6 +53,7 @@ class Account(BaseAccount):
 
         results = {
             'total': 0,
+            'consolidated': 0,
             'migrate-success': 0,
             'migrate-failed': 0,
             'previous-success': 0,
@@ -71,6 +72,8 @@ class Account(BaseAccount):
                     if pubkey_hash not in new_channel_keys and pubkey_hash not in self.channel_keys:
                         new_channel_keys[pubkey_hash] = private_key_pem
                         results['migrate-success'] += 1
+                    else:
+                        results['consolidated'] += 1
                 except Exception as e:
                     results['migrate-failed'] += 1
                     log.warning("Failed to migrate certificate for %s, incorrect private key: %s",
