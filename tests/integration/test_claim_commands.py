@@ -299,8 +299,6 @@ class ChannelCommands(CommandTestCase):
         self.assertIsNone(txo.private_key)
 
         # send the private key too
-        txoid = f"{tx['outputs'][0]['txid']}:{tx['outputs'][0]['nout']}"
-        account2.channel_keys[txoid] = self.account.channel_keys[txoid]
         channel_pubkey_address_hash = self.account.ledger.public_key_to_address(unhexlify(channel['public_key']))
         account2.channel_keys[channel_pubkey_address_hash] = self.account.channel_keys[channel_pubkey_address_hash]
 
