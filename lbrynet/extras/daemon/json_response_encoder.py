@@ -193,7 +193,7 @@ class JSONResponseEncoder(JSONEncoder):
 
     def encode_claim_meta(self, meta):
         for key, value in meta.items():
-            if key.endswith('_amount') or key.startswith('trending_'):
+            if key.endswith('_amount'):
                 if isinstance(value, int):
                     meta[key] = dewies_to_lbc(value)
         return meta

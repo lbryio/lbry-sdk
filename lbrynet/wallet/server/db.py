@@ -488,10 +488,9 @@ class SQLDB:
                         postfix, value = ops[value[0]], int(value[1:])
                 constraints[f'claim.{constraint}{postfix}'] = value
 
-        if 'is_controlling' in constraints:
+        if constraints.pop('is_controlling', False):
             if {'sequence', 'amount_order'}.isdisjoint(constraints):
                 constraints['claimtrie.claim_hash__is_not_null'] = ''
-            del constraints['is_controlling']
         if 'sequence' in constraints:
             constraints['order_by'] = 'claim.activation_height ASC'
             constraints['offset'] = int(constraints.pop('sequence')) - 1

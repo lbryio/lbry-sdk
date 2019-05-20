@@ -15,8 +15,10 @@ def from_old_json_schema(claim, payload: bytes):
         raise DecodeError('Could not parse JSON.')
     stream = claim.stream
     stream.source.sd_hash = value['sources']['lbry_sd_hash']
-    stream.source.media_type = value.get(
-        'content_type', value.get('content-type', 'application/octet-stream'))
+    stream.source.media_type = (
+            value.get('content_type', value.get('content-type')) or
+            'application/octet-stream'
+    )
     stream.title = value.get('title', '')
     stream.description = value.get('description', '')
     if value.get('thumbnail', ''):
