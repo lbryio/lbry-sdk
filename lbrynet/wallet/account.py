@@ -89,9 +89,7 @@ class Account(BaseAccount):
                     log.warning("Corrupt public:private key-pair: %s", str(e))
                     results['previous-corrupted'] += 1
 
-        self.channel_keys.clear()
-        for key in new_channel_keys:
-            self.channel_keys[key] = new_channel_keys[key]
+        self.channel_keys = new_channel_keys
 
         self.wallet.save()
         log.info('verifying and possibly migrating certificates:')
@@ -173,6 +171,5 @@ class Account(BaseAccount):
 
     def _get_pubkey_address_from_private_key_pem(self, private_key_pem):
         private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=hashlib.sha256)
-
         public_key_der = private_key.get_verifying_key().to_der()
         return self.ledger.public_key_to_address(public_key_der)
