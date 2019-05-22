@@ -9,7 +9,7 @@ Here's a video walkthrough of this setup, which is itself hosted by the LBRY net
 
 ## Prerequisites
 
-Running `lbrynet` from source requires Python 3.6 or higher (3.7 is preferred). Get the installer for your OS [here](https://www.python.org/downloads/release/python-370/)
+Running `lbrynet` from source requires Python 3.7 or higher. Get the installer for your OS [here](https://www.python.org/downloads/release/python-370/)
 
 After installing python 3, you'll need to install some additional libraries depending on your operating system.
 

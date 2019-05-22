@@ -16,7 +16,7 @@ setup(
     long_description_content_type="text/markdown",
     keywords="lbry protocol media",
     license='MIT',
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     packages=find_packages(exclude=('tests',)),
     zip_safe=False,
     entry_points={
