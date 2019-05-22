@@ -151,6 +151,14 @@ class Output(BaseOutput):
         private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=hashlib.sha256)
         return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()
 
+    @staticmethod
+    def pem_to_private_key_str(private_key_pem):
+        return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=hashlib.sha256).to_string()
+
+    @staticmethod
+    def private_key_from_str(private_key_str):
+        return ecdsa.SigningKey.from_string(private_key_str, curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+
     @classmethod
     def pay_claim_name_pubkey_hash(
             cls, amount: int, claim_name: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
