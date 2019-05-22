@@ -2122,7 +2122,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_channel_export(self, claim_id):
+    async def jsonrpc_channel_export(self, claim_id, password=None, account_id=None, insecure=False):
         """
         Export serialized channel signing information for a given certificate claim id
 
@@ -2135,11 +2135,12 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) Serialized certificate information
         """
+        account = self.get_account_or_default(account_id)
 
-        return await self.wallet_manager.export_certificate_info(claim_id)
+        return await self.wallet_manager.export_certificate_info(claim_id, account, password, insecure)
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_channel_import(self, serialized_certificate_info):
+    async def jsonrpc_channel_import(self, serialized_certificate_info, password=None, account_id=None):
         """
         Import serialized channel signing information (to allow signing new claims to the channel)
 
@@ -2152,8 +2153,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Result dictionary
         """
+        account = self.get_account_or_default(account_id)
 
-        return await self.wallet_manager.import_certificate_info(serialized_certificate_info)
+        return await self.wallet_manager.import_certificate_info(serialized_certificate_info, password, account)
 
     STREAM_DOC = """
     Create, update, abandon, list and inspect your stream claims.

@@ -306,6 +306,32 @@ class ChannelCommands(CommandTestCase):
         txo = (await account2.get_channels())[0]
         self.assertIsNotNone(txo.private_key)
 
+    async def test_channel_export_import_without_password(self):
+        tx = await self.channel_create('@foo', '1.0')
+        claim_id = tx['outputs'][0]['claim_id']
+        channel_private_key = (await self.account.get_channels())[0].private_key
+
+        _account2 = await self.out(self.daemon.jsonrpc_account_create("Account 2"))
+        account2_id, account2 = _account2["id"], self.daemon.get_account_or_error(_account2['id'])
+
+        # before exporting/importing channel
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
+
+        # exporting from default account
+        serialized_channel_info = await self.out(self.daemon.jsonrpc_channel_export(claim_id, insecure=True))
+
+        other_address = await account2.receiving.get_or_create_usable_address()
+        await self.out(self.channel_update(claim_id, claim_address=other_address))
+
+        # importing into second account
+        await self.daemon.jsonrpc_channel_import(serialized_channel_info, password=None, account_id=account2_id)
+
+        # after exporting/importing channel
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
+        txo_channel_account2 = (await account2.get_channels())[0]
+
+        self.assertEqual(channel_private_key, txo_channel_account2.private_key)
+
 
 class StreamCommands(CommandTestCase):
 
