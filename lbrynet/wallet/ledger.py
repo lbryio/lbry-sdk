@@ -4,6 +4,7 @@ from binascii import unhexlify
 from typing import Tuple, List, Dict
 
 from torba.client.baseledger import BaseLedger
+from torba.client.baseaccount import SingleKey
 from lbrynet.schema.result import Outputs
 from lbrynet.schema.url import URL
 from lbrynet.wallet.dewies import dewies_to_lbc
@@ -87,16 +88,26 @@ class MainNetLedger(BaseLedger):
         await self._report_state()
 
     async def _report_state(self):
-        for account in self.accounts:
-            total_receiving = len((await account.receiving.get_addresses()))
-            total_change = len((await account.change.get_addresses()))
-            channel_count = await account.get_channel_count()
-            claim_count = await account.get_claim_count()
-            balance = dewies_to_lbc(await account.get_balance())
-            log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
-                     "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
-                     account.id, balance, total_receiving, account.receiving.gap, total_change, account.change.gap,
-                     channel_count, len(account.channel_keys), claim_count)
+        try:
+            for account in self.accounts:
+                balance = dewies_to_lbc(await account.get_balance())
+                channel_count = await account.get_channel_count()
+                claim_count = await account.get_claim_count()
+                if isinstance(account.receiving, SingleKey):
+                    log.info("Loaded single key account %s with %s LBC. "
+                             "%d channels, %d certificates and %d claims",
+                             account.id, balance, channel_count, len(account.channel_keys), claim_count)
+                else:
+                    total_receiving = len((await account.receiving.get_addresses()))
+                    total_change = len((await account.change.get_addresses()))
+                    log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
+                             "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
+                             account.id, balance, total_receiving, account.receiving.gap, total_change,
+                             account.change.gap, channel_count, len(account.channel_keys), claim_count)
+        except:
+            log.exception(
+                'Failed to display wallet state, please file issue '
+                'for this bug along with the traceback you see below:')
 
 
 class TestNetLedger(MainNetLedger):
