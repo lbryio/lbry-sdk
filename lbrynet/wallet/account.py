@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 from hashlib import sha256
@@ -38,14 +37,14 @@ class Account(BaseAccount):
         super().apply(d)
         self.channel_keys.update(d.get('certificates', {}))
 
-    def add_channel_private_key(self, channel_name, channel_pubkey_hash, private_key):
-        if channel_pubkey_hash not in self.channel_keys:
-            self.channel_keys[channel_pubkey_hash] = private_key
-        else:
-            log.info("Public-Private key mapping for the channel %s already exists. Skipping...", channel_name)
+    def add_channel_private_key(self, private_key):
+        public_key_bytes = private_key.get_verifying_key().to_der()
+        channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
+        self.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
 
     def get_channel_private_key(self, channel_pubkey_hash):
-        return self.channel_keys.get(channel_pubkey_hash)
+        private_key_pem = self.channel_keys.get(channel_pubkey_hash)
+        return self._get_private_key_object_from_pem(private_key_pem)
 
     async def maybe_migrate_certificates(self):
         if not self.channel_keys:
@@ -170,6 +169,10 @@ class Account(BaseAccount):
         await self.ledger.db.release_all_outputs(self)
 
     def _get_pubkey_address_from_private_key_pem(self, private_key_pem):
-        private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=hashlib.sha256)
+        private_key = self._get_private_key_object_from_pem(private_key_pem)
         public_key_der = private_key.get_verifying_key().to_der()
         return self.ledger.public_key_to_address(public_key_der)
+
+    @staticmethod
+    def _get_private_key_object_from_pem(private_key_pem):
+        return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)

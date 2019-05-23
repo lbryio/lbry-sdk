@@ -143,8 +143,7 @@ class Output(BaseOutput):
             self.claim.signing_channel_hash,
             self.claim.to_message_bytes()
         ]))
-        private_key = ecdsa.SigningKey.from_pem(channel.private_key, hashfunc=hashlib.sha256)
-        self.claim.signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        self.claim.signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
         self.script.generate()
 
     def clear_signature(self):
@@ -152,14 +151,12 @@ class Output(BaseOutput):
         self.claim.clear_signature()
 
     def generate_channel_private_key(self):
-        private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
-        self.private_key = private_key.to_pem().decode()
-        self.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
+        self.private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+        self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
         self.script.generate()
         return self.private_key
 
-    def is_channel_private_key(self, private_key_pem):
-        private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=hashlib.sha256)
+    def is_channel_private_key(self, private_key):
         return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()
 
     @classmethod
