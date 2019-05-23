@@ -300,8 +300,7 @@ class ChannelCommands(CommandTestCase):
 
         # send the private key too
         channel_pubkey_address_hash = self.account.ledger.public_key_to_address(unhexlify(channel['public_key']))
-        account2.add_channel_private_key('@featurechannel', channel_pubkey_address_hash,
-                                         self.account.channel_keys[channel_pubkey_address_hash])
+        account2.add_channel_private_key('@featurechannel', self.account.channel_keys[channel_pubkey_address_hash])
 
         # now should have private key
         txo = (await account2.get_channels())[0]

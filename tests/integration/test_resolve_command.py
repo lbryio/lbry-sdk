@@ -333,7 +333,7 @@ def generate_signed_legacy(address: bytes, output: Output):
         claim.SerializeToString(),
         output.claim_hash[::-1]
     ]))
-    private_key = ecdsa.SigningKey.from_pem(output.private_key, hashfunc=hashlib.sha256)
+    private_key = output.private_key
     signature = private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
     claim.publisherSignature.version = 1
     claim.publisherSignature.signatureType = 1
