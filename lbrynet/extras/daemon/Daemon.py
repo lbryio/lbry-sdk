@@ -485,6 +485,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def handle_stream_get_request(self, request: web.Request):
         if not self.conf.streaming_get:
+            log.warning("streaming_get is disabled, rejecting request")
             raise web.HTTPForbidden()
         name_and_claim_id = request.path.split("/get/")[1]
         if "/" not in name_and_claim_id:
@@ -500,6 +501,20 @@ class Daemon(metaclass=JSONRPCServerType):
         raise web.HTTPFound(f"/stream/{stream.sd_hash}")
 
     async def handle_stream_range_request(self, request: web.Request):
+        try:
+            return await self._handle_stream_range_request(request)
+        except web.HTTPException as err:
+            log.warning("http code during /stream range request: %s", err)
+            raise err
+        except asyncio.CancelledError:
+            log.debug("/stream range request cancelled")
+        except Exception:
+            log.exception("error handling /stream range request")
+            raise
+        finally:
+            log.debug("finished handling /stream range request")
+
+    async def _handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
         if not self.stream_manager.started.is_set():
             await self.stream_manager.started.wait()
