@@ -531,8 +531,7 @@ class Config(CLIConfig):
         ('lbrynet4.lbry.com', 4444)  # ASIA
     ])
 
-    # comment server uses a single string because requests are made to the /api resource
-    comment_server = String("Server to store user-generated metadata.", "http://comments.lbry.com:2903/api")
+    comment_server = String("Updated Comment Server version.", "comments.lbry.com/api")
 
     # blockchain
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
