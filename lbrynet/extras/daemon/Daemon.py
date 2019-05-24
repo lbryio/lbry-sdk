@@ -3350,27 +3350,20 @@ class Daemon(metaclass=JSONRPCServerType):
                                        retrieve in one request
 
         Returns:
-            (dict)  Containing the list, and information about the paginated content:
-            {
-                "page": "Page number of the current items.",
-                "page_size": "Number of items to show on a page.",
-                "total_pages": "Total number of pages.",
-                "total_items": "Total number of items.",
-                "items": "A List of dict objects representing comments."
-                [
-                    {
-                        "comment":      (str) The actual string as inputted by the user,
-                        "comment_id":   (str) The Comment's unique identifier,
-                        "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
-                        "channel_id":   (str) The Channel Claim ID that this comment was posted under,
-                        "signature":    (str) The signature of the comment,
-                        "channel_url":  (str) Channel's URI in the ClaimTrie,
-                        "parent_id":    (str) Comment this is replying to, (None) if this is the root,
-                        "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
-                    },
-                    ...
-                ]
-            }
+            (list)  Containing comments stored as dictionary objects:
+            [
+                {
+                    "comment":      (str) The actual string as inputted by the user,
+                    "comment_id":   (str) The Comment's unique identifier,
+                    "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
+                    "channel_id":   (str) The Channel Claim ID that this comeent was posted under,
+                    "signature":    (str) The signature of the comment,
+                    "channel_uri":  (str) Channel's URI in the ClaimTrie,
+                    "parent_id":    (str) Comment this is replying to, (None) if this is the root,
+                    "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
+                },
+                ...
+            ]
         """
         return await jsonrpc_post(
             self.conf.comment_server,
@@ -3395,8 +3388,6 @@ class Daemon(metaclass=JSONRPCServerType):
                             [--parent_id=<parent_id>]
 
         Options:
-            --comment=<comment>         : (str) Comment to be made, should be at most 2000 characters.
-            --claim_id=<claim_id>       : (str) The ID of the claim on which the comment should be made on
             --parent_id=<parent_id>     : (str) The ID of a comment to make a response to
             --channel_id=<channel_id>   : (str) The ID of the channel you want to post under
             --channel_name=<channel_name>   : (str) The channel you want to post as, prepend with a '@'
@@ -3410,21 +3401,17 @@ class Daemon(metaclass=JSONRPCServerType):
                 "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
                 "channel_id":   (str) The Channel Claim ID that this comeent was posted under,
                 "signature":    (str) The signature of the comment,
-                "channel_url":  (str) Channel's URI in the ClaimTrie,
+                "channel_uri":  (str) Channel's URI in the ClaimTrie,
                 "parent_id":    (str) Comment this is replying to, (None) if this is the root,
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
             }
         """
         if bool(channel_name) ^ bool(channel_id):
+            skey, sval = ('claim_id', channel_id) if channel_id else ('normalized', channel_name.lower())
+            channel_list = await self.jsonrpc_channel_list()
             try:
-                channel_list = await self.jsonrpc_channel_list()
-                if channel_name:
-                    channel_name = channel_name.lower()
-                    channel: Output = [chan for chan in channel_list if chan.normalized_name == channel_name].pop()
-                    channel_id = channel.claim_id
-                else:
-                    channel: Output = [chan for chan in channel_list if chan.claim_id == channel_id].pop()
-                    channel_name = channel.normalized_name
+                channel: dict = [chan for chan in channel_list if chan[skey] == sval].pop()
+                channel_name, channel_id = channel['normalized'], channel['claim_id']
             except IndexError:
                 raise ValueError('You must enter a valid channel_%s' % ('id' if channel_id else 'name'))
         signature = None
@@ -3444,6 +3431,12 @@ class Daemon(metaclass=JSONRPCServerType):
             'signature': signature
         }
         return await jsonrpc_post(self.conf.comment_server, 'create_comment', **comment)
+
+    def valid_address_or_error(self, address):
+        try:
+            assert self.ledger.is_valid_address(address)
+        except:
+            raise Exception(f"'{address}' is not a valid address")
 
     @staticmethod
     def valid_stream_name_or_error(name: str):
