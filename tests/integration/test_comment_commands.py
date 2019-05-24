@@ -1,7 +1,6 @@
 import logging
+import time
 
-import typing
-import random
 import asyncio
 from aiohttp import web
 
@@ -10,13 +9,53 @@ from lbrynet.testcase import CommandTestCase
 import lbrynet.schema
 lbrynet.schema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
+COMMENT_IDS = [
+    "b7de681c412e315bb1a9ada6f485a2e0399400db",
+    "0f7e1514f55c7fefba1e714386e05b3d705f6d29",
+    "8ae19f686c39f402c80dabf25df23cf72fe426af",
+    "a11ad59b54bb937ca1a88329f253b17196bd4dc3",
+    "7ee87b3249fa47b296c8347cd63bba679ef629eb",
+    "0100e3367f68284f4970736c9351ad90c37dade5",
+    "974a5bfcce6bc72605688ba6e2efd34aa934b1dc",
+    "97ea100a52aa46ae9f2a4356169307a2505e8d47",
+    "2b4d193371c8f0ed45c830cb1ba3188b90bf08f1",
+    "db335dc3183ca3552b6ef4a7bce36f26ed37b7eb"
+]
+
+CLAIM_IDS = [
+    "f6068bdc8cb66fe7eb6c3cf4cf98da93a697df47",
+    "44a8c10e36ed8b60da8d5fe590cba61544fb7179",
+    "a7d8a1fc90ab806c98743a7f9ca7480e2cebe2a0",
+    "81a8cc2fa41eea0ae9d65ab0f8a0440605a23f1b",
+    "49117e9a7bb2aab01356e1160871aad5edb09ed5",
+    "2b928261918b1f7c65973c8fee9e20d4a1f1b2a4",
+    "f9d6eb75d1592a967b1c405208593d30b46446c9",
+    "cc70bd497eb1305096fa4e28275645f47c5d809d",
+    "2e520f60bd8f79f309d68b291fe574531a7d6656",
+    "16b0248c103fb7b3497bd58543f6c5dd6d47d5f2"
+]
+
+CHANNEL_IDS = [
+    "7b65a9886869a367371ec621abe5bac4e5dd27b9",
+    "c3bbde23a8b31dc05490cede3a381080b024f878",
+    "c544579ca13ce5d97e9301789620547323da15eb",
+    "428e1c075b27bbce1380c16ecb5f0d228318315e",
+    "1558b39438f573a47a5e0fcd78ad24d0eb358be0",
+    "ac66521e1757d320568a52ab8b01029bd169b1a0",
+    "aa89729a08050694ffb62e725356bbaa26481193",
+    "23181733dc3b836e4d38e8cc21d79378b855cf36",
+    "60efc8ced56a6a02c2d5371310f0130c541a9ded",
+    "af1c95f2026d4a254512dd6e6a792a9d92b9fd21"
+]
+
 
 class FakedCommentServer:
     ERRORS = {
-        'INVALID_URI': {'code': 1, 'message': 'Invalid claim URI'},
         'INVALID_PARAMS': {'code': -32602, 'message': 'Invalid parameters'},
         'INTERNAL': {'code': -32603, 'message': 'An internal error'},
         'UNKNOWN': {'code': -1, 'message': 'An unknown or very miscellaneous error'},
+        'INVALID_METHOD': {'code': -32604, 'message': 'The Requested method does not exist'}
+
     }
 
     def __init__(self, port=2903):
@@ -26,44 +65,27 @@ class FakedCommentServer:
         self.runner = None
         self.server = None
 
-    def get_claim_comments(self, uri: str, better_keys: bool) -> typing.Union[dict, list, None]:
-        if not uri.startswith('lbry://'):  # Very basic error case
-            return {'error': self.ERRORS['INVALID_URI']}
-        return [self.get_comment(i) for i in range(75)]
-
-    def get_comment(self, comment_id: int, parent_id: int = None) -> dict:
+    def get_comment(self, **kwargs) -> dict:
         return {
-            'comment_id': comment_id,
-            'parent_id': parent_id,
-            'author': f'Person{comment_id}',
-            'message': f'comment {comment_id}',
-            'claim_id': random.randint(1, 2**16),
-            'time_posted': random.randint(2**16, 2**32 - 1),
-            'upvotes': random.randint(0, 9999), 'downvotes': random.randint(0, 9999)
+            'comment_id': 'asbdsdasd',
+            'parent_id': 'asdsfsfsf',
+            'comment': 'asdsdadsdas',
+            'timestamp': time.time_ns(),
+            'channel_id': 'asdsdsdasdad',
+            'channel_name': 'asdsasasfaf',
+            'channel_uri': 'asdsdasda',
+            'signature': 'aasdasdasda',
         }
 
-    def comment(self, uri: str, poster: str, message: str) -> typing.Union[int, dict, None]:
-        if not uri.startswith('lbry://'):
-            return {'error': self.ERRORS['INVALID_URI']}
-        return random.randint(1, 9999)
+    def create_comment(self, comment, claim_id, **kwargs):
+        return self.get_comment(**kwargs)
 
-    def reply(self, parent_id: int, poster: str, message: str) -> dict:
-        if 2 <= len(message) <= 2000 and 2 <= len(poster) <= 127 and parent_id > 0:
-            return random.randint(parent_id + 1, 2**32 - 1)
-        return {'error': self.ERRORS['INVALID_PARAMS']}
-
-    def get_comment_data(self, comm_index: int, better_keys: bool = False) -> typing.Union[dict, None]:
-        return self.get_comment(comm_index)
-
-    def get_comment_replies(self, comm_index: int) -> typing.Union[list, None]:
-        return [random.randint(comm_index, comm_index+250) for _ in range(75)]
+    def get_claim_comments(self, page=1, page_size=50, **kwargs):
+        return [self.get_comment(**kwargs) for i in range(page_size)]
 
     methods = {
         'get_claim_comments': get_claim_comments,
-        'get_comment_data': get_comment_data,
-        'get_comment_replies': get_comment_replies,
-        'comment': comment,
-        'reply': reply
+        'create_comment': create_comment,
     }
 
     def process_json(self, body) -> dict:
@@ -71,12 +93,9 @@ class FakedCommentServer:
         if body['method'] in self.methods:
             params = body.get('params', {})
             result = self.methods[body['method']](self, **params)
-            if type(result) is dict and 'error' in result:
-                response['error'] = result['error']
-            else:
-                response['result'] = result
+            response['result'] = result
         else:
-            response['error'] = self.ERRORS['UNKNOWN']
+            response['error'] = self.ERRORS['INVALID_METHOD']
         return response
 
     async def _start(self):
@@ -106,7 +125,7 @@ class FakedCommentServer:
                 response = self.process_json(body)
             return web.json_response(response)
         else:
-            return web.json_response({'error': self.ERRORS['UNKNOWN']})
+            raise TypeError('invalid type passed')
 
 
 class CommentCommands(CommandTestCase):
@@ -126,78 +145,61 @@ class CommentCommands(CommandTestCase):
             await self.server_task
 
     async def test_comment_create(self):
-        claim = await self.stream_create(name='doge', bid='0.001', data=b'loool')
-        self.assertIn('outputs', claim)
         comment = await self.daemon.jsonrpc_comment_create(
-            claim_id=claim['outputs'][0]['claim_id'],
-            channel_id='Jimmy Buffett',
-            message="It's 5 O'Clock Somewhere"
+            claim_id=CLAIM_IDS[0],
+            channel_name='@JimmyBuffett',
+            channel_id=CHANNEL_IDS[0],
+            comment="It's 5 O'Clock Somewhere"
         )
-        self.assertIs(type(comment), dict, msg=f"Response type ({type(comment)})is not dict: {comment}")
-        self.assertIn('message', comment, msg=f"Response {comment} doesn't contain message")
-        self.assertIn('author', comment)
+        self.assertIsNotNone(comment)
+        self.assertNotIn('error', comment)
+        self.assertIn('comment', comment, msg=f"Response {comment} doesn't contain message")
+        self.assertIn('channel_name', comment)
 
     async def test_comment_create_reply(self):
-        claim = await self.stream_create(name='doge', bid='0.001')
-        self.assertIn('outputs', claim)
         reply = await self.daemon.jsonrpc_comment_create(
-            claim_id=claim['outputs'][0]['claim_id'],
-            channel_id='Jimmy Buffett',
-            message='Let\'s all go to Margaritaville',
-            parent_comment_id=42
+            claim_id=CLAIM_IDS[0],
+            channel_name='@JimmyBuffett',
+            channel_id=CHANNEL_IDS[0],
+            comment='Let\'s all go to Margaritaville',
+            parent_id=COMMENT_IDS[0]
         )
-        self.assertIs(type(reply), dict, msg=f'Response {type(reply)} is not dict\nResponse: {reply}')
-        self.assertIn('author', reply)
+        self.assertIsNotNone(reply)
+        self.assertNotIn('error', reply)
+        self.assertIn('comment_id', reply)
+        self.assertIsNotNone(reply['parent_id'])
 
     async def test_comment_list_root_level(self):
-        claim = await self.stream_create(name='doge', bid='0.001')
-        self.assertIn('outputs', claim)
-        claim_id = claim['outputs'][0]['claim_id']
-        comments = await self.daemon.jsonrpc_comment_list(claim_id)
-        self.assertIsNotNone(type(comments))
-        self.assertIs(type(comments), dict)
-        self.assertIn('comments', comments, f"'comments' field was not found in returned dict: {comments}")
-        self.assertIs(type(comments['comments']), list, msg=f'comment_list: {comments}')
-        comments = await self.daemon.jsonrpc_comment_list(claim_id, page_size=50)
+        comments = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[0])
         self.assertIsNotNone(comments)
-        self.assertIs(type(comments), dict)
-        self.assertIn('comments', comments, f"'comments' field was not found in returned dict: {comments}")
-        comment_list = comments['comments']
-        self.assertEqual(len(comment_list), 50, msg=f'comment_list incorrect size {len(comment_list)}: {comment_list}')
-        comments = await self.daemon.jsonrpc_comment_list(claim_id, page_size=50, page=2)
-        self.assertEqual(len(comments['comments']), 25, msg=f'comment list page 2: {comments["comments"]}')
-        comments = await self.daemon.jsonrpc_comment_list(claim_id, page_size=50, page=3)
-        self.assertEqual(len(comments['comments']), 0, msg=f'comment list is non-zero: {comments["comments"]}')
+        self.assertIs(type(comments), list)
+        comments = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[1], page_size=50)
+        self.assertIsNotNone(comments)
+        self.assertLessEqual(len(comments), 50)
+        self.assertGreaterEqual(len(comments), 0)
 
     async def test_comment_list_replies(self):
-        claim = await self.stream_create(name='doge', bid='0.001')
-        self.assertIn('outputs', claim)
-        claim_id = claim['outputs'][0]['claim_id']
-        replies = await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=23)
-        self.assertIsInstance(replies['comments'], list, msg=f'Invalid type: {replies["comments"]} should be list')
-        self.assertGreater(len(replies['comments']), 0, msg='Returned replies are empty')
-        replies = (await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=25, page_size=50))['comments']
-        self.assertEqual(len(replies), 50, f'Replies invalid length ({len(replies)})')
-        replies = (await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=67,
-                                                          page_size=23, page=5))['comments']
-        self.assertEqual(len(replies), 0, f'replies {replies} not 23: {len(replies)}')
-        replies = (await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=79,
-                                                          page_size=60, page=2))['comments']
-        self.assertEqual(len(replies), 15, f'Size of replies is incorrect, should be 15:  {replies}')
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[0], parent_id=23)
+        self.assertIsInstance(replies, list)
+        self.assertGreater(len(replies), 0)
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[2], parent_id=COMMENT_IDS[3], page_size=50)
+        self.assertEqual(len(replies), 50)
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[3], parent_id=COMMENT_IDS[5],
+                                                         page_size=23, page=5)
+        self.assertEqual(len(replies), 23)
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[5], parent_id=COMMENT_IDS[1],
+                                                         page_size=60, page=2)
+        self.assertEqual(len(replies), 60)
 
     async def test_comment_list_flatness_flatness_LA(self):
-        claim = await self.stream_create(name='doge', bid='0.001')
-        self.assertIn('outputs', claim)
-        claim_id = claim['outputs'][0]['claim_id']
-        replies = await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=23, flat=True)
-        self.assertIsInstance(replies['comments'], list, msg=f'Invalid type: {replies["comments"]} should be list')
-        self.assertGreater(len(replies['comments']), 0, msg='Returned replies are empty')
-        replies = (await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=25, flat=True,
-                                                          max_replies_shown=0, page_size=50))['comments']
-        self.assertEqual(len(replies), 50, f'Replies invalid length ({len(replies)})')
-        replies = (await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=67,
-                                                          flat=True, page_size=23, page=5))['comments']
-        self.assertEqual(len(replies), 0, f'replies {replies} not 23: {len(replies)}')
-        replies = (await self.daemon.jsonrpc_comment_list(claim_id, parent_comment_id=79,
-                                                          page_size=60, page=2))['comments']
-        self.assertGreaterEqual(len(replies), 15, f'Size of replies is incorrect, should be 15:  {replies}')
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[2], parent_id=23, include_replies=True)
+        self.assertGreater(len(replies), 0)
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[6], parent_id=25,
+                                                         page_size=50, include_replies=True)
+        self.assertGreaterEqual(len(replies), 0)
+        self.assertLessEqual(len(replies), 50)
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[7], parent_id=67, page_size=23, page=5)
+        self.assertGreaterEqual(len(replies), 0)
+        self.assertLessEqual(len(replies), 23)
+        replies = await self.daemon.jsonrpc_comment_list(CLAIM_IDS[9], parent_id=79, page=2, include_replies=True)
+        self.assertGreaterEqual(len(replies), 15)
