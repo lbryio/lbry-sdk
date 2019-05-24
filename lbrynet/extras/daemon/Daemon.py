@@ -1669,7 +1669,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         Search for stream and channel claims on the blockchain.
 
-        Use --channel_id=<channel_id> to list all stream claims in a channel.
+        Use --channel=<channel> to list all stream claims in a channel (can be name, url or channel claim id)
 
         Arguments marked with "supports equality constraints" allow prepending the
         value with an equality constraint such as '>', '>=', '<' and '<='
@@ -1677,7 +1677,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
-                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling]
+                         [--channel=<channel>] [--is_controlling]
                          [--order_by=<order_by>...]
                          [--height=<height>] [--publish_time=<publish_time>] [--release_time=<release_time>]
                          [--amount=<amount>] [--effective_amount=<effective_amount>]

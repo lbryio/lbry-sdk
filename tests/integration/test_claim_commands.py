@@ -68,8 +68,8 @@ class ClaimSearchCommand(CommandTestCase):
 
         # finding claims with and without a channel
         await self.assertFindsClaims([signed2, signed], name='on-channel-claim')
-        await self.assertFindsClaim(signed, name='on-channel-claim', channel_id=self.channel_id)
-        await self.assertFindsClaim(signed2, name='on-channel-claim', channel_id=channel_id2)
+        await self.assertFindsClaim(signed, name='on-channel-claim', channel=self.channel_id)
+        await self.assertFindsClaim(signed2, name='on-channel-claim', channel=channel_id2)
         await self.assertFindsClaim(unsigned, name='unsigned')
         await self.assertFindsClaim(unsigned, txid=unsigned['txid'], nout=0)
         await self.assertFindsClaim(unsigned, claim_id=unsigned['outputs'][0]['claim_id'])
@@ -79,14 +79,12 @@ class ClaimSearchCommand(CommandTestCase):
 
         # three streams in channel, zero streams in abandoned channel
         claims = [three, two, signed]
-        await self.assertFindsClaims(claims, channel_id=self.channel_id)
-        await self.assertFindsClaims([three, two, signed2, signed], channel_name="@abc")
-        await self.assertFindsClaims(claims, channel_name="@abc", channel_id=self.channel_id)
+        await self.assertFindsClaims(claims, channel=self.channel_id)
+        await self.assertFindsClaims([three, two, signed2, signed], channel="@abc")
         await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
         await self.channel_abandon(claim_id=self.channel_id)
-        await self.assertFindsClaims([], channel_id=self.channel_id)
-        await self.assertFindsClaims([signed2], channel_name="@abc")
-        await self.assertFindsClaims([], channel_name="@abc", channel_id=self.channel_id)
+        await self.assertFindsClaims([], channel=self.channel_id)
+        await self.assertFindsClaims([signed2], channel="@abc")
         await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}")
 
         # abandoned stream won't show up for streams in channel search
@@ -97,19 +95,19 @@ class ClaimSearchCommand(CommandTestCase):
         await self.create_channel()
         await self.create_lots_of_streams()
 
-        page = await self.claim_search(page_size=20, channel_id=self.channel_id)
+        page = await self.claim_search(page_size=20, channel=self.channel_id)
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams)
 
-        page = await self.claim_search(page_size=6, channel_id=self.channel_id)
+        page = await self.claim_search(page_size=6, channel=self.channel_id)
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[:6])
 
-        page = await self.claim_search(page=2, page_size=6, channel_id=self.channel_id)
+        page = await self.claim_search(page=2, page_size=6, channel=self.channel_id)
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[6:])
 
-        out_of_bounds = await self.claim_search(page=2, page_size=20, channel_id=self.channel_id)
+        out_of_bounds = await self.claim_search(page=2, page_size=20, channel=self.channel_id)
         self.assertEqual(out_of_bounds, [])
 
     async def test_tag_search(self):
