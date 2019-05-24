@@ -3,7 +3,7 @@ import typing
 import logging
 import binascii
 from lbrynet.error import DownloadSDTimeout
-from lbrynet.utils import resolve_host
+from lbrynet.utils import resolve_host, lru_cache_concurrent
 from lbrynet.stream.descriptor import StreamDescriptor
 from lbrynet.blob_exchange.downloader import BlobDownloader
 from lbrynet.dht.peer import KademliaPeer
@@ -35,6 +35,16 @@ class StreamDownloader:
         self.added_fixed_peers = False
         self.time_to_descriptor: typing.Optional[float] = None
         self.time_to_first_bytes: typing.Optional[float] = None
+
+        async def cached_read_blob(blob_info: 'BlobInfo') -> bytes:
+            return await self.read_blob(blob_info, 2)
+
+        if self.blob_manager.decrypted_blob_lru_cache:
+            cached_read_blob = lru_cache_concurrent(override_lru_cache=self.blob_manager.decrypted_blob_lru_cache)(
+                cached_read_blob
+            )
+
+        self.cached_read_blob = cached_read_blob
 
     async def add_fixed_peers(self):
         def _delayed_add_fixed_peers():

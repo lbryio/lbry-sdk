@@ -2,6 +2,7 @@ import os
 import hashlib
 import aiohttp
 import aiohttp.web
+import asyncio
 
 from lbrynet.utils import aiohttp_request
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
@@ -373,3 +374,46 @@ class RangeRequests(CommandTestCase):
         await stream.finished_writing.wait()
         with open(stream.full_path, 'rb') as f:
             self.assertEqual(self.data, f.read())
+
+
+class RangeRequestsLRUCache(CommandTestCase):
+    blob_lru_cache_size = 32
+
+    async def _request_stream(self):
+        name = 'foo'
+        url = f'http://{self.daemon.conf.streaming_host}:{self.daemon.conf.streaming_port}/get/{name}'
+
+        async with aiohttp_request('get', url) as req:
+            self.assertEqual(req.headers.get('Content-Type'), 'application/octet-stream')
+            content_range = req.headers.get('Content-Range')
+            content_length = int(req.headers.get('Content-Length'))
+            streamed_bytes = await req.content.read()
+        self.assertEqual(content_length, len(streamed_bytes))
+        self.assertEqual(15, content_length)
+        self.assertEqual(b'hi\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', streamed_bytes)
+        self.assertEqual('bytes 0-14/15', content_range)
+
+    async def test_range_requests_with_blob_lru_cache(self):
+        self.data = b'hi'
+        self.daemon.conf.save_blobs = False
+        self.daemon.conf.save_files = False
+        await self.stream_create('foo', '0.01', data=self.data, file_size=0)
+        await self.daemon.jsonrpc_file_list()[0].fully_reflected.wait()
+        await self.daemon.jsonrpc_file_delete(delete_from_download_dir=True, claim_name='foo')
+        self.assertEqual(0, len(os.listdir(self.daemon.blob_manager.blob_dir)))
+
+        await self.daemon.streaming_runner.setup()
+        site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,
+                                   self.daemon.conf.streaming_port)
+        await site.start()
+        self.assertListEqual(self.daemon.jsonrpc_file_list(), [])
+
+        await self._request_stream()
+        self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
+        self.server.stop_server()
+
+        # running with cache size 0 gets through without errors without
+        # this since the server doesnt stop immediately
+        await asyncio.sleep(1, loop=self.loop)
+
+        await self._request_stream()
