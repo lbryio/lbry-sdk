@@ -1,10 +1,13 @@
 import unittest
-from binascii import hexlify
+import ecdsa
+import hashlib
+from binascii import hexlify, unhexlify
 from torba.client.constants import COIN, NULL_HASH32
 
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.server.db import SQLDB
 from lbrynet.wallet.server.trending import TRENDING_WINDOW
+from lbrynet.wallet.server.canonical import FindShortestID
 from lbrynet.wallet.server.block_processor import Timer
 from lbrynet.wallet.transaction import Transaction, Input, Output
 
@@ -21,10 +24,6 @@ def get_input():
 
 def get_tx():
     return Transaction().add_inputs([get_input()])
-
-
-def claim_id(claim_hash):
-    return hexlify(claim_hash[::-1]).decode()
 
 
 class OldWalletServerTransaction:
@@ -57,7 +56,10 @@ class TestSQLDB(unittest.TestCase):
         claim = Claim()
         claim.channel.title = title
         channel = Output.pay_claim_name_pubkey_hash(amount, name, claim, b'abc')
-        channel.generate_channel_private_key()
+        private_key = ecdsa.SigningKey.from_string(b'c'*32, curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+        channel.private_key = private_key.to_pem().decode()
+        channel.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
+        channel.script.generate()
         return self._make_tx(channel)
 
     def get_stream(self, title, amount, name='foo'):
@@ -284,8 +286,69 @@ class TestSQLDB(unittest.TestCase):
                 self.get_support(up_biggly, (20+(window*(3 if window == 7 else 1)))*COIN),
             ])
         results = self.sql._search(order_by=['trending_local'])
-        self.assertEqual([c.claim_id for c in claims], [claim_id(c['claim_hash']) for c in results])
+        self.assertEqual([c.claim_id for c in claims], [hexlify(c['claim_hash'][::-1]).decode() for c in results])
         self.assertEqual([10, 6, 2, 0, -2], [int(c['trending_local']) for c in results])
         self.assertEqual([53, 38, -32, 0, -6], [int(c['trending_global']) for c in results])
         self.assertEqual([4, 4, 2, 0, 1], [int(c['trending_group']) for c in results])
         self.assertEqual([53, 38, 2, 0, -6], [int(c['trending_mixed']) for c in results])
+
+    @staticmethod
+    def _get_x_with_claim_id_prefix(getter, prefix, cached_iteration=None):
+        iterations = 100
+        for i in range(cached_iteration or 1, iterations):
+            stream = getter(f'claim #{i}', COIN)
+            if stream[0].tx.outputs[0].claim_id.startswith(prefix):
+                print(f'Found "{prefix}" in {i} iterations.')
+                return stream
+        raise ValueError(f'Failed to find "{prefix}" in {iterations} iterations.')
+
+    def get_channel_with_claim_id_prefix(self, prefix, cached_iteration):
+        return self._get_x_with_claim_id_prefix(self.get_channel, prefix, cached_iteration)
+
+    def get_stream_with_claim_id_prefix(self, prefix, cached_iteration):
+        return self._get_x_with_claim_id_prefix(self.get_stream, prefix, cached_iteration)
+
+    def test_canonical_name(self):
+        advance = self.advance
+        tx_abc = self.get_stream_with_claim_id_prefix('abc', 65)
+        tx_ab = self.get_stream_with_claim_id_prefix('ab', 42)
+        tx_a = self.get_stream_with_claim_id_prefix('a', 2)
+        advance(1, [tx_a])
+        advance(2, [tx_ab])
+        advance(3, [tx_abc])
+        r_a, r_ab, r_abc = self.sql._search(order_by=['^height'])
+        self.assertEqual("foo", r_a['canonical'])
+        self.assertEqual(f"foo#ab", r_ab['canonical'])
+        self.assertEqual(f"foo#abc", r_abc['canonical'])
+
+        tx_ab = self.get_channel_with_claim_id_prefix('ab', 72)
+        tx_a = self.get_channel_with_claim_id_prefix('a', 1)
+        advance(4, [tx_a])
+        advance(5, [tx_ab])
+
+        tx_c = self.get_stream_with_claim_id_prefix('c', 2)
+        tx_cd = self.get_stream_with_claim_id_prefix('cd', 2)
+        advance(6, [tx_c])
+        advance(7, [tx_cd])
+
+        r_a, r_ab, r_abc = self.sql._search(order_by=['^height'])
+        self.assertEqual("foo", r_a['canonical'])
+        self.assertEqual(f"foo#ab", r_ab['canonical'])
+        self.assertEqual(f"foo#abc", r_abc['canonical'])
+
+    def test_canonical_find_shortest_id(self):
+        new_hash = unhexlify('abcdef0123456789beef')[::-1]
+        other0 = unhexlify('1bcdef0123456789beef')[::-1]
+        other1 = unhexlify('ab1def0123456789beef')[::-1]
+        other2 = unhexlify('abc1ef0123456789beef')[::-1]
+        other3 = unhexlify('abcdef0123456789bee1')[::-1]
+        f = FindShortestID()
+        self.assertEqual('', f.finalize())
+        f.step(other0, new_hash)
+        self.assertEqual('#a', f.finalize())
+        f.step(other1, new_hash)
+        self.assertEqual('#abc', f.finalize())
+        f.step(other2, new_hash)
+        self.assertEqual('#abcd', f.finalize())
+        f.step(other3, new_hash)
+        self.assertEqual('#abcdef0123456789beef', f.finalize())
