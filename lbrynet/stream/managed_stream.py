@@ -217,7 +217,8 @@ class ManagedStream:
             written_bytes = None
         return {
             'streaming_url': f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.sd_hash}",
-            'completed': (self.output_file_exists and self.status in ('stopped', 'finished')) or all(
+            'completed': (self.output_file_exists and (self.status in ('stopped', 'finished'))
+                          or not self.saving.is_set()) or all(
                 self.blob_manager.is_blob_verified(b.blob_hash) for b in self.descriptor.blobs[:-1]),
             'file_name': file_name,
             'download_directory': download_directory,
