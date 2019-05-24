@@ -3,6 +3,9 @@ dist: xenial
 language: python
 python: "3.7"
 
+env:
+  - TORBA=master
+
 jobs:
   include:
 
@@ -10,7 +13,7 @@ jobs:
       name: "pylint lbrynet"
       install:
         - pip install astroid pylint
-        - pip install git+https://github.com/lbryio/torba.git@master#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
         - pip install -e .
       script: pylint lbrynet
 
@@ -18,7 +21,7 @@ jobs:
       name: "Unit Tests"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git@master#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
         - pip install -e .
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -vv tests.unit
@@ -27,10 +30,10 @@ jobs:
         - bash <(curl -s https://codecov.io/bash)
 
     - name: "Integration Tests"
-      cache: false
       install:
         - pip install tox-travis coverage
-        - pushd .. && git clone --single-branch --branch master https://github.com/lbryio/torba.git && popd
+        - pushd .. && git clone --single-branch --branch ${TORBA} https://github.com/lbryio/torba.git && popd
+
       script: tox
       after_success:
         - coverage combine tests/
@@ -39,7 +42,7 @@ jobs:
     - name: "Run Examples"
       install:
         - pip install coverage
-        - pip install git+https://github.com/lbryio/torba.git@master#egg=torba
+        - pip install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
         - pip install -e .
       script:
         - HOME=/tmp coverage run -p --source=lbrynet scripts/generate_json_api.py
@@ -56,7 +59,7 @@ jobs:
         - docker pull lbry/pyinstaller34_32bits:py371
       script:
         - python scripts/set_build.py
-        - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh
+        - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh ${TORBA}
         - sudo zip -j dist/lbrynet-windows.zip dist/lbrynet.exe
       deploy:
         provider: releases
@@ -80,7 +83,7 @@ jobs:
       env: OS=linux
       install:
         - pip3 install pyinstaller
-        - pip3 install git+https://github.com/lbryio/torba.git
+        - pip3 install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
         - python3 scripts/set_build.py
         - pip3 install -e .
       script:
