@@ -229,11 +229,12 @@ class LRUCache:
         return item in self.cache
 
 
-def lru_cache_concurrent(cache_size: int):
-    if not cache_size > 0:
+def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
+                         override_lru_cache: typing.Optional[LRUCache] = None):
+    if not cache_size and override_lru_cache is None:
         raise ValueError("invalid cache size")
     concurrent_cache = {}
-    lru_cache = LRUCache(cache_size)
+    lru_cache = override_lru_cache or LRUCache(cache_size)
 
     def wrapper(async_fn):
 

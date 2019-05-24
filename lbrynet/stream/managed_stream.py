@@ -42,6 +42,9 @@ class ManagedStream:
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
+    SAVING_ID = 1
+    STREAMING_ID = 2
+
     __slots__ = [
         'loop',
         'config',
@@ -304,7 +307,10 @@ class ManagedStream:
             raise IndexError(start_blob_num)
         for i, blob_info in enumerate(self.descriptor.blobs[start_blob_num:-1]):
             assert i + start_blob_num == blob_info.blob_num
-            decrypted = await self.downloader.read_blob(blob_info, connection_id)
+            if connection_id == self.STREAMING_ID:
+                decrypted = await self.downloader.cached_read_blob(blob_info)
+            else:
+                decrypted = await self.downloader.read_blob(blob_info, connection_id)
             yield (blob_info, decrypted)
 
     async def stream_file(self, request: Request, node: typing.Optional['Node'] = None) -> StreamResponse:
@@ -354,7 +360,7 @@ class ManagedStream:
         self.started_writing.clear()
         try:
             with open(output_path, 'wb') as file_write_handle:
-                async for blob_info, decrypted in self._aiter_read_stream(connection_id=1):
+                async for blob_info, decrypted in self._aiter_read_stream(connection_id=self.SAVING_ID):
                     log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
                     await self.loop.run_in_executor(None, self._write_decrypted_blob, file_write_handle, decrypted)
                     self.written_bytes += len(decrypted)
