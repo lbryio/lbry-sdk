@@ -2,6 +2,7 @@ import os
 import typing
 import asyncio
 import logging
+from lbrynet.utils import LRUCache
 from lbrynet.blob.blob_file import is_valid_blobhash, BlobFile, BlobBuffer, AbstractBlob
 from lbrynet.stream.descriptor import StreamDescriptor
 
@@ -30,6 +31,8 @@ class BlobManager:
             else self._node_data_store.completed_blobs
         self.blobs: typing.Dict[str, AbstractBlob] = {}
         self.config = config
+        self.decrypted_blob_lru_cache = None if not self.config.blob_lru_cache_size else LRUCache(
+            self.config.blob_lru_cache_size)
 
     def _get_blob(self, blob_hash: str, length: typing.Optional[int] = None):
         if self.config.save_blobs:
