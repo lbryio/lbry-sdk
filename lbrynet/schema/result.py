@@ -20,6 +20,7 @@ class Outputs:
 
     def _inflate_claim(self, txo, message):
         txo.meta = {
+            'canonical_url': message.canonical_url,
             'is_controlling': message.is_controlling,
             'activation_height': message.activation_height,
             'effective_amount': message.effective_amount,
@@ -91,6 +92,7 @@ class Outputs:
             txo_message.height = txo['height']
             txo_message.tx_hash = txo['txo_hash'][:32]
             txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])
+            txo_message.claim.canonical_url = txo['canonical_url']
             txo_message.claim.is_controlling = bool(txo['is_controlling'])
             txo_message.claim.activation_height = txo['activation_height']
             txo_message.claim.effective_amount = txo['effective_amount']

@@ -9,6 +9,7 @@ from torba.client.basedatabase import query, constraints_to_sql
 
 from lbrynet.schema.url import URL, normalize_name
 from lbrynet.wallet.transaction import Transaction, Output
+from lbrynet.wallet.server.canonical import register_canonical_functions
 from lbrynet.wallet.server.trending import (
     CREATE_TREND_TABLE, calculate_trending, register_trending_functions
 )
@@ -66,8 +67,9 @@ class SQLDB:
     CREATE_CLAIM_TABLE = """
         create table if not exists claim (
             claim_hash bytes primary key,
-            normalized text not null,
             claim_name text not null,
+            normalized text not null,
+            canonical text not null,
             is_channel bool not null,
             txo_hash bytes not null,
             tx_position integer not null,
@@ -150,6 +152,7 @@ class SQLDB:
         self.db = sqlite3.connect(self._db_path, isolation_level=None, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(self.CREATE_TABLES_QUERY)
+        register_canonical_functions(self.db)
         register_trending_functions(self.db)
 
     def close(self):
@@ -250,11 +253,19 @@ class SQLDB:
             self.db.executemany("""
                 INSERT INTO claim (
                     claim_hash, normalized, claim_name, is_channel, txo_hash, tx_position,
-                    height, amount, channel_hash, release_time, publish_time, activation_height)
+                    height, amount, channel_hash, release_time, publish_time, activation_height,
+                    canonical)
                 VALUES (
                     :claim_hash, :normalized, :claim_name, :is_channel, :txo_hash, :tx_position,
                     :height, :amount, :channel_hash, :release_time, :publish_time,
-                    CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END
+                    CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
+                    CASE WHEN :channel_hash IS NOT NULL
+                        THEN (SELECT canonical FROM claim WHERE claim_hash=:channel_hash)||'/'||
+                             :normalized||COALESCE((SELECT shortest_id(claim_hash, :claim_hash)
+                              FROM claim WHERE normalized = :normalized), '')
+                        ELSE :normalized||COALESCE((SELECT shortest_id(claim_hash, :claim_hash)
+                              FROM claim WHERE normalized = :normalized), '')
+                    END
                 )""", claims)
 
     def update_claims(self, txos: Set[Output], header):
@@ -561,7 +572,7 @@ class SQLDB:
         return self.get_claims(
             """
             claimtrie.claim_hash as is_controlling,
-            claim.claim_hash, claim.txo_hash, claim.height,
+            claim.claim_hash, claim.txo_hash, claim.height, claim.canonical,
             claim.activation_height, claim.effective_amount, claim.support_amount,
             claim.trending_group, claim.trending_mixed,
             claim.trending_local, claim.trending_global,
@@ -614,7 +625,10 @@ class SQLDB:
                 continue
             channel = None
             if url.has_channel:
-                matches = self._search(is_controlling=True, **url.channel.to_dict())
+                query = url.channel.to_dict()
+                if set(query) == {'name'}:
+                    query['is_controlling'] = True
+                matches = self._search(**query)
                 if matches:
                     channel = matches[0]
                 else:
@@ -624,7 +638,9 @@ class SQLDB:
                 query = url.stream.to_dict()
                 if channel is not None:
                     query['channel_hash'] = channel['claim_hash']
-                matches = self._search(is_controlling=True, **query)
+                if set(query) == {'name'}:
+                    query['is_controlling'] = True
+                matches = self._search(**query)
                 if matches:
                     result.append(matches[0])
                 else:

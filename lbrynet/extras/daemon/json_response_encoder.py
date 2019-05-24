@@ -175,6 +175,7 @@ class JSONResponseEncoder(JSONEncoder):
             })
             if include_meta:
                 output['meta'] = self.encode_claim_meta(txo.meta)
+                output['canonical_url'] = output['meta'].pop('canonical_url', None)
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 try:
                     output['value'] = txo.claim
