@@ -1,6 +1,3 @@
-from binascii import hexlify
-
-
 class FindShortestID:
     __slots__ = 'short_id', 'new_id'
 
