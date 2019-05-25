@@ -97,7 +97,8 @@ class Output(BaseOutput):
     def has_private_key(self):
         return self.private_key is not None
 
-    def is_signed_by(self, channel: 'Output', ledger=None):
+    def is_signed_by(self, channel: 'Output', ledger=None, public_key_bytes=None):
+        public_key_bytes = public_key_bytes or channel.claim.channel.public_key_bytes
         if self.claim.unsigned_payload:
             pieces = [
                 Base58.decode(self.get_address(ledger)),
@@ -111,7 +112,7 @@ class Output(BaseOutput):
                 self.claim.to_message_bytes()
             ]
         digest = sha256(b''.join(pieces))
-        public_key = load_der_public_key(channel.claim.channel.public_key_bytes, default_backend())
+        public_key = load_der_public_key(public_key_bytes, default_backend())
         hash = hashes.SHA256()
         signature = hexlify(self.claim.signature)
         r = int(signature[:int(len(signature)/2)], 16)
