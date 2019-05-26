@@ -51,7 +51,7 @@ class LBRYElectrumX(ElectrumX):
         return Outputs.to_base64(*self.db.sql.search(kwargs))
 
     async def claimtrie_resolve(self, *urls):
-        return Outputs.to_base64(self.db.sql.resolve(urls))
+        return Outputs.to_base64(*self.db.sql.resolve(urls))
 
     async def get_server_height(self):
         return self.bp.height
