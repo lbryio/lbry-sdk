@@ -2,6 +2,8 @@ import sqlite3
 import struct
 from typing import Union, Tuple, Set, List
 from binascii import unhexlify
+from itertools import chain
+
 
 from torba.server.db import DB
 from torba.server.util import class_logger
@@ -71,23 +73,31 @@ class SQLDB:
             claim_id text not null,
             claim_name text not null,
             normalized text not null,
-            canonical text not null,
             txo_hash bytes not null,
             tx_position integer not null,
             amount integer not null,
-            is_channel bool not null,
-            public_key_bytes bytes,
-            timestamp integer not null,
-            height integer not null,
+            timestamp integer not null, -- last updated timestamp
+            creation_timestamp integer not null,
+            height integer not null, -- last updated height
             creation_height integer not null,
             activation_height integer,
             expiration_height integer not null,
             release_time integer not null,
 
+            short_url text not null, -- normalized#shortest-unique-claim_id
+            canonical_url text, -- channel's-short_url/normalized#shortest-unique-claim_id-within-channel
+
+            -- claims which are channels
+            is_channel bool not null,
+            public_key_bytes bytes,
+            claims_in_channel integer,
+
+            -- claims which are inside channels
             channel_hash bytes,
-            channel_height integer, -- height at which claim got valid signature
-            channel_canonical text, -- canonical URL \w channel
-            is_channel_signature_valid bool,
+            channel_join integer, -- height at which claim got valid signature / joined channel
+            signature bytes,
+            signature_digest bytes,
+            is_channel_signature_valid bool not null default false,
 
             effective_amount integer not null default 0,
             support_amount integer not null default 0,
@@ -205,7 +215,7 @@ class SQLDB:
     def commit(self):
         self.execute('commit;')
 
-    def _upsertable_claims(self, txos: Set[Output], header, channels, clear_first=False):
+    def _upsertable_claims(self, txos: List[Output], header, clear_first=False):
         claim_hashes, claims, tags = [], [], []
         for txo in txos:
             tx = txo.tx_ref.tx
@@ -228,13 +238,9 @@ class SQLDB:
                 'tx_position': tx.position,
                 'amount': txo.amount,
                 'is_channel': False,
-                'public_key_bytes': None,
                 'timestamp': header['timestamp'],
                 'height': tx.height,
                 'release_time': None,
-                'channel_hash': None,
-                'channel_height': None,
-                'is_channel_signature_valid': None
             }
             claims.append(claim_record)
 
@@ -247,18 +253,8 @@ class SQLDB:
             if claim.is_stream:
                 if claim.stream.release_time:
                     claim_record['release_time'] = claim.stream.release_time
-                if claim.signing_channel_hash:
-                    claim_record['channel_hash'] = sqlite3.Binary(claim.signing_channel_hash)
-                    channel_pub_key = channels.get(claim.signing_channel_hash)
-                    if channel_pub_key:
-                        claim_record['is_channel_signature_valid'] = txo.is_signed_by(
-                            None, ledger=self.ledger, public_key_bytes=channel_pub_key
-                        )
-                        if claim_record['is_channel_signature_valid']:
-                            claim_record['channel_height'] = tx.height
             elif claim.is_channel:
                 claim_record['is_channel'] = True
-                claim_record['public_key_bytes'] = sqlite3.Binary(claim.channel.public_key_bytes)
 
             for tag in claim.message.tags:
                 tags.append((tag, claim_hash, tx.height))
@@ -273,63 +269,33 @@ class SQLDB:
 
         return claims
 
-    def insert_claims(self, txos: Set[Output], header, channels):
-        claims = self._upsertable_claims(txos, header, channels)
+    def insert_claims(self, txos: List[Output], header):
+        claims = self._upsertable_claims(txos, header)
         if claims:
             self.db.executemany("""
                 INSERT INTO claim (
-                    claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position,
-                    amount, is_channel, public_key_bytes, timestamp, height, creation_height,
-                    channel_hash, channel_height, is_channel_signature_valid, release_time,
-                    activation_height, expiration_height, canonical, channel_canonical)
+                    claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
+                    is_channel, timestamp, creation_timestamp, height, creation_height,
+                    release_time, activation_height, expiration_height, short_url)
                 VALUES (
-                    :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position,
-                    :amount, :is_channel, :public_key_bytes, :timestamp, :height, :height,
-                    :channel_hash, :channel_height, :is_channel_signature_valid,
+                    :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position, :amount,
+                    :is_channel, :timestamp, :timestamp, :height, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
                     CASE WHEN :height >= 262974 THEN :height+2102400 ELSE :height+262974 END,
                     :normalized||COALESCE(
                         (SELECT shortest_id(claim_id, :claim_id) FROM claim WHERE normalized = :normalized),
                         '#'||substr(:claim_id, 1, 1)
-                    ),
-                    CASE WHEN :is_channel_signature_valid = 1 THEN
-                        (SELECT canonical FROM claim WHERE claim_hash=:channel_hash)||'/'||
-                        :normalized||COALESCE(
-                            (SELECT shortest_id(claim_id, :claim_id) FROM claim
-                             WHERE normalized = :normalized AND
-                                   channel_hash = :channel_hash AND
-                                   is_channel_signature_valid = 1),
-                            '#'||substr(:claim_id, 1, 1)
-                        )
-                    END
+                    )
                 )""", claims)
 
-    def update_claims(self, txos: Set[Output], header, channels):
-        claims = self._upsertable_claims(txos, header, channels, clear_first=True)
+    def update_claims(self, txos: List[Output], header):
+        claims = self._upsertable_claims(txos, header, clear_first=True)
         if claims:
             self.db.executemany("""
-                UPDATE claim SET 
-                    txo_hash=:txo_hash, tx_position=:tx_position, height=:height, amount=:amount,
-                    public_key_bytes=:public_key_bytes, timestamp=:timestamp,
-                    release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END,
-                    channel_hash=:channel_hash, is_channel_signature_valid=:is_channel_signature_valid,
-                    channel_height=CASE
-                        WHEN channel_hash = :channel_hash AND :is_channel_signature_valid THEN channel_height
-                        WHEN :is_channel_signature_valid THEN :height
-                    END,
-                    channel_canonical=CASE
-                        WHEN channel_hash = :channel_hash AND :is_channel_signature_valid THEN channel_canonical
-                        WHEN :is_channel_signature_valid THEN
-                            (SELECT canonical FROM claim WHERE claim_hash=:channel_hash)||'/'||
-                            :normalized||COALESCE(
-                                (SELECT shortest_id(claim_id, :claim_id) FROM claim
-                                 WHERE normalized = :normalized AND
-                                       channel_hash = :channel_hash AND
-                                       is_channel_signature_valid = 1),
-                                '#'||substr(:claim_id, 1, 1)
-                            )
-                    END
+                UPDATE claim SET
+                    txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height, timestamp=:timestamp,
+                    release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;
                 """, claims)
 
@@ -345,13 +311,6 @@ class SQLDB:
         if binary_claim_hashes:
             for table in ('tag',):  # 'language', 'location', etc
                 self.execute(*self._delete_sql(table, {'claim_hash__in': binary_claim_hashes}))
-
-    def invalidate_channel_signatures(self, channels):
-        self.execute(f"""
-            UPDATE claim SET
-                channel_height=NULL, channel_canonical=NULL, is_channel_signature_valid=0
-            WHERE channel_hash IN ({','.join('?' for _ in channels)})
-        """, [sqlite3.Binary(channel) for channel in channels])
 
     def split_inputs_into_claims_supports_and_other(self, txis):
         txo_hashes = {txi.txo_ref.hash for txi in txis}
@@ -369,21 +328,7 @@ class SQLDB:
             txo_hashes -= {r['txo_hash'] for r in supports}
         return claims, supports, txo_hashes
 
-    def get_channel_public_keys_for_outputs(self, txos):
-        channels = set()
-        for txo in txos:
-            try:
-                channel_hash = txo.claim.signing_channel_hash
-                if channel_hash:
-                    channels.add(channel_hash)
-            except:
-                pass
-        return dict(self.execute(*query(
-            "SELECT claim_hash, public_key_bytes FROM claim",
-            claim_hash__in=[sqlite3.Binary(channel) for channel in channels]
-        )).fetchall())
-
-    def insert_supports(self, txos: Set[Output]):
+    def insert_supports(self, txos: List[Output]):
         supports = []
         for txo in txos:
             tx = txo.tx_ref.tx
@@ -404,6 +349,129 @@ class SQLDB:
             self.execute(*self._delete_sql(
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
+
+    def validate_channel_signatures(self, height, new_claims, updated_claims):
+        if not new_claims and not updated_claims:
+            return
+
+        channels, new_channel_keys, signables = {}, {}, {}
+        for txo in chain(new_claims, updated_claims):
+            try:
+                claim = txo.claim
+            except:
+                continue
+            if claim.is_channel:
+                channels[txo.claim_hash] = txo
+                new_channel_keys[txo.claim_hash] = claim.channel.public_key_bytes
+            else:
+                signables[txo.claim_hash] = txo
+
+        missing_channel_keys = set()
+        for txo in signables.values():
+            claim = txo.claim
+            if claim.is_signed and claim.signing_channel_hash not in new_channel_keys:
+                missing_channel_keys.add(claim.signing_channel_hash)
+
+        all_channel_keys = {}
+        if new_channel_keys or missing_channel_keys:
+            all_channel_keys = dict(self.execute(*query(
+                "SELECT claim_hash, public_key_bytes FROM claim",
+                claim_hash__in=[
+                    sqlite3.Binary(channel_hash) for channel_hash in
+                    set(new_channel_keys) | missing_channel_keys
+                ]
+            )))
+
+        changed_channel_keys = {}
+        for claim_hash, new_key in new_channel_keys.items():
+            if all_channel_keys[claim_hash] != new_key:
+                all_channel_keys[claim_hash] = new_key
+                changed_channel_keys[claim_hash] = new_key
+
+        claim_updates = []
+
+        for claim_hash, txo in signables.items():
+            claim = txo.claim
+            update = {
+                'claim_hash': sqlite3.Binary(claim_hash),
+                'channel_hash': None,
+                'signature': None,
+                'signature_digest': None,
+                'is_channel_signature_valid': False
+            }
+            if claim.is_signed:
+                update.update({
+                    'channel_hash': sqlite3.Binary(claim.signing_channel_hash),
+                    'signature': sqlite3.Binary(txo.get_encoded_signature()),
+                    'signature_digest': sqlite3.Binary(txo.get_signature_digest(self.ledger))
+                })
+            claim_updates.append(update)
+
+        if changed_channel_keys:
+            sql = f"""
+            SELECT * FROM claim WHERE
+                channel_hash IN ({','.join('?' for _ in changed_channel_keys)}) AND
+                signature IS NOT NULL
+            """
+            for affected_claim in self.execute(sql, [sqlite3.Binary(h) for h in changed_channel_keys]):
+                if affected_claim['claim_hash'] not in signables:
+                    claim_updates.append({
+                        'claim_hash': sqlite3.Binary(affected_claim['claim_hash']),
+                        'channel_hash': sqlite3.Binary(affected_claim['channel_hash']),
+                        'signature': sqlite3.Binary(affected_claim['signature']),
+                        'signature_digest': sqlite3.Binary(affected_claim['signature_digest']),
+                        'is_channel_signature_valid': False
+                    })
+
+        for update in claim_updates:
+            channel_pub_key = all_channel_keys.get(update['channel_hash'])
+            if channel_pub_key and update['signature']:
+                update['is_channel_signature_valid'] = Output.is_signature_valid(
+                    bytes(update['signature']), bytes(update['signature_digest']), channel_pub_key
+                )
+
+        if claim_updates:
+            self.db.executemany(f"""
+                UPDATE claim SET 
+                    channel_hash=:channel_hash, signature=:signature, signature_digest=:signature_digest,
+                    is_channel_signature_valid=:is_channel_signature_valid,
+                    channel_join=CASE
+                        WHEN is_channel_signature_valid AND :is_channel_signature_valid THEN channel_join
+                        WHEN :is_channel_signature_valid THEN {height}
+                    END,
+                    canonical_url=CASE
+                        WHEN is_channel_signature_valid AND :is_channel_signature_valid THEN canonical_url
+                        WHEN :is_channel_signature_valid THEN
+                            (SELECT short_url FROM claim WHERE claim_hash=:channel_hash)||'/'||
+                            normalized||COALESCE(
+                                (SELECT shortest_id(other_claim.claim_id, claim.claim_id) FROM claim AS other_claim
+                                 WHERE other_claim.normalized = claim.normalized AND
+                                       other_claim.channel_hash = :channel_hash AND
+                                       other_claim.is_channel_signature_valid = 1),
+                                '#'||substr(claim_id, 1, 1)
+                            )
+                    END
+                WHERE claim_hash=:claim_hash;
+                """, claim_updates)
+
+        if channels:
+            self.db.executemany(
+                "UPDATE claim SET public_key_bytes=:public_key_bytes WHERE claim_hash=:claim_hash", [{
+                    'claim_hash': sqlite3.Binary(claim_hash),
+                    'public_key_bytes': sqlite3.Binary(txo.claim.channel.public_key_bytes)
+                } for claim_hash, txo in channels.items()]
+            )
+
+        if all_channel_keys:
+            self.db.executemany(f"""
+                UPDATE claim SET
+                    claims_in_channel=(
+                        SELECT COUNT(*) FROM claim AS claim_in_channel
+                        WHERE claim_in_channel.channel_hash=claim.claim_hash AND
+                              claim_in_channel.is_channel_signature_valid
+                    )
+                WHERE claim_hash = ?
+            """, [(sqlite3.Binary(channel_hash),) for channel_hash in all_channel_keys.keys()])
 
     def _update_support_amount(self, claim_hashes):
         if claim_hashes:
@@ -501,20 +569,21 @@ class SQLDB:
         r(self._perform_overtake, height, [], [])
 
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
-        insert_claims = set()
-        update_claims = set()
+        insert_claims = []
+        update_claims = []
         delete_claim_hashes = set()
-        insert_supports = set()
+        insert_supports = []
         delete_support_txo_hashes = set()
         recalculate_claim_hashes = set()  # added/deleted supports, added/updated claim
         deleted_claim_names = set()
+        delete_others = set()
         body_timer = timer.add_timer('body')
         for position, (etx, txid) in enumerate(all_txs):
             tx = timer.run(
                 Transaction, etx.serialize(), height=height, position=position
             )
             # Inputs
-            spent_claims, spent_supports, spent_other = timer.run(
+            spent_claims, spent_supports, spent_others = timer.run(
                 self.split_inputs_into_claims_supports_and_other, tx.inputs
             )
             body_timer.start()
@@ -522,28 +591,38 @@ class SQLDB:
             delete_support_txo_hashes.update({r['txo_hash'] for r in spent_supports})
             deleted_claim_names.update({r['normalized'] for r in spent_claims})
             recalculate_claim_hashes.update({r['claim_hash'] for r in spent_supports})
+            delete_others.update(spent_others)
             # Outputs
             for output in tx.outputs:
                 if output.is_support:
-                    insert_supports.add(output)
+                    insert_supports.append(output)
                     recalculate_claim_hashes.add(output.claim_hash)
                 elif output.script.is_claim_name:
-                    insert_claims.add(output)
+                    insert_claims.append(output)
                     recalculate_claim_hashes.add(output.claim_hash)
                 elif output.script.is_update_claim:
                     claim_hash = output.claim_hash
-                    if claim_hash in delete_claim_hashes:
-                        delete_claim_hashes.remove(claim_hash)
-                    update_claims.add(output)
-                    recalculate_claim_hashes.add(output.claim_hash)
+                    update_claims.append(output)
+                    recalculate_claim_hashes.add(claim_hash)
+                    delete_claim_hashes.discard(claim_hash)
+                    delete_others.discard(output.ref.hash)  # claim insertion and update occurring in the same block
             body_timer.stop()
-        channel_public_keys = self.get_channel_public_keys_for_outputs(insert_claims | update_claims)
+        skip_claim_timer = timer.add_timer('skip insertion of abandoned claims')
+        skip_claim_timer.start()
+        for new_claim in list(insert_claims):
+            if new_claim.ref.hash in delete_others:
+                insert_claims.remove(new_claim)
+                self.logger.info(
+                    f"Skipping insertion of claim '{new_claim.id}' due to "
+                    f"an abandon of it in the same block {height}."
+                )
+        skip_claim_timer.stop()
         r = timer.run
         r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
-        r(self.invalidate_channel_signatures, recalculate_claim_hashes)
-        r(self.insert_claims, insert_claims, header, channel_public_keys)
-        r(self.update_claims, update_claims, header, channel_public_keys)
+        r(self.insert_claims, insert_claims, header)
+        r(self.update_claims, update_claims, header)
+        r(self.validate_channel_signatures, height, insert_claims, update_claims)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
@@ -649,23 +728,20 @@ class SQLDB:
             """
             claimtrie.claim_hash as is_controlling,
             claim.claim_hash, claim.txo_hash, claim.height,
-            claim.activation_height, claim.effective_amount, claim.support_amount,
+            claim.is_channel, claim.claims_in_channel,
+            claim.activation_height, claim.expiration_height,
+            claim.effective_amount, claim.support_amount,
             claim.trending_group, claim.trending_mixed,
             claim.trending_local, claim.trending_global,
-            CASE WHEN claim.is_channel_signature_valid = 1
-                THEN claim.channel_canonical
-                ELSE claim.canonical
-            END AS canonical,
-            CASE WHEN claim.is_channel=1 THEN (
-                SELECT COUNT(*) FROM claim as claim_in_channel
-                WHERE claim_in_channel.channel_hash=claim.claim_hash
-             ) ELSE 0 END AS claims_in_channel,
-            channel.txo_hash AS channel_txo_hash, channel.height AS channel_height
+            claim.short_url, claim.canonical_url,
+            claim.channel_hash, channel.txo_hash AS channel_txo_hash,
+            channel.height AS channel_height, claim.is_channel_signature_valid
             """, **constraints
         )
 
     INTEGER_PARAMS = {
-        'height', 'activation_height', 'release_time', 'publish_time',
+        'height', 'creation_height', 'activation_height', 'tx_position',
+        'release_time', 'timestamp',
         'amount', 'effective_amount', 'support_amount',
         'trending_group', 'trending_mixed',
         'trending_local', 'trending_global',
@@ -684,7 +760,7 @@ class SQLDB:
         'name',
     } | INTEGER_PARAMS
 
-    def search(self, constraints) -> Tuple[List, int, int]:
+    def search(self, constraints) -> Tuple[List, List, int, int]:
         assert set(constraints).issubset(self.SEARCH_PARAMS), \
             f"Search query contains invalid arguments: {set(constraints).difference(self.SEARCH_PARAMS)}"
         total = self.get_claims_count(**constraints)
@@ -693,10 +769,15 @@ class SQLDB:
         if 'order_by' not in constraints:
             constraints['order_by'] = ["height", "^name"]
         txo_rows = self._search(**constraints)
-        return txo_rows, constraints['offset'], total
+        channel_hashes = set(txo['channel_hash'] for txo in txo_rows if txo['channel_hash'])
+        extra_txo_rows = []
+        if channel_hashes:
+            extra_txo_rows = self._search(**{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]})
+        return txo_rows, extra_txo_rows, constraints['offset'], total
 
-    def resolve(self, urls) -> List:
+    def resolve(self, urls) -> Tuple[List, List]:
         result = []
+        channel_hashes = set()
         for raw_url in urls:
             try:
                 url = URL.parse(raw_url)
@@ -723,12 +804,17 @@ class SQLDB:
                 matches = self._search(**query)
                 if matches:
                     result.append(matches[0])
+                    if matches[0]['channel_hash']:
+                        channel_hashes.add(matches[0]['channel_hash'])
                 else:
                     result.append(LookupError(f'Could not find stream in "{raw_url}".'))
                     continue
             else:
                 result.append(channel)
-        return result
+        extra_txo_rows = []
+        if channel_hashes:
+            extra_txo_rows = self._search(**{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]})
+        return result, extra_txo_rows
 
 
 class LBRYDB(DB):
