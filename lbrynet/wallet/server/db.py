@@ -612,10 +612,6 @@ class SQLDB:
         for new_claim in list(insert_claims):
             if new_claim.ref.hash in delete_others:
                 insert_claims.remove(new_claim)
-                self.logger.info(
-                    f"Skipping insertion of claim '{new_claim.id}' due to "
-                    f"an abandon of it in the same block {height}."
-                )
         skip_claim_timer.stop()
         r = timer.run
         r(self.delete_claims, delete_claim_hashes)
