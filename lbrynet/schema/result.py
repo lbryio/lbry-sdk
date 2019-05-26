@@ -33,8 +33,8 @@ class Outputs:
         if txo_message.WhichOneof('meta') == 'claim':
             claim = txo_message.claim
             txo.meta = {
-                'short_url': claim.short_url,
-                'canonical_url': claim.canonical_url or claim.short_url,
+                'short_url': f'lbry://{claim.short_url}',
+                'canonical_url': f'lbry://{claim.canonical_url or claim.short_url}',
                 'is_controlling': claim.is_controlling,
                 'activation_height': claim.activation_height,
                 'expiration_height': claim.expiration_height,
