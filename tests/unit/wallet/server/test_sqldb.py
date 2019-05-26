@@ -370,7 +370,7 @@ class TestSQLDB(unittest.TestCase):
         self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
         self.assertEqual(2, self.sql._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
 
-        # invalidate channel signature
+        # change channel public key, invaliding stream claim signatures
         advance(8, [self.get_channel_update(txo_chan_a, COIN, key=b'a')])
         r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
         self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])
@@ -379,7 +379,7 @@ class TestSQLDB(unittest.TestCase):
         self.assertIsNone(r_ab2['canonical_url'])
         self.assertEqual(0, self.sql._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
 
-        # re-validate signature (reverts signature to original one)
+        # reinstate previous channel public key (previous stream claim signatures become valid again)
         advance(9, [self.get_channel_update(txo_chan_a, COIN, key=b'c')])
         r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
         self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])

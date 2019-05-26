@@ -384,7 +384,7 @@ class SQLDB:
 
         changed_channel_keys = {}
         for claim_hash, new_key in new_channel_keys.items():
-            if all_channel_keys[claim_hash] != new_key:
+            if claim_hash not in all_channel_keys or all_channel_keys[claim_hash] != new_key:
                 all_channel_keys[claim_hash] = new_key
                 changed_channel_keys[claim_hash] = new_key
 
