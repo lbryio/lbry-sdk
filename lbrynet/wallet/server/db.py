@@ -107,7 +107,9 @@ class SQLDB:
             trending_global integer not null default 0
         );
 
+        create index if not exists claim_id_idx on claim (claim_id);
         create index if not exists claim_normalized_idx on claim (normalized);
+        create index if not exists claim_search_idx on claim (normalized, claim_id);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_channel_hash_idx on claim (channel_hash);
         create index if not exists claim_release_time_idx on claim (release_time);
@@ -663,9 +665,11 @@ class SQLDB:
             constraints['limit'] = 1
 
         if 'claim_id' in constraints:
-            constraints['claim.claim_hash'] = sqlite3.Binary(
-                unhexlify(constraints.pop('claim_id'))[::-1]
-            )
+            claim_id = constraints.pop('claim_id')
+            if len(claim_id) == 40:
+                constraints['claim.claim_id'] = claim_id
+            else:
+                constraints['claim.claim_id__like'] = f'{claim_id[:40]}%'
         if 'name' in constraints:
             constraints['claim.normalized'] = normalize_name(constraints.pop('name'))
 
@@ -737,7 +741,7 @@ class SQLDB:
 
     INTEGER_PARAMS = {
         'height', 'creation_height', 'activation_height', 'tx_position',
-        'release_time', 'timestamp',
+        'release_time', 'timestamp', 'is_channel_signature_valid', 'channel_join',
         'amount', 'effective_amount', 'support_amount',
         'trending_group', 'trending_mixed',
         'trending_local', 'trending_global',
@@ -785,7 +789,9 @@ class SQLDB:
                 query = url.channel.to_dict()
                 if set(query) == {'name'}:
                     query['is_controlling'] = True
-                matches = self._search(**query)
+                else:
+                    query['order_by'] = ['^height']
+                matches = self._search(**query, limit=1)
                 if matches:
                     channel = matches[0]
                 else:
@@ -794,10 +800,16 @@ class SQLDB:
             if url.has_stream:
                 query = url.stream.to_dict()
                 if channel is not None:
+                    if set(query) == {'name'}:
+                        # temporarily emulate is_controlling for claims in channel
+                        query['order_by'] = ['effective_amount']
+                    else:
+                        query['order_by'] = ['^channel_join']
                     query['channel_hash'] = channel['claim_hash']
-                if set(query) == {'name'}:
+                    query['is_channel_signature_valid'] = 1
+                elif set(query) == {'name'}:
                     query['is_controlling'] = True
-                matches = self._search(**query)
+                matches = self._search(**query, limit=1)
                 if matches:
                     result.append(matches[0])
                     if matches[0]['channel_hash']:
