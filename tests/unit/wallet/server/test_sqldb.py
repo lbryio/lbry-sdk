@@ -56,7 +56,7 @@ class TestSQLDB(unittest.TestCase):
 
     def _set_channel_key(self, channel, key):
         private_key = ecdsa.SigningKey.from_string(key*32, curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
-        channel.private_key = private_key.to_pem().decode()
+        channel.private_key = private_key
         channel.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
         channel.script.generate()
 
