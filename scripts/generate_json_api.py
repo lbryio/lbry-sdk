@@ -262,7 +262,7 @@ class Examples(CommandTestCase):
 
         await r(
             'Search for all claims in channel',
-            'claim', 'search', f'--channel_id="{channel_id}"'
+            'claim', 'search', '--channel=@channel'
         )
 
         await r(
