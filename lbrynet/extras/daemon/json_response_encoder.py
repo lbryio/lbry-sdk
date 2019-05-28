@@ -138,7 +138,7 @@ class JSONResponseEncoder(JSONEncoder):
             'hex': hexlify(tx.raw).decode(),
         }
 
-    def encode_output(self, txo, check_signature=True, include_meta=True):
+    def encode_output(self, txo, check_signature=True):
         tx_height = txo.tx_ref.height
         best_height = self.ledger.headers.height
         output = {
@@ -169,12 +169,15 @@ class JSONResponseEncoder(JSONEncoder):
         if txo.script.is_claim_involved:
             output.update({
                 'name': txo.claim_name,
-                'normalized': txo.normalized_name,
+                'normalized_name': txo.normalized_name,
                 'claim_id': txo.claim_id,
-                'permanent_url': txo.permanent_url
+                'permanent_url': txo.permanent_url,
+                'meta': self.encode_claim_meta(txo.meta)
             })
-            if include_meta:
-                output['meta'] = self.encode_claim_meta(txo.meta)
+            if 'short_url' in output['meta']:
+                output['short_url'] = output['meta'].pop('short_url')
+            if 'canonical_url' in output['meta']:
+                output['canonical_url'] = output['meta'].pop('canonical_url')
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 try:
                     output['value'] = txo.claim
@@ -182,7 +185,7 @@ class JSONResponseEncoder(JSONEncoder):
                     if self.include_protobuf:
                         output['protobuf'] = hexlify(txo.claim.to_bytes())
                     if txo.channel is not None:
-                        output['signing_channel'] = self.encode_output(txo.channel, include_meta=False)
+                        output['signing_channel'] = self.encode_output(txo.channel)
                         if check_signature and txo.claim.is_signed:
                             output['is_channel_signature_valid'] = False
                             if txo.channel:
@@ -196,6 +199,8 @@ class JSONResponseEncoder(JSONEncoder):
             if key.endswith('_amount'):
                 if isinstance(value, int):
                     meta[key] = dewies_to_lbc(value)
+        if meta.get('creation_height', 0) > 0:
+            meta['creation_timestamp'] = self.ledger.headers[meta['creation_height']]['timestamp']
         return meta
 
     def encode_input(self, txi):

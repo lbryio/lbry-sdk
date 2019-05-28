@@ -3,7 +3,7 @@ import asyncio
 import typing
 import logging
 import binascii
-from aiohttp.web import Request, StreamResponse
+from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 from lbrynet.utils import generate_id
 from lbrynet.error import DownloadSDTimeout
 from lbrynet.schema.mime_types import guess_media_type
@@ -41,6 +41,9 @@ class ManagedStream:
     STATUS_RUNNING = "running"
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
+
+    SAVING_ID = 1
+    STREAMING_ID = 2
 
     __slots__ = [
         'loop',
@@ -214,7 +217,8 @@ class ManagedStream:
             written_bytes = None
         return {
             'streaming_url': f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.sd_hash}",
-            'completed': (self.output_file_exists and self.status in ('stopped', 'finished')) or all(
+            'completed': (self.output_file_exists and (self.status in ('stopped', 'finished'))
+                          or not self.saving.is_set()) or all(
                 self.blob_manager.is_blob_verified(b.blob_hash) for b in self.descriptor.blobs[:-1]),
             'file_name': file_name,
             'download_directory': download_directory,
@@ -304,14 +308,19 @@ class ManagedStream:
             raise IndexError(start_blob_num)
         for i, blob_info in enumerate(self.descriptor.blobs[start_blob_num:-1]):
             assert i + start_blob_num == blob_info.blob_num
-            decrypted = await self.downloader.read_blob(blob_info, connection_id)
+            if connection_id == self.STREAMING_ID:
+                decrypted = await self.downloader.cached_read_blob(blob_info)
+            else:
+                decrypted = await self.downloader.read_blob(blob_info, connection_id)
             yield (blob_info, decrypted)
 
     async def stream_file(self, request: Request, node: typing.Optional['Node'] = None) -> StreamResponse:
         log.info("stream file to browser for lbry://%s#%s (sd hash %s...)", self.claim_name, self.claim_id,
                  self.sd_hash[:6])
+        headers, size, skip_blobs, first_blob_start_offset = self._prepare_range_response_headers(
+            request.headers.get('range', 'bytes=0-')
+        )
         await self.start(node)
-        headers, size, skip_blobs = self._prepare_range_response_headers(request.headers.get('range', 'bytes=0-'))
         response = StreamResponse(
             status=206,
             headers=headers
@@ -321,11 +330,16 @@ class ManagedStream:
         self.streaming.set()
         try:
             wrote = 0
-            async for blob_info, decrypted in self._aiter_read_stream(skip_blobs, connection_id=2):
+            async for blob_info, decrypted in self._aiter_read_stream(skip_blobs, connection_id=self.STREAMING_ID):
+                if not wrote:
+                    decrypted = decrypted[first_blob_start_offset:]
                 if (blob_info.blob_num == len(self.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
                     decrypted += (b'\x00' * (size - len(decrypted) - wrote - (skip_blobs * 2097151)))
+                    log.debug("sending browser final blob (%i/%i)", blob_info.blob_num + 1,
+                              len(self.descriptor.blobs) - 1)
                     await response.write_eof(decrypted)
                 else:
+                    log.debug("sending browser blob (%i/%i)", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
                     await response.write(decrypted)
                 wrote += len(decrypted)
                 log.info("sent browser %sblob %i/%i", "(final) " if response._eof_sent else "",
@@ -354,7 +368,7 @@ class ManagedStream:
         self.started_writing.clear()
         try:
             with open(output_path, 'wb') as file_write_handle:
-                async for blob_info, decrypted in self._aiter_read_stream(connection_id=1):
+                async for blob_info, decrypted in self._aiter_read_stream(connection_id=self.SAVING_ID):
                     log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
                     await self.loop.run_in_executor(None, self._write_decrypted_blob, file_write_handle, decrypted)
                     self.written_bytes += len(decrypted)
@@ -485,7 +499,7 @@ class ManagedStream:
                 return
             await asyncio.sleep(1, loop=self.loop)
 
-    def _prepare_range_response_headers(self, get_range: str) -> typing.Tuple[typing.Dict[str, str], int, int]:
+    def _prepare_range_response_headers(self, get_range: str) -> typing.Tuple[typing.Dict[str, str], int, int, int]:
         if '=' in get_range:
             get_range = get_range.split('=')[1]
         start, end = get_range.split('-')
@@ -503,16 +517,23 @@ class ManagedStream:
             log.debug("estimating stream size")
 
         start = int(start)
+        if not 0 <= start < size:
+            raise HTTPRequestRangeNotSatisfiable()
+
         end = int(end) if end else size - 1
+
+        if end >= size:
+            raise HTTPRequestRangeNotSatisfiable()
+
         skip_blobs = start // 2097150
         skip = skip_blobs * 2097151
-        start = skip
+        skip_first_blob = start - skip
+        start = skip_first_blob + skip
         final_size = end - start + 1
-
         headers = {
             'Accept-Ranges': 'bytes',
             'Content-Range': f'bytes {start}-{end}/{size}',
             'Content-Length': str(final_size),
             'Content-Type': self.mime_type
         }
-        return headers, size, skip_blobs
+        return headers, size, skip_blobs, skip_first_blob

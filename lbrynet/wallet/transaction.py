@@ -97,7 +97,7 @@ class Output(BaseOutput):
     def has_private_key(self):
         return self.private_key is not None
 
-    def is_signed_by(self, channel: 'Output', ledger=None):
+    def get_signature_digest(self, ledger):
         if self.claim.unsigned_payload:
             pieces = [
                 Base58.decode(self.get_address(ledger)),
@@ -110,19 +110,30 @@ class Output(BaseOutput):
                 self.claim.signing_channel_hash,
                 self.claim.to_message_bytes()
             ]
-        digest = sha256(b''.join(pieces))
-        public_key = load_der_public_key(channel.claim.channel.public_key_bytes, default_backend())
-        hash = hashes.SHA256()
+        return sha256(b''.join(pieces))
+
+    def get_encoded_signature(self):
         signature = hexlify(self.claim.signature)
         r = int(signature[:int(len(signature)/2)], 16)
         s = int(signature[int(len(signature)/2):], 16)
-        encoded_sig = ecdsa.util.sigencode_der(r, s, len(signature)*4)
+        return ecdsa.util.sigencode_der(r, s, len(signature)*4)
+
+    @staticmethod
+    def is_signature_valid(encoded_signature, signature_digest, public_key_bytes):
         try:
-            public_key.verify(encoded_sig, digest, ec.ECDSA(Prehashed(hash)))
+            public_key = load_der_public_key(public_key_bytes, default_backend())
+            public_key.verify(encoded_signature, signature_digest, ec.ECDSA(Prehashed(hashes.SHA256())))
             return True
         except (ValueError, InvalidSignature):
             pass
         return False
+
+    def is_signed_by(self, channel: 'Output', ledger=None):
+        return self.is_signature_valid(
+            self.get_encoded_signature(),
+            self.get_signature_digest(ledger),
+            channel.claim.channel.public_key_bytes
+        )
 
     def sign(self, channel: 'Output', first_input_id=None):
         self.channel = channel

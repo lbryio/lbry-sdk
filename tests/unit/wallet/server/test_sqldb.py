@@ -1,10 +1,14 @@
 import unittest
+import ecdsa
+import hashlib
 from binascii import hexlify
 from torba.client.constants import COIN, NULL_HASH32
 
 from lbrynet.schema.claim import Claim
 from lbrynet.wallet.server.db import SQLDB
+from lbrynet.wallet.server.coin import LBCRegTest
 from lbrynet.wallet.server.trending import TRENDING_WINDOW
+from lbrynet.wallet.server.canonical import FindShortestID
 from lbrynet.wallet.server.block_processor import Timer
 from lbrynet.wallet.transaction import Transaction, Input, Output
 
@@ -23,10 +27,6 @@ def get_tx():
     return Transaction().add_inputs([get_input()])
 
 
-def claim_id(claim_hash):
-    return hexlify(claim_hash[::-1]).decode()
-
-
 class OldWalletServerTransaction:
     def __init__(self, tx):
         self.tx = tx
@@ -40,6 +40,7 @@ class TestSQLDB(unittest.TestCase):
     def setUp(self):
         self.first_sync = False
         self.daemon_height = 1
+        self.coin = LBCRegTest()
         self.sql = SQLDB(self, ':memory:')
         self.timer = Timer('BlockProcessor')
         self.sql.open()
@@ -53,17 +54,36 @@ class TestSQLDB(unittest.TestCase):
         self._txos[output.ref.hash] = output
         return OldWalletServerTransaction(tx), tx.hash
 
-    def get_channel(self, title, amount, name='@foo'):
+    def _set_channel_key(self, channel, key):
+        private_key = ecdsa.SigningKey.from_string(key*32, curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+        channel.private_key = private_key.to_pem().decode()
+        channel.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
+        channel.script.generate()
+
+    def get_channel(self, title, amount, name='@foo', key=b'a'):
         claim = Claim()
         claim.channel.title = title
         channel = Output.pay_claim_name_pubkey_hash(amount, name, claim, b'abc')
-        channel.generate_channel_private_key()
+        self._set_channel_key(channel, key)
         return self._make_tx(channel)
 
-    def get_stream(self, title, amount, name='foo'):
+    def get_channel_update(self, channel, amount, key=b'a'):
+        self._set_channel_key(channel, key)
+        return self._make_tx(
+            Output.pay_update_claim_pubkey_hash(
+                amount, channel.claim_name, channel.claim_id, channel.claim, b'abc'
+            ),
+            Input.spend(channel)
+        )
+
+    def get_stream(self, title, amount, name='foo', channel=None):
         claim = Claim()
         claim.stream.title = title
-        return self._make_tx(Output.pay_claim_name_pubkey_hash(amount, name, claim, b'abc'))
+        result = self._make_tx(Output.pay_claim_name_pubkey_hash(amount, name, claim, b'abc'))
+        if channel:
+            result[0].tx.outputs[0].sign(channel)
+            result[0].tx._reset()
+        return result
 
     def get_stream_update(self, tx, amount):
         claim = Transaction(tx[0].serialize()).outputs[0]
@@ -74,7 +94,7 @@ class TestSQLDB(unittest.TestCase):
             Input.spend(claim)
         )
 
-    def get_stream_abandon(self, tx):
+    def get_abandon(self, tx):
         claim = Transaction(tx[0].serialize()).outputs[0]
         return self._make_tx(
             Output.pay_pubkey_hash(claim.amount, b'abc'),
@@ -244,7 +264,7 @@ class TestSQLDB(unittest.TestCase):
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
             accepted=[]
         )
-        advance(14, [self.get_stream_abandon(stream2)])
+        advance(14, [self.get_abandon(stream2)])
         state(
             controlling=('Claim A', 10*COIN, 10*COIN, 13),
             active=[],
@@ -261,7 +281,7 @@ class TestSQLDB(unittest.TestCase):
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
             accepted=[]
         )
-        advance(15, [self.get_stream_abandon(stream2), self.get_stream('Claim C', 12*COIN)])
+        advance(15, [self.get_abandon(stream2), self.get_stream('Claim C', 12*COIN)])
         state(
             controlling=('Claim C', 12*COIN, 12*COIN, 15),
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
@@ -284,8 +304,111 @@ class TestSQLDB(unittest.TestCase):
                 self.get_support(up_biggly, (20+(window*(3 if window == 7 else 1)))*COIN),
             ])
         results = self.sql._search(order_by=['trending_local'])
-        self.assertEqual([c.claim_id for c in claims], [claim_id(c['claim_hash']) for c in results])
+        self.assertEqual([c.claim_id for c in claims], [hexlify(c['claim_hash'][::-1]).decode() for c in results])
         self.assertEqual([10, 6, 2, 0, -2], [int(c['trending_local']) for c in results])
         self.assertEqual([53, 38, -32, 0, -6], [int(c['trending_global']) for c in results])
         self.assertEqual([4, 4, 2, 0, 1], [int(c['trending_group']) for c in results])
         self.assertEqual([53, 38, 2, 0, -6], [int(c['trending_mixed']) for c in results])
+
+    @staticmethod
+    def _get_x_with_claim_id_prefix(getter, prefix, cached_iteration=None, **kwargs):
+        iterations = cached_iteration+1 if cached_iteration else 100
+        for i in range(cached_iteration or 1, iterations):
+            stream = getter(f'claim #{i}', COIN, **kwargs)
+            if stream[0].tx.outputs[0].claim_id.startswith(prefix):
+                cached_iteration is None and print(f'Found "{prefix}" in {i} iterations.')
+                return stream
+        if cached_iteration:
+            raise ValueError(f'Failed to find "{prefix}" at cached iteration, run with None to find iteration.')
+        raise ValueError(f'Failed to find "{prefix}" in {iterations} iterations, try different values.')
+
+    def get_channel_with_claim_id_prefix(self, prefix, cached_iteration=None, **kwargs):
+        return self._get_x_with_claim_id_prefix(self.get_channel, prefix, cached_iteration, **kwargs)
+
+    def get_stream_with_claim_id_prefix(self, prefix, cached_iteration=None, **kwargs):
+        return self._get_x_with_claim_id_prefix(self.get_stream, prefix, cached_iteration, **kwargs)
+
+    def test_canonical_url_and_channel_validation(self):
+        advance = self.advance
+
+        tx_chan_a = self.get_channel_with_claim_id_prefix('a', 1, key=b'c')
+        tx_chan_ab = self.get_channel_with_claim_id_prefix('ab', 72, key=b'c')
+        txo_chan_a = tx_chan_a[0].tx.outputs[0]
+        advance(1, [tx_chan_a])
+        advance(2, [tx_chan_ab])
+        r_ab, r_a = self.sql._search(order_by=['creation_height'], limit=2)
+        self.assertEqual("@foo#a", r_a['short_url'])
+        self.assertEqual("@foo#ab", r_ab['short_url'])
+        self.assertIsNone(r_a['canonical_url'])
+        self.assertIsNone(r_ab['canonical_url'])
+        self.assertEqual(0, r_a['claims_in_channel'])
+        self.assertEqual(0, r_ab['claims_in_channel'])
+
+        tx_a = self.get_stream_with_claim_id_prefix('a', 2)
+        tx_ab = self.get_stream_with_claim_id_prefix('ab', 42)
+        tx_abc = self.get_stream_with_claim_id_prefix('abc', 65)
+        advance(3, [tx_a])
+        advance(4, [tx_ab, tx_abc])
+        r_abc, r_ab, r_a = self.sql._search(order_by=['creation_height', 'tx_position'], limit=3)
+        self.assertEqual("foo#a", r_a['short_url'])
+        self.assertEqual("foo#ab", r_ab['short_url'])
+        self.assertEqual("foo#abc", r_abc['short_url'])
+        self.assertIsNone(r_a['canonical_url'])
+        self.assertIsNone(r_ab['canonical_url'])
+        self.assertIsNone(r_abc['canonical_url'])
+
+        tx_a2 = self.get_stream_with_claim_id_prefix('a', 7, channel=txo_chan_a)
+        tx_ab2 = self.get_stream_with_claim_id_prefix('ab', 23, channel=txo_chan_a)
+        a2_claim_id = tx_a2[0].tx.outputs[0].claim_id
+        ab2_claim_id = tx_ab2[0].tx.outputs[0].claim_id
+        advance(6, [tx_a2])
+        advance(7, [tx_ab2])
+        r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
+        self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo#{ab2_claim_id[:4]}", r_ab2['short_url'])
+        self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
+        self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
+        self.assertEqual(2, self.sql._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+
+        # change channel public key, invaliding stream claim signatures
+        advance(8, [self.get_channel_update(txo_chan_a, COIN, key=b'a')])
+        r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
+        self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo#{ab2_claim_id[:4]}", r_ab2['short_url'])
+        self.assertIsNone(r_a2['canonical_url'])
+        self.assertIsNone(r_ab2['canonical_url'])
+        self.assertEqual(0, self.sql._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+
+        # reinstate previous channel public key (previous stream claim signatures become valid again)
+        channel_update = self.get_channel_update(txo_chan_a, COIN, key=b'c')
+        advance(9, [channel_update])
+        r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
+        self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo#{ab2_claim_id[:4]}", r_ab2['short_url'])
+        self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
+        self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
+        self.assertEqual(2, self.sql._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+
+        # delete channel, invaliding stream claim signatures
+        advance(10, [self.get_abandon(channel_update)])
+        r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
+        self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo#{ab2_claim_id[:4]}", r_ab2['short_url'])
+        self.assertIsNone(r_a2['canonical_url'])
+        self.assertIsNone(r_ab2['canonical_url'])
+
+    def test_canonical_find_shortest_id(self):
+        new_hash = 'abcdef0123456789beef'
+        other0 = '1bcdef0123456789beef'
+        other1 = 'ab1def0123456789beef'
+        other2 = 'abc1ef0123456789beef'
+        other3 = 'abcdef0123456789bee1'
+        f = FindShortestID()
+        f.step(other0, new_hash)
+        self.assertEqual('#a', f.finalize())
+        f.step(other1, new_hash)
+        self.assertEqual('#abc', f.finalize())
+        f.step(other2, new_hash)
+        self.assertEqual('#abcd', f.finalize())
+        f.step(other3, new_hash)
+        self.assertEqual('#abcdef0123456789beef', f.finalize())

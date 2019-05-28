@@ -62,6 +62,7 @@ class CommandTestCase(IntegrationTestCase):
     LEDGER = lbrynet.wallet
     MANAGER = LbryWalletManager
     VERBOSITY = logging.WARN
+    blob_lru_cache_size = 0
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
@@ -81,6 +82,7 @@ class CommandTestCase(IntegrationTestCase):
         conf.lbryum_servers = [('127.0.0.1', 50001)]
         conf.reflector_servers = [('127.0.0.1', 5566)]
         conf.known_dht_nodes = []
+        conf.blob_lru_cache_size = self.blob_lru_cache_size
 
         await self.account.ensure_address_gap()
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]

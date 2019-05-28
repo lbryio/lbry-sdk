@@ -485,7 +485,10 @@ class Config(CLIConfig):
 
     # blob announcement and download
     save_blobs = Toggle("Save encrypted blob files for hosting, otherwise download blobs to memory only.", True)
-
+    blob_lru_cache_size = Integer(
+        "LRU cache size for decrypted downloaded blobs used to minimize re-downloading the same blobs when "
+        "replying to a range request. Set to 0 to disable.", 32
+    )
     announce_head_and_sd_only = Toggle(
         "Announce only the descriptor and first (rather than all) data blob for a stream to the DHT", True,
         previous_names=['announce_head_blobs_only']

@@ -126,6 +126,46 @@ class ResolveCommand(CommandTestCase):
         await self.assertResolvesToClaimId('foo$3', claim_id1)
         await self.assertResolvesToClaimId('foo$4', None)
 
+    async def test_partial_claim_id_resolve(self):
+        # add some noise
+        await self.channel_create('@abc', '0.1', allow_duplicate_name=True)
+        await self.channel_create('@abc', '0.2', allow_duplicate_name=True)
+        await self.channel_create('@abc', '1.0', allow_duplicate_name=True)
+
+        channel_id = self.get_claim_id(
+            await self.channel_create('@abc', '1.1', allow_duplicate_name=True))
+        await self.assertResolvesToClaimId(f'@abc', channel_id)
+        await self.assertResolvesToClaimId(f'@abc#{channel_id[0]}', channel_id)
+        await self.assertResolvesToClaimId(f'@abc#{channel_id[:10]}', channel_id)
+        await self.assertResolvesToClaimId(f'@abc#{channel_id}', channel_id)
+        channel = (await self.claim_search(claim_id=channel_id))[0]
+        await self.assertResolvesToClaimId(channel['short_url'], channel_id)
+        await self.assertResolvesToClaimId(channel['canonical_url'], channel_id)
+        await self.assertResolvesToClaimId(channel['permanent_url'], channel_id)
+
+        # add some noise
+        await self.stream_create('foo', '0.1', allow_duplicate_name=True, channel_id=channel['claim_id'])
+        await self.stream_create('foo', '0.2', allow_duplicate_name=True, channel_id=channel['claim_id'])
+        await self.stream_create('foo', '0.3', allow_duplicate_name=True, channel_id=channel['claim_id'])
+
+        claim_id1 = self.get_claim_id(
+            await self.stream_create('foo', '0.7', allow_duplicate_name=True, channel_id=channel['claim_id']))
+        claim1 = (await self.claim_search(claim_id=claim_id1))[0]
+        await self.assertResolvesToClaimId('foo', claim_id1)
+        await self.assertResolvesToClaimId('@abc/foo', claim_id1)
+        await self.assertResolvesToClaimId(claim1['short_url'], claim_id1)
+        await self.assertResolvesToClaimId(claim1['canonical_url'], claim_id1)
+        await self.assertResolvesToClaimId(claim1['permanent_url'], claim_id1)
+
+        claim_id2 = self.get_claim_id(
+            await self.stream_create('foo', '0.8', allow_duplicate_name=True, channel_id=channel['claim_id']))
+        claim2 = (await self.claim_search(claim_id=claim_id2))[0]
+        await self.assertResolvesToClaimId('foo', claim_id2)
+        await self.assertResolvesToClaimId('@abc/foo', claim_id2)
+        await self.assertResolvesToClaimId(claim2['short_url'], claim_id2)
+        await self.assertResolvesToClaimId(claim2['canonical_url'], claim_id2)
+        await self.assertResolvesToClaimId(claim2['permanent_url'], claim_id2)
+
     async def test_abandoned_channel_with_signed_claims(self):
         channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
         orphan_claim = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel['claim_id'])

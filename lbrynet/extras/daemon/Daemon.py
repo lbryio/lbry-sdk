@@ -114,6 +114,7 @@ def encode_pagination_doc(items):
         "page": "Page number of the current items.",
         "page_size": "Number of items to show on a page.",
         "total_pages": "Total number of pages.",
+        "total_items": "Total number of items.",
         "items": [items],
     }
 
@@ -125,9 +126,11 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
             "offset": page_size * (page-1),
             "limit": page_size
         })
+        total_items = await get_record_count(**constraints)
         return {
             "items": await get_records(**constraints),
-            "total_pages": int(((await get_record_count(**constraints)) + (page_size-1)) / page_size),
+            "total_pages": int((total_items + (page_size-1)) / page_size),
+            "total_items": total_items,
             "page": page, "page_size": page_size
         }
     return await get_records(**constraints)
@@ -486,6 +489,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def handle_stream_get_request(self, request: web.Request):
         if not self.conf.streaming_get:
+            log.warning("streaming_get is disabled, rejecting request")
             raise web.HTTPForbidden()
         name_and_claim_id = request.path.split("/get/")[1]
         if "/" not in name_and_claim_id:
@@ -501,6 +505,20 @@ class Daemon(metaclass=JSONRPCServerType):
         raise web.HTTPFound(f"/stream/{stream.sd_hash}")
 
     async def handle_stream_range_request(self, request: web.Request):
+        try:
+            return await self._handle_stream_range_request(request)
+        except web.HTTPException as err:
+            log.warning("http code during /stream range request: %s", err)
+            raise err
+        except asyncio.CancelledError:
+            log.debug("/stream range request cancelled")
+        except Exception:
+            log.exception("error handling /stream range request")
+            raise
+        finally:
+            log.debug("finished handling /stream range request")
+
+    async def _handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
         if not self.stream_manager.started.is_set():
             await self.stream_manager.started.wait()
@@ -1669,47 +1687,53 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         Search for stream and channel claims on the blockchain.
 
-        Use --channel_id=<channel_id> to list all stream claims in a channel.
-
         Arguments marked with "supports equality constraints" allow prepending the
         value with an equality constraint such as '>', '>=', '<' and '<='
         eg. --height=">400000" would limit results to only claims above 400k block height.
 
         Usage:
-            claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid> --nout=<nout>]
-                         [--channel_id=<channel_id>] [--channel_name=<channel_name>] [--is_controlling]
-                         [--order_by=<order_by>...]
-                         [--height=<height>] [--publish_time=<publish_time>] [--release_time=<release_time>]
+            claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid>] [--nout=<nout>]
+                         [--channel=<channel> | --channel_ids=<channel_ids>...] [--is_channel_signature_valid]
+                         [--is_controlling] [--release_time=<release_time>]
+                         [--timestamp=<timestamp>] [--creation_timestamp=<creation_timestamp>]
+                         [--height=<height>] [--creation_height=<creation_height>]
+                         [--activation_height=<activation_height>] [--expiration_height=<expiration_height>]
                          [--amount=<amount>] [--effective_amount=<effective_amount>]
                          [--support_amount=<support_amount>] [--trending_group=<trending_group>]
                          [--trending_mixed=<trending_mixed>] [--trending_local=<trending_local>]
-                         [--trending_global=<trending_global] [--activation_height=<activation_height>]
+                         [--trending_global=<trending_global]
                          [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
                          [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
                          [--not_languages=<not_languages>...]
                          [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
                          [--not_locations=<not_locations>...]
-                         [--page=<page>] [--page_size=<page_size>]
+                         [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
 
         Options:
-            --name=<name>                   : (str) find claims with this name
-            --claim_id=<claim_id>           : (str) find a claim with this claim_id
-            --txid=<txid>                   : (str) find a claim with this txid:nout
-            --nout=<nout>                   : (str) find a claim with this txid:nout
-            --channel_id=<channel_id>       : (str) limit search to specific channel claim id (returns stream claims)
-            --channel_name=<channel_name>   : (str) limit search to specific channel name (returns stream claims)
-            --is_controlling                : (bool) limit to controlling claims for their respective name
-            --order_by=<order_by>           : (str) field to order by, default is descending order, to do an
-                                                    ascending order prepend ^ to the field name, eg. '^amount'
-                                                    available fields: 'name', 'height', 'release_time',
-                                                    'publish_time', 'amount', 'effective_amount',
-                                                    'support_amount', 'trending_group', 'trending_mixed',
-                                                    'trending_local', 'trending_global', 'activation_height'
-            --height=<height>               : (int) limit by block height (supports equality constraints)
-            --activation_height=<activation_height>: (int) height at which claim starts competing for name
-                                                    (supports equality constraints)
-            --publish_time=<publish_time>   : (int) limit by UTC timestamp of containing block (supports
-                                                    equality constraints)
+            --name=<name>                   : (str) claim name (normalized)
+            --claim_id=<claim_id>           : (str) full or partial claim id
+            --txid=<txid>                   : (str) transaction id
+            --nout=<nout>                   : (str) position in the transaction
+            --channel=<channel>             : (str) claims signed by this channel (argument is
+                                                    a URL which automatically gets resolved),
+                                                    see --channel_ids if you need to filter by
+                                                    multiple channels at the same time,
+                                                    includes claims with invalid signatures,
+                                                    use in conjunction with --is_channel_signature_valid
+            --channel_ids=<channel_ids>     : (str) claims signed by any of these channels
+                                                    (arguments must be claim ids of the channels),
+                                                    includes claims with invalid signatures,
+                                                    use in conjunction with --is_channel_signature_valid
+            --is_channel_signature_valid    : (bool) only return claims with valid channel signatures
+            --is_controlling                : (bool) only return winning claims of their respective name
+            --height=<height>               : (int) last updated block height (supports equality constraints)
+            --timestamp=<timestamp>         : (int) last updated timestamp (supports equality constraints)
+            --creation_height=<creation_height>      : (int) created at block height (supports equality constraints)
+            --creation_timestamp=<creation_timestamp>: (int) created at timestamp (supports equality constraints)
+            --activation_height=<activation_height>  : (int) height at which claim starts competing for name
+                                                             (supports equality constraints)
+            --expiration_height=<expiration_height>  : (int) height at which claim will expire
+                                                             (supports equality constraints)
             --release_time=<release_time>   : (int) limit to claims self-described as having been
                                                     released to the public on or after this UTC
                                                     timestamp, when claim does not provide
@@ -1752,6 +1776,12 @@ class Daemon(metaclass=JSONRPCServerType):
             --not_locations=<not_locations> : (list) find claims not containing any of these locations
             --page=<page>                   : (int) page to return during paginating
             --page_size=<page_size>         : (int) number of items on page during pagination
+            --order_by=<order_by>           : (str) field to order by, default is descending order, to do an
+                                                    ascending order prepend ^ to the field name, eg. '^amount'
+                                                    available fields: 'name', 'height', 'release_time',
+                                                    'publish_time', 'amount', 'effective_amount',
+                                                    'support_amount', 'trending_group', 'trending_mixed',
+                                                    'trending_local', 'trending_global', 'activation_height'
 
         Returns: {Paginated[Output]}
         """
@@ -1760,7 +1790,8 @@ class Daemon(metaclass=JSONRPCServerType):
         txos, offset, total = await self.ledger.claim_search(**kwargs)
         return {
             "items": txos, "page": page_num, "page_size": page_size,
-            "total_pages": int((total + (page_size-1)) / page_size)
+            "total_pages": int((total + (page_size-1)) / page_size),
+            "total_items": total
         }
 
     CHANNEL_DOC = """
