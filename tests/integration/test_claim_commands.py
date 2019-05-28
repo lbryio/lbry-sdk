@@ -299,8 +299,8 @@ class ChannelCommands(CommandTestCase):
         self.assertIsNone(txo.private_key)
 
         # send the private key too
-        channel_pubkey_address_hash = self.account.ledger.public_key_to_address(unhexlify(channel['public_key']))
-        account2.add_channel_private_key('@featurechannel', self.account.channel_keys[channel_pubkey_address_hash])
+        channel_public_key = self.account.get_channel_private_key(unhexlify(channel['public_key']))
+        account2.add_channel_private_key(channel_public_key)
 
         # now should have private key
         txo = (await account2.get_channels())[0]

@@ -42,57 +42,22 @@ class Account(BaseAccount):
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         self.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
 
-    def get_channel_private_key(self, channel_pubkey_hash):
+    def get_channel_private_key(self, public_key_bytes):
+        channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         private_key_pem = self.channel_keys.get(channel_pubkey_hash)
-        return self._get_private_key_object_from_pem(private_key_pem)
+        if private_key_pem:
+            return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
 
     async def maybe_migrate_certificates(self):
         if not self.channel_keys:
             return
-
-        results = {
-            'total': 0,
-            'consolidated': 0,
-            'migrate-success': 0,
-            'migrate-failed': 0,
-            'previous-success': 0,
-            'previous-corrupted': 0
-        }
-
-        new_channel_keys = {}
-
-        for maybe_outpoint in self.channel_keys:
-            results['total'] += 1
-            if ':' in maybe_outpoint:
-                try:
-                    private_key_pem = self.channel_keys[maybe_outpoint]
-                    pubkey_hash = self._get_pubkey_address_from_private_key_pem(private_key_pem)
-
-                    if pubkey_hash not in new_channel_keys and pubkey_hash not in self.channel_keys:
-                        new_channel_keys[pubkey_hash] = private_key_pem
-                        results['migrate-success'] += 1
-                    else:
-                        results['consolidated'] += 1
-                except Exception as e:
-                    results['migrate-failed'] += 1
-                    log.warning("Failed to migrate certificate for %s, incorrect private key: %s",
-                                maybe_outpoint, str(e))
-            else:
-                try:
-                    pubkey_hash = self._get_pubkey_address_from_private_key_pem(self.channel_keys[maybe_outpoint])
-                    if pubkey_hash == maybe_outpoint:
-                        results['previous-success'] += 1
-                    else:
-                        results['previous-corrupted'] += 1
-                except Exception as e:
-                    log.warning("Corrupt public:private key-pair: %s", str(e))
-                    results['previous-corrupted'] += 1
-
-        self.channel_keys = new_channel_keys
-
+        channel_keys = {}
+        for private_key_pem in self.channel_keys.values():
+            private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
+            public_key_der = private_key.get_verifying_key().to_der()
+            channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
+        self.channel_keys = channel_keys
         self.wallet.save()
-        log.info('verifying and possibly migrating certificates:')
-        log.info(json.dumps(results, indent=2))
 
     async def save_max_gap(self):
         if issubclass(self.address_generator, HierarchicalDeterministic):
@@ -167,12 +132,3 @@ class Account(BaseAccount):
 
     async def release_all_outputs(self):
         await self.ledger.db.release_all_outputs(self)
-
-    def _get_pubkey_address_from_private_key_pem(self, private_key_pem):
-        private_key = self._get_private_key_object_from_pem(private_key_pem)
-        public_key_der = private_key.get_verifying_key().to_der()
-        return self.ledger.public_key_to_address(public_key_der)
-
-    @staticmethod
-    def _get_private_key_object_from_pem(private_key_pem):
-        return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
