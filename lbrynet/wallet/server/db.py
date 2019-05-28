@@ -109,7 +109,7 @@ class SQLDB:
 
         create index if not exists claim_id_idx on claim (claim_id);
         create index if not exists claim_normalized_idx on claim (normalized);
-        create index if not exists claim_search_idx on claim (normalized, claim_id);
+        create index if not exists claim_resolve_idx on claim (normalized, claim_id);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_channel_hash_idx on claim (channel_hash);
         create index if not exists claim_release_time_idx on claim (release_time);
@@ -352,8 +352,8 @@ class SQLDB:
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
 
-    def validate_channel_signatures(self, height, new_claims, updated_claims):
-        if not new_claims and not updated_claims:
+    def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims):
+        if not new_claims and not updated_claims and not spent_claims:
             return
 
         channels, new_channel_keys, signables = {}, {}, {}
@@ -455,6 +455,14 @@ class SQLDB:
                     END
                 WHERE claim_hash=:claim_hash;
                 """, claim_updates)
+
+        if spent_claims:
+            self.execute(
+                f"""
+                UPDATE claim SET is_channel_signature_valid=0, channel_join=NULL, canonical_url=NULL
+                WHERE channel_hash IN ({','.join('?' for _ in spent_claims)})
+                """, [sqlite3.Binary(cid) for cid in spent_claims]
+            )
 
         if channels:
             self.db.executemany(
@@ -620,7 +628,7 @@ class SQLDB:
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
         r(self.update_claims, update_claims, header)
-        r(self.validate_channel_signatures, height, insert_claims, update_claims)
+        r(self.validate_channel_signatures, height, insert_claims, update_claims, delete_claim_hashes)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
@@ -670,21 +678,25 @@ class SQLDB:
                 constraints['claim.claim_id'] = claim_id
             else:
                 constraints['claim.claim_id__like'] = f'{claim_id[:40]}%'
+
         if 'name' in constraints:
             constraints['claim.normalized'] = normalize_name(constraints.pop('name'))
 
         if 'channel' in constraints:
-            url = URL.parse(constraints.pop('channel'))
-            if url.channel.claim_id:
-                constraints['channel_id'] = url.channel.claim_id
+            channel_url = constraints.pop('channel')
+            match = self._resolve_one(channel_url)
+            if isinstance(match, sqlite3.Row):
+                constraints['channel_hash'] = match['claim_hash']
             else:
-                constraints['channel_name'] = url.channel.name
-        if 'channel_id' in constraints:
-            constraints['channel_hash'] = unhexlify(constraints.pop('channel_id'))[::-1]
+                raise LookupError(f'Could not resolve channel "{channel_url}".')
         if 'channel_hash' in constraints:
-            constraints['channel.claim_hash'] = sqlite3.Binary(constraints.pop('channel_hash'))
-        if 'channel_name' in constraints:
-            constraints['channel.normalized'] = normalize_name(constraints.pop('channel_name'))
+            constraints['claim.channel_hash'] = sqlite3.Binary(constraints.pop('channel_hash'))
+        if 'channel_ids' in constraints:
+            channel_ids = constraints.pop('channel_ids')
+            if channel_ids:
+                constraints['claim.channel_hash__in'] = [
+                    sqlite3.Binary(unhexlify(cid)[::-1]) for cid in channel_ids
+                ]
 
         if 'txid' in constraints:
             tx_hash = unhexlify(constraints.pop('txid'))[::-1]
@@ -697,23 +709,17 @@ class SQLDB:
         _apply_constraints_for_array_attributes(constraints, 'language')
         _apply_constraints_for_array_attributes(constraints, 'location')
 
-        try:
-            return self.db.execute(*query(
-                f"""
-                SELECT {cols} FROM claim
-                LEFT JOIN claimtrie USING (claim_hash)
-                LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
-                """, **constraints
-            )).fetchall()
-        except:
-            self.logger.exception('Failed to execute claim search query:')
-            print(query(
-                f"""
+        sql, values = query(
+            f"""
             SELECT {cols} FROM claim
             LEFT JOIN claimtrie USING (claim_hash)
             LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
             """, **constraints
-            ))
+        )
+        try:
+            return self.db.execute(sql, values).fetchall()
+        except:
+            self.logger.exception(f'Failed to execute claim search query: {sql}')
             raise
 
     def get_claims_count(self, **constraints):
@@ -727,8 +733,9 @@ class SQLDB:
         return self.get_claims(
             """
             claimtrie.claim_hash as is_controlling,
-            claim.claim_hash, claim.txo_hash, claim.height,
+            claim.claim_hash, claim.txo_hash,
             claim.is_channel, claim.claims_in_channel,
+            claim.height, claim.creation_height,
             claim.activation_height, claim.expiration_height,
             claim.effective_amount, claim.support_amount,
             claim.trending_group, claim.trending_mixed,
@@ -740,16 +747,16 @@ class SQLDB:
         )
 
     INTEGER_PARAMS = {
-        'height', 'creation_height', 'activation_height', 'tx_position',
-        'release_time', 'timestamp', 'is_channel_signature_valid', 'channel_join',
+        'height', 'creation_height', 'activation_height', 'expiration_height',
+        'timestamp', 'creation_timestamp', 'release_time',
+        'tx_position', 'channel_join', 'is_channel_signature_valid',
         'amount', 'effective_amount', 'support_amount',
         'trending_group', 'trending_mixed',
         'trending_local', 'trending_global',
     }
 
     SEARCH_PARAMS = {
-        'name', 'claim_id', 'txid', 'nout',
-        'channel', 'channel_id', 'channel_name',
+        'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids',
         'any_tags', 'all_tags', 'not_tags',
         'any_locations', 'all_locations', 'not_locations',
         'any_languages', 'all_languages', 'not_languages',
@@ -775,50 +782,54 @@ class SQLDB:
             extra_txo_rows = self._search(**{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]})
         return txo_rows, extra_txo_rows, constraints['offset'], total
 
+    def _resolve_one(self, raw_url):
+        try:
+            url = URL.parse(raw_url)
+        except ValueError as e:
+            return e
+
+        channel = None
+
+        if url.has_channel:
+            query = url.channel.to_dict()
+            if set(query) == {'name'}:
+                query['is_controlling'] = True
+            else:
+                query['order_by'] = ['^height']
+            matches = self._search(**query, limit=1)
+            if matches:
+                channel = matches[0]
+            else:
+                return LookupError(f'Could not find channel in "{raw_url}".')
+
+        if url.has_stream:
+            query = url.stream.to_dict()
+            if channel is not None:
+                if set(query) == {'name'}:
+                    # temporarily emulate is_controlling for claims in channel
+                    query['order_by'] = ['effective_amount']
+                else:
+                    query['order_by'] = ['^channel_join']
+                query['channel_hash'] = channel['claim_hash']
+                query['is_channel_signature_valid'] = 1
+            elif set(query) == {'name'}:
+                query['is_controlling'] = 1
+            matches = self._search(**query, limit=1)
+            if matches:
+                return matches[0]
+            else:
+                return LookupError(f'Could not find stream in "{raw_url}".')
+
+        return channel
+
     def resolve(self, urls) -> Tuple[List, List]:
         result = []
         channel_hashes = set()
         for raw_url in urls:
-            try:
-                url = URL.parse(raw_url)
-            except ValueError as e:
-                result.append(e)
-                continue
-            channel = None
-            if url.has_channel:
-                query = url.channel.to_dict()
-                if set(query) == {'name'}:
-                    query['is_controlling'] = True
-                else:
-                    query['order_by'] = ['^height']
-                matches = self._search(**query, limit=1)
-                if matches:
-                    channel = matches[0]
-                else:
-                    result.append(LookupError(f'Could not find channel in "{raw_url}".'))
-                    continue
-            if url.has_stream:
-                query = url.stream.to_dict()
-                if channel is not None:
-                    if set(query) == {'name'}:
-                        # temporarily emulate is_controlling for claims in channel
-                        query['order_by'] = ['effective_amount']
-                    else:
-                        query['order_by'] = ['^channel_join']
-                    query['channel_hash'] = channel['claim_hash']
-                    query['is_channel_signature_valid'] = 1
-                elif set(query) == {'name'}:
-                    query['is_controlling'] = True
-                matches = self._search(**query, limit=1)
-                if matches:
-                    result.append(matches[0])
-                    if matches[0]['channel_hash']:
-                        channel_hashes.add(matches[0]['channel_hash'])
-                else:
-                    result.append(LookupError(f'Could not find stream in "{raw_url}".'))
-                    continue
-            else:
-                result.append(channel)
+            match = self._resolve_one(raw_url)
+            result.append(match)
+            if isinstance(match, sqlite3.Row) and match['channel_hash']:
+                channel_hashes.add(match['channel_hash'])
         extra_txo_rows = []
         if channel_hashes:
             extra_txo_rows = self._search(**{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]})

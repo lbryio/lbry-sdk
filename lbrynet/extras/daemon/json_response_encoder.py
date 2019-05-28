@@ -169,7 +169,7 @@ class JSONResponseEncoder(JSONEncoder):
         if txo.script.is_claim_involved:
             output.update({
                 'name': txo.claim_name,
-                'normalized': txo.normalized_name,
+                'normalized_name': txo.normalized_name,
                 'claim_id': txo.claim_id,
                 'permanent_url': txo.permanent_url,
                 'meta': self.encode_claim_meta(txo.meta)
@@ -199,6 +199,8 @@ class JSONResponseEncoder(JSONEncoder):
             if key.endswith('_amount'):
                 if isinstance(value, int):
                     meta[key] = dewies_to_lbc(value)
+        if meta.get('creation_height', 0) > 0:
+            meta['creation_timestamp'] = self.ledger.headers[meta['creation_height']]['timestamp']
         return meta
 
     def encode_input(self, txi):

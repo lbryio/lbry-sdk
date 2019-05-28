@@ -94,7 +94,7 @@ class TestSQLDB(unittest.TestCase):
             Input.spend(claim)
         )
 
-    def get_stream_abandon(self, tx):
+    def get_abandon(self, tx):
         claim = Transaction(tx[0].serialize()).outputs[0]
         return self._make_tx(
             Output.pay_pubkey_hash(claim.amount, b'abc'),
@@ -264,7 +264,7 @@ class TestSQLDB(unittest.TestCase):
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
             accepted=[]
         )
-        advance(14, [self.get_stream_abandon(stream2)])
+        advance(14, [self.get_abandon(stream2)])
         state(
             controlling=('Claim A', 10*COIN, 10*COIN, 13),
             active=[],
@@ -281,7 +281,7 @@ class TestSQLDB(unittest.TestCase):
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
             accepted=[]
         )
-        advance(15, [self.get_stream_abandon(stream2), self.get_stream('Claim C', 12*COIN)])
+        advance(15, [self.get_abandon(stream2), self.get_stream('Claim C', 12*COIN)])
         state(
             controlling=('Claim C', 12*COIN, 12*COIN, 15),
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
@@ -380,13 +380,22 @@ class TestSQLDB(unittest.TestCase):
         self.assertEqual(0, self.sql._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
 
         # reinstate previous channel public key (previous stream claim signatures become valid again)
-        advance(9, [self.get_channel_update(txo_chan_a, COIN, key=b'c')])
+        channel_update = self.get_channel_update(txo_chan_a, COIN, key=b'c')
+        advance(9, [channel_update])
         r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
         self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])
         self.assertEqual(f"foo#{ab2_claim_id[:4]}", r_ab2['short_url'])
         self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
         self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
         self.assertEqual(2, self.sql._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+
+        # delete channel, invaliding stream claim signatures
+        advance(10, [self.get_abandon(channel_update)])
+        r_ab2, r_a2 = self.sql._search(order_by=['creation_height'], limit=2)
+        self.assertEqual(f"foo#{a2_claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo#{ab2_claim_id[:4]}", r_ab2['short_url'])
+        self.assertIsNone(r_a2['canonical_url'])
+        self.assertIsNone(r_ab2['canonical_url'])
 
     def test_canonical_find_shortest_id(self):
         new_hash = 'abcdef0123456789beef'
