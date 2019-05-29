@@ -7,6 +7,8 @@ import inspect
 import typing
 import base58
 import random
+import ecdsa
+import hashlib
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -2122,40 +2124,69 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_channel_export(self, claim_id, password=None, account_id=None):
+    async def jsonrpc_channel_export(self, channel_id=None, channel_name=None, account_id=None):
         """
-        Export serialized channel signing information for a given certificate claim id
+        Export channel private key.
 
         Usage:
-            channel_export (<claim_id> | --claim_id=<claim_id>)
+            channel_export (<channel_id> | --channel_id=<channel_id> | --channel_name=<channel_name>)
+                           [--account_id=<account_id>...]
 
         Options:
-            --claim_id=<claim_id> : (str) Claim ID to export information about
+            --channel_id=<channel_id>     : (str) claim id of channel to export
+            --channel_name=<channel_name> : (str) name of channel to export
+            --account_id=<account_id>     : (str) one or more account ids for accounts
+                                                  to look in for channels, defaults to
+                                                  all accounts.
 
         Returns:
-            (str) Serialized certificate information
+            (str) serialized channel private key
         """
-        account = self.get_account_or_default(account_id)
-
-        return await self.wallet_manager.export_certificate_info(claim_id, account, password)
+        channel = await self.get_channel_or_error(account_id, channel_id, channel_name, for_signing=True)
+        address = channel.get_address(self.ledger)
+        public_key = await self.ledger.get_public_key_for_address(channel.get_address(self.ledger))
+        if not public_key:
+            raise Exception("Can't find public key for address holding the channel.")
+        export = {
+            'name': channel.claim_name,
+            'channel_id': channel.claim_id,
+            'holding_address': address,
+            'holding_public_key': public_key.extended_key_string(),
+            'signing_private_key': channel.private_key.to_pem().decode()
+        }
+        return base58.b58encode(json.dumps(export, separators=(',', ':')))
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_channel_import(self, serialized_certificate_info, password=None, account_id=None):
+    async def jsonrpc_channel_import(self, channel_data):
         """
-        Import serialized channel signing information (to allow signing new claims to the channel)
+        Import serialized channel private key (to allow signing new streams to the channel)
 
         Usage:
-            channel_import (<serialized_certificate_info> | --serialized_certificate_info=<serialized_certificate_info>)
+            channel_import (<channel_data> | --channel_data=<channel_data>)
 
         Options:
-            --serialized_certificate_info=<serialized_certificate_info> : (str) certificate info
+            --channel_data=<channel_data> : (str) serialized channel, as exported by channel export
 
         Returns:
             (dict) Result dictionary
         """
-        account = self.get_account_or_default(account_id)
-
-        return await self.wallet_manager.import_certificate_info(serialized_certificate_info, password, account)
+        decoded = base58.b58decode(channel_data)
+        data = json.loads(decoded)
+        channel_private_key = ecdsa.SigningKey.from_pem(
+            data['signing_private_key'], hashfunc=hashlib.sha256
+        )
+        account: LBCAccount = await self.ledger.get_account_for_address(data['holding_address'])
+        if not account:
+            new_account = LBCAccount.from_dict(self.ledger, self.default_wallet, {
+                'name': f"Holding Account For Channel {data['name']}",
+                'public_key': data['holding_public_key'],
+                'address_generator': {'name': 'single-address'}
+            })
+            if self.ledger.network.is_connected:
+                asyncio.create_task(self.ledger.subscribe_account(new_account))
+        account.add_channel_private_key(channel_private_key)
+        self.default_wallet.save()
+        return f"Added channel signing key for {data['name']}."
 
     STREAM_DOC = """
     Create, update, abandon, list and inspect your stream claims.

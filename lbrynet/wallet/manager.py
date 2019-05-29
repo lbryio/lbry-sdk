@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from binascii import unhexlify, hexlify
+from binascii import unhexlify
 
 from datetime import datetime
 
@@ -16,9 +16,6 @@ from lbrynet.wallet.dewies import dewies_to_lbc
 
 
 log = logging.getLogger(__name__)
-
-_NO_PASSWORD_USED_BYTES = b'00'
-_PASSWORD_USED_BYTES = b'01'
 
 
 class LbryWalletManager(BaseWalletManager):
@@ -303,58 +300,6 @@ class LbryWalletManager(BaseWalletManager):
                 })
             history.append(item)
         return history
-
-    async def export_certificate_info(self, claim_id, account, password=None, insecure=False):
-        if password is None and not insecure:
-            raise ValueError(
-                "Password not provided. If you wish to export channel without a password, please use the "
-                "--insecure flag"
-            )
-
-        if password is not None and insecure:
-            raise ValueError(
-                "Password and insecure flag cannot be provided together. Please remove the insecure flag"
-            )
-
-        try:
-            channel_txo = (await account.get_channels(claim_id=claim_id, limit=1))[0]
-            private_key_str = channel_txo.pem_to_private_key_str(channel_txo.private_key)
-        except Exception:
-            raise LookupError(f"Cannot retrieve private key for channel id: {claim_id}")
-
-        if not password:
-            serialized_certificate_info = private_key_str + _NO_PASSWORD_USED_BYTES
-        else:
-            encrypted_private_key = self.encrypt_private_key_with_password(private_key_str, password)
-            serialized_certificate_info = encrypted_private_key + _PASSWORD_USED_BYTES
-
-        x = hexlify(serialized_certificate_info).decode()
-        return x
-
-    async def import_certificate_info(self, serialized_certificate_info, password, account):
-        serialized_certificate_info = (unhexlify(serialized_certificate_info.encode()))
-
-        if password is None and serialized_certificate_info.endswith(_PASSWORD_USED_BYTES):
-            raise ValueError("The certificate was encrypted with a password but no password was provided.")
-
-        if password is not None and serialized_certificate_info.endswith(_NO_PASSWORD_USED_BYTES):
-            raise ValueError("The certificate was not encrypted with a password but a password was provided.")
-
-        serialized_certificate_info = serialized_certificate_info[0:-2]
-
-        if not password:
-            private_key = Transaction.output_class.private_key_from_str(serialized_certificate_info)
-        else:
-            decrypted_private_key = self.decrypt_serilized_info_with_password(serialized_certificate_info, password)
-            private_key = Transaction.output_class.private_key_from_str(decrypted_private_key)
-
-        public_key_bytes = private_key.get_verifying_key().to_der()
-        channel_pubkey_hash = account.ledger.public_key_to_address(public_key_bytes)
-        account.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
-        account.wallet.save()
-
-    def encrypt_private_key_with_password(self, private_key_str, password):
-        pass
 
     def save(self):
         for wallet in self.wallets:
