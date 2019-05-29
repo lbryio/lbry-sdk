@@ -2122,7 +2122,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_channel_export(self, claim_id, password=None, account_id=None, insecure=False):
+    async def jsonrpc_channel_export(self, claim_id, password=None, account_id=None):
         """
         Export serialized channel signing information for a given certificate claim id
 
@@ -2137,7 +2137,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         account = self.get_account_or_default(account_id)
 
-        return await self.wallet_manager.export_certificate_info(claim_id, account, password, insecure)
+        return await self.wallet_manager.export_certificate_info(claim_id, account, password)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_import(self, serialized_certificate_info, password=None, account_id=None):
