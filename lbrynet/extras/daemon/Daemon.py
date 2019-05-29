@@ -3350,20 +3350,27 @@ class Daemon(metaclass=JSONRPCServerType):
                                        retrieve in one request
 
         Returns:
-            (list)  Containing comments stored as dictionary objects:
-            [
-                {
-                    "comment":      (str) The actual string as inputted by the user,
-                    "comment_id":   (str) The Comment's unique identifier,
-                    "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
-                    "channel_id":   (str) The Channel Claim ID that this comeent was posted under,
-                    "signature":    (str) The signature of the comment,
-                    "channel_uri":  (str) Channel's URI in the ClaimTrie,
-                    "parent_id":    (str) Comment this is replying to, (None) if this is the root,
-                    "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
-                },
-                ...
-            ]
+            (dict)  Containing the list, and information about the paginated content:
+            {
+                "page": "Page number of the current items.",
+                "page_size": "Number of items to show on a page.",
+                "total_pages": "Total number of pages.",
+                "total_items": "Total number of items.",
+                "items": "A List of dict objects representing comments."
+                [
+                    {
+                        "comment":      (str) The actual string as inputted by the user,
+                        "comment_id":   (str) The Comment's unique identifier,
+                        "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
+                        "channel_id":   (str) The Channel Claim ID that this comment was posted under,
+                        "signature":    (str) The signature of the comment,
+                        "channel_uri":  (str) Channel's URI in the ClaimTrie,
+                        "parent_id":    (str) Comment this is replying to, (None) if this is the root,
+                        "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
+                    },
+                    ...
+                ]
+            }
         """
         return await jsonrpc_post(
             self.conf.comment_server,
@@ -3388,6 +3395,8 @@ class Daemon(metaclass=JSONRPCServerType):
                             [--parent_id=<parent_id>]
 
         Options:
+            --comment=<comment>         : (str) Comment to be made, should be at most 2000 characters.
+            --claim_id=<claim_id>       : (str) The ID of the claim on which the comment should be made on
             --parent_id=<parent_id>     : (str) The ID of a comment to make a response to
             --channel_id=<channel_id>   : (str) The ID of the channel you want to post under
             --channel_name=<channel_name>   : (str) The channel you want to post as, prepend with a '@'
