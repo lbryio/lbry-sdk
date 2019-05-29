@@ -4,7 +4,7 @@ import tempfile
 import logging
 from binascii import unhexlify
 
-from torba.testcase import IntegrationTestCase
+from torba.testcase import IntegrationTestCase, WalletNode
 
 import lbrynet.wallet
 
@@ -71,41 +71,16 @@ class CommandTestCase(IntegrationTestCase):
         logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
         logging.getLogger('lbrynet.stream').setLevel(self.VERBOSITY)
 
-        conf = Config()
-        conf.data_dir = self.wallet_node.data_path
-        conf.wallet_dir = self.wallet_node.data_path
-        conf.download_dir = self.wallet_node.data_path
-        conf.share_usage_data = False
-        conf.use_upnp = False
-        conf.reflect_streams = True
-        conf.blockchain_name = 'lbrycrd_regtest'
-        conf.lbryum_servers = [('127.0.0.1', 50001)]
-        conf.reflector_servers = [('127.0.0.1', 5566)]
-        conf.known_dht_nodes = []
-        conf.blob_lru_cache_size = self.blob_lru_cache_size
+        self.daemons = []
+        self.extra_wallet_nodes = []
+        self.extra_wallet_node_port = 5280
+        self.daemon = await self.add_daemon(self.wallet_node)
 
         await self.account.ensure_address_gap()
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
         sendtxid = await self.blockchain.send_to_address(address, 10)
         await self.confirm_tx(sendtxid)
         await self.generate(5)
-
-        def wallet_maker(component_manager):
-            self.wallet_component = WalletComponent(component_manager)
-            self.wallet_component.wallet_manager = self.manager
-            self.wallet_component._running = True
-            return self.wallet_component
-
-        conf.components_to_skip = [
-            DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT
-        ]
-        self.daemon = Daemon(conf, ComponentManager(
-            conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
-            exchange_rate_manager=ExchangeRateManagerComponent
-        ))
-        await self.daemon.initialize()
-        self.manager.old_db = self.daemon.storage
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, server_tmp_dir)
@@ -125,8 +100,53 @@ class CommandTestCase(IntegrationTestCase):
 
     async def asyncTearDown(self):
         await super().asyncTearDown()
-        self.wallet_component._running = False
-        await self.daemon.stop(shutdown_runner=False)
+        for wallet_node in self.extra_wallet_nodes:
+            await wallet_node.stop(cleanup=True)
+        for daemon in self.daemons:
+            daemon.component_manager.get_component('wallet')._running = False
+            await daemon.stop(shutdown_runner=False)
+
+    async def add_daemon(self, wallet_node=None, seed=None):
+        if wallet_node is None:
+            wallet_node = WalletNode(
+                self.wallet_node.manager_class,
+                self.wallet_node.ledger_class,
+                port=self.extra_wallet_node_port
+            )
+            self.extra_wallet_node_port += 1
+            await wallet_node.start(self.conductor.spv_node, seed=seed)
+            self.extra_wallet_nodes.append(wallet_node)
+
+        conf = Config()
+        conf.data_dir = wallet_node.data_path
+        conf.wallet_dir = wallet_node.data_path
+        conf.download_dir = wallet_node.data_path
+        conf.share_usage_data = False
+        conf.use_upnp = False
+        conf.reflect_streams = True
+        conf.blockchain_name = 'lbrycrd_regtest'
+        conf.lbryum_servers = [('127.0.0.1', 50001)]
+        conf.reflector_servers = [('127.0.0.1', 5566)]
+        conf.known_dht_nodes = []
+        conf.blob_lru_cache_size = self.blob_lru_cache_size
+        conf.components_to_skip = [
+            DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
+            PEER_PROTOCOL_SERVER_COMPONENT
+        ]
+
+        def wallet_maker(component_manager):
+            wallet_component = WalletComponent(component_manager)
+            wallet_component.wallet_manager = wallet_node.manager
+            wallet_component._running = True
+            return wallet_component
+
+        daemon = Daemon(conf, ComponentManager(
+            conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
+            exchange_rate_manager=ExchangeRateManagerComponent
+        ))
+        await daemon.initialize()
+        wallet_node.manager.old_db = daemon.storage
+        return daemon
 
     async def confirm_tx(self, txid):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """

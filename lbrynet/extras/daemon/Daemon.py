@@ -2177,13 +2177,13 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         account: LBCAccount = await self.ledger.get_account_for_address(data['holding_address'])
         if not account:
-            new_account = LBCAccount.from_dict(self.ledger, self.default_wallet, {
+            account = LBCAccount.from_dict(self.ledger, self.default_wallet, {
                 'name': f"Holding Account For Channel {data['name']}",
                 'public_key': data['holding_public_key'],
                 'address_generator': {'name': 'single-address'}
             })
             if self.ledger.network.is_connected:
-                asyncio.create_task(self.ledger.subscribe_account(new_account))
+                await self.ledger.subscribe_account(account)
         account.add_channel_private_key(channel_private_key)
         self.default_wallet.save()
         return f"Added channel signing key for {data['name']}."
