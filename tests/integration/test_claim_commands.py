@@ -299,8 +299,8 @@ class ChannelCommands(CommandTestCase):
         self.assertIsNone(txo.private_key)
 
         # send the private key too
-        channel_public_key = self.account.get_channel_private_key(unhexlify(channel['public_key']))
-        account2.add_channel_private_key(channel_public_key)
+        private_key = self.account.get_channel_private_key(unhexlify(channel['public_key']))
+        account2.add_channel_private_key(private_key)
 
         # now should have private key
         txo = (await account2.get_channels())[0]
@@ -318,7 +318,7 @@ class ChannelCommands(CommandTestCase):
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
 
         # exporting from default account
-        serialized_channel_info = await self.out(self.daemon.jsonrpc_channel_export(claim_id, insecure=True))
+        serialized_channel_info = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
 
         other_address = await account2.receiving.get_or_create_usable_address()
         await self.out(self.channel_update(claim_id, claim_address=other_address))
