@@ -58,6 +58,9 @@ class AddressManager:
     def get_private_key(self, index: int) -> PrivateKey:
         raise NotImplementedError
 
+    def get_public_key(self, index: int) -> PubKey:
+        raise NotImplementedError
+
     async def get_max_gap(self):
         raise NotImplementedError
 
@@ -107,6 +110,9 @@ class HierarchicalDeterministic(AddressManager):
 
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key.child(self.chain_number).child(index)
+
+    def get_public_key(self, index: int) -> PubKey:
+        return self.account.public_key.child(self.chain_number).child(index)
 
     async def get_max_gap(self) -> int:
         addresses = await self._query_addresses(order_by="position ASC")
@@ -173,6 +179,9 @@ class SingleKey(AddressManager):
 
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key
+
+    def get_public_key(self, index: int) -> PubKey:
+        return self.account.public_key
 
     async def get_max_gap(self) -> int:
         return 0
@@ -389,6 +398,9 @@ class BaseAccount:
     def get_private_key(self, chain: int, index: int) -> PrivateKey:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
         return self.address_managers[chain].get_private_key(index)
+
+    def get_public_key(self, chain: int, index: int) -> PubKey:
+        return self.address_managers[chain].get_public_key(index)
 
     def get_balance(self, confirmations: int = 0, **constraints):
         if confirmations > 0:

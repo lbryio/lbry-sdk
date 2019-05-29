@@ -173,12 +173,29 @@ class BaseLedger(metaclass=LedgerRegistry):
     def add_account(self, account: baseaccount.BaseAccount):
         self.accounts.append(account)
 
-    async def get_private_key_for_address(self, address):
+    async def _get_account_and_address_info_for_address(self, address):
         match = await self.db.get_address(address=address)
         if match:
             for account in self.accounts:
                 if match['account'] == account.public_key.address:
-                    return account.get_private_key(match['chain'], match['position'])
+                    return account, match
+
+    async def get_private_key_for_address(self, address):
+        match = await self._get_account_and_address_info_for_address(address)
+        if match:
+            account, address_info = match
+            return account.get_private_key(address_info['chain'], address_info['position'])
+
+    async def get_public_key_for_address(self, address):
+        match = await self._get_account_and_address_info_for_address(address)
+        if match:
+            account, address_info = match
+            return account.get_public_key(address_info['chain'], address_info['position'])
+
+    async def get_account_for_address(self, address):
+        match = await self._get_account_and_address_info_for_address(address)
+        if match:
+            return match[0]
 
     async def get_effective_amount_estimators(self, funding_accounts: Iterable[baseaccount.BaseAccount]):
         estimators = []
