@@ -145,6 +145,7 @@ class CommandTestCase(IntegrationTestCase):
             exchange_rate_manager=ExchangeRateManagerComponent
         ))
         await daemon.initialize()
+        self.daemons.append(daemon)
         wallet_node.manager.old_db = daemon.storage
         return daemon
 
