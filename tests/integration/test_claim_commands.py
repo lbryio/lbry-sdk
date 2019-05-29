@@ -306,31 +306,51 @@ class ChannelCommands(CommandTestCase):
         txo = (await account2.get_channels())[0]
         self.assertIsNotNone(txo.private_key)
 
-    async def test_channel_export_import_without_password(self):
+    async def test_channel_export_import_into_new_account(self):
         tx = await self.channel_create('@foo', '1.0')
         claim_id = tx['outputs'][0]['claim_id']
         channel_private_key = (await self.account.get_channels())[0].private_key
+        exported_data = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
 
-        _account2 = await self.out(self.daemon.jsonrpc_account_create("Account 2"))
-        account2_id, account2 = _account2["id"], self.daemon.get_account_or_error(_account2['id'])
+        daemon2 = await self.add_daemon()
 
-        # before exporting/importing channel
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
+        # before importing channel
+        self.assertEqual(1, len(daemon2.default_wallet.accounts))
 
-        # exporting from default account
-        serialized_channel_info = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
+        # importing channel which will create a new single key account
+        await daemon2.jsonrpc_channel_import(exported_data)
 
-        other_address = await account2.receiving.get_or_create_usable_address()
-        await self.out(self.channel_update(claim_id, claim_address=other_address))
+        # after import
+        self.assertEqual(2, len(daemon2.default_wallet.accounts))
+        new_account = daemon2.default_wallet.accounts[1]
+        await daemon2.ledger._update_tasks.done.wait()
+        channels = await new_account.get_channels()
+        self.assertEqual(1, len(channels))
+        self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
 
-        # importing into second account
-        await self.daemon.jsonrpc_channel_import(serialized_channel_info, password=None, account_id=account2_id)
+    async def test_channel_export_import_into_existing_account(self):
+        tx = await self.channel_create('@foo', '1.0')
+        claim_id = tx['outputs'][0]['claim_id']
+        channel_private_key = (await self.account.get_channels())[0].private_key
+        exported_data = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
 
-        # after exporting/importing channel
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
-        txo_channel_account2 = (await account2.get_channels())[0]
+        daemon2 = await self.add_daemon(seed=self.account.seed)
+        await daemon2.ledger._update_tasks.done.wait()  # will sync channel previously created
 
-        self.assertEqual(channel_private_key, txo_channel_account2.private_key)
+        # before importing channel key, has channel without key
+        self.assertEqual(1, len(daemon2.default_wallet.accounts))
+        channels = await daemon2.default_account.get_channels()
+        self.assertEqual(1, len(channels))
+        self.assertIsNone(channels[0].private_key)
+
+        # importing channel will add it to existing account
+        await daemon2.jsonrpc_channel_import(exported_data)
+
+        # after import, still just one account but with private key now
+        self.assertEqual(1, len(daemon2.default_wallet.accounts))
+        channels = await daemon2.default_account.get_channels()
+        self.assertEqual(1, len(channels))
+        self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
 
 
 class StreamCommands(CommandTestCase):
