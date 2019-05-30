@@ -3325,7 +3325,7 @@ class Daemon(metaclass=JSONRPCServerType):
                         "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
                         "channel_id":   (str) The Channel Claim ID that this comment was posted under,
                         "signature":    (str) The signature of the comment,
-                        "channel_uri":  (str) Channel's URI in the ClaimTrie,
+                        "channel_url":  (str) Channel's URI in the ClaimTrie,
                         "parent_id":    (str) Comment this is replying to, (None) if this is the root,
                         "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
                     },
@@ -3371,7 +3371,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
                 "channel_id":   (str) The Channel Claim ID that this comeent was posted under,
                 "signature":    (str) The signature of the comment,
-                "channel_uri":  (str) Channel's URI in the ClaimTrie,
+                "channel_url":  (str) Channel's URI in the ClaimTrie,
                 "parent_id":    (str) Comment this is replying to, (None) if this is the root,
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
             }
