@@ -1,7 +1,6 @@
 import asyncio
 import json
 import hashlib
-import ecdsa
 from unittest import skip
 from binascii import hexlify, unhexlify
 from lbrynet.testcase import CommandTestCase

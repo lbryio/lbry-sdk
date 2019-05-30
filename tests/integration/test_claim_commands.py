@@ -84,10 +84,10 @@ class ClaimSearchCommand(CommandTestCase):
         await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
         await self.assertFindsClaims([three, two, signed2, signed], channel_ids=[channel_id2, self.channel_id])
         await self.channel_abandon(claim_id=self.channel_id)
-        await self.assertFindsClaims([], channel_ids=[self.channel_id], is_channel_signature_valid=True)
-        await self.assertFindsClaims([signed2], channel_ids=[channel_id2], is_channel_signature_valid=True)
+        await self.assertFindsClaims([], channel_ids=[self.channel_id], valid_channel_signatures=True)
+        await self.assertFindsClaims([signed2], channel_ids=[channel_id2], valid_channel_signatures=True)
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2, self.channel_id],
-                                     is_channel_signature_valid=True)
+                                     valid_channel_signatures=True)
 
         # abandoned stream won't show up for streams in channel search
         await self.stream_abandon(txid=signed2['txid'], nout=0)
