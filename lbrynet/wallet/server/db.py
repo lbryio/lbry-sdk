@@ -117,6 +117,7 @@ class SQLDB:
         create index if not exists claim_height_idx on claim (height);
         create index if not exists claim_activation_height_idx on claim (activation_height);
 
+        create index if not exists claim_effective_amount_idx on claim (effective_amount);
         create index if not exists claim_trending_group_idx on claim (trending_group);
         create index if not exists claim_trending_mixed_idx on claim (trending_mixed);
         create index if not exists claim_trending_local_idx on claim (trending_local);
