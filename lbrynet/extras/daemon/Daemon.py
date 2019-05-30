@@ -1695,7 +1695,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid>] [--nout=<nout>]
-                         [--channel=<channel> | --channel_ids=<channel_ids>...] [--is_channel_signature_valid]
+                         [--channel=<channel> | --channel_ids=<channel_ids>...]
+                         [--valid_channel_signatures] [--invalid_channel_signatures]
                          [--is_controlling] [--release_time=<release_time>]
                          [--timestamp=<timestamp>] [--creation_timestamp=<creation_timestamp>]
                          [--height=<height>] [--creation_height=<creation_height>]
@@ -1721,12 +1722,13 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     see --channel_ids if you need to filter by
                                                     multiple channels at the same time,
                                                     includes claims with invalid signatures,
-                                                    use in conjunction with --is_channel_signature_valid
+                                                    use in conjunction with --valid_channel_signatures
             --channel_ids=<channel_ids>     : (str) claims signed by any of these channels
                                                     (arguments must be claim ids of the channels),
                                                     includes claims with invalid signatures,
-                                                    use in conjunction with --is_channel_signature_valid
-            --is_channel_signature_valid    : (bool) only return claims with valid channel signatures
+                                                    use in conjunction with --valid_channel_signatures
+            --valid_channel_signatures      : (bool) only return claims with valid channel signatures
+            --invalid_channel_signatures    : (bool) only return claims with invalid channel signatures
             --is_controlling                : (bool) only return winning claims of their respective name
             --height=<height>               : (int) last updated block height (supports equality constraints)
             --timestamp=<timestamp>         : (int) last updated timestamp (supports equality constraints)
@@ -1787,6 +1789,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
+        if kwargs.pop('valid_channel_signatures', False):
+            kwargs['is_channel_signature_valid'] = 1
+        elif kwargs.pop('invalid_channel_signatures', False):
+            kwargs['is_channel_signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
         kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})
         txos, offset, total = await self.ledger.claim_search(**kwargs)
