@@ -3416,11 +3416,15 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         if bool(channel_name) ^ bool(channel_id):
-            skey, sval = ('claim_id', channel_id) if channel_id else ('normalized', channel_name.lower())
-            channel_list = await self.jsonrpc_channel_list()
             try:
-                channel: dict = [chan for chan in channel_list if chan[skey] == sval].pop()
-                channel_name, channel_id = channel['normalized'], channel['claim_id']
+                channel_list = await self.jsonrpc_channel_list()
+                if channel_name:
+                    channel_name = channel_name.lower()
+                    channel: Output = [chan for chan in channel_list if chan.normalized_name == channel_name].pop()
+                    channel_id = channel.claim_id
+                else:
+                    channel: Output = [chan for chan in channel_list if chan.claim_id == channel_id].pop()
+                    channel_name = channel.normalized_name
             except IndexError:
                 raise ValueError('You must enter a valid channel_%s' % ('id' if channel_id else 'name'))
         signature = None
