@@ -663,6 +663,7 @@ class SQLDB:
 
         if constraints.pop('is_controlling', False):
             if {'sequence', 'amount_order'}.isdisjoint(constraints):
+                join = True
                 constraints['claimtrie.claim_hash__is_not_null'] = ''
         if 'sequence' in constraints:
             constraints['order_by'] = 'claim.activation_height ASC'
