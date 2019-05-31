@@ -286,7 +286,7 @@ class SQLDB:
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
                     CASE WHEN :height >= 262974 THEN :height+2102400 ELSE :height+262974 END,
-                    :normalized||COALESCE(
+                    :claim_name||COALESCE(
                         (SELECT shortest_id(claim_id, :claim_id) FROM claim WHERE normalized = :normalized),
                         '#'||substr(:claim_id, 1, 1)
                     )
@@ -446,7 +446,7 @@ class SQLDB:
                         WHEN is_channel_signature_valid AND :is_channel_signature_valid THEN canonical_url
                         WHEN :is_channel_signature_valid THEN
                             (SELECT short_url FROM claim WHERE claim_hash=:channel_hash)||'/'||
-                            normalized||COALESCE(
+                            claim_name||COALESCE(
                                 (SELECT shortest_id(other_claim.claim_id, claim.claim_id) FROM claim AS other_claim
                                  WHERE other_claim.normalized = claim.normalized AND
                                        other_claim.channel_hash = :channel_hash AND
