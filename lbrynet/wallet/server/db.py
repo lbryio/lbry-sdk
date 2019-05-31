@@ -634,7 +634,7 @@ class SQLDB:
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
 
-    def get_claims(self, cols, **constraints):
+    def get_claims(self, cols, join=True, **constraints):
         if 'order_by' in constraints:
             sql_order_by = []
             for order_by in constraints['order_by']:
@@ -710,9 +710,10 @@ class SQLDB:
         _apply_constraints_for_array_attributes(constraints, 'language')
         _apply_constraints_for_array_attributes(constraints, 'location')
 
+        select = f"SELECT {cols} FROM claim"
+
         sql, values = query(
-            f"""
-            SELECT {cols} FROM claim
+            select if not join else select+"""
             LEFT JOIN claimtrie USING (claim_hash)
             LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
             """, **constraints
@@ -727,7 +728,7 @@ class SQLDB:
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
-        count = self.get_claims('count(*)', **constraints)
+        count = self.get_claims('count(*)', join=False, **constraints)
         return count[0][0]
 
     def _search(self, **constraints):
