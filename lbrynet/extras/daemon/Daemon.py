@@ -3445,6 +3445,12 @@ class Daemon(metaclass=JSONRPCServerType):
         }
         return await jsonrpc_post(self.conf.comment_server, 'create_comment', **comment)
 
+    def valid_address_or_error(self, address):
+        try:
+            assert self.ledger.is_valid_address(address)
+        except:
+            raise Exception(f"'{address}' is not a valid address")
+
     @staticmethod
     def valid_stream_name_or_error(name: str):
         try:
