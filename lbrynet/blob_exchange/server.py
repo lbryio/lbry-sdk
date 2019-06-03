@@ -22,15 +22,23 @@ class BlobServerProtocol(asyncio.Protocol):
         self.buf = b''
         self.transport = None
         self.lbrycrd_address = lbrycrd_address
+        self.peer_address_and_port: typing.Optional[str] = None
 
     def connection_made(self, transport):
         self.transport = transport
+        self.peer_address_and_port = "%s:%i" % self.transport.get_extra_info('peername')
+        self.blob_manager.connection_manager.connection_received(self.peer_address_and_port)
+
+    def connection_lost(self, exc: typing.Optional[Exception]) -> None:
+        self.blob_manager.connection_manager.incoming_connection_lost(self.peer_address_and_port)
 
     def send_response(self, responses: typing.List[blob_response_types]):
         to_send = []
         while responses:
             to_send.append(responses.pop())
-        self.transport.write(BlobResponse(to_send).serialize())
+        serialized = BlobResponse(to_send).serialize()
+        self.transport.write(serialized)
+        self.blob_manager.connection_manager.sent_data(self.peer_address_and_port, len(serialized))
 
     async def handle_request(self, request: BlobRequest):
         addr = self.transport.get_extra_info('peername')
@@ -72,6 +80,7 @@ class BlobServerProtocol(asyncio.Protocol):
     def data_received(self, data):
         request = None
         if data:
+            self.blob_manager.connection_manager.received_data(self.peer_address_and_port, len(data))
             message, separator, remainder = data.rpartition(b'}')
             if not separator:
                 self.buf += data
@@ -97,7 +106,7 @@ class BlobServer:
     def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
         self.loop = loop
         self.blob_manager = blob_manager
-        self.server_task: asyncio.Task = None
+        self.server_task: typing.Optional[asyncio.Task] = None
         self.started_listening = asyncio.Event(loop=self.loop)
         self.lbrycrd_address = lbrycrd_address
         self.server_protocol_class = BlobServerProtocol
