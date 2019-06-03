@@ -50,8 +50,10 @@ class ClaimSearchCommand(CommandTestCase):
 
     async def test_basic_claim_search(self):
         await self.create_channel()
+        channel_txo = self.channel['outputs'][0]
         channel2 = await self.channel_create('@abc', '0.1', allow_duplicate_name=True)
-        channel_id2 = channel2['outputs'][0]['claim_id']
+        channel_txo2 = channel2['outputs'][0]
+        channel_id2 = channel_txo2['claim_id']
 
         # finding a channel
         await self.assertFindsClaims([channel2, self.channel], name='@abc')
@@ -60,6 +62,10 @@ class ClaimSearchCommand(CommandTestCase):
         await self.assertFindsClaim(self.channel, txid=self.channel['txid'], nout=0)
         await self.assertFindsClaim(channel2, claim_id=channel_id2)
         await self.assertFindsClaim(channel2, txid=channel2['txid'], nout=0)
+        await self.assertFindsClaim(
+            channel2, public_key_id=channel_txo2['value']['public_key_id'])
+        await self.assertFindsClaim(
+            self.channel, public_key_id=channel_txo['value']['public_key_id'])
 
         signed = await self.stream_create('on-channel-claim', '0.001', channel_id=self.channel_id)
         signed2 = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel_id2,

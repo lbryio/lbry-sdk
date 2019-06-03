@@ -1697,7 +1697,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid>] [--nout=<nout>]
                          [--channel=<channel> | --channel_ids=<channel_ids>...]
                          [--valid_channel_signatures] [--invalid_channel_signatures]
-                         [--is_controlling] [--release_time=<release_time>]
+                         [--is_controlling] [--release_time=<release_time>] [--public_key_id=<public_key_id>]
                          [--timestamp=<timestamp>] [--creation_timestamp=<creation_timestamp>]
                          [--height=<height>] [--creation_height=<creation_height>]
                          [--activation_height=<activation_height>] [--expiration_height=<expiration_height>]
@@ -1730,6 +1730,9 @@ class Daemon(metaclass=JSONRPCServerType):
             --valid_channel_signatures      : (bool) only return claims with valid channel signatures
             --invalid_channel_signatures    : (bool) only return claims with invalid channel signatures
             --is_controlling                : (bool) only return winning claims of their respective name
+            --public_key_id                 : (str) only return channels having this public key id, this is
+                                                    the same key as used in the wallet file to map
+                                                    channel certificate private keys: {'public_key_id': 'private key'}
             --height=<height>               : (int) last updated block height (supports equality constraints)
             --timestamp=<timestamp>         : (int) last updated timestamp (supports equality constraints)
             --creation_height=<creation_height>      : (int) created at block height (supports equality constraints)
