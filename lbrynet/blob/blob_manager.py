@@ -5,6 +5,7 @@ import logging
 from lbrynet.utils import LRUCache
 from lbrynet.blob.blob_file import is_valid_blobhash, BlobFile, BlobBuffer, AbstractBlob
 from lbrynet.stream.descriptor import StreamDescriptor
+from lbrynet.connection_manager import ConnectionManager
 
 if typing.TYPE_CHECKING:
     from lbrynet.conf import Config
@@ -33,6 +34,7 @@ class BlobManager:
         self.config = config
         self.decrypted_blob_lru_cache = None if not self.config.blob_lru_cache_size else LRUCache(
             self.config.blob_lru_cache_size)
+        self.connection_manager = ConnectionManager(loop)
 
     def _get_blob(self, blob_hash: str, length: typing.Optional[int] = None):
         if self.config.save_blobs:
@@ -84,9 +86,11 @@ class BlobManager:
         to_add = await self.storage.sync_missing_blobs(in_blobfiles_dir)
         if to_add:
             self.completed_blob_hashes.update(to_add)
+        self.connection_manager.start()
         return True
 
     def stop(self):
+        self.connection_manager.stop()
         while self.blobs:
             _, blob = self.blobs.popitem()
             blob.close()

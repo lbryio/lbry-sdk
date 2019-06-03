@@ -278,7 +278,7 @@ class BlobComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.blob_manager: BlobManager = None
+        self.blob_manager: typing.Optional[BlobManager] = None
 
     @property
     def component(self) -> typing.Optional[BlobManager]:
@@ -294,7 +294,7 @@ class BlobComponent(Component):
         blob_dir = os.path.join(self.conf.data_dir, 'blobfiles')
         if not os.path.isdir(blob_dir):
             os.mkdir(blob_dir)
-        self.blob_manager = BlobManager(asyncio.get_event_loop(), blob_dir, storage, self.conf, data_store)
+        self.blob_manager = BlobManager(self.component_manager.loop, blob_dir, storage, self.conf, data_store)
         return await self.blob_manager.setup()
 
     async def stop(self):
@@ -304,7 +304,10 @@ class BlobComponent(Component):
         count = 0
         if self.blob_manager:
             count = len(self.blob_manager.completed_blob_hashes)
-        return {'finished_blobs': count}
+        return {
+            'finished_blobs': count,
+            'connections': self.blob_manager.connection_manager.status
+        }
 
 
 class DHTComponent(Component):
@@ -405,7 +408,7 @@ class StreamManagerComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.stream_manager: StreamManager = None
+        self.stream_manager: typing.Optional[StreamManager] = None
 
     @property
     def component(self) -> typing.Optional[StreamManager]:
@@ -415,7 +418,7 @@ class StreamManagerComponent(Component):
         if not self.stream_manager:
             return
         return {
-            'managed_files': len(self.stream_manager.streams)
+            'managed_files': len(self.stream_manager.streams),
         }
 
     async def start(self):
@@ -444,7 +447,7 @@ class PeerProtocolServerComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.blob_server: BlobServer = None
+        self.blob_server: typing.Optional[BlobServer] = None
 
     @property
     def component(self) -> typing.Optional[BlobServer]:
