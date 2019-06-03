@@ -740,6 +740,17 @@ class Daemon(metaclass=JSONRPCServerType):
                 },
                 'blob_manager': {
                     'finished_blobs': (int) number of finished blobs in the blob manager,
+                    'connections': {
+                        'incoming_bps': {
+                            <source ip and tcp port>: (int) bytes per second received,
+                        },
+                        'outgoing_bps': {
+                            <destination ip and tcp port>: (int) bytes per second sent,
+                        },
+                        'total_outgoing_mps': (float) megabytes per second sent,
+                        'total_incoming_mps': (float) megabytes per second received,
+                        'time': (float) timestamp
+                    }
                 },
                 'hash_announcer': {
                     'announce_queue_size': (int) number of blobs currently queued to be announced

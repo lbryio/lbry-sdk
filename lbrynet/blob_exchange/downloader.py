@@ -41,7 +41,9 @@ class BlobDownloader:
         start = self.loop.time()
         bytes_received, transport = await request_blob(
             self.loop, blob, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
-            self.config.blob_download_timeout, connected_transport=transport, connection_id=connection_id
+            self.config.blob_download_timeout, connected_transport=transport, connection_id=connection_id,
+            connection_manager=self.blob_manager.connection_manager
+
         )
         if not transport and peer not in self.ignored:
             self.ignored[peer] = self.loop.time()

@@ -8,18 +8,20 @@ from lbrynet.utils import cache_concurrent
 if typing.TYPE_CHECKING:
     from lbrynet.blob.blob_file import AbstractBlob
     from lbrynet.blob.writer import HashBlobWriter
+    from lbrynet.connection_manager import ConnectionManager
 
 log = logging.getLogger(__name__)
 
 
 class BlobExchangeClientProtocol(asyncio.Protocol):
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_timeout: typing.Optional[float] = 10):
+    def __init__(self, loop: asyncio.BaseEventLoop, peer_timeout: typing.Optional[float] = 10,
+                 connection_manager: typing.Optional['ConnectionManager'] = None):
         self.loop = loop
         self.peer_port: typing.Optional[int] = None
         self.peer_address: typing.Optional[str] = None
-        self.peer_timeout = peer_timeout
         self.transport: typing.Optional[asyncio.Transport] = None
-
+        self.peer_timeout = peer_timeout
+        self.connection_manager = connection_manager
         self.writer: typing.Optional['HashBlobWriter'] = None
         self.blob: typing.Optional['AbstractBlob'] = None
 
@@ -31,6 +33,12 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.closed = asyncio.Event(loop=self.loop)
 
     def data_received(self, data: bytes):
+        if self.connection_manager:
+            if not self.peer_address:
+                addr_info = self.transport.get_extra_info('peername')
+                self.peer_address, self.peer_port = addr_info
+            # assert self.peer_address is not None
+            self.connection_manager.received_data(f"{self.peer_address}:{self.peer_port}", len(data))
         #log.debug("%s:%d -- got %s bytes -- %s bytes on buffer -- %s blob bytes received",
         #          self.peer_address, self.peer_port, len(data), len(self.buf), self._blob_bytes_received)
         if not self.transport or self.transport.is_closing():
@@ -94,10 +102,15 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         """
         request = BlobRequest.make_request_for_blob_hash(self.blob.blob_hash)
         blob_hash = self.blob.blob_hash
+        if not self.peer_address:
+            addr_info = self.transport.get_extra_info('peername')
+            self.peer_address, self.peer_port = addr_info
         try:
             msg = request.serialize()
             log.debug("send request to %s:%i -> %s", self.peer_address, self.peer_port, msg.decode())
             self.transport.write(msg)
+            if self.connection_manager:
+                self.connection_manager.sent_data(f"{self.peer_address}:{self.peer_port}", len(msg))
             response: BlobResponse = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
@@ -186,11 +199,16 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 self.writer = None
 
     def connection_made(self, transport: asyncio.Transport):
+        addr = transport.get_extra_info('peername')
+        self.peer_address, self.peer_port = addr[0], addr[1]
         self.transport = transport
-        self.peer_address, self.peer_port = self.transport.get_extra_info('peername')
+        if self.connection_manager:
+            self.connection_manager.connection_made(f"{self.peer_address}:{self.peer_port}")
         log.debug("connection made to %s:%i", self.peer_address, self.peer_port)
 
     def connection_lost(self, reason):
+        if self.connection_manager:
+            self.connection_manager.outgoing_connection_lost(f"{self.peer_address}:{self.peer_port}")
         log.debug("connection lost to %s:%i (reason: %s, %s)", self.peer_address, self.peer_port, str(reason),
                   str(type(reason)))
         self.close()
@@ -199,16 +217,19 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 @cache_concurrent
 async def request_blob(loop: asyncio.BaseEventLoop, blob: 'AbstractBlob', address: str, tcp_port: int,
                        peer_connect_timeout: float, blob_download_timeout: float,
-                       connected_transport: asyncio.Transport = None, connection_id: int = 0)\
+                       connected_transport: asyncio.Transport = None, connection_id: int = 0,
+                       connection_manager: typing.Optional['ConnectionManager'] = None)\
         -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
     """
     Returns [<downloaded blob>, <keep connection>]
     """
 
-    protocol = BlobExchangeClientProtocol(loop, blob_download_timeout)
+    protocol = BlobExchangeClientProtocol(
+        loop, blob_download_timeout, connection_manager
+    )
     if connected_transport and not connected_transport.is_closing():
         connected_transport.set_protocol(protocol)
-        protocol.connection_made(connected_transport)
+        protocol.transport = connected_transport
         log.debug("reusing connection for %s:%d", address, tcp_port)
     else:
         connected_transport = None
