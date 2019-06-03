@@ -1,6 +1,7 @@
 import logging
 import asyncio
 
+from torba.rpc import RPCSession
 from torba.testcase import IntegrationTestCase
 
 
@@ -39,3 +40,16 @@ class ReconnectTests(IntegrationTestCase):
         self.ledger.config['default_servers'] = [('10.0.0.1', 12)] + list(conf['default_servers'])
         await self.ledger.start()
         self.assertTrue(self.ledger.network.is_connected)
+
+    async def test_pick_fastest(self):
+        # local server that is listening but wont reply
+        proto = RPCSession()
+        proto.handle_request = lambda _: asyncio.sleep(10)
+        server = await self.loop.create_server(lambda: proto, host='127.0.0.1', port=1337)
+        await self.ledger.stop()
+        conf = self.ledger.config
+        self.ledger.config['default_servers'] = [('127.0.0.1', 1337)] + list(conf['default_servers'])
+        self.ledger.config['connect_timeout'] = 30
+        await asyncio.wait_for(self.ledger.start(), timeout=1)
+        self.assertTrue(self.ledger.network.is_connected)
+        self.assertEqual(self.ledger.network.client.server, conf['default_servers'][-1])

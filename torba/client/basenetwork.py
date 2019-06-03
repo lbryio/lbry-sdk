@@ -1,7 +1,6 @@
 import logging
 import asyncio
 from asyncio import CancelledError
-from itertools import cycle
 from time import time
 
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
@@ -75,13 +74,32 @@ class BaseNetwork:
             'blockchain.address.subscribe': self._on_status_controller,
         }
 
+    async def pick_fastest_server(self, timeout):
+        async def __probe(server):
+            client = ClientSession(network=self, server=server)
+            try:
+                await client.create_connection(timeout)
+                await client.send_request('server.banner')
+                return client
+            except (asyncio.TimeoutError, asyncio.CancelledError) as error:
+                client.connection_lost(error)
+                raise error
+        futures = []
+        for server in self.config['default_servers']:
+            futures.append(__probe(server))
+        done, pending = await asyncio.wait(futures, return_when='FIRST_COMPLETED')
+        for task in pending:
+            task.cancel()
+        for client in done:
+            return await client
+
     async def start(self):
         self.running = True
         delay = 0.0
         connect_timeout = self.config.get('connect_timeout', 6)
-        for server in cycle(self.config['default_servers']):
-            self.client = ClientSession(network=self, server=server)
-            connection_string = '{}:{}'.format(*server)
+        while True:
+            self.client = await self.pick_fastest_server(connect_timeout)
+            connection_string = '{}:{}'.format(*self.client.server)
             try:
                 await self.client.create_connection(connect_timeout)
                 await self.ensure_server_version()
