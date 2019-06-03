@@ -51,7 +51,6 @@ class ReconnectTests(IntegrationTestCase):
         self.addCleanup(server.close)
 
     async def test_pick_fastest(self):
-        await self.ledger.stop()
         original_servers = self.ledger.config['default_servers']
         original_servers.clear()
         for index in reversed(range(4)):  # reversed so the slowest is the first
