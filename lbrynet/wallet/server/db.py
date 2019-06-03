@@ -90,6 +90,7 @@ class SQLDB:
             -- claims which are channels
             is_channel bool not null,
             public_key_bytes bytes,
+            public_key_hash bytes,
             claims_in_channel integer,
 
             -- claims which are inside channels
@@ -116,6 +117,7 @@ class SQLDB:
         create index if not exists claim_timestamp_idx on claim (timestamp);
         create index if not exists claim_height_idx on claim (height);
         create index if not exists claim_activation_height_idx on claim (activation_height);
+        create index if not exists claim_public_key_hash_idx on claim (public_key_hash);
 
         create index if not exists claim_effective_amount_idx on claim (effective_amount);
         create index if not exists claim_trending_group_idx on claim (trending_group);
@@ -467,9 +469,16 @@ class SQLDB:
 
         if channels:
             self.db.executemany(
-                "UPDATE claim SET public_key_bytes=:public_key_bytes WHERE claim_hash=:claim_hash", [{
+                """
+                UPDATE claim SET
+                    public_key_bytes=:public_key_bytes,
+                    public_key_hash=:public_key_hash
+                WHERE claim_hash=:claim_hash""", [{
                     'claim_hash': sqlite3.Binary(claim_hash),
-                    'public_key_bytes': sqlite3.Binary(txo.claim.channel.public_key_bytes)
+                    'public_key_bytes': sqlite3.Binary(txo.claim.channel.public_key_bytes),
+                    'public_key_hash': sqlite3.Binary(
+                        self.ledger.address_to_hash160(
+                            self.ledger.public_key_to_address(txo.claim.channel.public_key_bytes)))
                 } for claim_hash, txo in channels.items()]
             )
 
@@ -684,6 +693,10 @@ class SQLDB:
         if 'name' in constraints:
             constraints['claim.normalized'] = normalize_name(constraints.pop('name'))
 
+        if 'public_key_id' in constraints:
+            constraints['claim.public_key_hash'] = sqlite3.Binary(
+                self.ledger.address_to_hash160(constraints.pop('public_key_id')))
+
         if 'channel' in constraints:
             channel_url = constraints.pop('channel')
             match = self._resolve_one(channel_url)
@@ -759,7 +772,7 @@ class SQLDB:
     }
 
     SEARCH_PARAMS = {
-        'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids',
+        'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids', 'public_key_id',
         'any_tags', 'all_tags', 'not_tags',
         'any_locations', 'all_locations', 'not_locations',
         'any_languages', 'all_languages', 'not_languages',

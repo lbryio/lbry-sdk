@@ -1,6 +1,6 @@
 import logging
 from decimal import Decimal
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 from datetime import datetime
 from json import JSONEncoder
 
@@ -227,6 +227,10 @@ class JSONResponseEncoder(JSONEncoder):
         })
         return file
 
-    @staticmethod
-    def encode_claim(claim):
-        return getattr(claim, claim.claim_type).to_dict()
+    def encode_claim(self, claim):
+        encoded = getattr(claim, claim.claim_type).to_dict()
+        if 'public_key' in encoded:
+            encoded['public_key_id'] = self.ledger.public_key_to_address(
+                unhexlify(encoded['public_key'])
+            )
+        return encoded
