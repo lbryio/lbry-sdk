@@ -58,7 +58,6 @@ class ExchangeRateManagerComponent(Component):
 
 class CommandTestCase(IntegrationTestCase):
 
-    timeout = 180
     LEDGER = lbrynet.wallet
     MANAGER = LbryWalletManager
     VERBOSITY = logging.WARN
