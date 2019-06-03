@@ -1,7 +1,9 @@
 import logging
 import asyncio
 
+from torba.client.basenetwork import BaseNetwork
 from torba.rpc import RPCSession
+from torba.stream import StreamController
 from torba.testcase import IntegrationTestCase
 
 
@@ -41,15 +43,28 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.start()
         self.assertTrue(self.ledger.network.is_connected)
 
-    async def test_pick_fastest(self):
-        # local server that is listening but wont reply
+    async def _make_fake_server(self, latency=1.0, port=1337):
+        # local fake server with artificial latency
         proto = RPCSession()
-        proto.handle_request = lambda _: asyncio.sleep(10)
-        server = await self.loop.create_server(lambda: proto, host='127.0.0.1', port=1337)
+        proto.handle_request = lambda _: asyncio.sleep(latency)
+        server = await self.loop.create_server(lambda: proto, host='127.0.0.1', port=port)
+        self.addCleanup(server.close)
+
+    async def test_pick_fastest(self):
         await self.ledger.stop()
-        conf = self.ledger.config
-        self.ledger.config['default_servers'] = [('127.0.0.1', 1337)] + list(conf['default_servers'])
+        original_servers = self.ledger.config['default_servers']
+        original_servers.clear()
+        for index in reversed(range(4)):  # reversed so the slowest is the first
+            port = 1337 + index
+            await self._make_fake_server(latency=index, port=port)
+            original_servers.append(('127.0.0.1', port))
+
+        fastest = ('127.0.0.1', 1337)
+        self.ledger.config['default_servers'] = original_servers
         self.ledger.config['connect_timeout'] = 30
-        await asyncio.wait_for(self.ledger.start(), timeout=1)
-        self.assertTrue(self.ledger.network.is_connected)
-        self.assertEqual(self.ledger.network.client.server, conf['default_servers'][-1])
+
+        network = BaseNetwork(self.ledger)
+        asyncio.ensure_future(network.start())
+        await asyncio.wait_for(network.on_connected.first, timeout=1)
+        self.assertTrue(network.is_connected)
+        self.assertEqual(network.client.server, fastest)

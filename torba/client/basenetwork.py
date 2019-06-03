@@ -101,7 +101,6 @@ class BaseNetwork:
             self.client = await self.pick_fastest_server(connect_timeout)
             connection_string = '{}:{}'.format(*self.client.server)
             try:
-                await self.client.create_connection(connect_timeout)
                 await self.ensure_server_version()
                 log.info("Successfully connected to SPV wallet server: %s", connection_string)
                 self._on_connected_controller.add(True)
