@@ -1,10 +1,11 @@
 import logging
 import asyncio
+from unittest.mock import Mock
 
+from torba.client.baseledger import BaseLedger
 from torba.client.basenetwork import BaseNetwork
 from torba.rpc import RPCSession
-from torba.stream import StreamController
-from torba.testcase import IntegrationTestCase
+from torba.testcase import IntegrationTestCase, AsyncioTestCase
 
 
 class ReconnectTests(IntegrationTestCase):
@@ -43,28 +44,30 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.start()
         self.assertTrue(self.ledger.network.is_connected)
 
+
+class ServerPickingTestCase(AsyncioTestCase):
     async def _make_fake_server(self, latency=1.0, port=1337):
         # local fake server with artificial latency
         proto = RPCSession()
         proto.handle_request = lambda _: asyncio.sleep(latency)
         server = await self.loop.create_server(lambda: proto, host='127.0.0.1', port=port)
         self.addCleanup(server.close)
+        return ('127.0.0.1', port)
 
     async def test_pick_fastest(self):
-        original_servers = self.ledger.config['default_servers']
-        original_servers.clear()
-        for index in reversed(range(4)):  # reversed so the slowest is the first
-            port = 1337 + index
-            await self._make_fake_server(latency=index, port=port)
-            original_servers.append(('127.0.0.1', port))
+        ledger = Mock(config={
+            'default_servers': [
+                await self._make_fake_server(latency=1.5, port=1340),
+                await self._make_fake_server(latency=0.1, port=1337),
+                await self._make_fake_server(latency=1.0, port=1339),
+                await self._make_fake_server(latency=0.5, port=1338),
+            ],
+            'connect_timeout': 30
+        })
 
-        fastest = ('127.0.0.1', 1337)
-        self.ledger.config['default_servers'] = original_servers
-        self.ledger.config['connect_timeout'] = 30
-
-        network = BaseNetwork(self.ledger)
+        network = BaseNetwork(ledger)
         self.addCleanup(network.stop)
         asyncio.ensure_future(network.start())
         await asyncio.wait_for(network.on_connected.first, timeout=1)
         self.assertTrue(network.is_connected)
-        self.assertEqual(network.client.server, fastest)
+        self.assertEqual(network.client.server, ('127.0.0.1', 1337))
