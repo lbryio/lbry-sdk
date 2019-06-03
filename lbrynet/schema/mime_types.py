@@ -140,8 +140,10 @@ types_map = {
     '.cbr': ('application/vnd.comicbook-rar', 'document'),
     '.cbz': ('application/vnd.comicbook+zip', 'document'),
     '.lbry': ('application/x-ext-lbry', 'document'),
+    '.m4v': ('video/m4v', 'video'),
     '.mid': ('audio/midi', 'audio'),
     '.midi': ('audio/midi', 'audio'),
+    '.mkv': ('video/x-matroska', 'video'),
     '.mobi': ('application/x-mobipocket-ebook', 'document'),
     '.pct': ('image/pict', 'image'),
     '.pic': ('image/pict', 'image'),
@@ -149,8 +151,7 @@ types_map = {
     '.prc': ('application/x-mobipocket-ebook', 'document'),
     '.rtf': ('application/rtf', 'document'),
     '.xul': ('text/xul', 'document'),
-    '.m4v': ('video/m4v', 'video'),
-
+    
     # microsoft is special and has its own 'standard'
     # https://docs.microsoft.com/en-us/windows/desktop/wmp/file-name-extensions
     '.wmv': ('video/x-ms-wmv', 'video')
