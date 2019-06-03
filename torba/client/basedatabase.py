@@ -31,6 +31,8 @@ class AIOSQLite:
             self.executor.submit(conn.close)
             self.executor.shutdown(wait=True)
         conn = self.connection
+        if not conn:
+            return
         self.connection = None
         return asyncio.get_event_loop_policy().get_event_loop().call_later(0.01, __close, conn)
 

@@ -64,6 +64,7 @@ class ReconnectTests(IntegrationTestCase):
         self.ledger.config['connect_timeout'] = 30
 
         network = BaseNetwork(self.ledger)
+        self.addCleanup(network.stop)
         asyncio.ensure_future(network.start())
         await asyncio.wait_for(network.on_connected.first, timeout=1)
         self.assertTrue(network.is_connected)
