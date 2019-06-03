@@ -2278,7 +2278,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of publisher channel
-          --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
+          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for funding the transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
@@ -2391,7 +2391,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of the publisher channel
-          --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
+          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for funding the transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
@@ -2541,7 +2541,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of the publisher channel
             --clear_channel                : (bool) remove channel signature
-          --channel_account_id=<channel_id>: (str) one or more account ids for accounts to look in
+          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for funding the transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
@@ -3382,25 +3382,27 @@ class Daemon(metaclass=JSONRPCServerType):
             top_level=not include_replies
         )
 
-    async def jsonrpc_comment_create(self, claim_id: str, comment: str, parent_id: str = None,
-                                     channel_name: str = None, channel_id: str = None) -> dict:
+    async def jsonrpc_comment_create(
+            self, claim_id: str, comment: str, parent_id: str = None,
+            channel_account_id=None, channel_name: str = None, channel_id: str = None) -> dict:
         """
         Create and associate a comment with a claim using your channel identity.
 
         Usage:
             comment_create  (<comment> | --comment=<comment>)
                             (<claim_id> | --claim_id=<claim_id>)
-                            [--channel_id=<channel_id>]
-                            [--channel_name=<channel_name>]
                             [--parent_id=<parent_id>]
+                            [--channel_id=<channel_id>] [--channel_name=<channel_name>]
+                            [--channel_account_id=<channel_account_id>...]
 
         Options:
             --comment=<comment>         : (str) Comment to be made, should be at most 2000 characters.
             --claim_id=<claim_id>       : (str) The ID of the claim on which the comment should be made on
             --parent_id=<parent_id>     : (str) The ID of a comment to make a response to
             --channel_id=<channel_id>   : (str) The ID of the channel you want to post under
-            --channel_name=<channel_name>   : (str) The channel you want to post as, prepend with a '@'
-
+            --channel_name=<channel_name>: (str) The channel you want to post as, prepend with a '@'
+          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
+                                                   for channel certificates, defaults to all accounts.
 
         Returns:
             (dict) Comment object if successfully made, (None) otherwise
@@ -3415,34 +3417,23 @@ class Daemon(metaclass=JSONRPCServerType):
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
             }
         """
-        if bool(channel_name) ^ bool(channel_id):
-            try:
-                channel_list = await self.jsonrpc_channel_list()
-                if channel_name:
-                    channel_name = channel_name.lower()
-                    channel: Output = [chan for chan in channel_list if chan.normalized_name == channel_name].pop()
-                    channel_id = channel.claim_id
-                else:
-                    channel: Output = [chan for chan in channel_list if chan.claim_id == channel_id].pop()
-                    channel_name = channel.normalized_name
-            except IndexError:
-                raise ValueError('You must enter a valid channel_%s' % ('id' if channel_id else 'name'))
-        signature = None
-        if channel_id and channel_name:
-            signature = sign_comment(
-                channel_name=channel_name,
-                channel_id=channel_id,
-                comment=comment,
-                salt=time.time_ns()
-            )
         comment = {
             'comment': comment,
             'claim_id': claim_id,
             'parent_id': parent_id,
-            'channel_id': channel_id,
-            'channel_name': channel_name,
-            'signature': signature
         }
+        channel = await self.get_channel_or_none(channel_account_id, channel_id, channel_name, for_signing=True)
+        if channel:
+            comment.update({
+                'channel_id': channel.claim_id,
+                'channel_name': channel.claim_name,
+                'signature': sign_comment(
+                    channel_name=channel_name,
+                    channel_id=channel_id,
+                    comment=comment,
+                    salt=time.time_ns()
+                )
+            })
         return await jsonrpc_post(self.conf.comment_server, 'create_comment', **comment)
 
     def valid_address_or_error(self, address):
