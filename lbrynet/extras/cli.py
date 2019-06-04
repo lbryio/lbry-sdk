@@ -169,7 +169,7 @@ def add_command_parser(parent, command):
 
 def get_argument_parser():
     main = ArgumentParser(
-        'lbrynet', description='An interface to the LBRY Network.'
+        'lbrynet', description='An interface to the LBRY Network.', allow_abbrev=False,
     )
     main.add_argument(
         '-v', '--version', dest='cli_version', action="store_true",
@@ -192,8 +192,8 @@ def get_argument_parser():
         help=('Enable debug output. Optionally specify loggers for which debug output '
               'should selectively be applied.')
     )
-    start.set_defaults(command='start', start_parser=start)
     Config.contribute_to_argparse(start)
+    start.set_defaults(command='start', start_parser=start, doc=start.format_help())
 
     api = Daemon.get_api_definitions()
     groups = {}
@@ -239,6 +239,7 @@ def main(argv=None):
         if args.help:
             args.start_parser.print_help()
             return 0
+
         default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
         file_handler = logging.handlers.RotatingFileHandler(
             conf.log_file_path, maxBytes=2097152, backupCount=5
@@ -264,6 +265,7 @@ def main(argv=None):
             loop.set_debug(True)
         else:
             log.setLevel(logging.INFO)
+
         if conf.share_usage_data:
             loggly_handler = get_loggly_handler()
             loggly_handler.setLevel(logging.ERROR)

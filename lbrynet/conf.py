@@ -121,7 +121,7 @@ class Toggle(Setting[bool]):
         )
         parser.add_argument(
             self.no_cli_name,
-            help=f"Opposite of --{self.cli_name}",
+            help=f"Opposite of {self.cli_name}",
             dest=self.name,
             action="store_false",
             default=NOT_SET
