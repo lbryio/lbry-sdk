@@ -81,7 +81,7 @@ class BaseNetwork:
                 await client.create_connection(timeout)
                 await client.send_request('server.banner')
                 return client
-            except (asyncio.TimeoutError, asyncio.CancelledError) as error:
+            except (asyncio.TimeoutError, asyncio.CancelledError):
                 if not client.is_closing():
                     client.abort()
                 raise
