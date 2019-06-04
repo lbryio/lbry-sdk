@@ -8,12 +8,61 @@ from urllib.request import urlopen
 from torba.client.errors import InsufficientFundsError
 
 from lbrynet.testcase import CommandTestCase
+from lbrynet.wallet.transaction import Transaction
 
 
 log = logging.getLogger(__name__)
 
 
-class ClaimSearchCommand(CommandTestCase):
+class ClaimTestCase(CommandTestCase):
+
+    files_directory = os.path.join(os.path.dirname(__file__), 'files')
+    video_file_url = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4'
+    video_file_name = os.path.join(files_directory, 'ForBiggerEscapes.mp4')
+
+    def setUp(self):
+        if not os.path.exists(self.video_file_name):
+            if not os.path.exists(self.files_directory):
+                os.mkdir(self.files_directory)
+            log.info(f'downloading test video from {self.video_file_name}')
+            with urlopen(self.video_file_url) as response, \
+                    open(self.video_file_name, 'wb') as video_file:
+                video_file.write(response.read())
+
+    async def image_stream_create(self, name='blank-image', bid='1.0', confirm=True):
+        with tempfile.NamedTemporaryFile(suffix='.png') as file:
+            file.write(unhexlify(
+                b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
+                b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
+                b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
+                b'9454e44ae426082'
+            ))
+            file.flush()
+            tx = await self.out(
+                self.daemon.jsonrpc_stream_create(
+                    name, bid, file_path=file.name
+                )
+            )
+        if confirm:
+            await self.on_transaction_dict(tx)
+            await self.generate(1)
+            await self.on_transaction_dict(tx)
+        return tx
+
+    async def video_stream_create(self, name='chrome', bid='1.0', confirm=True):
+        tx = await self.out(
+            self.daemon.jsonrpc_stream_create(
+                name, bid, file_path=self.video_file_name
+            )
+        )
+        if confirm:
+            await self.on_transaction_dict(tx)
+            await self.generate(1)
+            await self.on_transaction_dict(tx)
+        return tx
+
+
+class ClaimSearchCommand(ClaimTestCase):
 
     async def create_channel(self):
         self.channel = await self.channel_create('@abc', '1.0')
@@ -169,6 +218,37 @@ class ClaimSearchCommand(CommandTestCase):
         await self.assertFindsClaims(claims[1:], height=f'>={height+2}', order_by=["^height"])
 
         await self.assertFindsClaims(claims, order_by=["^name"])
+
+    async def test_claim_type_and_media_type_search(self):
+        # create an invalid/unknown claim
+        address = await self.account.receiving.get_or_create_usable_address()
+        tx = await Transaction.claim_create(
+            'unknown', b'{"sources":{"lbry_sd_hash":""}}', 1, address, [self.account], self.account)
+        await tx.sign([self.account])
+        await self.broadcast(tx)
+        await self.confirm_tx(tx.id)
+
+        octet = await self.stream_create()
+        video = await self.video_stream_create()
+        image = await self.image_stream_create()
+        channel = await self.channel_create()
+        unknown = self.sout(tx)
+
+        # claim_type
+        await self.assertFindsClaims([image, video, octet, unknown], claim_type='stream')
+        await self.assertFindsClaims([channel], claim_type='channel')
+
+        # stream_type
+        await self.assertFindsClaims([octet, unknown], stream_types=['binary'])
+        await self.assertFindsClaims([video], stream_types=['video'])
+        await self.assertFindsClaims([image], stream_types=['image'])
+        await self.assertFindsClaims([image, video], stream_types=['video', 'image'])
+
+        # stream_type
+        await self.assertFindsClaims([octet, unknown], media_types=['application/octet-stream'])
+        await self.assertFindsClaims([video], media_types=['video/mp4'])
+        await self.assertFindsClaims([image], media_types=['image/png'])
+        await self.assertFindsClaims([image, video], media_types=['video/mp4', 'image/png'])
 
 
 class ChannelCommands(CommandTestCase):
@@ -370,20 +450,7 @@ class ChannelCommands(CommandTestCase):
         self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
 
 
-class StreamCommands(CommandTestCase):
-
-    files_directory = os.path.join(os.path.dirname(__file__), 'files')
-    video_file_url = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4'
-    video_file_name = os.path.join(files_directory, 'ForBiggerEscapes.mp4')
-
-    def setUp(self):
-        if not os.path.exists(self.video_file_name):
-            if not os.path.exists(self.files_directory):
-                os.mkdir(self.files_directory)
-            log.info(f'downloading test video from {self.video_file_name}')
-            with urlopen(self.video_file_url) as response,\
-                    open(self.video_file_name, 'wb') as video_file:
-                video_file.write(response.read())
+class StreamCommands(ClaimTestCase):
 
     async def test_create_stream_names(self):
         # claim new name
@@ -662,44 +729,26 @@ class StreamCommands(CommandTestCase):
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 1)
 
     async def test_automatic_type_and_metadata_detection_for_image(self):
-        with tempfile.NamedTemporaryFile(suffix='.png') as file:
-            file.write(unhexlify(
-                b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
-                b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
-                b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
-                b'9454e44ae426082'
-            ))
-            file.flush()
-            tx = await self.out(
-                self.daemon.jsonrpc_stream_create(
-                    'blank-image', '1.0', file_path=file.name
-                )
-            )
-            txo = tx['outputs'][0]
-            self.assertEqual(
-                txo['value'], {
-                    'source': {
-                        'size': '99',
-                        'name': os.path.basename(file.name),
-                        'media_type': 'image/png',
-                        'hash': '6c7df435d412c603390f593ef658c199817c7830ba3f16b7eadd8f99fa50e85dbd0d2b3dc61eadc33fe096e3872d1545',
-                        'sd_hash': txo['value']['source']['sd_hash'],
-                    },
-                    'stream_type': 'image',
-                    'image': {
-                        'width': 5,
-                        'height': 7
-                    }
+        txo = (await self.image_stream_create())['outputs'][0]
+        self.assertEqual(
+            txo['value'], {
+                'source': {
+                    'size': '99',
+                    'name': txo['value']['source']['name'],
+                    'media_type': 'image/png',
+                    'hash': '6c7df435d412c603390f593ef658c199817c7830ba3f16b7eadd8f99fa50e85dbd0d2b3dc61eadc33fe096e3872d1545',
+                    'sd_hash': txo['value']['source']['sd_hash'],
+                },
+                'stream_type': 'image',
+                'image': {
+                    'width': 5,
+                    'height': 7
                 }
-            )
+            }
+        )
 
     async def test_automatic_type_and_metadata_detection_for_video(self):
-        tx = await self.out(
-            self.daemon.jsonrpc_stream_create(
-                'chrome', '1.0', file_path=self.video_file_name
-            )
-        )
-        txo = tx['outputs'][0]
+        txo = (await self.video_stream_create())['outputs'][0]
         self.assertEqual(
             txo['value'], {
                 'source': {

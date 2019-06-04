@@ -10,6 +10,7 @@ from torba.server.util import class_logger
 from torba.client.basedatabase import query, constraints_to_sql
 
 from lbrynet.schema.url import URL, normalize_name
+from lbrynet.schema.mime_types import guess_stream_type
 from lbrynet.wallet.ledger import MainNetLedger, RegTestLedger
 from lbrynet.wallet.transaction import Transaction, Output
 from lbrynet.wallet.server.canonical import register_canonical_functions
@@ -19,6 +20,18 @@ from lbrynet.wallet.server.trending import (
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
+CLAIM_TYPES = {
+    'stream': 1,
+    'channel': 2,
+}
+STREAM_TYPES = {
+    'video': 1,
+    'audio': 2,
+    'image': 3,
+    'document': 4,
+    'binary': 5,
+    'model': 6
+}
 
 
 def _apply_constraints_for_array_attributes(constraints, attr):
@@ -87,8 +100,13 @@ class SQLDB:
             short_url text not null, -- normalized#shortest-unique-claim_id
             canonical_url text, -- channel's-short_url/normalized#shortest-unique-claim_id-within-channel
 
+            claim_type integer,
+
+            -- streams
+            stream_type text,
+            media_type text,
+
             -- claims which are channels
-            is_channel bool not null,
             public_key_bytes bytes,
             public_key_hash bytes,
             claims_in_channel integer,
@@ -118,6 +136,10 @@ class SQLDB:
         create index if not exists claim_height_idx on claim (height);
         create index if not exists claim_activation_height_idx on claim (activation_height);
         create index if not exists claim_public_key_hash_idx on claim (public_key_hash);
+
+        create index if not exists claim_claim_type_idx on claim (claim_type);
+        create index if not exists claim_stream_type_idx on claim (stream_type);
+        create index if not exists claim_media_type_idx on claim (media_type);
 
         create index if not exists claim_effective_amount_idx on claim (effective_amount);
         create index if not exists claim_trending_group_idx on claim (trending_group);
@@ -242,9 +264,11 @@ class SQLDB:
                 'txo_hash': sqlite3.Binary(txo.ref.hash),
                 'tx_position': tx.position,
                 'amount': txo.amount,
-                'is_channel': False,
                 'timestamp': header['timestamp'],
                 'height': tx.height,
+                'claim_type': None,
+                'stream_type': None,
+                'media_type': None,
                 'release_time': None,
             }
             claims.append(claim_record)
@@ -256,10 +280,13 @@ class SQLDB:
                 continue
 
             if claim.is_stream:
+                claim_record['claim_type'] = CLAIM_TYPES['stream']
+                claim_record['media_type'] = claim.stream.source.media_type
+                claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
                 if claim.stream.release_time:
                     claim_record['release_time'] = claim.stream.release_time
             elif claim.is_channel:
-                claim_record['is_channel'] = True
+                claim_record['claim_type'] = CLAIM_TYPES['channel']
 
             for tag in claim.message.tags:
                 tags.append((tag, claim_hash, tx.height))
@@ -280,11 +307,11 @@ class SQLDB:
             self.db.executemany("""
                 INSERT INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
-                    is_channel, timestamp, creation_timestamp, height, creation_height,
-                    release_time, activation_height, expiration_height, short_url)
+                    claim_type, media_type, stream_type, timestamp, creation_timestamp, height,
+                    creation_height, release_time, activation_height, expiration_height, short_url)
                 VALUES (
                     :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position, :amount,
-                    :is_channel, :timestamp, :timestamp, :height, :height,
+                    :claim_type, :media_type, :stream_type, :timestamp, :timestamp, :height, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
                     CASE WHEN :height >= 262974 THEN :height+2102400 ELSE :height+262974 END,
@@ -299,7 +326,9 @@ class SQLDB:
         if claims:
             self.db.executemany("""
                 UPDATE claim SET
-                    txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height, timestamp=:timestamp,
+                    txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
+                    claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
+                    timestamp=:timestamp,
                     release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;
                 """, claims)
@@ -720,6 +749,15 @@ class SQLDB:
                 tx_hash + struct.pack('<I', nout)
             )
 
+        if 'claim_type' in constraints:
+            constraints['claim.claim_type'] = CLAIM_TYPES[constraints.pop('claim_type')]
+        if 'stream_types' in constraints:
+            constraints['claim.stream_type__in'] = [
+                STREAM_TYPES[stream_type] for stream_type in constraints.pop('stream_types')
+            ]
+        if 'media_types' in constraints:
+            constraints['claim.media_type__in'] = constraints.pop('media_types')
+
         _apply_constraints_for_array_attributes(constraints, 'tag')
         _apply_constraints_for_array_attributes(constraints, 'language')
         _apply_constraints_for_array_attributes(constraints, 'location')
@@ -750,7 +788,7 @@ class SQLDB:
             """
             claimtrie.claim_hash as is_controlling,
             claim.claim_hash, claim.txo_hash,
-            claim.is_channel, claim.claims_in_channel,
+            claim.claims_in_channel,
             claim.height, claim.creation_height,
             claim.activation_height, claim.expiration_height,
             claim.effective_amount, claim.support_amount,
@@ -773,6 +811,7 @@ class SQLDB:
 
     SEARCH_PARAMS = {
         'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids', 'public_key_id',
+        'claim_type', 'stream_types', 'media_types',
         'any_tags', 'all_tags', 'not_tags',
         'any_locations', 'all_locations', 'not_locations',
         'any_languages', 'all_languages', 'not_languages',

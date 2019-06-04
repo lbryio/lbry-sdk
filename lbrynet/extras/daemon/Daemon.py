@@ -1705,6 +1705,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--support_amount=<support_amount>] [--trending_group=<trending_group>]
                          [--trending_mixed=<trending_mixed>] [--trending_local=<trending_local>]
                          [--trending_global=<trending_global]
+                         [--claim_type=<claim_type>] [--stream_types=<stream_types>...] [--media_types=<media_types>...]
                          [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
                          [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
                          [--not_languages=<not_languages>...]
@@ -1772,6 +1773,9 @@ class Daemon(metaclass=JSONRPCServerType):
             --trending_global=<trending_global>: (int) trending value calculated relative to all
                                                     trending content globally (supports
                                                     equality constraints)
+            --claim_type=<claim_type>       : (str) filter by 'channel', 'stream' or 'unknown'
+            --stream_types=<stream_types>   : (list) filter by 'video', 'image', 'document', etc
+            --media_types=<media_types>     : (list) filter by 'video/mp4', 'image/png', etc
             --any_tags=<any_tags>           : (list) find claims containing any of the tags
             --all_tags=<all_tags>           : (list) find claims containing every tag
             --not_tags=<not_tags>           : (list) find claims not containing any of these tags
