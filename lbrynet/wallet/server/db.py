@@ -387,10 +387,12 @@ class SQLDB:
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
 
-    def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims):
+    def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, timer):
         if not new_claims and not updated_claims and not spent_claims:
             return
 
+        sub_timer = timer.add_timer('segregate channels and signables')
+        sub_timer.start()
         channels, new_channel_keys, signables = {}, {}, {}
         for txo in chain(new_claims, updated_claims):
             try:
@@ -402,13 +404,19 @@ class SQLDB:
                 new_channel_keys[txo.claim_hash] = claim.channel.public_key_bytes
             else:
                 signables[txo.claim_hash] = txo
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('make list of channels we need to lookup')
+        sub_timer.start()
         missing_channel_keys = set()
         for txo in signables.values():
             claim = txo.claim
             if claim.is_signed and claim.signing_channel_hash not in new_channel_keys:
                 missing_channel_keys.add(claim.signing_channel_hash)
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('lookup missing channels')
+        sub_timer.start()
         all_channel_keys = {}
         if new_channel_keys or missing_channel_keys:
             all_channel_keys = dict(self.execute(*query(
@@ -418,7 +426,10 @@ class SQLDB:
                     set(new_channel_keys) | missing_channel_keys
                 ]
             )))
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('prepare for updating claims')
+        sub_timer.start()
         changed_channel_keys = {}
         for claim_hash, new_key in new_channel_keys.items():
             if claim_hash not in all_channel_keys or all_channel_keys[claim_hash] != new_key:
@@ -444,7 +455,10 @@ class SQLDB:
                     'signature_valid': 0
                 })
             claim_updates.append(update)
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('find claims affected by a change in channel key')
+        sub_timer.start()
         if changed_channel_keys:
             sql = f"""
             SELECT * FROM claim WHERE
@@ -460,14 +474,20 @@ class SQLDB:
                         'signature_digest': sqlite3.Binary(affected_claim['signature_digest']),
                         'signature_valid': 0
                     })
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('verify signatures')
+        sub_timer.start()
         for update in claim_updates:
             channel_pub_key = all_channel_keys.get(update['channel_hash'])
             if channel_pub_key and update['signature']:
                 update['signature_valid'] = Output.is_signature_valid(
                     bytes(update['signature']), bytes(update['signature_digest']), channel_pub_key
                 )
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('update claims')
+        sub_timer.start()
         if claim_updates:
             self.db.executemany(f"""
                 UPDATE claim SET 
@@ -491,7 +511,10 @@ class SQLDB:
                     END
                 WHERE claim_hash=:claim_hash;
                 """, claim_updates)
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('update claims affected by spent channels')
+        sub_timer.start()
         if spent_claims:
             self.execute(
                 f"""
@@ -501,7 +524,10 @@ class SQLDB:
                 WHERE channel_hash IN ({','.join('?' for _ in spent_claims)})
                 """, [sqlite3.Binary(cid) for cid in spent_claims]
             )
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('update channels')
+        sub_timer.start()
         if channels:
             self.db.executemany(
                 """
@@ -516,7 +542,10 @@ class SQLDB:
                             self.ledger.public_key_to_address(txo.claim.channel.public_key_bytes)))
                 } for claim_hash, txo in channels.items()]
             )
+        sub_timer.stop()
 
+        sub_timer = timer.add_timer('update claims_in_channel counts')
+        sub_timer.start()
         if all_channel_keys:
             self.db.executemany(f"""
                 UPDATE claim SET
@@ -527,6 +556,7 @@ class SQLDB:
                     )
                 WHERE claim_hash = ?
             """, [(sqlite3.Binary(channel_hash),) for channel_hash in all_channel_keys.keys()])
+        sub_timer.stop()
 
     def _update_support_amount(self, claim_hashes):
         if claim_hashes:
@@ -687,7 +717,8 @@ class SQLDB:
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
         r(self.update_claims, update_claims, header)
-        r(self.validate_channel_signatures, height, insert_claims, update_claims, delete_claim_hashes)
+        r(self.validate_channel_signatures, height, insert_claims,
+          update_claims, delete_claim_hashes, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
