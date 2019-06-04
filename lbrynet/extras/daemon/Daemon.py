@@ -1730,7 +1730,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --valid_channel_signatures      : (bool) only return claims with valid channel signatures
             --invalid_channel_signatures    : (bool) only return claims with invalid channel signatures
             --is_controlling                : (bool) only return winning claims of their respective name
-            --public_key_id                 : (str) only return channels having this public key id, this is
+            --public_key_id=<public_key_id> : (str) only return channels having this public key id, this is
                                                     the same key as used in the wallet file to map
                                                     channel certificate private keys: {'public_key_id': 'private key'}
             --height=<height>               : (int) last updated block height (supports equality constraints)
