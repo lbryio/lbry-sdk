@@ -192,7 +192,17 @@ class MaxKeyFee(Setting[dict]):
         )
 
 
-class Servers(Setting[list]):
+class ListSetting(Setting[list]):
+
+    def contribute_to_argparse(self, parser: ArgumentParser):
+        parser.add_argument(
+            self.cli_name,
+            help=self.doc,
+            action='append'
+        )
+
+
+class Servers(ListSetting):
 
     def validate(self, val):
         assert isinstance(val, (tuple, list)), \
@@ -225,15 +235,8 @@ class Servers(Setting[list]):
             return [f"{host}:{port}" for host, port in value]
         return value
 
-    def contribute_to_argparse(self, parser: ArgumentParser):
-        parser.add_argument(
-            self.cli_name,
-            help=self.doc,
-            action='append'
-        )
 
-
-class Strings(Setting[list]):
+class Strings(ListSetting):
 
     def validate(self, val):
         assert isinstance(val, (tuple, list)), \
@@ -268,7 +271,7 @@ class ArgumentAccess:
     def load(self, args):
         for setting in self.configuration.get_settings():
             value = getattr(args, setting.name, NOT_SET)
-            if value != NOT_SET and not (isinstance(setting, Servers) and value is None):
+            if value != NOT_SET and not (isinstance(setting, ListSetting) and value is None):
                 self.args[setting.name] = setting.deserialize(value)
 
     def __contains__(self, item: str):

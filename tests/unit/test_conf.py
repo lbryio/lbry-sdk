@@ -4,7 +4,7 @@ import types
 import tempfile
 import unittest
 import argparse
-from lbrynet.conf import Config, BaseConfig, String, Integer, Toggle, Servers, NOT_SET
+from lbrynet.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, NOT_SET
 from lbrynet.error import InvalidCurrencyError
 
 
@@ -14,6 +14,7 @@ class TestConfig(BaseConfig):
     test_false_toggle = Toggle('toggle help', False)
     test_true_toggle = Toggle('toggle help', True)
     servers = Servers('servers help', [('localhost', 80)])
+    strings = Strings('cheese', ['string'])
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -54,6 +55,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(c.test_true_toggle)
         self.assertFalse(c.test_false_toggle)
         self.assertEqual(c.servers, [('localhost', 80)])
+        self.assertEqual(c.strings, ['string'])
 
         args = parser.parse_args(['--test-str', 'blah'])
         c = TestConfig.create_from_arguments(args)
@@ -79,6 +81,10 @@ class ConfigurationTests(unittest.TestCase):
         args = parser.parse_args(['--servers=localhost:1', '--servers=192.168.0.1:2'])
         c = TestConfig.create_from_arguments(args)
         self.assertEqual(c.servers, [('localhost', 1), ('192.168.0.1', 2)])
+
+        args = parser.parse_args(['--strings=cheddar', '--strings=mozzarella'])
+        c = TestConfig.create_from_arguments(args)
+        self.assertEqual(c.strings, ['cheddar', 'mozzarella'])
 
     def test_environment(self):
         c = TestConfig()
