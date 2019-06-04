@@ -26,7 +26,7 @@ def extract_uris(response):
 async def get_frontpage_uris():
     session = aiohttp.ClientSession()
     try:
-        response = await session.get("https://api.lbry.io/file/list_homepage", timeout=10.0)
+        response = await session.get("https://api.lbry.com/file/list_homepage", timeout=10.0)
         if response.status != 200:
             print("API returned non 200 code!!")
             return

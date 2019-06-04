@@ -4,7 +4,7 @@ from typing import NamedTuple, Tuple
 
 
 def _create_url_regex():
-    # see https://spec.lbry.io/
+    # see https://spec.lbry.com/
 
     def _named(name, regex):
         return "(?P<" + name + ">" + regex + ")"

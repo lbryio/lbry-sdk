@@ -513,7 +513,7 @@ class UPnPComponent(Component):
                 pass
 
         if external_ip == "0.0.0.0" or not external_ip:
-            log.warning("unable to get external ip from UPnP, checking lbry.io fallback")
+            log.warning("unable to get external ip from UPnP, checking lbry.com fallback")
             external_ip = await utils.get_external_ip()
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)

@@ -47,7 +47,7 @@ async def main(blob_hash: str, url: str):
 
 
 if __name__ == "__main__":  # usage: python download_blob_from_peer.py <blob_hash> [host url:port]
-    url = 'reflector.lbry.io:5567'
+    url = 'reflector.lbry.com:5567'
     if len(sys.argv) > 2:
         url = sys.argv[2]
     asyncio.run(main(sys.argv[1], url))

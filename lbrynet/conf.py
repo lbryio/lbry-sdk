@@ -519,7 +519,7 @@ class Config(CLIConfig):
 
     # servers
     reflector_servers = Servers("Reflector re-hosting servers", [
-        ('reflector.lbry.io', 5566)
+        ('reflector.lbry.com', 5566)
     ])
     lbryum_servers = Servers("SPV wallet servers", [
         ('lbryumx1.lbry.com', 50001), # US EAST

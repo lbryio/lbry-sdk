@@ -24,6 +24,6 @@ theme:
     - type: 'telegram'
       link: 'https://t.me/lbryofficial'
     - type: 'discord'
-      link: 'https://chat.lbry.io'
+      link: 'https://chat.lbry.com'
     - type: 'reddit'
       link: 'https://reddit.com/r/lbry'

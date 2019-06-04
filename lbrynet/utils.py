@@ -75,7 +75,7 @@ def obfuscate(plain):
     return rot13(base64.b64encode(plain).decode())
 
 
-def check_connection(server="lbry.io", port=80, timeout=5) -> bool:
+def check_connection(server="lbry.com", port=80, timeout=5) -> bool:
     """Attempts to open a socket to server:port and returns True if successful."""
     log.debug('Checking connection to %s:%s', server, port)
     try:
@@ -102,7 +102,7 @@ def check_connection(server="lbry.io", port=80, timeout=5) -> bool:
         return False
 
 
-async def async_check_connection(server="lbry.io", port=80, timeout=5) -> bool:
+async def async_check_connection(server="lbry.com", port=80, timeout=5) -> bool:
     return await asyncio.get_event_loop().run_in_executor(None, check_connection, server, port, timeout)
 
 
@@ -271,7 +271,7 @@ async def aiohttp_request(method, url, **kwargs) -> typing.AsyncContextManager[a
 
 async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled or non-functioning
     try:
-        async with aiohttp_request("get", "https://api.lbry.io/ip") as resp:
+        async with aiohttp_request("get", "https://api.lbry.com/ip") as resp:
             response = await resp.json()
             if response['success']:
                 return response['data']['ip']

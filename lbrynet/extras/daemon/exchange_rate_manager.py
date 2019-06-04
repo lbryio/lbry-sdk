@@ -123,8 +123,8 @@ class LBRYioFeed(MarketFeed):
     def __init__(self):
         super().__init__(
             "BTCLBC",
-            "lbry.io",
-            "https://api.lbry.io/lbc/exchange_rate",
+            "lbry.com",
+            "https://api.lbry.com/lbc/exchange_rate",
             {},
             0.0,
         )
@@ -140,8 +140,8 @@ class LBRYioBTCFeed(MarketFeed):
     def __init__(self):
         super().__init__(
             "USDBTC",
-            "lbry.io",
-            "https://api.lbry.io/lbc/exchange_rate",
+            "lbry.com",
+            "https://api.lbry.com/lbc/exchange_rate",
             {},
             0.0,
         )
