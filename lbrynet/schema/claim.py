@@ -195,14 +195,13 @@ class Stream(BaseClaim):
                 claim['source']['hash'] = self.source.file_hash
             if 'sd_hash' in claim['source']:
                 claim['source']['sd_hash'] = self.source.sd_hash
+            if 'media_type' in claim['source']:
+                claim['stream_type'] = guess_stream_type(claim['source']['media_type'])
         fee = claim.get('fee', {})
         if 'address' in fee:
             fee['address'] = self.fee.address
         if 'amount' in fee:
             fee['amount'] = str(self.fee.amount)
-        stream_type = self.message.WhichOneof('type')
-        if stream_type:
-            claim['stream_type'] = stream_type
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):

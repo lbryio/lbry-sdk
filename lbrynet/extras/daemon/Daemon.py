@@ -51,7 +51,6 @@ if typing.TYPE_CHECKING:
     from lbrynet.wallet.manager import LbryWalletManager
     from lbrynet.wallet.ledger import MainNetLedger
     from lbrynet.stream.stream_manager import StreamManager
-    from lbrynet.stream.managed_stream import ManagedStream
 
 log = logging.getLogger(__name__)
 
@@ -1808,9 +1807,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         if kwargs.pop('valid_channel_signatures', False):
-            kwargs['is_channel_signature_valid'] = 1
+            kwargs['signature_valid'] = 1
         if kwargs.pop('invalid_channel_signatures', False):
-            kwargs['is_channel_signature_valid'] = 0
+            kwargs['signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
         kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})
         txos, offset, total = await self.ledger.claim_search(**kwargs)
