@@ -135,6 +135,7 @@ class SQLDB:
         create index if not exists claim_timestamp_idx on claim (timestamp);
         create index if not exists claim_height_idx on claim (height);
         create index if not exists claim_activation_height_idx on claim (activation_height);
+        create index if not exists claim_expiration_height_idx on claim (expiration_height);
         create index if not exists claim_public_key_hash_idx on claim (public_key_hash);
 
         create index if not exists claim_claim_type_idx on claim (claim_type);
