@@ -37,11 +37,10 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.network.get_transaction(sendtxid)
 
     async def test_timeout_then_reconnect(self):
-        await self.ledger.stop()
-        conf = self.ledger.config
-        self.ledger.config['connect_timeout'] = 1
-        self.ledger.config['default_servers'] = [('10.0.0.1', 12)] + list(conf['default_servers'])
-        await self.ledger.start()
+        await self.conductor.spv_node.stop()
+        self.assertFalse(self.ledger.network.is_connected)
+        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
 
 

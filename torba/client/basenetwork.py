@@ -84,7 +84,9 @@ class BaseNetwork:
             except (asyncio.TimeoutError, asyncio.CancelledError) as error:
                 if not client.is_closing():
                     client.abort()
-                raise error
+                raise
+            except Exception:  # pylint: disable=broad-except
+                log.exception("Connecting to %s:%d raised an exception:", *server)
         futures = []
         for server in self.config['default_servers']:
             futures.append(__probe(server))
@@ -99,27 +101,27 @@ class BaseNetwork:
         delay = 0.0
         connect_timeout = self.config.get('connect_timeout', 6)
         while True:
-            self.client = await self.pick_fastest_server(connect_timeout)
-            connection_string = '{}:{}'.format(*self.client.server)
             try:
-                await self.ensure_server_version()
-                log.info("Successfully connected to SPV wallet server: %s", connection_string)
-                self._on_connected_controller.add(True)
-                delay = 0.0
-                await self.client.on_disconnected.first
+                self.client = await self.pick_fastest_server(connect_timeout)
+                if self.is_connected:
+                    await self.ensure_server_version()
+                    log.info("Successfully connected to SPV wallet server: %s:%d", *self.client.server)
+                    self._on_connected_controller.add(True)
+                    delay = 0.0
+                    await self.client.on_disconnected.first
             except CancelledError:
                 self.running = False
             except asyncio.TimeoutError:
-                log.warning("Timed out connecting to: %s", connection_string)
+                log.warning("Timed out while trying to find a server!")
             except Exception:  # pylint: disable=broad-except
-                log.exception("Connecting to %s raised an exception:", connection_string)
+                log.exception("Exception while trying to find a server!")
             if not self.running:
                 return
             elif self.client:
                 await self.client.close()
                 self.client.connection.cancel_pending_requests()
-                await asyncio.sleep(delay)
-                delay = min(delay + 1.0, 10.0)
+            await asyncio.sleep(delay)
+            delay = min(delay + 1.0, 10.0)
 
     async def stop(self):
         self.running = False
