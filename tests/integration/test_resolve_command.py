@@ -134,7 +134,6 @@ class ResolveCommand(CommandTestCase):
         channel_id = self.get_claim_id(
             await self.channel_create('@abc', '1.1', allow_duplicate_name=True))
         await self.assertResolvesToClaimId(f'@abc', channel_id)
-        await self.assertResolvesToClaimId(f'@abc#{channel_id[0]}', channel_id)
         await self.assertResolvesToClaimId(f'@abc#{channel_id[:10]}', channel_id)
         await self.assertResolvesToClaimId(f'@abc#{channel_id}', channel_id)
         channel = (await self.claim_search(claim_id=channel_id))[0]
