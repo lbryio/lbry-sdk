@@ -52,9 +52,8 @@ class ConnectionManager:
         self._status = {
             'incoming_bps': {},
             'outgoing_bps': {},
-            'total_incoming_mbs': 0.0,
-            'total_outgoing_mbs': 0.0,
-            'time': self.loop.time()
+            'total_incoming_mbps': 0.0,
+            'total_outgoing_mbps': 0.0,
         }
 
         while True:
@@ -69,10 +68,10 @@ class ConnectionManager:
                 k, v = self.incoming.popitem()
                 self._status['incoming_bps'][k] = v
             now = self.loop.time()
-            self._status['total_outgoing_mbs'] = int(sum(list(self._status['outgoing_bps'].values())
-                                                   ) / (now - last)) / 1000000.0
-            self._status['total_incoming_mbs'] = int(sum(list(self._status['incoming_bps'].values())
-                                                       ) / (now - last)) / 1000000.0
+            self._status['total_outgoing_mbps'] = int(sum(list(self._status['outgoing_bps'].values()))
+                                                      / (now - last)) / 1000000.0
+            self._status['total_incoming_mbps'] = int(sum(list(self._status['incoming_bps'].values()))
+                                                      / (now - last)) / 1000000.0
             self._status['time'] = now
 
     def stop(self):

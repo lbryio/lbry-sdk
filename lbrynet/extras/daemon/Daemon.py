@@ -747,9 +747,8 @@ class Daemon(metaclass=JSONRPCServerType):
                         'outgoing_bps': {
                             <destination ip and tcp port>: (int) bytes per second sent,
                         },
-                        'total_outgoing_mps': (float) megabytes per second sent,
-                        'total_incoming_mps': (float) megabytes per second received,
-                        'time': (float) timestamp
+                        'total_outgoing_mbps': (float) megabytes per second sent,
+                        'total_incoming_mbps': (float) megabytes per second received
                     }
                 },
                 'hash_announcer': {
