@@ -140,7 +140,7 @@ class TestSQLDB(unittest.TestCase):
         return [otx[0].tx.outputs[0] for otx in txs]
 
     def state(self, controlling=None, active=None, accepted=None):
-        self.assertEqual(controlling or [], self.get_controlling())
+        self.assertEqual(controlling, self.get_controlling())
         self.assertEqual(active or [], self.get_active())
         self.assertEqual(accepted or [], self.get_accepted())
 
@@ -285,6 +285,28 @@ class TestSQLDB(unittest.TestCase):
         state(
             controlling=('Claim C', 12*COIN, 12*COIN, 15),
             active=[('Claim A', 10*COIN, 10*COIN, 13)],
+            accepted=[]
+        )
+
+    def test_winning_claim_expires_and_another_takes_over(self):
+        advance, state = self.advance, self.state
+        advance(10, [self.get_stream('Claim A', 11*COIN)])
+        advance(20, [self.get_stream('Claim B', 10*COIN)])
+        state(
+            controlling=('Claim A', 11*COIN, 11*COIN, 10),
+            active=[('Claim B', 10*COIN, 10*COIN, 20)],
+            accepted=[]
+        )
+        advance(262984, [])
+        state(
+            controlling=('Claim B', 10*COIN, 10*COIN, 20),
+            active=[],
+            accepted=[]
+        )
+        advance(262994, [])
+        state(
+            controlling=None,
+            active=[],
             accepted=[]
         )
 

@@ -622,6 +622,11 @@ class SQLDB:
         r(self._update_effective_amount, height)
         r(self._perform_overtake, height, [], [])
 
+    def get_expiring(self, height):
+        return self.execute(
+            f"SELECT claim_hash, normalized FROM claim WHERE expiration_height = {height}"
+        )
+
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = []
         update_claims = []
@@ -642,8 +647,8 @@ class SQLDB:
             )
             body_timer.start()
             delete_claim_hashes.update({r['claim_hash'] for r in spent_claims})
-            delete_support_txo_hashes.update({r['txo_hash'] for r in spent_supports})
             deleted_claim_names.update({r['normalized'] for r in spent_claims})
+            delete_support_txo_hashes.update({r['txo_hash'] for r in spent_supports})
             recalculate_claim_hashes.update({r['claim_hash'] for r in spent_supports})
             delete_others.update(spent_others)
             # Outputs
@@ -661,12 +666,21 @@ class SQLDB:
                     delete_claim_hashes.discard(claim_hash)
                     delete_others.discard(output.ref.hash)  # claim insertion and update occurring in the same block
             body_timer.stop()
+
         skip_claim_timer = timer.add_timer('skip insertion of abandoned claims')
         skip_claim_timer.start()
         for new_claim in list(insert_claims):
             if new_claim.ref.hash in delete_others:
                 insert_claims.remove(new_claim)
         skip_claim_timer.stop()
+
+        expire_timer = timer.add_timer('recording expired claims')
+        expire_timer.start()
+        for expired in self.get_expiring(height):
+            delete_claim_hashes.add(expired['claim_hash'])
+            deleted_claim_names.add(expired['normalized'])
+        expire_timer.stop()
+
         r = timer.run
         r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
