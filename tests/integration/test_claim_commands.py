@@ -141,8 +141,9 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.channel_abandon(claim_id=self.channel_id)
         await self.assertFindsClaims([], channel_ids=[self.channel_id], valid_channel_signatures=True)
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2], valid_channel_signatures=True)
+        # pass `invalid_channel_signatures=False` to catch a bug in argument processing
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2, self.channel_id],
-                                     valid_channel_signatures=True)
+                                     valid_channel_signatures=True, invalid_channel_signatures=False)
 
         # abandoned stream won't show up for streams in channel search
         await self.stream_abandon(txid=signed2['txid'], nout=0)

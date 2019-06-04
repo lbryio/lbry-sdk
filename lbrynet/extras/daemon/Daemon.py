@@ -1809,7 +1809,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         if kwargs.pop('valid_channel_signatures', False):
             kwargs['is_channel_signature_valid'] = 1
-        elif kwargs.pop('invalid_channel_signatures', False):
+        if kwargs.pop('invalid_channel_signatures', False):
             kwargs['is_channel_signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
         kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})
