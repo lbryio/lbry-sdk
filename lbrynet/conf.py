@@ -194,6 +194,10 @@ class MaxKeyFee(Setting[dict]):
 
 class ListSetting(Setting[list]):
 
+    def validate(self, val):
+        assert isinstance(val, (tuple, list)), \
+            f"Setting '{self.name}' must be a tuple or list."
+
     def contribute_to_argparse(self, parser: ArgumentParser):
         parser.add_argument(
             self.cli_name,
