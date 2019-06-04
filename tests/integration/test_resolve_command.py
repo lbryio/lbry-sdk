@@ -168,6 +168,7 @@ class ResolveCommand(CommandTestCase):
     async def test_abandoned_channel_with_signed_claims(self):
         channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
         orphan_claim = await self.stream_create('on-channel-claim', '0.0001', channel_id=channel['claim_id'])
+        abandoned_channel_id = channel['claim_id']
         await self.channel_abandon(txid=channel['txid'], nout=0)
         channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
         orphan_claim_id = orphan_claim['outputs'][0]['claim_id']
@@ -178,11 +179,13 @@ class ResolveCommand(CommandTestCase):
         self.assertEqual(response, {
             'lbry://@abc/on-channel-claim': {'error': 'lbry://@abc/on-channel-claim did not resolve to a claim'}
         })
-        response = await self.resolve('lbry://on-channel-claim')
-        self.assertNotIn('is_channel_signature_valid', response['lbry://on-channel-claim'])
+        response = (await self.resolve('lbry://on-channel-claim'))['lbry://on-channel-claim']
+        self.assertFalse(response['is_channel_signature_valid'])
+        self.assertEqual({'channel_id': abandoned_channel_id}, response['signing_channel'])
         direct_uri = 'lbry://on-channel-claim#' + orphan_claim_id
-        response = await self.resolve(direct_uri)
-        self.assertNotIn('is_channel_signature_valid', response[direct_uri])
+        response = (await self.resolve(direct_uri))[direct_uri]
+        self.assertFalse(response['is_channel_signature_valid'])
+        self.assertEqual({'channel_id': abandoned_channel_id}, response['signing_channel'])
         await self.stream_abandon(claim_id=orphan_claim_id)
 
         uri = 'lbry://@abc/on-channel-claim'

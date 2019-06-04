@@ -628,6 +628,7 @@ class StreamCommands(ClaimTestCase):
         }]
         fixed_values['thumbnail'] = {'url': fixed_values.pop('thumbnail_url')}
         fixed_values['release_time'] = str(values['release_time'])
+        fixed_values['stream_type'] = 'binary'
         fixed_values['source'] = {
             'hash': '56bf5dbae43f77a63d075b0f2ae9c7c3e3098db93779c7f9840da0f4db9c2f8c8454f4edd1373e2b64ee2e68350d916e',
             'media_type': 'application/octet-stream',
@@ -651,6 +652,7 @@ class StreamCommands(ClaimTestCase):
         stream = tx['outputs'][0]['value']
         self.assertEqual(
             stream, {
+                'stream_type': 'binary',
                 'source': {
                     'size': '3',
                     'media_type': 'application/octet-stream',
@@ -669,6 +671,7 @@ class StreamCommands(ClaimTestCase):
         fixed_values['source']['sd_hash'] = stream['source']['sd_hash']
         self.assertEqual(
             stream, {
+                'stream_type': 'binary',
                 'source': {
                     'size': '3',
                     'media_type': 'application/octet-stream',
