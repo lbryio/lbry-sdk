@@ -144,6 +144,17 @@ class ClaimSearchCommand(ClaimTestCase):
         # pass `invalid_channel_signatures=False` to catch a bug in argument processing
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2, self.channel_id],
                                      valid_channel_signatures=True, invalid_channel_signatures=False)
+        # invalid signature still returns channel_id
+        self.ledger._tx_cache.clear()
+        invalid_claims = await self.claim_search(invalid_channel_signatures=True)
+        self.assertEqual(3, len(invalid_claims))
+        self.assertTrue(all([not c['is_channel_signature_valid'] for c in invalid_claims]))
+        self.assertEqual({'channel_id': self.channel_id}, invalid_claims[0]['signing_channel'])
+
+        valid_claims = await self.claim_search(valid_channel_signatures=True)
+        self.assertEqual(1, len(valid_claims))
+        self.assertTrue(all([c['is_channel_signature_valid'] for c in valid_claims]))
+        self.assertEqual('@abc', valid_claims[0]['signing_channel']['name'])
 
         # abandoned stream won't show up for streams in channel search
         await self.stream_abandon(txid=signed2['txid'], nout=0)

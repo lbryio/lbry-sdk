@@ -116,7 +116,7 @@ class SQLDB:
             channel_join integer, -- height at which claim got valid signature / joined channel
             signature bytes,
             signature_digest bytes,
-            is_channel_signature_valid bool not null default false,
+            signature_valid bool,
 
             effective_amount integer not null default 0,
             support_amount integer not null default 0,
@@ -140,6 +140,8 @@ class SQLDB:
         create index if not exists claim_claim_type_idx on claim (claim_type);
         create index if not exists claim_stream_type_idx on claim (stream_type);
         create index if not exists claim_media_type_idx on claim (media_type);
+
+        create index if not exists claim_signature_valid_idx on claim (signature_valid);
 
         create index if not exists claim_effective_amount_idx on claim (effective_amount);
         create index if not exists claim_trending_group_idx on claim (trending_group);
@@ -431,13 +433,14 @@ class SQLDB:
                 'channel_hash': None,
                 'signature': None,
                 'signature_digest': None,
-                'is_channel_signature_valid': False
+                'signature_valid': None
             }
             if claim.is_signed:
                 update.update({
                     'channel_hash': sqlite3.Binary(claim.signing_channel_hash),
                     'signature': sqlite3.Binary(txo.get_encoded_signature()),
-                    'signature_digest': sqlite3.Binary(txo.get_signature_digest(self.ledger))
+                    'signature_digest': sqlite3.Binary(txo.get_signature_digest(self.ledger)),
+                    'signature_valid': 0
                 })
             claim_updates.append(update)
 
@@ -454,13 +457,13 @@ class SQLDB:
                         'channel_hash': sqlite3.Binary(affected_claim['channel_hash']),
                         'signature': sqlite3.Binary(affected_claim['signature']),
                         'signature_digest': sqlite3.Binary(affected_claim['signature_digest']),
-                        'is_channel_signature_valid': False
+                        'signature_valid': 0
                     })
 
         for update in claim_updates:
             channel_pub_key = all_channel_keys.get(update['channel_hash'])
             if channel_pub_key and update['signature']:
-                update['is_channel_signature_valid'] = Output.is_signature_valid(
+                update['signature_valid'] = Output.is_signature_valid(
                     bytes(update['signature']), bytes(update['signature_digest']), channel_pub_key
                 )
 
@@ -468,20 +471,20 @@ class SQLDB:
             self.db.executemany(f"""
                 UPDATE claim SET 
                     channel_hash=:channel_hash, signature=:signature, signature_digest=:signature_digest,
-                    is_channel_signature_valid=:is_channel_signature_valid,
+                    signature_valid=:signature_valid,
                     channel_join=CASE
-                        WHEN is_channel_signature_valid AND :is_channel_signature_valid THEN channel_join
-                        WHEN :is_channel_signature_valid THEN {height}
+                        WHEN signature_valid=1 AND :signature_valid=1 THEN channel_join
+                        WHEN :signature_valid=1 THEN {height}
                     END,
                     canonical_url=CASE
-                        WHEN is_channel_signature_valid AND :is_channel_signature_valid THEN canonical_url
-                        WHEN :is_channel_signature_valid THEN
+                        WHEN signature_valid=1 AND :signature_valid=1 THEN canonical_url
+                        WHEN :signature_valid=1 THEN
                             (SELECT short_url FROM claim WHERE claim_hash=:channel_hash)||'/'||
                             claim_name||COALESCE(
                                 (SELECT shortest_id(other_claim.claim_id, claim.claim_id) FROM claim AS other_claim
                                  WHERE other_claim.normalized = claim.normalized AND
                                        other_claim.channel_hash = :channel_hash AND
-                                       other_claim.is_channel_signature_valid = 1),
+                                       other_claim.signature_valid = 1),
                                 '#'||substr(claim_id, 1, 1)
                             )
                     END
@@ -491,7 +494,9 @@ class SQLDB:
         if spent_claims:
             self.execute(
                 f"""
-                UPDATE claim SET is_channel_signature_valid=0, channel_join=NULL, canonical_url=NULL
+                UPDATE claim SET
+                    signature_valid=CASE WHEN signature IS NOT NULL THEN 0 END,
+                    channel_join=NULL, canonical_url=NULL
                 WHERE channel_hash IN ({','.join('?' for _ in spent_claims)})
                 """, [sqlite3.Binary(cid) for cid in spent_claims]
             )
@@ -517,7 +522,7 @@ class SQLDB:
                     claims_in_channel=(
                         SELECT COUNT(*) FROM claim AS claim_in_channel
                         WHERE claim_in_channel.channel_hash=claim.claim_hash AND
-                              claim_in_channel.is_channel_signature_valid
+                              claim_in_channel.signature_valid=1
                     )
                 WHERE claim_hash = ?
             """, [(sqlite3.Binary(channel_hash),) for channel_hash in all_channel_keys.keys()])
@@ -800,14 +805,14 @@ class SQLDB:
             claim.trending_local, claim.trending_global,
             claim.short_url, claim.canonical_url,
             claim.channel_hash, channel.txo_hash AS channel_txo_hash,
-            channel.height AS channel_height, claim.is_channel_signature_valid
+            channel.height AS channel_height, claim.signature_valid
             """, **constraints
         )
 
     INTEGER_PARAMS = {
         'height', 'creation_height', 'activation_height', 'expiration_height',
         'timestamp', 'creation_timestamp', 'release_time',
-        'tx_position', 'channel_join', 'is_channel_signature_valid',
+        'tx_position', 'channel_join', 'signature_valid',
         'amount', 'effective_amount', 'support_amount',
         'trending_group', 'trending_mixed',
         'trending_local', 'trending_global',
@@ -870,7 +875,7 @@ class SQLDB:
                 else:
                     query['order_by'] = ['^channel_join']
                 query['channel_hash'] = channel['claim_hash']
-                query['is_channel_signature_valid'] = 1
+                query['signature_valid'] = 1
             elif set(query) == {'name'}:
                 query['is_controlling'] = 1
             matches = self._search(**query, limit=1)
