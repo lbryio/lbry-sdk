@@ -752,11 +752,15 @@ class SQLDB:
         if 'claim_type' in constraints:
             constraints['claim.claim_type'] = CLAIM_TYPES[constraints.pop('claim_type')]
         if 'stream_types' in constraints:
-            constraints['claim.stream_type__in'] = [
-                STREAM_TYPES[stream_type] for stream_type in constraints.pop('stream_types')
-            ]
+            stream_types = constraints.pop('stream_types')
+            if stream_types:
+                constraints['claim.stream_type__in'] = [
+                    STREAM_TYPES[stream_type] for stream_type in stream_types
+                ]
         if 'media_types' in constraints:
-            constraints['claim.media_type__in'] = constraints.pop('media_types')
+            media_types = constraints.pop('media_types')
+            if media_types:
+                constraints['claim.media_type__in'] = media_types
 
         _apply_constraints_for_array_attributes(constraints, 'tag')
         _apply_constraints_for_array_attributes(constraints, 'language')
