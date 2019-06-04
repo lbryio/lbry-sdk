@@ -247,19 +247,29 @@ class ChannelCommands(CommandTestCase):
         # create new channel with all fields set
         tx = await self.out(self.channel_create('@bigchannel', **values))
         channel = tx['outputs'][0]['value']
-        self.assertEqual(channel, {'public_key': channel['public_key'], **fixed_values})
+        self.assertEqual(channel, {
+            'public_key': channel['public_key'],
+            'public_key_id': channel['public_key_id'],
+            **fixed_values
+        })
 
         # create channel with nothing set
         tx = await self.out(self.channel_create('@lightchannel'))
         channel = tx['outputs'][0]['value']
-        self.assertEqual(channel, {'public_key': channel['public_key']})
+        self.assertEqual(
+            channel, {'public_key': channel['public_key'], 'public_key_id': channel['public_key_id']})
 
         # create channel with just a featured claim
         tx = await self.out(self.channel_create('@featurechannel', featured='beef'))
         txo = tx['outputs'][0]
         claim_id, channel = txo['claim_id'], txo['value']
         fixed_values['public_key'] = channel['public_key']
-        self.assertEqual(channel, {'public_key': fixed_values['public_key'], 'featured': ['beef']})
+        fixed_values['public_key_id'] = channel['public_key_id']
+        self.assertEqual(channel, {
+            'public_key': fixed_values['public_key'],
+            'public_key_id': fixed_values['public_key_id'],
+            'featured': ['beef']
+        })
 
         # update channel "@featurechannel" setting all fields
         tx = await self.out(self.channel_update(claim_id, **values))
@@ -280,9 +290,10 @@ class ChannelCommands(CommandTestCase):
 
         # replace mode (clears everything except public_key)
         tx = await self.out(self.channel_update(claim_id, replace=True, title='foo', email='new@email.com'))
-        self.assertEqual(
-            tx['outputs'][0]['value'],
-            {'public_key': channel['public_key'], 'title': 'foo', 'email': 'new@email.com'}
+        self.assertEqual(tx['outputs'][0]['value'], {
+            'public_key': channel['public_key'],
+            'public_key_id': channel['public_key_id'],
+            'title': 'foo', 'email': 'new@email.com'}
         )
 
         # send channel to someone else
