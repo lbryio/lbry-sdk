@@ -4,7 +4,7 @@ language: python
 python: "3.7"
 
 env:
-  - TORBA=v0.5.3
+  - TORBA=v0.5.4a
 
 jobs:
   include:
