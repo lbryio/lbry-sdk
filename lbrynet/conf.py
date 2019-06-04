@@ -228,9 +228,8 @@ class Servers(Setting[list]):
     def contribute_to_argparse(self, parser: ArgumentParser):
         parser.add_argument(
             self.cli_name,
-            nargs="*",
             help=self.doc,
-            default=NOT_SET
+            action='append'
         )
 
 
@@ -269,7 +268,7 @@ class ArgumentAccess:
     def load(self, args):
         for setting in self.configuration.get_settings():
             value = getattr(args, setting.name, NOT_SET)
-            if value != NOT_SET:
+            if value != NOT_SET and not (isinstance(setting, Servers) and value is None):
                 self.args[setting.name] = setting.deserialize(value)
 
     def __contains__(self, item: str):

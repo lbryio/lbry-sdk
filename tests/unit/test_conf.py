@@ -76,7 +76,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertFalse(c.test_true_toggle)
         self.assertFalse(c.test_false_toggle)
 
-        args = parser.parse_args(['--servers', 'localhost:1', '192.168.0.1:2'])
+        args = parser.parse_args(['--servers=localhost:1', '--servers=192.168.0.1:2'])
         c = TestConfig.create_from_arguments(args)
         self.assertEqual(c.servers, [('localhost', 1), ('192.168.0.1', 2)])
 
