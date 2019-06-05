@@ -319,7 +319,7 @@ class SQLDB:
                     :claim_type, :media_type, :stream_type, :timestamp, :timestamp, :height, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
-                    CASE WHEN :height >= 262974 THEN :height+2102400 ELSE :height+262974 END,
+                    CASE WHEN :height >= 137181 THEN :height+2102400 ELSE :height+262974 END,
                     :claim_name||COALESCE(
                         (SELECT shortest_id(claim_id, :claim_id) FROM claim WHERE normalized = :normalized),
                         '#'||substr(:claim_id, 1, 1)
