@@ -1,5 +1,4 @@
 set -x
-TORBA=$1
 rm -rf /tmp/.wine-*
 
 apt-get -qq update
@@ -12,8 +11,7 @@ cd lbry
 wget -Onetifaces-0.10.7-cp37-cp37m-win32.whl https://ci.appveyor.com/api/buildjobs/6hworunifsymrhp2/artifacts/dist%2Fnetifaces-0.10.7-cp37-cp37m-win32.whl
 pip install netifaces-0.10.7-cp37-cp37m-win32.whl
 
-pip install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
-
+pip install git+https://github.com/lbryio/torba.git@${1}#egg=torba
 pip install -e .
 pip install pywin32
 
