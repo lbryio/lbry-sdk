@@ -22,6 +22,7 @@ jobs:
       install:
         - pip install coverage
         - pip install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
+        - pip show torba
         - pip install -e .
       script:
         - HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -vv tests.unit
@@ -84,6 +85,7 @@ jobs:
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
+        - pip3 show torba
         - python3 scripts/set_build.py
         - pip3 install -e .
       script:

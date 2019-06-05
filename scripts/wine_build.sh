@@ -13,7 +13,7 @@ wget -Onetifaces-0.10.7-cp37-cp37m-win32.whl https://ci.appveyor.com/api/buildjo
 pip install netifaces-0.10.7-cp37-cp37m-win32.whl
 
 pip install git+https://github.com/lbryio/torba.git@${TORBA}#egg=torba
-
+pip show torba
 pip install -e .
 pip install pywin32
 
