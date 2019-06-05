@@ -1,6 +1,7 @@
 FROM debian:buster-slim
 
 ARG user=lbry
+ARG TORBA_VERSION=master
 
 # create an unprivileged user
 RUN groupadd -g 999 $user && useradd -r -u 999 -g $user $user
@@ -23,7 +24,7 @@ WORKDIR /home/$user
 RUN python3.7 -m pip install --upgrade pip setuptools
 
 # get torba
-RUN python3.7 -m pip install --user git+https://github.com/lbryio/torba.git#egg=torba
+RUN python3.7 -m pip install --user git+https://github.com/lbryio/torba.git@${TORBA_VERSION}#egg=torba
 
 # get uvloop
 RUN python3.7 -m pip install --user uvloop
