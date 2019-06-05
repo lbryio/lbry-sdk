@@ -6,7 +6,7 @@ python: "3.7"
 env:
   global:
     # must also be updated in wine_build.sh
-    - TORBA=v0.5.3
+    - TORBA=v0.5.4a0
 
 jobs:
   include:
