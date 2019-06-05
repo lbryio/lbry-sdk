@@ -1,5 +1,7 @@
 FROM debian:buster-slim
 
+ARG TORBA_VERSION=master
+
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
@@ -15,7 +17,7 @@ RUN python3.7 -m pip install --upgrade pip setuptools wheel
 COPY . /app
 WORKDIR /app
 
-RUN python3.7 -m pip install git+https://github.com/lbryio/torba.git#egg=torba
+RUN python3.7 -m pip install git+https://github.com/lbryio/torba.git@${TORBA_VERSION}#egg=torba
 RUN python3.7 -m pip install -e .
 
 # Orchstr8 API
