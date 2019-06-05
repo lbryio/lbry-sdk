@@ -126,9 +126,11 @@ class SQLDB:
             trending_global integer not null default 0
         );
 
+        create index if not exists claim_resolve_idx on claim (normalized, claim_id);
+        create index if not exists claim_claims_in_channel_idx on claim (signature_valid, channel_hash);
+
         create index if not exists claim_id_idx on claim (claim_id);
         create index if not exists claim_normalized_idx on claim (normalized);
-        create index if not exists claim_resolve_idx on claim (normalized, claim_id);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_channel_hash_idx on claim (channel_hash);
         create index if not exists claim_release_time_idx on claim (release_time);
@@ -551,8 +553,8 @@ class SQLDB:
                 UPDATE claim SET
                     claims_in_channel=(
                         SELECT COUNT(*) FROM claim AS claim_in_channel
-                        WHERE claim_in_channel.channel_hash=claim.claim_hash AND
-                              claim_in_channel.signature_valid=1
+                        WHERE claim_in_channel.signature_valid=1 AND
+                              claim_in_channel.channel_hash=claim.claim_hash
                     )
                 WHERE claim_hash = ?
             """, [(sqlite3.Binary(channel_hash),) for channel_hash in all_channel_keys.keys()])
