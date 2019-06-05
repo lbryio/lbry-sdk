@@ -4,7 +4,9 @@ language: python
 python: "3.7"
 
 env:
-  - TORBA=master
+  global:
+    # must also be updated in wine_build.sh
+    - TORBA=master
 
 jobs:
   include:
@@ -59,7 +61,7 @@ jobs:
         - docker pull lbry/pyinstaller34_32bits:py371
       script:
         - python scripts/set_build.py
-        - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh ${TORBA}
+        - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh
         - sudo zip -j dist/lbrynet-windows.zip dist/lbrynet.exe
       deploy:
         provider: releases
@@ -125,7 +127,7 @@ jobs:
       script:
           - set -e
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f scripts/Dockerfile.wallet_server .
+          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f scripts/Dockerfile.wallet_server --build-arg TORBA_VERSION=${TORBA} .
           - docker push lbry/wallet-server:$TRAVIS_TAG
     - if: tag IS blank AND branch = master AND NOT type IN (pull_request)
       stage: build
@@ -133,7 +135,7 @@ jobs:
       script:
           - set -e
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:master -f scripts/Dockerfile.wallet_server .
+          - travis_retry docker build -t lbry/wallet-server:master -f scripts/Dockerfile.wallet_server --build-arg TORBA_VERSION=${TORBA} .
           - docker push lbry/wallet-server:master
 
 cache:
