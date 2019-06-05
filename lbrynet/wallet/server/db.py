@@ -127,7 +127,7 @@ class SQLDB:
         );
 
         create index if not exists claim_resolve_idx on claim (normalized, claim_id);
-        create index if not exists claim_claims_in_channel_idx on claim (signature_valid, channel_hash);
+        create index if not exists claim_claims_in_channel_idx on claim (signature_valid, channel_hash, normalized);
 
         create index if not exists claim_id_idx on claim (claim_id);
         create index if not exists claim_normalized_idx on claim (normalized);
@@ -505,9 +505,9 @@ class SQLDB:
                             (SELECT short_url FROM claim WHERE claim_hash=:channel_hash)||'/'||
                             claim_name||COALESCE(
                                 (SELECT shortest_id(other_claim.claim_id, claim.claim_id) FROM claim AS other_claim
-                                 WHERE other_claim.normalized = claim.normalized AND
+                                 WHERE other_claim.signature_valid = 1 AND
                                        other_claim.channel_hash = :channel_hash AND
-                                       other_claim.signature_valid = 1),
+                                       other_claim.normalized = claim.normalized),
                                 '#'||substr(claim_id, 1, 1)
                             )
                     END
