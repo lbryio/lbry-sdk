@@ -801,16 +801,14 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Dictionary of lbry version information
             {
-                'build': (str) build type (e.g. "dev", "rc", "release"),
-                'ip': (str) remote ip, if available,
-                'lbrynet_version': (str) lbrynet_version,
-                'lbryum_version': (str) lbryum_version,
-                'lbryschema_version': (str) lbryschema_version,
-                'os_release': (str) os release string
-                'os_system': (str) os name
-                'platform': (str) platform string
                 'processor': (str) processor type,
                 'python_version': (str) python version,
+                'platform': (str) platform string,
+                'os_release': (str) os release string,
+                'os_system': (str) os name,
+                'lbrynet_version': (str) lbrynet version,
+                'torba_version': (str) torba version,
+                'build': (str) "dev" | "qa" | "rc" | "release",
             }
         """
         platform_info = system_info.get_platform()
