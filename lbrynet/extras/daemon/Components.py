@@ -306,7 +306,7 @@ class BlobComponent(Component):
             count = len(self.blob_manager.completed_blob_hashes)
         return {
             'finished_blobs': count,
-            'connections': self.blob_manager.connection_manager.status
+            'connections': {} if not self.blob_manager else self.blob_manager.connection_manager.status
         }
 
 
