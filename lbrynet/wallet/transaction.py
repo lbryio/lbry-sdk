@@ -88,6 +88,13 @@ class Output(BaseOutput):
         raise ValueError('Only claim name and claim update have the claim payload.')
 
     @property
+    def can_decode_claim(self):
+        try:
+            return self.claim
+        except:
+            return False
+
+    @property
     def permanent_url(self) -> str:
         if self.script.is_claim_involved:
             return f"lbry://{self.claim_name}#{self.claim_id}"
