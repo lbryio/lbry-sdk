@@ -41,8 +41,8 @@ class TestStreamAssembler(AsyncioTestCase):
 
         self.stream = await self.stream_manager.create_stream(file_path)
 
-    async def test_reflect_stream(self):
-        reflector = ReflectorServer(self.server_blob_manager)
+    async def _test_reflect_stream(self, response_chunk_size):
+        reflector = ReflectorServer(self.server_blob_manager, response_chunk_size=response_chunk_size)
         reflector.start_server(5566, '127.0.0.1')
         await reflector.started_listening.wait()
         self.addCleanup(reflector.stop_server)
@@ -62,6 +62,12 @@ class TestStreamAssembler(AsyncioTestCase):
 
         sent = await self.stream.upload_to_reflector('127.0.0.1', 5566)
         self.assertListEqual(sent, [])
+
+    async def test_reflect_stream(self):
+        return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=50), 3, loop=self.loop)
+
+    async def test_reflect_stream_small_response_chunks(self):
+        return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=30), 3, loop=self.loop)
 
     async def test_announces(self):
         to_announce = await self.storage.get_blobs_to_announce()
