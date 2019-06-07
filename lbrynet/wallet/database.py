@@ -59,7 +59,7 @@ class WalletDatabase(BaseDatabase):
 
         channel_ids = set()
         for txo in txos:
-            if txo.script.is_claim_name or txo.script.is_update_claim:
+            if txo.is_claim and txo.can_decode_claim:
                 if txo.claim.is_signed:
                     channel_ids.add(txo.claim.signing_channel_id)
                 if txo.claim.is_channel and my_account is not None:
