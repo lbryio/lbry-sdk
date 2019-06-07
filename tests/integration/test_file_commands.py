@@ -259,3 +259,22 @@ class FileCommands(CommandTestCase):
         await self.daemon.stream_manager.start()
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
         self.assertEqual(self.daemon.jsonrpc_file_list()[0].content_fee.raw, raw_content_fee)
+        await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
+
+        # PASS: no fee address --> use the claim address to pay
+        await self.stream_create(
+            'nofeeaddress', '0.01', data=b'free stuff?',
+        )
+        await self.stream_update(
+            claim_id=self.daemon.jsonrpc_file_list()[0].claim_id,
+            data=b'new price', fee_amount='2.0', fee_currency='LBC', claim_address=target_address
+        )
+        self.assertIs(self.daemon.jsonrpc_file_list()[0].stream_claim_info.claim.stream.fee.address, '')
+        await self.daemon.jsonrpc_file_delete(claim_name='nofeeaddress')
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
+
+        response = await self.out(self.daemon.jsonrpc_get('lbry://nofeeaddress'))
+        self.assertIsNotNone(response['content_fee'])
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
+        self.assertEqual(response['content_fee']['outputs'][0]['amount'], '2.0')
+        self.assertEqual(response['content_fee']['outputs'][0]['address'], target_address)

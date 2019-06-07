@@ -217,11 +217,11 @@ class Fee(Metadata):
 
     @property
     def address(self) -> str:
-        return Base58.encode(self.message.address)
+        return Base58.encode(self.address_bytes) if self.address_bytes else ''
 
     @address.setter
     def address(self, address: str):
-        self.message.address = Base58.decode(address)
+        self.address_bytes = Base58.decode(address)
 
     @property
     def address_bytes(self) -> bytes:
