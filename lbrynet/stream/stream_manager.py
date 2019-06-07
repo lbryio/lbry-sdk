@@ -407,7 +407,7 @@ class StreamManager:
                     msg = f"fee of {fee_amount} exceeds max available balance"
                     log.warning(msg)
                     raise InsufficientFundsError(msg)
-                fee_address = claim.stream.fee.address
+                fee_address = claim.stream.fee.address or resolved['address']
 
             stream = ManagedStream(
                 self.loop, self.config, self.blob_manager, claim.stream.source.sd_hash, download_directory,
