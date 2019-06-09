@@ -2,6 +2,7 @@ import logging
 import asyncio
 from asyncio import CancelledError
 from time import time
+from typing import Iterable
 
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
@@ -151,8 +152,8 @@ class SessionPool:
 
     def __init__(self, network: BaseNetwork, timeout: float):
         self.network = network
-        self.sessions = []
-        self._dead_servers = []
+        self.sessions: Iterable[ClientSession] = []
+        self._dead_servers: Iterable[ClientSession] = []
         self.maintain_connections_task = None
         self.timeout = timeout
         # triggered when the master server is out, to speed up reconnect
