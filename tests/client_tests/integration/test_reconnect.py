@@ -2,7 +2,6 @@ import logging
 import asyncio
 from unittest.mock import Mock
 
-from torba.client.baseledger import BaseLedger
 from torba.client.basenetwork import BaseNetwork
 from torba.rpc import RPCSession
 from torba.testcase import IntegrationTestCase, AsyncioTestCase
@@ -70,3 +69,6 @@ class ServerPickingTestCase(AsyncioTestCase):
         await asyncio.wait_for(network.on_connected.first, timeout=1)
         self.assertTrue(network.is_connected)
         self.assertEqual(network.client.server, ('127.0.0.1', 1337))
+        # ensure we are connected to all of them
+        self.assertEqual(len(network.session_pool.sessions), 4)
+        self.assertTrue(all([not session.is_closing() for session in network.session_pool.sessions]))
