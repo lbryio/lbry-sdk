@@ -2160,11 +2160,16 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        account = self.get_account_or_default(account_id)
+
+        if account_id is None:
+            accounts = self.get_accounts_or_all(None)
+        else:
+            accounts = [self.get_account_or_error(account_id)]
+
         return maybe_paginate(
-            account.get_channels,
-            account.get_channel_count,
-            page, page_size
+            self.ledger.db.get_channels,
+            self.ledger.db.get_channel_count,
+            page, page_size, account=accounts
         )
 
     @requires(WALLET_COMPONENT)

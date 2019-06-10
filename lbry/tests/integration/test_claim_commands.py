@@ -470,14 +470,14 @@ class ChannelCommands(CommandTestCase):
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         # before sending
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=self.account.id)), 3)
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
 
         other_address = await account2.receiving.get_or_create_usable_address()
         tx = await self.out(self.channel_update(claim_id, claim_address=other_address))
 
         # after sending
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 2)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=self.account.id)), 2)
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
 
         # shoud not have private key
@@ -537,6 +537,82 @@ class ChannelCommands(CommandTestCase):
         channels = await daemon2.default_account.get_channels()
         self.assertEqual(1, len(channels))
         self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
+
+    async def test_channel_list_lists_channels_from_all_accounts(self):
+        account1_id, account1 = self.account.id, self.account
+        new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
+        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+
+        await self.out(self.channel_create('@spam', '1.0'))
+
+        # channels in account1
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
+        self.assertEqual(len(channels), 1)
+
+        # total channels
+        channels = await self.out(self.daemon.jsonrpc_channel_list())
+        self.assertEqual(len(channels), 1)
+
+        result = await self.out(self.daemon.jsonrpc_account_send(
+            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+        ))
+        await self.confirm_tx(result['txid'])
+
+        await self.out(self.channel_create('@baz', '1.0', account_id=account2_id))
+
+        # channels in account2
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
+        self.assertEqual(len(channels), 1)
+
+        # total channels
+        channels = await self.out(self.daemon.jsonrpc_channel_list())
+        self.assertEqual(len(channels), 2)
+
+    async def test_pagination_in_channel_list_from_all_accounts(self):
+        account1_id, account1 = self.account.id, self.account
+        new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
+        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+
+        for i in range(1, 8):
+            await self.out(self.channel_create(f'@spam{i}', '0.1'))
+
+        # channels in account1
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
+        self.assertEqual(len(channels), 7)
+
+        result = await self.out(self.daemon.jsonrpc_account_send(
+            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+        ))
+        await self.confirm_tx(result['txid'])
+
+        for i in range(1, 6):
+            await self.out(self.channel_create(f'@baz{i}', '0.1', account_id=account2_id))
+
+        # channels in account2
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
+        self.assertEqual(len(channels), 5)
+
+        # total channels
+        channels = await self.out(self.daemon.jsonrpc_channel_list())
+        self.assertEqual(len(channels), 12)
+
+        # paginated channels page 1, first 10
+        channels = await self.out(self.daemon.jsonrpc_channel_list(page=1, page_size=10))
+        self.assertEqual(len(channels["items"]), 10)
+
+        for i, item in enumerate(channels["items"][:5][::-1]):
+            self.assertEqual(item["name"], f"@baz{i+1}")
+
+        for i, item in enumerate(channels["items"][5:][::-1]):
+            self.assertEqual(item["name"], f"@spam{i+3}")
+
+        # paginated channels page 2, next 2
+        channels = await self.out(self.daemon.jsonrpc_channel_list(page=2, page_size=10))
+        self.assertEqual(len(channels["items"]), 2)
+
+        for i, item in enumerate(channels["items"][::-1]):
+            self.assertEqual(item["name"], f"@spam{i+1}")
+
 
 
 class StreamCommands(ClaimTestCase):
@@ -617,7 +693,7 @@ class StreamCommands(ClaimTestCase):
         channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@spam')
-        self.assertEqual(channels, await self.out(self.daemon.jsonrpc_channel_list()))
+        self.assertEqual(channels, await self.out(self.daemon.jsonrpc_channel_list(account1_id)))
 
         channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
         self.assertEqual(len(channels), 1)
