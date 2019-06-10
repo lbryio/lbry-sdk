@@ -502,7 +502,7 @@ class BaseLedger(metaclass=LedgerRegistry):
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw).decode())
 
-    async def wait(self, tx: basetransaction.BaseTransaction, height=-1):
+    async def wait(self, tx: basetransaction.BaseTransaction, height=-1, timeout=None):
         addresses = set()
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:
@@ -514,9 +514,11 @@ class BaseLedger(metaclass=LedgerRegistry):
                 self.hash160_to_address(txo.script.values['pubkey_hash'])
             )
         records = await self.db.get_addresses(cols=('address',), address__in=addresses)
-        await asyncio.wait([
+        done, pending = await asyncio.wait([
             self.on_transaction.where(partial(
                 lambda a, e: a == e.address and e.tx.height >= height and e.tx.id == tx.id,
                 address_record['address']
             )) for address_record in records
-        ])
+        ], timeout=timeout)
+        if pending:
+            raise TimeoutError('Timed out waiting for transaction.')
