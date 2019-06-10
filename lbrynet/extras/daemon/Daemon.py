@@ -1757,7 +1757,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_create(
             self, name, bid, allow_duplicate_name=False, account_id=None, claim_address=None,
-            preview=False, **kwargs):
+            preview=False, blocking=False, **kwargs):
         """
         Create a new channel by generating a channel private key and establishing an '@' prefixed claim.
 
@@ -1768,7 +1768,8 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--website_url=<website_url>] [--featured=<featured>...]
                            [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                            [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
-                           [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
+                           [--account_id=<account_id>] [--claim_address=<claim_address>]
+                           [--preview] [--blocking]
 
         Options:
             --name=<name>                  : (str) name of the channel prefixed with '@'
@@ -1825,6 +1826,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the channel is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+            --blocking                     : (bool) wait until transaction is in mempool
 
         Returns: {Transaction}
         """
@@ -1851,8 +1853,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await tx.sign([account])
-            await account.ledger.broadcast(tx)
-            account.add_channel_private_key(txo.ref, txo.private_key)
+            await self.broadcast_or_release(account, tx, blocking)
+            account.add_channel_private_key(txo.private_key)
             self.default_wallet.save()
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
@@ -1866,7 +1868,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_update(
             self, claim_id, bid=None, account_id=None, claim_address=None,
-            new_signing_key=False, preview=False, replace=False, **kwargs):
+            new_signing_key=False, preview=False, blocking=False, replace=False, **kwargs):
         """
         Update an existing channel claim.
 
@@ -1880,7 +1882,7 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--locations=<locations>...] [--clear_locations]
                            [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key]
-                           [--preview] [--replace]
+                           [--preview] [--blocking] [--replace]
 
         Options:
             --claim_id=<claim_id>          : (str) claim_id of the channel to update
@@ -1939,6 +1941,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the channel is sent
             --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
             --preview                      : (bool) do not broadcast the transaction
+            --blocking                     : (bool) wait until transaction is in mempool
             --replace                      : (bool) instead of modifying specific values on
                                                     the channel, this will clear all existing values
                                                     and only save passed in values, useful for form
@@ -1989,8 +1992,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await tx.sign([account])
-            await account.ledger.broadcast(tx)
-            account.add_channel_private_key(new_txo.ref, new_txo.private_key)
+            await self.broadcast_or_release(account, tx, blocking)
+            account.add_channel_private_key(new_txo.private_key)
             self.default_wallet.save()
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
@@ -2041,10 +2044,8 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         if not preview:
-            await account.ledger.broadcast(tx)
+            await self.broadcast_or_release(account, tx, blocking)
             await self.analytics_manager.send_claim_action('abandon')
-            if blocking:
-                await account.ledger.wait(tx)
         else:
             await account.ledger.release_tx(tx)
 
@@ -2126,7 +2127,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
                     [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
-                    [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
+                    [--account_id=<account_id>] [--claim_address=<claim_address>]
+                    [--preview] [--blocking]
 
         Options:
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
@@ -2197,6 +2199,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+            --blocking                     : (bool) wait until transaction is in mempool
 
         Returns: {Transaction}
         """
@@ -2223,7 +2226,8 @@ class Daemon(metaclass=JSONRPCServerType):
     async def jsonrpc_stream_create(
             self, name, bid, file_path, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
-            account_id=None, claim_address=None, preview=False, **kwargs):
+            account_id=None, claim_address=None, preview=False, blocking=False,
+            **kwargs):
         """
         Make a new stream claim and announce the associated file to lbrynet.
 
@@ -2237,7 +2241,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
                     [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
-                    [--account_id=<account_id>] [--claim_address=<claim_address>] [--preview]
+                    [--account_id=<account_id>] [--claim_address=<claim_address>]
+                    [--preview] [--blocking]
 
         Options:
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
@@ -2310,6 +2315,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+            --blocking                     : (bool) wait until transaction is in mempool
 
         Returns: {Transaction}
         """
@@ -2346,7 +2352,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await tx.sign([account])
 
         if not preview:
-            await account.ledger.broadcast(tx)
+            await self.broadcast_or_release(account, tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
@@ -2363,7 +2369,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self, claim_id, bid=None, file_path=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
             account_id=None, claim_address=None,
-            preview=False, replace=False, **kwargs):
+            preview=False, blocking=False, replace=False, **kwargs):
         """
         Update an existing stream claim and if a new file is provided announce it to lbrynet.
 
@@ -2381,7 +2387,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>]
-                    [--preview] [--replace]
+                    [--preview] [--blocking] [--replace]
 
         Options:
             --claim_id=<claim_id>          : (str) id of the stream claim to update
@@ -2460,6 +2466,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
+            --blocking                     : (bool) wait until transaction is in mempool
             --replace                      : (bool) instead of modifying specific values on
                                                     the stream, this will clear all existing values
                                                     and only save passed in values, useful for form
@@ -2537,7 +2544,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await tx.sign([account])
 
         if not preview:
-            await account.ledger.broadcast(tx)
+            await self.broadcast_or_release(account, tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
@@ -2552,7 +2559,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_stream_abandon(
             self, claim_id=None, txid=None, nout=None, account_id=None,
-            preview=False, blocking=True):
+            preview=False, blocking=False):
         """
         Abandon one of my stream claims.
 
@@ -2589,10 +2596,8 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         if not preview:
-            await account.ledger.broadcast(tx)
+            await self.broadcast_or_release(account, tx, blocking)
             await self.analytics_manager.send_claim_action('abandon')
-            if blocking:
-                await account.ledger.wait(tx)
         else:
             await account.ledger.release_tx(tx)
 
@@ -2645,13 +2650,15 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_support_create(self, claim_id, amount, tip=False, account_id=None, preview=False):
+    async def jsonrpc_support_create(
+            self, claim_id, amount, tip=False, account_id=None,
+            preview=False, blocking=False):
         """
         Create a support or a tip for name claim.
 
         Usage:
             support_create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
-                           [--tip] [--account_id=<account_id>] [--preview]
+                           [--tip] [--account_id=<account_id>] [--preview] [--blocking]
 
         Options:
             --claim_id=<claim_id>     : (str) claim_id of the claim to support
@@ -2659,6 +2666,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --tip                     : (bool) send support to claim owner, default: false.
             --account_id=<account_id> : (str) id of the account to use
             --preview                 : (bool) do not broadcast the transaction
+            --blocking                : (bool) wait until transaction is in mempool
 
         Returns: {Transaction}
         """
@@ -2676,7 +2684,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await tx.sign([account])
-            await account.ledger.broadcast(tx)
+            await self.broadcast_or_release(account, tx, blocking)
             await self.storage.save_supports({claim_id: [{
                 'txid': tx.id,
                 'nout': tx.position,
@@ -2716,7 +2724,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_support_abandon(
             self, claim_id=None, txid=None, nout=None, keep=None,
-            account_id=None, preview=False, blocking=True):
+            account_id=None, preview=False, blocking=False):
         """
         Abandon supports, including tips, of a specific claim, optionally
         keeping some amount as supports.
@@ -2766,10 +2774,8 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         if not preview:
-            await account.ledger.broadcast(tx)
+            await self.broadcast_or_release(account, tx, blocking)
             await self.analytics_manager.send_claim_action('abandon')
-            if blocking:
-                await account.ledger.wait(tx)
         else:
             await account.ledger.release_tx(tx)
 
@@ -3409,6 +3415,15 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise Exception(f"permanent_url is not in the claim_data {claim_data}\n"
                                 f"The given claim_id ({claim_id}) may be invalid")
         return await jsonrpc_post(url, 'get_comment_data', comm_index=comment_id, better_keys=True)
+
+    async def broadcast_or_release(self, account, tx, blocking=False):
+        try:
+            await account.ledger.broadcast(tx)
+            if blocking:
+                await account.ledger.wait(tx)
+        except:
+            await account.ledger.release_tx(tx)
+            raise
 
     def valid_address_or_error(self, address):
         try:
