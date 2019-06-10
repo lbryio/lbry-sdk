@@ -46,8 +46,6 @@ class LBRYElectrumX(ElectrumX):
         handlers.update({
             'blockchain.numblocks.subscribe': self.numblocks_subscribe,
             'blockchain.utxo.get_address': self.utxo_get_address,
-            'blockchain.transaction.broadcast':
-                self.transaction_broadcast_1_0,
             'blockchain.transaction.get': self.transaction_get,
         })
         self.request_handlers.update(handlers)
