@@ -514,7 +514,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 self.hash160_to_address(txo.script.values['pubkey_hash'])
             )
         records = await self.db.get_addresses(cols=('address',), address__in=addresses)
-        done, pending = await asyncio.wait([
+        _, pending = await asyncio.wait([
             self.on_transaction.where(partial(
                 lambda a, e: a == e.address and e.tx.height >= height and e.tx.id == tx.id,
                 address_record['address']
