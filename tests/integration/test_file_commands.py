@@ -4,8 +4,10 @@ import os
 from binascii import unhexlify, hexlify
 
 from lbrynet.schema import Claim
+from lbrynet.schema.claim import Stream
 from lbrynet.testcase import CommandTestCase
 from lbrynet.blob_exchange.downloader import BlobDownloader
+from lbrynet.wallet.transaction import Transaction
 
 
 class FileCommands(CommandTestCase):
@@ -262,12 +264,12 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
 
         # PASS: no fee address --> use the claim address to pay
-        await self.stream_create(
+        tx = await self.stream_create(
             'nofeeaddress', '0.01', data=b'free stuff?',
         )
-        await self.stream_update(
-            claim_id=self.daemon.jsonrpc_file_list()[0].claim_id,
-            data=b'new price', fee_amount='2.0', fee_currency='LBC', claim_address=target_address
+        await self.__raw_value_update(
+            old_tx=tx,
+            fee_amount='2.0', fee_currency='LBC', claim_address=target_address
         )
         self.assertIs(self.daemon.jsonrpc_file_list()[0].stream_claim_info.claim.stream.fee.address, '')
         await self.daemon.jsonrpc_file_delete(claim_name='nofeeaddress')
@@ -278,3 +280,18 @@ class FileCommands(CommandTestCase):
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
         self.assertEqual(response['content_fee']['outputs'][0]['amount'], '2.0')
         self.assertEqual(response['content_fee']['outputs'][0]['address'], target_address)
+
+    async def __raw_value_update(self, old_tx, claim_address, **kwargs):
+        old_tx = Transaction(raw=unhexlify(old_tx['hex']))
+        old_txo = old_tx.outputs[0]
+        claim = Claim()
+        claim.stream.message.source.CopyFrom(
+            old_txo.claim.stream.message.source
+        )
+        claim.stream.update(**kwargs)
+        tx = await Transaction.claim_update(
+            old_txo, claim, 1, claim_address, [self.account], self.account
+        )
+        await tx.sign([self.account])
+        await self.broadcast(tx)
+        await self.confirm_tx(tx.id)

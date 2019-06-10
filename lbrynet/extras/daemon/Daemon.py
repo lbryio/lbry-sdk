@@ -2609,8 +2609,8 @@ class Daemon(metaclass=JSONRPCServerType):
         elif old_txo.claim.is_signed and not clear_channel and not replace:
             channel = old_txo.channel
 
-        if 'fee_address' in kwargs:
-            self.valid_address_or_error(kwargs['fee_address'])
+        if 'fee_amount' in kwargs:
+            kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
 
         if replace:
             claim = Claim()

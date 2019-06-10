@@ -711,6 +711,14 @@ class StreamCommands(ClaimTestCase):
         del fixed_values['fee']
         self.assertEqual(txo['value'], fixed_values)
 
+        # setting the fee after it has been cleared, without a fee address, sets the fee address to claim address
+        tx = await self.out(self.stream_update(claim_id, fee_amount='0.1', fee_currency='LBC'))
+        txo = tx['outputs'][0]
+        self.assertIn('fee', txo['value'])
+        self.assertIn('address', txo['value']['fee'])
+        self.assertEqual(txo['value']['fee']['address'], txo['address'])
+        fixed_values['fee'] = txo['value']['fee']
+
         # modifying hash/size/name
         fixed_values['source']['name'] = 'changed_name'
         fixed_values['source']['hash'] = 'cafebeef'
