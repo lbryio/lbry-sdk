@@ -125,11 +125,16 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                             self.peer_port)
                 log.warning(response.to_dict())
                 return self._blob_bytes_received, self.close()
-            elif availability_response.available_blobs and \
+            elif availability_response and availability_response.available_blobs and \
                     availability_response.available_blobs != [self.blob.blob_hash]:
                 log.warning("blob availability response doesn't match our request from %s:%i",
                             self.peer_address, self.peer_port)
                 return self._blob_bytes_received, self.close()
+            elif not availability_response:
+                log.warning("response from %s:%i did not include an availability response (we requested %s)",
+                            self.peer_address, self.peer_port, blob_hash)
+                return self._blob_bytes_received, self.close()
+
             if not price_response or price_response.blob_data_payment_rate != 'RATE_ACCEPTED':
                 log.warning("data rate rejected by %s:%i", self.peer_address, self.peer_port)
                 return self._blob_bytes_received, self.close()
