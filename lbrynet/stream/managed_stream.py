@@ -167,6 +167,10 @@ class ManagedStream:
         return None if not self.stream_claim_info else self.stream_claim_info.claim_name
 
     @property
+    def claim(self) -> typing.Optional['Claim']:
+        return None if not self.stream_claim_info else self.stream_claim_info.claim
+
+    @property
     def metadata(self) -> typing.Optional[typing.Dict]:
         return None if not self.stream_claim_info else self.stream_claim_info.claim.stream.to_dict()
 
