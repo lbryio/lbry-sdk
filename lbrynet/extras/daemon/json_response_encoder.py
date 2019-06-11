@@ -1,3 +1,4 @@
+import os
 import logging
 from decimal import Decimal
 from binascii import hexlify, unhexlify
@@ -94,9 +95,14 @@ def encode_file_doc():
         'nout': '(int) None if claim is not found else the transaction output index',
         'outpoint': '(str) None if claim is not found else the tx and output',
         'metadata': '(dict) None if claim is not found else the claim metadata',
+        'protobuf': '(str) hex encoded Stream protobuf',
         'channel_claim_id': '(str) None if claim is not found or not signed',
         'channel_name': '(str) None if claim is not found or not signed',
-        'claim_name': '(str) None if claim is not found else the claim name'
+        'claim_name': '(str) None if claim is not found else the claim name',
+        'content_fee': '(Transaction) None if content claim did not have a fee',
+        'height': '(int) height of the claim',
+        'confirmations': '(int) number of blocks since the claim was confirmed',
+        'timestamp': '(int) timestamp of the block containing the claim'
     }
 
 
@@ -218,15 +224,68 @@ class JSONResponseEncoder(JSONEncoder):
         return result
 
     def encode_file(self, managed_stream):
-        file = managed_stream.as_dict()
-        tx_height = managed_stream.stream_claim_info.height
-        best_height = self.ledger.headers.height
-        file.update({
+        full_path = managed_stream.full_path
+        file_name = managed_stream.file_name
+        download_directory = managed_stream.download_directory
+        if managed_stream.full_path and managed_stream.output_file_exists:
+            if managed_stream.written_bytes:
+                written_bytes = managed_stream.written_bytes
+            else:
+                written_bytes = os.stat(managed_stream.full_path).st_size
+        else:
+            full_path = None
+            file_name = None
+            download_directory = None
+            written_bytes = None
+
+        if managed_stream.stream_claim_info:
+            tx_height = managed_stream.stream_claim_info.height
+            best_height = self.ledger.headers.height
+            timestamp = self.ledger.headers[tx_height]['timestamp'] if tx_height > 0 else None
+            confirmations = None if not tx_height else ((best_height + 1) - tx_height if tx_height > 0 else tx_height)
+        else:
+            tx_height = None
+            timestamp = None
+            confirmations = None
+        return {
+            'streaming_url': f"http://{managed_stream.config.streaming_host}:{managed_stream.config.streaming_port}"
+                             f"/stream/{managed_stream.sd_hash}",
+            'completed': (managed_stream.output_file_exists and (managed_stream.status in ('stopped', 'finished'))
+                          or not managed_stream.saving.is_set()) or all(
+                managed_stream.blob_manager.is_blob_verified(b.blob_hash)
+                for b in managed_stream.descriptor.blobs[:-1]),
+            'file_name': file_name,
+            'download_directory': download_directory,
+            'points_paid': 0.0,
+            'stopped': not managed_stream.running,
+            'stream_hash': managed_stream.stream_hash,
+            'stream_name': managed_stream.descriptor.stream_name,
+            'suggested_file_name': managed_stream.descriptor.suggested_file_name,
+            'sd_hash': managed_stream.descriptor.sd_hash,
+            'download_path': full_path,
+            'mime_type': managed_stream.mime_type,
+            'key': managed_stream.descriptor.key,
+            'total_bytes_lower_bound': managed_stream.descriptor.lower_bound_decrypted_length(),
+            'total_bytes': managed_stream.descriptor.upper_bound_decrypted_length(),
+            'written_bytes': written_bytes,
+            'blobs_completed': managed_stream.blobs_completed,
+            'blobs_in_stream': managed_stream.blobs_in_stream,
+            'blobs_remaining': managed_stream.blobs_remaining,
+            'status': managed_stream.status,
+            'claim_id': managed_stream.claim_id,
+            'txid': managed_stream.txid,
+            'nout': managed_stream.nout,
+            'outpoint': managed_stream.outpoint,
+            'metadata': managed_stream.metadata,
+            'protobuf': managed_stream.metadata_protobuf,
+            'channel_claim_id': managed_stream.channel_claim_id,
+            'channel_name': managed_stream.channel_name,
+            'claim_name': managed_stream.claim_name,
+            'content_fee': managed_stream.content_fee,
             'height': tx_height,
-            'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
-            'timestamp': self.ledger.headers[tx_height]['timestamp'] if tx_height > 0 else None
-        })
-        return file
+            'confirmations': confirmations,
+            'timestamp': timestamp
+        }
 
     def encode_claim(self, claim):
         encoded = getattr(claim, claim.claim_type).to_dict()
