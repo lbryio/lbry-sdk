@@ -244,13 +244,14 @@ class WalletComponent(Component):
     def __init__(self, component_manager):
         super().__init__(component_manager)
         self.wallet_manager = None
+        self._started = False
 
     @property
     def component(self):
         return self.wallet_manager
 
     async def get_status(self):
-        if self.wallet_manager and self.running:
+        if self.wallet_manager and self._started:
             local_height = self.wallet_manager.ledger.headers.height
             remote_height = await self.wallet_manager.ledger.network.get_server_height()
             best_hash = self.wallet_manager.get_best_blockhash()
@@ -265,6 +266,7 @@ class WalletComponent(Component):
     async def start(self):
         log.info("Starting torba wallet")
         self.wallet_manager = await LbryWalletManager.from_lbrynet_config(self.conf)
+        self._started = True
         await self.wallet_manager.start()
 
     async def stop(self):
