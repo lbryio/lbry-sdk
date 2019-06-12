@@ -2610,7 +2610,7 @@ class Daemon(metaclass=JSONRPCServerType):
             channel = old_txo.channel
 
         if 'fee_amount' in kwargs:
-            kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
+            kwargs['fee_address'] = self.get_fee_address(kwargs, old_txo.claim.stream.fee.address or claim_address)
 
         if replace:
             claim = Claim()
