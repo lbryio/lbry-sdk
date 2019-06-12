@@ -206,8 +206,8 @@ class Fee(Metadata):
     def update(self, address: str = None, currency: str = None, amount=None):
         if address is not None:
             self.address = address
-        if currency is not None and amount is not None:
-            currency = currency.lower()
+        if (self.message.currency or currency is not None) and amount is not None:
+            currency = currency.lower() if currency is not None else self.currency.lower()
             assert currency in ('lbc', 'btc', 'usd'), f'Unknown currency type: {currency}'
             setattr(self, currency, Decimal(amount))
 
