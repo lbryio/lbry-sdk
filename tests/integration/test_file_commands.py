@@ -1,13 +1,10 @@
 import asyncio
 import logging
 import os
-from binascii import unhexlify, hexlify
+from binascii import hexlify
 
-from lbrynet.schema import Claim
-from lbrynet.schema.claim import Stream
 from lbrynet.testcase import CommandTestCase
 from lbrynet.blob_exchange.downloader import BlobDownloader
-from lbrynet.wallet.transaction import Transaction
 
 
 class FileCommands(CommandTestCase):
@@ -267,31 +264,24 @@ class FileCommands(CommandTestCase):
         tx = await self.stream_create(
             'nofeeaddress', '0.01', data=b'free stuff?',
         )
-        await self.__raw_value_update(
-            old_tx=tx,
-            fee_amount='2.0', fee_currency='LBC', claim_address=target_address
+        await self.__raw_value_update_no_fee_address(
+            tx, fee_amount='2.0', fee_currency='LBC', claim_address=target_address
         )
-        self.assertIs(self.daemon.jsonrpc_file_list()[0].stream_claim_info.claim.stream.fee.address, '')
         await self.daemon.jsonrpc_file_delete(claim_name='nofeeaddress')
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
 
         response = await self.out(self.daemon.jsonrpc_get('lbry://nofeeaddress'))
+        self.assertIs(self.daemon.jsonrpc_file_list()[0].stream_claim_info.claim.stream.fee.address, '')
         self.assertIsNotNone(response['content_fee'])
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
         self.assertEqual(response['content_fee']['outputs'][0]['amount'], '2.0')
         self.assertEqual(response['content_fee']['outputs'][0]['address'], target_address)
 
-    async def __raw_value_update(self, old_tx, claim_address, **kwargs):
-        old_tx = Transaction(raw=unhexlify(old_tx['hex']))
-        old_txo = old_tx.outputs[0]
-        claim = Claim()
-        claim.stream.message.source.CopyFrom(
-            old_txo.claim.stream.message.source
-        )
-        claim.stream.update(**kwargs)
-        tx = await Transaction.claim_update(
-            old_txo, claim, 1, claim_address, [self.account], self.account
-        )
+    async def __raw_value_update_no_fee_address(self, tx, claim_address, **kwargs):
+        tx = await self.daemon.jsonrpc_stream_update(tx['outputs'][0]['claim_id'], fee_amount='0.1', preview=True, claim_address=claim_address)
+        tx.outputs[0].claim.stream.update(**kwargs)
+        tx.outputs[0].claim.stream.fee.address_bytes = b''
+        tx.outputs[0].script.generate()
         await tx.sign([self.account])
         await self.broadcast(tx)
         await self.confirm_tx(tx.id)
