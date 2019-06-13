@@ -1,42 +1,47 @@
 import logging
+import time
+import hashlib
+import binascii
 
 import aiohttp
-import hashlib
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric import utils
-from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
+import ecdsa
+from torba.client.hash import sha256
+from lbrynet.wallet.transaction import Output
 
 log = logging.getLogger(__name__)
 
 
-def sign_comment(**kwargs):
-    private_key = generate_private_key(
-        public_exponent=65537,
-        key_size=4096,
-        backend=default_backend()
-    )
-    chosen_hash = hashes.SHA256()
-    hasher = hashes.Hash(chosen_hash, default_backend())
-    value_to_hash = b':'.join(bytes(v, 'utf-8') for v in kwargs.values() if type(v) is str)
-    hasher.update(value_to_hash)
-    digest = hasher.finalize()
-    signature = private_key.sign(
-        digest,
-        padding.PSS(
-            mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.MAX_LENGTH
-        ),
-        utils.Prehashed(chosen_hash)
-    )
-    m = hashlib.sha3_256()
-    m.update(signature)
-    return m.hexdigest()
+def get_encoded_signature(signature):
+    signature = signature.encode() if type(signature) is str else signature
+    r = int(signature[:int(len(signature) / 2)], 16)
+    s = int(signature[int(len(signature) / 2):], 16)
+    return ecdsa.util.sigencode_der(r, s, len(signature) * 4)
 
 
-def rpc_body(method: str, rpc_id: any, **params) -> dict:
-    return {'jsonrpc': '2.0', 'id': rpc_id, 'method': method, 'params': {**params}}
+def is_comment_signed_by_channel(comment: dict, channel: Output):
+    try:
+        pieces = [
+            comment['signing_ts'].encode(),
+            channel.claim_hash,
+            comment['comment'].encode()
+        ]
+        return Output.is_signature_valid(
+            get_encoded_signature(comment['signature']),
+            sha256(b''.join(pieces)),
+            channel.claim.channel.public_key_bytes
+        )
+    except KeyError:
+        pass
+    return False
+
+
+def sign_comment(comment: dict, channel: Output):
+    timestamp = str(int(time.time())).encode()
+    pieces = [timestamp, channel.claim_hash, comment['comment'].encode()]
+    digest = sha256(b''.join(pieces))
+    signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+    comment['signature'] = binascii.hexlify(signature).decode()
+    comment['signing_ts'] = timestamp.decode()
 
 
 async def jsonrpc_post(url: str, method: str, **params) -> any:
