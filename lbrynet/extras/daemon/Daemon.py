@@ -33,7 +33,7 @@ from lbrynet.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UP
 from lbrynet.extras.daemon.ComponentManager import RequiredCondition
 from lbrynet.extras.daemon.ComponentManager import ComponentManager
 from lbrynet.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbrynet.extras.daemon.comment_client import jsonrpc_post, sign_comment
+from lbrynet.extras.daemon.comment_client import jsonrpc_post, sign_comment, is_comment_signed_by_channel
 from lbrynet.extras.daemon.undecorated import undecorated
 from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.account import Account as LBCAccount
@@ -3353,8 +3353,8 @@ class Daemon(metaclass=JSONRPCServerType):
     Create and list comments.
     """
 
-    async def jsonrpc_comment_list(self, claim_id: str, parent_id: str = None,
-                                   page=1, page_size=50, include_replies=True):
+    async def jsonrpc_comment_list(self, claim_id, parent_id=None, page=1, page_size=50,
+                                   include_replies=True, is_channel_signature_valid=False):
         """
         List comments associated with a claim.
 
@@ -3362,17 +3362,17 @@ class Daemon(metaclass=JSONRPCServerType):
             comment_list    (<claim_id> | --claim_id=<claim_id>)
                             [(--page=<page> --page_size=<page_size>)]
                             [--parent_id=<parent_id>] [--include_replies]
+                            [--is_channel_signature_valid]
 
         Options:
-            --claim_id=<claim_id>   : (str) The claim on which the comment will be made on
-            --include_replies  : (bool) Flag to indicate whether or not you want the
-                                    replies to be included with the response or not
-            --parent_id=<parent_id>  : (int)
-
-            --page=<page>  : (int) The page you'd like to see in the comment list.
-                             The first page is 1, second page is 2, and so on.
-            --page_size=<page_size>  : (int) The amount of comments that you'd like to
-                                       retrieve in one request
+            --claim_id=<claim_id>           : (str) The claim on which the comment will be made on
+            --parent_id=<parent_id>         : (str) CommentId of a specific thread you'd like to see
+            --page=<page>                   : (int) The page you'd like to see in the comment list.
+            --page_size=<page_size>         : (int) The amount of comments that you'd like to retrieve
+            --include_replies               : (bool) Whether or not you want to include replies in list
+            --is_channel_signature_valid    : (bool) Only include comments with valid signatures.
+                                              [Warning: Paginated total size will not change, even
+                                               if list reduces]
 
         Returns:
             (dict)  Containing the list, and information about the paginated content:
@@ -3397,7 +3397,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 ]
             }
         """
-        return await jsonrpc_post(
+        cmnt_list: dict = await jsonrpc_post(
             self.conf.comment_server,
             "get_claim_comments",
             claim_id=claim_id,
@@ -3406,10 +3406,23 @@ class Daemon(metaclass=JSONRPCServerType):
             page_size=page_size,
             top_level=not include_replies
         )
+        if 'items' in cmnt_list:
+            items = cmnt_list['items']
+            chnl_uris = {cmnt['channel_url'] for cmnt in items if 'channel_url' in cmnt}
+            claims = await self.resolve(tuple(chnl_uris))
+            for cmnt in cmnt_list['items']:
+                if 'channel_url' in cmnt:
+                    if cmnt['channel_url'] in claims:
+                        channel = claims[cmnt['channel_url']]
+                        cmnt['is_channel_signature_valid'] = is_comment_signed_by_channel(cmnt, channel)
+                        continue
+                cmnt['is_channel_signature_valid'] = False
+            if is_channel_signature_valid:
+                cmnt_list['items'] = [c for c in cmnt_list['items'] if c['is_channel_signature_valid']]
+        return cmnt_list
 
-    async def jsonrpc_comment_create(
-            self, claim_id: str, comment: str, parent_id: str = None,
-            channel_account_id=None, channel_name: str = None, channel_id: str = None) -> dict:
+    async def jsonrpc_comment_create(self, claim_id, comment, parent_id=None, channel_account_id=None,
+                                     channel_name=None, channel_id=None) -> dict:
         """
         Create and associate a comment with a claim using your channel identity.
 
@@ -3421,13 +3434,13 @@ class Daemon(metaclass=JSONRPCServerType):
                             [--channel_account_id=<channel_account_id>...]
 
         Options:
-            --comment=<comment>         : (str) Comment to be made, should be at most 2000 characters.
-            --claim_id=<claim_id>       : (str) The ID of the claim on which the comment should be made on
-            --parent_id=<parent_id>     : (str) The ID of a comment to make a response to
-            --channel_id=<channel_id>   : (str) The ID of the channel you want to post under
-            --channel_name=<channel_name>: (str) The channel you want to post as, prepend with a '@'
-          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
-                                                   for channel certificates, defaults to all accounts.
+            --comment=<comment>                         : (str) Comment to be made, should be at most 2000 characters.
+            --claim_id=<claim_id>                       : (str) The ID of the claim to comment on
+            --parent_id=<parent_id>                     : (str) The ID of a comment to make a response to
+            --channel_id=<channel_id>                   : (str) The ID of the channel you want to post under
+            --channel_name=<channel_name>               : (str) The channel you want to post as, prepend with a '@'
+            --channel_account_id=<channel_account_id>   : (str) one or more account ids for accounts to look in
+                                                          for channel certificates, defaults to all accounts.
 
         Returns:
             (dict) Comment object if successfully made, (None) otherwise
@@ -3435,31 +3448,30 @@ class Daemon(metaclass=JSONRPCServerType):
                 "comment":      (str) The actual string as inputted by the user,
                 "comment_id":   (str) The Comment's unique identifier,
                 "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
-                "channel_id":   (str) The Channel Claim ID that this comeent was posted under,
+                "channel_id":   (str) The Channel Claim ID that this comment was posted under,
                 "signature":    (str) The signature of the comment,
                 "channel_url":  (str) Channel's URI in the ClaimTrie,
                 "parent_id":    (str) Comment this is replying to, (None) if this is the root,
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
             }
         """
-        comment = {
+        comment_body = {
             'comment': comment,
             'claim_id': claim_id,
             'parent_id': parent_id,
         }
         channel = await self.get_channel_or_none(channel_account_id, channel_id, channel_name, for_signing=True)
         if channel:
-            comment.update({
+            comment_body.update({
                 'channel_id': channel.claim_id,
                 'channel_name': channel.claim_name,
-                'signature': sign_comment(
-                    channel_name=channel_name,
-                    channel_id=channel_id,
-                    comment=comment,
-                    salt=time.time_ns()
-                )
             })
-        return await jsonrpc_post(self.conf.comment_server, 'create_comment', **comment)
+            sign_comment(comment_body, channel)
+        response = await jsonrpc_post(self.conf.comment_server, 'create_comment', **comment_body)
+        if 'signature' in response:
+            response['is_claim_signature_valid'] = is_comment_signed_by_channel(response, channel)
+        return response
+
 
     async def broadcast_or_release(self, account, tx, blocking=False):
         try:
