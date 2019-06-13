@@ -1,10 +1,11 @@
-import asyncio
+from math import ceil
+
 from aiohttp import web
 
 from lbrynet.testcase import CommandTestCase
 
 
-class FakedCommentServer:
+class MockedCommentServer:
 
     ERRORS = {
         'INVALID_PARAMS': {'code': -32602, 'message': 'Invalid parameters'},
@@ -25,11 +26,19 @@ class FakedCommentServer:
     def create_comment(self, **comment):
         self.comment_id += 1
         comment['comment_id'] = self.comment_id
+        if 'channel_id' in comment:
+            comment['channel_url'] = 'lbry://' + comment['channel_name'] + '#' + comment['channel_id']
         self.comments.append(comment)
         return comment
 
     def get_claim_comments(self, page=1, page_size=50, **kwargs):
-        return self.comments[:page_size]
+        return {
+            'page': page,
+            'page_size': page_size,
+            'total_pages': ceil(len(self.comments)/page_size),
+            'total_items': len(self.comments),
+            'items': (self.comments[::-1])[(page - 1) * page_size: page * page_size]
+        }
 
     methods = {
         'get_claim_comments': get_claim_comments,
@@ -73,21 +82,21 @@ class CommentCommands(CommandTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.daemon.conf.comment_server = 'http://localhost:2903/api'
-        self.comment_server = FakedCommentServer(2903)
+        self.comment_server = MockedCommentServer(2903)
         await self.comment_server.start()
         self.addCleanup(self.comment_server.stop)
 
-    async def test_comment_create(self):
+    async def test01_comment_create(self):
         channel = (await self.channel_create('@JimmyBuffett'))['outputs'][0]
         stream = (await self.stream_create())['outputs'][0]
 
-        self.assertEqual(0, len(await self.daemon.jsonrpc_comment_list(stream['claim_id'])))
+        self.assertEqual(0, len((await self.daemon.jsonrpc_comment_list(stream['claim_id']))['items']))
         comment = await self.daemon.jsonrpc_comment_create(
             claim_id=stream['claim_id'],
             channel_id=channel['claim_id'],
             comment="It's 5 O'Clock Somewhere"
         )
-        comments = await self.daemon.jsonrpc_comment_list(stream['claim_id'])
+        comments = (await self.daemon.jsonrpc_comment_list(stream['claim_id']))['items']
         self.assertEqual(1, len(comments))
         self.assertEqual(comment['comment_id'], comments[0]['comment_id'])
         self.assertEqual(stream['claim_id'], comments[0]['claim_id'])
@@ -99,7 +108,68 @@ class CommentCommands(CommandTestCase):
             comment='Let\'s all go to Margaritaville',
             parent_id=comments[0]['comment_id']
         )
-        comments = await self.daemon.jsonrpc_comment_list(stream['claim_id'])
+        comments = (await self.daemon.jsonrpc_comment_list(stream['claim_id']))['items']
         self.assertEqual(2, len(comments))
-        self.assertEqual(comments[1]['channel_id'], channel2['claim_id'])
-        self.assertEqual(comments[0]['comment_id'], comments[1]['parent_id'])
+        self.assertEqual(comments[0]['channel_id'], channel2['claim_id'])
+        self.assertEqual(comments[0]['parent_id'], comments[1]['comment_id'])
+
+        comment = await self.daemon.jsonrpc_comment_create(
+            claim_id=stream['claim_id'],
+            comment='Anonymous comment'
+        )
+        comments = (await self.daemon.jsonrpc_comment_list(stream['claim_id']))['items']
+        self.assertEqual(comment['comment_id'], comments[0]['comment_id'])
+
+    async def test02_unsigned_comment_list(self):
+        stream = (await self.stream_create())['outputs'][0]
+        comments = []
+        for i in range(28):
+            comment = await self.daemon.jsonrpc_comment_create(
+                comment=f'{i}',
+                claim_id=stream['claim_id'],
+            )
+            self.assertIn('comment_id', comment)
+            comments.append(comment)
+
+        comment_list = await self.daemon.jsonrpc_comment_list(
+            claim_id=stream['claim_id']
+        )
+        self.assertIs(comment_list['page_size'], 50)
+        self.assertIs(comment_list['page'], 1)
+        self.assertIs(comment_list['total_items'], 28)
+        for comment in comment_list['items']:
+            self.assertEqual(comment['comment'], comments.pop()['comment'])
+
+        signed_comment_list = await self.daemon.jsonrpc_comment_list(
+            claim_id=stream['claim_id'],
+            is_channel_signature_valid=True
+        )
+        self.assertIs(len(signed_comment_list['items']), 0)
+
+    async def test03_signed_comments_list(self):
+        channel = (await self.channel_create('@JimmyBuffett'))['outputs'][0]
+        stream = (await self.stream_create())['outputs'][0]
+        comments = []
+        for i in range(28):
+            comment = await self.daemon.jsonrpc_comment_create(
+                comment=f'{i}',
+                claim_id=stream['claim_id'],
+                channel_id=channel['claim_id'],
+            )
+            self.assertIn('comment_id', comment)
+            comments.append(comment)
+
+        comment_list = await self.daemon.jsonrpc_comment_list(
+            claim_id=stream['claim_id']
+        )
+        self.assertIs(comment_list['page_size'], 50)
+        self.assertIs(comment_list['page'], 1)
+        self.assertIs(comment_list['total_items'], 28)
+        for comment in comment_list['items']:
+            self.assertEqual(comment['comment'], comments.pop()['comment'])
+
+        signed_comment_list = await self.daemon.jsonrpc_comment_list(
+            claim_id=stream['claim_id'],
+            is_channel_signature_valid=True
+        )
+        self.assertIs(len(signed_comment_list['items']), 28)
