@@ -278,8 +278,9 @@ class FileCommands(CommandTestCase):
         self.assertEqual(response['content_fee']['outputs'][0]['address'], target_address)
 
     async def __raw_value_update_no_fee_address(self, tx, claim_address, **kwargs):
-        tx = await self.daemon.jsonrpc_stream_update(tx['outputs'][0]['claim_id'], fee_amount='0.1', preview=True, claim_address=claim_address)
-        tx.outputs[0].claim.stream.update(**kwargs)
+        tx = await self.daemon.jsonrpc_stream_update(
+            tx['outputs'][0]['claim_id'], preview=True, claim_address=claim_address, **kwargs
+        )
         tx.outputs[0].claim.stream.fee.address_bytes = b''
         tx.outputs[0].script.generate()
         await tx.sign([self.account])

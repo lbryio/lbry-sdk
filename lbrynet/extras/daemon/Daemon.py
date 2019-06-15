@@ -2609,8 +2609,16 @@ class Daemon(metaclass=JSONRPCServerType):
         elif old_txo.claim.is_signed and not clear_channel and not replace:
             channel = old_txo.channel
 
-        if 'fee_amount' in kwargs:
-            kwargs['fee_address'] = self.get_fee_address(kwargs, old_txo.claim.stream.fee.address or claim_address)
+        fee_address = self.get_fee_address(kwargs, old_txo.claim.stream.fee.address or claim_address)
+        if fee_address:
+            kwargs['fee_address'] = fee_address
+        kwargs['fee_currency'] = kwargs.get('fee_currency', old_txo.claim.stream.fee.currency if not replace else None)
+        kwargs['fee_amount'] = kwargs.get('fee_amount', old_txo.claim.stream.fee.amount if not replace else None)
+        valid_currency = kwargs['fee_currency'] if kwargs['fee_currency'] != 'UNKNOWN_CURRENCY' else None
+        if kwargs.get('fee_amount') and not valid_currency:
+            raise Exception('In order to set a fee amount, please specify a fee currency')
+        if valid_currency and not kwargs.get('fee_amount'):
+            raise Exception('In order to set a fee currency, please specify a fee amount')
 
         if replace:
             claim = Claim()

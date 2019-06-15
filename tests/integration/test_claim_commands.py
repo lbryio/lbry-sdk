@@ -2,6 +2,7 @@ import os.path
 import tempfile
 import logging
 from binascii import unhexlify
+from copy import deepcopy
 from urllib.request import urlopen
 
 
@@ -704,6 +705,39 @@ class StreamCommands(ClaimTestCase):
         fixed_values['languages'] = ['pt']
         fixed_values['locations'] = [{'country': 'BR'}]
         self.assertEqual(txo['value'], fixed_values)
+
+        # fee tests, replacing all (--replace)
+        fee_address = values['fee_address']
+        with self.assertRaises(Exception, msg='In order to set a fee amount, please specify a fee currency'):
+            await self.stream_update(claim_id, fee_amount='0.1', replace=True, preview=True, confirm=False)
+        with self.assertRaises(Exception, msg='In order to set a fee currency, please specify a fee amount'):
+            await self.stream_update(
+                claim_id, fee_currency='usd', replace=True, preview=True, confirm=False, claim_address=fee_address
+            )
+        tx = await self.stream_update(
+            claim_id, fee_amount='0.1', fee_currency='usd', replace=True, preview=True, confirm=False
+        )
+        self.assertEqual(
+            tx['outputs'][0]['value']['fee'],
+            {'address': fee_address, 'currency': 'USD', 'amount': '0.1'}
+        )
+        tx = await self.stream_update(claim_id, replace=True, preview=True, confirm=False)
+        self.assertNotIn('fee', tx['outputs'][0]['value'])
+        tx = await self.stream_update(claim_id, fee_address=fee_address, replace=True, preview=True, confirm=False)
+        self.assertEqual(tx['outputs'][0]['value']['fee'], {'address': fee_address})
+        # fee tests, but now replacing a single field (default)
+        tx = await self.stream_update(claim_id, fee_address=txo['address'], preview=True, confirm=False)
+        expected_value = deepcopy(fixed_values)
+        expected_value['fee']['address'] = txo['address']
+        self.assertEqual(tx['outputs'][0]['value'], expected_value)
+        tx = await self.stream_update(claim_id, fee_amount='42', preview=True, confirm=False)
+        expected_value['fee']['amount'] = '42'
+        expected_value['fee']['address'] = fixed_values['fee']['address']
+        self.assertEqual(tx['outputs'][0]['value'], expected_value)
+        tx = await self.stream_update(claim_id, fee_currency='lbc', preview=True, confirm=False)
+        expected_value['fee']['currency'] = 'LBC'
+        expected_value['fee']['amount'] = fixed_values['fee']['amount']
+        self.assertEqual(tx['outputs'][0]['value'], expected_value)
 
         # clearing fee
         tx = await self.out(self.stream_update(claim_id, clear_fee=True))

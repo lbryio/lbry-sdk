@@ -206,6 +206,8 @@ class Stream(BaseClaim):
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
         if kwargs.pop('clear_fee', False):
+            # clear_fee is set, ignore defaults
+            kwargs.pop('fee_address', None), kwargs.pop('fee_currency', None), kwargs.pop('fee_amount', None)
             self.message.ClearField('fee')
         else:
             self.fee.update(
