@@ -140,6 +140,8 @@ class BaseLedger(metaclass=LedgerRegistry):
         self._header_processing_lock = asyncio.Lock()
         self._address_update_locks: Dict[str, asyncio.Lock] = {}
 
+        self.coin_selection_strategy = None
+
     @classmethod
     def get_id(cls):
         return '{}_{}'.format(cls.symbol.lower(), cls.network_name.lower())
@@ -212,7 +214,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 txos, amount,
                 self.transaction_class.output_class.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
             )
-            spendables = selector.select()
+            spendables = selector.select(self.coin_selection_strategy)
             if spendables:
                 await self.reserve_outputs(s.txo for s in spendables)
             return spendables

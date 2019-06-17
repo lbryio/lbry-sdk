@@ -5,6 +5,12 @@ from torba.client import basetransaction
 
 MAXIMUM_TRIES = 100000
 
+STRATEGIES = []
+
+def strategy(method):
+    STRATEGIES.append(method.__name__)
+    return method
+
 
 class CoinSelector:
 
@@ -20,17 +26,30 @@ class CoinSelector:
         if seed is not None:
             self.random.seed(seed, version=1)
 
-    def select(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def select(self, strategy: str = None) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         if not self.txos:
             return []
         if self.target > self.available:
             return []
+        if strategy is not None:
+            return getattr(self, strategy)()
         return (
             self.branch_and_bound() or
             self.closest_match() or
             self.random_draw()
         )
 
+    @strategy
+    def confirmed_only(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+        self.txos = [t for t in self.txos if t.txo.tx_ref.height > 0] or self.txos
+        self.available = sum(c.effective_amount for c in self.txos)
+        return (
+                self.branch_and_bound() or
+                self.closest_match() or
+                self.random_draw()
+        )
+
+    @strategy
     def branch_and_bound(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         # see bitcoin implementation for more info:
         # https://github.com/bitcoin/bitcoin/blob/master/src/wallet/coinselection.cpp
@@ -89,6 +108,7 @@ class CoinSelector:
 
         return []
 
+    @strategy
     def closest_match(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         """ Pick one UTXOs that is larger than the target but with the smallest change. """
         target = self.target + self.cost_of_change
@@ -101,6 +121,7 @@ class CoinSelector:
                     smallest_change, best_match = change, txo
         return [best_match] if best_match else []
 
+    @strategy
     def random_draw(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         """ Accumulate UTXOs at random until there is enough to cover the target. """
         target = self.target + self.cost_of_change

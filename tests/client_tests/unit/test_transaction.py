@@ -14,8 +14,8 @@ FEE_PER_BYTE = 50
 FEE_PER_CHAR = 200000
 
 
-def get_output(amount=CENT, pubkey_hash=NULL_HASH):
-    return ledger_class.transaction_class() \
+def get_output(amount=CENT, pubkey_hash=NULL_HASH, height=-2):
+    return ledger_class.transaction_class(height=height) \
         .add_outputs([ledger_class.transaction_class.output_class.pay_pubkey_hash(amount, pubkey_hash)]) \
         .outputs[0]
 

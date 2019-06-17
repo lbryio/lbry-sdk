@@ -85,6 +85,16 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         match = selector.select()
         self.assertEqual([5*CENT], [c.txo.amount for c in match])
 
+    def test_prefer_confirmed_strategy(self):
+        utxo_pool = self.estimates(
+            utxo(11*CENT, height=5),
+            utxo(11*CENT, height=0),
+            utxo(11*CENT, height=-2),
+            utxo(11*CENT, height=5),
+        )
+        selector = CoinSelector(utxo_pool, 20*CENT, 0)
+        match = selector.select("confirmed_only")
+        self.assertEqual([5,5], [c.txo.tx_ref.height for c in match])
 
 class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
 
