@@ -204,12 +204,18 @@ class Fee(Metadata):
     __slots__ = ()
 
     def update(self, address: str = None, currency: str = None, amount=None):
+        amount = amount or self.amount
+        currency = currency or (self.currency if self.message.currency else None)
         if address is not None:
             self.address = address
-        if (self.message.currency or currency is not None) and amount is not None:
+        if currency and amount:
             currency = currency.lower() if currency is not None else self.currency.lower()
             assert currency in ('lbc', 'btc', 'usd'), f'Unknown currency type: {currency}'
-            setattr(self, currency, Decimal(amount))
+            setattr(self, currency, Decimal(amount or self.amount))
+        elif amount and not currency:
+            raise Exception('In order to set a fee amount, please specify a fee currency')
+        elif currency and not amount:
+            raise Exception('In order to set a fee currency, please specify a fee amount')
 
     @property
     def currency(self) -> str:
