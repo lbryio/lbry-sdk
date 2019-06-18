@@ -364,8 +364,11 @@ class BlockchainNode:
         self._block_expected += blocks
         return self._cli_cmnd('generate', str(blocks))
 
-    def invalidateblock(self, blockhash):
+    def invalidate_block(self, blockhash):
         return self._cli_cmnd('invalidateblock', blockhash)
+
+    def get_block_hash(self, block):
+        return self._cli_cmnd('getblockhash', str(block))
 
     def get_raw_change_address(self):
         return self._cli_cmnd('getrawchangeaddress')

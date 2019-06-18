@@ -457,13 +457,13 @@ class BlockProcessor:
                                          hash_to_hex_str(self.tip),
                                          self.height))
             self.tip = coin.header_prevhash(block.header)
-            self.backup_txs(block.transactions)
+            self.backup_txs(self.height, block.transactions)
             self.height -= 1
             self.db.tx_counts.pop()
 
         self.logger.info('backed up to height {:,d}'.format(self.height))
 
-    def backup_txs(self, txs):
+    def backup_txs(self, height, txs):
         # Prevout values, in order down the block (coinbase first if present)
         # undo_info is in reverse block order
         undo_info = self.db.read_undo_info(self.height)

@@ -39,7 +39,10 @@ class BaseHeaders:
 
     async def open(self):
         if self.path != ':memory:':
-            self.io = open(self.path, 'a+b')
+            if not os.path.exists(self.path):
+                self.io = open(self.path, 'w+b')
+            else:
+                self.io = open(self.path, 'r+b')
 
     async def close(self):
         self.io.close()
@@ -105,7 +108,7 @@ class BaseHeaders:
                     await loop.run_in_executor(None, self.validate_chunk, height, chunk)
                 except InvalidHeader as e:
                     bail = True
-                    chunk = chunk[:(height-e.height+1)*self.header_size]
+                    chunk = chunk[:(height-e.height)*self.header_size]
                 written = 0
                 if chunk:
                     self.io.seek(height * self.header_size, os.SEEK_SET)
