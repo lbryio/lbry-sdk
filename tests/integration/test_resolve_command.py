@@ -9,7 +9,7 @@ from lbrynet.schema.compat import OldClaimMessage
 from torba.client.hash import sha256, Base58
 
 
-class ResolveCommand(CommandTestCase):
+class BaseResolveTestCase(CommandTestCase):
 
     def get_claim_id(self, tx):
         return tx['outputs'][0]['claim_id']
@@ -20,6 +20,9 @@ class ResolveCommand(CommandTestCase):
             self.assertIn('error', other)
         else:
             self.assertEqual(claim_id, other['claim_id'])
+
+
+class ResolveCommand(BaseResolveTestCase):
 
     async def test_resolve_response(self):
         channel_id = self.get_claim_id(
@@ -304,6 +307,33 @@ class ResolveCommand(CommandTestCase):
         self.daemon.wallet_manager.ledger.network.get_transaction = check_result_cached
         await self._test_resolve_abc_foo()
         self.assertFalse(called_again.is_set())
+
+
+class ResolveAfterReorg(BaseResolveTestCase):
+
+    async def reorg(self, start):
+        blocks = self.ledger.headers.height - start
+        self.blockchain._block_expected = start - 1
+        # go back to start
+        await self.blockchain.invalidate_block(self.ledger.headers.hash(start).decode())
+        # go to previous + 1
+        await self.generate(blocks + 2)
+
+    async def test_reorg(self):
+        self.assertEqual(self.ledger.headers.height, 206)
+
+        name = '@abc'
+        channel_id = self.get_claim_id(
+            await self.channel_create(name, '0.01')
+        )
+        self.assertNotIn('error', (await self.resolve(name))[name])
+        await self.reorg(206)
+        self.assertNotIn('error', (await self.resolve(name))[name])
+
+        await self.channel_abandon(channel_id)
+        self.assertIn('error', (await self.resolve(name))[name])
+        await self.reorg(206)
+        self.assertIn('error', (await self.resolve(name))[name])
 
 
 def generate_signed_legacy(address: bytes, output: Output):
