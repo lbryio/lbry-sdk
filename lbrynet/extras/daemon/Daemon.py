@@ -414,19 +414,23 @@ class Daemon(metaclass=JSONRPCServerType):
         try:
             rpc_site = web.TCPSite(self.rpc_runner, self.conf.api_host, self.conf.api_port, shutdown_timeout=.5)
             await rpc_site.start()
-            log.info('lbrynet API listening on TCP %s:%i', *rpc_site._server.sockets[0].getsockname()[:2])
+            log.info('RPC server listening on TCP %s:%i', *rpc_site._server.sockets[0].getsockname()[:2])
+        except OSError as e:
+            log.error('RPC server failed to bind TCP %s:%i', self.conf.api_host, self.conf.api_port)
+            await self.analytics_manager.send_server_startup_error(str(e))
+            raise SystemExit()
 
+        try:
             streaming_site = web.TCPSite(self.streaming_runner, self.conf.streaming_host, self.conf.streaming_port,
                                          shutdown_timeout=.5)
             await streaming_site.start()
-            log.info('lbrynet media server listening on TCP %s:%i',
-                     *streaming_site._server.sockets[0].getsockname()[:2])
+            log.info('media server listening on TCP %s:%i', *streaming_site._server.sockets[0].getsockname()[:2])
 
         except OSError as e:
-            log.error('lbrynet API failed to bind TCP %s for listening. Daemon is already running or this port is '
-                      'already in use by another application.', self.conf.api)
+            log.error('media server failed to bind TCP %s:%i', self.conf.streaming_host, self.conf.streaming_port)
             await self.analytics_manager.send_server_startup_error(str(e))
             raise SystemExit()
+
 
         try:
             await self.initialize()
@@ -436,7 +440,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.stop()
         except Exception as e:
             await self.analytics_manager.send_server_startup_error(str(e))
-            log.exception('Failed to start lbrynet-daemon')
+            log.exception('Failed to start lbrynet')
 
         await self.analytics_manager.send_server_startup_success()
 
