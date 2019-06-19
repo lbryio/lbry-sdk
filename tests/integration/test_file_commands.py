@@ -271,7 +271,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
 
         response = await self.out(self.daemon.jsonrpc_get('lbry://nofeeaddress'))
-        self.assertIs(self.daemon.jsonrpc_file_list()[0].stream_claim_info.claim.stream.fee.address, '')
+        self.assertIsNone(self.daemon.jsonrpc_file_list()[0].stream_claim_info.claim.stream.fee.address)
         self.assertIsNotNone(response['content_fee'])
         self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
         self.assertEqual(response['content_fee']['outputs'][0]['amount'], '2.0')
