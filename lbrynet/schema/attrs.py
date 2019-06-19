@@ -204,26 +204,29 @@ class Fee(Metadata):
     __slots__ = ()
 
     def update(self, address: str = None, currency: str = None, amount=None):
-        amount = amount or self.amount
-        currency = currency or (self.currency if self.message.currency else None)
-        if address is not None:
+        if amount:
+            currency = (currency or self.currency or '').lower()
+            if not currency:
+                raise Exception('In order to set a fee amount, please specify a fee currency.')
+            if currency not in ('lbc', 'btc', 'usd'):
+                raise Exception(f'Missing or unknown currency provided: {currency}')
+            setattr(self, currency, Decimal(amount))
+        elif currency:
+            raise Exception('In order to set a fee currency, please specify a fee amount.')
+        if address:
+            if not self.currency:
+                raise Exception('In order to set a fee address, please specify a fee amount and currency.')
             self.address = address
-        if currency and amount:
-            currency = currency.lower() if currency is not None else self.currency.lower()
-            assert currency in ('lbc', 'btc', 'usd'), f'Unknown currency type: {currency}'
-            setattr(self, currency, Decimal(amount or self.amount))
-        elif amount and not currency:
-            raise Exception('In order to set a fee amount, please specify a fee currency')
-        elif currency and not amount:
-            raise Exception('In order to set a fee currency, please specify a fee amount')
 
     @property
     def currency(self) -> str:
-        return FeeMessage.Currency.Name(self.message.currency)
+        if self.message.currency:
+            return FeeMessage.Currency.Name(self.message.currency)
 
     @property
     def address(self) -> str:
-        return Base58.encode(self.address_bytes) if self.address_bytes else ''
+        if self.address_bytes:
+            return Base58.encode(self.address_bytes)
 
     @address.setter
     def address(self, address: str):
