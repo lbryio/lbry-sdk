@@ -40,7 +40,7 @@ class CoinSelector:
         )
 
     @strategy
-    def confirmed_only(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def prefer_confirmed(self) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         self.txos = [t for t in self.txos if t.txo.tx_ref and t.txo.tx_ref.height > 0] or self.txos
         self.available = sum(c.effective_amount for c in self.txos)
         return (
