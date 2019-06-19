@@ -431,7 +431,6 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.analytics_manager.send_server_startup_error(str(e))
             raise SystemExit()
 
-
         try:
             await self.initialize()
         except asyncio.CancelledError:
@@ -441,6 +440,7 @@ class Daemon(metaclass=JSONRPCServerType):
         except Exception as e:
             await self.analytics_manager.send_server_startup_error(str(e))
             log.exception('Failed to start lbrynet')
+            raise SystemExit()
 
         await self.analytics_manager.send_server_startup_success()
 
