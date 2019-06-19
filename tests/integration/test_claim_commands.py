@@ -2,7 +2,6 @@ import os.path
 import tempfile
 import logging
 from binascii import unhexlify
-from copy import deepcopy
 from urllib.request import urlopen
 
 
@@ -706,62 +705,6 @@ class StreamCommands(ClaimTestCase):
         fixed_values['locations'] = [{'country': 'BR'}]
         self.assertEqual(txo['value'], fixed_values)
 
-        # fee tests, replacing all (--replace)
-        fee_address = values['fee_address']
-        with self.assertRaises(Exception, msg='In order to set a fee amount, please specify a fee currency'):
-            await self.stream_update(claim_id, fee_amount='0.1', replace=True, preview=True, confirm=False)
-        with self.assertRaises(Exception, msg='In order to set a fee currency, please specify a fee amount'):
-            await self.stream_update(
-                claim_id, fee_currency='usd', replace=True, preview=True, confirm=False, claim_address=fee_address
-            )
-        tx = await self.stream_update(
-            claim_id, fee_amount='0.1', fee_currency='usd', replace=True, preview=True, confirm=False
-        )
-        self.assertEqual(
-            tx['outputs'][0]['value']['fee'],
-            {'address': fee_address, 'currency': 'USD', 'amount': '0.1'}
-        )
-        tx = await self.stream_update(claim_id, replace=True, preview=True, confirm=False)
-        self.assertNotIn('fee', tx['outputs'][0]['value'])
-        tx = await self.stream_update(claim_id, fee_address=fee_address, replace=True, preview=True, confirm=False)
-        self.assertEqual(tx['outputs'][0]['value']['fee'], {'address': fee_address})
-        # fee tests, but now replacing a single field (default)
-        tx = await self.stream_update(claim_id, fee_address=txo['address'], preview=True, confirm=False)
-        expected_value = deepcopy(fixed_values)
-        expected_value['fee']['address'] = txo['address']
-        self.assertEqual(tx['outputs'][0]['value'], expected_value)
-        tx = await self.stream_update(claim_id, fee_amount='42', preview=True, confirm=False)
-        expected_value['fee']['amount'] = '42'
-        expected_value['fee']['address'] = fixed_values['fee']['address']
-        self.assertEqual(tx['outputs'][0]['value'], expected_value)
-        tx = await self.stream_update(claim_id, fee_currency='lbc', preview=True, confirm=False)
-        expected_value['fee']['currency'] = 'LBC'
-        expected_value['fee']['amount'] = fixed_values['fee']['amount']
-        self.assertEqual(tx['outputs'][0]['value'], expected_value)
-
-        # clearing fee
-        tx = await self.out(self.stream_update(claim_id, clear_fee=True))
-        txo = tx['outputs'][0]
-        fixed_fee = fixed_values.pop('fee')
-        self.assertEqual(txo['value'], fixed_values)
-
-        # setting the fee after it has been cleared, without a fee address, sets the fee address to claim address
-        tx = await self.out(self.stream_update(
-            claim_id, fee_amount=fixed_fee['amount'], fee_currency=fixed_fee['currency'],
-        ))
-        txo = tx['outputs'][0]
-        fixed_fee['address'] = txo['address']
-        fixed_values['fee'] = fixed_fee
-        self.assertEqual(txo['value'], fixed_values)
-
-        # update just the fee amount, shouldnt update fee address to claim address
-        address = await self.daemon.jsonrpc_address_unused()
-        tx = await self.out(self.stream_update(
-            claim_id, fee_amount='1.33', claim_address=address
-        ))
-        fixed_values['fee']['amount'] = '1.33'
-        self.assertEqual(tx['outputs'][0]['value'], fixed_values)
-
         # modifying hash/size/name
         fixed_values['source']['name'] = 'changed_name'
         fixed_values['source']['hash'] = 'cafebeef'
@@ -793,6 +736,86 @@ class StreamCommands(ClaimTestCase):
         # after sending
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 3)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 1)
+
+    async def test_setting_fee_fields(self):
+        tx = await self.out(self.stream_create('paid-stream'))
+        txo = tx['outputs'][0]
+        claim_id, stream = txo['claim_id'], txo['value']
+        fee_address = 'mmCsWAiXMUVecFQ3fVzUwvpT9XFMXno2Ca'
+
+        self.assertNotIn('fee', stream)
+
+        # --replace=false
+        # validation
+        with self.assertRaisesRegex(Exception, 'please specify a fee currency'):
+            await self.stream_update(claim_id, fee_amount='0.1')
+        with self.assertRaisesRegex(Exception, 'unknown currency provided: foo'):
+            await self.stream_update(claim_id, fee_amount='0.1', fee_currency="foo")
+        with self.assertRaisesRegex(Exception, 'please specify a fee amount'):
+            await self.stream_update(claim_id, fee_currency='usd')
+        with self.assertRaisesRegex(Exception, 'please specify a fee amount'):
+            await self.stream_update(claim_id, fee_address=fee_address)
+        # set just amount and currency with default address
+        tx = await self.stream_update(
+            claim_id, fee_amount='0.99', fee_currency='lbc'
+        )
+        self.assertEqual(
+            tx['outputs'][0]['value']['fee'],
+            {'amount': '0.99', 'currency': 'LBC', 'address': txo['address']}
+        )
+        # set all fee fields
+        tx = await self.stream_update(
+            claim_id, fee_amount='0.1', fee_currency='usd', fee_address=fee_address
+        )
+        self.assertEqual(
+            tx['outputs'][0]['value']['fee'],
+            {'amount': '0.1', 'currency': 'USD', 'address': fee_address}
+        )
+        # change just address
+        tx = await self.stream_update(claim_id, fee_address=txo['address'])
+        self.assertEqual(
+            tx['outputs'][0]['value']['fee'],
+            {'amount': '0.1', 'currency': 'USD', 'address': txo['address']}
+        )
+        # change just amount (does not reset fee_address)
+        tx = await self.stream_update(claim_id, fee_amount='0.2')
+        self.assertEqual(
+            tx['outputs'][0]['value']['fee'],
+            {'amount': '0.2', 'currency': 'USD', 'address': txo['address']}
+        )
+        # changing currency without an amount is never allowed, even if previous amount exists
+        with self.assertRaises(Exception, msg='In order to set a fee currency, please specify a fee amount'):
+            await self.stream_update(claim_id, fee_currency='usd')
+        # clearing fee
+        tx = await self.out(self.stream_update(claim_id, clear_fee=True))
+        self.assertNotIn('fee', tx['outputs'][0]['value'])
+
+        # --replace=true
+        # set just amount and currency with default address
+        tx = await self.stream_update(
+            claim_id, fee_amount='0.99', fee_currency='lbc', replace=True
+        )
+        self.assertEqual(
+            tx['outputs'][0]['value']['fee'],
+            {'amount': '0.99', 'currency': 'LBC', 'address': txo['address']}
+        )
+        # set all fee fields
+        tx = await self.stream_update(
+            claim_id, fee_amount='0.1', fee_currency='usd', fee_address=fee_address, replace=True
+        )
+        self.assertEqual(
+            tx['outputs'][0]['value']['fee'],
+            {'amount': '0.1', 'currency': 'USD', 'address': fee_address}
+        )
+        # validation
+        with self.assertRaisesRegex(Exception, 'please specify a fee currency'):
+            await self.stream_update(claim_id, fee_amount='0.1', replace=True)
+        with self.assertRaisesRegex(Exception, 'unknown currency provided: foo'):
+            await self.stream_update(claim_id, fee_amount='0.1', fee_currency="foo", replace=True)
+        with self.assertRaisesRegex(Exception, 'please specify a fee amount'):
+            await self.stream_update(claim_id, fee_currency='usd', replace=True)
+        with self.assertRaisesRegex(Exception, 'please specify a fee amount'):
+            await self.stream_update(claim_id, fee_address=fee_address, replace=True)
 
     async def test_automatic_type_and_metadata_detection_for_image(self):
         txo = (await self.image_stream_create())['outputs'][0]
