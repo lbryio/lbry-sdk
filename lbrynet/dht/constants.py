@@ -18,11 +18,10 @@ data_expiration = 86400  # 24 hours
 token_secret_refresh_interval = 300  # 5 minutes
 maybe_ping_delay = 300  # 5 minutes
 check_refresh_interval = refresh_interval / 5
-max_datagram_size = 8192  # 8 KB
 rpc_id_length = 20
 protocol_version = 1
 bottom_out_limit = 3
-msg_size_limit = max_datagram_size - 26
+msg_size_limit = 1400
 
 
 def digest(data: bytes) -> bytes:

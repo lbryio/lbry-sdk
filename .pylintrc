@@ -24,7 +24,7 @@ persistent=yes
 load-plugins=
 
 # Use multiple processes to speed up Pylint.
-jobs=1
+jobs=4
 
 # Allow loading of arbitrary C extensions. Extensions are imported into the
 # active Python interpreter and may run arbitrary code.
@@ -77,8 +77,6 @@ disable=
   dangerous-default-value,
   duplicate-code,
   fixme,
-  global-statement,
-  inherit-non-class,
   invalid-name,
   len-as-condition,
   locally-disabled,
@@ -111,13 +109,11 @@ disable=
   unnecessary-lambda,
   unused-argument,
   unused-variable,
-  wildcard-import,
   wrong-import-order,
   wrong-import-position,
   deprecated-lambda,
   simplifiable-if-statement,
   unidiomatic-typecheck,
-  global-at-module-level,
   inconsistent-return-statements,
   keyword-arg-before-vararg,
   assignment-from-no-return,

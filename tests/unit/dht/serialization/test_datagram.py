@@ -59,18 +59,38 @@ class TestDatagram(unittest.TestCase):
         self.assertRaises(ValueError, RequestDatagram.make_find_value, b'1' * 49, b'2' * 48, b'1' * 20)
         self.assertRaises(ValueError, RequestDatagram.make_find_value, b'1' * 48, b'2' * 49, b'1' * 20)
         self.assertRaises(ValueError, RequestDatagram.make_find_value, b'1' * 48, b'2' * 48, b'1' * 21)
+        self.assertRaises(ValueError, RequestDatagram.make_find_value, b'1' * 48, b'2' * 48, b'1' * 20, -1)
         self.assertEqual(20, len(RequestDatagram.make_find_value(b'1' * 48, b'2' * 48).rpc_id))
 
+        # default page argument
         serialized = RequestDatagram.make_find_value(b'1' * 48, b'2' * 48, b'1' * 20).bencode()
         decoded = decode_datagram(serialized)
         self.assertEqual(decoded.packet_type, REQUEST_TYPE)
         self.assertEqual(decoded.rpc_id, b'1' * 20)
         self.assertEqual(decoded.node_id, b'1' * 48)
         self.assertEqual(decoded.method, b'findValue')
-        self.assertListEqual(decoded.args, [b'2' * 48, {b'protocolVersion': 1}])
+        self.assertListEqual(decoded.args, [b'2' * 48, {b'protocolVersion': 1, b'p': 0}])
 
-    def test_find_value_response(self):
+        # nondefault page argument
+        serialized = RequestDatagram.make_find_value(b'1' * 48, b'2' * 48, b'1' * 20, 1).bencode()
+        decoded = decode_datagram(serialized)
+        self.assertEqual(decoded.packet_type, REQUEST_TYPE)
+        self.assertEqual(decoded.rpc_id, b'1' * 20)
+        self.assertEqual(decoded.node_id, b'1' * 48)
+        self.assertEqual(decoded.method, b'findValue')
+        self.assertListEqual(decoded.args, [b'2' * 48, {b'protocolVersion': 1, b'p': 1}])
+
+    def test_find_value_response_without_pages_field(self):
         found_value_response = {b'2' * 48: [b'\x7f\x00\x00\x01']}
+        serialized = ResponseDatagram(RESPONSE_TYPE, b'1' * 20, b'1' * 48, found_value_response).bencode()
+        decoded = decode_datagram(serialized)
+        self.assertEqual(decoded.packet_type, RESPONSE_TYPE)
+        self.assertEqual(decoded.rpc_id, b'1' * 20)
+        self.assertEqual(decoded.node_id, b'1' * 48)
+        self.assertDictEqual(decoded.response, found_value_response)
+
+    def test_find_value_response_with_pages_field(self):
+        found_value_response = {b'2' * 48: [b'\x7f\x00\x00\x01'], b'p': 1}
         serialized = ResponseDatagram(RESPONSE_TYPE, b'1' * 20, b'1' * 48, found_value_response).bencode()
         decoded = decode_datagram(serialized)
         self.assertEqual(decoded.packet_type, RESPONSE_TYPE)
