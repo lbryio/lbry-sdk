@@ -13,6 +13,7 @@ from lbry.wallet.account import BaseAccount
 from lbry.wallet.transaction import Transaction
 from lbry.wallet.database import WalletDatabase
 from lbry.wallet.dewies import dewies_to_lbc
+from lbrynet.conf import Config
 
 
 log = logging.getLogger(__name__)
@@ -122,7 +123,7 @@ class LbryWalletManager(BaseWalletManager):
         return receiving_addresses, change_addresses
 
     @classmethod
-    async def from_lbrynet_config(cls, settings):
+    async def from_lbrynet_config(cls, settings: Config):
 
         ledger_id = {
             'lbrycrd_main':    'lbc_mainnet',
@@ -149,6 +150,7 @@ class LbryWalletManager(BaseWalletManager):
             'wallets': [wallet_file_path]
         })
         ledger = manager.get_or_create_ledger(ledger_id)
+        ledger.coin_selection_strategy = settings.coin_selection_strategy
         if manager.default_account is None:
             log.info('Wallet at %s is empty, generating a default account.', wallet_file_path)
             manager.default_wallet.generate_account(ledger)

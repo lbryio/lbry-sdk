@@ -4,7 +4,7 @@ import types
 import tempfile
 import unittest
 import argparse
-from lbry.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, NOT_SET
+from lbry.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, OneOfString, NOT_SET
 from lbry.error import InvalidCurrencyError
 
 
@@ -15,6 +15,7 @@ class TestConfig(BaseConfig):
     test_true_toggle = Toggle('toggle help', True)
     servers = Servers('servers help', [('localhost', 80)])
     strings = Strings('cheese', ['string'])
+    one_of_string = OneOfString(["a", "b", "c"], "one of string", "a")
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -225,3 +226,32 @@ class ConfigurationTests(unittest.TestCase):
         args = parser.parse_args(['--max-key-fee', '1.0', 'BTC'])
         c = Config.create_from_arguments(args)
         self.assertEqual(c.max_key_fee, {'amount': 1.0, 'currency': 'BTC'})
+
+    def test_one_of_string(self):
+        with self.assertRaises(ValueError):
+            no_vaid_values = OneOfString([], "no valid values", None)
+
+        with self.assertRaises(ValueError):
+            default_none = OneOfString(["a"], "invalid default", None)
+        with self.assertRaises(ValueError):
+            invalid_default = OneOfString(["a"], "invalid default", "b")
+
+        valid_default = OneOfString(["a"], "valid default", "a")
+
+        self.assertEqual("hello", OneOfString(["hello"], "valid default", "hello").default)
+
+        c = TestConfig()
+        with self.assertRaises(ValueError):
+            c.one_of_string = "d"
+
+        parser = argparse.ArgumentParser()
+        TestConfig.contribute_to_argparse(parser)
+
+        args = parser.parse_args(["--one-of-string=b"])
+        c = TestConfig.create_from_arguments(args)
+        self.assertEqual("b", c.one_of_string)
+
+        # with self.assertRaises(ValueError):
+        #     args = parser.parse_args(["--one-of-string=arst"])
+        #     c = TestConfig.create_from_arguments(args)
+        #     print("here")
