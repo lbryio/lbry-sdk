@@ -5,12 +5,13 @@ import hashlib
 import asyncio
 import typing
 import binascii
+import random
 from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
 
 from lbrynet.dht import constants
 from lbrynet.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
-from lbrynet.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE
+from lbrynet.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE, PAGE_KEY
 from lbrynet.dht.error import RemoteException, TransportNotConnected
 from lbrynet.dht.protocol.routing_table import TreeRoutingTable
 from lbrynet.dht.protocol.data_store import DictDataStore
@@ -67,18 +68,22 @@ class KademliaRPC:
 
         contacts = self.protocol.routing_table.find_close_peers(key, sender_node_id=rpc_contact.node_id)
         contact_triples = []
-        for contact in contacts:
+        for contact in contacts[:constants.k * 2]:
             contact_triples.append((contact.node_id, contact.address, contact.udp_port))
         return contact_triples
 
-    def find_value(self, rpc_contact: 'KademliaPeer', key: bytes):
+    def find_value(self, rpc_contact: 'KademliaPeer', key: bytes, page: int = 0):
+        page = page if page > 0 else 0
+
         if len(key) != constants.hash_length:
             raise ValueError("invalid blob_exchange hash length: %i" % len(key))
 
         response = {
             b'token': self.make_token(rpc_contact.compact_ip()),
-            b'contacts': self.find_node(rpc_contact, key)
         }
+
+        if not page:
+            response[b'contacts'] = self.find_node(rpc_contact, key)[:constants.k]
 
         if self.protocol.protocol_version:
             response[b'protocolVersion'] = self.protocol.protocol_version
@@ -92,8 +97,17 @@ class KademliaRPC:
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
         if len(peers) < constants.k and binascii.hexlify(key).decode() in self.protocol.data_store.completed_blobs:
             peers.append(self.compact_address())
+        if not peers:
+            response[PAGE_KEY] = 0
+        else:
+            response[PAGE_KEY] = (len(peers) // (constants.k + 1)) + 1  # how many pages of peers we have for the blob
         if peers:
-            response[key] = peers
+            if len(peers) > constants.k:
+                random.Random(self.protocol.node_id).shuffle(peers)
+            if page * constants.k >= len(peers):
+                response[key] = []
+            else:
+                response[key] = peers[page * constants.k:page * constants.k + constants.k]
         return response
 
     def refresh_token(self):  # TODO: this needs to be called periodically
@@ -166,7 +180,7 @@ class RemoteKademliaRPC:
         )
         return [(node_id, address.decode(), udp_port) for node_id, address, udp_port in response.response]
 
-    async def find_value(self, key: bytes) -> typing.Union[typing.Dict]:
+    async def find_value(self, key: bytes, page: int = 0) -> typing.Union[typing.Dict]:
         """
         :return: {
             b'token': <token bytes>,
@@ -177,7 +191,7 @@ class RemoteKademliaRPC:
         if len(key) != constants.hash_bits // 8:
             raise ValueError(f"invalid length of find value key: {len(key)}")
         response = await self.protocol.send_request(
-            self.peer, RequestDatagram.make_find_value(self.protocol.node_id, key)
+            self.peer, RequestDatagram.make_find_value(self.protocol.node_id, key, page=page)
         )
         self.peer_tracker.update_token(self.peer.node_id, response.response[b'token'])
         return response.response
@@ -417,13 +431,15 @@ class KademliaProtocol(DatagramProtocol):
         elif method == b'store':
             blob_hash, token, port, original_publisher_id, age = a
             result = self.node_rpc.store(sender_contact, blob_hash, token, port)
-        elif method == b'findNode':
-            key, = a
-            result = self.node_rpc.find_node(sender_contact, key)
         else:
-            assert method == b'findValue'
-            key, = a
-            result = self.node_rpc.find_value(sender_contact, key)
+            key, page = a[0], 0
+            if len(a) > 1:
+                page = a[1]
+            if method == b'findNode':
+                result = self.node_rpc.find_node(sender_contact, key)
+            else:
+                assert method == b'findValue'
+                result = self.node_rpc.find_value(sender_contact, key, page)
 
         self.send_response(
             sender_contact, ResponseDatagram(RESPONSE_TYPE, message.rpc_id, self.node_id, result),
@@ -642,12 +658,12 @@ class KademliaProtocol(DatagramProtocol):
             log.debug("Timeout while storing blob_hash %s at %s", binascii.hexlify(hash_value).decode()[:8], peer)
         except ValueError as err:
             log.error("Unexpected response: %s" % err)
-        except Exception as err:
+        except RemoteException as err:
             if 'Invalid token' in str(err):
                 self.peer_manager.clear_token(peer.node_id)
                 try:
                     return await __store()
-                except:
+                except (ValueError, asyncio.TimeoutError, RemoteException):
                     return peer.node_id, False
             else:
                 log.exception("Unexpected error while storing blob_hash")

@@ -7,6 +7,9 @@ REQUEST_TYPE = 0
 RESPONSE_TYPE = 1
 ERROR_TYPE = 2
 
+# argument names
+PAGE_KEY = b'p'
+
 
 class KademliaDatagramBase:
     """
@@ -91,11 +94,13 @@ class RequestDatagram(KademliaDatagramBase):
 
     @classmethod
     def make_find_value(cls, from_node_id: bytes, key: bytes,
-                        rpc_id: typing.Optional[bytes] = None) -> 'RequestDatagram':
+                        rpc_id: typing.Optional[bytes] = None, page: int = 0) -> 'RequestDatagram':
         rpc_id = rpc_id or constants.generate_id()[:constants.rpc_id_length]
         if len(key) != constants.hash_bits // 8:
             raise ValueError(f"invalid key length: {len(key)}")
-        return cls(REQUEST_TYPE, rpc_id, from_node_id, b'findValue', [key])
+        if page < 0:
+            raise ValueError(f"cannot request a negative page ({page})")
+        return cls(REQUEST_TYPE, rpc_id, from_node_id, b'findValue', [key, page])
 
 
 class ResponseDatagram(KademliaDatagramBase):

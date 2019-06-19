@@ -1,6 +1,7 @@
 import contextlib
 import typing
 import binascii
+import socket
 import asyncio
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
@@ -26,6 +27,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
         for node_id, address in peer_addresses:
             await self.add_peer(node_id, address)
         self.node.joined.set()
+        self.node._refresh_task = self.loop.create_task(self.node.refresh_node())
 
     async def add_peer(self, node_id, address, add_to_routing_table=True):
         n = Node(self.loop, PeerManager(self.loop), node_id, 4444, 4444, 3333, address)
@@ -113,3 +115,56 @@ class TestBlobAnnouncer(AsyncioTestCase):
             self.assertEqual(self.node.protocol.node_id, found_peers[0].node_id)
             self.assertEqual(self.node.protocol.external_ip, found_peers[0].address)
             self.assertEqual(self.node.protocol.peer_port, found_peers[0].tcp_port)
+
+    async def test_popular_blob(self):
+        peer_count = 150
+        addresses = [
+            (constants.generate_id(i + 1), socket.inet_ntoa(int(i + 1).to_bytes(length=4, byteorder='big')))
+            for i in range(peer_count)
+        ]
+        blob_hash = b'1' * 48
+
+        async with self._test_network_context(peer_addresses=addresses):
+            total_seen = set()
+            announced_to = self.nodes[0]
+            for i in range(1, peer_count):
+                node = self.nodes[i]
+                kad_peer = announced_to.protocol.peer_manager.get_kademlia_peer(
+                    node.protocol.node_id, node.protocol.external_ip, node.protocol.udp_port
+                )
+                await announced_to.protocol._add_peer(kad_peer)
+                peer = node.protocol.get_rpc_peer(
+                    node.protocol.peer_manager.get_kademlia_peer(
+                        announced_to.protocol.node_id,
+                        announced_to.protocol.external_ip,
+                        announced_to.protocol.udp_port
+                    )
+                )
+                response = await peer.store(blob_hash)
+                self.assertEqual(response, b'OK')
+                peers_for_blob = await peer.find_value(blob_hash, 0)
+                if i == 1:
+                    self.assertTrue(blob_hash not in peers_for_blob)
+                    self.assertEqual(peers_for_blob[b'p'], 0)
+                else:
+                    self.assertEqual(len(peers_for_blob[blob_hash]), min(i - 1, constants.k))
+                    self.assertEqual(len(announced_to.protocol.data_store.get_peers_for_blob(blob_hash)), i)
+                if i - 1 > constants.k:
+                    self.assertEqual(len(peers_for_blob[b'contacts']), constants.k)
+                    self.assertEqual(peers_for_blob[b'p'], ((i - 1) // (constants.k + 1)) + 1)
+                    seen = set(peers_for_blob[blob_hash])
+                    self.assertEqual(len(seen), constants.k)
+                    self.assertEqual(len(peers_for_blob[blob_hash]), len(seen))
+
+                    for pg in range(1, peers_for_blob[b'p']):
+                        page_x = await peer.find_value(blob_hash, pg)
+                        self.assertNotIn(b'contacts', page_x)
+                        page_x_set = set(page_x[blob_hash])
+                        self.assertEqual(len(page_x[blob_hash]), len(page_x_set))
+                        self.assertTrue(len(page_x_set) > 0)
+                        self.assertSetEqual(seen.intersection(page_x_set), set())
+                        seen.intersection_update(page_x_set)
+                        total_seen.update(page_x_set)
+                else:
+                    self.assertEqual(len(peers_for_blob[b'contacts']), i - 1)
+            self.assertEqual(len(total_seen), peer_count - 2)

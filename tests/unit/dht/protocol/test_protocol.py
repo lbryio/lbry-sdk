@@ -83,11 +83,14 @@ class TestProtocol(AsyncioTestCase):
             find_value_response = peer1.node_rpc.find_value(peer3, b'2' * 48)
             self.assertEqual(len(find_value_response[b'contacts']), 0)
             self.assertSetEqual(
-                {b'2' * 48, b'token', b'protocolVersion', b'contacts'}, set(find_value_response.keys())
+                {b'2' * 48, b'token', b'protocolVersion', b'contacts', b'p'}, set(find_value_response.keys())
             )
             self.assertEqual(2, len(find_value_response[b'2' * 48]))
             self.assertEqual(find_value_response[b'2' * 48][0], peer2_from_peer1.compact_address_tcp())
             self.assertDictEqual(bdecode(bencode(find_value_response)), find_value_response)
+
+            find_value_page_above_pages_response = peer1.node_rpc.find_value(peer3, b'2' * 48, page=10)
+            self.assertEqual(0, len(find_value_page_above_pages_response[b'2' * 48]))
 
             peer1.stop()
             peer2.stop()
