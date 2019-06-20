@@ -21,26 +21,25 @@ jobs:
       script:
         - cd lbry && HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -vv tests.unit
       after_success:
-        - cd lbry && coverage combine
-        - cd lbry && bash <(curl -s https://codecov.io/bash)
+        - coverage combine lbry/
+        - bash <(curl -s https://codecov.io/bash)
 
     - name: "Torba Unit Tests"
       env: TESTTYPE=unit
       install:
-        - pip install tox-travis
+        - pip install coverage tox-travis
       script: cd torba && tox
       after_success:
-        - pip install coverage
-        - cd torba && coverage combine tests/
-        - cd torba && bash <(curl -s https://codecov.io/bash)
+        - coverage combine torba/tests
+        - bash <(curl -s https://codecov.io/bash)
 
     - name: "LBRY Integration Tests"
       install:
-        - pip install tox-travis coverage
+        - pip install coverage tox-travis
       script: cd lbry && tox
       after_success:
-        - cd lbry && coverage combine
-        - cd lbry && bash <(curl -s https://codecov.io/bash)
+        - coverage combine lbry
+        - bash <(curl -s https://codecov.io/bash)
 
     - name: "Run Examples"
       install:
@@ -49,8 +48,8 @@ jobs:
       script:
         - cd lbry && HOME=/tmp coverage run -p --source=lbrynet scripts/generate_json_api.py
       after_success:
-        - cd lbry && coverage combine
-        - cd lbry && bash <(curl -s https://codecov.io/bash)
+        - coverage combine lbry
+        - bash <(curl -s https://codecov.io/bash)
 
     - stage: build
       name: "Windows"

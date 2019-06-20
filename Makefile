@@ -3,6 +3,6 @@ install:
 	cd lbry && pip install -e .
 
 lint:
+	cd lbry && pylint lbrynet
 	cd torba && pylint --rcfile=setup.cfg torba
 	cd torba && mypy --ignore-missing-imports torba
-	cd lbry && pylint lbrynet
