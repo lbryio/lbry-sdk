@@ -26,15 +26,19 @@ RUN python3.7 -m pip install --upgrade pip setuptools
 RUN python3.7 -m pip install --user uvloop
 
 # copy lbrynet
-RUN mkdir projects/
-COPY . projects/lbry
+ARG projects_dir=/home/$user/projects
+RUN mkdir $projects_dir
+COPY . $projects_dir
 USER root
 RUN chown -R $user:$user .
 USER $user
-WORKDIR projects/lbry/torba
+
+# install torba & lbry
+WORKDIR $projects_dir/torba
 RUN python3.7 -m pip install --user .
-WORKDIR projects/lbry/lbry
-RUN python3.7 -m pip install --user -e . && rm ~/.cache -rf
+WORKDIR $projects_dir/lbry
+RUN python3.7 -m pip install --user -e .
+RUN rm ~/.cache -rf
 
 # entry point
 ARG host=0.0.0.0
