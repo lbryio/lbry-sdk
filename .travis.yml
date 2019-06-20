@@ -89,8 +89,8 @@ jobs:
       env: OS=linux
       install:
         - pip3 install pyinstaller
-        - python3 scripts/set_build.py
         - cd torba && pip3 install -e .
+        - cd lbry && python3 scripts/set_build.py
         - cd lbry && pip3 install -e .
       script:
         - cd lbry && pyinstaller -F -n lbrynet lbrynet/extras/cli.py
