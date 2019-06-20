@@ -24,7 +24,16 @@ jobs:
         - coverage combine lbry/
         - bash <(curl -s https://codecov.io/bash)
 
-    - name: "Torba Unit Tests"
+    - name: "LBRY Integration Tests"
+      install:
+        - pip install coverage tox-travis
+      script: cd lbry && tox
+      after_success:
+        - coverage combine lbry
+        - bash <(curl -s https://codecov.io/bash)
+
+    - &torba-tests
+      name: "Torba Unit Tests"
       env: TESTTYPE=unit
       install:
         - pip install coverage tox-travis
@@ -33,13 +42,9 @@ jobs:
         - coverage combine torba/tests
         - bash <(curl -s https://codecov.io/bash)
 
-    - name: "LBRY Integration Tests"
-      install:
-        - pip install coverage tox-travis
-      script: cd lbry && tox
-      after_success:
-        - coverage combine lbry
-        - bash <(curl -s https://codecov.io/bash)
+    - <<: *torba-tests
+      name: "Torba Integration Tests"
+      env: TESTTYPE=integration
 
     - name: "Run Examples"
       install:
@@ -59,7 +64,7 @@ jobs:
       install:
         - docker pull lbry/pyinstaller34_32bits:py371
       script:
-        - python scripts/set_build.py
+        - cd lbry && python scripts/set_build.py
         - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/scripts/wine_build.sh
         - sudo zip -j dist/lbrynet-windows.zip dist/lbrynet.exe
       deploy:
