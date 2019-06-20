@@ -1,0 +1,21 @@
+# packaging
+torba.egg-info/
+dist/
+
+# PyCharm
+.idea/
+
+# testing
+.tox/
+tests/client_tests/unit/bitcoin_headers
+torba/bin
+
+# cache and logs
+__pycache__/
+.mypy_cache/
+_trial_temp/
+_trial_temp-*/
+
+# OS X DS_Store
+*.DS_Store
+
