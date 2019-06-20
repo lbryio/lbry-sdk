@@ -47,7 +47,7 @@ setup(
         'Topic :: Utilities',
     ],
     packages=find_packages(exclude=('tests',)),
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=REQUIRES,
     extras_require={
         'gui': (
