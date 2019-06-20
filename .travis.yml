@@ -89,11 +89,11 @@ jobs:
       env: OS=linux
       install:
         - pip3 install pyinstaller
-        - cd torba && pip3 install -e . && cd ../lbry
+        - cd torba && pip3 install -e . && cd ..
+        - cd lbry
         - python3 scripts/set_build.py
         - pip3 install -e .
       script:
-        - cd lbry
         - pyinstaller -F -n lbrynet lbrynet/extras/cli.py
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
@@ -126,13 +126,13 @@ jobs:
       before_install:
         - brew upgrade python || true
 
-   #- if: tag IS present
-    - stage: build
+    - if: tag IS present
+      stage: build
       name: "Wallet Server Docker Image - Tagged Release"
       script:
           - set -e
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f scripts/Dockerfile.wallet_server --build-arg TORBA_VERSION=${TORBA} .
+          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f lbry/scripts/Dockerfile.wallet_server .
          #- docker push lbry/wallet-server:$TRAVIS_TAG
    #- if: tag IS blank AND branch = master AND NOT type IN (pull_request)
     - stage: build
@@ -140,7 +140,7 @@ jobs:
       script:
           - set -e
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:master -f scripts/Dockerfile.wallet_server --build-arg TORBA_VERSION=${TORBA} .
+          - travis_retry docker build -t lbry/wallet-server:master -f lbry/scripts/Dockerfile.wallet_server .
          #- docker push lbry/wallet-server:master
 
 cache:
