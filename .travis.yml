@@ -9,7 +9,7 @@ jobs:
     - stage: code quality
       name: "pylint & mypy"
       install:
-        - pip install astroid pylint mypy
+        - pip install astroid pylint mypy==0.701
         - make install
       script: make lint
 
