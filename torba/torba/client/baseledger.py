@@ -210,11 +210,9 @@ class BaseLedger(metaclass=LedgerRegistry):
     async def get_spendable_utxos(self, amount: int, funding_accounts):
         async with self._utxo_reservation_lock:
             txos = await self.get_effective_amount_estimators(funding_accounts)
-            selector = CoinSelector(
-                txos, amount,
-                self.transaction_class.output_class.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
-            )
-            spendables = selector.select(self.coin_selection_strategy)
+            fee = self.transaction_class.output_class.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
+            selector = CoinSelector(amount, fee)
+            spendables = selector.select(txos, self.coin_selection_strategy)
             if spendables:
                 await self.reserve_outputs(s.txo for s in spendables)
             return spendables
