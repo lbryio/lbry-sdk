@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/lbry.iml" filepath="$PROJECT_DIR$/.idea/lbry.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/lbry-sdk.iml" filepath="$PROJECT_DIR$/.idea/lbry-sdk.iml" />
     </modules>
   </component>
 </project>
