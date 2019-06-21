@@ -1,5 +1,5 @@
 site_name: LBRY
-repo_url: https://github.com/lbryio/lbry
+repo_url: https://github.com/lbryio/lbry-sdk
 pages:
   - "API": index.md
   - "CLI": cli.md

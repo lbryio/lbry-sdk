@@ -136,8 +136,8 @@ class Version:
 
 def release(args):
     gh = get_github()
-    repo = gh.repository('lbryio', 'lbry')
-    version_file = repo.file_contents('lbry/__init__.py')
+    repo = gh.repository('lbryio', 'lbry-sdk')
+    version_file = repo.file_contents('lbry/lbry/__init__.py')
 
     current_version = Version.from_content(version_file)
     print(f'Current Version: {current_version}')
@@ -154,7 +154,7 @@ def release(args):
     release_texts = []
     unlabeled = []
     areas = {}
-    for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry"):
+    for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry-sdk"):
         area_labels = list(get_labels(pr, 'area'))
         type_label = get_label(pr, 'type')
         if area_labels and type_label:
