@@ -19,7 +19,7 @@ jobs:
         - pip install coverage
         - make install
       script:
-        - cd lbry && HOME=/tmp coverage run -p --source=lbrynet -m unittest discover -vv tests.unit
+        - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
       after_success:
         - coverage combine lbry/
         - bash <(curl -s https://codecov.io/bash)
@@ -51,7 +51,7 @@ jobs:
         - pip install coverage
         - make install
       script:
-        - cd lbry && HOME=/tmp coverage run -p --source=lbrynet scripts/generate_json_api.py
+        - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
       after_success:
         - coverage combine lbry
         - bash <(curl -s https://codecov.io/bash)
@@ -94,7 +94,7 @@ jobs:
         - python3 scripts/set_build.py
         - pip3 install -e .
       script:
-        - pyinstaller -F -n lbrynet lbrynet/extras/cli.py
+        - pyinstaller -F -n lbrynet lbry/extras/cli.py
         - chmod +x dist/lbrynet
         - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
         - ./dist/lbrynet --version
