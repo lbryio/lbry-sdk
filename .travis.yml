@@ -9,14 +9,12 @@ jobs:
     - stage: code quality
       name: "pylint & mypy"
       install:
-        - pip install astroid pylint mypy==0.701
         - make install
       script: make lint
 
     - stage: test
       name: "LBRY Unit Tests"
       install:
-        - pip install coverage
         - make install
       script:
         - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
@@ -48,7 +46,6 @@ jobs:
 
     - name: "Run Examples"
       install:
-        - pip install coverage
         - make install
       script:
         - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
