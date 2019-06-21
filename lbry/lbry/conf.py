@@ -193,19 +193,19 @@ class MaxKeyFee(Setting[dict]):
         )
 
 
-class OneOfString(String):
-    def __init__(self, valid_values: typing.List[str], *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class StringChoice(String):
+    def __init__(self, doc: str, valid_values: typing.List[str], default: str, *args, **kwargs):
+        super().__init__(doc, default, *args, **kwargs)
+        if not valid_values:
+            raise ValueError("No valid values provided")
+        if default not in valid_values:
+            raise ValueError(f"Default value must be one of: {', '.join(valid_values)}")
         self.valid_values = valid_values
-        if not self.valid_values:
-            raise ValueError(f"No valid values provided")
-        if self.default not in self.valid_values:
-            raise ValueError(f"Default value must be one of: " + ', '.join(self.valid_values))
 
     def validate(self, val):
         super().validate(val)
         if val not in self.valid_values:
-            raise ValueError(f"Setting '{self.name}' must be one of: " + ', '.join(self.valid_values))
+            raise ValueError(f"Setting '{self.name}' value must be one of: {', '.join(self.valid_values)}")
 
 
 class ListSetting(Setting[list]):
@@ -578,8 +578,9 @@ class Config(CLIConfig):
     streaming_get = Toggle("Enable the /get endpoint for the streaming media server. "
                            "Disable to prevent new streams from being added.", True)
 
-    coin_selection_strategy = OneOfString(STRATEGIES, "Strategy to use when selecting UTXOs for a transaction",
-                                          "branch_and_bound")
+    coin_selection_strategy = StringChoice(
+        "Strategy to use when selecting UTXOs for a transaction",
+        STRATEGIES, "standard")
 
     @property
     def streaming_host(self):
