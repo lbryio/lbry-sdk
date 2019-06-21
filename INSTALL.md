@@ -46,7 +46,7 @@ If you're running another Linux distro, install the equivalent of the above pack
 To install:
 
  ```
- git clone https://github.com/lbryio/lbry.git
+ git clone https://github.com/lbryio/lbry-sdk.git
  cd lbry
 
  Creating venv:
