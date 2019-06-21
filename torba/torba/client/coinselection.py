@@ -35,18 +35,16 @@ class CoinSelector:
         return getattr(self, strategy_name or "standard")(txos, available)
 
     @strategy
-    def prefer_confirmed(
-            self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator], available: int
-            ) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def prefer_confirmed(self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator],
+                         available: int) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         return (
             self.only_confirmed(txos, available) or
             self.standard(txos, available)
         )
 
     @strategy
-    def only_confirmed(
-            self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator], _
-            ) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def only_confirmed(self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator],
+                       _) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         confirmed = [t for t in txos if t.txo.tx_ref and t.txo.tx_ref.height > 0]
         if not confirmed:
             return []
@@ -56,9 +54,8 @@ class CoinSelector:
         return self.standard(confirmed, confirmed_available)
 
     @strategy
-    def standard(
-            self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator], available: int
-            ) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def standard(self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator],
+                 available: int) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         return (
             self.branch_and_bound(txos, available) or
             self.closest_match(txos, available) or
@@ -66,9 +63,8 @@ class CoinSelector:
         )
 
     @strategy
-    def branch_and_bound(
-            self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator], available: int
-            ) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def branch_and_bound(self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator],
+                         available: int) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         # see bitcoin implementation for more info:
         # https://github.com/bitcoin/bitcoin/blob/master/src/wallet/coinselection.cpp
 
@@ -127,9 +123,8 @@ class CoinSelector:
         return []
 
     @strategy
-    def closest_match(
-            self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator], _
-            ) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def closest_match(self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator],
+                      _) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         """ Pick one UTXOs that is larger than the target but with the smallest change. """
         target = self.target + self.cost_of_change
         smallest_change = None
@@ -142,9 +137,8 @@ class CoinSelector:
         return [best_match] if best_match else []
 
     @strategy
-    def random_draw(
-            self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator], _
-            ) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
+    def random_draw(self, txos: List[basetransaction.BaseOutputEffectiveAmountEstimator],
+                    _) -> List[basetransaction.BaseOutputEffectiveAmountEstimator]:
         """ Accumulate UTXOs at random until there is enough to cover the target. """
         target = self.target + self.cost_of_change
         self.random.shuffle(txos, self.random.random)
