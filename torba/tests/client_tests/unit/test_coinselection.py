@@ -13,7 +13,7 @@ NULL_HASH = b'\x00'*32
 
 
 def search(*args, **kwargs):
-    selection = CoinSelector(*args, **kwargs).branch_and_bound()
+    selection = CoinSelector(*args[1:], **kwargs).select(args[0], 'branch_and_bound')
     return [o.txo.amount for o in selection] if selection else selection
 
 
@@ -37,17 +37,17 @@ class BaseSelectionTestCase(AsyncioTestCase):
 class TestCoinSelectionTests(BaseSelectionTestCase):
 
     def test_empty_coins(self):
-        self.assertEqual(CoinSelector([], 0, 0).select(), [])
+        self.assertEqual(CoinSelector(0, 0).select([]), [])
 
     def test_skip_binary_search_if_total_not_enough(self):
         fee = utxo(CENT).get_estimator(self.ledger).fee
         big_pool = self.estimates(utxo(CENT+fee) for _ in range(100))
-        selector = CoinSelector(big_pool, 101 * CENT, 0)
-        self.assertEqual(selector.select(), [])
+        selector = CoinSelector(101 * CENT, 0)
+        self.assertEqual(selector.select(big_pool), [])
         self.assertEqual(selector.tries, 0)  # Never tried.
         # check happy path
-        selector = CoinSelector(big_pool, 100 * CENT, 0)
-        self.assertEqual(len(selector.select()), 100)
+        selector = CoinSelector(100 * CENT, 0)
+        self.assertEqual(len(selector.select(big_pool)), 100)
         self.assertEqual(selector.tries, 201)
 
     def test_exact_match(self):
@@ -57,8 +57,8 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
             utxo(CENT),
             utxo(CENT - fee)
         )
-        selector = CoinSelector(utxo_pool, CENT, 0)
-        match = selector.select()
+        selector = CoinSelector(CENT, 0)
+        match = selector.select(utxo_pool)
         self.assertEqual([CENT + fee], [c.txo.amount for c in match])
         self.assertTrue(selector.exact_match)
 
@@ -68,8 +68,8 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
             utxo(3 * CENT),
             utxo(4 * CENT)
         )
-        selector = CoinSelector(utxo_pool, CENT, 0, '\x00')
-        match = selector.select()
+        selector = CoinSelector(CENT, 0, '\x00')
+        match = selector.select(utxo_pool)
         self.assertEqual([2 * CENT], [c.txo.amount for c in match])
         self.assertFalse(selector.exact_match)
 
@@ -81,20 +81,27 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
             utxo(5*CENT),
             utxo(10*CENT),
         )
-        selector = CoinSelector(utxo_pool, 3*CENT, 0)
-        match = selector.select()
+        selector = CoinSelector(3*CENT, 0)
+        match = selector.select(utxo_pool)
         self.assertEqual([5*CENT], [c.txo.amount for c in match])
 
-    def test_prefer_confirmed_strategy(self):
+    def test_confirmed_strategies(self):
         utxo_pool = self.estimates(
             utxo(11*CENT, height=5),
             utxo(11*CENT, height=0),
             utxo(11*CENT, height=-2),
             utxo(11*CENT, height=5),
         )
-        selector = CoinSelector(utxo_pool, 20*CENT, 0)
-        match = selector.select("prefer_confirmed")
+
+        match = CoinSelector(20*CENT, 0).select(utxo_pool, "only_confirmed")
         self.assertEqual([5, 5], [c.txo.tx_ref.height for c in match])
+        match = CoinSelector(25*CENT, 0).select(utxo_pool, "only_confirmed")
+        self.assertEqual([], [c.txo.tx_ref.height for c in match])
+
+        match = CoinSelector(20*CENT, 0).select(utxo_pool, "prefer_confirmed")
+        self.assertEqual([5, 5], [c.txo.tx_ref.height for c in match])
+        match = CoinSelector(25*CENT, 0, '\x00').select(utxo_pool, "prefer_confirmed")
+        self.assertEqual([5, 0, -2], [c.txo.tx_ref.height for c in match])
 
 
 class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
@@ -160,8 +167,8 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
 
         # Iteration exhaustion test
         utxo_pool, target = self.make_hard_case(17)
-        selector = CoinSelector(utxo_pool, target, 0)
-        self.assertEqual(selector.branch_and_bound(), [])
+        selector = CoinSelector(target, 0)
+        self.assertEqual(selector.select(utxo_pool, 'branch_and_bound'), [])
         self.assertEqual(selector.tries, MAXIMUM_TRIES)  # Should exhaust
         utxo_pool, target = self.make_hard_case(14)
         self.assertIsNotNone(search(utxo_pool, target, 0))  # Should not exhaust

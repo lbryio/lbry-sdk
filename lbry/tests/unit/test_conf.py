@@ -4,7 +4,7 @@ import types
 import tempfile
 import unittest
 import argparse
-from lbry.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, OneOfString, NOT_SET
+from lbry.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, StringChoice, NOT_SET
 from lbry.error import InvalidCurrencyError
 
 
@@ -15,7 +15,7 @@ class TestConfig(BaseConfig):
     test_true_toggle = Toggle('toggle help', True)
     servers = Servers('servers help', [('localhost', 80)])
     strings = Strings('cheese', ['string'])
-    one_of_string = OneOfString(["a", "b", "c"], "one of string", "a")
+    string_choice = StringChoice("one of string", ["a", "b", "c"], "a")
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -227,31 +227,21 @@ class ConfigurationTests(unittest.TestCase):
         c = Config.create_from_arguments(args)
         self.assertEqual(c.max_key_fee, {'amount': 1.0, 'currency': 'BTC'})
 
-    def test_one_of_string(self):
-        with self.assertRaises(ValueError):
-            no_vaid_values = OneOfString([], "no valid values", None)
-
-        with self.assertRaises(ValueError):
-            default_none = OneOfString(["a"], "invalid default", None)
-        with self.assertRaises(ValueError):
-            invalid_default = OneOfString(["a"], "invalid default", "b")
-
-        valid_default = OneOfString(["a"], "valid default", "a")
-
-        self.assertEqual("hello", OneOfString(["hello"], "valid default", "hello").default)
+    def test_string_choice(self):
+        with self.assertRaisesRegex(ValueError, "No valid values provided"):
+            StringChoice("no valid values", [], "")
+        with self.assertRaisesRegex(ValueError, "Default value must be one of"):
+            StringChoice("invalid default", ["a"], "b")
 
         c = TestConfig()
-        with self.assertRaises(ValueError):
-            c.one_of_string = "d"
+        self.assertEqual("a", c.string_choice)  # default
+        c.string_choice = "b"
+        self.assertEqual("b", c.string_choice)
+        with self.assertRaisesRegex(ValueError, "Setting 'string_choice' value must be one of"):
+            c.string_choice = "d"
 
         parser = argparse.ArgumentParser()
         TestConfig.contribute_to_argparse(parser)
-
-        args = parser.parse_args(["--one-of-string=b"])
+        args = parser.parse_args(['--string-choice', 'c'])
         c = TestConfig.create_from_arguments(args)
-        self.assertEqual("b", c.one_of_string)
-
-        # with self.assertRaises(ValueError):
-        #     args = parser.parse_args(["--one-of-string=arst"])
-        #     c = TestConfig.create_from_arguments(args)
-        #     print("here")
+        self.assertEqual("c", c.string_choice)
