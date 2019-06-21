@@ -8,7 +8,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lbry/tests" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lbry/scripts" isTestSource="false" />
     </content>
-    <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="TestRunnerService">
