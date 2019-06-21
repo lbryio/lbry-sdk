@@ -7,17 +7,17 @@ import json
 from decimal import Decimal
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
-from lbrynet.utils import generate_id
-from lbrynet.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout, \
+from lbry.utils import generate_id
+from lbry.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout, \
     DownloadDataTimeout
-from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.extras.daemon.analytics import AnalyticsManager
-from lbrynet.stream.stream_manager import StreamManager
-from lbrynet.stream.descriptor import StreamDescriptor
-from lbrynet.dht.node import Node
-from lbrynet.dht.protocol.protocol import KademliaProtocol
-from lbrynet.dht.protocol.routing_table import TreeRoutingTable
-from lbrynet.schema.claim import Claim
+from lbry.wallet.manager import LbryWalletManager
+from lbry.extras.daemon.analytics import AnalyticsManager
+from lbry.stream.stream_manager import StreamManager
+from lbry.stream.descriptor import StreamDescriptor
+from lbry.dht.node import Node
+from lbry.dht.protocol.protocol import KademliaProtocol
+from lbry.dht.protocol.routing_table import TreeRoutingTable
+from lbry.schema.claim import Claim
 
 
 def get_mock_node(peer=None):

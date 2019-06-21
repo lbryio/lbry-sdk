@@ -3,9 +3,9 @@ import tempfile
 import shutil
 import os
 from torba.testcase import AsyncioTestCase
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobManager
+from lbry.conf import Config
+from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.blob.blob_manager import BlobManager
 
 
 class TestBlobManager(AsyncioTestCase):

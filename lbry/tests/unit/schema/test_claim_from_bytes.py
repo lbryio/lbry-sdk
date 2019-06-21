@@ -1,7 +1,7 @@
 from unittest import TestCase
 from binascii import unhexlify
 
-from lbrynet.schema import Claim
+from lbry.schema import Claim
 
 
 class TestOldJSONSchemaCompatibility(TestCase):

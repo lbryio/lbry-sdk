@@ -1,7 +1,7 @@
 import os
 import binascii
 import sqlite3
-from lbrynet.conf import Config
+from lbry.conf import Config
 
 
 def main():

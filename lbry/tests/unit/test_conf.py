@@ -4,8 +4,8 @@ import types
 import tempfile
 import unittest
 import argparse
-from lbrynet.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, NOT_SET
-from lbrynet.error import InvalidCurrencyError
+from lbry.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, NOT_SET
+from lbry.error import InvalidCurrencyError
 
 
 class TestConfig(BaseConfig):

@@ -232,7 +232,7 @@ class Resolver:
         # these results can include those where `signature_is_valid` is False. if they are skipped,
         # page indexing becomes tricky, as the number of results isn't known until after having
         # processed them.
-        # TODO: fix ^ in lbrynet.schema
+        # TODO: fix ^ in lbry.schema
 
         async def iter_validate_channel_claims():
             formatted_claims = []

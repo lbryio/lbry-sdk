@@ -1,9 +1,9 @@
 import unittest
-from lbrynet.dht.error import DecodeError
-from lbrynet.dht.serialization.bencoding import _bencode
-from lbrynet.dht.serialization.datagram import RequestDatagram, ResponseDatagram, decode_datagram, ErrorDatagram
-from lbrynet.dht.serialization.datagram import REQUEST_TYPE, RESPONSE_TYPE, ERROR_TYPE
-from lbrynet.dht.serialization.datagram import make_compact_address, decode_compact_address
+from lbry.dht.error import DecodeError
+from lbry.dht.serialization.bencoding import _bencode
+from lbry.dht.serialization.datagram import RequestDatagram, ResponseDatagram, decode_datagram, ErrorDatagram
+from lbry.dht.serialization.datagram import REQUEST_TYPE, RESPONSE_TYPE, ERROR_TYPE
+from lbry.dht.serialization.datagram import make_compact_address, decode_compact_address
 
 
 class TestDatagram(unittest.TestCase):

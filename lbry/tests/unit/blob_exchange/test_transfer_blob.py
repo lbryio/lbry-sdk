@@ -5,17 +5,17 @@ from io import BytesIO
 import shutil
 import os
 
-from lbrynet.blob_exchange.serialization import BlobRequest
+from lbry.blob_exchange.serialization import BlobRequest
 from torba.testcase import AsyncioTestCase
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobManager
-from lbrynet.blob_exchange.server import BlobServer, BlobServerProtocol
-from lbrynet.blob_exchange.client import request_blob
-from lbrynet.dht.peer import KademliaPeer, PeerManager
+from lbry.conf import Config
+from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.blob.blob_manager import BlobManager
+from lbry.blob_exchange.server import BlobServer, BlobServerProtocol
+from lbry.blob_exchange.client import request_blob
+from lbry.dht.peer import KademliaPeer, PeerManager
 
 # import logging
-# logging.getLogger("lbrynet").setLevel(logging.DEBUG)
+# logging.getLogger("lbry").setLevel(logging.DEBUG)
 
 
 def mock_config():

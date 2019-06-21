@@ -3,14 +3,14 @@ import shutil
 import unittest
 from unittest import mock
 import asyncio
-from lbrynet.blob.blob_file import MAX_BLOB_SIZE
-from lbrynet.blob_exchange.serialization import BlobResponse
-from lbrynet.blob_exchange.server import BlobServerProtocol
-from lbrynet.dht.node import Node
-from lbrynet.dht.peer import KademliaPeer
-from lbrynet.extras.daemon.storage import StoredStreamClaim
-from lbrynet.stream.managed_stream import ManagedStream
-from lbrynet.stream.descriptor import StreamDescriptor
+from lbry.blob.blob_file import MAX_BLOB_SIZE
+from lbry.blob_exchange.serialization import BlobResponse
+from lbry.blob_exchange.server import BlobServerProtocol
+from lbry.dht.node import Node
+from lbry.dht.peer import KademliaPeer
+from lbry.extras.daemon.storage import StoredStreamClaim
+from lbry.stream.managed_stream import ManagedStream
+from lbry.stream.descriptor import StreamDescriptor
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 
 

@@ -1,8 +1,8 @@
 import unittest
 from decimal import Decimal
-from lbrynet.schema.claim import Claim
-from lbrynet.extras.daemon import exchange_rate_manager
-from lbrynet.error import InvalidExchangeRateResponse
+from lbry.schema.claim import Claim
+from lbry.extras.daemon import exchange_rate_manager
+from lbry.error import InvalidExchangeRateResponse
 from tests import test_utils
 
 

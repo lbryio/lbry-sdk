@@ -5,9 +5,9 @@ from unittest import TestCase
 import docopt
 from torba.testcase import AsyncioTestCase
 
-from lbrynet.extras.cli import normalize_value, main
-from lbrynet.extras.system_info import get_platform
-from lbrynet.extras.daemon.Daemon import Daemon
+from lbry.extras.cli import normalize_value, main
+from lbry.extras.system_info import get_platform
+from lbry.extras.daemon.Daemon import Daemon
 
 
 class CLITest(AsyncioTestCase):

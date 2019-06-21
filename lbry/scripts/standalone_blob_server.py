@@ -1,10 +1,10 @@
 import sys
 import os
 import asyncio
-from lbrynet.blob.blob_manager import BlobManager
-from lbrynet.blob_exchange.server import BlobServer
-from lbrynet.schema.address import decode_address
-from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbry.blob.blob_manager import BlobManager
+from lbry.blob_exchange.server import BlobServer
+from lbry.schema.address import decode_address
+from lbry.extras.daemon.storage import SQLiteStorage
 
 
 async def main(address: str):

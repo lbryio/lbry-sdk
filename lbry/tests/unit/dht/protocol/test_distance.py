@@ -1,5 +1,5 @@
 import unittest
-from lbrynet.dht.protocol.distance import Distance
+from lbry.dht.protocol.distance import Distance
 
 
 class DistanceTests(unittest.TestCase):

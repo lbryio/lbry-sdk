@@ -5,10 +5,10 @@ from cryptography.exceptions import InvalidSignature
 from torba.testcase import AsyncioTestCase
 from torba.client.constants import CENT, NULL_HASH32
 
-from lbrynet.wallet.ledger import MainNetLedger
-from lbrynet.wallet.transaction import Transaction, Input, Output
+from lbry.wallet.ledger import MainNetLedger
+from lbry.wallet.transaction import Transaction, Input, Output
 
-from lbrynet.schema.claim import Claim
+from lbry.schema.claim import Claim
 
 
 def get_output(amount=CENT, pubkey_hash=NULL_HASH32):

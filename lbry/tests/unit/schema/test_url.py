@@ -1,6 +1,6 @@
 import unittest
 
-from lbrynet.schema.url import URL
+from lbry.schema.url import URL
 
 
 claim_id = "63f2da17b0d90042c559cc73b6b17f853945c43e"

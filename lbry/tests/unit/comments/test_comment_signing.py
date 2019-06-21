@@ -1,7 +1,7 @@
 from torba.testcase import AsyncioTestCase
 
-from lbrynet.extras.daemon.comment_client import sign_comment
-from lbrynet.extras.daemon.comment_client import is_comment_signed_by_channel
+from lbry.extras.daemon.comment_client import sign_comment
+from lbry.extras.daemon.comment_client import is_comment_signed_by_channel
 
 from tests.unit.wallet.test_schema_signing import get_stream, get_channel
 

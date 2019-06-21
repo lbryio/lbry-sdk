@@ -1,5 +1,5 @@
 import unittest
-from lbrynet.dht.serialization.bencoding import _bencode, bencode, bdecode, DecodeError
+from lbry.dht.serialization.bencoding import _bencode, bencode, bdecode, DecodeError
 
 
 class EncodeDecodeTest(unittest.TestCase):

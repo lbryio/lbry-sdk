@@ -1,7 +1,7 @@
 import unittest
 from binascii import hexlify, unhexlify
 
-from lbrynet.wallet.claim_proofs import get_hash_for_outpoint, verify_proof
+from lbry.wallet.claim_proofs import get_hash_for_outpoint, verify_proof
 from torba.client.hash import double_sha256
 
 

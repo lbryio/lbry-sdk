@@ -7,8 +7,8 @@ from urllib.request import urlopen
 
 from torba.client.errors import InsufficientFundsError
 
-from lbrynet.testcase import CommandTestCase
-from lbrynet.wallet.transaction import Transaction
+from lbry.testcase import CommandTestCase
+from lbry.wallet.transaction import Transaction
 
 
 log = logging.getLogger(__name__)

@@ -2,9 +2,9 @@ import sys
 import asyncio
 from binascii import hexlify
 
-from lbrynet.wallet.server.db import SQLDB
-from lbrynet.wallet.server.coin import LBC
-from lbrynet.wallet.server.daemon import Daemon
+from lbry.wallet.server.db import SQLDB
+from lbry.wallet.server.coin import LBC
+from lbry.wallet.server.daemon import Daemon
 
 
 def hex_reverted(value: bytes) -> str:

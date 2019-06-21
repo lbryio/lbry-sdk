@@ -6,12 +6,12 @@ import aiohttp
 import time
 
 from aiohttp import ClientConnectorError
-from lbrynet import __version__
-from lbrynet.blob.blob_file import MAX_BLOB_SIZE
-from lbrynet.conf import Config
-from lbrynet.schema.uri import parse_lbry_uri
-from lbrynet.extras.daemon.client import daemon_rpc
-from lbrynet.extras import system_info
+from lbry import __version__
+from lbry.blob.blob_file import MAX_BLOB_SIZE
+from lbry.conf import Config
+from lbry.schema.uri import parse_lbry_uri
+from lbry.extras.daemon.client import daemon_rpc
+from lbry.extras import system_info
 
 
 def extract_uris(response):

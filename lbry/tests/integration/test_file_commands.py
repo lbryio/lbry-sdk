@@ -3,8 +3,8 @@ import logging
 import os
 from binascii import hexlify
 
-from lbrynet.testcase import CommandTestCase
-from lbrynet.blob_exchange.downloader import BlobDownloader
+from lbry.testcase import CommandTestCase
+from lbry.blob_exchange.downloader import BlobDownloader
 
 
 class FileCommands(CommandTestCase):

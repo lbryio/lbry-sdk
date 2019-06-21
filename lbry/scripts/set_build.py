@@ -23,7 +23,7 @@ def get_build_type(travis_tag=None):
 
 def main():
     root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    build_type_path = os.path.join(root_dir, 'lbrynet', 'build_type.py')
+    build_type_path = os.path.join(root_dir, 'lbry', 'build_type.py')
     log.debug("configuring build type file: %s", build_type_path)
     travis_commit = os.environ['TRAVIS_COMMIT'][:6]
     build_type = get_build_type(os.environ.get('TRAVIS_TAG', None))

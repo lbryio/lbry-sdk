@@ -1,7 +1,7 @@
 import unittest
 from binascii import hexlify, unhexlify
 
-from lbrynet.wallet.script import OutputScript
+from lbry.wallet.script import OutputScript
 
 
 class TestPayClaimNamePubkeyHash(unittest.TestCase):

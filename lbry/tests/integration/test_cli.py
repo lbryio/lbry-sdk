@@ -2,14 +2,14 @@ import contextlib
 from io import StringIO
 from torba.testcase import AsyncioTestCase
 
-from lbrynet.conf import Config
-from lbrynet.extras import cli
-from lbrynet.extras.daemon.Components import (
+from lbry.conf import Config
+from lbry.extras import cli
+from lbry.extras.daemon.Components import (
     DATABASE_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT,
     HASH_ANNOUNCER_COMPONENT, STREAM_MANAGER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
-from lbrynet.extras.daemon.Daemon import Daemon
+from lbry.extras.daemon.Daemon import Daemon
 
 
 class CLIIntegrationTest(AsyncioTestCase):

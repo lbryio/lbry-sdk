@@ -2,16 +2,16 @@ import unittest
 from unittest import mock
 import json
 
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.extras.daemon.ComponentManager import ComponentManager
-from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
-from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT
-from lbrynet.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
-from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.extras.daemon.Components import HEADERS_COMPONENT
-from lbrynet.extras.daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.wallet import LbryWalletManager
+from lbry.conf import Config
+from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
+from lbry.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT
+from lbry.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
+from lbry.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbry.extras.daemon.Components import HEADERS_COMPONENT
+from lbry.extras.daemon.Daemon import Daemon as LBRYDaemon
+from lbry.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
 
 from tests import test_utils

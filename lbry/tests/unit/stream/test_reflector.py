@@ -3,11 +3,11 @@ import asyncio
 import tempfile
 import shutil
 from torba.testcase import AsyncioTestCase
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobManager
-from lbrynet.stream.stream_manager import StreamManager
-from lbrynet.stream.reflector.server import ReflectorServer
+from lbry.conf import Config
+from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.blob.blob_manager import BlobManager
+from lbry.stream.stream_manager import StreamManager
+from lbry.stream.reflector.server import ReflectorServer
 
 
 class TestStreamAssembler(AsyncioTestCase):

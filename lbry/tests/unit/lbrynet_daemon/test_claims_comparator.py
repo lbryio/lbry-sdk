@@ -1,6 +1,6 @@
 import unittest
 
-from lbrynet.extras.daemon.Daemon import sort_claim_results
+from lbry.extras.daemon.Daemon import sort_claim_results
 
 
 class ClaimsComparatorTest(unittest.TestCase):
