@@ -13,7 +13,7 @@ from lbry.wallet.account import BaseAccount
 from lbry.wallet.transaction import Transaction
 from lbry.wallet.database import WalletDatabase
 from lbry.wallet.dewies import dewies_to_lbc
-from lbrynet.conf import Config
+from lbry.conf import Config
 
 
 log = logging.getLogger(__name__)
