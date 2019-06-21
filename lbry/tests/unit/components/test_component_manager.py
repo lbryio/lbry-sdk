@@ -1,13 +1,13 @@
 import asyncio
 from torba.testcase import AsyncioTestCase, AdvanceTimeTestCase
 
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.ComponentManager import ComponentManager
-from lbrynet.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
-from lbrynet.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, UPNP_COMPONENT
-from lbrynet.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbrynet.extras.daemon.Components import HEADERS_COMPONENT
-from lbrynet.extras.daemon import Components
+from lbry.conf import Config
+from lbry.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
+from lbry.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, UPNP_COMPONENT
+from lbry.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbry.extras.daemon.Components import HEADERS_COMPONENT
+from lbry.extras.daemon import Components
 
 
 class TestComponentManager(AsyncioTestCase):

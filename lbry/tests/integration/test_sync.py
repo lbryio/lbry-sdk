@@ -3,15 +3,15 @@ from unittest import mock
 from torba.orchstr8.node import WalletNode, SPVNode
 from torba.testcase import AsyncioTestCase
 
-from lbrynet.conf import Config
-from lbrynet.wallet import LbryWalletManager, RegTestLedger
-from lbrynet.extras.daemon.Daemon import Daemon
-from lbrynet.extras.daemon.Components import WalletComponent
-from lbrynet.extras.daemon.Components import (
+from lbry.conf import Config
+from lbry.wallet import LbryWalletManager, RegTestLedger
+from lbry.extras.daemon.Daemon import Daemon
+from lbry.extras.daemon.Components import WalletComponent
+from lbry.extras.daemon.Components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
-from lbrynet.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon.ComponentManager import ComponentManager
 
 
 class AccountSynchronization(AsyncioTestCase):

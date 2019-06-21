@@ -1,7 +1,7 @@
 import asyncio
 import unittest
-from lbrynet.utils import generate_id
-from lbrynet.dht.peer import PeerManager
+from lbry.utils import generate_id
+from lbry.dht.peer import PeerManager
 from torba.testcase import AsyncioTestCase
 
 

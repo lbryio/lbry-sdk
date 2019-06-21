@@ -1,7 +1,7 @@
 import asyncio
 from unittest import mock, TestCase
-from lbrynet.dht.protocol.data_store import DictDataStore
-from lbrynet.dht.peer import PeerManager
+from lbry.dht.protocol.data_store import DictDataStore
+from lbry.dht.peer import PeerManager
 
 
 class DataStoreTests(TestCase):

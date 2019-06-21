@@ -1,9 +1,9 @@
 import asyncio
 from binascii import hexlify
 
-from lbrynet.dht import constants
-from lbrynet.dht.node import Node
-from lbrynet.dht.peer import PeerManager, KademliaPeer
+from lbry.dht import constants
+from lbry.dht.node import Node
+from lbry.dht.peer import PeerManager, KademliaPeer
 from torba.testcase import AsyncioTestCase
 
 
@@ -12,7 +12,7 @@ class DHTIntegrationTest(AsyncioTestCase):
     async def asyncSetUp(self):
         import logging
         logging.getLogger('asyncio').setLevel(logging.ERROR)
-        logging.getLogger('lbrynet.dht').setLevel(logging.WARN)
+        logging.getLogger('lbry.dht').setLevel(logging.WARN)
         self.nodes = []
         self.known_node_addresses = []
 

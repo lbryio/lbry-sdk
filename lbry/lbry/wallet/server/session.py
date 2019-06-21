@@ -154,7 +154,7 @@ class LBRYElectrumX(ElectrumX):
         return result
 
     def format_claim_from_daemon(self, claim, name=None):
-        """Changes the returned claim data to the format expected by lbrynet and adds missing fields."""
+        """Changes the returned claim data to the format expected by lbry and adds missing fields."""
 
         if not claim:
             return {}

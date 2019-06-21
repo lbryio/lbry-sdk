@@ -3,9 +3,9 @@ import json
 import hashlib
 from unittest import skip
 from binascii import hexlify, unhexlify
-from lbrynet.testcase import CommandTestCase
-from lbrynet.wallet.transaction import Transaction, Output
-from lbrynet.schema.compat import OldClaimMessage
+from lbry.testcase import CommandTestCase
+from lbry.wallet.transaction import Transaction, Output
+from lbry.schema.compat import OldClaimMessage
 from torba.client.hash import sha256, Base58
 
 

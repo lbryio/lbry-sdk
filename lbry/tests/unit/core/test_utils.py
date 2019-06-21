@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import unittest
 import asyncio
-from lbrynet import utils
+from lbry import utils
 from torba.testcase import AsyncioTestCase
 
 

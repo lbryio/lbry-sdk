@@ -4,11 +4,11 @@ import unittest
 import asyncio
 import logging
 from torba.testcase import AsyncioTestCase
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_info import BlobInfo
-from lbrynet.blob.blob_manager import BlobManager
-from lbrynet.stream.descriptor import StreamDescriptor
+from lbry.conf import Config
+from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.blob.blob_info import BlobInfo
+from lbry.blob.blob_manager import BlobManager
+from lbry.stream.descriptor import StreamDescriptor
 from tests.test_utils import random_lbry_hash
 
 log = logging.getLogger()

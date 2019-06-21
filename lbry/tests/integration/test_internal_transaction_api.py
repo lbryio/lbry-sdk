@@ -2,15 +2,15 @@ import asyncio
 
 from torba.testcase import IntegrationTestCase
 
-import lbrynet.wallet
-from lbrynet.schema.claim import Claim
-from lbrynet.wallet.transaction import Transaction, Output, Input
-from lbrynet.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
+import lbry.wallet
+from lbry.schema.claim import Claim
+from lbry.wallet.transaction import Transaction, Output, Input
+from lbry.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
 
 
 class BasicTransactionTest(IntegrationTestCase):
 
-    LEDGER = lbrynet.wallet
+    LEDGER = lbry.wallet
 
     async def test_creating_updating_and_abandoning_claim_with_channel(self):
 

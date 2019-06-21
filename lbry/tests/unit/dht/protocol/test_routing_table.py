@@ -1,9 +1,9 @@
 import asyncio
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
-from lbrynet.dht import constants
-from lbrynet.dht.node import Node
-from lbrynet.dht.peer import PeerManager
+from lbry.dht import constants
+from lbry.dht.node import Node
+from lbry.dht.peer import PeerManager
 
 
 expected_ranges = [
@@ -107,15 +107,15 @@ class TestRouting(AsyncioTestCase):
 #
 # from twisted.trial import unittest
 # from twisted.internet import defer
-# from lbrynet.dht import constants
-# from lbrynet.dht.routingtable import TreeRoutingTable
-# from lbrynet.dht.contact import ContactManager
-# from lbrynet.dht.distance import Distance
-# from lbrynet.utils import generate_id
+# from lbry.dht import constants
+# from lbry.dht.routingtable import TreeRoutingTable
+# from lbry.dht.contact import ContactManager
+# from lbry.dht.distance import Distance
+# from lbry.utils import generate_id
 #
 #
 # class FakeRPCProtocol:
-#     """ Fake RPC protocol; allows lbrynet.dht.contact.Contact objects to "send" RPCs """
+#     """ Fake RPC protocol; allows lbry.dht.contact.Contact objects to "send" RPCs """
 #     def sendRPC(self, *args, **kwargs):
 #         return defer.succeed(None)
 #
@@ -270,18 +270,18 @@ class TestRouting(AsyncioTestCase):
 #         # is not in bucket 0. so we put own_id at the end so we can keep splitting by adding to the
 #         # end
 #
-#         self.table = lbrynet.dht.routingtable.OptimizedTreeRoutingTable(own_id)
+#         self.table = lbry.dht.routingtable.OptimizedTreeRoutingTable(own_id)
 #
 #     def fill_bucket(self, bucket_min):
-#         bucket_size = lbrynet.dht.constants.k
+#         bucket_size = lbry.dht.constants.k
 #         for i in range(bucket_min, bucket_min + bucket_size):
-#             self.table.addContact(lbrynet.dht.contact.Contact(long(i), '127.0.0.1', 9999, None))
+#             self.table.addContact(lbry.dht.contact.Contact(long(i), '127.0.0.1', 9999, None))
 #
 #     def overflow_bucket(self, bucket_min):
-#         bucket_size = lbrynet.dht.constants.k
+#         bucket_size = lbry.dht.constants.k
 #         self.fill_bucket(bucket_min)
 #         self.table.addContact(
-#             lbrynet.dht.contact.Contact(long(bucket_min + bucket_size + 1),
+#             lbry.dht.contact.Contact(long(bucket_min + bucket_size + 1),
 #                                         '127.0.0.1', 9999, None))
 #
 #     def testKeyError(self):
@@ -290,19 +290,19 @@ class TestRouting(AsyncioTestCase):
 #         bucket_middle = self.table._buckets[0].rangeMax / 2
 #
 #         # fill last bucket
-#         self.fill_bucket(self.table._buckets[0].rangeMax - lbrynet.dht.constants.k - 1)
+#         self.fill_bucket(self.table._buckets[0].rangeMax - lbry.dht.constants.k - 1)
 #         # -1 in previous line because own_id is in last bucket
 #
 #         # fill/overflow 7 more buckets
 #         bucket_start = 0
-#         for i in range(0, lbrynet.dht.constants.k):
+#         for i in range(0, lbry.dht.constants.k):
 #             self.overflow_bucket(bucket_start)
 #             bucket_start += bucket_middle / (2 ** i)
 #
 #         # replacement cache now has k-1 entries.
 #         # adding one more contact to bucket 0 used to cause a KeyError, but it should work
 #         self.table.addContact(
-#             lbrynet.dht.contact.Contact(long(lbrynet.dht.constants.k + 2), '127.0.0.1', 9999, None))
+#             lbry.dht.contact.Contact(long(lbry.dht.constants.k + 2), '127.0.0.1', 9999, None))
 #
 #         # import math
 #         # print ""

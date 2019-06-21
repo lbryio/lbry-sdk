@@ -4,13 +4,13 @@ import tempfile
 import shutil
 import json
 
-from lbrynet.blob.blob_file import BlobFile
+from lbry.blob.blob_file import BlobFile
 from torba.testcase import AsyncioTestCase
-from lbrynet.conf import Config
-from lbrynet.error import InvalidStreamDescriptorError
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobManager
-from lbrynet.stream.descriptor import StreamDescriptor
+from lbry.conf import Config
+from lbry.error import InvalidStreamDescriptorError
+from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.blob.blob_manager import BlobManager
+from lbry.stream.descriptor import StreamDescriptor
 
 
 class TestStreamDescriptor(AsyncioTestCase):

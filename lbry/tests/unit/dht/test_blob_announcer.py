@@ -5,12 +5,12 @@ import socket
 import asyncio
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
-from lbrynet.conf import Config
-from lbrynet.dht import constants
-from lbrynet.dht.node import Node
-from lbrynet.dht.peer import PeerManager
-from lbrynet.dht.blob_announcer import BlobAnnouncer
-from lbrynet.extras.daemon.storage import SQLiteStorage
+from lbry.conf import Config
+from lbry.dht import constants
+from lbry.dht.node import Node
+from lbry.dht.peer import PeerManager
+from lbry.dht.blob_announcer import BlobAnnouncer
+from lbry.extras.daemon.storage import SQLiteStorage
 
 
 class TestBlobAnnouncer(AsyncioTestCase):

@@ -1,5 +1,5 @@
 import os
-from lbrynet import __name__, __version__
+from lbry import __name__, __version__
 from setuptools import setup, find_packages
 
 BASE = os.path.dirname(__file__)
@@ -20,7 +20,7 @@ setup(
     packages=find_packages(exclude=('tests',)),
     zip_safe=False,
     entry_points={
-        'console_scripts': 'lbrynet=lbrynet.extras.cli:main'
+        'console_scripts': 'lbrynet=lbry.extras.cli:main'
     },
     install_requires=[
         'torba',

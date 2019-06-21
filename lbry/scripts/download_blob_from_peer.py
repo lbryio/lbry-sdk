@@ -3,13 +3,13 @@ import os
 import asyncio
 import socket
 import ipaddress
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.storage import SQLiteStorage
-from lbrynet.blob.blob_manager import BlobManager
-from lbrynet.blob_exchange.client import BlobExchangeClientProtocol, request_blob
+from lbry.conf import Config
+from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.blob.blob_manager import BlobManager
+from lbry.blob_exchange.client import BlobExchangeClientProtocol, request_blob
 import logging
 
-log = logging.getLogger("lbrynet")
+log = logging.getLogger("lbry")
 log.addHandler(logging.StreamHandler())
 log.setLevel(logging.DEBUG)
 

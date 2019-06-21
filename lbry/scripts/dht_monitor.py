@@ -1,8 +1,8 @@
 import curses
 import time
 import asyncio
-from lbrynet.conf import Config
-from lbrynet.extras.daemon.client import daemon_rpc
+from lbry.conf import Config
+from lbry.extras.daemon.client import daemon_rpc
 
 stdscr = curses.initscr()
 

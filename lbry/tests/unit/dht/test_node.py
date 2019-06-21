@@ -2,9 +2,9 @@ import asyncio
 import typing
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
-from lbrynet.dht import constants
-from lbrynet.dht.node import Node
-from lbrynet.dht.peer import PeerManager
+from lbry.dht import constants
+from lbry.dht.node import Node
+from lbry.dht.peer import PeerManager
 
 
 class TestNodePingQueueDiscover(AsyncioTestCase):

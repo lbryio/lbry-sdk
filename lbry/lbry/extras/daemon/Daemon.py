@@ -965,7 +965,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns:
             (dict) Dictionary of daemon settings
-            See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings
+            See ADJUSTABLE_SETTINGS in lbry/conf.py for full list of settings
         """
         return self.conf.settings_dict
 

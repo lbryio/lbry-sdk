@@ -4,13 +4,13 @@ import hashlib
 from binascii import hexlify
 from torba.client.constants import COIN, NULL_HASH32
 
-from lbrynet.schema.claim import Claim
-from lbrynet.wallet.server.db import SQLDB
-from lbrynet.wallet.server.coin import LBCRegTest
-from lbrynet.wallet.server.trending import TRENDING_WINDOW
-from lbrynet.wallet.server.canonical import FindShortestID
-from lbrynet.wallet.server.block_processor import Timer
-from lbrynet.wallet.transaction import Transaction, Input, Output
+from lbry.schema.claim import Claim
+from lbry.wallet.server.db import SQLDB
+from lbry.wallet.server.coin import LBCRegTest
+from lbry.wallet.server.trending import TRENDING_WINDOW
+from lbry.wallet.server.canonical import FindShortestID
+from lbry.wallet.server.block_processor import Timer
+from lbry.wallet.transaction import Transaction, Input, Output
 
 
 def get_output(amount=COIN, pubkey_hash=NULL_HASH32):

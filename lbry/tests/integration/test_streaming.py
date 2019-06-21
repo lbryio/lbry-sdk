@@ -4,9 +4,9 @@ import aiohttp
 import aiohttp.web
 import asyncio
 
-from lbrynet.utils import aiohttp_request
-from lbrynet.blob.blob_file import MAX_BLOB_SIZE
-from lbrynet.testcase import CommandTestCase
+from lbry.utils import aiohttp_request
+from lbry.blob.blob_file import MAX_BLOB_SIZE
+from lbry.testcase import CommandTestCase
 
 
 def get_random_bytes(n: int) -> bytes:

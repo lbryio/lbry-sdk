@@ -2,10 +2,10 @@ import asyncio
 import binascii
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
-from lbrynet.dht.serialization.bencoding import bencode, bdecode
-from lbrynet.dht import constants
-from lbrynet.dht.protocol.protocol import KademliaProtocol
-from lbrynet.dht.peer import PeerManager
+from lbry.dht.serialization.bencoding import bencode, bdecode
+from lbry.dht import constants
+from lbry.dht.protocol.protocol import KademliaProtocol
+from lbry.dht.peer import PeerManager
 
 
 class TestProtocol(AsyncioTestCase):

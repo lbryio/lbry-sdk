@@ -1,7 +1,7 @@
 from unittest import TestCase
 from decimal import Decimal
 
-from lbrynet.schema.claim import Claim, Stream
+from lbry.schema.claim import Claim, Stream
 
 
 class TestClaimContainerAwareness(TestCase):

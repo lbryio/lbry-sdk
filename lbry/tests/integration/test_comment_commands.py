@@ -2,7 +2,7 @@ from math import ceil
 
 from aiohttp import web
 
-from lbrynet.testcase import CommandTestCase
+from lbry.testcase import CommandTestCase
 
 
 class MockedCommentServer:

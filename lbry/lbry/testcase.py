@@ -66,9 +66,9 @@ class CommandTestCase(IntegrationTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
 
-        logging.getLogger('lbrynet.blob_exchange').setLevel(self.VERBOSITY)
-        logging.getLogger('lbrynet.daemon').setLevel(self.VERBOSITY)
-        logging.getLogger('lbrynet.stream').setLevel(self.VERBOSITY)
+        logging.getLogger('lbry.blob_exchange').setLevel(self.VERBOSITY)
+        logging.getLogger('lbry.daemon').setLevel(self.VERBOSITY)
+        logging.getLogger('lbry.stream').setLevel(self.VERBOSITY)
 
         self.daemons = []
         self.extra_wallet_nodes = []

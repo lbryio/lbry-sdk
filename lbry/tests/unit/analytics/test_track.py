@@ -1,4 +1,4 @@
-from lbrynet.extras.daemon import analytics
+from lbry.extras.daemon import analytics
 
 import unittest
 

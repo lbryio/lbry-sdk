@@ -5,7 +5,7 @@ from unittest import mock
 import functools
 import asyncio
 if typing.TYPE_CHECKING:
-    from lbrynet.dht.protocol.protocol import KademliaProtocol
+    from lbry.dht.protocol.protocol import KademliaProtocol
 
 
 def get_time_accelerator(loop: asyncio.BaseEventLoop,

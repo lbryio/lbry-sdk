@@ -1,9 +1,9 @@
 import struct
 import asyncio
-from lbrynet.utils import generate_id
-from lbrynet.dht.protocol.routing_table import KBucket
-from lbrynet.dht.peer import PeerManager, KademliaPeer
-from lbrynet.dht import constants
+from lbry.utils import generate_id
+from lbry.dht.protocol.routing_table import KBucket
+from lbry.dht.peer import PeerManager, KademliaPeer
+from lbry.dht import constants
 from torba.testcase import AsyncioTestCase
 
 

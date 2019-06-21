@@ -137,7 +137,7 @@ class Version:
 def release(args):
     gh = get_github()
     repo = gh.repository('lbryio', 'lbry')
-    version_file = repo.file_contents('lbrynet/__init__.py')
+    version_file = repo.file_contents('lbry/__init__.py')
 
     current_version = Version.from_content(version_file)
     print(f'Current Version: {current_version}')

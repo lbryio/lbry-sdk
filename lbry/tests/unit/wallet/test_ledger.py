@@ -1,9 +1,9 @@
 from torba.testcase import AsyncioTestCase
 from torba.client.wallet import Wallet
 
-from lbrynet.wallet.account import Account
-from lbrynet.wallet.transaction import Transaction, Output, Input
-from lbrynet.wallet.ledger import MainNetLedger
+from lbry.wallet.account import Account
+from lbry.wallet.transaction import Transaction, Output, Input
+from lbry.wallet.ledger import MainNetLedger
 
 
 class LedgerTestCase(AsyncioTestCase):

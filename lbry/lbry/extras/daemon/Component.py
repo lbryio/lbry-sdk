@@ -16,7 +16,7 @@ class ComponentType(type):
 
 class Component(metaclass=ComponentType):
     """
-    lbrynet-daemon component helper
+    lbry-daemon component helper
 
     Inheriting classes will be automatically registered with the ComponentManager and must implement setup and stop
     methods
