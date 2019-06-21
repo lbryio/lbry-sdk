@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="PYTHON_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/torba/torba" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/torba/tests" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lbry/lbrynet" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lbry/tests" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lbry/scripts" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+  <component name="TestRunnerService">
+    <option name="PROJECT_TEST_RUNNER" value="Unittests" />
+  </component>
+</module>
