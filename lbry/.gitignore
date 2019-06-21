@@ -6,7 +6,7 @@
 /.coverage
 /lbry-venv
 
-lbrynet.egg-info
+lbry.egg-info
 __pycache__
 _trial_temp/
 

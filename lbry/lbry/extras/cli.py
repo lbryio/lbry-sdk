@@ -12,12 +12,12 @@ from docopt import docopt
 import aiohttp
 from aiohttp.web import GracefulExit
 
-from lbry import __name__ as lbrynet_name, __version__ as lbrynet_version
+from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.loggly_handler import get_loggly_handler
 from lbry.conf import Config, CLIConfig
 from lbry.extras.daemon.Daemon import Daemon
 
-log = logging.getLogger(lbrynet_name)
+log = logging.getLogger('lbry')
 log.addHandler(logging.NullHandler())
 
 
@@ -231,7 +231,7 @@ def main(argv=None):
         ensure_directory_exists(directory)
 
     if args.cli_version:
-        print(f"{lbrynet_name} {lbrynet_version}")
+        print(f"lbrynet {lbrynet_version}")
         return 0
 
     elif args.command == 'start':

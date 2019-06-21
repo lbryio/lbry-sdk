@@ -18,5 +18,5 @@ cd lbry
 pip install -e .
 pip install pywin32
 
-pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbrynet/extras/cli.py
+pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
 wine dist/lbrynet.exe --version

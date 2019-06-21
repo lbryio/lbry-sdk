@@ -28,7 +28,7 @@ EXPOSE 5280
 EXPOSE 50002
 # blockchain
 EXPOSE 9246
-ENV TORBA_LEDGER lbrynet.wallet
+ENV TORBA_LEDGER lbry.wallet
 
 RUN /usr/local/bin/orchstr8 download
 ENTRYPOINT ["/usr/local/bin/orchstr8"]

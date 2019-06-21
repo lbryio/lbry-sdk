@@ -2,6 +2,6 @@
 .tox
 __pycache__
 dist
-lbrynet.egg-info
+lbry.egg-info
 docs
 tests
