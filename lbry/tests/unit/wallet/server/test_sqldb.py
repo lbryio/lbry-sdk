@@ -418,23 +418,6 @@ class TestClaimtrie(TestSQLDB):
         f.step(other3, new_hash)
         self.assertEqual('#abcdef0123456789beef', f.finalize())
 
-    def test_claims_in_channel_gets_updated(self):
-        tx_chan_a = self.get_channel_with_claim_id_prefix('a', 1, key=b'c')
-        tx_chan_ab = self.get_channel_with_claim_id_prefix('ab', 72, key=b'c')
-        txo_chan_a = tx_chan_a[0].tx.outputs[0]
-        advance(1, [tx_chan_a])
-        advance(2, [tx_chan_ab])
-        r_ab, r_a = self.sql._search(order_by=['creation_height'], limit=2)
-        self.assertEqual("@foo#a", r_a['short_url'])
-        self.assertEqual("@foo#ab", r_ab['short_url'])
-        self.assertIsNone(r_a['canonical_url'])
-        self.assertIsNone(r_ab['canonical_url'])
-        self.assertEqual(0, r_a['claims_in_channel'])
-        self.assertEqual(0, r_ab['claims_in_channel'])
-
-        tx_a2 = self.get_stream_with_claim_id_prefix('a', 7, channel=txo_chan_a)
-        tx_ab2 = self.get_stream_with_claim_id_prefix('ab', 23, channel=txo_chan_a)
-
 
 class TestTrending(TestSQLDB):
 
