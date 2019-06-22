@@ -342,9 +342,14 @@ class SQLDB:
         """ Deletes claim supports and from claimtrie in case of an abandon. """
         if claim_hashes:
             binary_claim_hashes = [sqlite3.Binary(claim_hash) for claim_hash in claim_hashes]
+            affected_channels = self.execute(*query(
+                "SELECT channel_hash FROM claim", channel_hash__is_not_null=1, claim_hash__in=binary_claim_hashes
+            )).fetchall()
             for table in ('claim', 'support', 'claimtrie'):
                 self.execute(*self._delete_sql(table, {'claim_hash__in': binary_claim_hashes}))
             self._clear_claim_metadata(binary_claim_hashes)
+            return set(r['channel_hash'] for r in affected_channels)
+        return set()
 
     def _clear_claim_metadata(self, binary_claim_hashes: List[sqlite3.Binary]):
         if binary_claim_hashes:
@@ -389,7 +394,7 @@ class SQLDB:
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
 
-    def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, timer):
+    def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, affected_channels, timer):
         if not new_claims and not updated_claims and not spent_claims:
             return
 
@@ -420,12 +425,12 @@ class SQLDB:
         sub_timer = timer.add_timer('lookup missing channels')
         sub_timer.start()
         all_channel_keys = {}
-        if new_channel_keys or missing_channel_keys:
+        if new_channel_keys or missing_channel_keys or affected_channels:
             all_channel_keys = dict(self.execute(*query(
                 "SELECT claim_hash, public_key_bytes FROM claim",
                 claim_hash__in=[
                     sqlite3.Binary(channel_hash) for channel_hash in
-                    set(new_channel_keys) | missing_channel_keys
+                    set(new_channel_keys) | missing_channel_keys | affected_channels
                 ]
             )))
         sub_timer.stop()
@@ -715,12 +720,12 @@ class SQLDB:
         expire_timer.stop()
 
         r = timer.run
-        r(self.delete_claims, delete_claim_hashes)
+        affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
         r(self.update_claims, update_claims, header)
         r(self.validate_channel_signatures, height, insert_claims,
-          update_claims, delete_claim_hashes, forward_timer=True)
+          update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
