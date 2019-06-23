@@ -11,9 +11,6 @@ from torba.client.hash import sha256, Base58
 
 class BaseResolveTestCase(CommandTestCase):
 
-    def get_claim_id(self, tx):
-        return tx['outputs'][0]['claim_id']
-
     async def assertResolvesToClaimId(self, name, claim_id):
         other = (await self.resolve(name))[name]
         if claim_id is None:
@@ -173,7 +170,7 @@ class ResolveCommand(BaseResolveTestCase):
         abandoned_channel_id = channel['claim_id']
         await self.channel_abandon(txid=channel['txid'], nout=0)
         channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
-        orphan_claim_id = orphan_claim['outputs'][0]['claim_id']
+        orphan_claim_id = self.get_claim_id(orphan_claim)
 
         # Original channel doesnt exists anymore, so the signature is invalid. For invalid signatures, resolution is
         # only possible outside a channel
@@ -220,7 +217,7 @@ class ResolveCommand(BaseResolveTestCase):
         _ = await self.stream_create(one, '0.1')
         c = await self.stream_create(two, '0.2')
 
-        winner_id = c['outputs'][0]['claim_id']
+        winner_id = self.get_claim_id(c)
 
         r1 = await self.resolve(f'lbry://{one}')
         r2 = await self.resolve(f'lbry://{two}')
@@ -286,7 +283,7 @@ class ResolveCommand(BaseResolveTestCase):
             return await fut
 
         tx = await self.channel_create('@abc', '0.01')
-        channel_id = tx['outputs'][0]['claim_id']
+        channel_id = self.get_claim_id(tx)
         await self.stream_create('foo', '0.01', channel_id=channel_id)
 
         # raise a cancelled error from get_transaction

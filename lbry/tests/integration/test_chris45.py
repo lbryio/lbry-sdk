@@ -19,7 +19,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # registered the @spam channel yet? "I should do that!" he
         # exclaims and goes back to his computer to do just that!
         tx = await self.channel_create('@spam', '1.0')
-        channel_id = tx['outputs'][0]['claim_id']
+        channel_id = self.get_claim_id(tx)
 
         # Do we have it locally?
         channels = await self.out(self.daemon.jsonrpc_channel_list())
@@ -54,7 +54,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
             data=b'[insert long story about eels driving hovercraft]',
             channel_id=channel_id
         )
-        claim_id = tx['outputs'][0]['claim_id']
+        claim_id = self.get_claim_id(tx)
 
         # He quickly checks the unconfirmed balance to make sure everything looks
         # correct.
@@ -120,7 +120,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         tx = await self.stream_create(
             'fresh-start', '1.0', data=b'Amazingly Original First Line', channel_id=channel_id
         )
-        claim_id2 = tx['outputs'][0]['claim_id']
+        claim_id2 = self.get_claim_id(tx)
 
         await self.generate(5)
 

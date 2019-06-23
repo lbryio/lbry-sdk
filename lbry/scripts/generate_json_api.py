@@ -178,7 +178,7 @@ class Examples(CommandTestCase):
             'Create a channel claim without metadata',
             'channel', 'create', '@channel', '1.0'
         )
-        channel_id = channel['outputs'][0]['claim_id']
+        channel_id = self.get_claim_id(channel)
         await self.on_transaction_dict(channel)
         await self.generate(1)
         await self.on_transaction_dict(channel)
@@ -195,7 +195,7 @@ class Examples(CommandTestCase):
 
         channel = await r(
             'Update a channel claim',
-            'channel', 'update', channel['outputs'][0]['claim_id'], '--title="New Channel"'
+            'channel', 'update', self.get_claim_id(channel), '--title="New Channel"'
         )
 
         await self.on_transaction_dict(channel)
@@ -214,7 +214,7 @@ class Examples(CommandTestCase):
         await self.on_transaction_dict(big_channel)
         await self.generate(1)
         await self.on_transaction_dict(big_channel)
-        await self.daemon.jsonrpc_channel_abandon(big_channel['outputs'][0]['claim_id'])
+        await self.daemon.jsonrpc_channel_abandon(self.get_claim_id(big_channel))
         await self.generate(1)
 
         # stream claims
@@ -229,7 +229,7 @@ class Examples(CommandTestCase):
             await self.on_transaction_dict(stream)
             await self.generate(1)
             await self.on_transaction_dict(stream)
-        stream_id = stream['outputs'][0]['claim_id']
+        stream_id = self.get_claim_id(stream)
         stream_name = stream['outputs'][0]['name']
         stream = await r(
             'Update a stream claim to add channel',
@@ -291,7 +291,7 @@ class Examples(CommandTestCase):
             await self.on_transaction_dict(big_stream)
             await self.generate(1)
             await self.on_transaction_dict(big_stream)
-            await self.daemon.jsonrpc_channel_abandon(big_stream['outputs'][0]['claim_id'])
+            await self.daemon.jsonrpc_channel_abandon(self.get_claim_id(big_stream))
             await self.generate(1)
 
         # files

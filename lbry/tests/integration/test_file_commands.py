@@ -279,7 +279,7 @@ class FileCommands(CommandTestCase):
 
     async def __raw_value_update_no_fee_address(self, tx, claim_address, **kwargs):
         tx = await self.daemon.jsonrpc_stream_update(
-            tx['outputs'][0]['claim_id'], preview=True, claim_address=claim_address, **kwargs
+            self.get_claim_id(tx), preview=True, claim_address=claim_address, **kwargs
         )
         tx.outputs[0].claim.stream.fee.address_bytes = b''
         tx.outputs[0].script.generate()
