@@ -232,6 +232,21 @@ class ClaimSearchCommand(ClaimTestCase):
 
         await self.assertFindsClaims(claims, order_by=["^name"])
 
+    async def test_search_by_fee(self):
+        claim1 = await self.stream_create('claim1', fee_amount='1.0', fee_currency='lbc')
+        claim2 = await self.stream_create('claim2', fee_amount='0.9', fee_currency='lbc')
+        claim3 = await self.stream_create('claim3', fee_amount='0.5', fee_currency='lbc')
+        claim4 = await self.stream_create('claim4', fee_amount='0.1', fee_currency='lbc')
+        claim5 = await self.stream_create('claim5', fee_amount='1.0', fee_currency='usd')
+
+        await self.assertFindsClaims([claim5, claim4, claim3, claim2, claim1], fee_amount='>0')
+        await self.assertFindsClaims([claim4, claim3, claim2, claim1], fee_currency='lbc')
+        await self.assertFindsClaims([claim3, claim2, claim1], fee_amount='>0.1', fee_currency='lbc')
+        await self.assertFindsClaims([claim4, claim3, claim2], fee_amount='<1.0', fee_currency='lbc')
+        await self.assertFindsClaims([claim3], fee_amount='0.5', fee_currency='lbc')
+        await self.assertFindsClaims([claim5], fee_currency='usd')
+        await self.assertFindsClaims([], fee_currency='foo')
+
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim
         address = await self.account.receiving.get_or_create_usable_address()
