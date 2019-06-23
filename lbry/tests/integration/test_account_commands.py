@@ -54,3 +54,14 @@ class AccountManagement(CommandTestCase):
         # list specific account
         response = await self.daemon.jsonrpc_account_list(account_id, include_claims=True)
         self.assertEqual(response['name'], 'recreated account')
+
+    async def test_wallet_migration(self):
+        # null certificates should get deleted
+        await self.channel_create('@foo1')
+        await self.channel_create('@foo2')
+        await self.channel_create('@foo3')
+        keys = list(self.account.channel_keys.keys())
+        self.account.channel_keys[keys[0]] = None
+        self.account.channel_keys[keys[1]] = "some invalid junk"
+        await self.account.maybe_migrate_certificates()
+        self.assertEqual(list(self.account.channel_keys.keys()), [keys[2]])

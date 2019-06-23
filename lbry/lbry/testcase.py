@@ -11,6 +11,7 @@ import lbry.wallet
 from lbry.conf import Config
 from lbry.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.wallet import LbryWalletManager
+from lbry.wallet.account import Account
 from lbry.extras.daemon.Components import Component, WalletComponent
 from lbry.extras.daemon.Components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
@@ -62,6 +63,8 @@ class CommandTestCase(IntegrationTestCase):
     MANAGER = LbryWalletManager
     VERBOSITY = logging.WARN
     blob_lru_cache_size = 0
+
+    account: Account
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
