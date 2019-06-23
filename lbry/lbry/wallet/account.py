@@ -53,6 +53,10 @@ class Account(BaseAccount):
             return
         channel_keys = {}
         for private_key_pem in self.channel_keys.values():
+            if not isinstance(private_key_pem, str):
+                continue
+            if "-----BEGIN EC PRIVATE KEY-----" not in private_key_pem:
+                continue
             private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
             public_key_der = private_key.get_verifying_key().to_der()
             channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
