@@ -394,7 +394,7 @@ class SQLDB:
             ))
         if supports:
             self.db.executemany(
-                "INSERT INTO support ("
+                "INSERT OR IGNORE INTO support ("
                 "   txo_hash, tx_position, height, claim_hash, amount"
                 ") "
                 "VALUES (?, ?, ?, ?, ?)", supports

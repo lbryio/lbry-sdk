@@ -322,18 +322,40 @@ class ResolveAfterReorg(BaseResolveTestCase):
     async def test_reorg(self):
         self.assertEqual(self.ledger.headers.height, 206)
 
-        name = '@abc'
+        channel_name = '@abc'
         channel_id = self.get_claim_id(
-            await self.channel_create(name, '0.01')
+            await self.channel_create(channel_name, '0.01')
         )
-        self.assertNotIn('error', (await self.resolve(name))[name])
+        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
         await self.reorg(206)
-        self.assertNotIn('error', (await self.resolve(name))[name])
+        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
+
+        stream_name = 'foo'
+        stream_id = self.get_claim_id(
+            await self.stream_create(stream_name, '0.01', channel_id=channel_id)
+        )
+        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+        await self.reorg(206)
+        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+
+        await self.support_create(stream_id, '0.01')
+        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+        await self.reorg(206)
+        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+
+        await self.stream_abandon(stream_id)
+        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
+        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
+        await self.reorg(206)
+        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
+        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
 
         await self.channel_abandon(channel_id)
-        self.assertIn('error', (await self.resolve(name))[name])
+        self.assertIn('error', (await self.resolve(channel_name))[channel_name])
+        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
         await self.reorg(206)
-        self.assertIn('error', (await self.resolve(name))[name])
+        self.assertIn('error', (await self.resolve(channel_name))[channel_name])
+        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
 
 
 def generate_signed_legacy(address: bytes, output: Output):
