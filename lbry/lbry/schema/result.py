@@ -100,7 +100,8 @@ class Outputs:
         if txo['canonical_url'] is not None:
             txo_message.claim.canonical_url = txo['canonical_url']
         txo_message.claim.is_controlling = bool(txo['is_controlling'])
-        txo_message.claim.take_over_height = txo['last_take_over_height']
+        if txo['last_take_over_height'] is not None:
+            txo_message.claim.take_over_height = txo['last_take_over_height']
         txo_message.claim.creation_height = txo['creation_height']
         txo_message.claim.activation_height = txo['activation_height']
         txo_message.claim.expiration_height = txo['expiration_height']
