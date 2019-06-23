@@ -75,7 +75,7 @@ jobs:
           tags: true
       addons:
         artifacts:
-          working_dir: dist
+          working_dir: lbry/dist
           paths:
             - lbrynet-windows.zip
           target_paths:
