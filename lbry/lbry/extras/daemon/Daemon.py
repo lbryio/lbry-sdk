@@ -1707,8 +1707,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid>] [--nout=<nout>]
-                         [--channel=<channel> | --channel_ids=<channel_ids>...]
-                         [--valid_channel_signatures] [--invalid_channel_signatures]
+                         [--channel=<channel> | --channel_ids=<channel_ids>... --not_channel_ids=<not_channel_ids>...]
+                         [--has_channel_signature] [--valid_channel_signature | --invalid_channel_signature]
                          [--is_controlling] [--release_time=<release_time>] [--public_key_id=<public_key_id>]
                          [--timestamp=<timestamp>] [--creation_timestamp=<creation_timestamp>]
                          [--height=<height>] [--creation_height=<creation_height>]
@@ -1736,14 +1736,22 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     see --channel_ids if you need to filter by
                                                     multiple channels at the same time,
                                                     includes claims with invalid signatures,
-                                                    use in conjunction with --valid_channel_signatures
+                                                    use in conjunction with --valid_channel_signature
             --channel_ids=<channel_ids>     : (str) claims signed by any of these channels
                                                     (arguments must be claim ids of the channels),
                                                     includes claims with invalid signatures,
-                                                    use in conjunction with --valid_channel_signatures
-            --valid_channel_signatures      : (bool) only return claims with valid channel signatures
-            --invalid_channel_signatures    : (bool) only return claims with invalid channel signatures
-            --is_controlling                : (bool) only return winning claims of their respective name
+                                                    implies --has_channel_signature,
+                                                    use in conjunction with --valid_channel_signature
+            --not_channel_ids=<not_channel_ids>: (str) exclude claims signed by any of these channels
+                                                    (arguments must be claim ids of the channels)
+            --has_channel_signature         : (bool) claims with a channel signature (valid or invalid)
+            --valid_channel_signature       : (bool) claims with a valid channel signature or no signature,
+                                                     use in conjunction with --has_channel_signature to
+                                                     only get claims with valid signatures
+            --invalid_channel_signature     : (bool) claims with invalid channel signature or no signature,
+                                                     use in conjunction with --has_channel_signature to
+                                                     only get claims with invalid signatures
+            --is_controlling                : (bool) winning claims of their respective name
             --public_key_id=<public_key_id> : (str) only return channels having this public key id, this is
                                                     the same key as used in the wallet file to map
                                                     channel certificate private keys: {'public_key_id': 'private key'}
@@ -1811,9 +1819,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        if kwargs.pop('valid_channel_signatures', False):
+        if kwargs.pop('valid_channel_signature', False):
             kwargs['signature_valid'] = 1
-        if kwargs.pop('invalid_channel_signatures', False):
+        if kwargs.pop('invalid_channel_signature', False):
             kwargs['signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
         kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})

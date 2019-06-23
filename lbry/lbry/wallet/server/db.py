@@ -813,6 +813,30 @@ class SQLDB:
                 constraints['claim.channel_hash__in'] = [
                     sqlite3.Binary(unhexlify(cid)[::-1]) for cid in channel_ids
                 ]
+        if 'not_channel_ids' in constraints:
+            not_channel_ids = constraints.pop('not_channel_ids')
+            if not_channel_ids:
+                not_channel_ids_binary = [
+                    sqlite3.Binary(unhexlify(ncid)[::-1]) for ncid in not_channel_ids
+                ]
+                if constraints.get('has_channel_signature', False):
+                    constraints['claim.channel_hash__not_in'] = not_channel_ids_binary
+                else:
+                    constraints['null_or_not_channel__or'] = {
+                        'claim.signature_valid__is_null': True,
+                        'claim.channel_hash__not_in': not_channel_ids_binary
+                    }
+        if 'signature_valid' in constraints:
+            has_channel_signature = constraints.pop('has_channel_signature', False)
+            if has_channel_signature:
+                constraints['claim.signature_valid'] = constraints.pop('signature_valid')
+            else:
+                constraints['null_or_signature__or'] = {
+                    'claim.signature_valid__is_null': True,
+                    'claim.signature_valid': constraints.pop('signature_valid')
+                }
+        elif 'has_channel_signature' in constraints:
+            constraints['claim.signature_valid__is_not_null'] = constraints.pop('has_channel_signature')
 
         if 'txid' in constraints:
             tx_hash = unhexlify(constraints.pop('txid'))[::-1]
@@ -883,15 +907,16 @@ class SQLDB:
     INTEGER_PARAMS = {
         'height', 'creation_height', 'activation_height', 'expiration_height',
         'timestamp', 'creation_timestamp', 'release_time', 'fee_amount',
-        'tx_position', 'channel_join', 'signature_valid',
+        'tx_position', 'channel_join',
         'amount', 'effective_amount', 'support_amount',
         'trending_group', 'trending_mixed',
         'trending_local', 'trending_global',
     }
 
     SEARCH_PARAMS = {
-        'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids', 'public_key_id',
-        'claim_type', 'stream_types', 'media_types', 'fee_currency',
+        'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
+        'public_key_id', 'claim_type', 'stream_types', 'media_types', 'fee_currency',
+        'has_channel_signature', 'signature_valid',
         'any_tags', 'all_tags', 'not_tags',
         'any_locations', 'all_locations', 'not_locations',
         'any_languages', 'all_languages', 'not_languages',

@@ -66,7 +66,7 @@ class ClaimSearchCommand(ClaimTestCase):
 
     async def create_channel(self):
         self.channel = await self.channel_create('@abc', '1.0')
-        self.channel_id = self.channel['outputs'][0]['claim_id']
+        self.channel_id = self.get_claim_id(self.channel)
 
     async def create_lots_of_streams(self):
         tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
@@ -93,7 +93,7 @@ class ClaimSearchCommand(ClaimTestCase):
         self.assertEqual(len(claims), len(results))
         for claim, result in zip(claims, results):
             self.assertEqual(
-                (claim['txid'], claim['outputs'][0]['claim_id']),
+                (claim['txid'], self.get_claim_id(claim)),
                 (result['txid'], result['claim_id'])
             )
 
@@ -128,7 +128,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaim(signed2, name='on-channel-claim', channel_ids=[channel_id2])
         await self.assertFindsClaim(unsigned, name='unsigned')
         await self.assertFindsClaim(unsigned, txid=unsigned['txid'], nout=0)
-        await self.assertFindsClaim(unsigned, claim_id=unsigned['outputs'][0]['claim_id'])
+        await self.assertFindsClaim(unsigned, claim_id=self.get_claim_id(unsigned))
 
         two = await self.stream_create('on-channel-claim-2', '0.0001', channel_id=self.channel_id)
         three = await self.stream_create('on-channel-claim-3', '0.0001', channel_id=self.channel_id)
@@ -139,20 +139,20 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
         await self.assertFindsClaims([three, two, signed2, signed], channel_ids=[channel_id2, self.channel_id])
         await self.channel_abandon(claim_id=self.channel_id)
-        await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}", valid_channel_signatures=True)
-        await self.assertFindsClaims([], channel_ids=[self.channel_id], valid_channel_signatures=True)
-        await self.assertFindsClaims([signed2], channel_ids=[channel_id2], valid_channel_signatures=True)
-        # pass `invalid_channel_signatures=False` to catch a bug in argument processing
+        await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}", valid_channel_signature=True)
+        await self.assertFindsClaims([], channel_ids=[self.channel_id], valid_channel_signature=True)
+        await self.assertFindsClaims([signed2], channel_ids=[channel_id2], valid_channel_signature=True)
+        # pass `invalid_channel_signature=False` to catch a bug in argument processing
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2, self.channel_id],
-                                     valid_channel_signatures=True, invalid_channel_signatures=False)
+                                     valid_channel_signature=True, invalid_channel_signature=False)
         # invalid signature still returns channel_id
         self.ledger._tx_cache.clear()
-        invalid_claims = await self.claim_search(invalid_channel_signatures=True)
+        invalid_claims = await self.claim_search(invalid_channel_signature=True, has_channel_signature=True)
         self.assertEqual(3, len(invalid_claims))
         self.assertTrue(all([not c['is_channel_signature_valid'] for c in invalid_claims]))
         self.assertEqual({'channel_id': self.channel_id}, invalid_claims[0]['signing_channel'])
 
-        valid_claims = await self.claim_search(valid_channel_signatures=True)
+        valid_claims = await self.claim_search(valid_channel_signature=True, has_channel_signature=True)
         self.assertEqual(1, len(valid_claims))
         self.assertTrue(all([c['is_channel_signature_valid'] for c in valid_claims]))
         self.assertEqual('@abc', valid_claims[0]['signing_channel']['name'])
@@ -247,6 +247,59 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim5], fee_currency='usd')
         await self.assertFindsClaims([], fee_currency='foo')
 
+    async def test_search_by_channel(self):
+        match = self.assertFindsClaims
+
+        chan1_id = self.get_claim_id(await self.channel_create('@chan1'))
+        chan2_id = self.get_claim_id(await self.channel_create('@chan2'))
+        chan3_id = self.get_claim_id(await self.channel_create('@chan3'))
+
+        claim1 = await self.stream_create('claim1')
+        claim2 = await self.stream_create('claim2', channel_id=chan1_id)
+        claim3 = await self.stream_create('claim3', channel_id=chan1_id)
+        claim4 = await self.stream_create('claim4', channel_id=chan2_id)
+        claim5 = await self.stream_create('claim5', channel_id=chan2_id)
+        claim6 = await self.stream_create('claim6', channel_id=chan3_id)
+        await self.channel_abandon(chan3_id)
+
+        # {has/valid/invalid}_channel_signature
+        await match([claim6, claim5, claim4, claim3, claim2], has_channel_signature=True)
+        await match([claim5, claim4, claim3, claim2, claim1], valid_channel_signature=True, claim_type='stream')
+        await match([claim6, claim1],                         invalid_channel_signature=True, claim_type='stream')
+        await match([claim5, claim4, claim3, claim2], has_channel_signature=True, valid_channel_signature=True)
+        await match([claim6],                         has_channel_signature=True, invalid_channel_signature=True)
+
+        # not_channel_ids
+        await match([claim6, claim5, claim4, claim3, claim2, claim1], not_channel_ids=['abc123'], claim_type='stream')
+        await match([claim5, claim4, claim3, claim2, claim1],         not_channel_ids=[chan3_id], claim_type='stream')
+        await match([claim6, claim5, claim4, claim1],                 not_channel_ids=[chan1_id], claim_type='stream')
+        await match([claim6, claim3, claim2, claim1],                 not_channel_ids=[chan2_id], claim_type='stream')
+        await match([claim6, claim1],                       not_channel_ids=[chan1_id, chan2_id], claim_type='stream')
+
+        # not_channel_ids + valid_channel_signature
+        await match([claim5, claim4, claim3, claim2, claim1],
+                    not_channel_ids=['abc123'], valid_channel_signature=True, claim_type='stream')
+        await match([claim5, claim4, claim1],
+                    not_channel_ids=[chan1_id], valid_channel_signature=True, claim_type='stream')
+        await match([claim3, claim2, claim1],
+                    not_channel_ids=[chan2_id], valid_channel_signature=True, claim_type='stream')
+        await match([claim1], not_channel_ids=[chan1_id, chan2_id], valid_channel_signature=True, claim_type='stream')
+
+        # not_channel_ids + has_channel_signature
+        await match([claim6, claim5, claim4, claim3, claim2], not_channel_ids=['abc123'], has_channel_signature=True)
+        await match([claim6, claim5, claim4],                 not_channel_ids=[chan1_id], has_channel_signature=True)
+        await match([claim6, claim3, claim2],                 not_channel_ids=[chan2_id], has_channel_signature=True)
+        await match([claim6],                       not_channel_ids=[chan1_id, chan2_id], has_channel_signature=True)
+
+        # not_channel_ids + has_channel_signature + valid_channel_signature
+        await match([claim5, claim4, claim3, claim2],
+                    not_channel_ids=['abc123'], has_channel_signature=True, valid_channel_signature=True)
+        await match([claim5, claim4],
+                    not_channel_ids=[chan1_id], has_channel_signature=True, valid_channel_signature=True)
+        await match([claim3, claim2],
+                    not_channel_ids=[chan2_id], has_channel_signature=True, valid_channel_signature=True)
+        await match([], not_channel_ids=[chan1_id, chan2_id], has_channel_signature=True, valid_channel_signature=True)
+
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim
         address = await self.account.receiving.get_or_create_usable_address()
@@ -307,7 +360,7 @@ class ChannelCommands(CommandTestCase):
     async def test_channel_bids(self):
         # enough funds
         tx = await self.channel_create('@foo', '5.0')
-        claim_id = tx['outputs'][0]['claim_id']
+        claim_id = self.get_claim_id(tx)
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 1)
         await self.assertBalance(self.account, '4.991893')
 
@@ -433,7 +486,7 @@ class ChannelCommands(CommandTestCase):
 
     async def test_channel_export_import_into_new_account(self):
         tx = await self.channel_create('@foo', '1.0')
-        claim_id = tx['outputs'][0]['claim_id']
+        claim_id = self.get_claim_id(tx)
         channel_private_key = (await self.account.get_channels())[0].private_key
         exported_data = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
 
@@ -455,7 +508,7 @@ class ChannelCommands(CommandTestCase):
 
     async def test_channel_export_import_into_existing_account(self):
         tx = await self.channel_create('@foo', '1.0')
-        claim_id = tx['outputs'][0]['claim_id']
+        claim_id = self.get_claim_id(tx)
         channel_private_key = (await self.account.get_channels())[0].private_key
         exported_data = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
 
@@ -507,7 +560,7 @@ class StreamCommands(ClaimTestCase):
     async def test_stream_bids(self):
         # enough funds
         tx = await self.stream_create('foo', '2.0')
-        claim_id = tx['outputs'][0]['claim_id']
+        claim_id = self.get_claim_id(tx)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 1)
         await self.assertBalance(self.account, '7.993893')
 
@@ -551,7 +604,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
 
         baz_tx = await self.out(self.channel_create('@baz', '1.0', account_id=account2_id))
-        baz_id = baz_tx['outputs'][0]['claim_id']
+        baz_id = self.get_claim_id(baz_tx)
 
         channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
         self.assertEqual(len(channels), 1)
@@ -731,7 +784,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(tx['outputs'][0]['value'], fixed_values)
 
         # stream_update re-signs with the same channel
-        channel_id = (await self.channel_create('@chan'))['outputs'][0]['claim_id']
+        channel_id = self.get_claim_id(await self.channel_create('@chan'))
         tx = await self.stream_update(claim_id, channel_id=channel_id)
         self.assertEqual(tx['outputs'][0]['signing_channel']['name'], '@chan')
         tx = await self.stream_update(claim_id, title='channel re-signs')
@@ -919,7 +972,7 @@ class StreamCommands(ClaimTestCase):
         tx = await self.out(self.daemon.jsonrpc_stream_create(
             'chrome', '1.0', file_path=self.video_file_name,
             tags='blah', languages='uk', locations='UA::Kyiv',
-            channel_id=channel['outputs'][0]['claim_id']
+            channel_id=self.get_claim_id(channel)
         ))
         await self.on_transaction_dict(tx)
         txo = tx['outputs'][0]
@@ -941,7 +994,7 @@ class StreamCommands(ClaimTestCase):
         await self.assertBalance(self.account, '10.0')
 
         tx = await self.stream_create(bid='2.5')  # creates new claim
-        claim_id = tx['outputs'][0]['claim_id']
+        claim_id = self.get_claim_id(tx)
         txs = await self.out(self.daemon.jsonrpc_transaction_list())
         self.assertEqual(len(txs[0]['claim_info']), 1)
         self.assertEqual(txs[0]['confirmations'], 1)
@@ -977,7 +1030,7 @@ class StreamCommands(ClaimTestCase):
         await self.assertBalance(self.account, '10.0')
         tx = await self.stream_create(bid='0.0001')
         await self.assertBalance(self.account, '9.979793')
-        await self.stream_abandon(tx['outputs'][0]['claim_id'])
+        await self.stream_abandon(self.get_claim_id(tx))
         await self.assertBalance(self.account, '9.97968399')
 
     async def test_publish(self):
@@ -1001,10 +1054,7 @@ class StreamCommands(ClaimTestCase):
         tx2 = await self.publish('foo', tags='updated')
 
         self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
-        self.assertEqual(
-            tx1['outputs'][0]['claim_id'],
-            tx2['outputs'][0]['claim_id']
-        )
+        self.assertEqual(self.get_claim_id(tx1), self.get_claim_id(tx2))
 
         # update conflict with two claims of the same name
         tx3 = await self.stream_create('foo', allow_duplicate_name=True)
@@ -1013,7 +1063,7 @@ class StreamCommands(ClaimTestCase):
 
         self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
         # abandon duplicate stream
-        await self.stream_abandon(tx3['outputs'][0]['claim_id'])
+        await self.stream_abandon(self.get_claim_id(tx3))
 
         # publish to a channel
         await self.channel_create('@abc')
@@ -1022,7 +1072,7 @@ class StreamCommands(ClaimTestCase):
         r = await self.resolve('lbry://@abc/foo')
         self.assertEqual(
             r['lbry://@abc/foo']['claim_id'],
-            tx3['outputs'][0]['claim_id']
+            self.get_claim_id(tx3)
         )
 
         # publishing again clears channel
@@ -1054,7 +1104,7 @@ class SupportCommands(CommandTestCase):
 
         # create the claim we'll be tipping and supporting
         tx = await self.stream_create()
-        claim_id = tx['outputs'][0]['claim_id']
+        claim_id = self.get_claim_id(tx)
 
         # account1 and account2 balances:
         await self.assertBalance(self.account, '3.979769')
