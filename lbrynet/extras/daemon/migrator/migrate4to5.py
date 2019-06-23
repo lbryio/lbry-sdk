@@ -24,8 +24,7 @@ def add_lbry_file_metadata(db_dir):
         return
 
     if not os.path.isfile(lbryfile_info_db):
-        log.error(
-            "blockchainname.db was not found but lbryfile_info.db was found, skipping migration")
+        log.info("blockchainname.db was not found but lbryfile_info.db was found, skipping migration")
         return
 
     name_metadata_db = sqlite3.connect(name_metadata)

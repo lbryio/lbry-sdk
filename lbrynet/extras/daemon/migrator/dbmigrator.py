@@ -1,3 +1,4 @@
+import os
 import logging
 
 log = logging.getLogger(__name__)
@@ -27,9 +28,23 @@ def migrate_db(conf, start, end):
         elif current == 10:
             from .migrate10to11 import do_migration
         else:
-            raise Exception("DB migration of version {} to {} is not available".format(current,
-                                                                                       current+1))
-        do_migration(conf)
+            raise Exception("DB migration of version {} to {} is not available".format(current, current+1))
+        try:
+            do_migration(conf)
+        except Exception as err:
+            log.info("failed to migrate database: %s", str(err))
+            if os.path.exists(os.path.join(conf.data_dir, "lbrynet.sqlite")):
+                backup_name = f"rev_{current}_unmigrated_database"
+                count = 0
+                while os.path.exists(os.path.join(conf.data_dir, backup_name + ".sqlite")):
+                    count += 1
+                    backup_name = f"rev_{current}_unmigrated_database_{count}"
+                backup_path = os.path.join(conf.data_dir, backup_name + ".sqlite")
+                os.rename(os.path.join(conf.data_dir, "lbrynet.sqlite"), backup_path)
+                log.info("made a backup of the unmigrated database: %s", backup_path)
+            if os.path.isfile(os.path.join(conf.data_dir, "db_revision")):
+                os.remove(os.path.join(conf.data_dir, "db_revision"))
+            return None
         current += 1
         log.info("successfully migrated the database from revision %i to %i", current - 1, current)
     return None
