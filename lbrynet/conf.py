@@ -523,9 +523,17 @@ class Config(CLIConfig):
         ('reflector.lbry.com', 5566)
     ])
     lbryum_servers = Servers("SPV wallet servers", [
-        ('lbryumx1.lbry.com', 50001), # US EAST
-        ('lbryumx2.lbry.com', 50001), # US EAST
-        ('lbryumx4.lbry.com', 50001)  #EU
+        ('lbryumx1.lbry.com', 50001),  # US EAST
+        ('lbryumx2.lbry.com', 50001),  # US EAST
+        ('lbryumx4.lbry.com', 50001),  # EU
+        ('lbryumx5.lbry.com', 50001),  # US WEST
+        ('lbryumx6.lbry.com', 50001),  # EU
+        ('lbryumx7.lbry.com', 50001),  # Asia Pacific
+        ('lbryumx8.lbry.com', 50001),  # Asia Pacific
+        ('lbryumx9.lbry.com', 50001),  # US EAST
+        ('lbryumx10.lbry.com', 50001), # Sao Paulo
+        ('lbryumx11.lbry.com', 50001), # Reserved, not used
+        ('lbryumx12.lbry.com', 50001)  # Reserved, not used
     ])
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
         ('lbrynet1.lbry.com', 4444),  # US EAST
