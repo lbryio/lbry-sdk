@@ -98,7 +98,7 @@ jobs:
       deploy:
         provider: releases
         api_key: $GITHUB_OAUTH_TOKEN
-        file: lbry/dist/lbrynet-${OS}.zip
+        file: dist/lbrynet-${OS}.zip
         skip_cleanup: true
         overwrite: true
         draft: true
