@@ -791,7 +791,7 @@ class SQLDB:
             if isinstance(match, sqlite3.Row):
                 constraints['channel_hash'] = match['claim_hash']
             else:
-                raise LookupError(f'Could not resolve channel "{channel_url}".')
+                return [[0]] if cols == 'count(*)' else []
         if 'channel_hash' in constraints:
             constraints['claim.channel_hash'] = sqlite3.Binary(constraints.pop('channel_hash'))
         if 'channel_ids' in constraints:

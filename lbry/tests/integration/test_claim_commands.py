@@ -139,6 +139,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
         await self.assertFindsClaims([three, two, signed2, signed], channel_ids=[channel_id2, self.channel_id])
         await self.channel_abandon(claim_id=self.channel_id)
+        await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}", valid_channel_signatures=True)
         await self.assertFindsClaims([], channel_ids=[self.channel_id], valid_channel_signatures=True)
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2], valid_channel_signatures=True)
         # pass `invalid_channel_signatures=False` to catch a bug in argument processing
