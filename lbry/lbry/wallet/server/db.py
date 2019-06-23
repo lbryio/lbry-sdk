@@ -10,6 +10,7 @@ from torba.server.util import class_logger
 from torba.client.basedatabase import query, constraints_to_sql
 
 from lbry.schema.url import URL, normalize_name
+from lbry.schema.tags import clean_tags
 from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet.ledger import MainNetLedger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
@@ -34,8 +35,8 @@ STREAM_TYPES = {
 }
 
 
-def _apply_constraints_for_array_attributes(constraints, attr):
-    any_items = constraints.pop(f'any_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+def _apply_constraints_for_array_attributes(constraints, attr, cleaner):
+    any_items = cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if any_items:
         constraints.update({
             f'$any_{attr}{i}': item for i, item in enumerate(any_items)
@@ -47,7 +48,7 @@ def _apply_constraints_for_array_attributes(constraints, attr):
             SELECT DISTINCT claim_hash FROM {attr} WHERE {attr} IN ({values})
         """
 
-    all_items = constraints.pop(f'all_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+    all_items = cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if all_items:
         constraints[f'$all_{attr}_count'] = len(all_items)
         constraints.update({
@@ -61,7 +62,7 @@ def _apply_constraints_for_array_attributes(constraints, attr):
             GROUP BY claim_hash HAVING COUNT({attr}) = :$all_{attr}_count
         """
 
-    not_items = constraints.pop(f'not_{attr}s', [])[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+    not_items = cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if not_items:
         constraints.update({
             f'$not_{attr}{i}': item for i, item in enumerate(not_items)
@@ -293,7 +294,7 @@ class SQLDB:
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
-            for tag in claim.message.tags:
+            for tag in clean_tags(claim.message.tags):
                 tags.append((tag, claim_hash, tx.height))
 
         if clear_first:
@@ -820,9 +821,9 @@ class SQLDB:
             if media_types:
                 constraints['claim.media_type__in'] = media_types
 
-        _apply_constraints_for_array_attributes(constraints, 'tag')
-        _apply_constraints_for_array_attributes(constraints, 'language')
-        _apply_constraints_for_array_attributes(constraints, 'location')
+        _apply_constraints_for_array_attributes(constraints, 'tag', clean_tags)
+        _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _)
+        _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _)
 
         select = f"SELECT {cols} FROM claim"
 
