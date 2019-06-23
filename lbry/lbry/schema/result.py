@@ -34,6 +34,7 @@ class Outputs:
                 'short_url': f'lbry://{claim.short_url}',
                 'canonical_url': f'lbry://{claim.canonical_url or claim.short_url}',
                 'is_controlling': claim.is_controlling,
+                'take_over_height': claim.take_over_height,
                 'creation_height': claim.creation_height,
                 'activation_height': claim.activation_height,
                 'expiration_height': claim.expiration_height,
@@ -99,6 +100,7 @@ class Outputs:
         if txo['canonical_url'] is not None:
             txo_message.claim.canonical_url = txo['canonical_url']
         txo_message.claim.is_controlling = bool(txo['is_controlling'])
+        txo_message.claim.take_over_height = txo['last_take_over_height']
         txo_message.claim.creation_height = txo['creation_height']
         txo_message.claim.activation_height = txo['activation_height']
         txo_message.claim.expiration_height = txo['expiration_height']
