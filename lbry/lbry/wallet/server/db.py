@@ -866,6 +866,7 @@ class SQLDB:
         return self.get_claims(
             """
             claimtrie.claim_hash as is_controlling,
+            claimtrie.last_take_over_height,
             claim.claim_hash, claim.txo_hash,
             claim.claims_in_channel,
             claim.height, claim.creation_height,
