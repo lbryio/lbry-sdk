@@ -3,7 +3,7 @@ import time
 import logging
 import json
 from decimal import Decimal
-
+import typing
 from lbrynet.error import InvalidExchangeRateResponse, CurrencyConversionError
 from lbrynet.utils import aiohttp_request
 
@@ -44,7 +44,7 @@ class MarketFeed:
         self.params = params
         self.fee = fee
         self.rate = None
-        self._task: asyncio.Task = None
+        self._task: typing.Optional[asyncio.Task] = None
         self._online = True
 
     def rate_is_initialized(self):
@@ -105,7 +105,10 @@ class BittrexFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        json_response = json.loads(response)
+        try:
+            json_response = json.loads(response)
+        except (ValueError, json.JSONDecodeError) as err:
+            raise InvalidExchangeRateResponse(self.name, str(err))
         if 'result' not in json_response:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         trades = json_response['result']
@@ -130,7 +133,10 @@ class LBRYioFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        json_response = json.loads(response)
+        try:
+            json_response = json.loads(response)
+        except (ValueError, json.JSONDecodeError) as err:
+            raise InvalidExchangeRateResponse(self.name, str(err))
         if 'data' not in json_response:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         return 1.0 / json_response['data']['lbc_btc']
@@ -149,7 +155,7 @@ class LBRYioBTCFeed(MarketFeed):
     def _handle_response(self, response):
         try:
             json_response = json.loads(response)
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
         if 'data' not in json_response:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
@@ -169,7 +175,7 @@ class CryptonatorBTCFeed(MarketFeed):
     def _handle_response(self, response):
         try:
             json_response = json.loads(response)
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             raise InvalidExchangeRateResponse(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
@@ -190,7 +196,7 @@ class CryptonatorFeed(MarketFeed):
     def _handle_response(self, response):
         try:
             json_response = json.loads(response)
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             raise InvalidExchangeRateResponse(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
