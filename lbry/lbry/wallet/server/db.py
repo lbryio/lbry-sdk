@@ -3,7 +3,7 @@ import struct
 from typing import Union, Tuple, Set, List
 from binascii import unhexlify
 from itertools import chain
-
+from decimal import Decimal
 
 from torba.server.db import DB
 from torba.server.util import class_logger
@@ -106,6 +106,8 @@ class SQLDB:
             -- streams
             stream_type text,
             media_type text,
+            fee_amount integer default 0,
+            fee_currency text,
 
             -- claims which are channels
             public_key_bytes bytes,
@@ -144,6 +146,8 @@ class SQLDB:
         create index if not exists claim_claim_type_idx on claim (claim_type);
         create index if not exists claim_stream_type_idx on claim (stream_type);
         create index if not exists claim_media_type_idx on claim (media_type);
+        create index if not exists claim_fee_amount_idx on claim (fee_amount);
+        create index if not exists claim_fee_currency_idx on claim (fee_currency);
 
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
 
@@ -276,6 +280,8 @@ class SQLDB:
                 'stream_type': None,
                 'media_type': None,
                 'release_time': None,
+                'fee_currency': None,
+                'fee_amount': None
             }
             claims.append(claim_record)
 
@@ -291,6 +297,9 @@ class SQLDB:
                 claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
                 if claim.stream.release_time:
                     claim_record['release_time'] = claim.stream.release_time
+                if claim.stream.has_fee:
+                    claim_record['fee_currency'] = claim.stream.fee.currency.lower()
+                    claim_record['fee_amount'] = int(claim.stream.fee.amount*1000)
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
@@ -313,11 +322,13 @@ class SQLDB:
             self.db.executemany("""
                 INSERT OR IGNORE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
-                    claim_type, media_type, stream_type, timestamp, creation_timestamp, height,
+                    claim_type, media_type, stream_type, timestamp, creation_timestamp,
+                    fee_currency, fee_amount, height,
                     creation_height, release_time, activation_height, expiration_height, short_url)
                 VALUES (
                     :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position, :amount,
-                    :claim_type, :media_type, :stream_type, :timestamp, :timestamp, :height, :height,
+                    :claim_type, :media_type, :stream_type, :timestamp, :timestamp,
+                    :fee_currency, :fee_amount, :height, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
                     CASE WHEN :height >= 137181 THEN :height+2102400 ELSE :height+262974 END,
@@ -334,7 +345,7 @@ class SQLDB:
                 UPDATE claim SET
                     txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
                     claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
-                    timestamp=:timestamp,
+                    timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency,
                     release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;
                 """, claims)
@@ -753,10 +764,12 @@ class SQLDB:
                 postfix = ''
                 if isinstance(value, str):
                     if len(value) >= 2 and value[:2] in ops:
-                        postfix, value = ops[value[:2]], int(value[2:])
+                        postfix, value = ops[value[:2]], value[2:]
                     elif len(value) >= 1 and value[0] in ops:
-                        postfix, value = ops[value[0]], int(value[1:])
-                constraints[f'claim.{constraint}{postfix}'] = value
+                        postfix, value = ops[value[0]], value[1:]
+                if constraint == 'fee_amount':
+                    value = Decimal(value)*1000
+                constraints[f'claim.{constraint}{postfix}'] = int(value)
 
         if constraints.pop('is_controlling', False):
             if {'sequence', 'amount_order'}.isdisjoint(constraints):
@@ -821,6 +834,9 @@ class SQLDB:
             if media_types:
                 constraints['claim.media_type__in'] = media_types
 
+        if 'fee_currency' in constraints:
+            constraints['claim.fee_currency'] = constraints.pop('fee_currency').lower()
+
         _apply_constraints_for_array_attributes(constraints, 'tag', clean_tags)
         _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _)
         _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _)
@@ -865,7 +881,7 @@ class SQLDB:
 
     INTEGER_PARAMS = {
         'height', 'creation_height', 'activation_height', 'expiration_height',
-        'timestamp', 'creation_timestamp', 'release_time',
+        'timestamp', 'creation_timestamp', 'release_time', 'fee_amount',
         'tx_position', 'channel_join', 'signature_valid',
         'amount', 'effective_amount', 'support_amount',
         'trending_group', 'trending_mixed',
@@ -874,7 +890,7 @@ class SQLDB:
 
     SEARCH_PARAMS = {
         'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids', 'public_key_id',
-        'claim_type', 'stream_types', 'media_types',
+        'claim_type', 'stream_types', 'media_types', 'fee_currency',
         'any_tags', 'all_tags', 'not_tags',
         'any_locations', 'all_locations', 'not_locations',
         'any_languages', 'all_languages', 'not_languages',
