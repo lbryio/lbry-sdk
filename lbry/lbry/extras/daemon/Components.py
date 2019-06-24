@@ -510,7 +510,7 @@ class UPnPComponent(Component):
             external_ip = await utils.get_external_ip()
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
-        if self.external_ip:
+        if external_ip:
             self.external_ip = external_ip
         # assert self.external_ip is not None   # TODO: handle going/starting offline
 
