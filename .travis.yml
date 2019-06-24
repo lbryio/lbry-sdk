@@ -53,48 +53,28 @@ jobs:
         - coverage combine lbry
         - bash <(curl -s https://codecov.io/bash)
 
-    - stage: build
-      name: "Windows"
-      language: generic
-      services:
-        - docker
-      install:
-        - docker pull lbry/pyinstaller34_32bits:py371
-      script:
-        - pushd lbry && python scripts/set_build.py && popd
-        - docker run -v "$(pwd):/src/lbry" lbry/pyinstaller34_32bits:py371 lbry/lbry/scripts/wine_build.sh
-        - sudo zip -j lbry/dist/lbrynet-windows.zip lbry/dist/lbrynet.exe
-      deploy:
-        provider: releases
-        api_key: $GITHUB_OAUTH_TOKEN
-        file: lbry/dist/lbrynet-windows.zip
-        skip_cleanup: true
-        overwrite: true
-        draft: true
-        on:
-          tags: true
-      addons:
-        artifacts:
-          working_dir: lbry/dist
-          paths:
-            - lbrynet-windows.zip
-          target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})
-
     - &build
       name: "Linux"
       env: OS=linux
       install:
-        - pip3 install pyinstaller
-        - cd torba && pip3 install -e . && cd ..
+        - pip install pyinstaller
+        - cd torba && pip install -e . && cd ..
         - cd lbry
-        - python3 scripts/set_build.py
-        - pip3 install -e .
+        - python scripts/set_build.py
+        - pip install -e .
       script:
         - pyinstaller -F -n lbrynet lbry/extras/cli.py
-        - chmod +x dist/lbrynet
-        - zip -j dist/lbrynet-${OS}.zip dist/lbrynet
-        - ./dist/lbrynet --version
+        - cd dist
+        - chmod +x lbrynet
+        - ./lbrynet --version
+        - zip -j lbrynet-${OS}.zip lbrynet
+      after_success:
+        - pip install awscli
+        - aws configure set aws_access_key_id $ARTIFACTS_KEY
+        - aws configure set aws_secret_access_key $ARTIFACTS_SECRET
+        - aws configure set region us-east-1
+        - export S3_PATH="/daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})"
+        - aws s3 cp lbrynet-${OS}.zip s3://build.lbry.io${S3_PATH}/lbrynet-${OS}.zip
       deploy:
         provider: releases
         api_key: $GITHUB_OAUTH_TOKEN
@@ -104,24 +84,39 @@ jobs:
         draft: true
         on:
           tags: true
-      addons:
-        artifacts:
-          working_dir: dist
-          paths:
-            - lbrynet-${OS}.zip
-          # artifact uploader thinks lbry is a directory, https://github.com/travis-ci/artifacts/issues/78
-          target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})
 
     - <<: *build
       name: "Mac"
       os: osx
       osx_image: xcode8.3
-      language: generic
+      language: shell
       env: OS=mac
-      cache: false
+      #cache: false
       before_install:
         - brew upgrade python || true
+        - pip3 install --user --upgrade pip virtualenv
+        - /Users/travis/Library/Python/3.7/bin/virtualenv $HOME/venv
+        - source $HOME/venv/bin/activate
+
+    - <<: *build
+      name: "Windows"
+      os: windows
+      language: shell
+      env:
+        - OS=windows
+        - PATH=/C/Users/travis/AppData/Roaming/Python/Python37/Scripts:/c/Python37:/c/Python37/Scripts:/C/Windows/System32/downlevel:$PATH
+      before_install:
+        - choco install python --x86
+        - pip install --user --upgrade pip virtualenv
+        - virtualenv $HOME/venv
+        - source $HOME/venv/Scripts/activate
+        - pip install pywin32
+      script:
+        - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
+        - cd dist
+        - ./lbrynet.exe --version
+        - 7z a -tzip lbrynet-windows.zip lbrynet.exe
+
 
     - if: tag IS present
       stage: build
