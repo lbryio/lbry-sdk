@@ -67,8 +67,9 @@ jobs:
         - pyinstaller -F -n lbrynet lbry/extras/cli.py
         - cd dist
         - chmod +x lbrynet
-        - ./lbrynet --version
         - zip -j lbrynet-${OS}.zip lbrynet
+        - shasum -a 256 -b lbrynet-${OS}.zip
+        - ./lbrynet --version
       after_success:
         - aws configure set aws_access_key_id $ARTIFACTS_KEY
         - aws configure set aws_secret_access_key $ARTIFACTS_SECRET
@@ -115,9 +116,9 @@ jobs:
       script:
         - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
         - cd dist
-        - ./lbrynet.exe --version
         - 7z a -tzip lbrynet-windows.zip lbrynet.exe
-
+        - sha256sum -b lbrynet-windows.zip
+        - ./lbrynet.exe --version
     - if: tag IS present
       stage: build
       name: "Wallet Server Docker Image - Tagged Release"
