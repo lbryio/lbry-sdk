@@ -77,8 +77,8 @@ def get_release_text(desc: str):
 def get_previous_final(repo, current_release):
     assert current_release.rc is not None, "Need an rc to find the previous final release."
     previous = None
-    for release in repo.releases(current_release.rc + 1):
-        previous = release
+    for tag in repo.tags(current_release.rc+1):
+        previous = tag
     return previous
 
 
@@ -143,12 +143,14 @@ def release(args):
     print(f'Current Version: {current_version}')
     new_version = current_version.increment(args.action)
     print(f'    New Version: {new_version}')
-    print()
 
     if args.action == '*-rc':
-        previous_release = get_previous_final(repo, current_version)
+        previous_release = repo.release_from_tag(args.start_tag or get_previous_final(repo, current_version))
     else:
         previous_release = repo.release_from_tag(current_version.tag)
+
+    print(f' Changelog From: {previous_release.tag_name} ({previous_release.created_at})')
+    print()
 
     incompats = []
     release_texts = []
@@ -263,6 +265,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", default=False, action="store_true", help="run unit tests")
     parser.add_argument("--dry-run", default=False, action="store_true", help="show what will be done")
+    parser.add_argument("--start-tag", help="custom starting tag for changelog generation")
     parser.add_argument("action", nargs="?", choices=['major+rc', 'minor+rc', 'micro+rc', '*+rc', '*-rc'])
     args = parser.parse_args()
     if args.test:
