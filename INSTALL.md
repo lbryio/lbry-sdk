@@ -31,10 +31,12 @@ Assistance installing Python3: https://docs.python-guide.org/starting/install3/o
 
 ### Linux
 
-On Ubuntu (we recommend 18.04), install the following:
+On Ubuntu (16.04 minimum, we recommend 18.04), install the following:
 
 ```
-sudo apt-get install build-essential python3.7 python3.7-dev git python3-venv libssl-dev python-protobuf
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt-get update
+sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv libssl-dev python-protobuf
 ```
 
 On Raspbian, you will also need to install `python-pyparsing`.
@@ -43,32 +45,61 @@ If you're running another Linux distro, install the equivalent of the above pack
 
 ## Installation
 
-To install:
+### Linux/Mac
+
+To install on Linux/Mac:
 
  ```
- git clone https://github.com/lbryio/lbry-sdk.git
- cd lbry
+ Clone the repository:
+ $ git clone https://github.com/lbryio/lbry-sdk.git
+ $ cd lbry-sdk
 
- Creating venv:
- python -m venv lbry-venv
+ Create a Python virtual environment for lbry-sdk:
+ $ python3.7 -m venv lbry-venv
  
- Activating lbry-venv on Linux/Mac:
- source lbry-venv/bin/activate
+ Activating lbry-sdk virtual environment:
+ $ source lbry-venv/bin/activate
  
- Activating lbry-venv on Windows: 
- lbry-venv\Scripts\activate
+ Make sure you're on Python 3.7+ (as the default Python in virtual environment):
+ $ python --version
 
- python --version # Python 2 is not supported. Make sure you're on Python 3.7
+ Install packages:
+ $ make install
 
- pip install -e .
+ If you are on Linux and using PyCharm, generates initial configs:
+ $ make idea
  ```
 
-To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `virtualenv` command.
+To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `python3.7 -m venv lbry-venv` command.
+
+### Windows
+
+To install on Windows:
+
+ ```
+ Clone the repository:
+ > git clone https://github.com/lbryio/lbry-sdk.git
+ > cd lbry-sdk
+
+ Create a Python virtual environment for lbry-sdk:
+ > python -m venv lbry-venv
+
+ Activating lbry-sdk virtual environment:
+ > lbry-venv\Scripts\activate
+
+ Install packages:
+ > cd torba
+ > pip install -e .
+ > cd ../lbry
+ > pip install -e .
+ ```
 
 ## Run the tests
+
 To run the unit tests from the repo directory:
+
  ```
- trial --reactor=asyncio tests.unit
+ python -m unittest discover -s lbry tests.unit
  ```
 
 ## Usage
