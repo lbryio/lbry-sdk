@@ -1,7 +1,6 @@
 import sqlite3
 import logging
 import os
-import asyncio
 from lbry.blob.blob_info import BlobInfo
 from lbry.stream.descriptor import StreamDescriptor
 
@@ -24,10 +23,10 @@ def do_migration(conf):
         blobs_by_stream.setdefault(stream_hash, []).append(BlobInfo(position, blob_length or 0, iv, blob_hash))
 
     for stream_name, stream_key, suggested_filename, sd_hash, stream_hash in streams:
-        sd = StreamDescriptor(asyncio.get_event_loop(), blob_dir, stream_name, stream_key, suggested_filename,
+        sd = StreamDescriptor(None, blob_dir, stream_name, stream_key, suggested_filename,
                               blobs_by_stream[stream_hash], stream_hash, sd_hash)
         if sd_hash != sd.calculate_sd_hash():
-            log.warning("Stream for descriptor %s is invalid, cleaning it up", sd_hash)
+            log.info("Stream for descriptor %s is invalid, cleaning it up", sd_hash)
             blob_hashes = [blob.blob_hash for blob in blobs_by_stream[stream_hash]]
             delete_stream(cursor, stream_hash, sd_hash, blob_hashes, blob_dir)
 
