@@ -58,7 +58,7 @@ jobs:
       name: "Linux"
       env: OS=linux
       install:
-        - pip install pyinstaller
+        - pip install pyinstaller awscli
         - cd torba && pip install -e . && cd ..
         - cd lbry
         - python scripts/set_build.py
@@ -70,7 +70,6 @@ jobs:
         - ./lbrynet --version
         - zip -j lbrynet-${OS}.zip lbrynet
       after_success:
-        - pip install awscli
         - aws configure set aws_access_key_id $ARTIFACTS_KEY
         - aws configure set aws_secret_access_key $ARTIFACTS_SECRET
         - aws configure set region us-east-1
@@ -92,12 +91,13 @@ jobs:
       osx_image: xcode8.3
       language: shell
       env: OS=mac
-      #cache: false
       before_install:
         - brew upgrade python || true
         - pip3 install --user --upgrade pip virtualenv
         - /Users/travis/Library/Python/3.7/bin/virtualenv $HOME/venv
         - source $HOME/venv/bin/activate
+      before_cache:
+        - brew cleanup
 
     - <<: *build
       name: "Windows"
@@ -141,4 +141,5 @@ cache:
     - $HOME/venv
     - $HOME/.cache/pip
     - $HOME/Library/Caches/pip
+    - $HOME/Library/Caches/Homebrew
     - $TRAVIS_BUILD_DIR/.tox
