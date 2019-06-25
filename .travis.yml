@@ -74,12 +74,12 @@ jobs:
         - aws configure set aws_access_key_id $ARTIFACTS_KEY
         - aws configure set aws_secret_access_key $ARTIFACTS_SECRET
         - aws configure set region us-east-1
-        - export S3_PATH="/daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})"
-        - aws s3 cp lbrynet-${OS}.zip s3://build.lbry.io${S3_PATH}/lbrynet-${OS}.zip
+        - export S3_PATH="daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})"
+        - aws s3 cp lbrynet-${OS}.zip s3://build.lbry.io/${S3_PATH}/lbrynet-${OS}.zip
       deploy:
         provider: releases
         api_key: $GITHUB_OAUTH_TOKEN
-        file: dist/lbrynet-${OS}.zip
+        file: lbrynet-${OS}.zip
         skip_cleanup: true
         overwrite: true
         draft: true
@@ -118,7 +118,6 @@ jobs:
         - ./lbrynet.exe --version
         - 7z a -tzip lbrynet-windows.zip lbrynet.exe
 
-
     - if: tag IS present
       stage: build
       name: "Wallet Server Docker Image - Tagged Release"
@@ -127,6 +126,7 @@ jobs:
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
           - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -f lbry/scripts/Dockerfile.wallet_server .
           - docker push lbry/wallet-server:$TRAVIS_TAG
+
     - if: tag IS blank AND branch = master AND NOT type IN (pull_request)
       stage: build
       name: "Wallet Server Docker Image - Master"
@@ -138,6 +138,7 @@ jobs:
 
 cache:
   directories:
+    - $HOME/venv
     - $HOME/.cache/pip
     - $HOME/Library/Caches/pip
     - $TRAVIS_BUILD_DIR/.tox
