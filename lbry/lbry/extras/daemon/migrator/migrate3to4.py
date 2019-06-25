@@ -26,7 +26,7 @@ def migrate_blobs_db(db_dir):
 
     # if blobs.db doesn't exist, skip migration
     if not os.path.isfile(blobs_db):
-        log.error("blobs.db was not found but lbryfile_info.db was found, skipping migration")
+        log.info("blobs.db was not found but lbryfile_info.db was found, skipping migration")
         return
 
     blobs_db_file = sqlite3.connect(blobs_db)
