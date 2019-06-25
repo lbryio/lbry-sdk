@@ -5,6 +5,7 @@ from torba.client.wallet import Wallet
 from torba.client.constants import COIN
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.client.basedatabase import query, constraints_to_sql, AIOSQLite
+from torba.client.hash import sha256
 
 from torba.testcase import AsyncioTestCase
 
@@ -187,7 +188,7 @@ class TestQueries(AsyncioTestCase):
         to_address = await my_account.receiving.get_or_create_usable_address()
         to_hash = ledger_class.address_to_hash160(to_address)
         tx = ledger_class.transaction_class(height=height, is_verified=True) \
-            .add_inputs([self.txi(self.txo(1, NULL_HASH))]) \
+            .add_inputs([self.txi(self.txo(1, sha256(str(height).encode())))]) \
             .add_outputs([self.txo(1, to_hash)])
         await self.ledger.db.insert_transaction(tx)
         await self.ledger.db.save_transaction_io(tx, to_address, to_hash, '')
