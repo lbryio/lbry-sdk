@@ -54,6 +54,7 @@ jobs:
         - bash <(curl -s https://codecov.io/bash)
 
     - &build
+      stage: build
       name: "Linux"
       env: OS=linux
       install:
