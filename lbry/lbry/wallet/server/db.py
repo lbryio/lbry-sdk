@@ -281,7 +281,7 @@ class SQLDB:
                 'media_type': None,
                 'release_time': None,
                 'fee_currency': None,
-                'fee_amount': None
+                'fee_amount': 0
             }
             claims.append(claim_record)
 
