@@ -62,6 +62,7 @@ class BaseNetwork:
         self.client: ClientSession = None
         self.session_pool: SessionPool = None
         self.running = False
+        self.remote_height: int = 0
 
         self._on_connected_controller = StreamController()
         self.on_connected = self._on_connected_controller.stream
@@ -82,11 +83,13 @@ class BaseNetwork:
         connect_timeout = self.config.get('connect_timeout', 6)
         self.session_pool = SessionPool(network=self, timeout=connect_timeout)
         self.session_pool.start(self.config['default_servers'])
+        self.on_header.listen(self._update_remote_height)
         while True:
             try:
                 self.client = await self.pick_fastest_session()
                 if self.is_connected:
                     await self.ensure_server_version()
+                    self._update_remote_height((await self.subscribe_headers(),))
                     log.info("Successfully connected to SPV wallet server: %s:%d", *self.client.server)
                     self._on_connected_controller.add(True)
                     await self.client.on_disconnected.first
@@ -135,6 +138,10 @@ class BaseNetwork:
     async def probe_session(self, session: ClientSession):
         await session.send_request('server.banner')
         return session
+
+    def _update_remote_height(self, header_args):
+        if header_args and header_args[0]:
+            self.remote_height = header_args[0]["height"]
 
     def ensure_server_version(self, required='1.2'):
         return self.rpc('server.version', [__version__, required])
