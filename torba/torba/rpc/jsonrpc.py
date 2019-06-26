@@ -32,6 +32,7 @@ __all__ = ('JSONRPC', 'JSONRPCv1', 'JSONRPCv2', 'JSONRPCLoose',
 
 import itertools
 import json
+import typing
 from functools import partial
 from numbers import Number
 
@@ -596,7 +597,7 @@ class JSONRPCConnection(object):
         # Sent Requests and Batches that have not received a response.
         # The key is its request ID; for a batch it is sorted tuple
         # of request IDs
-        self._requests = {}
+        self._requests: typing.Dict[str, typing.Tuple[Request, Event]] = {}
         # A public attribute intended to be settable dynamically
         self.max_response_size = 0
 
@@ -683,7 +684,7 @@ class JSONRPCConnection(object):
     #
     # External API
     #
-    def send_request(self, request):
+    def send_request(self, request: Request) -> typing.Tuple[bytes, Event]:
         """Send a Request.  Return a (message, event) pair.
 
         The message is an unframed message to send over the network.
