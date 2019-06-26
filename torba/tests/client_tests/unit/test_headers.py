@@ -1,4 +1,6 @@
+import asyncio
 import os
+import tempfile
 from urllib.request import Request, urlopen
 
 from torba.testcase import AsyncioTestCase
@@ -91,3 +93,21 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
         self.assertEqual(headers.height, 32250)
         await headers.connect(len(headers), remainder)
         self.assertEqual(headers.height, 32259)
+
+    async def test_concurrency(self):
+        BLOCKS = 30
+        headers_temporary_file = tempfile.mktemp()
+        headers = MainHeaders(headers_temporary_file)
+        await headers.open()
+        self.addCleanup(os.remove, headers_temporary_file)
+        async def writer():
+            for block_index in range(BLOCKS):
+                await headers.connect(block_index, self.get_bytes(block_bytes(block_index + 1), block_bytes(block_index)))
+        async def reader():
+            for block_index in range(BLOCKS):
+                while len(headers) < block_index:
+                    await asyncio.sleep(0.000001)
+                assert headers[block_index]['block_height'] == block_index
+        reader_task = asyncio.create_task(reader())
+        await writer()
+        await reader_task
