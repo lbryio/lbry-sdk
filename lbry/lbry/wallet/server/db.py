@@ -838,8 +838,8 @@ class SQLDB:
                     'claim.signature_valid__is_null': True,
                     'claim.signature_valid': constraints.pop('signature_valid')
                 }
-        elif 'has_channel_signature' in constraints:
-            constraints['claim.signature_valid__is_not_null'] = constraints.pop('has_channel_signature')
+        elif constraints.pop('has_channel_signature', False):
+            constraints['claim.signature_valid__is_not_null'] = True
 
         if 'txid' in constraints:
             tx_hash = unhexlify(constraints.pop('txid'))[::-1]
