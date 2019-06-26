@@ -160,7 +160,6 @@ class HeadersComponent(Component):
 
     async def get_download_height(self):
         async with utils.aiohttp_request('HEAD', HEADERS_URL) as response:
-            log.warning(response)
             return response.content_length // HEADER_SIZE
 
     async def should_download_headers_from_s3(self):
