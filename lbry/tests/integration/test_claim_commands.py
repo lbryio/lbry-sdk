@@ -225,7 +225,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim4, claim3, claim2], all_tags=['abc'], any_tags=['def', 'ghi'])
 
     async def test_order_by(self):
-        height = await self.ledger.network.get_server_height()
+        height = self.ledger.network.remote_height
         claims = [await self.stream_create(f'claim{i}') for i in range(5)]
 
         await self.assertFindsClaims(claims, order_by=["^height"])

@@ -5,7 +5,6 @@ import math
 import binascii
 import typing
 from hashlib import sha256
-from types import SimpleNamespace
 import base58
 
 from aioupnp import __version__ as aioupnp_version
@@ -23,7 +22,6 @@ from lbry.extras.daemon.Component import Component
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.wallet import LbryWalletManager
-from lbry.wallet import Network
 
 
 log = logging.getLogger(__name__)
@@ -160,19 +158,10 @@ class HeadersComponent(Component):
             return os.stat(self.headers_file).st_size
         return 0
 
-    async def get_remote_height(self):
-        ledger = SimpleNamespace()
-        ledger.config = {
-            'default_servers': self.conf.lbryum_servers,
-            'data_path': self.conf.wallet_dir
-        }
-        net = Network(ledger)
-        first_connection = net.on_connected.first
-        asyncio.ensure_future(net.start())  # TODO: SKETCHY! it might be trapping a CancelledError and not raising it
-        await first_connection
-        remote_height = await net.get_server_height()
-        await net.stop()
-        return remote_height
+    async def get_download_height(self):
+        async with utils.aiohttp_request('HEAD', HEADERS_URL) as response:
+            log.warning(response)
+            return response.content_length // HEADER_SIZE
 
     async def should_download_headers_from_s3(self):
         if self.conf.blockchain_name != "lbrycrd_main":
@@ -181,8 +170,9 @@ class HeadersComponent(Component):
         s3_headers_depth = self.conf.s3_headers_depth
         if not s3_headers_depth:
             return False
+
         local_height = self.local_header_file_height()
-        remote_height = await self.get_remote_height()
+        remote_height = await self.get_download_height()
         log.info("remote height: %i, local height: %i", remote_height, local_height)
         if remote_height > (local_height + s3_headers_depth):
             return True
@@ -242,9 +232,9 @@ class WalletComponent(Component):
         return self.wallet_manager
 
     async def get_status(self):
-        if self.wallet_manager and self.running:
+        if self.wallet_manager and self.wallet_manager.ledger.network.remote_height:
             local_height = self.wallet_manager.ledger.headers.height
-            remote_height = await self.wallet_manager.ledger.network.get_server_height()
+            remote_height = self.wallet_manager.ledger.network.remote_height
             best_hash = self.wallet_manager.get_best_blockhash()
             return {
                 'blocks': max(local_height, 0),

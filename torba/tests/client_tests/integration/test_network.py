@@ -7,6 +7,15 @@ from torba.rpc import RPCSession
 from torba.testcase import IntegrationTestCase, AsyncioTestCase
 
 
+class NetworkTests(IntegrationTestCase):
+
+    async def test_remote_height_updated_automagically(self):
+        initial_height = self.ledger.network.remote_height
+        await self.blockchain.generate(1)
+        await self.ledger.network.on_header.first
+        self.assertEqual(self.ledger.network.remote_height, initial_height + 1)
+
+
 class ReconnectTests(IntegrationTestCase):
 
     VERBOSITY = logging.WARN

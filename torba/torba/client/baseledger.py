@@ -263,8 +263,8 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     async def join_network(self, *args):
         log.info("Subscribing and updating accounts.")
-        await self.update_headers()
-        await self.network.subscribe_headers()
+        async with self._header_processing_lock:
+            await self.update_headers()
         await self.subscribe_accounts()
         await self._update_tasks.done.wait()
 
