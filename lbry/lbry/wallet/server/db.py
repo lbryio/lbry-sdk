@@ -298,8 +298,11 @@ class SQLDB:
                 if claim.stream.release_time:
                     claim_record['release_time'] = claim.stream.release_time
                 if claim.stream.has_fee:
-                    claim_record['fee_currency'] = claim.stream.fee.currency.lower()
-                    claim_record['fee_amount'] = int(claim.stream.fee.amount*1000)
+                    fee = claim.stream.fee
+                    if isinstance(fee.currency, str):
+                        claim_record['fee_currency'] = fee.currency.lower()
+                    if isinstance(fee.amount, Decimal):
+                        claim_record['fee_amount'] = int(fee.amount*1000)
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
