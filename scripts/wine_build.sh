@@ -1,6 +1,6 @@
 set -x
 # must also be updated in travis.yml
-TORBA_VERSION=v0.5.4a2
+TORBA_VERSION=v0.5.4a3
 rm -rf /tmp/.wine-*
 
 apt-get -qq update

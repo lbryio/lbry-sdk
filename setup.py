@@ -23,7 +23,7 @@ setup(
         'console_scripts': 'lbrynet=lbrynet.extras.cli:main'
     },
     install_requires=[
-        'torba==0.5.4a2',
+        'torba==0.5.4a3',
         'aiohttp==3.5.4',
         'aioupnp==0.0.13',
         'appdirs==1.4.3',
