@@ -184,6 +184,8 @@ class LbryWalletManager(BaseWalletManager):
                         len(set(receiving_addresses).difference(set(migrated_receiving))))
 
     def get_best_blockhash(self):
+        if len(self.ledger.headers) <= 0:
+            return self.ledger.genesis_hash
         return self.ledger.headers.hash(self.ledger.headers.height).decode()
 
     def get_unused_address(self):
