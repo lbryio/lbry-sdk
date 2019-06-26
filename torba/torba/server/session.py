@@ -6,7 +6,7 @@
 # and warranty status of this software.
 
 """Classes for local RPC server and remote client TCP/SSL servers."""
-
+import collections
 import asyncio
 import codecs
 import datetime
@@ -278,18 +278,37 @@ class SessionManager:
     def _get_info(self):
         """A summary of server state."""
         group_map = self._group_map()
+        method_counts = collections.defaultdict(0)
+        error_count = 0
+        logged = 0
+        paused = 0
+        pending_requests = 0
+        closing = 0
+
+        for s in self.sessions:
+            error_count += s.errors
+            if s.log_me:
+                logged += 1
+            if not s._can_send.is_set():
+                paused += 1
+            pending_requests += s.count_pending_items()
+            if s.is_closing():
+                closing += 1
+            for request, _ in s.connection._requests.values():
+                method_counts[request.method] += 1
         return {
-            'closing': len([s for s in self.sessions if s.is_closing()]),
+            'closing': closing,
             'daemon': self.daemon.logged_url(),
             'daemon_height': self.daemon.cached_height(),
             'db_height': self.db.db_height,
-            'errors': sum(s.errors for s in self.sessions),
+            'errors': error_count,
             'groups': len(group_map),
-            'logged': len([s for s in self.sessions if s.log_me]),
-            'paused': sum(not s._can_send.is_set() for s in self.sessions),
+            'logged': logged,
+            'paused': paused,
             'pid': os.getpid(),
             'peers': self.peer_mgr.info(),
-            'requests': sum(s.count_pending_items() for s in self.sessions),
+            'requests': pending_requests,
+            'method_counts': method_counts,
             'sessions': self.session_count(),
             'subs': self._sub_count(),
             'txs_sent': self.txs_sent,
