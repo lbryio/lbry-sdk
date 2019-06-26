@@ -1,5 +1,4 @@
 import os
-import asyncio
 import logging
 from io import BytesIO
 from typing import Optional, Iterator, Tuple
@@ -35,7 +34,6 @@ class BaseHeaders:
             self.io = BytesIO()
         self.path = path
         self._size: Optional[int] = None
-        self._header_connect_lock = asyncio.Lock()
 
     async def open(self):
         if self.path != ':memory:':
@@ -98,27 +96,25 @@ class BaseHeaders:
     async def connect(self, start: int, headers: bytes) -> int:
         added = 0
         bail = False
-        loop = asyncio.get_running_loop()
-        async with self._header_connect_lock:
-            for height, chunk in self._iterate_chunks(start, headers):
-                try:
-                    # validate_chunk() is CPU bound and reads previous chunks from file system
-                    await loop.run_in_executor(None, self.validate_chunk, height, chunk)
-                except InvalidHeader as e:
-                    bail = True
-                    chunk = chunk[:(height-e.height)*self.header_size]
-                written = 0
-                if chunk:
-                    self.io.seek(height * self.header_size, os.SEEK_SET)
-                    written = self.io.write(chunk) // self.header_size
-                    self.io.truncate()
-                    # .seek()/.write()/.truncate() might also .flush() when needed
-                    # the goal here is mainly to ensure we're definitely flush()'ing
-                    await loop.run_in_executor(None, self.io.flush)
-                    self._size = None
-                added += written
-                if bail:
-                    break
+        for height, chunk in self._iterate_chunks(start, headers):
+            try:
+                # validate_chunk() is CPU bound and reads previous chunks from file system
+                self.validate_chunk(height, chunk)
+            except InvalidHeader as e:
+                bail = True
+                chunk = chunk[:(height-e.height)*self.header_size]
+            written = 0
+            if chunk:
+                self.io.seek(height * self.header_size, os.SEEK_SET)
+                written = self.io.write(chunk) // self.header_size
+                self.io.truncate()
+                # .seek()/.write()/.truncate() might also .flush() when needed
+                # the goal here is mainly to ensure we're definitely flush()'ing
+                self.io.flush()
+                self._size = None
+            added += written
+            if bail:
+                break
         return added
 
     def validate_chunk(self, height, chunk):
