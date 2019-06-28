@@ -118,10 +118,23 @@ class HeadersComponent(Component):
         return self
 
     async def get_status(self):
-        return {} if not self._downloading_headers else {
-            'downloading_headers': self._downloading_headers,
-            'download_progress': self._headers_progress_percent
-        }
+        if self._downloading_headers:
+            progress = self._headers_progress_percent
+        else:
+            try:
+                wallet_manager = self.component_manager.get_component(WALLET_COMPONENT)
+                if wallet_manager and wallet_manager.ledger.network.remote_height > 0:
+                    local_height = wallet_manager.ledger.headers.height
+                    remote_height = wallet_manager.ledger.network.remote_height
+                    progress = max(math.ceil(float(local_height) / float(remote_height) * 100), 0)
+                else:
+                    return {}
+            except NameError:
+                return {}
+        return {
+            'downloading_headers': True,
+            'download_progress': progress
+        } if progress < 100 else {}
 
     async def fetch_headers_from_s3(self):
         local_header_size = self.local_header_file_size()
@@ -160,6 +173,9 @@ class HeadersComponent(Component):
 
     async def get_download_height(self):
         async with utils.aiohttp_request('HEAD', HEADERS_URL) as response:
+            if response.status != 200:
+                log.warning("Header download error: %s", response.status)
+                return 0
             return response.content_length // HEADER_SIZE
 
     async def should_download_headers_from_s3(self):
@@ -191,7 +207,7 @@ class HeadersComponent(Component):
         current_checksum = hashsum.hexdigest()
         if current_checksum != checksum:
             msg = f"Expected checksum {checksum}, got {current_checksum}"
-            log.warning("Wallet file corrupted, checksum mismatch. " + msg)
+            log.warning("Headers file corrupted, checksum mismatch. " + msg)
             log.warning("Deleting header file so it can be downloaded again.")
             os.unlink(self.headers_file)
         elif (self.local_header_file_size() % HEADER_SIZE) != 0:
