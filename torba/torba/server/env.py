@@ -33,7 +33,7 @@ class Env:
         self.allow_root = self.boolean('ALLOW_ROOT', False)
         self.host = self.default('HOST', 'localhost')
         self.rpc_host = self.default('RPC_HOST', 'localhost')
-        self.loop_policy = self.event_loop_policy()
+        self.loop_policy = self.set_event_loop_policy()
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
@@ -129,14 +129,18 @@ class Env:
             raise cls.Error('remove obsolete environment variables {}'
                             .format(bad))
 
-    def event_loop_policy(self):
-        policy = self.default('EVENT_LOOP_POLICY', None)
-        if policy is None:
-            return None
-        if policy == 'uvloop':
+    def set_event_loop_policy(self):
+        policy_name = self.default('EVENT_LOOP_POLICY', None)
+        if not policy_name:
+            import asyncio
+            return asyncio.get_event_loop_policy()
+        elif policy_name == 'uvloop':
             import uvloop
-            return uvloop.EventLoopPolicy()
-        raise self.Error('unknown event loop policy "{}"'.format(policy))
+            import asyncio
+            loop_policy = uvloop.EventLoopPolicy()
+            asyncio.set_event_loop_policy(loop_policy)
+            return loop_policy
+        raise self.Error('unknown event loop policy "{}"'.format(policy_name))
 
     def cs_host(self, *, for_rpc):
         """Returns the 'host' argument to pass to asyncio's create_server
