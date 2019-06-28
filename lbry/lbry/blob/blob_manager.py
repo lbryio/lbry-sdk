@@ -86,7 +86,8 @@ class BlobManager:
         to_add = await self.storage.sync_missing_blobs(in_blobfiles_dir)
         if to_add:
             self.completed_blob_hashes.update(to_add)
-        self.connection_manager.start()
+        if self.config.track_bandwidth:
+            self.connection_manager.start()
         return True
 
     def stop(self):
