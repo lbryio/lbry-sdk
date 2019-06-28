@@ -61,7 +61,7 @@ def calculate_trending(db, height, is_first_sync, final_height):
 
     start = (height-TRENDING_WINDOW)+1
     db.execute(f"""
-    INSERT INTO trend (claim_hash, height, amount)
+    INSERT OR IGNORE INTO trend (claim_hash, height, amount)
     SELECT claim_hash, {start}, COALESCE(
             (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
              AND height >= {start}), 0
