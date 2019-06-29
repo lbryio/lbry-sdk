@@ -11,27 +11,12 @@ def block_bytes(blocks):
 
 
 class BitcoinHeadersTestCase(AsyncioTestCase):
-
-    # Download headers instead of storing them in git.
-    HEADER_URL = 'http://headers.electrum.org/blockchain_headers'
     HEADER_FILE = 'bitcoin_headers'
-    HEADER_BYTES = block_bytes(32260)  # 2.6MB
     RETARGET_BLOCK = 32256  # difficulty: 1 -> 1.18
 
     def setUp(self):
         self.maxDiff = None
         self.header_file_name = os.path.join(os.path.dirname(__file__), self.HEADER_FILE)
-        if not os.path.exists(self.header_file_name):
-            req = Request(self.HEADER_URL)
-            req.add_header('Range', 'bytes=0-{}'.format(self.HEADER_BYTES-1))
-            with urlopen(req) as response, open(self.header_file_name, 'wb') as header_file:
-                header_file.write(response.read())
-        if os.path.getsize(self.header_file_name) != self.HEADER_BYTES:
-            os.remove(self.header_file_name)
-            raise Exception(
-                "Downloaded headers for testing are not the correct number of bytes. "
-                "They were deleted. Try running the tests again."
-            )
 
     def get_bytes(self, upto: int = -1, after: int = 0) -> bytes:
         with open(self.header_file_name, 'rb') as headers:
