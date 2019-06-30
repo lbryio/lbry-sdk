@@ -422,7 +422,8 @@ class BaseDatabase(SQLiteMixin):
             annotated_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
-                    my_account=my_account,
+                    my_accounts=[my_account],
+                    account=[my_account],
                     txid__in=txids[offset:offset+step],
                 ))
             })
@@ -432,7 +433,8 @@ class BaseDatabase(SQLiteMixin):
             referenced_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
-                    my_account=my_account,
+                    my_accounts=[my_account],
+                    account=[my_account],
                     txoid__in=txi_txoids[offset:offset+step],
                 ))
             })
@@ -470,10 +472,12 @@ class BaseDatabase(SQLiteMixin):
             " JOIN tx USING (txid)".format(cols), **constraints
         ))
 
-    async def get_txos(self, my_account=None, no_tx=False, **constraints):
-        my_account = my_account or constraints.get('account', None)
-        if isinstance(my_account, BaseAccount):
-            my_account = my_account.public_key.address
+    async def get_txos(self, my_accounts=None, **constraints):
+        my_account_address = []
+        if my_accounts is not None:
+            my_account_address = [my_account.public_key.address for my_account in my_accounts if
+                                  isinstance(my_account, BaseAccount)]
+
         if 'order_by' not in constraints:
             constraints['order_by'] = ["tx.height=0 DESC", "tx.height DESC", "tx.position DESC"]
         rows = await self.select_txos(
@@ -499,7 +503,7 @@ class BaseDatabase(SQLiteMixin):
                     )
                 txo = txs[row[0]].outputs[row[5]]
             txo.is_change = row[6] == 1
-            txo.is_my_account = row[7] == my_account
+            txo.is_my_account = row[7] in my_account_address
             txos.append(txo)
         return txos
 
@@ -507,6 +511,7 @@ class BaseDatabase(SQLiteMixin):
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
+        constraints.pop('my_accounts', None)
         count = await self.select_txos('count(*)', **constraints)
         return count[0][0]
 

@@ -53,9 +53,10 @@ class WalletDatabase(BaseDatabase):
         return row
 
     async def get_txos(self, **constraints) -> List[Output]:
-        accounts = constraints.get('my_account', constraints.get('account', None))
-        if not isinstance(accounts, List) and accounts is not None:
-            accounts = [accounts]
+        my_accounts = constraints.get('my_accounts', None)
+        filtering_accounts = constraints.get('accounts', None)
+        if not isinstance(filtering_accounts, List) and filtering_accounts is not None:
+            filtering_accounts = [filtering_accounts]
 
         txos = await super().get_txos(**constraints)
 
@@ -64,8 +65,8 @@ class WalletDatabase(BaseDatabase):
             if txo.is_claim and txo.can_decode_claim:
                 if txo.claim.is_signed:
                     channel_ids.add(txo.claim.signing_channel_id)
-                if txo.claim.is_channel and accounts is not None:
-                    for account in accounts:
+                if txo.claim.is_channel and my_accounts is not None:
+                    for account in my_accounts:
                         private_key = account.get_channel_private_key(txo.claim.channel.public_key_bytes)
                         if private_key is not None:
                             txo.private_key = private_key
@@ -75,7 +76,8 @@ class WalletDatabase(BaseDatabase):
             channels = {
                 txo.claim_id: txo for txo in
                 (await self.get_claims(
-                    account=accounts,
+                    my_accounts=my_accounts,
+                    account=filtering_accounts,
                     claim_id__in=channel_ids
                 ))
             }
