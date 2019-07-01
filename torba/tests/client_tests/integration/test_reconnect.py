@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import socket
 from unittest.mock import Mock
 
 from torba.client.basenetwork import BaseNetwork
@@ -41,6 +42,51 @@ class ReconnectTests(IntegrationTestCase):
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
+
+    async def test_socket_timeout_then_reconnect(self):
+        # TODO: test reconnecting on an rpc request
+        # TODO: test rolling over to a working server when an rpc request fails before raising
+
+        self.assertTrue(self.ledger.network.is_connected)
+
+        await self.assertBalance(self.account, '0.0')
+
+        address1 = await self.account.receiving.get_or_create_usable_address()
+
+        real_sock = self.ledger.network.client.transport._extra.pop('socket')
+        mock_sock = Mock(spec=socket.socket)
+
+        for attr in dir(real_sock):
+            if not attr.startswith('__'):
+                setattr(mock_sock, attr, getattr(real_sock, attr))
+
+        raised = asyncio.Event(loop=self.loop)
+
+        def recv(*a, **kw):
+            raised.set()
+            raise TimeoutError("[Errno 60] Operation timed out")
+
+        mock_sock.recv = recv
+        self.ledger.network.client.transport._sock = mock_sock
+        self.ledger.network.client.transport._extra['socket'] = mock_sock
+
+        await self.blockchain.send_to_address(address1, 21)
+        await self.blockchain.generate(1)
+        self.assertFalse(raised.is_set())
+
+        await asyncio.wait_for(raised.wait(), 2)
+        await self.assertBalance(self.account, '0.0')
+        self.assertFalse(self.ledger.network.is_connected)
+        self.assertIsNone(self.ledger.network.client.transport)
+
+        await self.blockchain.send_to_address(address1, 21)
+        await self.blockchain.generate(1)
+        await self.ledger.network.on_connected.first
+        self.assertTrue(self.ledger.network.is_connected)
+
+        await asyncio.sleep(30, loop=self.loop)
+        self.assertIsNotNone(self.ledger.network.client.transport)
+        await self.assertBalance(self.account, '42.0')
 
 
 class ServerPickingTestCase(AsyncioTestCase):

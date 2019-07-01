@@ -55,9 +55,25 @@ class ClientSession(BaseClientSession):
             self.ping_task.cancel()
 
 
+def protocol_exception_handler(loop: asyncio.AbstractEventLoop, context):
+    exception = context['exception']
+    if 'protocol' not in context or 'transport' not in context:
+        raise exception
+    if not isinstance(context['protocol'], ClientSession):
+        raise exception
+    transport: asyncio.Transport = context['transport']
+    message = context['message']
+    if message not in ("Fatal read error on socket transport", "Fatal write error on socket transport"):
+        raise exception
+    log.warning("Disconnecting after error: %s", str(exception))
+    transport.abort()
+    transport.close()
+
+
 class BaseNetwork:
 
     def __init__(self, ledger):
+        asyncio.get_event_loop().set_exception_handler(protocol_exception_handler)
         self.config = ledger.config
         self.client: ClientSession = None
         self.session_pool: SessionPool = None
