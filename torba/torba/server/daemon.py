@@ -55,6 +55,7 @@ class Daemon:
         self.max_retry = max_retry
         self._height = None
         self.available_rpcs = {}
+        self.connector = aiohttp.TCPConnector()
 
     def set_url(self, url):
         """Set the URLS to the given list, and switch to the first one."""
@@ -89,7 +90,7 @@ class Daemon:
 
     def client_session(self):
         """An aiohttp client session."""
-        return aiohttp.ClientSession()
+        return aiohttp.ClientSession(connector=self.connector, connector_owner=False)
 
     async def _send_data(self, data):
         async with self.workqueue_semaphore:

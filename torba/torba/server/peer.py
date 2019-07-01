@@ -70,6 +70,7 @@ class Peer:
         # Transient, non-persisted metadata
         self.bad = False
         self.other_port_pairs = set()
+        self.status = 2
 
     @classmethod
     def peers_from_features(cls, features, source):
