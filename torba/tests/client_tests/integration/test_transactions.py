@@ -52,7 +52,7 @@ class BasicTransactionTests(IntegrationTestCase):
         # this check must happen before generating a new block
         self.assertTrue(all([
             tx.inputs[0].txo_ref.txo is not None
-            for tx in await self.ledger.db.get_transactions(txid__in=[tx.id for tx in txs])
+            for tx in await self.ledger.db.get_transactions(txid__in=[tx.id for tx in txs], my_account=self.account)
         ]))
 
         await self.blockchain.generate(1)
