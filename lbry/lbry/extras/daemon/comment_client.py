@@ -3,7 +3,7 @@ import time
 import hashlib
 import binascii
 
-import aiohttp
+from lbrynet import utils
 import ecdsa
 from torba.client.hash import sha256
 from lbry.wallet.transaction import Output
@@ -47,10 +47,10 @@ def sign_comment(comment: dict, channel: Output):
 async def jsonrpc_post(url: str, method: str, **params) -> any:
     json_body = {'jsonrpc': '2.0', 'id': None, 'method': method, 'params': params}
     headers = {'Content-Type': 'application/json'}
-    async with aiohttp.request('POST', url, json=json_body, headers=headers) as response:
+    async with utils.aiohttp_request('POST', url, json=json_body, headers=headers) as response:
         try:
             result = await response.json()
             return result['result'] if 'result' in result else result
-        except aiohttp.client.ContentTypeError as cte:
+        except Exception as cte:
             log.exception('Unable to decode respose from server: %s', cte)
             return await response.text()
