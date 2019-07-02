@@ -91,7 +91,7 @@ class MainNetLedger(BaseLedger):
         try:
             for account in self.accounts:
                 balance = dewies_to_lbc(await account.get_balance())
-                channel_count = await account.get_channel_count()
+                channel_count = await account.get_channel_count(account=[account])
                 claim_count = await account.get_claim_count()
                 if isinstance(account.receiving, SingleKey):
                     log.info("Loaded single key account %s with %s LBC. "
