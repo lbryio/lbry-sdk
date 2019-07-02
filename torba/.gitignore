@@ -7,7 +7,6 @@ dist/
 
 # testing
 .tox/
-tests/client_tests/unit/bitcoin_headers
 torba/bin
 
 # cache and logs

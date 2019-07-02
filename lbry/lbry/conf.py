@@ -573,9 +573,9 @@ class Config(CLIConfig):
         "Whether to share usage stats and diagnostic info with LBRY.", True,
         previous_names=['upload_log', 'upload_log', 'share_debug_info']
     )
+    track_bandwidth = Toggle("Track bandwidth usage", True)
 
     # media server
-
     streaming_server = String('Host name and port to serve streaming media over range requests',
                               'localhost:5280', metavar='HOST:PORT')
     streaming_get = Toggle("Enable the /get endpoint for the streaming media server. "

@@ -12,6 +12,7 @@ import random
 import socket
 import ssl
 import time
+import typing
 from asyncio import Event, sleep
 from collections import defaultdict, Counter
 
@@ -72,7 +73,7 @@ class PeerManager:
         # ip_addr property is either None, an onion peer, or the
         # IP address that was connected to.  Adding a peer will evict
         # any other peers with the same host name or IP address.
-        self.peers = set()
+        self.peers: typing.Set[Peer] = set()
         self.permit_onion_peer_time = time.time()
         self.proxy = None
         self.group = TaskGroup()
@@ -394,7 +395,7 @@ class PeerManager:
         self.group.add(self._detect_proxy())
         self.group.add(self._import_peers())
 
-    def info(self):
+    def info(self) -> typing.Dict[str, int]:
         """The number of peers."""
         self._set_peer_statuses()
         counter = Counter(peer.status for peer in self.peers)
