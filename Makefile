@@ -1,31 +1,35 @@
-.PHONY: venv create-venve clean-venv
+.PHONY: dev lint idea clean
 
-install:
-	cd torba && pip install -e .
-	cd lbry && pip install -e .
-	pip install mypy==0.701
-	pip install coverage astroid pylint
+VENV_PYTHON:=$(shell pwd)/lbry-venv/bin/python
 
-lint:
-	cd lbry && pylint lbry
-	cd torba && pylint --rcfile=setup.cfg torba
-	cd torba && mypy --ignore-missing-imports torba
+.DEFAULT: clean install
+
+install: lbry-venv/bin/activate lbry-venv/bin/lbrynet lbry-venv/bin/torba
+
+install-dev: install dev
+
+dev: lbry-venv/bin/activate
+	$(VENV_PYTHON) -m pip install mypy==0.701
+	$(VENV_PYTHON) -m pip install coverage astroid pylint
+
+lint: dev
+	$(VENV_PYTHON) -m pylint lbry/lbry
+	$(VENV_PYTHON) -m pylint --rcfile=torba/setup.cfg torba/torba
+	$(VENV_PYTHON) -m mypy --ignore-missing-imports torba/torba
 
 idea:
 	mkdir -p .idea
 	cp -r lbry/scripts/idea/* .idea
 
-VENV_NAME?=lbry-venv
-VENV_PYTHON=$(shell pwd)/$(VENV_NAME)/bin/python
+clean:
+	- rm -rf lbry-venv
 
-venv: clean-venv create-venv
-	cd torba && $(VENV_PYTHON) -m pip install -e .
-	cd lbry && $(VENV_PYTHON) -m pip install -e .
-	$(VENV_PYTHON) -m pip install mypy==0.701
-	$(VENV_PYTHON) -m pip install coverage astroid pylint
+lbry-venv/bin/activate:
+	virtualenv --python=python3.7 lbry-venv
 
-create-venv:
-	virtualenv --python=python3.7 $(VENV_NAME)
+lbry-venv/bin/lbrynet: lbry-venv/bin/activate lbry-venv/bin/torba
+	$(VENV_PYTHON) -m pip install -e lbry/
 
-clean-venv:
-	- rm -rf $(VENV_NAME)
+lbry-venv/bin/torba: lbry-venv/bin/activate
+	$(VENV_PYTHON) -m pip install -e torba/
+
