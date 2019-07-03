@@ -3,7 +3,7 @@ import time
 import hashlib
 import binascii
 
-from lbrynet import utils
+from lbry import utils
 import ecdsa
 from torba.client.hash import sha256
 from lbry.wallet.transaction import Output
