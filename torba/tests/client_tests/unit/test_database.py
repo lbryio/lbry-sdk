@@ -1,5 +1,6 @@
 import unittest
 import sqlite3
+from functools import wraps
 
 from torba.client.wallet import Wallet
 from torba.client.constants import COIN
@@ -223,6 +224,21 @@ class TestQueries(AsyncioTestCase):
 
     def txi(self, txo):
         return ledger_class.transaction_class.input_class.spend(txo)
+
+    async def test_large_tx_doesnt_hit_variable_limits(self):
+        # SQLite is usually compiled with 999 variables limit: https://www.sqlite.org/limits.html
+        # This can be removed when there is a better way. See: https://github.com/lbryio/lbry-sdk/issues/2281
+        fetchall = self.ledger.db.db.execute_fetchall
+        def check_parameters_length(sql, parameters):
+            self.assertLess(len(parameters or []), 999)
+            return fetchall(sql, parameters)
+
+        self.ledger.db.db.execute_fetchall = check_parameters_length
+        account = await self.create_account()
+        tx = await self.create_tx_from_nothing(account, 1)
+        for _ in range(1200):
+            tx = await self.create_tx_from_txo(tx.outputs[0], account, 1)
+        await self.ledger.db.get_transactions()
 
     async def test_queries(self):
         self.assertEqual(0, await self.ledger.db.get_address_count())

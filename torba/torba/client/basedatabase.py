@@ -412,21 +412,25 @@ class BaseDatabase(SQLiteMixin):
             for txi in txs[-1].inputs:
                 txi_txoids.append(txi.txo_ref.id)
 
-        annotated_txos = {
-            txo.id: txo for txo in
-            (await self.get_txos(
-                my_account=my_account,
-                txid__in=txids
-            ))
-        }
+        annotated_txos = {}
+        for offset in range(0, len(txids), 900):
+            annotated_txos.update({
+                txo.id: txo for txo in
+                (await self.get_txos(
+                    my_account=my_account,
+                    txid__in=txids[offset:offset+900],
+                ))
+            })
 
-        referenced_txos = {
-            txo.id: txo for txo in
-            (await self.get_txos(
-                my_account=my_account,
-                txoid__in=txi_txoids
-            ))
-        }
+        referenced_txos = {}
+        for offset in range(0, len(txi_txoids), 900):
+            referenced_txos.update({
+                txo.id: txo for txo in
+                (await self.get_txos(
+                    my_account=my_account,
+                    txoid__in=txi_txoids[offset:offset+900],
+                ))
+            })
 
         for tx in txs:
             for txi in tx.inputs:
