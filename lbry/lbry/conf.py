@@ -170,6 +170,11 @@ class MaxKeyFee(Setting[dict]):
                 'amount': float(value['amount']),
             }
         if isinstance(value, str):
+            if not value:
+                return None
+            if value.lower() == "null":
+                return None
+
             value = value.split()
         if isinstance(value, list):
             return self._parse_list(value)
