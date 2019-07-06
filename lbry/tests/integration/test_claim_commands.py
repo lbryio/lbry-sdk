@@ -613,6 +613,16 @@ class ChannelCommands(CommandTestCase):
         for i, item in enumerate(channels["items"][::-1]):
             self.assertEqual(item["name"], f"@spam{i+1}")
 
+    async def test_error_if_filtering_account_not_a_subset_of_my_accounts(self):
+        account1_id, account1 = self.account.id, self.account
+        new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
+        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+
+        await self.out(self.channel_create('@spam', '1.0'))
+
+        with self.assertRaises(AssertionError):
+            await self.daemon.jsonrpc_channel_list(my_account_id=account1_id, account_ids=[account2_id])
+
 
 class StreamCommands(ClaimTestCase):
 

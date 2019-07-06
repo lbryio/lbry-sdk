@@ -423,7 +423,6 @@ class BaseDatabase(SQLiteMixin):
                 txo.id: txo for txo in
                 (await self.get_txos(
                     my_accounts=[my_account],
-                    account=[my_account],
                     txid__in=txids[offset:offset+step],
                 ))
             })
@@ -434,7 +433,6 @@ class BaseDatabase(SQLiteMixin):
                 txo.id: txo for txo in
                 (await self.get_txos(
                     my_accounts=[my_account],
-                    account=[my_account],
                     txoid__in=txi_txoids[offset:offset+step],
                 ))
             })
@@ -472,7 +470,7 @@ class BaseDatabase(SQLiteMixin):
             " JOIN tx USING (txid)".format(cols), **constraints
         ))
 
-    async def get_txos(self, my_accounts=None, **constraints):
+    async def get_txos(self, my_accounts, filtering_accounts=None, **constraints):
         my_account_address = []
         if my_accounts is not None:
             my_account_address = [my_account.public_key.address for my_account in my_accounts if
@@ -483,7 +481,7 @@ class BaseDatabase(SQLiteMixin):
         rows = await self.select_txos(
             "tx.txid, raw, tx.height, tx.position, tx.is_verified, "
             "txo.position, chain, account, amount, script",
-            **constraints
+            account=filtering_accounts, **constraints
         )
         txos = []
         txs = {}
@@ -512,6 +510,7 @@ class BaseDatabase(SQLiteMixin):
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
         constraints.pop('my_accounts', None)
+        constraints['account'] = constraints.pop('filtering_accounts', None)
         count = await self.select_txos('count(*)', **constraints)
         return count[0][0]
 

@@ -417,16 +417,16 @@ class BaseAccount:
         }
 
     def get_utxos(self, **constraints):
-        return self.ledger.db.get_utxos(account=self, **constraints)
+        return self.ledger.db.get_utxos(my_accounts=[self], **constraints)
 
     def get_utxo_count(self, **constraints):
-        return self.ledger.db.get_utxo_count(account=self, **constraints)
+        return self.ledger.db.get_utxo_count(my_accounts=[self], **constraints)
 
     def get_transactions(self, **constraints):
         return self.ledger.db.get_transactions(account=self, **constraints)
 
     def get_transaction_count(self, **constraints):
-        return self.ledger.db.get_transaction_count(account=self, **constraints)
+        return self.ledger.db.get_transaction_count(my_accounts=[self], **constraints)
 
     async def fund(self, to_account, amount=None, everything=False,
                    outputs=1, broadcast=False, **constraints):

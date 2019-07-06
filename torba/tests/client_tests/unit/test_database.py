@@ -259,7 +259,7 @@ class TestQueries(AsyncioTestCase):
 
         self.assertEqual(0, await self.ledger.db.get_transaction_count())
         self.assertEqual(0, await self.ledger.db.get_utxo_count())
-        self.assertEqual([], await self.ledger.db.get_utxos())
+        self.assertEqual([], await self.ledger.db.get_utxos(my_account=None))
         self.assertEqual(0, await self.ledger.db.get_txo_count())
         self.assertEqual(0, await self.ledger.db.get_balance())
         self.assertEqual(0, await self.ledger.db.get_balance(account=account1))
@@ -329,7 +329,7 @@ class TestQueries(AsyncioTestCase):
 
         # height 0 sorted to the top with the rest in descending order
         tx4 = await self.create_tx_from_nothing(account1, 0)
-        txos = await self.ledger.db.get_txos()
+        txos = await self.ledger.db.get_txos(my_accounts=None)
         self.assertEqual([0, 2, 1], [txo.tx_ref.height for txo in txos])
         self.assertEqual([tx4.id, tx2.id, tx1.id], [txo.tx_ref.id for txo in txos])
         txs = await self.ledger.db.get_transactions()
