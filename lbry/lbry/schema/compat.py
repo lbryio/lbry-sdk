@@ -36,7 +36,7 @@ def from_old_json_schema(claim, payload: bytes):
             pass
     if value.get('nsfw', False):
         stream.tags.append('mature')
-    if "fee" in value:
+    if "fee" in value and isinstance(value['fee'], dict):
         fee = value["fee"]
         currency = list(fee.keys())[0]
         if currency == 'LBC':
