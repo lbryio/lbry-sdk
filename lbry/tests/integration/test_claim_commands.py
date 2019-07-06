@@ -621,7 +621,7 @@ class ChannelCommands(CommandTestCase):
         await self.out(self.channel_create('@spam', '1.0'))
 
         with self.assertRaises(AssertionError):
-            await self.daemon.jsonrpc_channel_list(my_account_id=account1_id, account_ids=[account2_id])
+            await self.daemon.jsonrpc_channel_list(my_account_ids=[account1_id], account_ids=[account2_id])
 
 
 class StreamCommands(ClaimTestCase):

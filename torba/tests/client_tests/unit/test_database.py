@@ -259,7 +259,7 @@ class TestQueries(AsyncioTestCase):
 
         self.assertEqual(0, await self.ledger.db.get_transaction_count())
         self.assertEqual(0, await self.ledger.db.get_utxo_count())
-        self.assertEqual([], await self.ledger.db.get_utxos(my_account=None))
+        self.assertEqual([], await self.ledger.db.get_utxos(my_accounts=None))
         self.assertEqual(0, await self.ledger.db.get_txo_count())
         self.assertEqual(0, await self.ledger.db.get_balance())
         self.assertEqual(0, await self.ledger.db.get_balance(account=account1))

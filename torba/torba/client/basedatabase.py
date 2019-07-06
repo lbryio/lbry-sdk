@@ -510,7 +510,7 @@ class BaseDatabase(SQLiteMixin):
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
         constraints.pop('my_accounts', None)
-        constraints['account'] = constraints.pop('filtering_accounts', None)
+        constraints['account'] = constraints.pop('filtering_accounts', constraints.pop('account', None))
         count = await self.select_txos('count(*)', **constraints)
         return count[0][0]
 
