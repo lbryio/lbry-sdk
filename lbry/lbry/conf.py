@@ -162,19 +162,16 @@ class MaxKeyFee(Setting[dict]):
         return {'amount': amount, 'currency': currency}
 
     def deserialize(self, value):
-        if value is None:
-            return
+        if not value:
+            return None
         if isinstance(value, dict):
             return {
                 'currency': value['currency'],
                 'amount': float(value['amount']),
             }
         if isinstance(value, str):
-            if not value:
-                return None
             if value.lower() == "null":
                 return None
-
             value = value.split()
         if isinstance(value, list):
             return self._parse_list(value)
