@@ -180,6 +180,14 @@ class ClaimSearchCommand(ClaimTestCase):
         out_of_bounds = await self.claim_search(page=2, page_size=20, channel='@abc')
         self.assertEqual(out_of_bounds, [])
 
+        results = await self.daemon.jsonrpc_claim_search()
+        self.assertEqual(results['total_pages'], 2)
+        self.assertEqual(results['total_items'], 13)
+
+        results = await self.daemon.jsonrpc_claim_search(no_totals=True)
+        self.assertNotIn('total_pages', results)
+        self.assertNotIn('total_items', results)
+
     async def test_tag_search(self):
         claim1 = await self.stream_create('claim1', tags=['aBc'])
         claim2 = await self.stream_create('claim2', tags=['#abc', 'def'])

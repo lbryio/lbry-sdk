@@ -923,7 +923,8 @@ class SQLDB:
         'any_tags', 'all_tags', 'not_tags',
         'any_locations', 'all_locations', 'not_locations',
         'any_languages', 'all_languages', 'not_languages',
-        'is_controlling', 'limit', 'offset', 'order_by'
+        'is_controlling', 'limit', 'offset', 'order_by',
+        'no_totals',
     } | INTEGER_PARAMS
 
     ORDER_FIELDS = {
@@ -933,7 +934,9 @@ class SQLDB:
     def search(self, constraints) -> Tuple[List, List, int, int]:
         assert set(constraints).issubset(self.SEARCH_PARAMS), \
             f"Search query contains invalid arguments: {set(constraints).difference(self.SEARCH_PARAMS)}"
-        total = self.get_claims_count(**constraints)
+        total = None
+        if not constraints.pop('no_totals', False):
+            total = self.get_claims_count(**constraints)
         constraints['offset'] = abs(constraints.get('offset', 0))
         constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
         if 'order_by' not in constraints:

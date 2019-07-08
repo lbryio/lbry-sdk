@@ -77,7 +77,8 @@ class Outputs:
     def to_bytes(cls, txo_rows, extra_txo_rows, offset=0, total=None) -> bytes:
         page = OutputsMessage()
         page.offset = offset
-        page.total = total or len(txo_rows)
+        if total is not None:
+            page.total = total
         for row in txo_rows:
             cls.row_to_message(row, page.txos.add())
         for row in extra_txo_rows:
