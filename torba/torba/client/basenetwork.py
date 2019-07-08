@@ -3,6 +3,7 @@ import asyncio
 from asyncio import CancelledError
 from time import time
 from typing import List
+import socket
 
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
@@ -217,6 +218,8 @@ class SessionPool:
             log.warning("Timeout connecting to %s:%d", *session.server)
         except asyncio.CancelledError:  # pylint: disable=try-except-raise
             raise
+        except socket.gaierror:
+            log.warning("Could not resolve IP for %s", session.server[0])
         except Exception as err:  # pylint: disable=broad-except
             if 'Connect call failed' in str(err):
                 log.warning("Could not connect to %s:%d", *session.server)

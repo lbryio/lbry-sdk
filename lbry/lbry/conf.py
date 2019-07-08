@@ -362,6 +362,9 @@ class ConfigFileAccess:
         del self.data[key]
 
 
+TBC = typing.TypeVar('TBC', bound='BaseConfig')
+
+
 class BaseConfig:
 
     config = Path("Path to configuration file.", metavar='FILE')
@@ -418,7 +421,7 @@ class BaseConfig:
         }
 
     @classmethod
-    def create_from_arguments(cls, args):
+    def create_from_arguments(cls, args) -> TBC:
         conf = cls()
         conf.set_arguments(args)
         conf.set_environment()

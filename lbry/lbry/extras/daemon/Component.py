@@ -56,7 +56,8 @@ class Component(metaclass=ComponentType):
             self._running = True
             return result
         except asyncio.CancelledError:
-            pass
+            log.info("Cancelled setup of %s component", self.__class__.__name__)
+            raise
         except Exception as err:
             log.exception("Error setting up %s", self.component_name or self.__class__.__name__)
             raise err
@@ -67,7 +68,8 @@ class Component(metaclass=ComponentType):
             self._running = False
             return result
         except asyncio.CancelledError:
-            pass
+            log.info("Cancelled stop of %s component", self.__class__.__name__)
+            raise
         except Exception as err:
             log.exception("Error stopping %s", self.__class__.__name__)
             raise err
