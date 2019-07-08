@@ -1816,6 +1816,8 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     'publish_time', 'amount', 'effective_amount',
                                                     'support_amount', 'trending_group', 'trending_mixed',
                                                     'trending_local', 'trending_global', 'activation_height'
+            --no_totals                     : (bool) do not calculate the total number of pages and items in result set
+                                                     (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -1826,11 +1828,11 @@ class Daemon(metaclass=JSONRPCServerType):
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
         kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})
         txos, offset, total = await self.ledger.claim_search(**kwargs)
-        return {
-            "items": txos, "page": page_num, "page_size": page_size,
-            "total_pages": int((total + (page_size-1)) / page_size),
-            "total_items": total
-        }
+        result = {"items": txos, "page": page_num, "page_size": page_size}
+        if not kwargs.pop('no_totals', False):
+            result['total_pages'] = int((total + (page_size-1)) / page_size)
+            result['total_items'] = total
+        return result
 
     CHANNEL_DOC = """
     Create, update, abandon and list your channel claims.
