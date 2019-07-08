@@ -53,7 +53,6 @@ class WalletDatabase(BaseDatabase):
         return row
 
     async def get_txos(self, my_accounts, filtering_accounts=None, **constraints) -> List[Output]:
-        constraints.pop('account', None)
         # if filtering accounts are not given filter by my accounts
         if my_accounts is not None and filtering_accounts is None:
             filtering_accounts = my_accounts

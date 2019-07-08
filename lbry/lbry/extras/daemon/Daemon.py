@@ -1694,10 +1694,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        my_account = self.get_account_or_default(account_id)
+        account = self.get_account_or_default(account_id)
         return maybe_paginate(
-            my_account.get_claims,
-            my_account.get_claim_count,
+            account.get_claims,
+            account.get_claim_count,
             page, page_size
         )
 
@@ -2145,26 +2145,26 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_channel_list(self, my_account_ids=None, account_ids: list = None, page=None, page_size=None):
+    def jsonrpc_channel_list(self, account_id=None, page=None, page_size=None):
         """
         List my channel claims.
 
         Usage:
-            channel_list [<my_account_ids> | --my_account_ids=<my_account_ids>]
-                         [<account_ids> | --account_ids=<account_ids>]
+            channel_list [<account_id> | --account_id=<account_id>]
                          [--page=<page>] [--page_size=<page_size>]
 
         Options:
-            --my_account_ids=<my_account_ids>  : (str, list) ids of my accounts
-            --account_ids=<account_ids>        : (str, list) ids of the account to use for filtering
-            --page=<page>                      : (int) page to return during paginating
-            --page_size=<page_size>            : (int) number of items on page during pagination
+            --account_id=<account_id>  : (str) id of the account to use
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns: {Paginated[Output]}
         """
 
-        my_accounts = self.get_accounts_or_all(my_account_ids)
-        filtering_accounts = self.get_accounts_or_all(account_ids)
+        if account_id is not None:
+            account_id = [account_id]
+
+        my_accounts = filtering_accounts = self.get_accounts_or_all(account_id)
 
         return maybe_paginate(
             self.ledger.db.get_channels,
@@ -2750,10 +2750,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        my_account = self.get_account_or_default(account_id)
+        account = self.get_account_or_default(account_id)
         return maybe_paginate(
-            my_account.get_streams,
-            my_account.get_stream_count,
+            account.get_streams,
+            account.get_stream_count,
             page, page_size
         )
 
@@ -2844,10 +2844,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        my_account = self.get_account_or_default(account_id)
+        account = self.get_account_or_default(account_id)
         return maybe_paginate(
-            my_account.get_supports,
-            my_account.get_support_count,
+            account.get_supports,
+            account.get_support_count,
             page, page_size
         )
 
@@ -2975,11 +2975,11 @@ class Daemon(metaclass=JSONRPCServerType):
             }
 
         """
-        filtering_account = self.get_account_or_default(account_id)
+        account = self.get_account_or_default(account_id)
         return maybe_paginate(
             self.wallet_manager.get_history,
             self.ledger.db.get_transaction_count,
-            page, page_size, account=filtering_account
+            page, page_size, account=account
         )
 
     @requires(WALLET_COMPONENT)
@@ -3017,10 +3017,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        my_account = self.get_account_or_default(account_id)
+        account = self.get_account_or_default(account_id)
         return maybe_paginate(
-            my_account.get_utxos,
-            my_account.get_utxo_count,
+            account.get_utxos,
+            account.get_utxo_count,
             page, page_size
         )
 

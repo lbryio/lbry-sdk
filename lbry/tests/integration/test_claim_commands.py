@@ -470,15 +470,15 @@ class ChannelCommands(CommandTestCase):
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         # before sending
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_ids=[self.account.id])), 3)
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_ids=[account2_id])), 0)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(self.account.id)), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account2_id)), 0)
 
         other_address = await account2.receiving.get_or_create_usable_address()
         tx = await self.out(self.channel_update(claim_id, claim_address=other_address))
 
         # after sending
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_ids=[self.account.id])), 2)
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_ids=[account2_id])), 1)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(self.account.id)), 2)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account2_id)), 1)
 
         # should not have private key
         txo = (await account2.get_channels())[0]
@@ -546,7 +546,7 @@ class ChannelCommands(CommandTestCase):
         await self.out(self.channel_create('@spam', '1.0'))
 
         # channels in account1
-        channels = await self.out(self.daemon.jsonrpc_channel_list(None, [account1_id]))
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
         self.assertEqual(len(channels), 1)
 
         # total channels
@@ -561,7 +561,7 @@ class ChannelCommands(CommandTestCase):
         await self.out(self.channel_create('@baz', '1.0', account_id=account2_id))
 
         # channels in account2
-        channels = await self.out(self.daemon.jsonrpc_channel_list(None, [account2_id]))
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
         self.assertEqual(len(channels), 1)
 
         # total channels
@@ -577,7 +577,7 @@ class ChannelCommands(CommandTestCase):
             await self.out(self.channel_create(f'@spam{i}', '0.1'))
 
         # channels in account1
-        channels = await self.out(self.daemon.jsonrpc_channel_list(None, [account1_id]))
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
         self.assertEqual(len(channels), 7)
 
         result = await self.out(self.daemon.jsonrpc_account_send(
@@ -589,7 +589,7 @@ class ChannelCommands(CommandTestCase):
             await self.out(self.channel_create(f'@baz{i}', '0.1', account_id=account2_id))
 
         # channels in account2
-        channels = await self.out(self.daemon.jsonrpc_channel_list(None, [account2_id]))
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
         self.assertEqual(len(channels), 5)
 
         # total channels
@@ -612,16 +612,6 @@ class ChannelCommands(CommandTestCase):
 
         for i, item in enumerate(channels["items"][::-1]):
             self.assertEqual(item["name"], f"@spam{i+1}")
-
-    async def test_error_if_filtering_account_not_a_subset_of_my_accounts(self):
-        account1_id, account1 = self.account.id, self.account
-        new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
-        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
-
-        await self.out(self.channel_create('@spam', '1.0'))
-
-        with self.assertRaises(AssertionError):
-            await self.daemon.jsonrpc_channel_list(my_account_ids=[account1_id], account_ids=[account2_id])
 
 
 class StreamCommands(ClaimTestCase):
@@ -699,12 +689,12 @@ class StreamCommands(ClaimTestCase):
         baz_tx = await self.out(self.channel_create('@baz', '1.0', account_id=account2_id))
         baz_id = self.get_claim_id(baz_tx)
 
-        channels = await self.out(self.daemon.jsonrpc_channel_list(account_ids=[account1_id]))
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@spam')
-        self.assertEqual(channels, await self.out(self.daemon.jsonrpc_channel_list(account_ids=[account1_id])))
+        self.assertEqual(channels, await self.out(self.daemon.jsonrpc_channel_list(account1_id)))
 
-        channels = await self.out(self.daemon.jsonrpc_channel_list(account_ids=[account2_id]))
+        channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@baz')
 
