@@ -235,10 +235,20 @@ class TestQueries(AsyncioTestCase):
 
         self.ledger.db.db.execute_fetchall = check_parameters_length
         account = await self.create_account()
-        tx = await self.create_tx_from_nothing(account, 1)
-        for _ in range(1200):
-            tx = await self.create_tx_from_txo(tx.outputs[0], account, 1)
-        await self.ledger.db.get_transactions()
+        tx = await self.create_tx_from_nothing(account, 0)
+        for height in range(1200):
+            tx = await self.create_tx_from_txo(tx.outputs[0], account, height=height)
+        variable_limit = self.ledger.db.MAX_QUERY_VARIABLES
+        for limit in range(variable_limit-2, variable_limit+2):
+            txs = await self.ledger.db.get_transactions(limit=limit, order_by='height asc')
+            self.assertEqual(len(txs), limit)
+            inputs, outputs, last_tx = set(), set(), txs[0]
+            for tx in txs[1:]:
+                self.assertEqual(len(tx.inputs), 1)
+                self.assertEqual(tx.inputs[0].txo_ref.tx_ref.id, last_tx.id)
+                self.assertEqual(len(tx.outputs), 1)
+                last_tx = tx
+
 
     async def test_queries(self):
         self.assertEqual(0, await self.ledger.db.get_address_count())
