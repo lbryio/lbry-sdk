@@ -198,6 +198,7 @@ def rows_to_dict(rows, fields):
 class SQLiteMixin:
 
     CREATE_TABLES_QUERY: str
+    MAX_QUERY_VARIABLES = 900
 
     def __init__(self, path):
         self._db_path = path
@@ -396,7 +397,7 @@ class BaseDatabase(SQLiteMixin):
 
         tx_rows = await self.select_transactions(
             'txid, raw, height, position, is_verified',
-            order_by=["height=0 DESC", "height DESC", "position DESC"],
+            order_by=constraints.pop('order_by', ["height=0 DESC", "height DESC", "position DESC"]),
             **constraints
         )
 
@@ -412,23 +413,24 @@ class BaseDatabase(SQLiteMixin):
             for txi in txs[-1].inputs:
                 txi_txoids.append(txi.txo_ref.id)
 
+        step = self.MAX_QUERY_VARIABLES
         annotated_txos = {}
-        for offset in range(0, len(txids), 900):
+        for offset in range(0, len(txids), step):
             annotated_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
                     my_account=my_account,
-                    txid__in=txids[offset:offset+900],
+                    txid__in=txids[offset:offset+step],
                 ))
             })
 
         referenced_txos = {}
-        for offset in range(0, len(txi_txoids), 900):
+        for offset in range(0, len(txi_txoids), step):
             referenced_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
                     my_account=my_account,
-                    txoid__in=txi_txoids[offset:offset+900],
+                    txoid__in=txi_txoids[offset:offset+step],
                 ))
             })
 
