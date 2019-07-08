@@ -93,7 +93,10 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
         if '#' in key:
             key, tag = key[:key.index('#')], key[key.index('#')+1:]
         col, op, key = key, '=', key.replace('.', '_')
-        if key.startswith('$'):
+        if not key:
+            sql.append(constraint)
+            continue
+        elif key.startswith('$'):
             values[key] = constraint
             continue
         elif key.endswith('__not'):
