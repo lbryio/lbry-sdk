@@ -3573,18 +3573,17 @@ class Daemon(metaclass=JSONRPCServerType):
             key, value = 'name', channel_name
         else:
             raise ValueError("Couldn't find channel because a channel_id or channel_name was not provided.")
-        # Todo: this can now be optimised to not use a loop. so optimise it
-        for account in self.get_accounts_or_all(account_ids):
-            channels = await account.get_channels(**{f'claim_{key}': value}, limit=1)
-            if len(channels) == 1:
-                if for_signing and channels[0].private_key is None:
-                    raise Exception(f"Couldn't find private key for {key} '{value}'. ")
-                return channels[0]
-            elif len(channels) > 1:
-                raise ValueError(
-                    f"Multiple channels found with channel_{key} '{value}', "
-                    f"pass a channel_id to narrow it down."
-                )
+        all_accounts = self.get_accounts_or_all(account_ids)
+        channels = await self.ledger.db.get_channels(my_accounts=all_accounts, **{f'claim_{key}': value}, limit=1)
+        if len(channels) == 1:
+            if for_signing and channels[0].private_key is None:
+                raise Exception(f"Couldn't find private key for {key} '{value}'. ")
+            return channels[0]
+        elif len(channels) > 1:
+            raise ValueError(
+                f"Multiple channels found with channel_{key} '{value}', "
+                f"pass a channel_id to narrow it down."
+            )
         raise ValueError(f"Couldn't find channel with channel_{key} '{value}'.")
 
     def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True) -> LBCAccount:
