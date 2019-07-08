@@ -35,7 +35,7 @@ STREAM_TYPES = {
 }
 
 
-def _apply_constraints_for_array_attributes(constraints, attr, cleaner):
+def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
     any_items = cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if any_items:
         constraints.update({
@@ -44,9 +44,18 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner):
         values = ', '.join(
             f':$any_{attr}{i}' for i in range(len(any_items))
         )
-        constraints[f'claim.claim_hash__in#_any_{attr}'] = f"""
-            SELECT DISTINCT claim_hash FROM {attr} WHERE {attr} IN ({values})
-        """
+        if for_count:
+            constraints[f'claim.claim_hash__in#_any_{attr}'] = f"""
+                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            """
+        else:
+            constraints[f'#_any_{attr}'] = f"""
+                EXISTS(
+                    SELECT 1 FROM {attr} WHERE
+                        claim.claim_hash={attr}.claim_hash
+                    AND {attr} IN ({values})
+                )
+            """
 
     all_items = cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if all_items:
@@ -57,10 +66,19 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner):
         values = ', '.join(
             f':$all_{attr}{i}' for i in range(len(all_items))
         )
-        constraints[f'claim.claim_hash__in#_all_{attr}'] = f"""
-            SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
-            GROUP BY claim_hash HAVING COUNT({attr}) = :$all_{attr}_count
-        """
+        if for_count:
+            constraints[f'claim.claim_hash__in#_all_{attr}'] = f"""
+                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+                GROUP BY claim_hash HAVING COUNT({attr}) = :$all_{attr}_count
+            """
+        else:
+            constraints[f'#_all_{attr}'] = f"""
+                {len(all_items)}=(
+                    SELECT count(*) FROM {attr} WHERE
+                        claim.claim_hash={attr}.claim_hash
+                    AND {attr} IN ({values})
+                )
+            """
 
     not_items = cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if not_items:
@@ -70,9 +88,18 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner):
         values = ', '.join(
             f':$not_{attr}{i}' for i in range(len(not_items))
         )
-        constraints[f'claim.claim_hash__not_in#_not_{attr}'] = f"""
-            SELECT DISTINCT claim_hash FROM {attr} WHERE {attr} IN ({values})
-        """
+        if for_count:
+            constraints[f'claim.claim_hash__not_in#_not_{attr}'] = f"""
+                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            """
+        else:
+            constraints[f'#_not_{attr}'] = f"""
+                NOT EXISTS(
+                    SELECT 1 FROM {attr} WHERE
+                        claim.claim_hash={attr}.claim_hash
+                    AND {attr} IN ({values})
+                )
+            """
 
 
 class SQLDB:
@@ -745,7 +772,7 @@ class SQLDB:
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
 
-    def get_claims(self, cols, join=True, **constraints):
+    def get_claims(self, cols, for_count=False, **constraints):
         if 'order_by' in constraints:
             sql_order_by = []
             for order_by in constraints['order_by']:
@@ -776,7 +803,7 @@ class SQLDB:
 
         if constraints.pop('is_controlling', False):
             if {'sequence', 'amount_order'}.isdisjoint(constraints):
-                join = True
+                for_count = False
                 constraints['claimtrie.claim_hash__is_not_null'] = ''
         if 'sequence' in constraints:
             constraints['order_by'] = 'claim.activation_height ASC'
@@ -864,14 +891,14 @@ class SQLDB:
         if 'fee_currency' in constraints:
             constraints['claim.fee_currency'] = constraints.pop('fee_currency').lower()
 
-        _apply_constraints_for_array_attributes(constraints, 'tag', clean_tags)
-        _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _)
-        _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _)
+        _apply_constraints_for_array_attributes(constraints, 'tag', clean_tags, for_count)
+        _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _, for_count)
+        _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _, for_count)
 
         select = f"SELECT {cols} FROM claim"
 
         sql, values = query(
-            select if not join else select+"""
+            select if for_count else select+"""
             LEFT JOIN claimtrie USING (claim_hash)
             LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
             """, **constraints
@@ -886,7 +913,7 @@ class SQLDB:
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
-        count = self.get_claims('count(*)', join=False, **constraints)
+        count = self.get_claims('count(*)', for_count=True, **constraints)
         return count[0][0]
 
     def _search(self, **constraints):
