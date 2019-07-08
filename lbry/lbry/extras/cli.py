@@ -221,6 +221,61 @@ def ensure_directory_exists(path: str):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
+def run_daemon(args: list, conf: Config):
+    default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
+    file_handler = logging.handlers.RotatingFileHandler(
+        conf.log_file_path, maxBytes=2097152, backupCount=5
+    )
+    file_handler.setFormatter(default_formatter)
+    log.addHandler(file_handler)
+    logging.getLogger('torba').addHandler(file_handler)
+
+    if not args.quiet:
+        handler = logging.StreamHandler()
+        handler.setFormatter(default_formatter)
+        log.addHandler(handler)
+        logging.getLogger('torba').addHandler(handler)
+        logging.getLogger('torba').setLevel(logging.INFO)
+
+    logging.getLogger('aioupnp').setLevel(logging.WARNING)
+    logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
+
+    loop = asyncio.get_event_loop()
+
+    if args.verbose:
+        log.setLevel(logging.DEBUG)
+        loop.set_debug(True)
+    else:
+        log.setLevel(logging.INFO)
+
+    if conf.share_usage_data:
+        loggly_handler = get_loggly_handler()
+        loggly_handler.setLevel(logging.ERROR)
+        log.addHandler(loggly_handler)
+
+    daemon = Daemon(conf)
+
+    def __exit():
+        raise GracefulExit()
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, __exit)
+        loop.add_signal_handler(signal.SIGTERM, __exit)
+    except NotImplementedError:
+        pass  # Not implemented on Windows
+
+    try:
+        loop.run_until_complete(daemon.start())
+        loop.run_forever()
+    except (GracefulExit, KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        loop.run_until_complete(daemon.stop())
+
+    if hasattr(loop, 'shutdown_asyncgens'):
+        loop.run_until_complete(loop.shutdown_asyncgens())
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
@@ -232,88 +287,26 @@ def main(argv=None):
 
     if args.cli_version:
         print(f"lbrynet {lbrynet_version}")
-        return 0
-
     elif args.command == 'start':
-
         if args.help:
             args.start_parser.print_help()
-            return 0
-
-        default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
-        file_handler = logging.handlers.RotatingFileHandler(
-            conf.log_file_path, maxBytes=2097152, backupCount=5
-        )
-        file_handler.setFormatter(default_formatter)
-        log.addHandler(file_handler)
-        logging.getLogger('torba').addHandler(file_handler)
-
-        if not args.quiet:
-            handler = logging.StreamHandler()
-            handler.setFormatter(default_formatter)
-            log.addHandler(handler)
-            logging.getLogger('torba').addHandler(handler)
-            logging.getLogger('torba').setLevel(logging.INFO)
-
-        logging.getLogger('aioupnp').setLevel(logging.WARNING)
-        logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
-
-        loop = asyncio.get_event_loop()
-
-        if args.verbose:
-            log.setLevel(logging.DEBUG)
-            loop.set_debug(True)
         else:
-            log.setLevel(logging.INFO)
-
-        if conf.share_usage_data:
-            loggly_handler = get_loggly_handler()
-            loggly_handler.setLevel(logging.ERROR)
-            log.addHandler(loggly_handler)
-
-        daemon = Daemon(conf)
-        started = False
-        def __exit():
-            if started:
-                daemon.stop_event.set()
-            else:
-                raise GracefulExit()
-        try:
-            loop.add_signal_handler(signal.SIGINT, __exit)
-            loop.add_signal_handler(signal.SIGTERM, __exit)
-        except NotImplementedError:
-            pass  # Not implemented on Windows
-        try:
-            loop.run_until_complete(daemon.start())
-            started = True
-            loop.run_until_complete(daemon.stop_event.wait())
-        except (GracefulExit, KeyboardInterrupt):
-            pass
-        finally:
-            loop.run_until_complete(daemon.stop())
-        if hasattr(loop, 'shutdown_asyncgens'):
-            loop.run_until_complete(loop.shutdown_asyncgens())
-
+            run_daemon(args, conf)
     elif args.command is not None:
-
         doc = args.doc
         api_method_name = args.api_method_name
         if args.replaced_by:
             print(f"{args.api_method_name} is deprecated, using {args.replaced_by['api_method_name']}.")
             doc = args.replaced_by['doc']
             api_method_name = args.replaced_by['api_method_name']
-
         if args.help:
             print(doc)
         else:
             parsed = docopt(doc, command_args)
             params = set_kwargs(parsed)
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(execute_command(conf, api_method_name, params))
-
+            asyncio.get_event_loop().run_until_complete(execute_command(conf, api_method_name, params))
     elif args.group is not None:
         args.group_parser.print_help()
-
     else:
         parser.print_help()
 

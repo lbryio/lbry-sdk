@@ -168,7 +168,7 @@ class HeadersComponent(Component):
         }
         net = Network(ledger)
         first_connection = net.on_connected.first
-        asyncio.ensure_future(net.start())
+        asyncio.ensure_future(net.start())  # TODO: SKETCHY! it might be trapping a CancelledError and not raising it
         await first_connection
         remote_height = await net.get_server_height()
         await net.stop()
