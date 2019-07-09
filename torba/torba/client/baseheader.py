@@ -82,6 +82,10 @@ class BaseHeaders:
     def height(self) -> int:
         return len(self)-1
 
+    @property
+    def bytes_size(self):
+        return len(self) * self.header_size
+
     def hash(self, height=None) -> bytes:
         return self.hash_header(
             self.get_raw_header(height if height is not None else self.height)
