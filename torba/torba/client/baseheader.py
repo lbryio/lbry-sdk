@@ -164,12 +164,26 @@ class BaseHeaders:
                         proof_of_work.value, target.value)
                 )
 
+    def repair(self):
+        for height in range(self.height):
+            chunk = self.get_raw_header(height)
+            try:
+                # validate_chunk() is CPU bound and reads previous chunks from file system
+                self.validate_chunk(height, chunk)
+            except InvalidHeader as e:
+                log.warning("Header file corrupted at height %s, truncating it.", e.height)
+                self.io.seek((e.height) * self.header_size, os.SEEK_SET)
+                self.io.truncate()
+                self.io.flush()
+                self._size = None
+                return
+
     @staticmethod
     def get_proof_of_work(header_hash: bytes) -> ArithUint256:
         return ArithUint256(int(b'0x' + header_hash, 16))
 
     def _iterate_chunks(self, height: int, headers: bytes) -> Iterator[Tuple[int, bytes]]:
-        assert len(headers) % self.header_size == 0
+        assert len(headers) % self.header_size == 0, f"{len(headers)} {len(headers)%self.header_size}"
         start = 0
         end = (self.chunk_size - height % self.chunk_size) * self.header_size
         while start < end:
