@@ -165,18 +165,24 @@ class BaseHeaders:
                 )
 
     def repair(self):
+        previous_header_hash = fail = None
         for height in range(self.height):
-            chunk = self.get_raw_header(height)
-            try:
-                # validate_chunk() is CPU bound and reads previous chunks from file system
-                self.validate_chunk(height, chunk)
-            except InvalidHeader as e:
-                log.warning("Header file corrupted at height %s, truncating it.", e.height)
-                self.io.seek((e.height) * self.header_size, os.SEEK_SET)
+            raw = self.get_raw_header(height)
+            header = self.deserialize(height, raw)
+            if height:
+                if header['prev_block_hash'] != previous_header_hash:
+                    fail = True
+            else:
+                if self.hash_header(raw) != self.genesis_hash:
+                    fail = True
+            if fail:
+                log.warning("Header file corrupted at height %s, truncating it.", height - 1)
+                self.io.seek((height - 1) * self.header_size, os.SEEK_SET)
                 self.io.truncate()
                 self.io.flush()
                 self._size = None
                 return
+            previous_header_hash = self.hash_header(raw)
 
     @staticmethod
     def get_proof_of_work(header_hash: bytes) -> ArithUint256:
