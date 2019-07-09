@@ -9,6 +9,7 @@ from typing import Dict, Type, Iterable, List, Optional
 from operator import itemgetter
 from collections import namedtuple
 
+import pylru
 from torba.tasks import TaskGroup
 from torba.client import baseaccount, basenetwork, basetransaction
 from torba.client.basedatabase import BaseDatabase
@@ -134,7 +135,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             )
         )
 
-        self._tx_cache = {}
+        self._tx_cache = pylru.lrucache(100000)
         self._update_tasks = TaskGroup()
         self._utxo_reservation_lock = asyncio.Lock()
         self._header_processing_lock = asyncio.Lock()
@@ -421,8 +422,8 @@ class BaseLedger(metaclass=LedgerRegistry):
                     else:
                         check_db_for_txos.append(txi.txo_ref.id)
 
-                referenced_txos = {
-                    txo.id: txo for txo in await self.db.get_txos(txoid__in=check_db_for_txos)
+                referenced_txos = {} if not check_db_for_txos else {
+                    txo.id: txo for txo in await self.db.get_txos(txoid__in=check_db_for_txos, no_tx=True)
                 }
 
                 for txi in tx.inputs:

@@ -7,7 +7,7 @@ from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable
 
 import sqlite3
 
-from torba.client.basetransaction import BaseTransaction
+from torba.client.basetransaction import BaseTransaction, TXRefImmutable
 from torba.client.baseaccount import BaseAccount
 
 log = logging.getLogger(__name__)
@@ -470,24 +470,34 @@ class BaseDatabase(SQLiteMixin):
             " JOIN tx USING (txid)".format(cols), **constraints
         ))
 
-    async def get_txos(self, my_account=None, **constraints):
+    async def get_txos(self, my_account=None, no_tx=False, **constraints):
         my_account = my_account or constraints.get('account', None)
         if isinstance(my_account, BaseAccount):
             my_account = my_account.public_key.address
         if 'order_by' not in constraints:
             constraints['order_by'] = ["tx.height=0 DESC", "tx.height DESC", "tx.position DESC"]
         rows = await self.select_txos(
-            "tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, chain, account",
+            "tx.txid, raw, tx.height, tx.position, tx.is_verified, "
+            "txo.position, chain, account, amount, script",
             **constraints
         )
         txos = []
         txs = {}
+        output_class = self.ledger.transaction_class.output_class
         for row in rows:
-            if row[0] not in txs:
-                txs[row[0]] = self.ledger.transaction_class(
-                    row[1], height=row[2], position=row[3], is_verified=row[4]
+            if no_tx:
+                txo = output_class(
+                    amount=row[8],
+                    script=output_class.script_class(row[9]),
+                    tx_ref=TXRefImmutable.from_id(row[0], row[2]),
+                    position=row[5]
                 )
-            txo = txs[row[0]].outputs[row[5]]
+            else:
+                if row[0] not in txs:
+                    txs[row[0]] = self.ledger.transaction_class(
+                        row[1], height=row[2], position=row[3], is_verified=row[4]
+                    )
+                txo = txs[row[0]].outputs[row[5]]
             txo.is_change = row[6] == 1
             txo.is_my_account = row[7] == my_account
             txos.append(txo)

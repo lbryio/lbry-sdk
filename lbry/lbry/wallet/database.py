@@ -76,7 +76,7 @@ class WalletDatabase(BaseDatabase):
                 ))
             }
             for txo in txos:
-                if txo.script.is_claim_name or txo.script.is_update_claim:
+                if txo.is_claim and txo.can_decode_claim:
                     txo.channel = channels.get(txo.claim.signing_channel_id, None)
 
         return txos

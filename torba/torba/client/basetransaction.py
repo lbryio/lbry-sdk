@@ -310,19 +310,20 @@ class BaseTransaction:
     def outputs(self) -> ReadOnlyList[BaseOutput]:
         return ReadOnlyList(self._outputs)
 
-    def _add(self, new_ios: Iterable[InputOutput], existing_ios: List) -> 'BaseTransaction':
+    def _add(self, existing_ios: List, new_ios: Iterable[InputOutput], reset=False) -> 'BaseTransaction':
         for txio in new_ios:
             txio.tx_ref = self.ref
             txio.position = len(existing_ios)
             existing_ios.append(txio)
-        self._reset()
+        if reset:
+            self._reset()
         return self
 
     def add_inputs(self, inputs: Iterable[BaseInput]) -> 'BaseTransaction':
-        return self._add(inputs, self._inputs)
+        return self._add(self._inputs, inputs, True)
 
     def add_outputs(self, outputs: Iterable[BaseOutput]) -> 'BaseTransaction':
-        return self._add(outputs, self._outputs)
+        return self._add(self._outputs, outputs, True)
 
     @property
     def size(self) -> int:
@@ -420,11 +421,11 @@ class BaseTransaction:
             stream = BCDataStream(self._raw)
             self.version = stream.read_uint32()
             input_count = stream.read_compact_size()
-            self.add_inputs([
+            self._add(self._inputs, [
                 self.input_class.deserialize_from(stream) for _ in range(input_count)
             ])
             output_count = stream.read_compact_size()
-            self.add_outputs([
+            self._add(self._outputs, [
                 self.output_class.deserialize_from(stream) for _ in range(output_count)
             ])
             self.locktime = stream.read_uint32()
