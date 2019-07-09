@@ -94,6 +94,27 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
         await headers.connect(len(headers), remainder)
         self.assertEqual(headers.height, 32259)
 
+    async def test_repair(self):
+        headers = MainHeaders(':memory:')
+        await headers.connect(0, self.get_bytes(block_bytes(3001)))
+        self.assertEqual(headers.height, 3000)
+        headers.repair()
+        self.assertEqual(headers.height, 3000)
+        # corrupt the middle of it
+        headers.io.seek(block_bytes(1500))
+        headers.io.write(b"wtf")
+        headers.repair()
+        self.assertEqual(headers.height, 1499)
+        self.assertEqual(len(headers), 1500)
+        # corrupt by appending
+        headers.io.seek(block_bytes(len(headers)))
+        headers.io.write(b"appending")
+        headers._size = None
+        headers.repair()
+        self.assertEqual(headers.height, 1499)
+        await headers.connect(len(headers), self.get_bytes(block_bytes(3001 - 1500), after=block_bytes(1500)))
+        self.assertEqual(headers.height, 3000)
+
     async def test_concurrency(self):
         BLOCKS = 30
         headers_temporary_file = tempfile.mktemp()
