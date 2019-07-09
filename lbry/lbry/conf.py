@@ -644,15 +644,18 @@ def get_darwin_directories() -> typing.Tuple[str, str, str]:
 
 
 def get_linux_directories() -> typing.Tuple[str, str, str]:
+    download_dir = None
     try:
         with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
-            down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-        down_dir = re.sub('\$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir)
-        download_dir = re.sub('\"', '', down_dir)
+            match = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read())
+            if match is not None:
+                down_dir = match.group(1)
+                down_dir = re.sub('$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir)
+                download_dir = re.sub('\"', '', down_dir)
     except EnvironmentError:
-        download_dir = os.getenv('XDG_DOWNLOAD_DIR')
+        pass
     if not download_dir:
-        download_dir = os.path.expanduser('~/Downloads')
+        download_dir = os.getenv('XDG_DOWNLOAD_DIR') or os.path.expanduser('~/Downloads')
 
     # old
     data_dir = os.path.expanduser('~/.lbrynet')
