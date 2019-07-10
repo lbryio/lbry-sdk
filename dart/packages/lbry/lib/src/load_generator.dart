@@ -92,6 +92,7 @@ class LoadGenerator {
                 }
             }
             stat.backlog = backlog.length;
+            stat.load = load;
             if (cb(this, stat)) {
                 previous = spawn_requests();
             } else {
@@ -107,7 +108,7 @@ class LoadGenerator {
     List<LoadRequest> spawn_requests() {
         var requests = <LoadRequest>[];
         for (var _ in Iterable.generate(load)) {
-            requests.add(LoadRequest.resolve().start());
+            requests.add(LoadRequest.search().start());
         }
         return requests;
     }
