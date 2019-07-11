@@ -4,28 +4,8 @@ import 'dart:convert';
 
 
 class LoadRequest {
-
-    static const RESOLVE = {
-        'id': 1,
-        'method': 'blockchain.claimtrie.resolve',
-        'params': ['one', 'two', 'three']
-    };
-
-    static const CLAIM_SEARCH = {
-        'id': 1,
-        'method': 'blockchain.claimtrie.search',
-        'params': {
-            'fee_amount': '<1',
-            'all_tags': ['funny'],
-            'any_tags': [
-                'crypto',
-                'outdoors',
-                'cars',
-                'automotive'
-            ]
-        }
-    };
-
+    final String host;
+    final int port;
     final Map payload;
     Completer completer;
     Stopwatch timer;
@@ -33,15 +13,14 @@ class LoadRequest {
     bool get isDone => completer.isCompleted;
     int get elapsed => timer.elapsedMilliseconds;
 
-    LoadRequest.search(): payload=CLAIM_SEARCH;
-    LoadRequest.resolve(): payload=RESOLVE;
+    LoadRequest(this.host, this.port, this.payload);
 
     LoadRequest start() {
         completer = Completer();
         timer = Stopwatch()..start();
         completer.future.whenComplete(() => timer.stop());
         try {
-            Socket.connect('127.0.0.1', 50001).then((socket) {
+            Socket.connect(this.host, this.port).then((socket) {
                 socket.transform(utf8.decoder).listen((r) {
                     if (r.contains('"jsonrpc": "2.0", "result": ')) {
                         socket.close();
@@ -70,10 +49,13 @@ typedef bool LoadTestCallback(LoadGenerator load_generator, LoadDataPoint stats)
 class LoadGenerator {
     int load = 1;
     Timer _timer;
+    String host;
+    int port;
+    Map query;
 
     LoadTestCallback cb;
 
-    LoadGenerator(this.cb);
+    LoadGenerator(this.host, this.port, this.query, this.cb);
 
     start() {
         var previous = spawn_requests();
@@ -108,7 +90,7 @@ class LoadGenerator {
     List<LoadRequest> spawn_requests() {
         var requests = <LoadRequest>[];
         for (var _ in Iterable.generate(load)) {
-            requests.add(LoadRequest.search().start());
+            requests.add(LoadRequest(this.host, this.port, this.query).start());
         }
         return requests;
     }
@@ -139,7 +121,11 @@ class LoadDataPoint {
 
 cli() {
     var runs = 1;
-    LoadGenerator((t, stats) {
+    LoadGenerator('localhost', 50001, {
+            'id': 1,
+            'method': 'blockchain.claimtrie.resolve',
+            'params': ['one', 'two', 'three']
+    }, (t, stats) {
         print("run ${runs}: ${stats}");
         t.load = (runs < 4 ? t.load*2 : t.load/2).round();
         return runs++ < 10;

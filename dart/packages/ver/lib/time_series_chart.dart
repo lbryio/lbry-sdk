@@ -77,14 +77,31 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
                 data: loadData,
             )
         );
-        var increase = 2;
+        var increase = 1;
         loadData.add(LoadDataPoint());
-        loadGenerator = LoadGenerator((t, stats) {
+        loadGenerator = LoadGenerator('spv2.lbry.com', 50001, {
+                'id': 1,
+                'method': 'blockchain.claimtrie.search',
+                'params': {
+                    'offset': 0,
+                    'limit': 20,
+                    'fee_amount': '<1',
+                    'all_tags': ['funny'],
+                    'any_tags': [
+                        'crypto',
+                        'outdoors',
+                        'cars',
+                        'automotive'
+                    ]
+                }
+            }, (t, stats) {
             setState(() {
                 //if (loadData.length > 60) loadData.removeAt(0);
                 loadData.add(stats);
             });
-            increase = max(1, min(30, (increase*1.1).ceil())-stats.backlog);
+            //increase = max(1, min(30, (increase*1.1).ceil())-stats.backlog);
+            increase += 1;
+            //t.query['params']['offset'] = (increase/2).ceil()*t.query['params']['limit'];
             t.load = increase;//rand.nextInt(10)+5;
             return true;
         })..start();
