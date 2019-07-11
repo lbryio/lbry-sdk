@@ -136,7 +136,7 @@ packages:
       name: protobuf
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "0.13.14"
+    version: "0.13.15"
   quiver:
     dependency: transitive
     description:

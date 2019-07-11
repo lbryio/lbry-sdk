@@ -21,7 +21,7 @@ class LoadRequest {
         completer.future.whenComplete(() => timer.stop());
         try {
             Socket.connect(this.host, this.port).then((socket) {
-                socket.transform(utf8.decoder).listen((r) {
+                utf8.decoder.bind(socket).listen((r) {
                     if (r.contains('"jsonrpc": "2.0", "result": ')) {
                         socket.close();
                         completer.complete();
