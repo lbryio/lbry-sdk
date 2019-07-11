@@ -4,13 +4,26 @@ from binascii import unhexlify, hexlify
 
 from torba.rpc.jsonrpc import RPCError
 from torba.server.hash import hash_to_hex_str
-from torba.server.session import ElectrumX
+from torba.server.session import ElectrumX, SessionManager
 from torba.server import util
 
-from lbry.schema.result import Outputs
 from lbry.schema.url import URL
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db import LBRYDB
+from lbry.wallet.server.query import QueryExecutor
+
+
+class LBRYSessionManager(SessionManager):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.query_executor = None
+
+    async def start_other(self):
+        self.query_executor = QueryExecutor('claims.db', self.env.coin.NET, self.env.max_query_workers)
+
+    async def stop_other(self):
+        self.query_executor.shutdown()
 
 
 class LBRYElectrumX(ElectrumX):
@@ -48,10 +61,10 @@ class LBRYElectrumX(ElectrumX):
     async def claimtrie_search(self, **kwargs):
         if 'claim_id' in kwargs:
             self.assert_claim_id(kwargs['claim_id'])
-        return Outputs.to_base64(*self.db.sql.search(kwargs))
+        return await self.session_mgr.query_executor.search(kwargs)
 
     async def claimtrie_resolve(self, *urls):
-        return Outputs.to_base64(*self.db.sql.resolve(urls))
+        return await self.session_mgr.query_executor.resolve(urls)
 
     async def get_server_height(self):
         return self.bp.height

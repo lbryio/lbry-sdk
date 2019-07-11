@@ -37,6 +37,7 @@ class Env:
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
+        self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
         self.daemon_url = self.required('DAEMON_URL')
         if coin is not None:
             assert issubclass(coin, Coin)

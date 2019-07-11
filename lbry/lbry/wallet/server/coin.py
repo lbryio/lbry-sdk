@@ -9,13 +9,14 @@ from torba.server.coins import Coin, CoinError
 
 
 class LBC(Coin):
-    from .session import LBRYElectrumX
+    from .session import LBRYElectrumX, LBRYSessionManager
     from .block_processor import LBRYBlockProcessor
     from .daemon import LBCDaemon
     from .db import LBRYDB
     DAEMON = LBCDaemon
     SESSIONCLS = LBRYElectrumX
     BLOCK_PROCESSOR = LBRYBlockProcessor
+    SESSION_MANAGER = LBRYSessionManager
     DB = LBRYDB
     NAME = "LBRY"
     SHORTNAME = "LBC"

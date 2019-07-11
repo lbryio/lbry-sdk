@@ -203,7 +203,8 @@ class SPVNode:
             'DAEMON_URL': blockchain_node.rpc_url,
             'REORG_LIMIT': '100',
             'HOST': self.hostname,
-            'TCP_PORT': str(self.port)
+            'TCP_PORT': str(self.port),
+            'MAX_QUERY_WORKERS': '1'
         }
         # TODO: don't use os.environ
         os.environ.update(conf)
