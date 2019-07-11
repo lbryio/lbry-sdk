@@ -204,7 +204,7 @@ class SPVNode:
             'REORG_LIMIT': '100',
             'HOST': self.hostname,
             'TCP_PORT': str(self.port),
-            'MAX_QUERY_WORKERS': '1'
+            'MAX_QUERY_WORKERS': '0'
         }
         # TODO: don't use os.environ
         os.environ.update(conf)

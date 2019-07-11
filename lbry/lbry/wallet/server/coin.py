@@ -12,7 +12,7 @@ class LBC(Coin):
     from .session import LBRYElectrumX, LBRYSessionManager
     from .block_processor import LBRYBlockProcessor
     from .daemon import LBCDaemon
-    from .db import LBRYDB
+    from .db.writer import LBRYDB
     DAEMON = LBCDaemon
     SESSIONCLS = LBRYElectrumX
     BLOCK_PROCESSOR = LBRYBlockProcessor
