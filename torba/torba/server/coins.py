@@ -47,7 +47,7 @@ import torba.server.tx as lib_tx
 import torba.server.block_processor as block_proc
 from torba.server.db import DB
 import torba.server.daemon as daemon
-from torba.server.session import ElectrumX, DashElectrumX
+from torba.server.session import ElectrumX, DashElectrumX, SessionManager
 
 
 Block = namedtuple("Block", "raw header transactions")
@@ -72,6 +72,7 @@ class Coin:
     DESERIALIZER = lib_tx.Deserializer
     DAEMON = daemon.Daemon
     BLOCK_PROCESSOR = block_proc.BlockProcessor
+    SESSION_MANAGER = SessionManager
     DB = DB
     HEADER_VALUES = [
         'version', 'prev_block_hash', 'merkle_root', 'timestamp', 'bits', 'nonce'

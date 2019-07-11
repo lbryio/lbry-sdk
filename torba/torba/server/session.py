@@ -523,6 +523,7 @@ class SessionManager:
                                  .format(self.env.drop_client.pattern))
             # Start notifications; initialize hsub_results
             await notifications.start(self.db.db_height, self._notify_sessions)
+            await self.start_other()
             await self._start_external_servers()
             server_listening_event.set()
             # Peer discovery should start after the external servers
@@ -539,6 +540,13 @@ class SessionManager:
                 await asyncio.wait([
                     session.close(force_after=1) for session in self.sessions
                 ])
+            await self.stop_other()
+
+    async def start_other(self):
+        pass
+
+    async def stop_other(self):
+        pass
 
     def session_count(self) -> int:
         """The number of connections that we've sent something to."""
