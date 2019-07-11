@@ -116,7 +116,7 @@ class Server:
         MemPoolAPI.register(Notifications)
         self.mempool = mempool = MemPool(env.coin, notifications)
 
-        self.session_mgr = SessionManager(
+        self.session_mgr = env.coin.SESSION_MANAGER(
             env, db, bp, daemon, mempool, self.shutdown_event
         )
 
