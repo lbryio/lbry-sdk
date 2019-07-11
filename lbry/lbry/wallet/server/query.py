@@ -360,7 +360,7 @@ class QueryProcessor(Process):
         return result, extra_txo_rows
 
     def run(self):
-        (call_queue, result_queue, _, initargs) = self._args
+        (call_queue, result_queue, _, initargs) = self._args  # pylint: disable=W0632
         db_path, ledger_name = initargs
         self.ledger = MainNetLedger if ledger_name == 'mainnet' else RegTestLedger
         self.db = sqlite3.connect(db_path, isolation_level=None)
