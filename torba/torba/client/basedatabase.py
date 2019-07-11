@@ -470,7 +470,7 @@ class BaseDatabase(SQLiteMixin):
             " JOIN tx USING (txid)".format(cols), **constraints
         ))
 
-    async def get_txos(self, my_accounts, filtering_accounts=None, **constraints):
+    async def get_txos(self, my_accounts, filtering_accounts=None, no_tx=False, **constraints):
         my_account_address = []
         if my_accounts is not None:
             my_account_address = [my_account.public_key.address for my_account in my_accounts if
