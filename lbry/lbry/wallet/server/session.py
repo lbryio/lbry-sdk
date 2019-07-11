@@ -1,16 +1,17 @@
+import os
 import math
-import unicodedata as uda
-from binascii import unhexlify, hexlify
+import base64
+import asyncio
+from binascii import hexlify
 
 from torba.rpc.jsonrpc import RPCError
-from torba.server.hash import hash_to_hex_str
 from torba.server.session import ElectrumX, SessionManager
 from torba.server import util
 
-from lbry.schema.url import URL
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
-from lbry.wallet.server.db import LBRYDB
-from lbry.wallet.server.query import QueryExecutor
+from lbry.wallet.server.db.writer import LBRYDB
+from lbry.wallet.server.db import reader
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 
 class LBRYSessionManager(SessionManager):
@@ -20,7 +21,13 @@ class LBRYSessionManager(SessionManager):
         self.query_executor = None
 
     async def start_other(self):
-        self.query_executor = QueryExecutor('claims.db', self.env.coin.NET, self.env.max_query_workers)
+        args = dict(initializer=reader.initializer, initargs=('claims.db', self.env.coin.NET))
+        if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
+            self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
+        else:
+            self.query_executor = ProcessPoolExecutor(
+                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4), **args
+            )
 
     async def stop_other(self):
         self.query_executor.shutdown()
@@ -43,17 +50,7 @@ class LBRYElectrumX(ElectrumX):
             'blockchain.transaction.get_height': self.transaction_get_height,
             'blockchain.claimtrie.search': self.claimtrie_search,
             'blockchain.claimtrie.resolve': self.claimtrie_resolve,
-            'blockchain.claimtrie.getclaimbyid': self.claimtrie_getclaimbyid,
-            'blockchain.claimtrie.getclaimsforname': self.claimtrie_getclaimsforname,
             'blockchain.claimtrie.getclaimsbyids': self.claimtrie_getclaimsbyids,
-            'blockchain.claimtrie.getvalue': self.claimtrie_getvalue,
-            'blockchain.claimtrie.getnthclaimforname': self.claimtrie_getnthclaimforname,
-            'blockchain.claimtrie.getclaimsintx': self.claimtrie_getclaimsintx,
-            'blockchain.claimtrie.getclaimssignedby': self.claimtrie_getclaimssignedby,
-            'blockchain.claimtrie.getclaimssignedbynthtoname': self.claimtrie_getclaimssignedbynthtoname,
-            'blockchain.claimtrie.getvalueforuri': self.claimtrie_getvalueforuri,
-            'blockchain.claimtrie.getvaluesforuris': self.claimtrie_getvalueforuris,
-            'blockchain.claimtrie.getclaimssignedbyid': self.claimtrie_getclaimssignedbyid,
             'blockchain.block.get_server_height': self.get_server_height,
         }
         self.request_handlers.update(handlers)
@@ -61,10 +58,14 @@ class LBRYElectrumX(ElectrumX):
     async def claimtrie_search(self, **kwargs):
         if 'claim_id' in kwargs:
             self.assert_claim_id(kwargs['claim_id'])
-        return await self.session_mgr.query_executor.search(kwargs)
+        return base64.b64encode(await asyncio.get_running_loop().run_in_executor(
+            self.session_mgr.query_executor, reader.search_to_bytes, kwargs
+        )).decode()
 
     async def claimtrie_resolve(self, *urls):
-        return await self.session_mgr.query_executor.resolve(urls)
+        return base64.b64encode(await asyncio.get_running_loop().run_in_executor(
+            self.session_mgr.query_executor, reader.resolve_to_bytes, urls
+        )).decode()
 
     async def get_server_height(self):
         return self.bp.height
@@ -79,84 +80,9 @@ class LBRYElectrumX(ElectrumX):
             return -1
         return None
 
-    async def claimtrie_getclaimssignedby(self, name):
-        winning_claim = await self.daemon.getvalueforname(name)
-        if winning_claim:
-            return await self.claimtrie_getclaimssignedbyid(winning_claim['claimId'])
-
-    async def claimtrie_getclaimssignedbyid(self, certificate_id):
-        claim_ids = self.get_claim_ids_signed_by(certificate_id)
-        return await self.batched_formatted_claims_from_daemon(claim_ids)
-
-    def claimtrie_getclaimssignedbyidminimal(self, certificate_id):
-        claim_ids = self.get_claim_ids_signed_by(certificate_id)
-        ret = []
-        for claim_id in claim_ids:
-            raw_claim_id = unhexlify(claim_id)[::-1]
-            info = self.db.get_claim_info(raw_claim_id)
-            if info:
-                ret.append({
-                    'claim_id': claim_id,
-                    'height': info.height,
-                    'name': info.name.decode()
-                })
-        return ret
-
-    def get_claim_ids_signed_by(self, certificate_id):
-        raw_certificate_id = unhexlify(certificate_id)[::-1]
-        raw_claim_ids = self.db.get_signed_claim_ids_by_cert_id(raw_certificate_id)
-        return list(map(hash_to_hex_str, raw_claim_ids))
-
-    async def claimtrie_getclaimssignedbynthtoname(self, name, n):
-        claim = self.claimtrie_getnthclaimforname(name, n)
-        if claim and 'claim_id' in claim:
-            return await self.claimtrie_getclaimssignedbyid(hash_to_hex_str(claim['claim_id']))
-
-    async def claimtrie_getclaimsintx(self, txid):
-        # TODO: this needs further discussion.
-        # Code on lbryum-server is wrong and we need to gather what we clearly expect from this command
-        claim_ids = [claim['claimId'] for claim in (await self.daemon.getclaimsfortx(txid)) if 'claimId' in claim]
-        return await self.batched_formatted_claims_from_daemon(claim_ids)
-
-    async def claimtrie_getvalue(self, name, block_hash=None):
-        proof = await self.daemon.getnameproof(name, block_hash)
-        result = {'proof': proof, 'supports': []}
-
-        if proof_has_winning_claim(proof):
-            tx_hash, nout = proof['txhash'], int(proof['nOut'])
-            transaction_info = await self.daemon.getrawtransaction(tx_hash, True)
-            result['transaction'] = transaction_info['hex']  # should have never included this (or the call to get it)
-            raw_claim_id = self.db.get_claim_id_from_outpoint(unhexlify(tx_hash)[::-1], nout)
-            claim_id = hexlify(raw_claim_id[::-1]).decode()
-            claim = await self.claimtrie_getclaimbyid(claim_id)
-            result.update(claim)
-
-        return result
-
-    async def claimtrie_getnthclaimforname(self, name, n):
-        n = int(n)
-        result = await self.claimtrie_getclaimsforname(name)
-        if 'claims' in result and len(result['claims']) > n >= 0:
-            # TODO: revist this after lbrycrd_#209 to see if we can sort by claim_sequence at this point
-            result['claims'].sort(key=lambda c: (int(c['height']), int(c['nout'])))
-            result['claims'][n]['claim_sequence'] = n
-            return result['claims'][n]
-
-    async def claimtrie_getpartialmatch(self, name, part):
-        result = await self.claimtrie_getclaimsforname(name)
-        if 'claims' in result:
-            return next(filter(lambda x: x['claim_id'].starts_with(part), result['claims']), None)
-
-    async def claimtrie_getclaimsforname(self, name):
-        claims = await self.daemon.getclaimsforname(name)
-        if claims:
-            claims['claims'] = [self.format_claim_from_daemon(claim, name) for claim in claims['claims']]
-            claims['supports_without_claims'] = []  # fixme temporary
-            del claims['supports without claims']
-            claims['last_takeover_height'] = claims['nLastTakeoverHeight']
-            del claims['nLastTakeoverHeight']
-            return claims
-        return {}
+    async def claimtrie_getclaimsbyids(self, *claim_ids):
+        claims = await self.batched_formatted_claims_from_daemon(claim_ids)
+        return dict(zip(claim_ids, claims))
 
     async def batched_formatted_claims_from_daemon(self, claim_ids):
         claims = await self.daemon.getclaimsbyids(claim_ids)
@@ -215,19 +141,6 @@ class LBRYElectrumX(ElectrumX):
             result['normalized_name'] = claim['normalized_name'].encode('ISO-8859-1').decode()
         return result
 
-    def format_supports_from_daemon(self, supports):
-        return [[support['txid'], support['n'], get_from_possible_keys(support, 'amount', 'nAmount')] for
-                 support in supports]
-
-    async def claimtrie_getclaimbyid(self, claim_id):
-        self.assert_claim_id(claim_id)
-        claim = await self.daemon.getclaimbyid(claim_id)
-        return self.format_claim_from_daemon(claim)
-
-    async def claimtrie_getclaimsbyids(self, *claim_ids):
-        claims = await self.batched_formatted_claims_from_daemon(claim_ids)
-        return dict(zip(claim_ids, claims))
-
     def assert_tx_hash(self, value):
         '''Raise an RPCError if the value is not a valid transaction
         hash.'''
@@ -247,118 +160,6 @@ class LBRYElectrumX(ElectrumX):
         except Exception:
             pass
         raise RPCError(1, f'{value} should be a claim id hash')
-
-    def normalize_name(self, name):
-        # this is designed to match lbrycrd; change it here if it changes there
-        return uda.normalize('NFD', name).casefold()
-
-    def claim_matches_name(self, claim, name):
-        if not name:
-            return False
-        if 'normalized_name' in claim:
-            return self.normalize_name(name) == claim['normalized_name']
-        return name == claim['name']
-
-    async def claimtrie_getvalueforuri(self, block_hash, uri, known_certificates=None):
-        # TODO: this thing is huge, refactor
-        CLAIM_ID = "claim_id"
-        WINNING = "winning"
-        SEQUENCE = "sequence"
-        uri = uri
-        block_hash = block_hash
-        try:
-            parsed_uri = URL.parse(uri)
-        except ValueError as err:
-            return {'error': err.args[0]}
-        result = {}
-
-        if parsed_uri.has_channel:
-            certificate = None
-
-            # TODO: this is also done on the else, refactor
-            if parsed_uri.channel.claim_id:
-                if len(parsed_uri.channel.claim_id) < 40:
-                    certificate_info = self.claimtrie_getpartialmatch(
-                        parsed_uri.channel.name, parsed_uri.channel.claim_id)
-                else:
-                    certificate_info = await self.claimtrie_getclaimbyid(parsed_uri.channel.claim_id)
-                if certificate_info and self.claim_matches_name(certificate_info, parsed_uri.channel.name):
-                    certificate = {'resolution_type': CLAIM_ID, 'result': certificate_info}
-            elif parsed_uri.claim_sequence:
-                certificate_info = await self.claimtrie_getnthclaimforname(parsed_uri.name, parsed_uri.claim_sequence)
-                if certificate_info:
-                    certificate = {'resolution_type': SEQUENCE, 'result': certificate_info}
-            else:
-                certificate_info = await self.claimtrie_getvalue(parsed_uri.name, block_hash)
-                if certificate_info:
-                    certificate = {'resolution_type': WINNING, 'result': certificate_info}
-
-            if certificate and 'claim_id' not in certificate['result']:
-                return result
-
-            if certificate:
-                result['certificate'] = certificate
-                channel_id = certificate['result']['claim_id']
-                claims_in_channel = self.claimtrie_getclaimssignedbyidminimal(channel_id)
-                if not parsed_uri.path:
-                    result['unverified_claims_in_channel'] = {claim['claim_id']: (claim['name'], claim['height'])
-                                                              for claim in claims_in_channel}
-                else:
-                    # making an assumption that there aren't case conflicts on an existing channel
-                    norm_path = self.normalize_name(parsed_uri.path)
-                    result['unverified_claims_for_name'] = {claim['claim_id']: (claim['name'], claim['height'])
-                                                            for claim in claims_in_channel
-                                                            if self.normalize_name(claim['name']) == norm_path}
-
-        else:
-            claim = None
-            if parsed_uri.claim_id:
-                if len(parsed_uri.claim_id) < 40:
-                    claim_info = self.claimtrie_getpartialmatch(parsed_uri.name, parsed_uri.claim_id)
-                else:
-                    claim_info = await self.claimtrie_getclaimbyid(parsed_uri.claim_id)
-                if claim_info and self.claim_matches_name(claim_info, parsed_uri.name):
-                    claim = {'resolution_type': CLAIM_ID, 'result': claim_info}
-            elif parsed_uri.claim_sequence:
-                claim_info = await self.claimtrie_getnthclaimforname(parsed_uri.name, parsed_uri.claim_sequence)
-                if claim_info:
-                    claim = {'resolution_type': SEQUENCE, 'result': claim_info}
-            else:
-                claim_info = await self.claimtrie_getvalue(parsed_uri.name, block_hash)
-                if claim_info:
-                    claim = {'resolution_type': WINNING, 'result': claim_info}
-            if (claim and
-                    # is not an unclaimed winning name
-                    (claim['resolution_type'] != WINNING or proof_has_winning_claim(claim['result']['proof']))):
-                raw_claim_id = unhexlify(claim['result']['claim_id'])[::-1]
-                raw_certificate_id = self.db.get_claim_info(raw_claim_id).cert_id
-                if raw_certificate_id:
-                    certificate_id = hash_to_hex_str(raw_certificate_id)
-                    certificate = await self.claimtrie_getclaimbyid(certificate_id)
-                    if certificate:
-                        certificate = {'resolution_type': CLAIM_ID,
-                                       'result': certificate}
-                        result['certificate'] = certificate
-                result['claim'] = claim
-
-        return result
-
-    async def claimtrie_getvalueforuris(self, block_hash, *uris):
-        MAX_BATCH_URIS = 500
-        if len(uris) > MAX_BATCH_URIS:
-            raise Exception("Exceeds max batch uris of {}".format(MAX_BATCH_URIS))
-
-        return {uri: await self.claimtrie_getvalueforuri(block_hash, uri) for uri in uris}
-
-        # TODO: get it all concurrently when lbrycrd pending changes goes into a stable release
-        #async def getvalue(uri):
-        #    value = await self.claimtrie_getvalueforuri(block_hash, uri)
-        #    return uri, value,
-        #return dict([await asyncio.gather(*tuple(getvalue(uri) for uri in uris))][0])
-
-
-def proof_has_winning_claim(proof):
-    return {'txhash', 'nOut'}.issubset(proof.keys())
 
 
 def get_from_possible_keys(dictionary, *keys):

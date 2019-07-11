@@ -3,7 +3,7 @@ import time
 from torba.server.block_processor import BlockProcessor
 
 from lbry.schema.claim import Claim
-from lbry.wallet.server.db import SQLDB
+from lbry.wallet.server.db.writer import SQLDB
 
 
 class Timer:
