@@ -3,6 +3,11 @@ import math
 import base64
 import asyncio
 from binascii import hexlify
+#from weakref import WeakSet
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+#from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite
+#from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
 from torba.rpc.jsonrpc import RPCError
 from torba.server.session import ElectrumX, SessionManager
@@ -11,7 +16,60 @@ from torba.server import util
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYDB
 from lbry.wallet.server.db import reader
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+
+class AdminWebSocket:
+
+    def __init__(self, manager):
+        self.manager = manager
+        self.app = Application()
+        self.app['websockets'] = WeakSet()
+        self.app.router.add_get('/', self.on_connect)
+        self.app.on_shutdown.append(self.on_shutdown)
+        self.runner = AppRunner(self.app)
+
+    async def on_status(self, _):
+        if not self.app['websockets']:
+            return
+        self.send_message({
+            'type': 'status',
+            'height': self.manager.daemon.cached_height(),
+        })
+
+    def send_message(self, msg):
+        for web_socket in self.app['websockets']:
+            asyncio.create_task(web_socket.send_json(msg))
+
+    async def start(self):
+        await self.runner.setup()
+        await TCPSite(self.runner, self.manager.env.websocket_host, self.manager.env.websocket_port).start()
+        print('started websocket')
+
+    async def stop(self):
+        await self.runner.cleanup()
+        print('stopped websocket')
+
+    async def on_connect(self, request):
+        web_socket = WebSocketResponse()
+        await web_socket.prepare(request)
+        self.app['websockets'].add(web_socket)
+        try:
+            async for msg in web_socket:
+                if msg.type == WSMsgType.TEXT:
+                    print(msg.data)
+                    await self.on_status(None)
+                elif msg.type == WSMsgType.ERROR:
+                    print('web socket connection closed with exception %s' %
+                          web_socket.exception())
+        finally:
+            self.app['websockets'].discard(web_socket)
+        return web_socket
+
+    @staticmethod
+    async def on_shutdown(app):
+        print('disconnecting websockets')
+        for web_socket in app['websockets']:
+            await web_socket.close(code=WSCloseCode.GOING_AWAY, message='Server shutdown')
 
 
 class LBRYSessionManager(SessionManager):
@@ -19,6 +77,36 @@ class LBRYSessionManager(SessionManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.query_executor = None
+        if self.can_start_websocket:
+            self.websocket = AdminWebSocket(self)
+            self.metric_sender = None
+            self.metrics = {
+                'search': 0,
+                'search_time': 0,
+                'resolve': 0,
+                'resolve_time': 0
+            }
+
+    @property
+    def can_start_websocket(self):
+        return self.env.websocket_host is not None and self.env.websocket_port is not None
+
+    def add_metric(self, command, metric):
+        if self.can_start_websocket:
+            self.metrics[command] += 1
+            self.metrics[f'{command}_time'] += int(metric['total']*1000)
+
+    async def send_metrics(self):
+        while self.running:
+            metrics = self.metrics
+            self.metrics = {
+                'search': 0,
+                'search_time': 0,
+                'resolve': 0,
+                'resolve_time': 0
+            }
+            self.websocket.send_message(metrics)
+            await asyncio.sleep(1)
 
     async def start_other(self):
         args = dict(initializer=reader.initializer, initargs=('claims.db', self.env.coin.NET))
@@ -28,8 +116,16 @@ class LBRYSessionManager(SessionManager):
             self.query_executor = ProcessPoolExecutor(
                 max_workers=self.env.max_query_workers or max(os.cpu_count(), 4), **args
             )
+        if self.can_start_websocket:
+            self.running = True
+            await self.websocket.start()
+            self.metric_sender = asyncio.create_task(self.send_metrics())
 
     async def stop_other(self):
+        if self.can_start_websocket:
+            self.running = False
+            self.metric_sender.cancel()
+            await self.websocket.stop()
         self.query_executor.shutdown()
 
 
@@ -58,14 +154,18 @@ class LBRYElectrumX(ElectrumX):
     async def claimtrie_search(self, **kwargs):
         if 'claim_id' in kwargs:
             self.assert_claim_id(kwargs['claim_id'])
-        return base64.b64encode(await asyncio.get_running_loop().run_in_executor(
+        data, metrics = await asyncio.get_running_loop().run_in_executor(
             self.session_mgr.query_executor, reader.search_to_bytes, kwargs
-        )).decode()
+        )
+        self.session_mgr.add_metric('search', metrics)
+        return base64.b64encode(data).decode()
 
     async def claimtrie_resolve(self, *urls):
-        return base64.b64encode(await asyncio.get_running_loop().run_in_executor(
+        data, metrics = await asyncio.get_running_loop().run_in_executor(
             self.session_mgr.query_executor, reader.resolve_to_bytes, urls
-        )).decode()
+        )
+        self.session_mgr.add_metric('resolve', metrics)
+        return base64.b64encode(data).decode()
 
     async def get_server_height(self):
         return self.bp.height
