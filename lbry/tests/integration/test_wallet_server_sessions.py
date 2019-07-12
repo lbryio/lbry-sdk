@@ -61,7 +61,6 @@ class TestSessionBloat(IntegrationTestCase):
         def delayed_resume():
             self.paused_session.clear()
 
-            time.sleep(0.9)
             self.resumed_session.set()
 
         self.client_session.pause_writing = wrap_callback_event(self.client_session.pause_writing, paused)
