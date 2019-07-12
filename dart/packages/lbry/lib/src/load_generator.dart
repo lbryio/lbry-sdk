@@ -98,7 +98,7 @@ class LoadGenerator {
 }
 
 class LoadDataPoint {
-    final DateTime time = new DateTime.now();
+    final DateTime time = DateTime.now();
     int success = 0;
     int errored = 0;
     int backlog = 0;
