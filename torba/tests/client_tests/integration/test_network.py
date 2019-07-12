@@ -56,10 +56,14 @@ class ServerPickingTestCase(AsyncioTestCase):
     async def _make_fake_server(self, latency=1.0, port=1337):
         # local fake server with artificial latency
         proto = RPCSession()
-        proto.handle_request = lambda _: asyncio.sleep(latency)
+        async def __handler(_):
+            await asyncio.sleep(latency)
+            return {'height': 1}
+
+        proto.handle_request = __handler
         server = await self.loop.create_server(lambda: proto, host='127.0.0.1', port=port)
         self.addCleanup(server.close)
-        return ('127.0.0.1', port)
+        return '127.0.0.1', port
 
     async def test_pick_fastest(self):
         ledger = Mock(config={
