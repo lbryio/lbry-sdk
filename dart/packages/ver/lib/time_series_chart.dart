@@ -14,15 +14,55 @@ class SimpleTimeSeriesChart extends StatefulWidget {
 
 
 class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
+    final List<MetricDataPoint> metricData = [];
     final List<LoadDataPoint> loadData = [];
     final List<charts.Series<LoadDataPoint, DateTime>> loadSeries = [];
     final List<charts.Series<LoadDataPoint, DateTime>> timeSeries = [];
+    final List<charts.Series<MetricDataPoint, DateTime>> metricSeries = [];
+    final List<charts.Series<MetricDataPoint, DateTime>> metricTimeSeries = [];
     final Random rand = Random();
     LoadGenerator loadGenerator;
+    Client client;
 
     @override
     void initState() {
         super.initState();
+        metricSeries.add(
+            charts.Series<MetricDataPoint, DateTime>(
+                id: 'Searches',
+                colorFn: (_, __) => charts.MaterialPalette.black.darker,
+                domainFn: (MetricDataPoint load, _) => load.time,
+                measureFn: (MetricDataPoint load, _) => load.search,
+                data: metricData,
+            )
+        );
+        metricSeries.add(
+            charts.Series<MetricDataPoint, DateTime>(
+                id: 'Resolves',
+                colorFn: (_, __) => charts.MaterialPalette.black.darker,
+                domainFn: (MetricDataPoint load, _) => load.time,
+                measureFn: (MetricDataPoint load, _) => load.resolve,
+                data: metricData,
+            )
+        );
+        metricTimeSeries.add(
+            charts.Series<MetricDataPoint, DateTime>(
+                id: 'Avg. Resolve Time',
+                colorFn: (_, __) => charts.MaterialPalette.green.shadeDefault,
+                domainFn: (MetricDataPoint load, _) => load.time,
+                measureFn: (MetricDataPoint load, _) => load.avg_resolve,
+                data: metricData,
+            )
+        );
+        metricTimeSeries.add(
+            charts.Series<MetricDataPoint, DateTime>(
+                id: 'Avg. Search Time',
+                colorFn: (_, __) => charts.MaterialPalette.yellow.shadeDefault,
+                domainFn: (MetricDataPoint load, _) => load.time,
+                measureFn: (MetricDataPoint load, _) => load.avg_search,
+                data: metricData,
+            )
+        );
         loadSeries.add(
             charts.Series<LoadDataPoint, DateTime>(
                 id: 'Load',
@@ -79,7 +119,7 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
         );
         var increase = 1;
         loadData.add(LoadDataPoint());
-        loadGenerator = LoadGenerator('spv2.lbry.com', 50001, {
+        loadGenerator = LoadGenerator('localhost', 50001, {
                 'id': 1,
                 'method': 'blockchain.claimtrie.search',
                 'params': {
@@ -99,17 +139,26 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
                 //if (loadData.length > 60) loadData.removeAt(0);
                 loadData.add(stats);
             });
-            //increase = max(1, min(30, (increase*1.1).ceil())-stats.backlog);
-            increase += 1;
+            increase = max(1, min(30, (increase*1.1).ceil())-stats.backlog);
+            //increase += 1;
             //t.query['params']['offset'] = (increase/2).ceil()*t.query['params']['limit'];
             t.load = increase;//rand.nextInt(10)+5;
             return true;
         })..start();
+        metricData.add(MetricDataPoint());
+        client = Client('ws://localhost:8181/')..open()..metrics.listen((m) {
+            setState(() {
+                metricData.add(m);
+            });
+            print(m.avg_resolve);
+            print(m.avg_search);
+        });
     }
 
     @override
     void dispose() {
-      loadGenerator.stop();
+      if (client != null) client.close();
+      if (loadGenerator != null) loadGenerator.stop();
       super.dispose();
     }
 
@@ -118,6 +167,8 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
         return Column(children: <Widget>[
             SizedBox(height: 250.0, child: BetterTimeSeriesChart(loadSeries)),
             SizedBox(height: 250.0, child: BetterTimeSeriesChart(timeSeries)),
+            SizedBox(height: 250.0, child: BetterTimeSeriesChart(metricSeries)),
+            SizedBox(height: 250.0, child: BetterTimeSeriesChart(metricTimeSeries)),
         ]);
     }
 
