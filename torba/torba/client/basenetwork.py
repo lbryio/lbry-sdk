@@ -140,8 +140,7 @@ class BaseNetwork:
         return session
 
     def _update_remote_height(self, header_args):
-        if header_args and header_args[0]:
-            self.remote_height = header_args[0]["height"]
+        self.remote_height = header_args[0]["height"]
 
     def ensure_server_version(self, required='1.2'):
         return self.rpc('server.version', [__version__, required])

@@ -168,7 +168,7 @@ class BaseHeaders:
                         proof_of_work.value, target.value)
                 )
 
-    def repair(self):
+    async def repair(self):
         previous_header_hash = fail = None
         for height in range(self.height):
             raw = self.get_raw_header(height)

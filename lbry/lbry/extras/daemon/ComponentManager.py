@@ -163,3 +163,6 @@ class ComponentManager:
             if component.component_name == component_name:
                 return component.component
         raise NameError(component_name)
+
+    def has_component(self, component_name):
+        return any(component.component_name == component_name for component in self.components)
