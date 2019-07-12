@@ -48,10 +48,9 @@ class ReconnectTests(IntegrationTestCase):
         # TODO: test rolling over to a working server when an rpc request fails before raising
 
         self.assertTrue(self.ledger.network.is_connected)
-
-        await self.assertBalance(self.account, '0.0')
-
         address1 = await self.account.receiving.get_or_create_usable_address()
+        txid = await self.blockchain.send_to_address(address1, 21)
+        await self.blockchain.generate(1)
 
         real_sock = self.ledger.network.client.transport._extra.pop('socket')
         mock_sock = Mock(spec=socket.socket)
@@ -70,23 +69,21 @@ class ReconnectTests(IntegrationTestCase):
         self.ledger.network.client.transport._sock = mock_sock
         self.ledger.network.client.transport._extra['socket'] = mock_sock
 
-        await self.blockchain.send_to_address(address1, 21)
-        await self.blockchain.generate(1)
         self.assertFalse(raised.is_set())
+        with self.assertRaises(asyncio.CancelledError):
+            await self.ledger.network.get_transaction(txid)
 
-        await asyncio.wait_for(raised.wait(), 2)
-        await self.assertBalance(self.account, '0.0')
+        self.assertTrue(raised.is_set())
         self.assertFalse(self.ledger.network.is_connected)
         self.assertIsNone(self.ledger.network.client.transport)
 
-        await self.blockchain.send_to_address(address1, 21)
+        txid = await self.blockchain.send_to_address(address1, 2)
         await self.blockchain.generate(1)
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
 
-        await asyncio.sleep(30, loop=self.loop)
         self.assertIsNotNone(self.ledger.network.client.transport)
-        await self.assertBalance(self.account, '42.0')
+        self.assertIsNotNone(await self.ledger.network.get_transaction(txid))
 
 
 class ServerPickingTestCase(AsyncioTestCase):

@@ -8,6 +8,7 @@ import socket
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
 from torba import __version__
+from torba.rpc.util import protocol_exception_handler
 from torba.stream import StreamController
 
 log = logging.getLogger(__name__)
@@ -53,21 +54,6 @@ class ClientSession(BaseClientSession):
         self._on_disconnect_controller.add(True)
         if self.ping_task:
             self.ping_task.cancel()
-
-
-def protocol_exception_handler(loop: asyncio.AbstractEventLoop, context):
-    exception = context['exception']
-    if 'protocol' not in context or 'transport' not in context:
-        raise exception
-    if not isinstance(context['protocol'], ClientSession):
-        raise exception
-    transport: asyncio.Transport = context['transport']
-    message = context['message']
-    if message not in ("Fatal read error on socket transport", "Fatal write error on socket transport"):
-        raise exception
-    log.warning("Disconnecting after error: %s", str(exception))
-    transport.abort()
-    transport.close()
 
 
 class BaseNetwork:
@@ -219,7 +205,10 @@ class SessionPool:
                 self.ensure_connection(session)
                 for session in self.sessions
             ], return_exceptions=True)
-            await asyncio.wait([asyncio.sleep(3), self._lost_master.wait()], return_when='FIRST_COMPLETED')
+            try:
+                await asyncio.wait_for(self._lost_master.wait(), timeout=3)
+            except asyncio.TimeoutError:
+                pass
             self._lost_master.clear()
             if not self.sessions:
                 self.sessions.extend(self._dead_servers)

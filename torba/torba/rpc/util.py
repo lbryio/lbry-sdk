@@ -93,3 +93,13 @@ class Concurrency(object):
         else:
             for _ in range(-diff):
                 await self.semaphore.acquire()
+
+
+def protocol_exception_handler(loop: asyncio.AbstractEventLoop, context):
+    message = context['message']
+    transport = context.get('transport')
+    if transport and message in ("Fatal read error on socket transport", "Fatal write error on socket transport"):
+        transport.abort()
+        transport.close()
+    else:
+        return loop.default_exception_handler(context)
