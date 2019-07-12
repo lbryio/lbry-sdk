@@ -3,11 +3,11 @@ import math
 import base64
 import asyncio
 from binascii import hexlify
-#from weakref import WeakSet
+from weakref import WeakSet
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-#from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite
-#from aiohttp.http_websocket import WSMsgType, WSCloseCode
+from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite
+from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
 from torba.rpc.jsonrpc import RPCError
 from torba.server.session import ElectrumX, SessionManager
