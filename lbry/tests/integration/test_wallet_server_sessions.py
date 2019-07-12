@@ -1,6 +1,5 @@
 import asyncio
 import socket
-import time
 import logging
 from unittest.mock import Mock
 from torba.testcase import IntegrationTestCase, Conductor
