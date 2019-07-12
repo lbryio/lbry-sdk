@@ -280,7 +280,7 @@ def resolve(urls) -> Tuple[List, List, dict]:
 def resolve_to_bytes(urls) -> Tuple[bytes, dict]:
     start = time.time()
     *result, _metrics = resolve(urls)
-    output = Outputs.to_bytes(*result)
+    output = Outputs.to_bytes(*result)  # pylint: disable=E1120
     _metrics['total'] = time.time()-start
     return output, _metrics
 
