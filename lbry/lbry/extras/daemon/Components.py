@@ -119,7 +119,7 @@ class HeadersComponent(Component):
     def _round_progress(self, local_height, remote_height):
         return min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
 
-    async def get_status(self):
+    async def get_status(self) -> dict:
         progress = None
         if self.is_downloading_headers:
             progress = self._headers_progress_percent
@@ -161,7 +161,7 @@ class HeadersComponent(Component):
                     self.headers.bytes_size, final_size_after_download
                 )
 
-    def local_header_file_size(self):
+    def local_header_file_size(self) -> int:
         if os.path.isfile(self.headers_file):
             return os.stat(self.headers_file).st_size
         return 0
@@ -175,7 +175,7 @@ class HeadersComponent(Component):
         except OSError:
             log.exception("Failed to download headers using https.")
 
-    async def should_download_headers_from_s3(self):
+    async def should_download_headers_from_s3(self) -> bool:
         if self.conf.blockchain_name != "lbrycrd_main":
             return False
         s3_headers_depth = self.conf.s3_headers_depth
