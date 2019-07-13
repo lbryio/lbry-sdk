@@ -29,37 +29,64 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
         super.initState();
         metricSeries.add(
             charts.Series<MetricDataPoint, DateTime>(
-                id: 'Searches',
-                colorFn: (_, __) => charts.MaterialPalette.black.darker,
+                id: 'Searches Started',
+                colorFn: (_, __) => charts.MaterialPalette.deepOrange.shadeDefault.lighter,
                 domainFn: (MetricDataPoint load, _) => load.time,
-                measureFn: (MetricDataPoint load, _) => load.search,
+                measureFn: (MetricDataPoint load, _) => load.search.started,
                 data: metricData,
             )
         );
         metricSeries.add(
             charts.Series<MetricDataPoint, DateTime>(
-                id: 'Resolves',
-                colorFn: (_, __) => charts.MaterialPalette.black.darker,
+                id: 'Searches Finished',
+                colorFn: (_, __) => charts.MaterialPalette.deepOrange.shadeDefault.darker,
                 domainFn: (MetricDataPoint load, _) => load.time,
-                measureFn: (MetricDataPoint load, _) => load.resolve,
+                measureFn: (MetricDataPoint load, _) => load.search.finished,
+                data: metricData,
+            )
+        );
+        metricSeries.add(
+            charts.Series<MetricDataPoint, DateTime>(
+                id: 'Resolves Started',
+                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.lighter,
+                domainFn: (MetricDataPoint load, _) => load.time,
+                measureFn: (MetricDataPoint load, _) => load.resolve.started,
+                data: metricData,
+            )
+        );
+        metricSeries.add(
+            charts.Series<MetricDataPoint, DateTime>(
+                id: 'Resolves Finished',
+                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.darker,
+                domainFn: (MetricDataPoint load, _) => load.time,
+                measureFn: (MetricDataPoint load, _) => load.resolve.finished,
                 data: metricData,
             )
         );
         metricTimeSeries.add(
             charts.Series<MetricDataPoint, DateTime>(
-                id: 'Avg. Resolve Time',
-                colorFn: (_, __) => charts.MaterialPalette.green.shadeDefault,
+                id: 'Avg. Waiting',
+                colorFn: (_, __) => charts.MaterialPalette.red.shadeDefault.darker,
                 domainFn: (MetricDataPoint load, _) => load.time,
-                measureFn: (MetricDataPoint load, _) => load.avg_resolve,
+                measureFn: (MetricDataPoint load, _) => load.search.avg_wait_time,
                 data: metricData,
             )
         );
         metricTimeSeries.add(
             charts.Series<MetricDataPoint, DateTime>(
-                id: 'Avg. Search Time',
-                colorFn: (_, __) => charts.MaterialPalette.yellow.shadeDefault,
+                id: 'Avg. Executing',
+                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.lighter,
                 domainFn: (MetricDataPoint load, _) => load.time,
-                measureFn: (MetricDataPoint load, _) => load.avg_search,
+                measureFn: (MetricDataPoint load, _) => load.search.avg_execution_time,
+                data: metricData,
+            )
+        );
+        metricTimeSeries.add(
+            charts.Series<MetricDataPoint, DateTime>(
+                id: 'Avg. SQLite',
+                colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault.darker,
+                domainFn: (MetricDataPoint load, _) => load.time,
+                measureFn: (MetricDataPoint load, _) => load.search.avg_query_time_per_search,
                 data: metricData,
             )
         );
@@ -123,10 +150,11 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
                 'id': 1,
                 'method': 'blockchain.claimtrie.search',
                 'params': {
+                    'no_totals': true,
                     'offset': 0,
                     'limit': 20,
                     'fee_amount': '<1',
-                    'all_tags': ['funny'],
+                    //'all_tags': ['funny'],
                     'any_tags': [
                         'crypto',
                         'outdoors',
@@ -139,19 +167,17 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
                 //if (loadData.length > 60) loadData.removeAt(0);
                 loadData.add(stats);
             });
-            increase = max(1, min(30, (increase*1.1).ceil())-stats.backlog);
+            increase = max(1, min(100, increase+2)-stats.backlog);
             //increase += 1;
             //t.query['params']['offset'] = (increase/2).ceil()*t.query['params']['limit'];
             t.load = increase;//rand.nextInt(10)+5;
             return true;
         })..start();
-        metricData.add(MetricDataPoint());
+        metricData.add(MetricDataPoint.empty());
         client = Client('ws://localhost:8181/')..open()..metrics.listen((m) {
             setState(() {
                 metricData.add(m);
             });
-            print(m.avg_resolve);
-            print(m.avg_search);
         });
     }
 
@@ -165,10 +191,10 @@ class _SimpleTimeSeriesChartState extends State<SimpleTimeSeriesChart> {
     @override
     Widget build(BuildContext context) {
         return Column(children: <Widget>[
-            SizedBox(height: 250.0, child: BetterTimeSeriesChart(loadSeries)),
-            SizedBox(height: 250.0, child: BetterTimeSeriesChart(timeSeries)),
-            SizedBox(height: 250.0, child: BetterTimeSeriesChart(metricSeries)),
-            SizedBox(height: 250.0, child: BetterTimeSeriesChart(metricTimeSeries)),
+            SizedBox(height: 220.0, child: BetterTimeSeriesChart(loadSeries)),
+            SizedBox(height: 220.0, child: BetterTimeSeriesChart(timeSeries)),
+            SizedBox(height: 220.0, child: BetterTimeSeriesChart(metricSeries)),
+            SizedBox(height: 220.0, child: BetterTimeSeriesChart(metricTimeSeries)),
         ]);
     }
 

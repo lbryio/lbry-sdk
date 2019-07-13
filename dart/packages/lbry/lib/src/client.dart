@@ -17,12 +17,12 @@ class Client {
         channel = IOWebSocketChannel.connect(this.url);
         channel.stream.listen((message) {
             Map data = json.decode(message);
+            Map commands = data['commands'];
             _metricsController.add(
-                MetricDataPoint()
-                    ..search=data['search'] ?? 0
-                    ..search_time=data['search_time'] ?? 0
-                    ..resolve=data['resolve'] ?? 0
-                    ..resolve_time=data['resolve_time'] ?? 0
+                MetricDataPoint(
+                    CommandMetrics.from_map(commands['search'] ?? {}),
+                    CommandMetrics.from_map(commands['resolve'] ?? {})
+                )
             );
         });
     }
@@ -31,14 +31,45 @@ class Client {
 }
 
 
+class CommandMetrics {
+    final int started;
+    final int finished;
+    final int total_time;
+    final int execution_time;
+    final int query_time;
+    final int query_count;
+    final int avg_wait_time;
+    final int avg_total_time;
+    final int avg_execution_time;
+    final int avg_query_time_per_search;
+    final int avg_query_time_per_query;
+    CommandMetrics(
+        this.started, this.finished, this.total_time,
+        this.execution_time, this.query_time, this.query_count):
+        avg_wait_time=finished > 0 ? ((total_time - (execution_time + query_time))/finished).round() : 0,
+        avg_total_time=finished > 0 ? (total_time/finished).round() : 0,
+        avg_execution_time=finished > 0 ? (execution_time/finished).round() : 0,
+        avg_query_time_per_search=finished > 0 ? (query_time/finished).round() : 0,
+        avg_query_time_per_query=query_count > 0 ? (query_time/query_count).round() : 0;
+    CommandMetrics.from_map(Map data): this(
+        data['started'] ?? 0,
+        data['finished'] ?? 0,
+        data['total_time'] ?? 0,
+        data['execution_time'] ?? 0,
+        data['query_time'] ?? 0,
+        data['query_count'] ?? 0,
+    );
+}
+
+
 class MetricDataPoint {
     final DateTime time = DateTime.now();
-    int search = 0;
-    int search_time = 0;
-    int resolve = 0;
-    int resolve_time = 0;
-    int get avg_search => search_time > 0 ? (search_time/search).round() : 0;
-    int get avg_resolve => resolve_time > 0 ? (resolve_time/resolve).round() : 0;
+    final CommandMetrics search;
+    final CommandMetrics resolve;
+    MetricDataPoint(this.search, this.resolve);
+    MetricDataPoint.empty():
+        search=CommandMetrics.from_map({}),
+        resolve=CommandMetrics.from_map({});
 }
 
 
