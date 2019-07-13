@@ -22,9 +22,6 @@ CURRENCIES = {
     'LBC': {'type': 'crypto'},
     'USD': {'type': 'fiat'},
 }
-HEADERS_FILE_SHA256_CHECKSUM = (
-    590383, '71ff515ab728467a35a1484ca8c29ad2bfae3ea77753f9d3dfc64743121e7129'
-)
 
 
 class Setting(typing.Generic[T]):
