@@ -1,16 +1,19 @@
 import time
 import struct
 import sqlite3
-from typing import Tuple, List, Any
+from typing import Tuple, List, Dict, Union, Type, Optional
 from binascii import unhexlify
 from decimal import Decimal
 from contextvars import ContextVar
+from functools import wraps
+from dataclasses import dataclass
 
 from torba.client.basedatabase import query
 
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs
+from lbry.wallet.ledger import BaseLedger, MainNetLedger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES
 
@@ -49,25 +52,96 @@ PRAGMAS = """
 """
 
 
-db = ContextVar('db')
-ledger = ContextVar('ledger')
+@dataclass
+class ReaderState:
+    db: sqlite3.Connection
+    stack: List[List]
+    metrics: Dict
+    is_tracking_metrics: bool
+    ledger: Type[BaseLedger]
+
+    def close(self):
+        self.db.close()
+
+    def reset_metrics(self):
+        self.stack = []
+        self.metrics = {}
 
 
-def initializer(_path, _ledger_name):
-    _db = sqlite3.connect(_path, isolation_level=None, uri=True)
-    _db.row_factory = sqlite3.Row
-    db.set(_db)
-    from lbry.wallet.ledger import MainNetLedger, RegTestLedger
-    ledger.set(MainNetLedger if _ledger_name == 'mainnet' else RegTestLedger)
+ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
+
+
+def initializer(_path, _ledger_name, _measure=False):
+    db = sqlite3.connect(_path, isolation_level=None, uri=True)
+    db.row_factory = sqlite3.Row
+    ctx.set(ReaderState(
+        db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
+        ledger=MainNetLedger if _ledger_name == 'mainnet' else RegTestLedger
+    ))
 
 
 def cleanup():
-    db.get().close()
-    db.set(None)
-    ledger.set(None)
+    ctx.get().close()
+    ctx.set(None)
 
 
-def get_claims(cols, for_count=False, **constraints) -> Tuple[List, float]:
+def measure(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        state = ctx.get()
+        if not state.is_tracking_metrics:
+            return func(*args, **kwargs)
+        metric = state.metrics.setdefault(func.__name__, {'calls': 0, 'total': 0, 'isolated': 0})
+        state.stack.append([])
+        start = time.perf_counter()
+        try:
+            return func(*args, **kwargs)
+        except:
+            metric['errors'] += 1
+            raise
+        finally:
+            elapsed = int((time.perf_counter()-start)*1000)
+            metric['calls'] += 1
+            metric['total'] += elapsed
+            metric['isolated'] += (elapsed-sum(state.stack.pop()))
+            if state.stack:
+                state.stack[-1].append(elapsed)
+    return wrapper
+
+
+def reports_metrics(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        state = ctx.get()
+        if not state.is_tracking_metrics:
+            return func(*args, **kwargs)
+        state.reset_metrics()
+        r = func(*args, **kwargs)
+        return r, state.metrics
+    return wrapper
+
+
+@reports_metrics
+def search_to_bytes(constraints) -> Union[bytes, Tuple[bytes, Dict]]:
+    return encode_result(search(constraints))
+
+
+@reports_metrics
+def resolve_to_bytes(urls) -> Union[bytes, Tuple[bytes, Dict]]:
+    return encode_result(resolve(urls))
+
+
+def encode_result(result):
+    return Outputs.to_bytes(*result)
+
+
+@measure
+def execute_query(sql, values) -> List:
+    return ctx.get().db.execute(sql, values).fetchall()
+
+
+@measure
+def get_claims(cols, for_count=False, **constraints) -> List:
     if 'order_by' in constraints:
         sql_order_by = []
         for order_by in constraints['order_by']:
@@ -121,15 +195,15 @@ def get_claims(cols, for_count=False, **constraints) -> Tuple[List, float]:
 
     if 'public_key_id' in constraints:
         constraints['claim.public_key_hash'] = sqlite3.Binary(
-            ledger.get().address_to_hash160(constraints.pop('public_key_id')))
+            ctx.get().ledger.address_to_hash160(constraints.pop('public_key_id')))
 
     if 'channel' in constraints:
         channel_url = constraints.pop('channel')
-        match, _ = _resolve_one(channel_url)
+        match = resolve_url(channel_url)
         if isinstance(match, sqlite3.Row):
             constraints['channel_hash'] = match['claim_hash']
         else:
-            return [[0]] if cols == 'count(*)' else [], 0
+            return [[0]] if cols == 'count(*)' else []
     if 'channel_hash' in constraints:
         constraints['claim.channel_hash'] = sqlite3.Binary(constraints.pop('channel_hash'))
     if 'channel_ids' in constraints:
@@ -198,46 +272,38 @@ def get_claims(cols, for_count=False, **constraints) -> Tuple[List, float]:
         LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
         """, **constraints
     )
-    start = time.time()
-    result = db.get().execute(sql, values).fetchall()
-    return result, time.time()-start
+
+    return execute_query(sql, values)
 
 
-def get_claims_count(**constraints) -> Tuple[int, float]:
+@measure
+def get_claims_count(**constraints) -> int:
     constraints.pop('offset', None)
     constraints.pop('limit', None)
     constraints.pop('order_by', None)
-    count, elapsed = get_claims('count(*)', for_count=True, **constraints)
-    return count[0][0], elapsed
+    count = get_claims('count(*)', for_count=True, **constraints)
+    return count[0][0]
 
 
-def search(constraints) -> Tuple[List, List, int, int, dict]:
+@measure
+def search(constraints) -> Tuple[List, List, int, int]:
     assert set(constraints).issubset(SEARCH_PARAMS), \
         f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
-    _metrics = {}
     total = None
     if not constraints.pop('no_totals', False):
-        total, _metrics['count'] = get_claims_count(**constraints)
+        total = get_claims_count(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
     if 'order_by' not in constraints:
         constraints['order_by'] = ["height", "^name"]
-    txo_rows, _metrics['claim.search'] = _search(**constraints)
+    txo_rows = _search(**constraints)
     channel_hashes = set(txo['channel_hash'] for txo in txo_rows if txo['channel_hash'])
     extra_txo_rows = []
     if channel_hashes:
-        extra_txo_rows, _metrics['channel.search'] = _search(
+        extra_txo_rows = _search(
             **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]}
         )
-    return txo_rows, extra_txo_rows, constraints['offset'], total, _metrics
-
-
-def search_to_bytes(constraints) -> (bytes, dict):
-    start = time.time()
-    *result, _metrics = search(constraints)
-    output = Outputs.to_bytes(*result)
-    _metrics['total'] = time.time()-start
-    return output, _metrics
+    return txo_rows, extra_txo_rows, constraints['offset'], total
 
 
 def _search(**constraints):
@@ -259,39 +325,30 @@ def _search(**constraints):
     )
 
 
-def resolve(urls) -> Tuple[List, List, dict]:
+@measure
+def resolve(urls) -> Tuple[List, List]:
     result = []
-    _metrics = {'urls': []}
     channel_hashes = set()
     for raw_url in urls:
-        match, metric = _resolve_one(raw_url)
+        match = resolve_url(raw_url)
         result.append(match)
-        _metrics['urls'].append(metric)
         if isinstance(match, sqlite3.Row) and match['channel_hash']:
             channel_hashes.add(match['channel_hash'])
     extra_txo_rows = []
     if channel_hashes:
-        extra_txo_rows, _metrics['channel.search'] = _search(
+        extra_txo_rows = _search(
             **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]}
         )
-    return result, extra_txo_rows, _metrics
+    return result, extra_txo_rows
 
 
-def resolve_to_bytes(urls) -> Tuple[bytes, dict]:
-    start = time.time()
-    *result, _metrics = resolve(urls)
-    output = Outputs.to_bytes(*result)  # pylint: disable=E1120
-    _metrics['total'] = time.time()-start
-    return output, _metrics
-
-
-def _resolve_one(raw_url) -> Tuple[Any, dict]:
-    _metrics = {}
+@measure
+def resolve_url(raw_url):
 
     try:
         url = URL.parse(raw_url)
     except ValueError as e:
-        return e, _metrics
+        return e
 
     channel = None
 
@@ -301,11 +358,11 @@ def _resolve_one(raw_url) -> Tuple[Any, dict]:
             query['is_controlling'] = True
         else:
             query['order_by'] = ['^height']
-        matches, _metrics['channel.search'] = _search(**query, limit=1)
+        matches = _search(**query, limit=1)
         if matches:
             channel = matches[0]
         else:
-            return LookupError(f'Could not find channel in "{raw_url}".'), _metrics
+            return LookupError(f'Could not find channel in "{raw_url}".')
 
     if url.has_stream:
         query = url.stream.to_dict()
@@ -319,15 +376,16 @@ def _resolve_one(raw_url) -> Tuple[Any, dict]:
             query['signature_valid'] = 1
         elif set(query) == {'name'}:
             query['is_controlling'] = 1
-        matches, _metrics['stream.search'] = _search(**query, limit=1)
+        matches = _search(**query, limit=1)
         if matches:
-            return matches[0], _metrics
+            return matches[0]
         else:
-            return LookupError(f'Could not find stream in "{raw_url}".'), _metrics
+            return LookupError(f'Could not find stream in "{raw_url}".')
 
-    return channel, _metrics
+    return channel
 
 
+@measure
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
     any_items = cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if any_items:

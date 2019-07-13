@@ -1,5 +1,6 @@
 import os
 import math
+import time
 import base64
 import asyncio
 from binascii import hexlify
@@ -77,54 +78,80 @@ class LBRYSessionManager(SessionManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.query_executor = None
-        if self.can_start_websocket:
+        self.websocket = None
+        self.metrics_processor = None
+        self.command_metrics = {}
+        self.reader_metrics = {}
+        self.running = False
+        if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
-            self.metric_sender = None
-            self.metrics = {
-                'search': 0,
-                'search_time': 0,
-                'resolve': 0,
-                'resolve_time': 0
+
+    def get_command_tracking_info(self, command):
+        if command not in self.command_metrics:
+            self.command_metrics[command] = {
+                'started': 0,
+                'finished': 0,
+                'total_time': 0,
+                'execution_time': 0,
+                'query_time': 0,
+                'query_count': 0,
             }
+        return self.command_metrics[command]
 
-    @property
-    def can_start_websocket(self):
-        return self.env.websocket_host is not None and self.env.websocket_port is not None
+    def start_command_tracking(self, command_name):
+        if self.env.track_metrics:
+            command = self.get_command_tracking_info(command_name)
+            command['started'] += 1
 
-    def add_metric(self, command, metric):
-        if self.can_start_websocket:
-            self.metrics[command] += 1
-            self.metrics[f'{command}_time'] += int(metric['total']*1000)
+    def finish_command_tracking(self, command_name, elapsed, metrics):
+        if self.env.track_metrics:
+            command = self.get_command_tracking_info(command_name)
+            command['finished'] += 1
+            command['total_time'] += elapsed
+            command['execution_time'] += (metrics[command_name]['total'] - metrics['execute_query']['total'])
+            command['query_time'] += metrics['execute_query']['total']
+            command['query_count'] += metrics['execute_query']['calls']
+            for func_name, func_metrics in metrics.items():
+                reader = self.reader_metrics.setdefault(func_name, {})
+                for key in func_metrics:
+                    if key not in reader:
+                        reader[key] = func_metrics[key]
+                    else:
+                        reader[key] += func_metrics[key]
 
-    async def send_metrics(self):
+    async def process_metrics(self):
         while self.running:
-            metrics = self.metrics
-            self.metrics = {
-                'search': 0,
-                'search_time': 0,
-                'resolve': 0,
-                'resolve_time': 0
-            }
-            self.websocket.send_message(metrics)
+            commands, self.command_metrics = self.command_metrics, {}
+            reader, self.reader_metrics = self.reader_metrics, {}
+            if self.websocket is not None:
+                self.websocket.send_message({
+                    'commands': commands,
+                    'reader': reader
+                })
             await asyncio.sleep(1)
 
     async def start_other(self):
-        args = dict(initializer=reader.initializer, initargs=('claims.db', self.env.coin.NET))
+        self.running = True
+        args = dict(
+            initializer=reader.initializer,
+            initargs=('claims.db', self.env.coin.NET, self.env.track_metrics)
+        )
         if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
             self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
         else:
             self.query_executor = ProcessPoolExecutor(
                 max_workers=self.env.max_query_workers or max(os.cpu_count(), 4), **args
             )
-        if self.can_start_websocket:
-            self.running = True
+        if self.websocket is not None:
             await self.websocket.start()
-            self.metric_sender = asyncio.create_task(self.send_metrics())
+        if self.env.track_metrics:
+            self.metrics_processor = asyncio.create_task(self.process_metrics())
 
     async def stop_other(self):
-        if self.can_start_websocket:
-            self.running = False
-            self.metric_sender.cancel()
+        self.running = False
+        if self.env.track_metrics:
+            self.metrics_processor.cancel()
+        if self.websocket is not None:
             await self.websocket.stop()
         self.query_executor.shutdown()
 
@@ -132,6 +159,7 @@ class LBRYSessionManager(SessionManager):
 class LBRYElectrumX(ElectrumX):
     PROTOCOL_MIN = (0, 0)  # temporary, for supporting 0.10 protocol
     max_errors = math.inf  # don't disconnect people for errors! let them happen...
+    session_mgr: LBRYSessionManager
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -151,21 +179,31 @@ class LBRYElectrumX(ElectrumX):
         }
         self.request_handlers.update(handlers)
 
+    async def run_in_executor(self, name, func, kwargs):
+        start = None
+        if self.env.track_metrics:
+            self.session_mgr.start_command_tracking(name)
+            start = time.perf_counter()
+        result = await asyncio.get_running_loop().run_in_executor(
+            self.session_mgr.query_executor, func, kwargs
+        )
+        if self.env.track_metrics:
+            elapsed = int((time.perf_counter() - start) * 1000)
+            (result, metrics) = result
+            self.session_mgr.finish_command_tracking(name, elapsed, metrics)
+        return result
+
     async def claimtrie_search(self, **kwargs):
         if 'claim_id' in kwargs:
             self.assert_claim_id(kwargs['claim_id'])
-        data, metrics = await asyncio.get_running_loop().run_in_executor(
-            self.session_mgr.query_executor, reader.search_to_bytes, kwargs
-        )
-        self.session_mgr.add_metric('search', metrics)
-        return base64.b64encode(data).decode()
+        return base64.b64encode(
+            await self.run_in_executor('search', reader.search_to_bytes, kwargs)
+        ).decode()
 
     async def claimtrie_resolve(self, *urls):
-        data, metrics = await asyncio.get_running_loop().run_in_executor(
-            self.session_mgr.query_executor, reader.resolve_to_bytes, urls
-        )
-        self.session_mgr.add_metric('resolve', metrics)
-        return base64.b64encode(data).decode()
+        return base64.b64encode(
+            await self.run_in_executor('resolve', reader.resolve_to_bytes, urls)
+        ).decode()
 
     async def get_server_height(self):
         return self.bp.height
