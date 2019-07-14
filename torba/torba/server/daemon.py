@@ -57,6 +57,11 @@ class Daemon:
         self.available_rpcs = {}
         self.connector = aiohttp.TCPConnector()
 
+    async def close(self):
+        if self.connector:
+            await self.connector.close()
+            self.connector = None
+
     def set_url(self, url):
         """Set the URLS to the given list, and switch to the first one."""
         urls = url.split(',')

@@ -146,6 +146,7 @@ class Server:
             task.cancel()
         await asyncio.wait(self.cancellable_tasks)
         self.shutdown_event.set()
+        await self.daemon.close()
 
     def run(self):
         loop = asyncio.get_event_loop()
