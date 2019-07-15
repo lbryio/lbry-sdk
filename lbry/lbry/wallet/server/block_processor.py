@@ -68,6 +68,7 @@ class LBRYBlockProcessor(BlockProcessor):
         self.logger.info(f"LbryumX Block Processor - Validating signatures: {self.should_validate_signatures}")
         self.sql: SQLDB = self.db.sql
         self.timer = Timer('BlockProcessor')
+        self.search_cache = {}
 
     def advance_blocks(self, blocks):
         self.sql.begin()
@@ -78,6 +79,8 @@ class LBRYBlockProcessor(BlockProcessor):
             raise
         finally:
             self.sql.commit()
+        for cache in self.search_cache.values():
+            cache.clear()
 
     def advance_txs(self, height, txs, header):
         timer = self.timer.sub_timers['advance_blocks']

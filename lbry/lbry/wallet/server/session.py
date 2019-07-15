@@ -5,6 +5,7 @@ import base64
 import asyncio
 from binascii import hexlify
 from weakref import WeakSet
+from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite
@@ -69,7 +70,7 @@ class AdminWebSocket:
     @staticmethod
     async def on_shutdown(app):
         print('disconnecting websockets')
-        for web_socket in app['websockets']:
+        for web_socket in set(app['websockets']):
             await web_socket.close(code=WSCloseCode.GOING_AWAY, message='Server shutdown')
 
 
@@ -85,6 +86,9 @@ class LBRYSessionManager(SessionManager):
         self.running = False
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
+        self.search_cache = self.bp.search_cache
+        self.search_cache['search'] = lrucache(1000)
+        self.search_cache['resolve'] = lrucache(1000)
 
     def get_command_tracking_info(self, command):
         if command not in self.command_metrics:
@@ -191,19 +195,26 @@ class LBRYElectrumX(ElectrumX):
             elapsed = int((time.perf_counter() - start) * 1000)
             (result, metrics) = result
             self.session_mgr.finish_command_tracking(name, elapsed, metrics)
+        result = base64.b64encode(result)
+        if self.env.cache_search:
+            self.session_mgr.search_cache[name][str(kwargs)] = result
         return result
 
     async def claimtrie_search(self, **kwargs):
         if 'claim_id' in kwargs:
             self.assert_claim_id(kwargs['claim_id'])
-        return base64.b64encode(
-            await self.run_in_executor('search', reader.search_to_bytes, kwargs)
-        ).decode()
+        if self.env.cache_search:
+            key = str(kwargs)
+            if key in self.session_mgr.search_cache['search']:
+                return self.session_mgr.search_cache['search'][key]
+        return await self.run_in_executor('search', reader.search_to_bytes, kwargs)
 
     async def claimtrie_resolve(self, *urls):
-        return base64.b64encode(
-            await self.run_in_executor('resolve', reader.resolve_to_bytes, urls)
-        ).decode()
+        if self.env.cache_search:
+            key = str(urls)
+            if key in self.session_mgr.search_cache['resolve']:
+                return self.session_mgr.search_cache['resolve'][key]
+        return await self.run_in_executor('resolve', reader.resolve_to_bytes, urls)
 
     async def get_server_height(self):
         return self.bp.height
