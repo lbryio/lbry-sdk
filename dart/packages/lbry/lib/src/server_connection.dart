@@ -15,15 +15,18 @@ class Client {
 
     open() {
         channel = IOWebSocketChannel.connect(this.url);
+        int tick = 1;
         channel.stream.listen((message) {
             Map data = json.decode(message);
             Map commands = data['commands'];
             _metricsController.add(
                 MetricDataPoint(
+                    tick,
                     CommandMetrics.from_map(commands['search'] ?? {}),
                     CommandMetrics.from_map(commands['resolve'] ?? {})
                 )
             );
+            tick++;
         });
     }
 
@@ -63,11 +66,12 @@ class CommandMetrics {
 
 
 class MetricDataPoint {
-    final DateTime time = DateTime.now();
+    final int tick;
     final CommandMetrics search;
     final CommandMetrics resolve;
-    MetricDataPoint(this.search, this.resolve);
+    MetricDataPoint(this.tick, this.search, this.resolve);
     MetricDataPoint.empty():
+        tick = 0,
         search=CommandMetrics.from_map({}),
         resolve=CommandMetrics.from_map({});
 }

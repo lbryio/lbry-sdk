@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^0.1.2
   charts_flutter: ^0.6.0
+  provider: ^3.0.0
   lbry:
     path: ../lbry
 
