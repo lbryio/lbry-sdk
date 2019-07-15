@@ -44,24 +44,32 @@ class LoadRequest {
     }
 }
 
-typedef bool LoadTestCallback(LoadGenerator load_generator, LoadDataPoint stats);
+typedef bool LoadTickCallback(ClientLoadGenerator load_generator, ClientLoadDataPoint stats);
 
-class LoadGenerator {
-    int load = 1;
+class ClientLoadGenerator {
     Timer _timer;
-    String host;
-    int port;
+
+    final String host;
+    final int port;
+    final LoadTickCallback tickCallback;
+    int load = 1;
     Map query;
 
-    LoadTestCallback cb;
-
-    LoadGenerator(this.host, this.port, this.query, this.cb);
+    ClientLoadGenerator(this.host, this.port, {this.tickCallback, this.query}) {
+        if (query == null) {
+            query = {
+                'id': 1,
+                'method': 'blockchain.claimtrie.resolve',
+                'params': ['one', 'two', 'three']
+            };
+        }
+    }
 
     start() {
         var previous = spawn_requests();
         var backlog = <LoadRequest>[];
         _timer = Timer.periodic(Duration(seconds: 1), (t) {
-            var stat = LoadDataPoint();
+            var stat = ClientLoadDataPoint(t.tick);
             backlog.removeWhere((r) {
                 if (r.isDone) stat.addCatchup(r);
                 return r.isDone;
@@ -75,10 +83,11 @@ class LoadGenerator {
             }
             stat.backlog = backlog.length;
             stat.load = load;
-            if (cb(this, stat)) {
+            stat.close();
+            if (tickCallback(this, stat)) {
                 previous = spawn_requests();
             } else {
-                t.cancel();
+                stop();
             }
         });
     }
@@ -97,18 +106,20 @@ class LoadGenerator {
 
 }
 
-class LoadDataPoint {
-    final DateTime time = DateTime.now();
+class ClientLoadDataPoint {
+    final int tick;
     int success = 0;
     int errored = 0;
     int backlog = 0;
     int catchup = 0;
     int _success_total = 0;
+    int avg_success = 0;
     int _catchup_total = 0;
+    int avg_catchup = 0;
     int load = 0;
 
-    int get avg_success => _success_total > 0 ? (_success_total/success).round() : 0;
-    int get avg_catchup => _catchup_total > 0 ? (_catchup_total/catchup).round() : 0;
+    ClientLoadDataPoint(this.tick);
+    ClientLoadDataPoint.empty(): this(0);
 
     addSuccess(LoadRequest r) {
         success++; _success_total += r.elapsed;
@@ -117,16 +128,19 @@ class LoadDataPoint {
     addCatchup(LoadRequest r) {
         catchup++; _catchup_total += r.elapsed;
     }
+
+    close() {
+        avg_success = _success_total > 0 ? (_success_total/success).round() : 0;
+        avg_catchup = _catchup_total > 0 ? (_catchup_total/catchup).round() : 0;
+    }
+
 }
 
-cli() {
+
+generate_load() {
     var runs = 1;
-    LoadGenerator('localhost', 50001, {
-            'id': 1,
-            'method': 'blockchain.claimtrie.resolve',
-            'params': ['one', 'two', 'three']
-    }, (t, stats) {
-        print("run ${runs}: ${stats}");
+    ClientLoadGenerator('localhost', 50001, tickCallback: (t, stats) {
+        print("run ${runs}: ${stats.load} load, ${stats.success} success, ${stats.backlog} backlog");
         t.load = (runs < 4 ? t.load*2 : t.load/2).round();
         return runs++ < 10;
     }).start();
