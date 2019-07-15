@@ -72,6 +72,13 @@ class TestLanguages(TestCase):
         self.assertEqual(stream.languages[2].region, 'US')
         self.assertEqual(stream.langtags, ['en', 'en-US', 'en-Latn-US'])
 
+        stream.languages.append('es-419')
+        self.assertEqual(stream.languages[3].langtag, 'es-419')
+        self.assertEqual(stream.languages[3].language, 'es')
+        self.assertEqual(stream.languages[3].script, None)
+        self.assertEqual(stream.languages[3].region, '419')
+        self.assertEqual(stream.langtags, ['en', 'en-US', 'en-Latn-US', 'es-419'])
+
         stream = Stream()
         stream.languages.extend(['en-Latn-US', 'es-ES', 'de-DE'])
         self.assertEqual(stream.languages[0].language, 'en')
