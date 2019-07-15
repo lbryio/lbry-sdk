@@ -379,7 +379,9 @@ class Language(Metadata):
         self.language = parts.pop(0)
         if parts and len(parts[0]) == 4:
             self.script = parts.pop(0)
-        if parts and len(parts[0]) == 2:
+        if parts and len(parts[0]) == 2 and parts[0].isalpha():
+            self.region = parts.pop(0)
+        if parts and len(parts[0]) == 3 and parts[0].isdigit():
             self.region = parts.pop(0)
         assert not parts, f"Failed to parse language tag: {langtag}"
 
@@ -404,10 +406,13 @@ class Language(Metadata):
     @property
     def region(self) -> str:
         if self.message.region:
-            return LocationMessage.Country.Name(self.message.region)
+            r = LocationMessage.Country.Name(self.message.region)
+            return r[1:] if r.startswith('R') else r
 
     @region.setter
     def region(self, region: str):
+        if len(region) == 3:
+            region = 'R'+region
         self.message.region = LocationMessage.Country.Value(region)
 
 
