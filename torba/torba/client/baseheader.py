@@ -170,23 +170,26 @@ class BaseHeaders:
 
     async def repair(self):
         previous_header_hash = fail = None
-        for height in range(self.height):
-            raw = self.get_raw_header(height)
-            header = self.deserialize(height, raw)
-            if height:
-                if header['prev_block_hash'] != previous_header_hash:
-                    fail = True
-            else:
-                if self.hash_header(raw) != self.genesis_hash:
-                    fail = True
-            if fail:
-                log.warning("Header file corrupted at height %s, truncating it.", height - 1)
-                self.io.seek((height - 1) * self.header_size, os.SEEK_SET)
-                self.io.truncate()
-                self.io.flush()
-                self._size = None
-                return
-            previous_header_hash = self.hash_header(raw)
+        self.io.seek(0)
+        batch_size = 10000
+        for start_height in range(0, self.height, batch_size):
+            headers = self.io.read(self.header_size*batch_size)
+            for header_hash, header in self._iterate_headers(start_height, headers):
+                height = header['block_height']
+                if height:
+                    if header['prev_block_hash'] != previous_header_hash:
+                        fail = True
+                else:
+                    if header_hash != self.genesis_hash:
+                        fail = True
+                if fail:
+                    log.warning("Header file corrupted at height %s, truncating it.", height - 1)
+                    self.io.seek((height - 1) * self.header_size, os.SEEK_SET)
+                    self.io.truncate()
+                    self.io.flush()
+                    self._size = None
+                    return
+                previous_header_hash = header_hash
 
     @staticmethod
     def get_proof_of_work(header_hash: bytes) -> ArithUint256:
