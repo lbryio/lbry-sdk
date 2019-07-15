@@ -1742,12 +1742,12 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     multiple channels at the same time,
                                                     includes claims with invalid signatures,
                                                     use in conjunction with --valid_channel_signature
-            --channel_ids=<channel_ids>     : (str) claims signed by any of these channels
+            --channel_ids=<channel_ids>     : (list) claims signed by any of these channels
                                                     (arguments must be claim ids of the channels),
                                                     includes claims with invalid signatures,
                                                     implies --has_channel_signature,
                                                     use in conjunction with --valid_channel_signature
-            --not_channel_ids=<not_channel_ids>: (str) exclude claims signed by any of these channels
+            --not_channel_ids=<not_channel_ids>: (list) exclude claims signed by any of these channels
                                                     (arguments must be claim ids of the channels)
             --has_channel_signature         : (bool) claims with a channel signature (valid or invalid)
             --valid_channel_signature       : (bool) claims with a valid channel signature or no signature,
@@ -1815,7 +1815,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --not_locations=<not_locations> : (list) find claims not containing any of these locations
             --page=<page>                   : (int) page to return during paginating
             --page_size=<page_size>         : (int) number of items on page during pagination
-            --order_by=<order_by>           : (str) field to order by, default is descending order, to do an
+            --order_by=<order_by>           : (list) field to order by, default is descending order, to do an
                                                     ascending order prepend ^ to the field name, eg. '^amount'
                                                     available fields: 'name', 'height', 'release_time',
                                                     'publish_time', 'amount', 'effective_amount',
