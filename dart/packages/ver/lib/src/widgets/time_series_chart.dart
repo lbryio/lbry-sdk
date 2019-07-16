@@ -40,11 +40,10 @@ class ServerLoadChartState extends State<ServerLoadChart> {
         super.initState();
         seriesData = [
             charts.Series<ServerLoadDataPoint, int>(
-                id: 'Search Start',
-                colorFn: (_, __) =>
-                charts.MaterialPalette.deepOrange.shadeDefault.lighter,
+                id: 'Search Cache',
+                colorFn: (_, __) => charts.MaterialPalette.green.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.started,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.cache_hit,
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
@@ -53,27 +52,16 @@ class ServerLoadChartState extends State<ServerLoadChart> {
                 charts.MaterialPalette.deepOrange.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
                 measureFn: (ServerLoadDataPoint load, _) => load.search.finished,
+                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 5.0,
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
-                id: 'Search Cache',
-                colorFn: (_, __) => charts.MaterialPalette.green.shadeDefault.darker,
+                id: 'Search Start',
+                colorFn: (_, __) =>
+                charts.MaterialPalette.deepOrange.shadeDefault.lighter,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.cache_hit,
-                data: widget.server.serverLoadData,
-            ),
-            charts.Series<ServerLoadDataPoint, int>(
-                id: 'Resolve Start',
-                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.lighter,
-                domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.resolve.started,
-                data: widget.server.serverLoadData,
-            ),
-            charts.Series<ServerLoadDataPoint, int>(
-                id: 'Resolve Finish',
-                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.darker,
-                domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.resolve.finished,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.started,
+                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 1.0,
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
@@ -81,6 +69,22 @@ class ServerLoadChartState extends State<ServerLoadChart> {
                 colorFn: (_, __) => charts.MaterialPalette.cyan.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
                 measureFn: (ServerLoadDataPoint load, _) => load.resolve.cache_hit,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Resolve Finish',
+                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.darker,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => load.resolve.finished,
+                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 5.0,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Resolve Start',
+                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.lighter,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => load.resolve.started,
+                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 1.0,
                 data: widget.server.serverLoadData,
             ),
         ];
