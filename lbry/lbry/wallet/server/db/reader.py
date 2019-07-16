@@ -422,7 +422,13 @@ def resolve_url(raw_url):
 
 @measure
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
-    any_items = cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+    any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    not_items = set(cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+
+    all_items = {item for item in all_items if item not in not_items}
+    any_items = {item for item in any_items if item not in not_items}
+
     if any_items:
         constraints.update({
             f'$any_{attr}{i}': item for i, item in enumerate(any_items)
@@ -443,7 +449,6 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
                 )
             """
 
-    all_items = cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if all_items:
         constraints[f'$all_{attr}_count'] = len(all_items)
         constraints.update({
@@ -466,7 +471,6 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
                 )
             """
 
-    not_items = cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if not_items:
         constraints.update({
             f'$not_{attr}{i}': item for i, item in enumerate(not_items)
