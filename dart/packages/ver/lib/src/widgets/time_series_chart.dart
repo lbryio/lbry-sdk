@@ -13,8 +13,8 @@ class ServerCharts extends StatelessWidget {
     Widget build(BuildContext context) {
         var server = Provider.of<Server>(context, listen: false);
         return ListView(children: <Widget>[
-            SizedBox(height: 220.0, child: ServerLoadChart(server)),
-            SizedBox(height: 220.0, child: ServerPerformanceChart(server)),
+            SizedBox(height: 300.0, child: ServerLoadChart(server)),
+            SizedBox(height: 300.0, child: ServerPerformanceChart(server)),
             //SizedBox(height: 220.0, child: ClientLoadChart(server.clientLoadManager)),
             //SizedBox(height: 220.0, child: ClientPerformanceChart(server.clientLoadManager)),
         ]);
