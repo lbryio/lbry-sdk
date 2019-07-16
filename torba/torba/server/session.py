@@ -255,9 +255,10 @@ class SessionManager:
 
     async def _clear_stale_sessions(self):
         """Cut off sessions that haven't done anything for 10 minutes."""
+        session_timeout = self.env.session_timeout
         while True:
-            await sleep(60)
-            stale_cutoff = time.time() - self.env.session_timeout
+            await sleep(session_timeout // 10)
+            stale_cutoff = time.time() - session_timeout
             stale_sessions = [session for session in self.sessions
                               if session.last_recv < stale_cutoff]
             if stale_sessions:
@@ -267,7 +268,7 @@ class SessionManager:
                 # Give the sockets some time to close gracefully
                 if stale_sessions:
                     await asyncio.wait([
-                        session.close() for session in stale_sessions
+                        session.close(force_after=session_timeout // 10) for session in stale_sessions
                     ])
 
             # Consolidate small groups

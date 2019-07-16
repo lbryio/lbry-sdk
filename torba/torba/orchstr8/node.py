@@ -195,6 +195,7 @@ class SPVNode:
         self.server = None
         self.hostname = 'localhost'
         self.port = 50001 + 1  # avoid conflict with default daemon
+        self.session_timeout = 600
 
     async def start(self, blockchain_node: 'BlockchainNode'):
         self.data_path = tempfile.mkdtemp()
@@ -204,6 +205,7 @@ class SPVNode:
             'REORG_LIMIT': '100',
             'HOST': self.hostname,
             'TCP_PORT': str(self.port),
+            'SESSION_TIMEOUT': str(self.session_timeout),
             'MAX_QUERY_WORKERS': '0'
         }
         # TODO: don't use os.environ

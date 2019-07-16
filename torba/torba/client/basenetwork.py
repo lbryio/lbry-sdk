@@ -15,22 +15,26 @@ log = logging.getLogger(__name__)
 
 class ClientSession(BaseClientSession):
 
-    def __init__(self, *args, network, server, **kwargs):
+    def __init__(self, *args, network, server, timeout=30, **kwargs):
         self.network = network
         self.server = server
         super().__init__(*args, **kwargs)
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
         self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
-        self.max_seconds_idle = 60
+        self.timeout = timeout
+        self.max_seconds_idle = timeout * 2
         self.ping_task = None
 
     async def send_request(self, method, args=()):
         try:
-            return await super().send_request(method, args)
+            return await asyncio.wait_for(super().send_request(method, args), timeout=self.timeout)
         except RPCError as e:
             log.warning("Wallet server returned an error. Code: %s Message: %s", *e.args)
             raise e
+        except asyncio.TimeoutError:
+            self.abort()
+            raise
 
     async def ping_forever(self):
         # TODO: change to 'ping' on newer protocol (above 1.2)
@@ -209,7 +213,10 @@ class SessionPool:
                 self.ensure_connection(session)
                 for session in self.sessions
             ], return_exceptions=True)
-            await asyncio.wait([asyncio.sleep(3), self._lost_master.wait()], return_when='FIRST_COMPLETED')
+            try:
+                await asyncio.wait_for(self._lost_master.wait(), timeout=3)
+            except asyncio.TimeoutError:
+                pass
             self._lost_master.clear()
             if not self.sessions:
                 self.sessions.extend(self._dead_servers)

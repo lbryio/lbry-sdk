@@ -98,6 +98,8 @@ class Daemon:
         return aiohttp.ClientSession(connector=self.connector, connector_owner=False)
 
     async def _send_data(self, data):
+        if not self.connector:
+            raise asyncio.CancelledError('Tried to send request during shutdown.')
         async with self.workqueue_semaphore:
             async with self.client_session() as session:
                 async with session.post(self.current_url(), data=data) as resp:
