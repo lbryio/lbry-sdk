@@ -10,4 +10,4 @@ def normalize_tag(tag: str):
 
 
 def clean_tags(tags: List[str]):
-    return [tag for tag in (normalize_tag(tag) for tag in tags) if tag]
+    return [tag for tag in set(normalize_tag(tag) for tag in tags) if tag]
