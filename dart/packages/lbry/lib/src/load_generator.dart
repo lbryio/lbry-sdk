@@ -9,6 +9,7 @@ class LoadRequest {
     final Map payload;
     Completer completer;
     Stopwatch timer;
+    Socket socket;
 
     bool get isDone => completer.isCompleted;
     int get elapsed => timer.elapsedMilliseconds;
@@ -21,6 +22,7 @@ class LoadRequest {
         completer.future.whenComplete(() => timer.stop());
         try {
             Socket.connect(this.host, this.port).then((socket) {
+                this.socket = socket;
                 utf8.decoder.bind(socket).listen((r) {
                     if (r.contains('"jsonrpc": "2.0", "result": ')) {
                         socket.close();
@@ -54,6 +56,7 @@ class ClientLoadGenerator {
     final LoadTickCallback tickCallback;
     int load = 1;
     Map query;
+    List<LoadRequest> backlog = [];
 
     ClientLoadGenerator(this.host, this.port, {this.tickCallback, this.query}) {
         if (query == null) {
@@ -67,7 +70,7 @@ class ClientLoadGenerator {
 
     start() {
         var previous = spawn_requests();
-        var backlog = <LoadRequest>[];
+        backlog = <LoadRequest>[];
         _timer = Timer.periodic(Duration(seconds: 1), (t) {
             var stat = ClientLoadDataPoint(t.tick);
             backlog.removeWhere((r) {
@@ -94,6 +97,9 @@ class ClientLoadGenerator {
 
     stop() {
         _timer.cancel();
+        for (var remaining in backlog) {
+            remaining?.socket?.close();
+        }
     }
 
     List<LoadRequest> spawn_requests() {

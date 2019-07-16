@@ -40,7 +40,7 @@ class ServerLoadChartState extends State<ServerLoadChart> {
         super.initState();
         seriesData = [
             charts.Series<ServerLoadDataPoint, int>(
-                id: 'Searches Started',
+                id: 'Search Start',
                 colorFn: (_, __) =>
                 charts.MaterialPalette.deepOrange.shadeDefault.lighter,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
@@ -48,7 +48,7 @@ class ServerLoadChartState extends State<ServerLoadChart> {
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
-                id: 'Searches Finished',
+                id: 'Search Finish',
                 colorFn: (_, __) =>
                 charts.MaterialPalette.deepOrange.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
@@ -56,20 +56,33 @@ class ServerLoadChartState extends State<ServerLoadChart> {
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
-                id: 'Resolves Started',
-                colorFn: (_, __) =>
-                charts.MaterialPalette.teal.shadeDefault.lighter,
+                id: 'Search Cache',
+                colorFn: (_, __) => charts.MaterialPalette.green.shadeDefault.darker,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.cache_hit,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Resolve Start',
+                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.lighter,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
                 measureFn: (ServerLoadDataPoint load, _) => load.resolve.started,
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
-                id: 'Resolves Finished',
+                id: 'Resolve Finish',
                 colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
                 measureFn: (ServerLoadDataPoint load, _) => load.resolve.finished,
                 data: widget.server.serverLoadData,
-            )
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Resolve Cache',
+                colorFn: (_, __) => charts.MaterialPalette.cyan.shadeDefault.darker,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => load.resolve.cache_hit,
+                data: widget.server.serverLoadData,
+            ),
         ];
     }
 

@@ -59,14 +59,15 @@ class APICallMetrics {
     final int execution_time;
     final int query_time;
     final int query_count;
+    final int cache_hit;
     final int avg_wait_time;
     final int avg_total_time;
     final int avg_execution_time;
     final int avg_query_time_per_search;
     final int avg_query_time_per_query;
     APICallMetrics(
-        this.started, this.finished, this.total_time,
-        this.execution_time, this.query_time, this.query_count):
+        this.started, this.finished, this.total_time, this.execution_time,
+        this.query_time, this.query_count, this.cache_hit):
         avg_wait_time=finished > 0 ? ((total_time - (execution_time + query_time))/finished).round() : 0,
         avg_total_time=finished > 0 ? (total_time/finished).round() : 0,
         avg_execution_time=finished > 0 ? (execution_time/finished).round() : 0,
@@ -79,6 +80,7 @@ class APICallMetrics {
         data['execution_time'] ?? 0,
         data['query_time'] ?? 0,
         data['query_count'] ?? 0,
+        data['cache_hit'] ?? 0,
     );
 }
 
