@@ -165,6 +165,8 @@ class JSONRPC(object):
     METHOD_NOT_FOUND = -32601
     INVALID_ARGS = -32602
     INTERNAL_ERROR = -32603
+    QUERY_TIMEOUT = -32000
+
     # Codes specific to this library
     ERROR_CODE_UNAVAILABLE = -100
 
