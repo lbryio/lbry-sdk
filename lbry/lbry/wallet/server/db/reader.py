@@ -91,7 +91,9 @@ def measure(func):
         state = ctx.get()
         if not state.is_tracking_metrics:
             return func(*args, **kwargs)
-        metric = state.metrics.setdefault(func.__name__, {'calls': 0, 'total': 0, 'isolated': 0})
+        metric = state.metrics.setdefault(func.__name__, {
+            'calls': 0, 'total': 0, 'isolated': 0, 'errors': 0
+        })
         state.stack.append([])
         start = time.perf_counter()
         try:
