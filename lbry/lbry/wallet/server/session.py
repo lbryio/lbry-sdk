@@ -7,7 +7,6 @@ from binascii import hexlify
 from weakref import WeakSet
 from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from typing import Optional
 
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
