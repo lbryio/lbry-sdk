@@ -68,7 +68,8 @@ void main() {
             title: 'Ver',
             theme: ThemeData(
                 brightness: Brightness.dark,
-                //primarySwatch: Colors.lightBlue,
+                //primaryColor: Colors.lightBlue[800],
+                //accentColor: Colors.cyan[600],
                 fontFamily: 'Roboto',
             ),
             home: MultiProvider(

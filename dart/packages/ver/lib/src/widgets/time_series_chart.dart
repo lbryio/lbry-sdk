@@ -15,8 +15,8 @@ class ServerCharts extends StatelessWidget {
         return ListView(children: <Widget>[
             SizedBox(height: 220.0, child: ServerLoadChart(server)),
             SizedBox(height: 220.0, child: ServerPerformanceChart(server)),
-            SizedBox(height: 220.0, child: ClientLoadChart(server.clientLoadManager)),
-            SizedBox(height: 220.0, child: ClientPerformanceChart(server.clientLoadManager)),
+            //SizedBox(height: 220.0, child: ClientLoadChart(server.clientLoadManager)),
+            //SizedBox(height: 220.0, child: ClientPerformanceChart(server.clientLoadManager)),
         ]);
     }
 }
@@ -256,19 +256,40 @@ class BetterLineChart extends charts.LineChart {
     final int itemCount;
     final Object lastItem;
 
-    BetterLineChart(List<charts.Series<dynamic, int>> seriesList)
-        :
+    BetterLineChart(List<charts.Series<dynamic, int>> seriesList):
             itemCount = seriesList[0].data.length,
             lastItem = seriesList[0].data.last,
             super(
-            seriesList,
-            behaviors: [charts.SeriesLegend()],
-            domainAxis: charts.NumericAxisSpec(
-                viewport: new charts.NumericExtents(
-                    max(0, seriesList[0].data.last.tick - 60), seriesList[0].data.last.tick
-                )
-            )
-        );
+                seriesList,
+                behaviors: [charts.SeriesLegend()],
+                domainAxis: charts.NumericAxisSpec(
+                    viewport: new charts.NumericExtents(
+                        max(0, seriesList[0].data.last.tick - 60), seriesList[0].data.last.tick
+                    ),
+                    renderSpec: new charts.SmallTickRendererSpec(
+                        labelStyle: new charts.TextStyleSpec(
+                            color: charts.MaterialPalette.gray.shade50
+                        ),
+                        lineStyle: new charts.LineStyleSpec(
+                            color: charts.MaterialPalette.black
+                        )
+                    ),
+                ),
+                primaryMeasureAxis: new charts.NumericAxisSpec(
+                    renderSpec: new charts.GridlineRendererSpec(
+                        labelStyle: new charts.TextStyleSpec(
+                            color: charts.MaterialPalette.white
+                        ),
+                        lineStyle: new charts.LineStyleSpec(
+                            color: charts.MaterialPalette.gray.shade100
+                        ),
+                    ),
+                    tickProviderSpec: new charts.BasicNumericTickProviderSpec(
+                        dataIsInWholeNumbers: true,
+                        desiredTickCount: 5
+                    )
+                ),
+            );
 
     @override
     void updateCommonChart(common.BaseChart baseChart, charts.BaseChart oldWidget,
