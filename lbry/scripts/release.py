@@ -74,28 +74,19 @@ def get_release_text(desc: str):
             yield line[len(RELEASE_TEXT):]
 
 
-def get_previous_final(repo, current_release):
-    assert current_release.rc is not None, "Need an rc to find the previous final release."
-    previous = None
-    for tag in repo.tags(current_release.rc+1):
-        previous = tag
-    return previous
-
-
 class Version:
 
-    def __init__(self, major=0, minor=0, micro=0, rc=None):
+    def __init__(self, major=0, minor=0, micro=0):
         self.major = int(major)
         self.minor = int(minor)
         self.micro = int(micro)
-        self.rc = rc if rc is None else int(rc)
 
     @classmethod
     def from_string(cls, version_string):
         (major, minor, micro), rc = version_string.split('.'), None
         if 'rc' in micro:
             micro, rc = micro.split('rc')
-        return cls(major, minor, micro, rc)
+        return cls(major, minor, micro)
 
     @classmethod
     def from_content(cls, content):
@@ -106,20 +97,12 @@ class Version:
     def increment(self, action):
         cls = self.__class__
 
-        if action == '*-rc':
-            assert self.rc is not None, f"Can't drop rc designation because {self} is already not an rc."
-            return cls(self.major, self.minor, self.micro)
-        elif action == '*+rc':
-            assert self.rc is not None, "Must already be an rc to increment."
-            return cls(self.major, self.minor, self.micro, self.rc+1)
-
-        assert self.rc is None, f"Can't start a new rc because {self} is already an rc."
-        if action == 'major+rc':
-            return cls(self.major+1, rc=1)
-        elif action == 'minor+rc':
-            return cls(self.major, self.minor+1, rc=1)
-        elif action == 'micro+rc':
-            return cls(self.major, self.minor, self.micro+1, 1)
+        if action == 'major':
+            return cls(self.major+1)
+        elif action == 'minor':
+            return cls(self.major, self.minor+1)
+        elif action == 'micro':
+            return cls(self.major, self.minor, self.micro+1)
 
         raise ValueError(f'unknown action: {action}')
 
@@ -128,10 +111,7 @@ class Version:
         return f'v{self}'
 
     def __str__(self):
-        version = '.'.join(str(p) for p in [self.major, self.minor, self.micro])
-        if self.rc is not None:
-            version += f'rc{self.rc}'
-        return version
+        return '.'.join(str(p) for p in [self.major, self.minor, self.micro])
 
 
 def release(args):
@@ -139,15 +119,15 @@ def release(args):
     repo = gh.repository('lbryio', 'lbry-sdk')
     version_file = repo.file_contents('lbry/lbry/__init__.py')
 
+    if not args.confirm:
+        print("\nDRY RUN ONLY. RUN WITH --confirm TO DO A REAL RELEASE.\n")
+
     current_version = Version.from_content(version_file)
     print(f'Current Version: {current_version}')
     new_version = current_version.increment(args.action)
     print(f'    New Version: {new_version}')
 
-    if args.action == '*-rc':
-        previous_release = repo.release_from_tag(args.start_tag or get_previous_final(repo, current_version))
-    else:
-        previous_release = repo.release_from_tag(current_version.tag)
+    previous_release = repo.release_from_tag(current_version.tag)
 
     print(f' Changelog From: {previous_release.tag_name} ({previous_release.created_at})')
     print()
@@ -165,7 +145,7 @@ def release(args):
                     incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
                 for release_text in get_release_text(pr.body):
                     release_texts.append(f'{release_text.strip()} ({pr.html_url})')
-                if not (args.action == '*-rc' and type_label == 'fixup'):
+                if type_label != 'fixup':
                     area = areas.setdefault(area_name, [])
                     area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
         else:
@@ -203,7 +183,7 @@ def release(args):
         for skipped in unlabeled:
             print(skipped)
 
-    if not args.dry_run:
+    if args.confirm:
 
         commit = version_file.update(
           new_version.tag,
@@ -223,8 +203,9 @@ def release(args):
             name=new_version.tag,
             body=body.getvalue(),
             draft=True,
-            prerelease=new_version.rc is not None
         )
+
+    return 0
 
 
 class TestReleaseTool(unittest.TestCase):
@@ -235,44 +216,34 @@ class TestReleaseTool(unittest.TestCase):
 
     def test_version_increment(self):
         v = Version.from_string('1.2.3')
-        self.assertTrue(str(v.increment('major+rc')), '2.0.0rc1')
-        self.assertTrue(str(v.increment('minor+rc')), '1.3.0rc1')
-        self.assertTrue(str(v.increment('micro+rc')), '1.2.4rc1')
-        with self.assertRaisesRegex(AssertionError, "Must already be an rc to increment."):
-            v.increment('*+rc')
-        with self.assertRaisesRegex(AssertionError, "Can't drop rc designation"):
-            v.increment('*-rc')
-
-        v = Version.from_string('1.2.3rc3')
-        self.assertTrue(str(v.increment('*+rc')), '1.2.3rc4')
-        self.assertTrue(str(v.increment('*-rc')), '1.2.3')
-        with self.assertRaisesRegex(AssertionError, "already an rc"):
-            v.increment('major+rc')
-        with self.assertRaisesRegex(AssertionError, "already an rc"):
-            v.increment('minor+rc')
-        with self.assertRaisesRegex(AssertionError, "already an rc"):
-            v.increment('micro+rc')
+        self.assertTrue(str(v.increment('major')), '2.0.0')
+        self.assertTrue(str(v.increment('minor')), '1.3.0')
+        self.assertTrue(str(v.increment('micro')), '1.2.4')
 
 
 def test():
     runner = unittest.TextTestRunner(verbosity=2)
     loader = unittest.TestLoader()
     suite = loader.loadTestsFromTestCase(TestReleaseTool)
-    runner.run(suite)
+    return 0 if runner.run(suite).wasSuccessful() else 1
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test", default=False, action="store_true", help="run unit tests")
-    parser.add_argument("--dry-run", default=False, action="store_true", help="show what will be done")
+    parser.add_argument("--confirm", default=False, action="store_true",
+                        help="without this flag, it will only print what it will do but will not actually do it")
     parser.add_argument("--start-tag", help="custom starting tag for changelog generation")
-    parser.add_argument("action", nargs="?", choices=['major+rc', 'minor+rc', 'micro+rc', '*+rc', '*-rc'])
+    parser.add_argument("action", choices=['test', 'major', 'minor', 'micro'])
     args = parser.parse_args()
-    if args.test:
-        test()
+
+    if args.action == "test":
+        code = test()
     else:
-        release(args)
+        code = release(args)
+
+    print()
+    return code
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
