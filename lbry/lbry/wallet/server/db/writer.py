@@ -83,7 +83,6 @@ class SQLDB:
         create index if not exists claim_normalized_idx on claim (normalized);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_channel_hash_idx on claim (channel_hash);
-        create index if not exists claim_release_time_idx on claim (release_time);
         create index if not exists claim_timestamp_idx on claim (timestamp);
         create index if not exists claim_height_idx on claim (height);
         create index if not exists claim_activation_height_idx on claim (activation_height);
@@ -98,11 +97,9 @@ class SQLDB:
 
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
 
-        create index if not exists claim_effective_amount_idx on claim (effective_amount);
-        create index if not exists claim_trending_group_idx on claim (trending_group);
-        create index if not exists claim_trending_mixed_idx on claim (trending_mixed);
-        create index if not exists claim_trending_local_idx on claim (trending_local);
-        create index if not exists claim_trending_global_idx on claim (trending_global);
+        create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash);
+        create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
+        create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
     """
 
     CREATE_SUPPORT_TABLE = """
