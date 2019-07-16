@@ -124,8 +124,7 @@ class SQLDB:
             height integer not null
         );
         create index if not exists tag_tag_idx on tag (tag);
-        create index if not exists tag_claim_hash_idx on tag (claim_hash);
-        create index if not exists tag_height_idx on tag (height);
+        create unique index if not exists tag_claim_hash_tag_idx on tag (claim_hash, tag);
     """
 
     CREATE_CLAIMTRIE_TABLE = """
@@ -200,7 +199,7 @@ class SQLDB:
         self.execute('commit;')
 
     def _upsertable_claims(self, txos: List[Output], header, clear_first=False):
-        claim_hashes, claims, tags = [], [], []
+        claim_hashes, claims, tags = [], [], {}
         for txo in txos:
             tx = txo.tx_ref.tx
 
@@ -254,14 +253,14 @@ class SQLDB:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
             for tag in clean_tags(claim.message.tags):
-                tags.append((tag, claim_hash, tx.height))
+                tags[(tag, claim_hash)] = (tag, claim_hash, tx.height)
 
         if clear_first:
             self._clear_claim_metadata(claim_hashes)
 
         if tags:
             self.db.executemany(
-                "INSERT INTO tag (tag, claim_hash, height) VALUES (?, ?, ?)", tags
+                "INSERT INTO tag (tag, claim_hash, height) VALUES (?, ?, ?)", tags.values()
             )
 
         return claims
