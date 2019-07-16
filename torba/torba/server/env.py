@@ -39,7 +39,7 @@ class Env:
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
         self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
         self.track_metrics = self.boolean('TRACK_METRICS', False)
-        self.websocket_host = self.default('WEBSOCKET_HOST', None)
+        self.websocket_host = self.default('WEBSOCKET_HOST', self.host)
         self.websocket_port = self.integer('WEBSOCKET_PORT', None)
         self.daemon_url = self.required('DAEMON_URL')
         if coin is not None:
@@ -50,7 +50,6 @@ class Env:
             network = self.default('NET', 'mainnet').strip()
             self.coin = Coin.lookup_coin_class(coin_name, network)
         self.cache_MB = self.integer('CACHE_MB', 1200)
-        self.host = self.default('HOST', 'localhost')
         self.reorg_limit = self.integer('REORG_LIMIT', self.coin.REORG_LIMIT)
         # Server stuff
         self.tcp_port = self.integer('TCP_PORT', None)
