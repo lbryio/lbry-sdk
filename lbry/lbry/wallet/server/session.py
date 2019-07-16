@@ -133,9 +133,10 @@ class LBRYSessionManager(SessionManager):
             command = self.get_command_tracking_info(command_name)
             command['finished'] += 1
             command['total_time'] += elapsed
-            command['execution_time'] += (metrics[command_name]['total'] - metrics['execute_query']['total'])
-            command['query_time'] += metrics['execute_query']['total']
-            command['query_count'] += metrics['execute_query']['calls']
+            if 'execute_query' in metrics:
+                command['execution_time'] += (metrics[command_name]['total'] - metrics['execute_query']['total'])
+                command['query_time'] += metrics['execute_query']['total']
+                command['query_count'] += metrics['execute_query']['calls']
             for func_name, func_metrics in metrics.items():
                 reader = self.reader_metrics.setdefault(func_name, {})
                 for key in func_metrics:
@@ -239,10 +240,12 @@ class LBRYElectrumX(ElectrumX):
             return result
 
     async def claimtrie_search(self, **kwargs):
-        return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
+        if kwargs:
+            return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
 
     async def claimtrie_resolve(self, *urls):
-        return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+        if urls:
+            return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
 
     async def get_server_height(self):
         return self.bp.height

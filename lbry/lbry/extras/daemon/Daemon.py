@@ -3425,7 +3425,7 @@ class Daemon(metaclass=JSONRPCServerType):
             page_size=page_size,
             top_level=not include_replies
         )
-        if 'items' in cmnt_list:
+        if cmnt_list.get('items', None):
             items = cmnt_list['items']
             chnl_uris = {cmnt['channel_url'] for cmnt in items if 'channel_url' in cmnt}
             claims = await self.resolve(tuple(chnl_uris))
