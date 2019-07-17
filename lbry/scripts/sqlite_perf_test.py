@@ -1,9 +1,12 @@
-import uvloop, asyncio, time, sys
+import uvloop, asyncio, time, sys, logging
 from concurrent.futures import ProcessPoolExecutor
 from lbry.wallet.server.db import reader
 
 
 db_path = '/tmp/wallet-server/claims.db'
+default_query_timout  = 0.25
+log = logging.getLogger(__name__)
+log.addHandler(logging.StreamHandler())
 
 
 async def run_times(executor, iterations, show=True):
@@ -40,7 +43,9 @@ async def run_times(executor, iterations, show=True):
 
 
 async def main():
-    executor = ProcessPoolExecutor(4, initializer=reader.initializer, initargs=(db_path, 'mainnet', True))
+    executor = ProcessPoolExecutor(
+        4, initializer=reader.initializer, initargs=(log, db_path, 'mainnet', default_query_timout, True)
+    )
     await run_times(executor, 4, show=False)
     await run_times(executor, 1)
     await run_times(executor, 2**3)

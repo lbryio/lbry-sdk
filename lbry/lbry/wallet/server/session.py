@@ -11,7 +11,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
-from torba.rpc.jsonrpc import RPCError
+from torba.rpc.jsonrpc import RPCError, JSONRPC
 from torba.server.session import ElectrumX, SessionManager
 from torba.server import util
 
@@ -115,6 +115,8 @@ class LBRYSessionManager(SessionManager):
                 'execution_time': 0,
                 'query_time': 0,
                 'query_count': 0,
+                'interrupted': 0,
+                'interrupted_query_values': [],
             }
         return self.command_metrics[command]
 
@@ -145,6 +147,18 @@ class LBRYSessionManager(SessionManager):
                     else:
                         reader[key] += func_metrics[key]
 
+    def interrupted_command_error(self, command_name, elapsed, metrics, kwargs):
+        if self.env.track_metrics:
+            command = self.get_command_tracking_info(command_name)
+            command['finished'] += 1
+            command['interrupted'] += 1
+            command['total_time'] += elapsed
+            command['execution_time'] += (metrics[command_name]['total'] - metrics['execute_query']['total'])
+            command['query_time'] += metrics['execute_query']['total']
+            command['query_count'] += metrics['execute_query']['calls']
+            if len(command['interrupted_query_values']) < 100:
+                command['interrupted_query_values'].append(kwargs)
+
     async def process_metrics(self):
         while self.running:
             commands, self.command_metrics = self.command_metrics, {}
@@ -160,7 +174,8 @@ class LBRYSessionManager(SessionManager):
         self.running = True
         args = dict(
             initializer=reader.initializer,
-            initargs=('claims.db', self.env.coin.NET, self.env.track_metrics)
+            initargs=(self.logger, 'claims.db', self.env.coin.NET, self.env.database_query_timeout,
+                      self.env.track_metrics)
         )
         if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
             self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
@@ -210,9 +225,16 @@ class LBRYElectrumX(ElectrumX):
         if self.env.track_metrics:
             self.session_mgr.start_command_tracking(name)
             start = time.perf_counter()
-        result = await asyncio.get_running_loop().run_in_executor(
-            self.session_mgr.query_executor, func, kwargs
-        )
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                self.session_mgr.query_executor, func, kwargs
+            )
+        except reader.SQLiteInterruptedError as error:
+            self.session_mgr.interrupted_command_error(
+                name, int((time.perf_counter() - start) * 1000), error.metrics, kwargs
+            )
+            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
+
         if self.env.track_metrics:
             elapsed = int((time.perf_counter() - start) * 1000)
             (result, metrics) = result
@@ -228,7 +250,6 @@ class LBRYElectrumX(ElectrumX):
         elif cache_item.result is not None:
             self.session_mgr.cache_hit(query_name)
             return cache_item.result
-
         async with cache_item.lock:
             result = cache_item.result
             if result is None:

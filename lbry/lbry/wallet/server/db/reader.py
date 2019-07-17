@@ -1,6 +1,7 @@
 import time
 import struct
 import sqlite3
+import logging
 from typing import Tuple, List, Dict, Union, Type, Optional
 from binascii import unhexlify
 from decimal import Decimal
@@ -16,6 +17,12 @@ from lbry.schema.result import Outputs
 from lbry.wallet.ledger import BaseLedger, MainNetLedger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES
+
+
+class SQLiteInterruptedError(sqlite3.OperationalError):
+    def __init__(self, metrics):
+        super().__init__('sqlite query interrupted')
+        self.metrics = metrics
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
@@ -59,6 +66,8 @@ class ReaderState:
     metrics: Dict
     is_tracking_metrics: bool
     ledger: Type[BaseLedger]
+    query_timeout: float
+    log: logging.Logger
 
     def close(self):
         self.db.close()
@@ -67,17 +76,31 @@ class ReaderState:
         self.stack = []
         self.metrics = {}
 
+    def set_query_timeout(self):
+        stop_at = time.perf_counter() + self.query_timeout
+
+        def interruptor():
+            if time.perf_counter() >= stop_at:
+                self.db.interrupt()
+            return
+
+        self.db.set_progress_handler(interruptor, 100)
+
 
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
 
 
-def initializer(_path, _ledger_name, _measure=False):
+def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
+
     db = sqlite3.connect(_path, isolation_level=None, uri=True)
     db.row_factory = sqlite3.Row
-    ctx.set(ReaderState(
-        db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
-        ledger=MainNetLedger if _ledger_name == 'mainnet' else RegTestLedger
-    ))
+    ctx.set(
+        ReaderState(
+            db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
+            ledger=MainNetLedger if _ledger_name == 'mainnet' else RegTestLedger,
+            query_timeout=query_timeout, log=log
+        )
+    )
 
 
 def cleanup():
@@ -139,7 +162,17 @@ def encode_result(result):
 
 @measure
 def execute_query(sql, values) -> List:
-    return ctx.get().db.execute(sql, values).fetchall()
+    context = ctx.get()
+    context.set_query_timeout()
+    try:
+        return context.db.execute(sql, values).fetchall()
+    except sqlite3.OperationalError as err:
+        if str(err) == "interrupted":
+            query_str = sql
+            for k in sorted(values.keys(), reverse=True):
+                query_str = query_str.replace(f":{k}", str(values[k]) if not k.startswith("$") else f"'{values[k]}'")
+            context.log.warning("interrupted slow sqlite query:\n%s", query_str)
+            raise SQLiteInterruptedError(context.metrics)
 
 
 @measure
@@ -389,7 +422,13 @@ def resolve_url(raw_url):
 
 @measure
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
-    any_items = cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
+    any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    not_items = set(cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+
+    all_items = {item for item in all_items if item not in not_items}
+    any_items = {item for item in any_items if item not in not_items}
+
     if any_items:
         constraints.update({
             f'$any_{attr}{i}': item for i, item in enumerate(any_items)
@@ -410,7 +449,6 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
                 )
             """
 
-    all_items = cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if all_items:
         constraints[f'$all_{attr}_count'] = len(all_items)
         constraints.update({
@@ -433,7 +471,6 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
                 )
             """
 
-    not_items = cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH]
     if not_items:
         constraints.update({
             f'$not_{attr}{i}': item for i, item in enumerate(not_items)

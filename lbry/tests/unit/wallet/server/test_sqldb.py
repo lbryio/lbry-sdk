@@ -1,6 +1,7 @@
 import unittest
 import ecdsa
 import hashlib
+import logging
 from binascii import hexlify
 from torba.client.constants import COIN, NULL_HASH32
 
@@ -36,6 +37,7 @@ class OldWalletServerTransaction:
 
 
 class TestSQLDB(unittest.TestCase):
+    query_timeout = 0.25
 
     def setUp(self):
         self.first_sync = False
@@ -44,7 +46,7 @@ class TestSQLDB(unittest.TestCase):
         db_url = 'file:test_sqldb?mode=memory&cache=shared'
         self.sql = writer.SQLDB(self, db_url)
         self.addCleanup(self.sql.close)
-        reader.initializer(db_url, 'regtest')
+        reader.initializer(logging.getLogger(__name__), db_url, 'regtest', self.query_timeout)
         self.addCleanup(reader.cleanup)
         self.timer = Timer('BlockProcessor')
         self.sql.open()
