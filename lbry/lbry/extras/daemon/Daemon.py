@@ -3416,7 +3416,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 ]
             }
         """
-        cmnt_list: dict = await jsonrpc_post(
+        result = await jsonrpc_post(
             self.conf.comment_server,
             "get_claim_comments",
             claim_id=claim_id,
@@ -3425,20 +3425,25 @@ class Daemon(metaclass=JSONRPCServerType):
             page_size=page_size,
             top_level=not include_replies
         )
-        if cmnt_list.get('items', None):
-            items = cmnt_list['items']
-            chnl_uris = {cmnt['channel_url'] for cmnt in items if 'channel_url' in cmnt}
-            claims = await self.resolve(tuple(chnl_uris))
-            for cmnt in cmnt_list['items']:
-                if 'channel_url' in cmnt:
-                    if cmnt['channel_url'] in claims:
-                        channel = claims[cmnt['channel_url']]
-                        cmnt['is_channel_signature_valid'] = is_comment_signed_by_channel(cmnt, channel)
-                        continue
-                cmnt['is_channel_signature_valid'] = False
-            if is_channel_signature_valid:
-                cmnt_list['items'] = [c for c in cmnt_list['items'] if c['is_channel_signature_valid']]
-        return cmnt_list
+
+        for comment in result.get('items', []):
+            channel_url = comment.get('channel_url')
+            if not channel_url:
+                continue
+            resolve_response = await self.resolve([channel_url])
+            if 'error' not in resolve_response[channel_url]:
+                comment['is_channel_signature_valid'] = is_comment_signed_by_channel(
+                    comment, resolve_response[channel_url]
+                )
+            else:
+                comment['is_channel_signature_valid'] = False
+
+        if is_channel_signature_valid:
+            result['items'] = [
+                c for c in result.get('items', []) if c['is_channel_signature_valid']
+            ]
+
+        return result
 
     async def jsonrpc_comment_create(self, claim_id, comment, parent_id=None, channel_account_id=None,
                                      channel_name=None, channel_id=None) -> dict:
