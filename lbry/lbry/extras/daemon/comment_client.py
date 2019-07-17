@@ -2,9 +2,9 @@ import logging
 import time
 import hashlib
 import binascii
-
-from lbry import utils
 import ecdsa
+from typing import Any
+from lbry import utils
 from torba.client.hash import sha256
 from lbry.wallet.transaction import Output
 
@@ -45,13 +45,9 @@ def sign_comment(comment: dict, channel: Output):
     comment['signing_ts'] = timestamp.decode()
 
 
-async def jsonrpc_post(url: str, method: str, **params) -> any:
+async def jsonrpc_post(url: str, method: str, **params) -> Any:
     json_body = {'jsonrpc': '2.0', 'id': None, 'method': method, 'params': params}
     headers = {'Content-Type': 'application/json'}
     async with utils.aiohttp_request('POST', url, json=json_body, headers=headers) as response:
-        try:
-            result = await response.json()
-            return result['result'] if 'result' in result else result
-        except Exception as cte:
-            log.exception('Unable to decode respose from server: %s', cte)
-            return await response.text()
+        result = await response.json()
+        return result['result'] if 'result' in result else result
