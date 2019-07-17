@@ -3428,7 +3428,9 @@ class Daemon(metaclass=JSONRPCServerType):
         if cmnt_list.get('items', None):
             items = cmnt_list['items']
             chnl_uris = {cmnt['channel_url'] for cmnt in items if 'channel_url' in cmnt}
-            claims = await self.resolve(tuple(chnl_uris))
+            claims = {}
+            if chnl_uris:
+                claims = await self.resolve(tuple(chnl_uris))
             for cmnt in cmnt_list['items']:
                 if 'channel_url' in cmnt:
                     if cmnt['channel_url'] in claims:
@@ -3486,11 +3488,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 'channel_name': channel.claim_name,
             })
             sign_comment(comment_body, channel)
+
         response = await jsonrpc_post(self.conf.comment_server, 'create_comment', **comment_body)
         if 'signature' in response:
             response['is_claim_signature_valid'] = is_comment_signed_by_channel(response, channel)
         return response
-
 
     async def broadcast_or_release(self, account, tx, blocking=False):
         try:
