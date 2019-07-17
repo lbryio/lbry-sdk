@@ -69,10 +69,10 @@ class BlobManager:
     def is_blob_verified(self, blob_hash: str, length: typing.Optional[int] = None) -> bool:
         if not is_valid_blobhash(blob_hash):
             raise ValueError(blob_hash)
-        if blob_hash in self.blobs:
-            return self.blobs[blob_hash].get_is_verified()
         if not os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
             return False
+        if blob_hash in self.blobs:
+            return self.blobs[blob_hash].get_is_verified()
         return self._get_blob(blob_hash, length).get_is_verified()
 
     async def setup(self) -> bool:
