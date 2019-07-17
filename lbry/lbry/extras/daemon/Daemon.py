@@ -3440,7 +3440,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if is_channel_signature_valid:
             result['items'] = [
-                c for c in result.get('items', []) if c['is_channel_signature_valid']
+                c for c in result.get('items', []) if c.get('is_channel_signature_valid', False)
             ]
 
         return result
