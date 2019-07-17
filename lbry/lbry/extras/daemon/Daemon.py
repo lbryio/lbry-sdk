@@ -3431,7 +3431,7 @@ class Daemon(metaclass=JSONRPCServerType):
             if not channel_url:
                 continue
             resolve_response = await self.resolve([channel_url])
-            if 'error' not in resolve_response[channel_url]:
+            if isinstance(resolve_response[channel_url], Output):
                 comment['is_channel_signature_valid'] = is_comment_signed_by_channel(
                     comment, resolve_response[channel_url]
                 )
