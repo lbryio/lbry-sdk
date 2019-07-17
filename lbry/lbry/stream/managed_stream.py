@@ -211,7 +211,6 @@ class ManagedStream:
             full_path = None
             file_name = None
             download_directory = None
-            written_bytes = None
         return {
             'streaming_url': f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.sd_hash}",
             'completed': self.written_bytes >= self.descriptor.lower_bound_decrypted_length(),
