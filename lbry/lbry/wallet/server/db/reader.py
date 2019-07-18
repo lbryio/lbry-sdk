@@ -125,8 +125,6 @@ def measure(func):
         start = time.perf_counter()
         try:
             return func(*args, **kwargs)
-        except:
-            raise
         finally:
             elapsed = int((time.perf_counter()-start)*1000)
             metric['total'] = elapsed
