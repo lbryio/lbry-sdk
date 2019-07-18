@@ -1,18 +1,19 @@
 import time
 import unittest
-from lbry.wallet.server.metrics import ServerLoadData, calculate_percentiles
+from lbry.wallet.server.metrics import ServerLoadData, calculate_avg_percentiles
 
 
 class TestPercentileCalculation(unittest.TestCase):
 
     def test_calculate_percentiles(self):
-        self.assertEqual(calculate_percentiles([]), (0, 0, 0, 0, 0, 0, 0))
-        self.assertEqual(calculate_percentiles([1]), (1, 1, 1, 1, 1, 1, 1))
-        self.assertEqual(calculate_percentiles([1, 2]), (1, 1, 1, 1, 2, 2, 2))
-        self.assertEqual(calculate_percentiles([1, 2, 3]), (1, 1, 1, 2, 3, 3, 3))
-        self.assertEqual(calculate_percentiles([4, 1, 2, 3]), (1, 1, 1, 2, 3, 4, 4))
-        self.assertEqual(calculate_percentiles([1, 2, 3, 4, 5, 6]), (1, 1, 2, 3, 5, 6, 6))
-        self.assertEqual(calculate_percentiles(list(range(1, 101))), (1, 5, 25, 50, 75, 95, 100))
+        self.assertEqual(calculate_avg_percentiles([]), (0, 0, 0, 0, 0, 0, 0, 0))
+        self.assertEqual(calculate_avg_percentiles([1]), (1, 1, 1, 1, 1, 1, 1, 1))
+        self.assertEqual(calculate_avg_percentiles([1, 2]), (1, 1, 1, 1, 1, 2, 2, 2))
+        self.assertEqual(calculate_avg_percentiles([1, 2, 3]), (2, 1, 1, 1, 2, 3, 3, 3))
+        self.assertEqual(calculate_avg_percentiles([4, 1, 2, 3]), (2, 1, 1, 1, 2, 3, 4, 4))
+        self.assertEqual(calculate_avg_percentiles([1, 2, 3, 4, 5, 6]), (3, 1, 1, 2, 3, 5, 6, 6))
+        self.assertEqual(calculate_avg_percentiles(
+            list(range(1, 101))), (50, 1, 5, 25, 50, 75, 95, 100))
 
 
 class TestCollectingMetrics(unittest.TestCase):
@@ -23,8 +24,8 @@ class TestCollectingMetrics(unittest.TestCase):
         search = load.for_api('search')
         self.assertEqual(search.name, 'search')
         search.start()
-        search.cache_hit()
-        search.cache_hit()
+        search.cache_response()
+        search.cache_response()
         metrics = {
             'search': [{'total': 40}],
             'execute_query': [
@@ -33,30 +34,27 @@ class TestCollectingMetrics(unittest.TestCase):
             ]
         }
         for x in range(5):
-            search.finish(time.perf_counter() - 0.055 + 0.001*x, metrics)
+            search.query_response(time.perf_counter() - 0.055 + 0.001*x, metrics)
         metrics['execute_query'][0]['total'] = 10
         metrics['execute_query'][0]['sql'] = "select lots, of, stuff FROM claim where something=1"
-        search.interrupt(time.perf_counter() - 0.050, metrics)
-        search.error(time.perf_counter() - 0.050, metrics)
-        search.error(time.perf_counter() - 0.052)
+        search.query_interrupt(time.perf_counter() - 0.050, metrics)
+        search.query_error(time.perf_counter() - 0.050, metrics)
+        search.query_error(time.perf_counter() - 0.052, {})
         self.assertEqual(load.to_json_and_reset({}), {'status': {}, 'api': {'search': {
-            'cache_hits_count': 2,
-            'errored_count': 2,
-            'errored_queries': ['FROM claim where something=1'],
-            'execution_avg': 12,
-            'execution_percentiles': (10, 10, 10, 10, 20, 20, 20),
-            'finished_count': 7,
-            'individual_queries_count': 14,
-            'individual_query_avg': 13,
-            'individual_query_percentiles': (10, 10, 10, 10, 20, 20, 20),
-            'interrupted_count': 0,
-            'interrupted_queries': ['FROM claim where something=1'],
-            'query_avg': 27,
-            'query_percentiles': (20, 20, 20, 30, 30, 30, 30),
-            'started_count': 1,
-            'total_avg': 52,
-            'total_percentiles': (50, 50, 50, 52, 54, 55, 55),
-            'wait_avg': 12,
-            'wait_percentiles': (10, 10, 10, 12, 14, 15, 15)
+            "receive_count": 1,
+            "cache_response_count": 2,
+            "query_response_count": 5,
+            "intrp_response_count": 1,
+            "error_response_count": 2,
+            "response": (53, 51, 51, 52, 53, 54, 55, 55),
+            "interrupt": (50, 50, 50, 50, 50, 50, 50, 50),
+            "error": (51, 50, 50, 50, 50, 52, 52, 52),
+            "python": (12, 10, 10, 10, 10, 20, 20, 20),
+            "wait": (12, 10, 10, 10, 12, 14, 15, 15),
+            "sql": (27, 20, 20, 20, 30, 30, 30, 30),
+            "individual_sql": (13, 10, 10, 10, 10, 20, 20, 20),
+            "individual_sql_count": 14,
+            "errored_queries": ['FROM claim where something=1'],
+            "interrupted_queries": ['FROM claim where something=1'],
         }}})
         self.assertEqual(load.to_json_and_reset({}), {'status': {}, 'api': {}})

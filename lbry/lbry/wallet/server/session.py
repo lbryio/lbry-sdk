@@ -15,7 +15,7 @@ from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYDB
 from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
-from lbry.wallet.server.metrics import ServerLoadData
+from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 
 
 class ResultCacheItem:
@@ -109,55 +109,50 @@ class LBRYElectrumX(ElectrumX):
         }
         self.request_handlers.update(handlers)
 
-    async def run_in_executor(self, name, func, kwargs):
-        result = start = api = None
-
-        if self.env.track_metrics:
-            api = self.session_mgr.metrics.for_api(name)
-            api.start()
-            start = time.perf_counter()
-
+    async def run_in_executor(self, metrics: APICallMetrics, func, kwargs):
+        start = time.perf_counter()
         try:
             result = await asyncio.get_running_loop().run_in_executor(
                 self.session_mgr.query_executor, func, kwargs
             )
         except reader.SQLiteInterruptedError as error:
-            if self.env.track_metrics:
-                api.interrupt(start, error.metrics)
+            metrics.query_interrupt(start, error.metrics)
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
         except reader.SQLiteOperationalError as error:
-            if self.env.track_metrics:
-                api.error(start, error.metrics)
+            metrics.query_error(start, error.metrics)
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
         except:
-            if self.env.track_metrics:
-                api.error(start)
+            metrics.query_error(start, {})
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
 
         if self.env.track_metrics:
-            (result, metrics) = result
-            api.finish(start, metrics)
+            (result, metrics_data) = result
+            metrics.query_response(start, metrics_data)
 
         return base64.b64encode(result).decode()
 
     async def run_and_cache_query(self, query_name, function, kwargs):
+        if self.env.track_metrics:
+            metrics = self.session_mgr.metrics.for_api(query_name)
+        else:
+            metrics = APICallMetrics(query_name)
+        metrics.start()
         cache = self.session_mgr.search_cache[query_name]
         cache_key = str(kwargs)
         cache_item = cache.get(cache_key)
         if cache_item is None:
             cache_item = cache[cache_key] = ResultCacheItem()
         elif cache_item.result is not None:
-            self.session_mgr.metrics.for_api(query_name).cache_hit()
+            metrics.cache_response()
             return cache_item.result
         async with cache_item.lock:
-            result = cache_item.result
-            if result is None:
-                result = cache_item.result = await self.run_in_executor(
-                    query_name, function, kwargs
+            if cache_item.result is None:
+                cache_item.result = await self.run_in_executor(
+                    metrics, function, kwargs
                 )
             else:
-                self.session_mgr.metrics.for_api(query_name).cache_hit()
-            return result
+                metrics.cache_response()
+            return cache_item.result
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
