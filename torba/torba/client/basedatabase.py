@@ -1,5 +1,6 @@
 import logging
 import asyncio
+from binascii import hexlify
 from asyncio import wrap_future
 from concurrent.futures.thread import ThreadPoolExecutor
 
@@ -189,6 +190,19 @@ def query(select, **constraints):
         sql.append('OFFSET {}'.format(offset))
 
     return ' '.join(sql), values
+
+
+def interpolate(sql, values):
+    for k in sorted(values.keys(), reverse=True):
+        value = values[k]
+        if isinstance(value, memoryview):
+            value = hexlify(bytes(value)[::-1]).decode()
+        elif isinstance(value, str):
+            value = f"'{value}'"
+        else:
+            value = str(value)
+        sql = sql.replace(f":{k}", value)
+    return sql
 
 
 def rows_to_dict(rows, fields):
