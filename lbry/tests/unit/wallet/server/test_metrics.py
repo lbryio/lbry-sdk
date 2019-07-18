@@ -6,13 +6,13 @@ from lbry.wallet.server.metrics import ServerLoadData, calculate_percentiles
 class TestPercentileCalculation(unittest.TestCase):
 
     def test_calculate_percentiles(self):
-        self.assertEqual(calculate_percentiles([]), [0, 0, 0, 0, 0, 0, 0])
-        self.assertEqual(calculate_percentiles([1]), [1, 1, 1, 1, 1, 1, 1])
-        self.assertEqual(calculate_percentiles([1, 2]), [1, 1, 1, 1, 2, 2, 2])
-        self.assertEqual(calculate_percentiles([1, 2, 3]), [1, 1, 1, 2, 3, 3, 3])
-        self.assertEqual(calculate_percentiles([1, 2, 3, 4]), [1, 1, 1, 2, 3, 4, 4])
-        self.assertEqual(calculate_percentiles([1, 2, 3, 4, 5, 6]), [1, 1, 2, 3, 5, 6, 6])
-        self.assertEqual(calculate_percentiles(list(range(1, 101))), [1, 5, 25, 50, 75, 95, 100])
+        self.assertEqual(calculate_percentiles([]), (0, 0, 0, 0, 0, 0, 0))
+        self.assertEqual(calculate_percentiles([1]), (1, 1, 1, 1, 1, 1, 1))
+        self.assertEqual(calculate_percentiles([1, 2]), (1, 1, 1, 1, 2, 2, 2))
+        self.assertEqual(calculate_percentiles([1, 2, 3]), (1, 1, 1, 2, 3, 3, 3))
+        self.assertEqual(calculate_percentiles([4, 1, 2, 3]), (1, 1, 1, 2, 3, 4, 4))
+        self.assertEqual(calculate_percentiles([1, 2, 3, 4, 5, 6]), (1, 1, 2, 3, 5, 6, 6))
+        self.assertEqual(calculate_percentiles(list(range(1, 101))), (1, 5, 25, 50, 75, 95, 100))
 
 
 class TestCollectingMetrics(unittest.TestCase):
