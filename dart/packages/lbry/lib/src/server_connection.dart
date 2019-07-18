@@ -20,14 +20,11 @@ class ServerConnection {
         channel = IOWebSocketChannel.connect(this.url);
         int tick = 1;
         channel.stream.listen((message) {
-            Map data = json.decode(message);
+            var data = json.decode(message);
             print(data);
-            Map commands = data['commands'] ?? {};
             _loadDataController.add(
-                ServerLoadDataPoint(
-                    tick,
-                    APICallMetrics.from_map(commands['search'] ?? {}),
-                    APICallMetrics.from_map(commands['resolve'] ?? {})
+                ServerLoadDataPoint.from_map(
+                    tick, data
                 )
             );
             tick++;
@@ -52,48 +49,106 @@ class ServerConnection {
 }
 
 
+class TimeStats {
+    final int avg, min, max;
+    // percentiles
+    final int five;
+    final int twenty_five;
+    final int fifty;
+    final int seventy_five;
+    final int ninety_five;
+    TimeStats(
+        this.avg, this.min, this.five, this.twenty_five,
+        this.fifty, this.seventy_five, this.ninety_five,
+        this.max
+    );
+    TimeStats.from_list(List l): this(
+        l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7]
+    );
+    TimeStats.from_zeros(): this(
+        0, 0, 0, 0, 0, 0, 0, 0
+    );
+    factory TimeStats.from_list_or_zeros(List l) =>
+        l != null ? TimeStats.from_list(l): TimeStats.from_zeros();
+}
+
+
 class APICallMetrics {
-    final int started;
-    final int finished;
-    final int total_time;
-    final int execution_time;
-    final int query_time;
-    final int query_count;
-    final int cache_hit;
-    final int avg_wait_time;
-    final int avg_total_time;
-    final int avg_execution_time;
-    final int avg_query_time_per_search;
-    final int avg_query_time_per_query;
+    // total requests received
+    final int receive_count;
+    // sum of these is total responses made
+    final int cache_response_count;
+    final int query_response_count;
+    final int intrp_response_count;
+    final int error_response_count;
+    // stacked values for chart
+    final int cache_response_stack;
+    final int query_response_stack;
+    final int intrp_response_stack;
+    final int error_response_stack;
+    // millisecond timings for non-cache responses
+    final TimeStats response;
+    final TimeStats interrupt;
+    final TimeStats error;
+    // response, interrupt and error each also report the python, wait and sql stats:
+    final TimeStats python;
+    final TimeStats wait;
+    final TimeStats sql;
+    // extended timings for individual sql executions
+    final TimeStats individual_sql;
+    final int individual_sql_count;
+    // actual queries
+    final List<String> errored_queries;
+    final List<String> interrupted_queries;
     APICallMetrics(
-        this.started, this.finished, this.total_time, this.execution_time,
-        this.query_time, this.query_count, this.cache_hit):
-        avg_wait_time=finished > 0 ? ((total_time - (execution_time + query_time))/finished).round() : 0,
-        avg_total_time=finished > 0 ? (total_time/finished).round() : 0,
-        avg_execution_time=finished > 0 ? (execution_time/finished).round() : 0,
-        avg_query_time_per_search=finished > 0 ? (query_time/finished).round() : 0,
-        avg_query_time_per_query=query_count > 0 ? (query_time/query_count).round() : 0;
+        this.receive_count,
+        this.cache_response_count, this.query_response_count,
+        this.intrp_response_count, this.error_response_count,
+        this.response, this.interrupt, this.error,
+        this.python, this.wait, this.sql,
+        this.individual_sql, this.individual_sql_count,
+        this.errored_queries, this.interrupted_queries
+    ):
+        cache_response_stack=cache_response_count+query_response_count+intrp_response_count+error_response_count,
+        query_response_stack=query_response_count+intrp_response_count+error_response_count,
+        intrp_response_stack=intrp_response_count+error_response_count,
+        error_response_stack=error_response_count;
     APICallMetrics.from_map(Map data): this(
-        data['started'] ?? 0,
-        data['finished'] ?? 0,
-        data['total_time'] ?? 0,
-        data['execution_time'] ?? 0,
-        data['query_time'] ?? 0,
-        data['query_count'] ?? 0,
-        data['cache_hit'] ?? 0,
+        data["receive_count"] ?? 0,
+        data["cache_response_count"] ?? 0,
+        data["query_response_count"] ?? 0,
+        data["intrp_response_count"] ?? 0,
+        data["error_response_count"] ?? 0,
+        TimeStats.from_list_or_zeros(data["response"]),
+        TimeStats.from_list_or_zeros(data["interrupt"]),
+        TimeStats.from_list_or_zeros(data["error"]),
+        TimeStats.from_list_or_zeros(data["python"]),
+        TimeStats.from_list_or_zeros(data["wait"]),
+        TimeStats.from_list_or_zeros(data["sql"]),
+        TimeStats.from_list_or_zeros(data["individual_sql"]),
+        data["individual_sql_count"] ?? 0,
+        List<String>.from(data["errored_queries"] ?? const []),
+        List<String>.from(data["interrupted_queries"] ?? const []),
     );
 }
 
 
 class ServerLoadDataPoint {
     final int tick;
+    final int sessions;
     final APICallMetrics search;
     final APICallMetrics resolve;
-    ServerLoadDataPoint(this.tick, this.search, this.resolve);
-    ServerLoadDataPoint.empty():
-        tick = 0,
-        search=APICallMetrics.from_map({}),
-        resolve=APICallMetrics.from_map({});
+    const ServerLoadDataPoint(
+        this.tick, this.sessions, this.search, this.resolve
+    );
+    ServerLoadDataPoint.from_map(int tick, Map data): this(
+        tick, (data['status'] ?? const {})['sessions'] ?? 0,
+        APICallMetrics.from_map((data['api'] ?? const {})['search'] ?? const {}),
+        APICallMetrics.from_map((data['api'] ?? const {})['resolve'] ?? const {})
+    );
+    ServerLoadDataPoint.empty(): this(
+        0, 0, APICallMetrics.from_map(const {}), APICallMetrics.from_map(const {})
+    );
 }
 
 
