@@ -541,8 +541,7 @@ class SQLDB:
         if claim_hashes:
             self.execute(
                 f"UPDATE claim SET effective_amount = amount + support_amount "
-                f"WHERE activation_height < {height} "
-                f"  AND claim_hash IN ({','.join('?' for _ in claim_hashes)})",
+                f"WHERE claim_hash IN ({','.join('?' for _ in claim_hashes)})",
                 claim_hashes
             )
 
