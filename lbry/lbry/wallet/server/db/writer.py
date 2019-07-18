@@ -534,10 +534,6 @@ class SQLDB:
             """, claim_hashes)
 
     def _update_effective_amount(self, height, claim_hashes=None):
-        self.execute(
-            f"UPDATE claim SET effective_amount = amount + support_amount "
-            f"WHERE activation_height = {height}"
-        )
         if claim_hashes:
             self.execute(
                 f"UPDATE claim SET effective_amount = amount + support_amount "
@@ -569,12 +565,13 @@ class SQLDB:
                    claimtrie.claim_hash AS current_winner,
                    MAX(winner.effective_amount)
             FROM (
-                SELECT normalized, claim_hash, effective_amount FROM claim
+                SELECT normalized, claim_hash, effective_amount, activation_height FROM claim
                 WHERE normalized IN (
                     SELECT normalized FROM claim WHERE activation_height={height} {claim_hashes_sql}
                 ) {deleted_names_sql}
                 ORDER BY effective_amount DESC, height ASC, tx_position ASC
             ) AS winner LEFT JOIN claimtrie USING (normalized)
+            WHERE winner.activation_height<={height}
             GROUP BY winner.normalized
             HAVING current_winner IS NULL OR current_winner <> winner.claim_hash
         """, changed_claim_hashes+deleted_names)

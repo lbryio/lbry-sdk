@@ -167,35 +167,35 @@ class TestClaimtrie(TestSQLDB):
         state(
             controlling=('Claim A', 10*COIN, 10*COIN, 13),
             active=[],
-            accepted=[('Claim B', 20*COIN, 0, 1031)]
+            accepted=[('Claim B', 20*COIN, 20*COIN, 1031)]
         )
         advance(1010, [self.get_support(stream, 14*COIN)])
         state(
             controlling=('Claim A', 10*COIN, 24*COIN, 13),
             active=[],
-            accepted=[('Claim B', 20*COIN, 0, 1031)]
+            accepted=[('Claim B', 20*COIN, 20*COIN, 1031)]
         )
         advance(1020, [self.get_stream('Claim C', 50*COIN)])
         state(
             controlling=('Claim A', 10*COIN, 24*COIN, 13),
             active=[],
             accepted=[
-                ('Claim B', 20*COIN, 0, 1031),
-                ('Claim C', 50*COIN, 0, 1051)]
+                ('Claim B', 20*COIN, 20*COIN, 1031),
+                ('Claim C', 50*COIN, 50*COIN, 1051)]
         )
         advance(1031, [])
         state(
             controlling=('Claim A', 10*COIN, 24*COIN, 13),
             active=[('Claim B', 20*COIN, 20*COIN, 1031)],
-            accepted=[('Claim C', 50*COIN, 0, 1051)]
+            accepted=[('Claim C', 50*COIN, 50*COIN, 1051)]
         )
         advance(1040, [self.get_stream('Claim D', 300*COIN)])
         state(
             controlling=('Claim A', 10*COIN, 24*COIN, 13),
             active=[('Claim B', 20*COIN, 20*COIN, 1031)],
             accepted=[
-                ('Claim C', 50*COIN, 0, 1051),
-                ('Claim D', 300*COIN, 0, 1072)]
+                ('Claim C', 50*COIN, 50*COIN, 1051),
+                ('Claim D', 300*COIN, 300*COIN, 1072)]
         )
         advance(1051, [])
         state(
