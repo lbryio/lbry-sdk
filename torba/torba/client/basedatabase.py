@@ -1,7 +1,7 @@
 import logging
 import asyncio
-from binascii import hexlify
 from asyncio import wrap_future
+from binascii import hexlify
 from concurrent.futures.thread import ThreadPoolExecutor
 
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable
