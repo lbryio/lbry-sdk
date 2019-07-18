@@ -3,7 +3,7 @@ from concurrent.futures import ProcessPoolExecutor
 from lbry.wallet.server.db import reader
 
 
-db_path = '/tmp/wallet-server/claims.db'
+db_path = '../../../lbryconf/wallet-server/claims.db'
 default_query_timout  = 0.25
 log = logging.getLogger(__name__)
 log.addHandler(logging.StreamHandler())
@@ -29,7 +29,7 @@ async def run_times(executor, iterations, show=True):
             ]
         }
     ) for _ in range(iterations)))
-    timings = [r[1]['execute_query']['total'] for r in timings]
+    timings = [r[1]['execute_query'][0]['total'] for r in timings]
     total = int((time.perf_counter() - start) * 100)
     if show:
         avg = sum(timings)/len(timings)
@@ -52,8 +52,8 @@ async def main():
     await run_times(executor, 2**5)
     await run_times(executor, 2**7)
     await run_times(executor, 2**9)
-    await run_times(executor, 2**11)
-    await run_times(executor, 2**13)
+    #await run_times(executor, 2**11)
+    #await run_times(executor, 2**13)
     executor.shutdown(True)
 
 if __name__ == '__main__':
