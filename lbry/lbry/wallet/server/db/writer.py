@@ -257,7 +257,7 @@ class SQLDB:
 
         if tags:
             self.db.executemany(
-                "INSERT INTO tag (tag, claim_hash, height) VALUES (?, ?, ?)", tags.values()
+                "INSERT OR IGNORE INTO tag (tag, claim_hash, height) VALUES (?, ?, ?)", tags.values()
             )
 
         return claims

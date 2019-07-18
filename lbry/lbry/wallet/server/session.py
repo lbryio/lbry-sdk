@@ -4,12 +4,8 @@ import time
 import base64
 import asyncio
 from binascii import hexlify
-from weakref import WeakSet
 from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-
-from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite
-from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
 from torba.rpc.jsonrpc import RPCError, JSONRPC
 from torba.server.session import ElectrumX, SessionManager
@@ -18,56 +14,8 @@ from torba.server import util
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYDB
 from lbry.wallet.server.db import reader
-
-
-class AdminWebSocket:
-
-    def __init__(self, manager):
-        self.manager = manager
-        self.app = Application()
-        self.app['websockets'] = WeakSet()
-        self.app.router.add_get('/', self.on_connect)
-        self.app.on_shutdown.append(self.on_shutdown)
-        self.runner = AppRunner(self.app)
-
-    async def on_status(self, _):
-        if not self.app['websockets']:
-            return
-        self.send_message({
-            'type': 'status',
-            'height': self.manager.daemon.cached_height(),
-        })
-
-    def send_message(self, msg):
-        for web_socket in self.app['websockets']:
-            asyncio.create_task(web_socket.send_json(msg))
-
-    async def start(self):
-        await self.runner.setup()
-        await TCPSite(self.runner, self.manager.env.websocket_host, self.manager.env.websocket_port).start()
-
-    async def stop(self):
-        await self.runner.cleanup()
-
-    async def on_connect(self, request):
-        web_socket = WebSocketResponse()
-        await web_socket.prepare(request)
-        self.app['websockets'].add(web_socket)
-        try:
-            async for msg in web_socket:
-                if msg.type == WSMsgType.TEXT:
-                    await self.on_status(None)
-                elif msg.type == WSMsgType.ERROR:
-                    print('web socket connection closed with exception %s' %
-                          web_socket.exception())
-        finally:
-            self.app['websockets'].discard(web_socket)
-        return web_socket
-
-    @staticmethod
-    async def on_shutdown(app):
-        for web_socket in set(app['websockets']):
-            await web_socket.close(code=WSCloseCode.GOING_AWAY, message='Server shutdown')
+from lbry.wallet.server.websocket import AdminWebSocket
+from lbry.wallet.server.metrics import ServerLoadData
 
 
 class ResultCacheItem:
@@ -95,9 +43,8 @@ class LBRYSessionManager(SessionManager):
         super().__init__(*args, **kwargs)
         self.query_executor = None
         self.websocket = None
-        self.metrics_processor = None
-        self.command_metrics = {}
-        self.reader_metrics = {}
+        self.metrics = ServerLoadData()
+        self.metrics_loop = None
         self.running = False
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
@@ -105,69 +52,11 @@ class LBRYSessionManager(SessionManager):
         self.search_cache['search'] = lrucache(10000)
         self.search_cache['resolve'] = lrucache(10000)
 
-    def get_command_tracking_info(self, command):
-        if command not in self.command_metrics:
-            self.command_metrics[command] = {
-                'cache_hit': 0,
-                'started': 0,
-                'finished': 0,
-                'total_time': 0,
-                'execution_time': 0,
-                'query_time': 0,
-                'query_count': 0,
-                'interrupted': 0,
-                'interrupted_query_values': [],
-            }
-        return self.command_metrics[command]
-
-    def cache_hit(self, command_name):
-        if self.env.track_metrics:
-            command = self.get_command_tracking_info(command_name)
-            command['cache_hit'] += 1
-
-    def start_command_tracking(self, command_name):
-        if self.env.track_metrics:
-            command = self.get_command_tracking_info(command_name)
-            command['started'] += 1
-
-    def finish_command_tracking(self, command_name, elapsed, metrics):
-        if self.env.track_metrics:
-            command = self.get_command_tracking_info(command_name)
-            command['finished'] += 1
-            command['total_time'] += elapsed
-            if 'execute_query' in metrics:
-                command['execution_time'] += (metrics[command_name]['total'] - metrics['execute_query']['total'])
-                command['query_time'] += metrics['execute_query']['total']
-                command['query_count'] += metrics['execute_query']['calls']
-            for func_name, func_metrics in metrics.items():
-                reader = self.reader_metrics.setdefault(func_name, {})
-                for key in func_metrics:
-                    if key not in reader:
-                        reader[key] = func_metrics[key]
-                    else:
-                        reader[key] += func_metrics[key]
-
-    def interrupted_command_error(self, command_name, elapsed, metrics, kwargs):
-        if self.env.track_metrics:
-            command = self.get_command_tracking_info(command_name)
-            command['finished'] += 1
-            command['interrupted'] += 1
-            command['total_time'] += elapsed
-            command['execution_time'] += (metrics[command_name]['total'] - metrics['execute_query']['total'])
-            command['query_time'] += metrics['execute_query']['total']
-            command['query_count'] += metrics['execute_query']['calls']
-            if len(command['interrupted_query_values']) < 100:
-                command['interrupted_query_values'].append(kwargs)
-
     async def process_metrics(self):
         while self.running:
-            commands, self.command_metrics = self.command_metrics, {}
-            reader, self.reader_metrics = self.reader_metrics, {}
+            data = self.metrics.to_json_and_reset({'sessions': self.session_count()})
             if self.websocket is not None:
-                self.websocket.send_message({
-                    'commands': commands,
-                    'reader': reader
-                })
+                self.websocket.send_message(data)
             await asyncio.sleep(1)
 
     async def start_other(self):
@@ -186,12 +75,12 @@ class LBRYSessionManager(SessionManager):
         if self.websocket is not None:
             await self.websocket.start()
         if self.env.track_metrics:
-            self.metrics_processor = asyncio.create_task(self.process_metrics())
+            self.metrics_loop = asyncio.create_task(self.process_metrics())
 
     async def stop_other(self):
         self.running = False
         if self.env.track_metrics:
-            self.metrics_processor.cancel()
+            self.metrics_loop.cancel()
         if self.websocket is not None:
             await self.websocket.stop()
         self.query_executor.shutdown()
@@ -221,24 +110,34 @@ class LBRYElectrumX(ElectrumX):
         self.request_handlers.update(handlers)
 
     async def run_in_executor(self, name, func, kwargs):
-        start = None
+        result = start = api = None
+
         if self.env.track_metrics:
-            self.session_mgr.start_command_tracking(name)
+            api = self.session_mgr.metrics.for_api(name)
+            api.start()
             start = time.perf_counter()
+
         try:
             result = await asyncio.get_running_loop().run_in_executor(
                 self.session_mgr.query_executor, func, kwargs
             )
         except reader.SQLiteInterruptedError as error:
-            self.session_mgr.interrupted_command_error(
-                name, int((time.perf_counter() - start) * 1000), error.metrics, kwargs
-            )
+            if self.env.track_metrics:
+                api.interrupt(start, error.metrics)
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
+        except reader.SQLiteOperationalError as error:
+            if self.env.track_metrics:
+                api.error(start, error.metrics)
+            raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
+        except:
+            if self.env.track_metrics:
+                api.error(start)
+            raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
 
         if self.env.track_metrics:
-            elapsed = int((time.perf_counter() - start) * 1000)
             (result, metrics) = result
-            self.session_mgr.finish_command_tracking(name, elapsed, metrics)
+            api.finish(start, metrics)
+
         return base64.b64encode(result).decode()
 
     async def run_and_cache_query(self, query_name, function, kwargs):
@@ -248,7 +147,7 @@ class LBRYElectrumX(ElectrumX):
         if cache_item is None:
             cache_item = cache[cache_key] = ResultCacheItem()
         elif cache_item.result is not None:
-            self.session_mgr.cache_hit(query_name)
+            self.session_mgr.metrics.for_api(query_name).cache_hit()
             return cache_item.result
         async with cache_item.lock:
             result = cache_item.result
@@ -257,7 +156,7 @@ class LBRYElectrumX(ElectrumX):
                     query_name, function, kwargs
                 )
             else:
-                self.session_mgr.cache_hit(query_name)
+                self.session_mgr.metrics.for_api(query_name).cache_hit()
             return result
 
     async def claimtrie_search(self, **kwargs):

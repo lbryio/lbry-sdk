@@ -9,7 +9,7 @@ from contextvars import ContextVar
 from functools import wraps
 from dataclasses import dataclass
 
-from torba.client.basedatabase import query
+from torba.client.basedatabase import query, interpolate
 
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags
@@ -17,6 +17,12 @@ from lbry.schema.result import Outputs
 from lbry.wallet.ledger import BaseLedger, MainNetLedger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES
+
+
+class SQLiteOperationalError(sqlite3.OperationalError):
+    def __init__(self, metrics):
+        super().__init__('sqlite query errored')
+        self.metrics = metrics
 
 
 class SQLiteInterruptedError(sqlite3.OperationalError):
@@ -91,7 +97,6 @@ ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
 
 
 def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
-
     db = sqlite3.connect(_path, isolation_level=None, uri=True)
     db.row_factory = sqlite3.Row
     ctx.set(
@@ -114,21 +119,18 @@ def measure(func):
         state = ctx.get()
         if not state.is_tracking_metrics:
             return func(*args, **kwargs)
-        metric = state.metrics.setdefault(func.__name__, {
-            'calls': 0, 'total': 0, 'isolated': 0, 'errors': 0
-        })
+        metric = {}
+        state.metrics.setdefault(func.__name__, []).append(metric)
         state.stack.append([])
         start = time.perf_counter()
         try:
             return func(*args, **kwargs)
         except:
-            metric['errors'] += 1
             raise
         finally:
             elapsed = int((time.perf_counter()-start)*1000)
-            metric['calls'] += 1
-            metric['total'] += elapsed
-            metric['isolated'] += (elapsed-sum(state.stack.pop()))
+            metric['total'] = elapsed
+            metric['isolated'] = (elapsed-sum(state.stack.pop()))
             if state.stack:
                 state.stack[-1].append(elapsed)
     return wrapper
@@ -167,15 +169,16 @@ def execute_query(sql, values) -> List:
     try:
         return context.db.execute(sql, values).fetchall()
     except sqlite3.OperationalError as err:
+        plain_sql = interpolate(sql, values)
+        if not context.is_tracking_metrics:
+            context.metric['execute_query'][-1]['sql'] = plain_sql
         if str(err) == "interrupted":
-            query_str = sql
-            for k in sorted(values.keys(), reverse=True):
-                query_str = query_str.replace(f":{k}", str(values[k]) if not k.startswith("$") else f"'{values[k]}'")
-            context.log.warning("interrupted slow sqlite query:\n%s", query_str)
+            context.log.warning("interrupted slow sqlite query:\n%s", plain_sql)
             raise SQLiteInterruptedError(context.metrics)
+        context.log.exception('failed running query', exc_info=err)
+        raise SQLiteOperationalError(context.metrics)
 
 
-@measure
 def get_claims(cols, for_count=False, **constraints) -> List:
     if 'order_by' in constraints:
         sql_order_by = []
@@ -420,7 +423,6 @@ def resolve_url(raw_url):
     return channel
 
 
-@measure
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
     any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
     all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
