@@ -13,7 +13,12 @@ class ServerCharts extends StatelessWidget {
     Widget build(BuildContext context) {
         var server = Provider.of<Server>(context, listen: false);
         return ListView(children: <Widget>[
-            SizedBox(height: 300.0, child: ServerLoadChart(server)),
+            SizedBox(height: 300.0, child: APILoadChart(
+                server, "Search", (ServerLoadDataPoint dataPoint) => dataPoint.search
+            )),
+            //SizedBox(height: 300.0, child: APILoadChart(
+            //    server, "Resolve", (ServerLoadDataPoint dataPoint) => dataPoint.resolve
+            //)),
             SizedBox(height: 300.0, child: ServerPerformanceChart(server)),
             //SizedBox(height: 220.0, child: ClientLoadChart(server.clientLoadManager)),
             //SizedBox(height: 220.0, child: ClientPerformanceChart(server.clientLoadManager)),
@@ -22,16 +27,20 @@ class ServerCharts extends StatelessWidget {
 }
 
 
-class ServerLoadChart extends StatefulWidget {
+typedef APICallMetrics APIGetter(ServerLoadDataPoint dataPoint);
+
+class APILoadChart extends StatefulWidget {
     final Server server;
-    ServerLoadChart(this.server);
+    final String name;
+    final APIGetter getter;
+    APILoadChart(this.server, this.name, this.getter);
 
     @override
-    State<StatefulWidget> createState() => ServerLoadChartState();
+    State<StatefulWidget> createState() => APILoadChartState();
 }
 
 
-class ServerLoadChartState extends State<ServerLoadChart> {
+class APILoadChartState extends State<APILoadChart> {
 
     List<charts.Series<ServerLoadDataPoint, int>> seriesData;
 
@@ -39,54 +48,73 @@ class ServerLoadChartState extends State<ServerLoadChart> {
     void initState() {
         super.initState();
         seriesData = [
+            /*
             charts.Series<ServerLoadDataPoint, int>(
-                id: 'Search Cache',
+                id: 'Received',
+                colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault.lighter,
+                strokeWidthPxFn: (_, __) => 4.0,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).receive_count,
+                data: widget.server.serverLoadData,
+            ),*/
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Cache',
+                colorFn: (_, __) =>
+                charts.MaterialPalette.green.shadeDefault,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).cache_response_stack,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Query',
+                colorFn: (_, __) =>
+                charts.MaterialPalette.blue.shadeDefault,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).query_response_stack,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Interrupts',
+                colorFn: (_, __) => charts.MaterialPalette.red.shadeDefault.lighter,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).intrp_response_stack,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'Errors',
+                colorFn: (_, __) => charts.MaterialPalette.red.shadeDefault,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).error_response_stack,
+                data: widget.server.serverLoadData,
+            ),
+            /*
+            charts.Series<ServerLoadDataPoint, int>(
+                id: '${widget.name} Interrupted',
+                colorFn: (_, __) =>
+                charts.MaterialPalette.pink.shadeDefault.lighter,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).interrupted,
+                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 5.0,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: '${widget.name} Errored',
+                colorFn: (_, __) =>
+                charts.MaterialPalette.red.shadeDefault.darker,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).errored,
+                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 5.0,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: '${widget.name} From Cache',
                 colorFn: (_, __) => charts.MaterialPalette.green.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.cache_hit,
+                measureFn: (ServerLoadDataPoint load, _) => widget.getter(load).cache_hits,
+                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 3.0,
                 data: widget.server.serverLoadData,
             ),
-            charts.Series<ServerLoadDataPoint, int>(
-                id: 'Search Finish',
-                colorFn: (_, __) =>
-                charts.MaterialPalette.deepOrange.shadeDefault.darker,
-                domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.finished,
-                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 5.0,
-                data: widget.server.serverLoadData,
-            ),
-            charts.Series<ServerLoadDataPoint, int>(
-                id: 'Search Start',
-                colorFn: (_, __) =>
-                charts.MaterialPalette.deepOrange.shadeDefault.lighter,
-                domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.started,
-                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 1.0,
-                data: widget.server.serverLoadData,
-            ),
-            charts.Series<ServerLoadDataPoint, int>(
-                id: 'Resolve Cache',
-                colorFn: (_, __) => charts.MaterialPalette.cyan.shadeDefault.darker,
-                domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.resolve.cache_hit,
-                data: widget.server.serverLoadData,
-            ),
-            charts.Series<ServerLoadDataPoint, int>(
-                id: 'Resolve Finish',
-                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.darker,
-                domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.resolve.finished,
-                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 5.0,
-                data: widget.server.serverLoadData,
-            ),
-            charts.Series<ServerLoadDataPoint, int>(
-                id: 'Resolve Start',
-                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.lighter,
-                domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.resolve.started,
-                strokeWidthPxFn: (ServerLoadDataPoint load, _) => 1.0,
-                data: widget.server.serverLoadData,
-            ),
+             */
         ];
     }
 
@@ -94,7 +122,9 @@ class ServerLoadChartState extends State<ServerLoadChart> {
     Widget build(BuildContext context) {
         return StreamBuilder<ServerLoadDataPoint>(
             stream: widget.server.serverLoadStream,
-            builder: (BuildContext context, _) => BetterLineChart(seriesData)
+            builder: (BuildContext context, _) => BetterLineChart(seriesData,
+                //renderer: new charts.LineRendererConfig<num>(includeArea: true)
+            )
         );
     }
 }
@@ -118,26 +148,40 @@ class ServerPerformanceChartState extends State<ServerPerformanceChart> {
         super.initState();
         seriesData = [
             charts.Series<ServerLoadDataPoint, int>(
+                id: 'Waiting 95 Percentile',
+                colorFn: (_, __) => charts.MaterialPalette.red.shadeDefault.lighter,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.wait.ninety_five,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
                 id: 'Avg. Waiting',
                 colorFn: (_, __) => charts.MaterialPalette.red.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.avg_wait_time,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.wait.avg,
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
                 id: 'Avg. Executing',
-                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.lighter,
+                colorFn: (_, __) => charts.MaterialPalette.teal.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.avg_execution_time,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.python.avg,
+                data: widget.server.serverLoadData,
+            ),
+            charts.Series<ServerLoadDataPoint, int>(
+                id: 'SQLite 95 Percentile',
+                colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault.lighter,
+                domainFn: (ServerLoadDataPoint load, _) => load.tick,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.sql.ninety_five,
                 data: widget.server.serverLoadData,
             ),
             charts.Series<ServerLoadDataPoint, int>(
                 id: 'Avg. SQLite',
                 colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault.darker,
                 domainFn: (ServerLoadDataPoint load, _) => load.tick,
-                measureFn: (ServerLoadDataPoint load, _) => load.search.avg_query_time_per_search,
+                measureFn: (ServerLoadDataPoint load, _) => load.search.sql.avg,
                 data: widget.server.serverLoadData,
-            )
+            ),
         ];
     }
 
@@ -260,11 +304,13 @@ class BetterLineChart extends charts.LineChart {
     final int itemCount;
     final Object lastItem;
 
-    BetterLineChart(List<charts.Series<dynamic, int>> seriesList):
+    BetterLineChart(List<charts.Series<dynamic, int>> seriesList, {charts.LineRendererConfig renderer}):
             itemCount = seriesList[0].data.length,
             lastItem = seriesList[0].data.last,
             super(
                 seriesList,
+                animate: false,
+                defaultRenderer: renderer,
                 behaviors: [charts.SeriesLegend()],
                 domainAxis: charts.NumericAxisSpec(
                     viewport: new charts.NumericExtents(
