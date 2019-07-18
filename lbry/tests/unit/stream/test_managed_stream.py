@@ -40,6 +40,15 @@ class TestManagedStream(BlobExchangeTestBase):
             self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir
         )
 
+    async def test_status_file_completed(self):
+        await self._test_transfer_stream(10)
+        self.assertTrue(self.stream.output_file_exists)
+        self.assertTrue(self.stream.as_dict()['completed'])
+        with open(self.stream.full_path, 'w+b') as outfile:
+            outfile.truncate(1)
+        self.assertTrue(self.stream.output_file_exists)
+        self.assertFalse(self.stream.as_dict()['completed'])
+
     async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None, stop_when_done=True):
         await self.setup_stream(blob_count)
         mock_node = mock.Mock(spec=Node)
@@ -52,7 +61,7 @@ class TestManagedStream(BlobExchangeTestBase):
 
         mock_node.accumulate_peers = mock_accumulate_peers or _mock_accumulate_peers
         await self.stream.save_file(node=mock_node)
-        await self.stream.finished_writing.wait()
+        await self.stream.finished_write_attempt.wait()
         self.assertTrue(os.path.isfile(self.stream.full_path))
         if stop_when_done:
             await self.stream.stop()

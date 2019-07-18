@@ -17,6 +17,18 @@ class TestBlobManager(AsyncioTestCase):
         self.blob_manager = BlobManager(self.loop, tmp_dir, self.storage, self.config)
         await self.storage.open()
 
+    async def test_memory_blobs_arent_verifie_but_real_ones_are(self):
+        for save_blobs in (False, True):
+            await self.setup_blob_manager(save_blobs=save_blobs)
+            # add a blob file
+            blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
+            blob_bytes = b'1' * ((2 * 2 ** 20) - 1)
+            blob = self.blob_manager.get_blob(blob_hash, len(blob_bytes))
+            blob.save_verified_blob(blob_bytes)
+            self.assertTrue(blob.get_is_verified())
+            self.blob_manager.blob_completed(blob)
+            self.assertEqual(self.blob_manager.is_blob_verified(blob_hash), save_blobs)
+
     async def test_sync_blob_file_manager_on_startup(self):
         await self.setup_blob_manager(save_blobs=True)
 
