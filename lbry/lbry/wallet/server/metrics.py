@@ -120,11 +120,11 @@ class ServerLoadData:
             self._apis[name] = APICallMetrics(name)
         return self._apis[name]
 
-    def to_json_and_reset(self, server):
+    def to_json_and_reset(self, status):
         try:
             return {
                 'api': {name: api.to_json_and_reset() for name, api in self._apis.items()},
-                'server': server
+                'status': status
             }
         finally:
             self._apis = {}

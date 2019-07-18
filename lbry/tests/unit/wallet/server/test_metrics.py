@@ -59,4 +59,4 @@ class TestCollectingMetrics(unittest.TestCase):
             'wait_avg': 12,
             'wait_percentiles': (10, 10, 10, 12, 14, 15, 15)
         }}})
-        self.assertEqual(load.to_json_and_reset({}), {'api': {}})
+        self.assertEqual(load.to_json_and_reset({}), {'status': {}, 'api': {}})
