@@ -168,7 +168,7 @@ def execute_query(sql, values) -> List:
         return context.db.execute(sql, values).fetchall()
     except sqlite3.OperationalError as err:
         plain_sql = interpolate(sql, values)
-        if not context.is_tracking_metrics:
+        if context.is_tracking_metrics:
             context.metric['execute_query'][-1]['sql'] = plain_sql
         if str(err) == "interrupted":
             context.log.warning("interrupted slow sqlite query:\n%s", plain_sql)
