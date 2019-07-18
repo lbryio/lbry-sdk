@@ -20,9 +20,10 @@ from .common import CLAIM_TYPES, STREAM_TYPES
 
 
 class SQLiteInterruptedError(sqlite3.OperationalError):
-    def __init__(self, metrics):
+    def __init__(self, metrics, fetched):
         super().__init__('sqlite query interrupted')
         self.metrics = metrics
+        self.fetched = fetched
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
@@ -164,15 +165,23 @@ def encode_result(result):
 def execute_query(sql, values) -> List:
     context = ctx.get()
     context.set_query_timeout()
+    rows = []
     try:
-        return context.db.execute(sql, values).fetchall()
+        query = context.db.execute(sql, values)
+        while True:
+            next_row = query.fetchone()
+            if next_row is None:
+                break
+            rows.append(next_row)
+        return rows
     except sqlite3.OperationalError as err:
         if str(err) == "interrupted":
-            query_str = sql
-            for k in sorted(values.keys(), reverse=True):
-                query_str = query_str.replace(f":{k}", str(values[k]) if not k.startswith("$") else f"'{values[k]}'")
-            context.log.warning("interrupted slow sqlite query:\n%s", query_str)
-            raise SQLiteInterruptedError(context.metrics)
+            context.log.warning("interrupted slow sqlite query, had %i fetched results:\n%s\n%s", len(rows), sql, values)
+            if rows:
+                return rows
+            raise SQLiteInterruptedError(context.metrics, tuple(rows))
+        context.log.exception('failed running query', exc_info=err)
+        raise err
 
 
 @measure
