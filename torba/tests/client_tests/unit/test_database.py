@@ -1,11 +1,10 @@
 import unittest
 import sqlite3
-from functools import wraps
 
 from torba.client.wallet import Wallet
 from torba.client.constants import COIN
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
-from torba.client.basedatabase import query, constraints_to_sql, AIOSQLite
+from torba.client.basedatabase import query, interpolate, constraints_to_sql, AIOSQLite
 from torba.client.hash import sha256
 
 from torba.testcase import AsyncioTestCase
@@ -165,6 +164,26 @@ class TestQueryBuilder(unittest.TestCase):
         self.assertEqual(
             query("select * from foo", limit=20, offset=10),
             ("select * from foo LIMIT 20 OFFSET 10", {})
+        )
+
+    def test_query_interpolation(self):
+        self.maxDiff = None
+        # tests that interpolation replaces longer keys first
+        self.assertEqual(
+            interpolate(*query(
+                "select * from foo",
+                a__not='b', b__in='select * from blah where c=:$c',
+                d__any={'one__like': 'o', 'two': 2},
+                a0=3, a00=1, a00a=2, a00aa=4,  # <-- breaks without correct interpolation key order
+                ahash=memoryview(sha256(b'hello world')),
+                limit=10, order_by='b', **{'$c': 3})
+            ),
+            "select * from foo WHERE a != 'b' AND "
+            "b IN (select * from blah where c=3) AND "
+            "(one LIKE 'o' OR two = 2) AND "
+            "a0 = 3 AND a00 = 1 AND a00a = 2 AND a00aa = 4 "
+            "AND ahash = e9cdefe2acf78890ee80537ae3ef84c4faab7ddad7522ea5083e4d93b9274db9 "
+            "ORDER BY b LIMIT 10",
         )
 
 
