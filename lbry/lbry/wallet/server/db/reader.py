@@ -177,7 +177,7 @@ def execute_query(sql, values) -> List:
         raise SQLiteOperationalError(context.metrics)
 
 
-def get_claims(cols, for_count=False, **constraints) -> List:
+def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'order_by' in constraints:
         sql_order_by = []
         for order_by in constraints['order_by']:
@@ -232,14 +232,6 @@ def get_claims(cols, for_count=False, **constraints) -> List:
     if 'public_key_id' in constraints:
         constraints['claim.public_key_hash'] = sqlite3.Binary(
             ctx.get().ledger.address_to_hash160(constraints.pop('public_key_id')))
-
-    if 'channel' in constraints:
-        channel_url = constraints.pop('channel')
-        match = resolve_url(channel_url)
-        if isinstance(match, sqlite3.Row):
-            constraints['channel_hash'] = match['claim_hash']
-        else:
-            return [[0]] if cols == 'count(*)' else []
     if 'channel_hash' in constraints:
         constraints['claim.channel_hash'] = sqlite3.Binary(constraints.pop('channel_hash'))
     if 'channel_ids' in constraints:
@@ -308,7 +300,18 @@ def get_claims(cols, for_count=False, **constraints) -> List:
         LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
         """, **constraints
     )
+    return sql, values
 
+
+def get_claims(cols, for_count=False, **constraints) -> List:
+    if 'channel' in constraints:
+        channel_url = constraints.pop('channel')
+        match = resolve_url(channel_url)
+        if isinstance(match, sqlite3.Row):
+            constraints['channel_hash'] = match['claim_hash']
+        else:
+            return [[0]] if cols == 'count(*)' else []
+    sql, values = _get_claims(cols, for_count, **constraints)
     return execute_query(sql, values)
 
 
