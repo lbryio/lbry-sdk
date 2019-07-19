@@ -41,11 +41,24 @@ def sign_comment(comment: dict, channel: Output):
     pieces = [timestamp, channel.claim_hash, comment['comment'].encode()]
     digest = sha256(b''.join(pieces))
     signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
-    comment['signature'] = binascii.hexlify(signature).decode()
-    comment['signing_ts'] = timestamp.decode()
+    comment.update({
+        'signature': binascii.hexlify(signature).decode(),
+        'signing_ts': timestamp.decode()
+    })
 
 
-async def jsonrpc_post(url: str, method: str, **params) -> any:
+def sign_abandon_comment(body: dict, channel: Output):
+    pieces = [body['comment_id'].encode(), channel.claim_hash]
+    digest = sha256(b''.join(pieces))
+    signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+    body.update({
+        'signature': binascii.hexlify(signature).decode()
+    })
+
+
+async def jsonrpc_post(url: str, method: str, params: dict = None, **kwargs) -> any:
+    params = dict() if not params else params
+    params.update(kwargs)
     json_body = {'jsonrpc': '2.0', 'id': None, 'method': method, 'params': params}
     headers = {'Content-Type': 'application/json'}
     async with utils.aiohttp_request('POST', url, json=json_body, headers=headers) as response:
@@ -53,5 +66,5 @@ async def jsonrpc_post(url: str, method: str, **params) -> any:
             result = await response.json()
             return result['result'] if 'result' in result else result
         except Exception as cte:
-            log.exception('Unable to decode respose from server: %s', cte)
+            log.exception('Unable to decode response from server: %s', cte)
             return await response.text()
