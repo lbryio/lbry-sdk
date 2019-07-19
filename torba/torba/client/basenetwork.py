@@ -47,6 +47,8 @@ class ClientSession(BaseClientSession):
         connector = Connector(lambda: self, *self.server)
         await asyncio.wait_for(connector.create_connection(), timeout=timeout)
         self.ping_task = asyncio.create_task(self.ping_forever())
+        # tie the ping task to this connection: if the task dies for any unexpected error, abort
+        self.ping_task.add_done_callback(lambda _: self.abort())
 
     async def handle_request(self, request):
         controller = self.network.subscription_controllers[request.method]
@@ -223,10 +225,14 @@ class SessionPool:
                 self._dead_servers = []
 
     async def ensure_connection(self, session):
-        if not session.is_closing():
-            return
+        self._dead_servers.append(session)
+        self.sessions.remove(session)
         try:
-            return await session.create_connection(self.timeout)
+            if session.is_closing():
+                await session.create_connection(self.timeout)
+            await asyncio.wait_for(session.send_request('server.banner'), timeout=self.timeout)
+            self.sessions.append(session)
+            self._dead_servers.remove(session)
         except asyncio.TimeoutError:
             log.warning("Timeout connecting to %s:%d", *session.server)
         except asyncio.CancelledError:  # pylint: disable=try-except-raise
@@ -238,11 +244,9 @@ class SessionPool:
                 log.warning("Could not connect to %s:%d", *session.server)
             else:
                 log.exception("Connecting to %s:%d raised an exception:", *session.server)
-        self._dead_servers.append(session)
-        self.sessions.remove(session)
 
     async def get_online_sessions(self):
-        self._lost_master.set()
         while not self.online:
-            await asyncio.sleep(0.1)
+            self._lost_master.set()
+            await asyncio.sleep(0.5)
         return self.sessions
