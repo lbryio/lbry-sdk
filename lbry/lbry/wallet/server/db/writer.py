@@ -97,7 +97,7 @@ class SQLDB:
 
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
 
-        create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash);
+        create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
         create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
         create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
     """
