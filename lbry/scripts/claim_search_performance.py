@@ -29,6 +29,11 @@ COMMON_AND_RARE = [
     'ufos'
 ]
 
+COMMON_AND_RARE2 = [
+    'city fix',
+    'gaming'
+]
+
 RARE_ANY_TAGS = [
     'city fix',
     'ufos',
@@ -61,7 +66,7 @@ ORDER_BY = [
 
 def get_args(limit=20):
     args = []
-    any_tags_combinations = [DEFAULT_ANY_TAGS, COMMON_AND_RARE, RARE_ANY_TAGS, CITY_FIX, []]
+    any_tags_combinations = [DEFAULT_ANY_TAGS, COMMON_AND_RARE, RARE_ANY_TAGS, COMMON_AND_RARE2, CITY_FIX, []]
     not_tags_combinations = [MATURE_TAGS, []]
     for no_totals in [True]:
         for offset in [0, 100]:
