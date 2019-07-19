@@ -34,6 +34,10 @@ RARE_ANY_TAGS = [
     'ufos',
 ]
 
+CITY_FIX = [
+    'city fix'
+]
+
 MATURE_TAGS = [
     'porn',
     'nsfw',
@@ -57,10 +61,10 @@ ORDER_BY = [
 
 def get_args(limit=20):
     args = []
-    any_tags_combinations = [DEFAULT_ANY_TAGS, COMMON_AND_RARE, RARE_ANY_TAGS, []]
+    any_tags_combinations = [DEFAULT_ANY_TAGS, COMMON_AND_RARE, RARE_ANY_TAGS, CITY_FIX, []]
     not_tags_combinations = [MATURE_TAGS, []]
     for no_totals in [True]:
-        for offset in [0, 100, 2000]:
+        for offset in [0, 100]:
             for any_tags in any_tags_combinations:
                 for not_tags in not_tags_combinations:
                     for order_by in ORDER_BY:
