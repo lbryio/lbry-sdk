@@ -33,7 +33,8 @@ from lbry.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_
 from lbry.extras.daemon.ComponentManager import RequiredCondition
 from lbry.extras.daemon.ComponentManager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbry.extras.daemon.comment_client import jsonrpc_post, sign_comment, is_comment_signed_by_channel
+from lbry.extras.daemon.comment_client import jsonrpc_post, sign_comment, sign_abandon_comment
+from lbry.extras.daemon.comment_client import is_comment_signed_by_channel
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.wallet.account import Account as LBCAccount
@@ -3491,11 +3492,45 @@ class Daemon(metaclass=JSONRPCServerType):
                 'channel_name': channel.claim_name,
             })
             sign_comment(comment_body, channel)
-        response = await jsonrpc_post(self.conf.comment_server, 'create_comment', **comment_body)
+        response = await jsonrpc_post(self.conf.comment_server, 'create_comment', comment_body)
         if 'signature' in response:
             response['is_claim_signature_valid'] = is_comment_signed_by_channel(response, channel)
         return response
 
+    async def jsonrpc_comment_abandon(self, comment_id, channel_name=None, channel_id=None, channel_account_id=None):
+        """"
+        Delete a comment published under your channel identity
+
+        Usage:
+            comment_delete  (<comment_id> | --comment_id=<comment_id>)
+                            (--channel_id=<channel_id> | --channel_name=<channel_name>)
+                            [--channel_account_id=<channel_account_id>...]
+
+        Options:
+            --comment_id=<comment_id>                   : (str) The ID of the comment to be deleted.
+            --channel_id=<channel_id>                   : (str) The ID of the channel that posted the comment.
+            --channel_name=<channel_name>               : (str) The Name of the channel that posted the comment..
+            --channel_account_id=<channel_account_id>   : (str) one or more account ids for accounts to look in
+                                                          for channel certificates, defaults to all accounts.
+        Returns:
+        """
+        abandon_comment_body = {'comment_id': comment_id}
+        if not channel_name and not channel_id:
+            chan = await jsonrpc_post(
+                self.conf.comment_server, 'get_channel_from_comment_id', comment_id=comment_id
+            )
+            channel_id = chan.get('channel_id')
+            channel_name = chan.get('channel_name')
+
+        channel = await self.get_channel_or_none(channel_account_id, channel_id, channel_name, for_signing=True)
+        if not channel:
+            raise Exception('You must own the channel to delete the comment')
+        abandon_comment_body.update({
+            'channel_id': channel.claim_id,
+            'channel_name': channel.claim_name,
+        })
+        sign_abandon_comment(abandon_comment_body, channel)
+        return await jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
 
     async def broadcast_or_release(self, account, tx, blocking=False):
         try:
