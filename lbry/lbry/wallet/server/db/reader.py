@@ -56,7 +56,7 @@ SEARCH_PARAMS = {
 
 
 ORDER_FIELDS = {
-   'name',
+   'name', 'claim_hash'
 } | INTEGER_PARAMS
 
 
@@ -334,7 +334,7 @@ def search(constraints) -> Tuple[List, List, int, int]:
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
     if 'order_by' not in constraints:
-        constraints['order_by'] = ["height", "^name"]
+        constraints['order_by'] = ["claim_hash"]
     txo_rows = _search(**constraints)
     channel_hashes = set(txo['channel_hash'] for txo in txo_rows if txo['channel_hash'])
     extra_txo_rows = []
@@ -408,7 +408,7 @@ def resolve_url(raw_url):
         if channel is not None:
             if set(query) == {'name'}:
                 # temporarily emulate is_controlling for claims in channel
-                query['order_by'] = ['effective_amount']
+                query['order_by'] = ['effective_amount', '^height']
             else:
                 query['order_by'] = ['^channel_join']
             query['channel_hash'] = channel['claim_hash']

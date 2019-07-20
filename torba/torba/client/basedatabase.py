@@ -196,7 +196,7 @@ def interpolate(sql, values):
     for k in sorted(values.keys(), reverse=True):
         value = values[k]
         if isinstance(value, memoryview):
-            value = hexlify(bytes(value)[::-1]).decode()
+            value = f"X'{hexlify(bytes(value)).decode()}'"
         elif isinstance(value, str):
             value = f"'{value}'"
         else:
