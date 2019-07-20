@@ -16,7 +16,7 @@ from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs
 from lbry.wallet.ledger import BaseLedger, MainNetLedger, RegTestLedger
 
-from .common import CLAIM_TYPES, STREAM_TYPES
+from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 
 
 class SQLiteOperationalError(sqlite3.OperationalError):
@@ -433,24 +433,36 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
     any_items = {item for item in any_items if item not in not_items}
 
     if any_items:
+
+        any_queries = {}
+
+        common_items = any_items & COMMON_TAGS.keys()
+        if common_items:
+            any_items -= common_items
+            for item in common_items:
+                index_name = COMMON_TAGS[item]
+                any_queries[f'$any_{attr}_{index_name}'] = item
+                any_queries[f'#_any_{attr}_{index_name}'] = f"""
+                    EXISTS(
+                        SELECT 1 FROM {attr} INDEXED BY tag_{index_name}_idx WHERE
+                            claim.claim_hash={attr}.claim_hash
+                        AND {attr} = '{item}'
+                    )
+                """
+
         constraints.update({
             f'$any_{attr}{i}': item for i, item in enumerate(any_items)
         })
         values = ', '.join(
             f':$any_{attr}{i}' for i in range(len(any_items))
         )
-        if for_count:
-            constraints[f'claim.claim_hash__in#_any_{attr}'] = f"""
-                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
-            """
-        else:
-            constraints[f'#_any_{attr}'] = f"""
-                EXISTS(
-                    SELECT 1 FROM {attr} WHERE
-                        claim.claim_hash={attr}.claim_hash
-                    AND {attr} IN ({values})
-                )
-            """
+        any_queries[f'claim.claim_hash__in#_any_{attr}'] = f"""
+            SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+        """
+        if len(any_queries) == 1:
+            constraints.update(any_queries)
+        elif len(any_queries) > 1:
+            constraints[f'ORed_{attr}_queries__any'] = any_queries
 
     if all_items:
         constraints[f'$all_{attr}_count'] = len(all_items)

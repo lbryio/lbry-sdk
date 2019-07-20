@@ -11,7 +11,7 @@ class TestTagNormalization(unittest.TestCase):
     def test_normalize_tag(self):
         tag = self.assertNormalizedTag
         tag('', ' \t #!~')
-        tag('tag', 'Tag')
+        tag('tag', 'T\'ag')
         tag('t ag', '\tT  \nAG   ')
         tag('tag hash', '#tag~#hash!')
 
