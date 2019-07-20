@@ -182,7 +182,7 @@ class TestQueryBuilder(unittest.TestCase):
             "b IN (select * from blah where c=3) AND "
             "(one LIKE 'o' OR two = 2) AND "
             "a0 = 3 AND a00 = 1 AND a00a = 2 AND a00aa = 4 "
-            "AND ahash = e9cdefe2acf78890ee80537ae3ef84c4faab7ddad7522ea5083e4d93b9274db9 "
+            "AND ahash = X'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9' "
             "ORDER BY b LIMIT 10",
         )
 
