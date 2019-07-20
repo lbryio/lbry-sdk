@@ -441,7 +441,6 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             any_items -= common_items
             for item in common_items:
                 index_name = COMMON_TAGS[item]
-                any_queries[f'$any_{attr}_{index_name}'] = item
                 any_queries[f'#_any_{attr}_{index_name}'] = f"""
                     EXISTS(
                         SELECT 1 FROM {attr} INDEXED BY tag_{index_name}_idx WHERE
