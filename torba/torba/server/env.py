@@ -38,6 +38,7 @@ class Env:
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
         self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
+        self.individual_tag_indexes = self.boolean('INDIVIDUAL_TAG_INDEXES', True)
         self.track_metrics = self.boolean('TRACK_METRICS', False)
         self.websocket_host = self.default('WEBSOCKET_HOST', self.host)
         self.websocket_port = self.integer('WEBSOCKET_PORT', None)

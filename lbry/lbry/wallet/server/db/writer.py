@@ -116,7 +116,6 @@ class SQLDB:
     SEARCH_INDEXES = """
         -- used by any tag clouds
         create index if not exists tag_tag_idx on tag (tag, claim_hash);
-        {custom_tags_indexes}
 
         -- common ORDER BY
         create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
@@ -139,10 +138,12 @@ class SQLDB:
         create index if not exists claim_fee_currency_idx on claim (fee_currency);
 
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
-    """.format(custom_tags_indexes='\n'.join(
-        f'create unique index if not exists tag_{tag_key}_idx on tag (tag, claim_hash) WHERE tag="{tag_value}";'
+    """
+
+    TAG_INDEXES = '\n'.join(
+        f"create unique index if not exists tag_{tag_key}_idx on tag (tag, claim_hash) WHERE tag='{tag_value}';"
         for tag_value, tag_key in COMMON_TAGS.items()
-    ))
+    )
 
     CREATE_TABLES_QUERY = (
         PRAGMAS +
@@ -698,9 +699,6 @@ class SQLDB:
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
-
-        if self.main.first_sync and height == daemon_height:
-            self.db.executescript(self.SEARCH_INDEXES)
 
 
 class LBRYDB(DB):
