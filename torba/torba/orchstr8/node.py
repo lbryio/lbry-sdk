@@ -206,7 +206,8 @@ class SPVNode:
             'HOST': self.hostname,
             'TCP_PORT': str(self.port),
             'SESSION_TIMEOUT': str(self.session_timeout),
-            'MAX_QUERY_WORKERS': '0'
+            'MAX_QUERY_WORKERS': '0',
+            'INDIVIDUAL_TAG_INDEXES': '',
         }
         # TODO: don't use os.environ
         os.environ.update(conf)
