@@ -79,10 +79,10 @@ class LBRYBlockProcessor(BlockProcessor):
             raise
         finally:
             self.sql.commit()
-        if self.db.first_sync and blocks == self.daemon.cached_height():
-            self.timer.run(self.db.executescript, self.sql.SEARCH_INDEXES, timer_name='executing SEARCH_INDEXES')
+        if self.db.first_sync and self.height == self.daemon.cached_height():
+            self.timer.run(self.sql.db.executescript, self.sql.SEARCH_INDEXES, timer_name='executing SEARCH_INDEXES')
             if self.env.individual_tag_indexes:
-                self.timer.run(self.db.executescript, self.sql.TAG_INDEXES, timer_name='executing TAG_INDEXES')
+                self.timer.run(self.sql.db.executescript, self.sql.TAG_INDEXES, timer_name='executing TAG_INDEXES')
         for cache in self.search_cache.values():
             cache.clear()
 
