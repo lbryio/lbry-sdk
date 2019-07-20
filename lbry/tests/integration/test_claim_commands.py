@@ -89,6 +89,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim], **kwargs)
 
     async def assertFindsClaims(self, claims, **kwargs):
+        kwargs.setdefault('order_by', ['height', '^name'])
         results = await self.claim_search(**kwargs)
         self.assertEqual(len(claims), len(results))
         for claim, result in zip(claims, results):
@@ -165,15 +166,15 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.create_channel()
         await self.create_lots_of_streams()
 
-        page = await self.claim_search(page_size=20, channel='@abc')
+        page = await self.claim_search(page_size=20, channel='@abc', order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams)
 
-        page = await self.claim_search(page_size=6, channel='@abc')
+        page = await self.claim_search(page_size=6, channel='@abc', order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[:6])
 
-        page = await self.claim_search(page=2, page_size=6, channel='@abc')
+        page = await self.claim_search(page=2, page_size=6, channel='@abc', order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[6:])
 
