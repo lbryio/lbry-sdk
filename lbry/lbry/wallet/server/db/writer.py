@@ -16,7 +16,7 @@ from lbry.wallet.server.db.trending import (
     CREATE_TREND_TABLE, calculate_trending, register_trending_functions
 )
 
-from .common import CLAIM_TYPES, STREAM_TYPES
+from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
@@ -76,30 +76,12 @@ class SQLDB:
             trending_global integer not null default 0
         );
 
-        create index if not exists claim_resolve_idx on claim (normalized, claim_id);
+        create index if not exists claim_normalized_idx on claim (normalized, activation_height);
+        create index if not exists claim_channel_hash_idx on claim (channel_hash, signature, claim_hash);
         create index if not exists claim_claims_in_channel_idx on claim (signature_valid, channel_hash, normalized);
-
-        create index if not exists claim_id_idx on claim (claim_id);
-        create index if not exists claim_normalized_idx on claim (normalized);
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
-        create index if not exists claim_channel_hash_idx on claim (channel_hash);
-        create index if not exists claim_timestamp_idx on claim (timestamp);
-        create index if not exists claim_height_idx on claim (height);
-        create index if not exists claim_activation_height_idx on claim (activation_height);
+        create index if not exists claim_activation_height_idx on claim (activation_height, claim_hash);
         create index if not exists claim_expiration_height_idx on claim (expiration_height);
-        create index if not exists claim_public_key_hash_idx on claim (public_key_hash);
-
-        create index if not exists claim_claim_type_idx on claim (claim_type);
-        create index if not exists claim_stream_type_idx on claim (stream_type);
-        create index if not exists claim_media_type_idx on claim (media_type);
-        create index if not exists claim_fee_amount_idx on claim (fee_amount);
-        create index if not exists claim_fee_currency_idx on claim (fee_currency);
-
-        create index if not exists claim_signature_valid_idx on claim (signature_valid);
-
-        create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
-        create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
-        create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
     """
 
     CREATE_SUPPORT_TABLE = """
@@ -110,7 +92,6 @@ class SQLDB:
             claim_hash bytes not null,
             amount integer not null
         );
-        create index if not exists support_txo_hash_idx on support (txo_hash);
         create index if not exists support_claim_hash_idx on support (claim_hash, height);
     """
 
@@ -120,7 +101,6 @@ class SQLDB:
             claim_hash bytes not null,
             height integer not null
         );
-        create index if not exists tag_tag_idx on tag (tag);
         create unique index if not exists tag_claim_hash_tag_idx on tag (claim_hash, tag);
     """
 
@@ -132,6 +112,37 @@ class SQLDB:
         );
         create index if not exists claimtrie_claim_hash_idx on claimtrie (claim_hash);
     """
+
+    SEARCH_INDEXES = """
+        -- used by any tag clouds
+        create index if not exists tag_tag_idx on tag (tag, claim_hash);
+        {custom_tags_indexes}
+
+        -- common ORDER BY
+        create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
+        create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
+        create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
+
+        -- TODO: verify that all indexes below are used
+        create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
+
+        create index if not exists claim_resolve_idx on claim (normalized, claim_id);
+
+        create index if not exists claim_id_idx on claim (claim_id, claim_hash);
+        create index if not exists claim_timestamp_idx on claim (timestamp);
+        create index if not exists claim_public_key_hash_idx on claim (public_key_hash);
+
+        create index if not exists claim_claim_type_idx on claim (claim_type);
+        create index if not exists claim_stream_type_idx on claim (stream_type);
+        create index if not exists claim_media_type_idx on claim (media_type);
+        create index if not exists claim_fee_amount_idx on claim (fee_amount);
+        create index if not exists claim_fee_currency_idx on claim (fee_currency);
+
+        create index if not exists claim_signature_valid_idx on claim (signature_valid);
+    """.format(custom_tags_indexes='\n'.join(
+        f'create unique index if not exists tag_{tag_key}_idx on tag (tag, claim_hash) WHERE tag="{tag_value}";'
+        for tag_value, tag_key in COMMON_TAGS.items()
+    ))
 
     CREATE_TABLES_QUERY = (
         PRAGMAS +
@@ -687,6 +698,9 @@ class SQLDB:
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
+
+        if self.main.first_sync and height == daemon_height:
+            self.db.executescript(self.SEARCH_INDEXES)
 
 
 class LBRYDB(DB):
