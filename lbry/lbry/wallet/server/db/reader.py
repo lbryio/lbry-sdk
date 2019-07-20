@@ -436,16 +436,30 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
 
         any_queries = {}
 
-        common_items = any_items & COMMON_TAGS.keys()
-        if common_items:
-            any_items -= common_items
-            for item in common_items:
-                index_name = COMMON_TAGS[item]
-                any_queries[f'#_any_{attr}_{index_name}'] = f"""
+        if attr == 'tag':
+            common_tags = any_items & COMMON_TAGS.keys()
+            if common_tags:
+                any_items -= common_tags
+            if len(common_tags) < 5:
+                for item in common_tags:
+                    index_name = COMMON_TAGS[item]
+                    any_queries[f'#_common_tag_{index_name}'] = f"""
                     EXISTS(
-                        SELECT 1 FROM {attr} INDEXED BY tag_{index_name}_idx WHERE
-                            claim.claim_hash={attr}.claim_hash
-                        AND {attr} = '{item}'
+                        SELECT 1 FROM tag INDEXED BY tag_{index_name}_idx WHERE claim.claim_hash=tag.claim_hash
+                        AND tag = '{item}'
+                    )
+                    """
+            elif len(common_tags) >= 5:
+                constraints.update({
+                    f'$any_common_tag{i}': item for i, item in enumerate(common_tags)
+                })
+                values = ', '.join(
+                    f':$any_common_tag{i}' for i in range(len(common_tags))
+                )
+                constraints[f'#_any_common_tags'] = f"""
+                    EXISTS(
+                        SELECT 1 FROM tag WHERE claim.claim_hash=tag.claim_hash
+                        AND tag IN ({values})
                     )
                 """
 
@@ -455,9 +469,18 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
         values = ', '.join(
             f':$any_{attr}{i}' for i in range(len(any_items))
         )
-        any_queries[f'claim.claim_hash__in#_any_{attr}'] = f"""
-            SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
-        """
+        if for_count or attr == 'tag':
+            any_queries[f'claim.claim_hash__in#_any_{attr}'] = f"""
+                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            """
+        else:
+            any_queries[f'#_any_{attr}'] = f"""
+                EXISTS(
+                    SELECT 1 FROM {attr} WHERE
+                        claim.claim_hash={attr}.claim_hash
+                    AND {attr} IN ({values})
+                )
+            """
         if len(any_queries) == 1:
             constraints.update(any_queries)
         elif len(any_queries) > 1:
