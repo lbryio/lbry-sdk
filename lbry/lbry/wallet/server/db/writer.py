@@ -1,4 +1,5 @@
 import sqlite3
+import binascii
 from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
@@ -16,7 +17,7 @@ from lbry.wallet.server.db.trending import (
     CREATE_TREND_TABLE, calculate_trending, register_trending_functions
 )
 
-from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
+from .common import CLAIM_TYPES, STREAM_TYPES
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
@@ -140,10 +141,12 @@ class SQLDB:
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
     """
 
-    TAG_INDEXES = '\n'.join(
-        f"create unique index if not exists tag_{tag_key}_idx on tag (tag, claim_hash) WHERE tag='{tag_value}';"
-        for tag_value, tag_key in COMMON_TAGS.items()
-    )
+    COMMON_TAG_INDEX_TABLE = """
+        create table if not exists common_tag_index (
+        index_name text unique not null,
+        tag text unique not null
+    );
+    """
 
     CREATE_TABLES_QUERY = (
         PRAGMAS +
@@ -151,7 +154,8 @@ class SQLDB:
         CREATE_TREND_TABLE +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
-        CREATE_TAG_TABLE
+        CREATE_TAG_TABLE +
+        COMMON_TAG_INDEX_TABLE
     )
 
     def __init__(self, main, path):
@@ -614,6 +618,34 @@ class SQLDB:
         if height > 50:
             self.execute(f"DROP TABLE claimtrie{height-50}")
         self.execute(f"CREATE TABLE claimtrie{height} AS SELECT * FROM claimtrie")
+
+    def _create_tag_index(self, tag: str):
+        tag_value = tag.replace("'", "''")
+        tag_hex = binascii.hexlify(tag.encode()).decode()
+        create_tag_idx = f"" \
+            f"CREATE UNIQUE INDEX IF NOT EXISTS common_tag_{tag_hex}_idx ON tag (tag, claim_hash) " \
+            f"WHERE tag='{tag_value}';"
+        self.db.executescript(create_tag_idx)
+        self.execute("INSERT OR IGNORE INTO common_tag_index VALUES (?, ?)", (f"common_tag_{tag_hex}_idx", tag))
+
+    def update_common_tag_indexes(self, tags_to_index: int = 200, min_count_to_index=2000):
+        current_indexed = {
+            tag: index_name for tag, index_name in self.execute(
+                'SELECT tag, index_name FROM common_tag_index'
+            ).fetchall()
+        }
+        sql = "SELECT tag, count(claim_hash) as cnt from tag group by tag order by cnt desc limit ?"
+        for tag, count in self.execute(sql, (tags_to_index,)).fetchall():
+            current_indexed.pop(tag, None)
+            if count < min_count_to_index:
+                break
+            self._create_tag_index(tag)
+        for to_remove, index_name in current_indexed.items():
+            self.db.execute("", (to_remove, ))
+            self.db.executescript(
+                f"DELETE FROM common_tag_index WHERE index_name='{index_name}';"
+                f"DROP INDEX {index_name};"
+            )
 
     def update_claimtrie(self, height, changed_claim_hashes, deleted_names, timer):
         r = timer.run

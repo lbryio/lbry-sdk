@@ -16,7 +16,7 @@ from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs
 from lbry.wallet.ledger import BaseLedger, MainNetLedger, RegTestLedger
 
-from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
+from .common import CLAIM_TYPES, STREAM_TYPES
 
 
 class SQLiteOperationalError(sqlite3.OperationalError):
@@ -74,6 +74,8 @@ class ReaderState:
     ledger: Type[BaseLedger]
     query_timeout: float
     log: logging.Logger
+    tag_indexes: Dict[str, str]
+    last_updated_tag_indexes: float
 
     def close(self):
         self.db.close()
@@ -92,6 +94,17 @@ class ReaderState:
 
         self.db.set_progress_handler(interruptor, 100)
 
+    def get_tag_indexes(self):
+        if not self.tag_indexes or time.perf_counter() - self.last_updated_tag_indexes > 60:
+            self.tag_indexes.clear()
+            self.tag_indexes.update({
+                tag: idx_name for tag, idx_name in self.db.execute(
+                    "select tag, index_name from common_tag_index"
+                ).fetchall()
+            })
+            self.last_updated_tag_indexes = time.perf_counter()
+        return self.tag_indexes
+
 
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
 
@@ -103,7 +116,7 @@ def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
         ReaderState(
             db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
             ledger=MainNetLedger if _ledger_name == 'mainnet' else RegTestLedger,
-            query_timeout=query_timeout, log=log
+            query_timeout=query_timeout, log=log, tag_indexes={}, last_updated_tag_indexes=time.perf_counter()
         )
     )
 
@@ -164,20 +177,32 @@ def encode_result(result):
 def execute_query(sql, values) -> List:
     context = ctx.get()
     context.set_query_timeout()
+    return _execute_query(context.db, context.is_tracking_metrics, context.metrics, context.log, sql, values)
+
+
+def _execute_query(db, is_tracking_metrics, metrics, log, sql, values) -> List:
     try:
-        return context.db.execute(sql, values).fetchall()
+        return db.execute(sql, values).fetchall()
     except sqlite3.OperationalError as err:
         plain_sql = interpolate(sql, values)
-        if context.is_tracking_metrics:
-            context.metrics['execute_query'][-1]['sql'] = plain_sql
+        if is_tracking_metrics:
+            metrics['execute_query'][-1]['sql'] = plain_sql
         if str(err) == "interrupted":
-            context.log.warning("interrupted slow sqlite query:\n%s", plain_sql)
-            raise SQLiteInterruptedError(context.metrics)
-        context.log.exception('failed running query', exc_info=err)
-        raise SQLiteOperationalError(context.metrics)
+            log.warning("interrupted slow sqlite query:\n%s", plain_sql)
+            raise SQLiteInterruptedError(metrics)
+        log.exception('failed running query\n%s', plain_sql, exc_info=err)
+        raise SQLiteOperationalError(metrics)
 
 
-def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
+@measure
+def get_claims(cols, for_count=False, **constraints) -> List:
+    if 'channel' in constraints:
+        channel_url = constraints.pop('channel')
+        match = resolve_url(channel_url)
+        if isinstance(match, sqlite3.Row):
+            constraints['channel_hash'] = match['claim_hash']
+        else:
+            return [[0]] if cols == 'count(*)' else []
     if 'order_by' in constraints:
         sql_order_by = []
         for order_by in constraints['order_by']:
@@ -288,9 +313,13 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'fee_currency' in constraints:
         constraints['claim.fee_currency'] = constraints.pop('fee_currency').lower()
 
-    _apply_constraints_for_array_attributes(constraints, 'tag', clean_tags, for_count)
-    _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _, for_count)
-    _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _, for_count)
+    context = ctx.get()
+    context.set_query_timeout()
+    tag_indexes = context.get_tag_indexes()
+
+    _apply_constraints_for_array_attributes(constraints, 'tag', clean_tags, tag_indexes, for_count)
+    _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _, tag_indexes, for_count)
+    _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _, tag_indexes, for_count)
 
     select = f"SELECT {cols} FROM claim"
 
@@ -300,19 +329,7 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
         """, **constraints
     )
-    return sql, values
-
-
-def get_claims(cols, for_count=False, **constraints) -> List:
-    if 'channel' in constraints:
-        channel_url = constraints.pop('channel')
-        match = resolve_url(channel_url)
-        if isinstance(match, sqlite3.Row):
-            constraints['channel_hash'] = match['claim_hash']
-        else:
-            return [[0]] if cols == 'count(*)' else []
-    sql, values = _get_claims(cols, for_count, **constraints)
-    return execute_query(sql, values)
+    return _execute_query(context.db, context.is_tracking_metrics, context.metrics, context.log, sql, values)
 
 
 @measure
@@ -424,7 +441,7 @@ def resolve_url(raw_url):
     return channel
 
 
-def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
+def _apply_constraints_for_array_attributes(constraints, attr, cleaner, tag_indexes, for_count=False):
     any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
     all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
     not_items = set(cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
@@ -435,16 +452,17 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
     any_queries = {}
 
     if attr == 'tag':
-        common_tags = any_items & COMMON_TAGS.keys()
+        common_tags = any_items & tag_indexes.keys()
         if common_tags:
             any_items -= common_tags
         if len(common_tags) < 5:
             for item in common_tags:
-                index_name = COMMON_TAGS[item]
+                index_name = tag_indexes[item]
+                escaped = item.replace("'", "''")
                 any_queries[f'#_common_tag_{index_name}'] = f"""
                 EXISTS(
-                    SELECT 1 FROM tag INDEXED BY tag_{index_name}_idx WHERE claim.claim_hash=tag.claim_hash
-                    AND tag = '{item}'
+                    SELECT 1 FROM tag INDEXED BY {index_name} WHERE claim.claim_hash=tag.claim_hash
+                    AND tag='{escaped}'
                 )
                 """
         elif len(common_tags) >= 5:
