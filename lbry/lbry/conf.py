@@ -551,6 +551,9 @@ class Config(CLIConfig):
         ('spv4.lbry.com', 50001),
         ('spv5.lbry.com', 50001),
         ('spv6.lbry.com', 50001),
+        ('spv7.lbry.com', 50001),
+        ('spv8.lbry.com', 50001),
+        ('spv9.lbry.com', 50001),
     ])
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
         ('lbrynet1.lbry.com', 4444),  # US EAST
