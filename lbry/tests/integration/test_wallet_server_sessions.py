@@ -15,6 +15,7 @@ class TestSessionBloat(IntegrationTestCase):
 
     async def test_session_bloat_from_socket_timeout(self):
         await self.conductor.stop_spv()
+        await self.ledger.stop()
         self.conductor.spv_node.session_timeout = 1
         await self.conductor.start_spv()
         session = ClientSession(network=None, server=self.ledger.network.client.server, timeout=0.2)

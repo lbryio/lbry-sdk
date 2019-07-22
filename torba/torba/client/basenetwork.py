@@ -40,15 +40,17 @@ class ClientSession(BaseClientSession):
         # TODO: change to 'ping' on newer protocol (above 1.2)
         while not self.is_closing():
             if (time() - self.last_send) > self.max_seconds_idle:
-                await self.send_request('server.banner')
+                try:
+                    await self.send_request('server.banner')
+                except:
+                    self.abort()
+                    raise
             await asyncio.sleep(self.max_seconds_idle//3)
 
     async def create_connection(self, timeout=6):
         connector = Connector(lambda: self, *self.server)
         await asyncio.wait_for(connector.create_connection(), timeout=timeout)
         self.ping_task = asyncio.create_task(self.ping_forever())
-        # tie the ping task to this connection: if the task dies for any unexpected error, abort
-        self.ping_task.add_done_callback(lambda _: self.abort())
 
     async def handle_request(self, request):
         controller = self.network.subscription_controllers[request.method]
