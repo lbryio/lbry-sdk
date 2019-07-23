@@ -132,7 +132,7 @@ class HeadersComponent(Component):
         } if progress is not None and progress < 100 else {}
 
     async def fetch_headers_from_s3(self):
-        local_header_size = self.headers.bytes_size
+        local_header_size = self.local_header_file_size()
         resume_header = {"Range": f"bytes={local_header_size}-"}
         async with utils.aiohttp_request('get', self.HEADERS_URL, headers=resume_header) as response:
             if response.status == 406 or response.content_length < self.headers.header_size:  # our file is bigger
@@ -142,17 +142,16 @@ class HeadersComponent(Component):
                 log.warning("s3 appears to have corrupted header")
                 return
             final_size_after_download = response.content_length + local_header_size
+            write_mode = "wb"
             if local_header_size > 0:
                 log.info("Resuming download of %i bytes from s3", response.content_length)
-            while not response.content.at_eof():
-                max_read = min(self.headers.header_size * 10000, final_size_after_download - self.headers.bytes_size)
-                chunk = await response.content.readexactly(max_read)
-                if not await self.headers.connect(len(self.headers), chunk):
-                    log.warning("Error connecting downloaded headers from at %s.", self.headers.height)
-                    return
-                self._headers_progress_percent = self._round_progress(
-                    self.headers.bytes_size, final_size_after_download
-                )
+                write_mode = "a+b"
+            with open(self.headers_file, write_mode) as fd:
+                while not response.content.at_eof():
+                    local_header_size += fd.write(await response.content.readany())
+                    self._headers_progress_percent = self._round_progress(
+                        local_header_size, final_size_after_download
+                    )
 
     def local_header_file_size(self) -> int:
         if os.path.isfile(self.headers_file):
@@ -173,7 +172,7 @@ class HeadersComponent(Component):
         if not s3_headers_depth:
             return False
 
-        local_height = self.headers.height
+        local_height = self.local_header_file_size() // self.headers.header_size
         remote_height = await self.get_downloadable_header_height()
         if remote_height is not None:
             log.info("remote height: %i, local height: %i", remote_height, local_height)
@@ -187,9 +186,8 @@ class HeadersComponent(Component):
         if os.path.exists(self.old_file):
             log.warning("Moving old headers from %s to %s.", self.old_file, self.headers_file)
             os.rename(self.old_file, self.headers_file)
+
         try:
-            await self.headers.open()
-            await self.headers.repair()
             if await self.should_download_headers_from_s3():
                 self.is_downloading_headers = True
                 await self.fetch_headers_from_s3()
@@ -197,8 +195,10 @@ class HeadersComponent(Component):
             log.error("failed to fetch headers from s3: %s", err)
         finally:
             self.is_downloading_headers = False
+            # fixme: workaround, this should happen before download but happens after because headers.connect fail
+            await self.headers.open()
+            await self.headers.repair()
             await self.headers.close()
-
     async def stop(self):
         pass
 
