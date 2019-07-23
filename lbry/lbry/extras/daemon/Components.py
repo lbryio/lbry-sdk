@@ -138,10 +138,10 @@ class HeadersComponent(Component):
             if response.status == 406 or response.content_length < self.headers.header_size:  # our file is bigger
                 log.warning("s3 is more out of date than we are")
                 return
-            if response.content_length % self.headers.header_size != 0:
+            final_size_after_download = response.content_length + local_header_size
+            if final_size_after_download % self.headers.header_size != 0:
                 log.warning("s3 appears to have corrupted header")
                 return
-            final_size_after_download = response.content_length + local_header_size
             write_mode = "wb"
             if local_header_size > 0:
                 log.info("Resuming download of %i bytes from s3", response.content_length)
