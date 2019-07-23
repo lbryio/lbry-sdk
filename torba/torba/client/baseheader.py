@@ -170,10 +170,12 @@ class BaseHeaders:
 
     async def repair(self):
         previous_header_hash = fail = None
-        self.io.seek(0)
-        batch_size = 10000
+        batch_size = 36
         for start_height in range(0, self.height, batch_size):
+            self.io.seek(self.header_size * start_height)
             headers = self.io.read(self.header_size*batch_size)
+            if len(headers) % self.header_size != 0:
+                headers = headers[:(len(headers) // self.header_size) * self.header_size]
             for header_hash, header in self._iterate_headers(start_height, headers):
                 height = header['block_height']
                 if height:
@@ -205,7 +207,7 @@ class BaseHeaders:
             end = min(len(headers), end + self.chunk_size * self.header_size)
 
     def _iterate_headers(self, height: int, headers: bytes) -> Iterator[Tuple[bytes, dict]]:
-        assert len(headers) % self.header_size == 0
+        assert len(headers) % self.header_size == 0, len(headers)
         for idx in range(len(headers) // self.header_size):
             start, end = idx * self.header_size, (idx + 1) * self.header_size
             header = headers[start:end]
