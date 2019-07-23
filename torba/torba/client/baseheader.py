@@ -186,7 +186,7 @@ class BaseHeaders:
                         fail = True
                 if fail:
                     log.warning("Header file corrupted at height %s, truncating it.", height - 1)
-                    self.io.seek((height - 1) * self.header_size, os.SEEK_SET)
+                    self.io.seek(max(0, (height - 1)) * self.header_size, os.SEEK_SET)
                     self.io.truncate()
                     self.io.flush()
                     self._size = None

@@ -1,3 +1,4 @@
+import hashlib
 import os
 import asyncio
 import logging
@@ -99,6 +100,7 @@ class DatabaseComponent(Component):
 class HeadersComponent(Component):
     component_name = HEADERS_COMPONENT
     HEADERS_URL = "https://headers.lbry.io/blockchain_headers_latest"
+    CHECKPOINT = ('100b33ca3d0b86a48f0d6d6f30458a130ecb89d5affefe4afccb134d5a40f4c2', 600_000)
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -180,6 +182,19 @@ class HeadersComponent(Component):
                 return True
         return False
 
+    def verify_checkpoint(self):
+        expected_hash, at_height = self.CHECKPOINT
+        if self.local_header_file_size() // self.headers.header_size < at_height:
+            return False
+        hash = hashlib.sha256()
+        chunk_size = self.headers.header_size * 1000
+        with open(self.headers_file, 'rb') as header_file:
+            data = header_file.read(chunk_size)
+            while data and header_file.tell() <= at_height * self.headers.header_size:
+                hash.update(data)
+                data = header_file.read(chunk_size)
+        return hash.hexdigest() == expected_hash
+
     async def start(self):
         if not os.path.exists(self.headers_dir):
             os.mkdir(self.headers_dir)
@@ -196,9 +211,11 @@ class HeadersComponent(Component):
         finally:
             self.is_downloading_headers = False
             # fixme: workaround, this should happen before download but happens after because headers.connect fail
-            await self.headers.open()
-            await self.headers.repair()
-            await self.headers.close()
+            if not self.verify_checkpoint():
+                log.info("Checkpoint failed, verifying headers using slower method.")
+                await self.headers.open()
+                await self.headers.repair()
+                await self.headers.close()
     async def stop(self):
         pass
 
