@@ -1,9 +1,11 @@
 import asyncio
+import os
 
-from torba.client.basenetwork import ClientSession
-from torba.orchstr8 import Conductor
-from torba.testcase import IntegrationTestCase
 import lbry.wallet
+from lbry.testcase import CommandTestCase
+from lbry.extras.daemon.Components import HeadersComponent
+from torba.client.basenetwork import ClientSession
+from torba.testcase import IntegrationTestCase
 
 
 class TestSessionBloat(IntegrationTestCase):
@@ -29,3 +31,22 @@ class TestSessionBloat(IntegrationTestCase):
             await session.send_request('server.banner', ())
         self.assertTrue(session.is_closing())
         self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 0)
+
+
+class TestHeadersComponent(CommandTestCase):
+
+    LEDGER = lbry.wallet
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.component_manager = self.daemon.component_manager
+        self.component_manager.conf.blockchain_name = 'lbrycrd_main'
+        self.headers_component = HeadersComponent(self.component_manager)
+
+    async def test_cant_reach_host(self):
+        HeadersComponent.HEADERS_URL = 'notthere/'
+        os.unlink(self.headers_component.headers.path)
+        # test is that this doesnt raise
+        await self.headers_component.start()
+        self.assertTrue(self.component_manager.get_components_status()['blockchain_headers'])
+        self.assertEqual(await self.headers_component.get_status(), {})
