@@ -115,7 +115,7 @@ class BaseHeaders:
                 # .seek()/.write()/.truncate() might also .flush() when needed
                 # the goal here is mainly to ensure we're definitely flush()'ing
                 self.io.flush()
-                self._size = None
+                self._size = self.io.tell() // self.header_size
             added += written
             if bail:
                 break
