@@ -78,7 +78,8 @@ jobs:
         - aws s3 cp lbrynet-${OS}.zip s3://build.lbry.io/${S3_PATH}/lbrynet-${OS}.zip
       deploy:
         provider: releases
-        api_key: $GITHUB_OAUTH_TOKEN
+        api_key:
+          secure: "qEdk0ACEsEvF/wKzKPjhnJlfWhjR2sCwEmbRcvsYFJqNtuI6wiWOYttf6/rZ72uHs1PUVOo6oXPSYRk2mPEu+7ccW9XMETWag7tsNHhXY78Exhrw6ibeJSCQ9uBmvJCMLU3mI4YvGvlQvPLjFEenAebAUIpbwSFmjWdd6wF8zlorbVcpORVR1OaAj6n2l3dtWWcAsG+SWCLVtYSOOHFYfrJSlQD9BEI6qJk0UBprgkOvj8PVnD4wMY3PgFPwS7QR0oyh5Yqn1GyQyx0oZvieNyD34PXjxRd6WlYYiKDWNj54a0wpTaJLA2QCQMyi2TDwpbEFnnJQ92fWGFB4phUD9zPkcQDozzOUxUUBejQBn8Ew6xg/fmNqtUDjfhxwLrs26TuYrSxGS1T1VacQCXYHK2d/nvNTnAwdYZUyGyRCKkBIdqk82lVcXhqC3vO1ZF+bWV8+eCoHb6jlgt10W2bJimLH4a2cARxWT40ejYEY7E85FeYnrxrNtKrjf8JVgFM0VtY32NCApIPlawYnA9MT9VQhKgS7bhaoDLm56PJn+6fd3pQbZQflK08RqxO8EApwCJzMnSIoCRmoUQe1o5mSGBRJ+QE7F2lSjzJ2jGDxeewz/bguewwyY30MLoOdf5fuhzLZwlXlRrVrZ4ZfSV2/0DoJ9PZOHtJ4G+fcs7NGTP4="
         file: lbrynet-${OS}.zip
         skip_cleanup: true
         overwrite: true
