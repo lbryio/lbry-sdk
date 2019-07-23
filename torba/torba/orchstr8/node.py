@@ -266,6 +266,7 @@ class BlockchainNode:
         self.data_path = None
         self.protocol = None
         self.transport = None
+        self.blockchain_address = None
         self._block_expected = 0
         self.hostname = 'localhost'
         self.peerport = 9246 + 2  # avoid conflict with default peer port
@@ -329,7 +330,7 @@ class BlockchainNode:
             self.daemon_bin,
             f'-datadir={self.data_path}', '-printtoconsole', '-regtest', '-server', '-txindex',
             f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.rpcport}',
-            f'-port={self.peerport}'
+            f'-port={self.peerport}', '-addresstype=legacy', '-vbparams=segwit:0:999999999999'
         )
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
@@ -364,9 +365,10 @@ class BlockchainNode:
         self.log.info(out.decode().strip())
         return out.decode().strip()
 
-    def generate(self, blocks):
+    async def generate(self, blocks, address=None):
         self._block_expected += blocks
-        return self._cli_cmnd('generate', str(blocks))
+        address = await self.get_raw_change_address()
+        return await self._cli_cmnd('generatetoaddress', str(blocks), str(address))
 
     def invalidate_block(self, blockhash):
         return self._cli_cmnd('invalidateblock', blockhash)
@@ -375,7 +377,7 @@ class BlockchainNode:
         return self._cli_cmnd('getblockhash', str(block))
 
     def get_raw_change_address(self):
-        return self._cli_cmnd('getrawchangeaddress')
+        return self._cli_cmnd('getrawchangeaddress', 'legacy')
 
     async def get_balance(self):
         return float(await self._cli_cmnd('getbalance'))

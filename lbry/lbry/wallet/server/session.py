@@ -104,6 +104,7 @@ class LBRYElectrumX(ElectrumX):
             'blockchain.transaction.get_height': self.transaction_get_height,
             'blockchain.claimtrie.search': self.claimtrie_search,
             'blockchain.claimtrie.resolve': self.claimtrie_resolve,
+            'blockchain.claimtrie.getnameproofs': self.claimtrie_getnameproofs,
             'blockchain.claimtrie.getclaimsbyids': self.claimtrie_getclaimsbyids,
             'blockchain.block.get_server_height': self.get_server_height,
         }
@@ -164,6 +165,9 @@ class LBRYElectrumX(ElectrumX):
 
     async def get_server_height(self):
         return self.bp.height
+
+    def claimtrie_getnameproofs(self, block_hash, *names):
+        return self.daemon._send_vector('getnameproof', iter((name, block_hash) for name in names))
 
     async def transaction_get_height(self, tx_hash):
         self.assert_tx_hash(tx_hash)

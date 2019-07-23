@@ -214,7 +214,9 @@ class CommandTestCase(IntegrationTestCase):
         self.assertEqual(claim['outputs'][0]['name'], name)
         if confirm:
             await self.on_transaction_dict(claim)
+            height = self.ledger.headers.height
             await self.generate(1)
+            await self.on_header(height + 1)
             await self.on_transaction_dict(claim)
         return claim
 

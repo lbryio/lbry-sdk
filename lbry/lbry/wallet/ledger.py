@@ -3,10 +3,11 @@ import logging
 from binascii import unhexlify
 from typing import Tuple, List, Dict
 
+from lbry.wallet.claim_proofs import verify_proof, InvalidProofError
 from torba.client.baseledger import BaseLedger
 from torba.client.baseaccount import SingleKey
 from lbry.schema.result import Outputs
-from lbry.schema.url import URL
+from lbry.schema.url import URL, normalize_name
 from lbry.wallet.dewies import dewies_to_lbc
 from lbry.wallet.resolve import Resolver
 from lbry.wallet.account import Account
@@ -72,7 +73,50 @@ class MainNetLedger(BaseLedger):
                 result[url] = txo
             else:
                 result[url] = {'error': f'{url} did not resolve to a claim'}
-        return result
+        return await self.validate_resolutions(result)
+
+    async def validate_resolutions(self, resolutions: dict):
+        provables = {}
+        for url, txo in resolutions.items():
+            if isinstance(txo, dict) and 'error' in txo:
+                continue
+            parsed_url = URL.parse(url)
+            # cases we check: names without sequence, claim id or any modifier
+            # except: @channel/name as the signature is enough, instead we check '@channel'
+            if parsed_url.has_channel:
+                if not parsed_url.has_stream_in_channel and parsed_url.channel.to_dict().keys() == {'name'}:
+                    provables.setdefault(normalize_name(parsed_url.channel.name), []).append((url, txo.id))
+            elif parsed_url.has_stream and parsed_url.stream.to_dict().keys() == {'name'}:
+                provables.setdefault(normalize_name(parsed_url.stream.name), []).append((url, txo.id))
+        if not provables:
+            return resolutions
+        root_hash = self.headers.claim_trie_root.decode()
+        names = list(provables.keys())
+        proofs = await self.network.get_name_proofs(self.headers.hash().decode(), *names)
+        for proof, name in zip(proofs, names):
+            all_failed = True
+            for url, txid in provables[name]:
+                if not proof.get('txhash'):
+                    resolutions[url] = {'error': f"Proof mismatch on {url}: no claims under {name} but we got {txid}"}
+                    continue
+                expected_txid = f"{proof['txhash']}:{proof['nOut']}"
+                if txid != expected_txid:
+                    resolutions[url] = {
+                        'error': f"Proof mismatch: {url} resolved to {txid} instead of {expected_txid} on {name}"
+                    }
+                else:
+                    all_failed = False
+            if not all_failed:
+                try:
+                    verify_proof(proof, root_hash, name)
+                    continue
+                except InvalidProofError as error:
+                    for url, _ in provables[name]:
+                        resolution = resolutions[url]
+                        if isinstance(resolution, dict) and 'error' in resolution:
+                            continue
+                        resolutions[url] = {'error': f'Invalid proof for {url}: {str(error)}'}
+        return resolutions
 
     async def claim_search(self, **kwargs) -> Tuple[List, int, int]:
         return await self._inflate_outputs(self.network.claim_search(**kwargs))
