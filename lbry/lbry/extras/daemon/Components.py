@@ -216,6 +216,8 @@ class HeadersComponent(Component):
                 await self.headers.open()
                 await self.headers.repair()
                 await self.headers.close()
+            else:
+                log.info("Header checkpoint verified.")
     async def stop(self):
         pass
 
