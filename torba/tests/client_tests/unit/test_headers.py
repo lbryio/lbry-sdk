@@ -109,7 +109,6 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
         # corrupt by appending
         headers.io.seek(block_bytes(len(headers)))
         headers.io.write(b"appending")
-        headers._size = None
         await headers.repair()
         self.assertEqual(headers.height, 1499)
         await headers.connect(len(headers), self.get_bytes(block_bytes(3001 - 1500), after=block_bytes(1500)))
