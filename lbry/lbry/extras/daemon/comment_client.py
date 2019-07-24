@@ -36,23 +36,14 @@ def is_comment_signed_by_channel(comment: dict, channel: Output):
     return False
 
 
-def sign_comment(comment: dict, channel: Output):
+def sign_comment(comment: dict, channel: Output, signing_field='comment'):
     timestamp = str(int(time.time())).encode()
-    pieces = [timestamp, channel.claim_hash, comment['comment'].encode()]
+    pieces = [timestamp, channel.claim_hash, comment[signing_field].encode()]
     digest = sha256(b''.join(pieces))
     signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
     comment.update({
         'signature': binascii.hexlify(signature).decode(),
         'signing_ts': timestamp.decode()
-    })
-
-
-def sign_abandon_comment(body: dict, channel: Output):
-    pieces = [body['comment_id'].encode(), channel.claim_hash]
-    digest = sha256(b''.join(pieces))
-    signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
-    body.update({
-        'signature': binascii.hexlify(signature).decode()
     })
 
 
