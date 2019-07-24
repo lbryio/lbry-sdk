@@ -121,6 +121,7 @@ class SQLDB:
         create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
         create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
         create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
+        create unique index if not exists filter_fee_amount_order_release_time_idx on claim (fee_amount, release_time, claim_hash);
 
         -- TODO: verify that all indexes below are used
         create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
@@ -134,8 +135,6 @@ class SQLDB:
         create index if not exists claim_claim_type_idx on claim (claim_type);
         create index if not exists claim_stream_type_idx on claim (stream_type);
         create index if not exists claim_media_type_idx on claim (media_type);
-        create index if not exists claim_fee_amount_idx on claim (fee_amount);
-        create index if not exists claim_fee_currency_idx on claim (fee_currency);
 
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
     """
