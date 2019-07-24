@@ -33,7 +33,7 @@ from lbry.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_
 from lbry.extras.daemon.ComponentManager import RequiredCondition
 from lbry.extras.daemon.ComponentManager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbry.extras.daemon.comment_client import jsonrpc_post, sign_comment, sign_abandon_comment
+from lbry.extras.daemon.comment_client import jsonrpc_post, sign_comment
 from lbry.extras.daemon.comment_client import is_comment_signed_by_channel
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.wallet.transaction import Transaction, Output, Input
@@ -3521,7 +3521,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_id': channel.claim_id,
             'channel_name': channel.claim_name,
         })
-        sign_abandon_comment(abandon_comment_body, channel)
+        sign_comment(abandon_comment_body, channel, signing_field='comment_id')
         resp = await jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
         return {comment_id: resp}
 
