@@ -33,8 +33,7 @@ from lbry.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_
 from lbry.extras.daemon.ComponentManager import RequiredCondition
 from lbry.extras.daemon.ComponentManager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbry.extras.daemon.comment_client import jsonrpc_post, sign_comment
-from lbry.extras.daemon.comment_client import is_comment_signed_by_channel
+from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.wallet.account import Account as LBCAccount
@@ -3417,7 +3416,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 ]
             }
         """
-        result = await jsonrpc_post(
+        result = await comment_client.jsonrpc_post(
             self.conf.comment_server,
             "get_claim_comments",
             claim_id=claim_id,
@@ -3433,7 +3432,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 continue
             resolve_response = await self.resolve([channel_url])
             if isinstance(resolve_response[channel_url], Output):
-                comment['is_channel_signature_valid'] = is_comment_signed_by_channel(
+                comment['is_channel_signature_valid'] = comment_client.is_comment_signed_by_channel(
                     comment, resolve_response[channel_url]
                 )
             else:
@@ -3491,10 +3490,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 'channel_id': channel.claim_id,
                 'channel_name': channel.claim_name,
             })
-            sign_comment(comment_body, channel)
-        response = await jsonrpc_post(self.conf.comment_server, 'create_comment', comment_body)
+            comment_client.sign_comment(comment_body, channel)
+        response = await comment_client.jsonrpc_post(self.conf.comment_server, 'create_comment', comment_body)
         if 'signature' in response:
-            response['is_claim_signature_valid'] = is_comment_signed_by_channel(response, channel)
+            response['is_claim_signature_valid'] = comment_client.is_comment_signed_by_channel(response, channel)
         return response
 
     async def jsonrpc_comment_abandon(self, comment_id):
@@ -3511,7 +3510,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
         """
         abandon_comment_body = {'comment_id': comment_id}
-        channel = await jsonrpc_post(
+        channel = await comment_client.jsonrpc_post(
             self.conf.comment_server, 'get_channel_from_comment_id', comment_id=comment_id
         )
         if not channel:
@@ -3521,8 +3520,8 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_id': channel.claim_id,
             'channel_name': channel.claim_name,
         })
-        sign_comment(abandon_comment_body, channel, signing_field='comment_id')
-        resp = await jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
+        comment_client.sign_comment(abandon_comment_body, channel, signing_field='comment_id')
+        resp = await comment_client.jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
         return {comment_id: resp}
 
     async def broadcast_or_release(self, account, tx, blocking=False):
