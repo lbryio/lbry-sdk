@@ -48,7 +48,7 @@ def sign_comment(comment: dict, channel: Output, signing_field='comment'):
 
 
 async def jsonrpc_post(url: str, method: str, params: dict = None, **kwargs) -> any:
-    params = dict() if not params else params
+    params = params or {}
     params.update(kwargs)
     json_body = {'jsonrpc': '2.0', 'id': None, 'method': method, 'params': params}
     headers = {'Content-Type': 'application/json'}
