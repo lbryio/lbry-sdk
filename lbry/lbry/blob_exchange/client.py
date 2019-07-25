@@ -187,7 +187,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             return await self._download_blob()
         except OSError as e:
             # i'm not sure how to fix this race condition - jack
-            log.warning("race happened downloading %s from %s:%i", blob_hash, self.peer_address, self.peer_port)
+            log.warning("race happened downloading %s from %s:%s", blob_hash, self.peer_address, self.peer_port)
             # return self._blob_bytes_received, self.transport
             raise
         except asyncio.TimeoutError:
@@ -220,7 +220,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
 
 @cache_concurrent
-async def request_blob(loop: asyncio.BaseEventLoop, blob: 'AbstractBlob', address: str, tcp_port: int,
+async def request_blob(loop: asyncio.BaseEventLoop, blob: typing.Optional['AbstractBlob'], address: str, tcp_port: int,
                        peer_connect_timeout: float, blob_download_timeout: float,
                        connected_transport: asyncio.Transport = None, connection_id: int = 0,
                        connection_manager: typing.Optional['ConnectionManager'] = None)\
@@ -242,7 +242,9 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: 'AbstractBlob', addres
         if not connected_transport:
             await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
                                    peer_connect_timeout, loop=loop)
-        if blob.get_is_verified() or not blob.is_writeable():
+            connected_transport = protocol.transport
+        if blob is None or blob.get_is_verified() or not blob.is_writeable():
+            # blob is None happens when we are just opening a connection
             # file exists but not verified means someone is writing right now, give it time, come back later
             return 0, connected_transport
         return await protocol.download_blob(blob)
