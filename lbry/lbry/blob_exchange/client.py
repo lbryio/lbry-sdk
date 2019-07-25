@@ -242,6 +242,7 @@ async def request_blob(loop: asyncio.BaseEventLoop, blob: typing.Optional['Abstr
         if not connected_transport:
             await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
                                    peer_connect_timeout, loop=loop)
+            connected_transport = protocol.transport
         if blob is None or blob.get_is_verified() or not blob.is_writeable():
             # blob is None happens when we are just opening a connection
             # file exists but not verified means someone is writing right now, give it time, come back later
