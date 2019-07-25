@@ -187,7 +187,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             return await self._download_blob()
         except OSError as e:
             # i'm not sure how to fix this race condition - jack
-            log.warning("race happened downloading %s from %s:%i", blob_hash, self.peer_address, self.peer_port)
+            log.warning("race happened downloading %s from %s:%s", blob_hash, self.peer_address, self.peer_port)
             # return self._blob_bytes_received, self.transport
             raise
         except asyncio.TimeoutError:
