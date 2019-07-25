@@ -1,3 +1,4 @@
+import time
 from math import ceil
 
 from aiohttp import web
@@ -14,6 +15,19 @@ class MockedCommentServer:
         'INVALID_METHOD': {'code': -32604, 'message': 'The Requested method does not exist'}
     }
 
+    COMMENT_SCHEMA = {
+        'comment': None,
+        'comment_id': None,
+        'claim_id': None,
+        'parent_id': None,
+        'channel_name': None,
+        'channel_id': None,
+        'signature': None,
+        'signing_ts': None,
+        'timestamp': None,
+        'channel_url': None,
+    }
+
     def __init__(self, port=2903):
         self.port = port
         self.app = web.Application(debug=True)
@@ -23,13 +37,43 @@ class MockedCommentServer:
         self.comments = []
         self.comment_id = 0
 
-    def create_comment(self, **comment):
+    @classmethod
+    def _create_comment(cls, **kwargs):
+        schema = cls.COMMENT_SCHEMA.copy()
+        schema.update(**kwargs)
+        return schema
+
+    @staticmethod
+    def clean(d: dict):
+        return {k: v for k, v in d.items() if v}
+
+    def create_comment(self, channel_name=None, channel_id=None, **kwargs):
         self.comment_id += 1
-        comment['comment_id'] = self.comment_id
-        if 'channel_id' in comment:
-            comment['channel_url'] = 'lbry://' + comment['channel_name'] + '#' + comment['channel_id']
+        comment_id = self.comment_id
+        channel_url = 'lbry://' + channel_name + '#' + channel_id if channel_id else None
+        comment = self._create_comment(
+            comment_id=str(comment_id),
+            channel_name=channel_name,
+            channel_id=channel_id,
+            channel_url=channel_url,
+            timestamp=str(int(time.time())),
+            **kwargs
+        )
         self.comments.append(comment)
-        return comment
+        return self.clean(comment)
+
+    def delete_comment(self, comment_id: int, channel_id: str, **kwargs):
+        deleted = False
+        try:
+            if 0 <= comment_id <= len(self.comments) and self.comments[comment_id - 1]['channel_id'] == channel_id:
+                self.comments.pop(comment_id - 1)
+                deleted = True
+        finally:
+            return {
+                str(comment_id): {
+                    'deleted': deleted
+                }
+            }
 
     def get_claim_comments(self, page=1, page_size=50, **kwargs):
         return {
@@ -37,22 +81,36 @@ class MockedCommentServer:
             'page_size': page_size,
             'total_pages': ceil(len(self.comments)/page_size),
             'total_items': len(self.comments),
-            'items': (self.comments[::-1])[(page - 1) * page_size: page * page_size]
+            'items': [self.clean(c) for c in (self.comments[::-1])[(page - 1) * page_size: page * page_size]]
+        }
+
+    def get_comment_channel_by_id(self, comment_id: int, **kwargs):
+        comment = self.comments[comment_id - 1]
+        return {
+            'channel_id': comment.get('channel_id'),
+            'channel_name': comment.get('channel_name')
         }
 
     methods = {
         'get_claim_comments': get_claim_comments,
         'create_comment': create_comment,
+        'delete_comment': delete_comment,
+        'get_channel_from_comment_id': get_comment_channel_by_id,
     }
 
     def process_json(self, body) -> dict:
         response = {'jsonrpc': '2.0', 'id': body['id']}
-        if body['method'] in self.methods:
-            params = body.get('params', {})
-            result = self.methods[body['method']](self, **params)
-            response['result'] = result
-        else:
-            response['error'] = self.ERRORS['INVALID_METHOD']
+        try:
+            if body['method'] in self.methods:
+                params = body.get('params', {})
+                if 'comment_id' in params and type(params['comment_id']) is str:
+                    params['comment_id'] = int(params['comment_id'])
+                result = self.methods[body['method']](self, **params)
+                response['result'] = result
+            else:
+                response['error'] = self.ERRORS['INVALID_METHOD']
+        except Exception:
+            response['error'] = self.ERRORS['UNKNOWN']
         return response
 
     async def start(self):
@@ -173,3 +231,20 @@ class CommentCommands(CommandTestCase):
             is_channel_signature_valid=True
         )
         self.assertIs(len(signed_comment_list['items']), 28)
+
+    async def test04_comment_abandons(self):
+        rswanson = (await self.channel_create('@RonSwanson'))['outputs'][0]
+        stream = (await self.stream_create('Pawnee Town Hall of Fame by Leslie Knope'))['outputs'][0]
+        comment = await self.daemon.jsonrpc_comment_create(
+            comment='KNOPE! WHAT DID I TELL YOU ABOUT PUTTING MY INFORMATION UP LIKE THAT',
+            claim_id=stream['claim_id'],
+            channel_id=rswanson['claim_id']
+        )
+        self.assertIn('signature', comment)
+        deleted = await self.daemon.jsonrpc_comment_abandon(comment['comment_id'])
+        self.assertIn(comment['comment_id'], deleted)
+        self.assertTrue(deleted[comment['comment_id']]['deleted'])
+
+        deleted = await self.daemon.jsonrpc_comment_abandon(comment['comment_id'])
+        self.assertIn(comment['comment_id'], deleted)
+        self.assertFalse(deleted[comment['comment_id']]['deleted'])

@@ -3503,26 +3503,30 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             comment_delete  (<comment_id> | --comment_id=<comment_id>)
 
-
         Options:
-            --comment_id=<comment_id>                   : (str) The ID of the comment to be deleted.
+            --comment_id=<comment_id>   : (str) The ID of the comment to be deleted.
 
         Returns:
+            (dict) Object with the `comment_id` passed in as the key, and a flag indicating if it was deleted
+            {
+                <comment_id> (str): {
+                    "deleted": (bool)
+                }
+            }
         """
         abandon_comment_body = {'comment_id': comment_id}
         channel = await comment_client.jsonrpc_post(
             self.conf.comment_server, 'get_channel_from_comment_id', comment_id=comment_id
         )
-        if not channel:
+        if 'error' in channel:
             return {comment_id: {'deleted': False}}
         channel = await self.get_channel_or_none(None, **channel)
         abandon_comment_body.update({
             'channel_id': channel.claim_id,
             'channel_name': channel.claim_name,
         })
-        comment_client.sign_comment(abandon_comment_body, channel, signing_field='comment_id')
-        resp = await comment_client.jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
-        return {comment_id: resp}
+        comment_client.sign_comment(abandon_comment_body, channel, abandon=True)
+        return await comment_client.jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
 
     async def broadcast_or_release(self, account, tx, blocking=False):
         try:

@@ -18,13 +18,18 @@ def get_encoded_signature(signature):
     return ecdsa.util.sigencode_der(r, s, len(signature) * 4)
 
 
-def is_comment_signed_by_channel(comment: dict, channel: Output):
+def cid2hash(claim_id: str) -> bytes:
+    return binascii.unhexlify(claim_id.encode())[::-1]
+
+
+def is_comment_signed_by_channel(comment: dict, channel: Output, abandon=False):
     if type(channel) is Output:
         try:
+            signing_field = comment['comment_id'] if abandon else comment['comment']
             pieces = [
                 comment['signing_ts'].encode(),
-                channel.claim_hash,
-                comment['comment'].encode()
+                cid2hash(comment['channel_id']),
+                signing_field.encode()
             ]
             return Output.is_signature_valid(
                 get_encoded_signature(comment['signature']),
@@ -36,14 +41,15 @@ def is_comment_signed_by_channel(comment: dict, channel: Output):
     return False
 
 
-def sign_comment(comment: dict, channel: Output, signing_field='comment'):
-    timestamp = str(int(time.time())).encode()
-    pieces = [timestamp, channel.claim_hash, comment[signing_field].encode()]
+def sign_comment(comment: dict, channel: Output, abandon=False):
+    timestamp = str(int(time.time()))
+    signing_field = comment['comment_id'] if abandon else comment['comment']
+    pieces = [timestamp.encode(), channel.claim_hash, signing_field.encode()]
     digest = sha256(b''.join(pieces))
     signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
     comment.update({
         'signature': binascii.hexlify(signature).decode(),
-        'signing_ts': timestamp.decode()
+        'signing_ts': timestamp
     })
 
 
