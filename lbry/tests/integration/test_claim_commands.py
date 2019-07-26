@@ -602,15 +602,15 @@ class StreamCommands(ClaimTestCase):
         account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
 
         await self.out(self.channel_create('@spam', '1.0'))
-        self.assertEqual('8.989893', await self.daemon.jsonrpc_account_balance())
+        self.assertEqual('8.989893', (await self.daemon.jsonrpc_account_balance())['available'])
 
         result = await self.out(self.daemon.jsonrpc_account_send(
             '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
         ))
         await self.confirm_tx(result['txid'])
 
-        self.assertEqual('3.989769', await self.daemon.jsonrpc_account_balance())
-        self.assertEqual('5.0', await self.daemon.jsonrpc_account_balance(account2_id))
+        self.assertEqual('3.989769', (await self.daemon.jsonrpc_account_balance())['available'])
+        self.assertEqual('5.0', (await self.daemon.jsonrpc_account_balance(account2_id))['available'])
 
         baz_tx = await self.out(self.channel_create('@baz', '1.0', account_id=account2_id))
         baz_id = self.get_claim_id(baz_tx)

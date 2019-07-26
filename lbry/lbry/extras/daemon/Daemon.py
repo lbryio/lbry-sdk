@@ -14,7 +14,7 @@ from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
 from traceback import format_exc
 from aiohttp import web
-from functools import wraps
+from functools import wraps, partial
 from google.protobuf.message import DecodeError
 from torba.client.wallet import Wallet
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
@@ -1044,8 +1044,22 @@ class Daemon(metaclass=JSONRPCServerType):
             (decimal) amount of lbry credits in wallet
         """
         account = self.get_account_or_default(account_id)
-        dewies = await account.get_balance(confirmations=confirmations)
-        return dewies_to_lbc(dewies)
+        get_balance = partial(account.get_balance, confirmations=True)
+        claims_balance = await get_balance(include_claims=True, claim_type__or={'is_claim':True, 'is_update': True})
+        supports_balance = await get_balance(include_claims=True, is_support=True)
+        total = await get_balance(include_claims=True)
+        unavailable = claims_balance + supports_balance
+        return {
+            'total': dewies_to_lbc(total),
+            'available': dewies_to_lbc(total - unavailable),
+            'reserved': {
+                'total': dewies_to_lbc(unavailable),
+                'claims': dewies_to_lbc(claims_balance),
+                'supports': dewies_to_lbc(supports_balance)
+            },
+            'tips_received': '0.0',
+            'tips_sent': '0.0'
+        }
 
     @requires("wallet")
     async def jsonrpc_account_add(
