@@ -431,6 +431,21 @@ class BaseTransaction:
             self.locktime = stream.read_uint32()
 
     @classmethod
+    def from_stream(cls, position, stream):
+        tx = cls(position=position)
+        tx.version = stream.read_uint32()
+        input_count = stream.read_compact_size()
+        tx._add(tx._inputs, [
+            tx.input_class.deserialize_from(stream) for _ in range(input_count)
+        ])
+        output_count = stream.read_compact_size()
+        tx._add(tx._outputs, [
+            tx.output_class.deserialize_from(stream) for _ in range(output_count)
+        ])
+        tx.locktime = stream.read_uint32()
+        return tx
+
+    @classmethod
     def ensure_all_have_same_ledger(cls, funding_accounts: Iterable[BaseAccount],
                                     change_account: BaseAccount = None) -> 'baseledger.BaseLedger':
         ledger = None
