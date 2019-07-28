@@ -1044,10 +1044,17 @@ class Daemon(metaclass=JSONRPCServerType):
             (decimal) amount of lbry credits in wallet
         """
         account = self.get_account_or_default(account_id)
-        get_balance = partial(account.get_balance, confirmations=True)
-        claims_balance = await get_balance(include_claims=True, claim_type__or={'is_claim':True, 'is_update': True})
-        supports_balance = await get_balance(include_claims=True, is_support=True)
-        total = await get_balance(include_claims=True)
+        get_total_balance = partial(account.get_balance, confirmations=True, include_claims=True)
+        total = await get_total_balance()
+        claims_balance = await get_total_balance(claim_type__or={'is_claim':True, 'is_update': True})
+        supports_balance = await get_total_balance(is_support=True)
+        tips_received, tips_sent = 0, 0
+        for transaction in await account.get_transactions():
+            for support_output in transaction.my_support_outputs:
+                if all([not txi.is_my_account for txi in transaction.inputs]):
+                    tips_received += support_output.amount
+            for support_output in transaction.other_support_outputs:
+                tips_sent += support_output.amount
         unavailable = claims_balance + supports_balance
         return {
             'total': dewies_to_lbc(total),
@@ -1057,8 +1064,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 'claims': dewies_to_lbc(claims_balance),
                 'supports': dewies_to_lbc(supports_balance)
             },
-            'tips_received': '0.0',
-            'tips_sent': '0.0'
+            'tips_received': dewies_to_lbc(tips_received),
+            'tips_sent': dewies_to_lbc(tips_sent)
         }
 
     @requires("wallet")

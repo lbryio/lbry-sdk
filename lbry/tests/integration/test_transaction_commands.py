@@ -59,8 +59,8 @@ class TransactionCommandsTestCase(CommandTestCase):
             first_claim_id, '0.3', tip=True, account_id=second_account_id)).id)
         final_balance = await self.daemon.jsonrpc_account_balance()
         self.assertEqual({
-            'tips_received': '0.0',
-            'tips_sent': '0.0',
+            'tips_received': '0.3',
+            'tips_sent': '0.5',
             'total': '8.777264',
             'available': '5.477264',
             'reserved': {'claims': '1.0', 'supports': '2.3', 'total': '3.3'}
