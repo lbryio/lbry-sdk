@@ -59,7 +59,7 @@ async def main(cmd_args=None):
             kwargs = {
                 'page': page,
                 # 'claim_type': 'stream',
-                'order_by': ['trending_global'],
+                'order_by': ['trending_global', 'trending_mixed'],
                 'no_totals': True
             }
 
