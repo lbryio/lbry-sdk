@@ -55,10 +55,19 @@ async def main(cmd_args=None):
     url_to_claim = {}
     try:
         for page in range(1, cmd_args.download_pages + 1):
-            start = time.time()
+            start = time.perf_counter()
+            kwargs = {
+                'page': page,
+                # 'claim_type': 'stream',
+                'order_by': ['trending_global'],
+                'no_totals': True
+            }
+
+            # if not cmd_args.allow_fees:
+            #     kwargs['fee_amount'] = 0
+
             response = await daemon_rpc(
-                conf, 'claim_search', page=page, claim_type='stream', fee_amount=None if cmd_args.allow_fees else 0,
-                order_by=['trending_global'], no_totals=True
+                conf, 'claim_search', **kwargs
             )
             if 'error' in response or not response.get('items'):
                 print(f'Error getting claim list page {page}:')
