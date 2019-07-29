@@ -360,6 +360,10 @@ class StreamManager:
                 )
             except asyncio.TimeoutError:
                 raise ResolveTimeout(uri)
+            except Exception as err:
+                if isinstance(err, asyncio.CancelledError):
+                    raise
+                raise ResolveError(f"Unexpected error resolving stream: {str(err)}")
             await self.storage.save_claims_for_resolve([
                 value for value in resolved_result.values() if 'error' not in value
             ])
