@@ -3371,9 +3371,10 @@ class Daemon(metaclass=JSONRPCServerType):
         return result
 
     COMMENT_DOC = """
-    Create and list comments.
+    View, create and abandon comments.
     """
 
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_list(self, claim_id, parent_id=None, page=1, page_size=50,
                                    include_replies=True, is_channel_signature_valid=False):
         """
@@ -3427,7 +3428,6 @@ class Daemon(metaclass=JSONRPCServerType):
             page_size=page_size,
             top_level=not include_replies
         )
-
         for comment in result.get('items', []):
             channel_url = comment.get('channel_url')
             if not channel_url:
@@ -3439,16 +3439,15 @@ class Daemon(metaclass=JSONRPCServerType):
                 )
             else:
                 comment['is_channel_signature_valid'] = False
-
         if is_channel_signature_valid:
             result['items'] = [
                 c for c in result.get('items', []) if c.get('is_channel_signature_valid', False)
             ]
-
         return result
 
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_create(self, claim_id, comment, parent_id=None, channel_account_id=None,
-                                     channel_name=None, channel_id=None) -> dict:
+                                     channel_name=None, channel_id=None):
         """
         Create and associate a comment with a claim using your channel identity.
 
@@ -3498,9 +3497,10 @@ class Daemon(metaclass=JSONRPCServerType):
             response['is_claim_signature_valid'] = comment_client.is_comment_signed_by_channel(response, channel)
         return response
 
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_abandon(self, comment_id):
-        """"
-        Delete a comment published under your channel identity
+        """
+        Abandon a comment published under your channel identity.
 
         Usage:
             comment_delete  (<comment_id> | --comment_id=<comment_id>)
