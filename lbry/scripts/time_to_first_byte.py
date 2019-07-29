@@ -35,14 +35,14 @@ def variance(times):
 
 
 async def wait_for_done(conf, claim_name, timeout):
-    blobs_completed, last_completed = 0, time.time()
+    blobs_completed, last_completed = 0, time.perf_counter()
     while True:
         file = (await daemon_rpc(conf, "file_list", claim_name=claim_name))[0]
         if file['status'] in ['finished', 'stopped']:
             return True, file['blobs_completed'], file['blobs_in_stream']
         elif blobs_completed < int(file['blobs_completed']):
-            blobs_completed, last_completed = int(file['blobs_completed']), time.time()
-        elif (time.time() - last_completed) > timeout:
+            blobs_completed, last_completed = int(file['blobs_completed']), time.perf_counter()
+        elif (time.perf_counter() - last_completed) > timeout:
             return False, file['blobs_completed'], file['blobs_in_stream']
         await asyncio.sleep(1.0)
 
@@ -77,12 +77,11 @@ async def main(cmd_args=None):
                 url_to_claim.update({
                     claim['permanent_url']: claim for claim in response['items']
                 })
-            print(f'Claim search page {page} took: {time.time() - start}')
+            print(f'Claim search page {page} took: {time.perf_counter() - start}')
     except (ClientConnectorError, ConnectionError):
         print("Could not connect to daemon")
         return 1
     print("**********************************************")
-
     print(f"Attempting to download {len(url_to_claim)} claim_search streams")
 
     first_byte_times = []
@@ -96,7 +95,7 @@ async def main(cmd_args=None):
     ))
 
     for i, (url, claim) in enumerate(url_to_claim.items()):
-        start = time.time()
+        start = time.perf_counter()
         response = await daemon_rpc(conf, 'get', uri=url, save_file=not cmd_args.head_blob_only)
         if 'error' in response:
             print(f"{i + 1}/{len(url_to_claim)} - failed to start {url}: {response['error']}")
@@ -104,7 +103,7 @@ async def main(cmd_args=None):
             if cmd_args.exit_on_error:
                 return
             continue
-        first_byte = time.time()
+        first_byte = time.perf_counter()
         first_byte_times.append(first_byte - start)
         print(f"{i + 1}/{len(url_to_claim)} - {first_byte - start} {url}")
         if not cmd_args.head_blob_only:
@@ -115,7 +114,7 @@ async def main(cmd_args=None):
                 download_successes.append(url)
             else:
                 failed_to[url] = 'finish'
-            mbs = round((blobs_in_stream * (MAX_BLOB_SIZE - 1)) / (time.time() - start) / 1000000, 2)
+            mbs = round((blobs_in_stream * (MAX_BLOB_SIZE - 1)) / (time.perf_counter() - start) / 1000000, 2)
             download_speeds.append(mbs)
             print(f"downloaded {amount_downloaded}/{blobs_in_stream} blobs for {url} at "
                   f"{mbs}mb/s")
