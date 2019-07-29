@@ -391,7 +391,7 @@ class StreamManager:
             fee_amount, fee_address = None, None
 
             # check that the fee is payable
-            if not to_replace and claim.stream.has_fee:
+            if not to_replace and claim.stream.has_fee and claim.stream.fee.amount:
                 fee_amount = round(exchange_rate_manager.convert_currency(
                     claim.stream.fee.currency, "LBC", claim.stream.fee.amount
                 ), 5)
