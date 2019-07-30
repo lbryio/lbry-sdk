@@ -360,6 +360,10 @@ class StreamManager:
                 )
             except asyncio.TimeoutError:
                 raise ResolveTimeout(uri)
+            except Exception as err:
+                if isinstance(err, asyncio.CancelledError):
+                    raise
+                raise ResolveError(f"Unexpected error resolving stream: {str(err)}")
             await self.storage.save_claims_for_resolve([
                 value for value in resolved_result.values() if 'error' not in value
             ])
@@ -391,7 +395,7 @@ class StreamManager:
             fee_amount, fee_address = None, None
 
             # check that the fee is payable
-            if not to_replace and claim.stream.has_fee:
+            if not to_replace and claim.stream.has_fee and claim.stream.fee.amount:
                 fee_amount = round(exchange_rate_manager.convert_currency(
                     claim.stream.fee.currency, "LBC", claim.stream.fee.amount
                 ), 5)

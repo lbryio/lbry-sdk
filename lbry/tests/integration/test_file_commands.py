@@ -277,11 +277,40 @@ class FileCommands(CommandTestCase):
         self.assertEqual(response['content_fee']['outputs'][0]['amount'], '2.0')
         self.assertEqual(response['content_fee']['outputs'][0]['address'], target_address)
 
+    async def test_null_fee(self):
+        target_address = await self.blockchain.get_raw_change_address()
+        tx = await self.stream_create(
+            'nullfee', '0.01', data=b'no pay me, no',
+            fee_currency='LBC', fee_address=target_address, fee_amount='1.0'
+        )
+        await self.__raw_value_update_no_fee_amount(tx, target_address)
+        await self.daemon.jsonrpc_file_delete(claim_name='nullfee')
+        response = await self.daemon.jsonrpc_get('lbry://nullfee')
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
+        self.assertIsNone(response.content_fee)
+        self.assertTrue(response.stream_claim_info.claim.stream.has_fee)
+        self.assertDictEqual(
+            response.stream_claim_info.claim.stream.to_dict()['fee'],
+            {'currency': 'LBC', 'address': target_address}
+        )
+        await self.daemon.jsonrpc_file_delete(claim_name='nullfee')
+
     async def __raw_value_update_no_fee_address(self, tx, claim_address, **kwargs):
         tx = await self.daemon.jsonrpc_stream_update(
             self.get_claim_id(tx), preview=True, claim_address=claim_address, **kwargs
         )
         tx.outputs[0].claim.stream.fee.address_bytes = b''
+        tx.outputs[0].script.generate()
+        await tx.sign([self.account])
+        await self.broadcast(tx)
+        await self.confirm_tx(tx.id)
+
+    async def __raw_value_update_no_fee_amount(self, tx, claim_address):
+        tx = await self.daemon.jsonrpc_stream_update(
+            self.get_claim_id(tx), preview=True, fee_currency='LBC', fee_amount='1.0', fee_address=claim_address,
+            claim_address=claim_address
+        )
+        tx.outputs[0].claim.stream.fee.message.ClearField('amount')
         tx.outputs[0].script.generate()
         await tx.sign([self.account])
         await self.broadcast(tx)
