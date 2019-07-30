@@ -1033,6 +1033,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             account_balance [<account_id>] [<address> | --address=<address>]
+                            [<confirmations> | --confirmations=<confirmations>]
 
         Options:
             --account_id=<account_id>       : (str) If provided only the balance for this
@@ -1044,25 +1045,27 @@ class Daemon(metaclass=JSONRPCServerType):
             (decimal) amount of lbry credits in wallet
         """
         account = self.get_account_or_default(account_id)
-        get_total_balance = partial(account.get_balance, confirmations=True, include_claims=True)
+        get_total_balance = partial(account.get_balance, confirmations=confirmations, include_claims=True)
         total = await get_total_balance()
         claims_balance = await get_total_balance(claim_type__or={'is_claim':True, 'is_update': True})
-        supports_balance = await get_total_balance(is_support=True)
-        tips_received, tips_sent = 0, 0
-        for transaction in await account.get_transactions():
-            for support_output in transaction.my_support_outputs:
-                if all([not txi.is_my_account for txi in transaction.inputs]):
-                    tips_received += support_output.amount
-            for support_output in transaction.other_support_outputs:
-                tips_sent += support_output.amount
-        unavailable = claims_balance + supports_balance
+        tips_received, tips_sent, tips_balance, supports_balance = 0, 0, 0, 0
+        for amount, spent, from_me, to_me, height in await account.get_support_summary():
+            tips_sent += amount if from_me and not to_me else 0
+            tips_received += amount if to_me and not from_me else 0
+            if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
+                continue
+            if not spent and to_me:
+                tips_balance += amount if not from_me else 0
+                supports_balance += amount if from_me else 0
+        unavailable = claims_balance + supports_balance + tips_balance
         return {
             'total': dewies_to_lbc(total),
             'available': dewies_to_lbc(total - unavailable),
             'reserved': {
                 'total': dewies_to_lbc(unavailable),
                 'claims': dewies_to_lbc(claims_balance),
-                'supports': dewies_to_lbc(supports_balance)
+                'supports': dewies_to_lbc(supports_balance),
+                'tips': dewies_to_lbc(tips_balance)
             },
             'tips_received': dewies_to_lbc(tips_received),
             'tips_sent': dewies_to_lbc(tips_sent)

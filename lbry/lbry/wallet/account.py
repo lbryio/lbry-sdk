@@ -134,5 +134,8 @@ class Account(BaseAccount):
     def get_support_count(self, **constraints):
         return self.ledger.db.get_support_count(account=self, **constraints)
 
+    def get_support_summary(self):
+        return self.ledger.db.get_supports_summary(account_id=self.id)
+
     async def release_all_outputs(self):
         await self.ledger.db.release_all_outputs(self)
