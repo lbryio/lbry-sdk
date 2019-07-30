@@ -14,7 +14,7 @@ from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
 from traceback import format_exc
 from aiohttp import web
-from functools import wraps, partial
+from functools import wraps
 from google.protobuf.message import DecodeError
 from torba.client.wallet import Wallet
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
@@ -1047,38 +1047,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (decimal) amount of lbry credits in wallet
         """
         account = self.get_account_or_default(account_id)
-        get_total_balance = partial(account.get_balance, confirmations=confirmations, include_claims=True)
-        total = await get_total_balance()
-        if not reserved_subtotals:
-            reserved = await account.get_balance(
-                confirmations=confirmations, include_claims=True,
-                claim_type__or={'is_claim': True, 'is_support': True, 'is_update': True}
-            )
-            return {
-                'total': dewies_to_lbc(total),
-                'reserved': dewies_to_lbc(reserved),
-                'available': dewies_to_lbc(total - reserved),
-                'reserved_subtotals': None
-            }
-        claims_balance = await get_total_balance(claim_type__or={'is_claim':True, 'is_update': True})
-        tips_balance, supports_balance = 0, 0
-        for amount, spent, from_me, to_me, height in await account.get_support_summary():
-            if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
-                continue
-            if not spent and to_me:
-                tips_balance += amount if not from_me else 0
-                supports_balance += amount if from_me else 0
-        unavailable = claims_balance + supports_balance + tips_balance
-        return {
-            'total': dewies_to_lbc(total),
-            'available': dewies_to_lbc(total - unavailable),
-            'reserved': dewies_to_lbc(unavailable),
-            'reserved_subtotals': {
-                'claims': dewies_to_lbc(claims_balance),
-                'supports': dewies_to_lbc(supports_balance),
-                'tips': dewies_to_lbc(tips_balance)
-            }
-        }
+        return await account.get_granular_balances(confirmations=confirmations, reserved_subtotals=reserved_subtotals)
 
     @requires("wallet")
     async def jsonrpc_account_add(

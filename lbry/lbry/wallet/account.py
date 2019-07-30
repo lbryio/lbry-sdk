@@ -1,9 +1,11 @@
 import json
 import logging
+from functools import partial
 from hashlib import sha256
 from string import hexdigits
 
 import ecdsa
+from lbry.wallet.dewies import dewies_to_lbc
 
 from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
 
@@ -74,6 +76,37 @@ class Account(BaseAccount):
         if not include_claims:
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
         return super().get_balance(confirmations, **constraints)
+
+    async def get_granular_balances(self, confirmations=0, reserved_subtotals=False):
+        tips_balance, supports_balance, claims_balance = 0, 0, 0
+        get_total_balance = partial(self.get_balance, confirmations=confirmations, include_claims=True)
+        total = await get_total_balance()
+        if reserved_subtotals:
+            claims_balance = await get_total_balance(claim_type__or={'is_claim':True, 'is_update': True})
+            for amount, spent, from_me, to_me, height in await self.get_support_summary():
+                if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
+                    continue
+                if not spent and to_me:
+                    if from_me:
+                        supports_balance += amount
+                    else:
+                        tips_balance += amount
+            reserved = claims_balance + supports_balance + tips_balance
+        else:
+            reserved = await self.get_balance(
+                confirmations=confirmations, include_claims=True,
+                claim_type__or={'is_claim': True, 'is_support': True, 'is_update': True}
+            )
+        return {
+            'total': dewies_to_lbc(total),
+            'available': dewies_to_lbc(total - reserved),
+            'reserved': dewies_to_lbc(reserved),
+            'reserved_subtotals': {
+                'claims': dewies_to_lbc(claims_balance),
+                'supports': dewies_to_lbc(supports_balance),
+                'tips': dewies_to_lbc(tips_balance)
+            } if reserved_subtotals else None
+        }
 
     @classmethod
     def get_private_key_from_seed(cls, ledger, seed: str, password: str):
