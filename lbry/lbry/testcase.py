@@ -156,6 +156,7 @@ class CommandTestCase(IntegrationTestCase):
         await self.on_transaction_id(txid)
         await self.generate(1)
         await self.on_transaction_id(txid)
+        return txid
 
     async def on_transaction_dict(self, tx):
         await self.ledger.wait(

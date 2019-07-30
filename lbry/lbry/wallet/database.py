@@ -138,3 +138,14 @@ class WalletDatabase(BaseDatabase):
             "    SELECT address from pubkey_address WHERE account = ?"
             "  )", [account.public_key.address]
         )
+
+    def get_supports_summary(self, account_id):
+        return self.db.execute_fetchall("""
+            select txo.amount, exists(select * from txi where txi.txoid=txo.txoid) as spent,
+                (txo.txid in
+                (select txi.txid from txi join pubkey_address a on txi.address = a.address
+                    where a.account = ?)) as from_me,
+                (txo.address in (select address from pubkey_address where account=?)) as to_me,
+                tx.height
+            from txo join tx using (txid) where is_support=1
+        """, (account_id, account_id))

@@ -44,7 +44,7 @@ class TransactionCommandsTestCase(CommandTestCase):
             'tips_sent': '0.0',
             'total': '10.0',
             'available': '10.0',
-            'reserved': {'total': '0.0', 'claims': '0.0', 'supports': '0.0'}
+            'reserved': {'total': '0.0', 'claims': '0.0', 'supports': '0.0', 'tips': '0.0'}
         }, initial_balance)
         first_claim_id = self.get_claim_id(await self.stream_create('granularity', bid='3.0'))
         await self.stream_update(first_claim_id, data=b'news', bid='1.0')
@@ -52,16 +52,30 @@ class TransactionCommandsTestCase(CommandTestCase):
         second_account_id = (await self.out(self.daemon.jsonrpc_account_create("Tip-er")))['id']
         second_accound_address = await self.daemon.jsonrpc_address_unused(second_account_id)
         await self.confirm_tx((await self.daemon.jsonrpc_account_send('1.0', second_accound_address)).id)
+        self.assertEqual({
+            'tips_received': '0.0',
+            'tips_sent': '0.0',
+            'total': '8.97741',
+            'available': '5.97741',
+            'reserved': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0', 'total': '3.0'}
+        }, await self.daemon.jsonrpc_account_balance())
         second_claim_id = self.get_claim_id(await self.stream_create(
             name='granularity-is-cool', account_id=second_account_id, bid='0.1'))
         await self.daemon.jsonrpc_support_create(second_claim_id, '0.5', tip=True)
-        await self.confirm_tx((await self.daemon.jsonrpc_support_create(
+        first_account_tip_txid = await self.confirm_tx((await self.daemon.jsonrpc_support_create(
             first_claim_id, '0.3', tip=True, account_id=second_account_id)).id)
-        final_balance = await self.daemon.jsonrpc_account_balance()
         self.assertEqual({
             'tips_received': '0.3',
             'tips_sent': '0.5',
             'total': '8.777264',
             'available': '5.477264',
-            'reserved': {'claims': '1.0', 'supports': '2.3', 'total': '3.3'}
-        }, final_balance)
+            'reserved': {'claims': '1.0', 'supports': '2.0', 'tips': '0.3', 'total': '3.3'}
+        }, await self.daemon.jsonrpc_account_balance())
+        await self.confirm_tx((await self.daemon.jsonrpc_support_abandon(txid=first_account_tip_txid, nout=0)).id)
+        self.assertEqual({
+            'tips_received': '0.3',
+            'tips_sent': '0.5',
+            'total': '8.777157',
+            'available': '5.777157',
+            'reserved': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0', 'total': '3.0'}
+        }, await self.daemon.jsonrpc_account_balance())
