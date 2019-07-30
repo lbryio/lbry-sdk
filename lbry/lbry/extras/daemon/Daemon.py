@@ -1027,19 +1027,21 @@ class Daemon(metaclass=JSONRPCServerType):
             return self.wallet_manager.get_detailed_accounts(**kwargs)
 
     @requires("wallet")
-    async def jsonrpc_account_balance(self, account_id=None, confirmations=0):
+    async def jsonrpc_account_balance(self, account_id=None, confirmations=0, reserved_subtotals=False):
         """
         Return the balance of an account
 
         Usage:
             account_balance [<account_id>] [<address> | --address=<address>]
-                            [<confirmations> | --confirmations=<confirmations>]
+                            [<confirmations> | --confirmations=<confirmations>] [--reserved_subtotals]
 
         Options:
             --account_id=<account_id>       : (str) If provided only the balance for this
                                               account will be given. Otherwise default account.
             --confirmations=<confirmations> : (int) Only include transactions with this many
                                               confirmed blocks.
+            --reserved_subtotals            : (bool) Include detailed reserved balances on
+                                              claims, tips and supports.
 
         Returns:
             (decimal) amount of lbry credits in wallet
@@ -1047,11 +1049,20 @@ class Daemon(metaclass=JSONRPCServerType):
         account = self.get_account_or_default(account_id)
         get_total_balance = partial(account.get_balance, confirmations=confirmations, include_claims=True)
         total = await get_total_balance()
+        if not reserved_subtotals:
+            reserved = await account.get_balance(
+                confirmations=confirmations, include_claims=True,
+                claim_type__or={'is_claim': True, 'is_support': True, 'is_update': True}
+            )
+            return {
+                'total': dewies_to_lbc(total),
+                'reserved': dewies_to_lbc(reserved),
+                'available': dewies_to_lbc(total - reserved),
+                'reserved_subtotals': None
+            }
         claims_balance = await get_total_balance(claim_type__or={'is_claim':True, 'is_update': True})
-        tips_received, tips_sent, tips_balance, supports_balance = 0, 0, 0, 0
+        tips_balance, supports_balance = 0, 0
         for amount, spent, from_me, to_me, height in await account.get_support_summary():
-            tips_sent += amount if from_me and not to_me else 0
-            tips_received += amount if to_me and not from_me else 0
             if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
                 continue
             if not spent and to_me:
@@ -1061,14 +1072,12 @@ class Daemon(metaclass=JSONRPCServerType):
         return {
             'total': dewies_to_lbc(total),
             'available': dewies_to_lbc(total - unavailable),
-            'reserved': {
-                'total': dewies_to_lbc(unavailable),
+            'reserved': dewies_to_lbc(unavailable),
+            'reserved_subtotals': {
                 'claims': dewies_to_lbc(claims_balance),
                 'supports': dewies_to_lbc(supports_balance),
                 'tips': dewies_to_lbc(tips_balance)
-            },
-            'tips_received': dewies_to_lbc(tips_received),
-            'tips_sent': dewies_to_lbc(tips_sent)
+            }
         }
 
     @requires("wallet")
