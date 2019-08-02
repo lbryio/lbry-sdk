@@ -71,7 +71,7 @@ class AbstractBlob:
         'readers'
     ]
 
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+    def __init__(self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
                  blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
                  blob_directory: typing.Optional[str] = None):
         self.loop = loop
@@ -175,7 +175,7 @@ class AbstractBlob:
 
     @classmethod
     async def create_from_unencrypted(
-            cls, loop: asyncio.BaseEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+            cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
             unencrypted: bytes, blob_num: int,
             blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None) -> BlobInfo:
         """
@@ -237,7 +237,7 @@ class BlobBuffer(AbstractBlob):
     """
     An in-memory only blob
     """
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+    def __init__(self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
                  blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
                  blob_directory: typing.Optional[str] = None):
         self._verified_bytes: typing.Optional[BytesIO] = None
@@ -276,7 +276,7 @@ class BlobFile(AbstractBlob):
     """
     A blob existing on the local file system
     """
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+    def __init__(self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
                  blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
                  blob_directory: typing.Optional[str] = None):
         super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
@@ -324,7 +324,7 @@ class BlobFile(AbstractBlob):
 
     @classmethod
     async def create_from_unencrypted(
-            cls, loop: asyncio.BaseEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+            cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
             unencrypted: bytes, blob_num: int,
             blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'],
                                                                      asyncio.Task]] = None) -> BlobInfo:

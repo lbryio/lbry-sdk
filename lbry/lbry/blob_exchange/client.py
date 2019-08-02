@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 class BlobExchangeClientProtocol(asyncio.Protocol):
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_timeout: typing.Optional[float] = 10,
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_timeout: typing.Optional[float] = 10,
                  connection_manager: typing.Optional['ConnectionManager'] = None):
         self.loop = loop
         self.peer_port: typing.Optional[int] = None
@@ -39,8 +39,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 self.peer_address, self.peer_port = addr_info
             # assert self.peer_address is not None
             self.connection_manager.received_data(f"{self.peer_address}:{self.peer_port}", len(data))
-        #log.debug("%s:%d -- got %s bytes -- %s bytes on buffer -- %s blob bytes received",
-        #          self.peer_address, self.peer_port, len(data), len(self.buf), self._blob_bytes_received)
         if not self.transport or self.transport.is_closing():
             log.warning("transport closing, but got more bytes from %s:%i\n%s", self.peer_address, self.peer_port,
                         binascii.hexlify(data))
@@ -91,7 +89,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
-        except (asyncio.TimeoutError) as err:  # TODO: is this needed?
+        except asyncio.TimeoutError as err:  # TODO: is this needed?
             log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
@@ -185,7 +183,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self.blob, self.writer = blob, blob.get_blob_writer(self.peer_address, self.peer_port)
             self._response_fut = asyncio.Future(loop=self.loop)
             return await self._download_blob()
-        except OSError as e:
+        except OSError:
             # i'm not sure how to fix this race condition - jack
             log.warning("race happened downloading %s from %s:%s", blob_hash, self.peer_address, self.peer_port)
             # return self._blob_bytes_received, self.transport
@@ -220,8 +218,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
 
 @cache_concurrent
-async def request_blob(loop: asyncio.BaseEventLoop, blob: typing.Optional['AbstractBlob'], address: str, tcp_port: int,
-                       peer_connect_timeout: float, blob_download_timeout: float,
+async def request_blob(loop: asyncio.AbstractEventLoop, blob: typing.Optional['AbstractBlob'], address: str,
+                       tcp_port: int, peer_connect_timeout: float, blob_download_timeout: float,
                        connected_transport: asyncio.Transport = None, connection_id: int = 0,
                        connection_manager: typing.Optional['ConnectionManager'] = None)\
         -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:

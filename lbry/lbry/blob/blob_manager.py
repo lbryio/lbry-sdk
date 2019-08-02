@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 class BlobManager:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, storage: 'SQLiteStorage', config: 'Config',
+    def __init__(self, loop: asyncio.AbstractEventLoop, blob_dir: str, storage: 'SQLiteStorage', config: 'Config',
                  node_data_store: typing.Optional['DictDataStore'] = None):
         """
         This class stores blobs on the hard disk

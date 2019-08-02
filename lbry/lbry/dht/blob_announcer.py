@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 
 class BlobAnnouncer:
-    def __init__(self, loop: asyncio.BaseEventLoop, node: 'Node', storage: 'SQLiteStorage'):
+    def __init__(self, loop: asyncio.AbstractEventLoop, node: 'Node', storage: 'SQLiteStorage'):
         self.loop = loop
         self.node = node
         self.storage = storage

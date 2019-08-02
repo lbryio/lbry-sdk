@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 class Node:
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.rpc_timeout,
                  split_buckets_under_index: int = constants.split_buckets_under_index):
         self.loop = loop

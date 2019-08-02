@@ -58,7 +58,7 @@ class StreamDescriptor:
         'sd_hash'
     ]
 
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_dir: str, stream_name: str, key: str,
+    def __init__(self, loop: asyncio.AbstractEventLoop, blob_dir: str, stream_name: str, key: str,
                  suggested_file_name: str, blobs: typing.List[BlobInfo], stream_hash: typing.Optional[str] = None,
                  sd_hash: typing.Optional[str] = None):
         self.loop = loop
@@ -139,7 +139,7 @@ class StreamDescriptor:
         return sd_blob
 
     @classmethod
-    def _from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
+    def _from_stream_descriptor_blob(cls, loop: asyncio.AbstractEventLoop, blob_dir: str,
                                      blob: AbstractBlob) -> 'StreamDescriptor':
         with blob.reader_context() as blob_reader:
             json_bytes = blob_reader.read()
@@ -171,7 +171,7 @@ class StreamDescriptor:
         return descriptor
 
     @classmethod
-    async def from_stream_descriptor_blob(cls, loop: asyncio.BaseEventLoop, blob_dir: str,
+    async def from_stream_descriptor_blob(cls, loop: asyncio.AbstractEventLoop, blob_dir: str,
                                           blob: AbstractBlob) -> 'StreamDescriptor':
         if not blob.is_readable():
             raise InvalidStreamDescriptorError(f"unreadable/missing blob: {blob.blob_hash}")
@@ -209,7 +209,7 @@ class StreamDescriptor:
 
     @classmethod
     async def create_stream(
-            cls, loop: asyncio.BaseEventLoop, blob_dir: str, file_path: str, key: typing.Optional[bytes] = None,
+            cls, loop: asyncio.AbstractEventLoop, blob_dir: str, file_path: str, key: typing.Optional[bytes] = None,
             iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None,
             old_sort: bool = False,
             blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'],
