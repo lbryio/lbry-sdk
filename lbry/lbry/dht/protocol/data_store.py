@@ -7,7 +7,7 @@ if typing.TYPE_CHECKING:
 
 
 class DictDataStore:
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager'):
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager'):
         # Dictionary format:
         # { <key>: [(<contact>, <age>), ...] }
         self._data_store: typing.Dict[bytes, typing.List[typing.Tuple['KademliaPeer', float]]] = {}

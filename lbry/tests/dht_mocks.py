@@ -8,7 +8,7 @@ if typing.TYPE_CHECKING:
     from lbry.dht.protocol.protocol import KademliaProtocol
 
 
-def get_time_accelerator(loop: asyncio.BaseEventLoop,
+def get_time_accelerator(loop: asyncio.AbstractEventLoop,
                          now: typing.Optional[float] = None) -> typing.Callable[[float], typing.Awaitable[None]]:
     """
     Returns an async advance() function
@@ -48,7 +48,7 @@ def get_time_accelerator(loop: asyncio.BaseEventLoop,
 
 
 @contextlib.contextmanager
-def mock_network_loop(loop: asyncio.BaseEventLoop):
+def mock_network_loop(loop: asyncio.AbstractEventLoop):
     dht_network: typing.Dict[typing.Tuple[str, int], 'KademliaProtocol'] = {}
 
     async def create_datagram_endpoint(proto_lam: typing.Callable[[], 'KademliaProtocol'],

@@ -163,7 +163,7 @@ class TreeRoutingTable:
     that paper.
     """
 
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager', parent_node_id: bytes,
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', parent_node_id: bytes,
                  split_buckets_under_index: int = constants.split_buckets_under_index):
         self._loop = loop
         self._peer_manager = peer_manager

@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 class BlobDownloader:
     BAN_FACTOR = 2.0  # fixme: when connection manager gets implemented, move it out from here
 
-    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
+    def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  peer_queue: asyncio.Queue):
         self.loop = loop
         self.config = config

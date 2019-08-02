@@ -63,7 +63,7 @@ def path_or_none(p) -> typing.Optional[str]:
 
 
 class StreamManager:
-    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
+    def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  wallet: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node'],
                  analytics_manager: typing.Optional['AnalyticsManager'] = None):
         self.loop = loop

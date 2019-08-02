@@ -29,7 +29,7 @@ old_protocol_errors = {
 
 
 class KademliaRPC:
-    def __init__(self, protocol: 'KademliaProtocol', loop: asyncio.BaseEventLoop, peer_port: int = 3333):
+    def __init__(self, protocol: 'KademliaProtocol', loop: asyncio.AbstractEventLoop, peer_port: int = 3333):
         self.protocol = protocol
         self.loop = loop
         self.peer_port = peer_port
@@ -132,7 +132,7 @@ class RemoteKademliaRPC:
     Encapsulates RPC calls to remote Peers
     """
 
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_tracker: 'PeerManager', protocol: 'KademliaProtocol',
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_tracker: 'PeerManager', protocol: 'KademliaProtocol',
                  peer: 'KademliaPeer'):
         self.loop = loop
         self.peer_tracker = peer_tracker
@@ -195,7 +195,7 @@ class RemoteKademliaRPC:
 
 
 class PingQueue:
-    def __init__(self, loop: asyncio.BaseEventLoop, protocol: 'KademliaProtocol'):
+    def __init__(self, loop: asyncio.AbstractEventLoop, protocol: 'KademliaProtocol'):
         self._loop = loop
         self._protocol = protocol
         self._pending_contacts: typing.Dict['KademliaPeer', float] = {}
@@ -258,7 +258,7 @@ class PingQueue:
 
 
 class KademliaProtocol(DatagramProtocol):
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager', node_id: bytes, external_ip: str,
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, external_ip: str,
                  udp_port: int, peer_port: int, rpc_timeout: float = constants.rpc_timeout,
                  split_buckets_under_index: int = constants.split_buckets_under_index):
         self.peer_manager = peer_manager

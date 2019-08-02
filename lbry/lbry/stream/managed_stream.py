@@ -33,7 +33,7 @@ def _get_next_available_file_name(download_directory: str, file_name: str) -> st
     return file_name
 
 
-async def get_next_available_file_name(loop: asyncio.BaseEventLoop, download_directory: str, file_name: str) -> str:
+async def get_next_available_file_name(loop: asyncio.AbstractEventLoop, download_directory: str, file_name: str) -> str:
     return await loop.run_in_executor(None, _get_next_available_file_name, download_directory, file_name)
 
 
@@ -71,7 +71,7 @@ class ManagedStream:
         'finished_write_attempt'
     ]
 
-    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
+    def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  sd_hash: str, download_directory: typing.Optional[str] = None, file_name: typing.Optional[str] = None,
                  status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None,
                  download_id: typing.Optional[str] = None, rowid: typing.Optional[int] = None,
@@ -245,7 +245,7 @@ class ManagedStream:
         }
 
     @classmethod
-    async def create(cls, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager',
+    async def create(cls, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
                      file_path: str, key: typing.Optional[bytes] = None,
                      iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> 'ManagedStream':
         descriptor = await StreamDescriptor.create_stream(

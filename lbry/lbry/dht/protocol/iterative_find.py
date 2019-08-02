@@ -70,7 +70,7 @@ def get_shortlist(routing_table: 'TreeRoutingTable', key: bytes,
 
 
 class IterativeFinder:
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
                  bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
@@ -254,7 +254,7 @@ class IterativeFinder:
 
 
 class IterativeNodeFinder(IterativeFinder):
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
                  bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
@@ -305,7 +305,7 @@ class IterativeNodeFinder(IterativeFinder):
 
 
 class IterativeValueFinder(IterativeFinder):
-    def __init__(self, loop: asyncio.BaseEventLoop, peer_manager: 'PeerManager',
+    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
                  bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,

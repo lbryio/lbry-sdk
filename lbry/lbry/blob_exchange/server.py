@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 class BlobServerProtocol(asyncio.Protocol):
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
+    def __init__(self, loop: asyncio.AbstractEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
         self.loop = loop
         self.blob_manager = blob_manager
         self.server_task: asyncio.Task = None
@@ -103,7 +103,7 @@ class BlobServerProtocol(asyncio.Protocol):
 
 
 class BlobServer:
-    def __init__(self, loop: asyncio.BaseEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
+    def __init__(self, loop: asyncio.AbstractEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
         self.loop = loop
         self.blob_manager = blob_manager
         self.server_task: typing.Optional[asyncio.Task] = None

@@ -20,7 +20,7 @@ def is_valid_ipv4(address):
 
 
 class PeerManager:
-    def __init__(self, loop: asyncio.BaseEventLoop):
+    def __init__(self, loop: asyncio.AbstractEventLoop):
         self._loop = loop
         self._rpc_failures: typing.Dict[
             typing.Tuple[str, int], typing.Tuple[typing.Optional[float], typing.Optional[float]]
@@ -61,7 +61,7 @@ class PeerManager:
         self._node_tokens[node_id] = (now, token)
 
     def get_node_token(self, node_id: bytes) -> typing.Optional[bytes]:
-        ts, token = self._node_tokens.get(node_id, (None, None))
+        ts, token = self._node_tokens.get(node_id, (0, None))
         if ts and ts > self._loop.time() - constants.token_secret_refresh_interval:
             return token
 
@@ -148,7 +148,7 @@ class KademliaPeer:
         'protocol_version',
     ]
 
-    def __init__(self, loop: asyncio.BaseEventLoop, address: str, node_id: typing.Optional[bytes] = None,
+    def __init__(self, loop: asyncio.AbstractEventLoop, address: str, node_id: typing.Optional[bytes] = None,
                  udp_port: typing.Optional[int] = None, tcp_port: typing.Optional[int] = None):
         if node_id is not None:
             if not len(node_id) == constants.hash_length:
