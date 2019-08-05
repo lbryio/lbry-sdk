@@ -3501,7 +3501,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Abandon a comment published under your channel identity.
 
         Usage:
-            comment_delete  (<comment_id> | --comment_id=<comment_id>)
+            comment_abandon  (<comment_id> | --comment_id=<comment_id>)
 
         Options:
             --comment_id=<comment_id>   : (str) The ID of the comment to be deleted.
