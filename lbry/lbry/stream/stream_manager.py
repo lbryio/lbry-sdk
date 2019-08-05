@@ -454,6 +454,7 @@ class StreamManager:
                         uri, outpoint,
                         None if not stream else len(stream.downloader.blob_downloader.active_connections),
                         None if not stream else len(stream.downloader.blob_downloader.scores),
+                        None if not stream else len(stream.downloader.blob_downloader.connection_failures),
                         False if not stream else stream.downloader.added_fixed_peers,
                         self.config.fixed_peer_delay if not stream else stream.downloader.fixed_peers_delay,
                         None if not stream else stream.sd_hash,
