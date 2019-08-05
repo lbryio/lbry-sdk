@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 class StreamDownloader:
-    def __init__(self, loop: asyncio.BaseEventLoop, config: 'Config', blob_manager: 'BlobManager', sd_hash: str,
+    def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager', sd_hash: str,
                  descriptor: typing.Optional[StreamDescriptor] = None):
         self.loop = loop
         self.config = config

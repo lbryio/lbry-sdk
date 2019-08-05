@@ -26,6 +26,7 @@ class BlobDownloader:
         self.ignored: typing.Dict['KademliaPeer', int] = {}
         self.scores: typing.Dict['KademliaPeer', int] = {}
         self.failures: typing.Dict['KademliaPeer', int] = {}
+        self.connection_failures: typing.List['KademliaPeer'] = []
         self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
         self.is_running = asyncio.Event(loop=self.loop)
 
@@ -47,6 +48,8 @@ class BlobDownloader:
             connection_manager=self.blob_manager.connection_manager
 
         )
+        if not bytes_received and not transport and peer not in self.connection_failures:
+            self.connection_failures.append(peer)
         if not transport and peer not in self.ignored:
             self.ignored[peer] = self.loop.time()
             log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
@@ -113,6 +116,7 @@ class BlobDownloader:
             blob.close()
 
     def close(self):
+        self.connection_failures.clear()
         self.scores.clear()
         self.ignored.clear()
         self.is_running.clear()
