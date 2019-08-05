@@ -89,7 +89,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
-        except asyncio.TimeoutError as err:  # TODO: is this needed?
+        except asyncio.TimeoutError as err:
             log.error("%s downloading blob from %s:%i", str(err), self.peer_address, self.peer_port)
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
