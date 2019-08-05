@@ -152,12 +152,28 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertEqual(event['event'], 'Time To First Bytes')
             self.assertEqual(event['properties']['tried_peers_count'], 1)
             self.assertEqual(event['properties']['active_peer_count'], 1)
+            self.assertEqual(event['properties']['connection_failures_count'], 0)
             self.assertEqual(event['properties']['use_fixed_peers'], True)
             self.assertEqual(event['properties']['added_fixed_peers'], True)
             self.assertEqual(event['properties']['fixed_peer_delay'], self.client_config.fixed_peer_delay)
             self.assertGreaterEqual(total_duration, resolve_duration + head_blob_duration + sd_blob_duration)
 
         await self._test_time_to_first_bytes(check_post, after_setup=after_setup)
+
+    async def test_tcp_connection_failure_analytics(self):
+        self.client_config.download_timeout = 3.0
+
+        def after_setup():
+            self.server.stop_server()
+
+        def check_post(event):
+            self.assertEqual(event['event'], 'Time To First Bytes')
+            self.assertIsNone(event['properties']['head_blob_duration'])
+            self.assertIsNone(event['properties']['sd_blob_duration'])
+            self.assertFalse(event['properties']['added_fixed_peers'])
+            self.assertEqual(event['properties']['connection_failures_count'],  1)
+
+        await self._test_time_to_first_bytes(check_post, DownloadSDTimeout, after_setup=after_setup)
 
     async def test_override_fixed_peer_delay_dht_disabled(self):
         self.client_config.reflector_servers = [(self.server_from_client.address, self.server_from_client.tcp_port - 1)]
