@@ -169,10 +169,10 @@ class BaseNetwork:
         return self.rpc('blockchain.block.headers', [height, count])
 
     def subscribe_headers(self):
-        return self.client.send_request('blockchain.headers.subscribe', [True])
+        return self.rpc('blockchain.headers.subscribe', [True])
 
     def subscribe_address(self, address):
-        return self.client.send_request('blockchain.address.subscribe', [address])
+        return self.rpc('blockchain.address.subscribe', [address])
 
 
 class SessionPool:

@@ -35,7 +35,7 @@ class ReconnectTests(IntegrationTestCase):
         d = self.ledger.network.get_transaction(sendtxid)
         # what's that smoke on my ethernet cable? oh no!
         self.ledger.network.client.connection_lost(Exception())
-        with self.assertRaises(asyncio.CancelledError):
+        with self.assertRaises((asyncio.TimeoutError, asyncio.CancelledError)):
            await d
         # rich but offline? no way, no water, let's retry
         with self.assertRaisesRegex(ConnectionError, 'connection is not available'):

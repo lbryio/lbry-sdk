@@ -26,7 +26,7 @@ class TestSessionBloat(IntegrationTestCase):
         self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 1)
         self.assertFalse(session.is_closing())
         await asyncio.sleep(1.1)
-        with self.assertRaises(asyncio.TimeoutError):
+        with self.assertRaises((asyncio.TimeoutError, asyncio.CancelledError)):
             await session.send_request('server.banner', ())
         self.assertTrue(session.is_closing())
         self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 0)
