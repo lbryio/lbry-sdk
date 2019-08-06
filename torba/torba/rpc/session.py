@@ -473,6 +473,8 @@ class RPCSession(SessionBase):
 
     async def send_request(self, method, args=()):
         """Send an RPC request over the network."""
+        if self.is_closing():
+            raise CancelledError()
         message, event = self.connection.send_request(Request(method, args))
         await self._send_message(message)
         await event.wait()
