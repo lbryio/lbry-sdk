@@ -464,6 +464,7 @@ class StreamManager:
                         None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,
                         None if not stream else stream.downloader.time_to_first_bytes,
                         None if not error else error.__class__.__name__,
+                        None if not error else str(error),
                         None if not server else f"{server[0]}:{server[1]}"
                     )
                 )

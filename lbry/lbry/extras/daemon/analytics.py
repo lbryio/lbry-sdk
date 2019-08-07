@@ -51,7 +51,7 @@ def _download_properties(conf: Config, external_ip: str, resolve_duration: float
                          head_blob_hash: typing.Optional[str] = None,
                          head_blob_length: typing.Optional[int] = None,
                          head_blob_download_duration: typing.Optional[float] = None,
-                         error: typing.Optional[str] = None,
+                         error: typing.Optional[str] = None, error_msg: typing.Optional[str] = None,
                          wallet_server: typing.Optional[str] = None) -> typing.Dict:
     return {
         "external_ip": external_ip,
@@ -59,6 +59,7 @@ def _download_properties(conf: Config, external_ip: str, resolve_duration: float
         "total_duration": round(total_duration, 4),
         "resolve_duration": None if not resolve_duration else round(resolve_duration, 4),
         "error": error,
+        "error_message": error_msg,
         'name': name,
         "outpoint": outpoint,
 
@@ -187,11 +188,13 @@ class AnalyticsManager:
                                        head_blob_length: typing.Optional[int] = None,
                                        head_blob_duration: typing.Optional[int] = None,
                                        error: typing.Optional[str] = None,
+                                       error_msg: typing.Optional[str] = None,
                                        wallet_server: typing.Optional[str] = None):
         await self.track(self._event(TIME_TO_FIRST_BYTES, _download_properties(
             self.conf, self.external_ip, resolve_duration, total_duration, download_id, name, outpoint,
             found_peers_count, tried_peers_count, connection_failures_count, added_fixed_peers, fixed_peers_delay,
-            sd_hash, sd_download_duration, head_blob_hash, head_blob_length, head_blob_duration, error, wallet_server
+            sd_hash, sd_download_duration, head_blob_hash, head_blob_length, head_blob_duration, error, error_msg,
+            wallet_server
         )))
 
     async def send_download_finished(self, download_id, name, sd_hash):
