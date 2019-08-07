@@ -1,7 +1,8 @@
-import unittest
 from torba.stream import StreamController
+from torba.testcase import AsyncioTestCase
 
-class StreamControllerTestCase(unittest.TestCase):
+
+class StreamControllerTestCase(AsyncioTestCase):
     def test_non_unique_events(self):
         events = []
         controller = StreamController()
