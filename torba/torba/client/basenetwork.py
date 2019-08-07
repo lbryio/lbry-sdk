@@ -89,10 +89,10 @@ class BaseNetwork:
         self._on_connected_controller = StreamController()
         self.on_connected = self._on_connected_controller.stream
 
-        self._on_header_controller = StreamController()
+        self._on_header_controller = StreamController(merge_repeated_events=True)
         self.on_header = self._on_header_controller.stream
 
-        self._on_status_controller = StreamController()
+        self._on_status_controller = StreamController(merge_repeated_events=True)
         self.on_status = self._on_status_controller.stream
 
         self.subscription_controllers = {
