@@ -747,6 +747,13 @@ class Daemon(metaclass=JSONRPCServerType):
                     'best_blockhash': (str) block hash of most recent block,
                     'is_encrypted': (bool),
                     'is_locked': (bool),
+                    'connected_servers': (list) [
+                        {
+                            'host': (str) server hostname,
+                            'port': (int) server port,
+                            'latency': (int) milliseconds
+                        }
+                    ],
                 },
                 'dht': {
                     'node_id': (str) lbry dht node id - hex encoded,

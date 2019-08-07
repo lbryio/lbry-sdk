@@ -448,6 +448,7 @@ class StreamManager:
         finally:
             if self.analytics_manager and (error or (stream and (stream.downloader.time_to_descriptor or
                                                                  stream.downloader.time_to_first_bytes))):
+                server = self.wallet.ledger.network.client.server
                 self.loop.create_task(
                     self.analytics_manager.send_time_to_first_bytes(
                         resolved_time, self.loop.time() - start_time, None if not stream else stream.download_id,
@@ -462,7 +463,8 @@ class StreamManager:
                         None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].blob_hash,
                         None if not (stream and stream.descriptor) else stream.descriptor.blobs[0].length,
                         None if not stream else stream.downloader.time_to_first_bytes,
-                        None if not error else error.__class__.__name__
+                        None if not error else error.__class__.__name__,
+                        None if not server else f"{server[0]}:{server[1]}"
                     )
                 )
 
