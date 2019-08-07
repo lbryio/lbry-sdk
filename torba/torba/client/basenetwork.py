@@ -108,7 +108,7 @@ class BaseNetwork:
             try:
                 self.client = await self.session_pool.wait_for_fastest_session()
                 self._update_remote_height((await self.subscribe_headers(),))
-                log.info("Successfully connected to SPV wallet server: %s:%d", *self.client.server)
+                log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
                 self._on_connected_controller.add(True)
                 self.client.on_disconnected.listen(lambda _: self.switch_event.set())
                 await self.switch_event.wait()
@@ -118,8 +118,6 @@ class BaseNetwork:
                 raise
             except asyncio.TimeoutError:
                 pass
-            except Exception:  # pylint: disable=broad-except
-                log.exception("Exception while trying to find a server!")
 
     async def stop(self):
         self.running = False
@@ -142,10 +140,6 @@ class BaseNetwork:
             return self.client.send_request(list_or_method, args)
         else:
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
-
-    async def probe_session(self, session: ClientSession):
-        await session.send_request('server.banner')
-        return session
 
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
@@ -214,7 +208,6 @@ class SessionPool:
                 task = asyncio.create_task(session.ensure_session())
                 task.add_done_callback(lambda _: self.ensure_connections())
                 self.sessions[session] = task
-
 
     async def wait_for_fastest_session(self):
         while True:
