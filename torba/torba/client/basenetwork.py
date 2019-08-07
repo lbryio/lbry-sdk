@@ -40,6 +40,9 @@ class ClientSession(BaseClientSession):
         except RPCError as e:
             log.warning("Wallet server returned an error. Code: %s Message: %s", *e.args)
             raise e
+        except TimeoutError:
+            self.latency = 1 << 32
+            raise
 
     async def ensure_session(self):
         # Handles reconnecting and maintaining a session alive
@@ -50,7 +53,7 @@ class ClientSession(BaseClientSession):
                 if self.is_closing():
                     await self.create_connection(self.timeout)
                     await self.ensure_server_version()
-                if (time() - self.last_send) > self.max_seconds_idle:
+                if (time() - self.last_send) > self.max_seconds_idle or self.latency == 1 << 32:
                     await self.send_request('server.banner')
                 retry_delay = default_delay
             except (asyncio.TimeoutError, OSError):
