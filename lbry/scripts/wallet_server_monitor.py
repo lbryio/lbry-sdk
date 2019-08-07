@@ -21,6 +21,13 @@ if not sys.version_info >= (3, 7):
     sys.exit(1)
 
 
+async def handle_slow_query(cursor, server, command, queries):
+    for query in queries:
+        cursor.execute("""
+        INSERT INTO wallet_server_slow_queries (server, command, query, event_time) VALUES (%s,%s,%s,%s);
+        """, (server, command, query, datetime.now()))
+
+
 async def handle_analytics_event(cursor, event, server):
     cursor.execute("""
     INSERT INTO wallet_server_stats (server, sessions, event_time) VALUES (%s,%s,%s);
@@ -34,6 +41,8 @@ async def handle_analytics_event(cursor, event, server):
         }
         for key, value in stats.items():
             if key.endswith("_queries"):
+                if key == "interrupted_queries":
+                    await handle_slow_query(cursor, server, command, value)
                 continue
             if isinstance(value, list):
                 data.update({
@@ -121,6 +130,7 @@ async def main(dsn, servers, slackclient):
 def ensure_database(dsn):
     db = psycopg2.connect(**dsn)
     c = db.cursor()
+
     c.execute("SELECT to_regclass('wallet_server_stats');")
     if c.fetchone()[0] is None:
         print("creating table 'wallet_server_stats'...")
@@ -131,6 +141,21 @@ def ensure_database(dsn):
             event_time timestamp
         );
         """)
+
+    c.execute("SELECT to_regclass('wallet_server_slow_queries');")
+    if c.fetchone()[0] is None:
+        print("creating table 'wallet_server_slow_queries'...")
+        c.execute("""
+        CREATE TABLE wallet_server_slow_queries (
+            server text,
+            command text,
+            query text,
+            event_time timestamp
+        );
+        """)
+
+    c.execute("SELECT to_regclass('wallet_server_command_stats');")
+    if c.fetchone()[0] is None:
         print("creating table 'wallet_server_command_stats'...")
         c.execute("""
         CREATE TABLE wallet_server_command_stats (
@@ -266,6 +291,10 @@ if __name__ == "__main__":
     slackclient = get_slack_client(args)
     try:
         loop.run_until_complete(main(get_dsn(args), get_servers(args), slackclient))
+    except KeyboardInterrupt as e:
+        pass
+    except Exception as e:
+        loop.run_until_complete(boris_says(slackclient, repr(e)))
     finally:
         loop.run_until_complete(
             boris_says(slackclient, random.choice([
