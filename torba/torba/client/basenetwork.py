@@ -74,6 +74,7 @@ class ClientSession(BaseClientSession):
         controller.add(request.args)
 
     def connection_lost(self, exc):
+        log.debug("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
         self.latency = 1 << 32
         self._on_disconnect_controller.add(True)
@@ -136,10 +137,10 @@ class BaseNetwork:
         return self.client and not self.client.is_closing()
 
     def rpc(self, list_or_method, args):
+        fastest = self.session_pool.fastest_session
+        if fastest is not None and self.client != fastest:
+            self.switch_event.set()
         if self.is_connected:
-            fastest = self.session_pool.fastest_session
-            if self.client != fastest:
-                self.switch_event.set()
             return self.client.send_request(list_or_method, args)
         else:
             raise ConnectionError("Attempting to send rpc request when connection is not available.")

@@ -456,7 +456,7 @@ class RPCSession(SessionBase):
 
     def connection_lost(self, exc):
         # Cancel pending requests and message processing
-        self.connection.cancel_pending_requests()
+        self.connection.time_out_pending_requests()
         super().connection_lost(exc)
 
     # External API
