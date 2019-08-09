@@ -1,4 +1,5 @@
 import os
+import shutil
 import binascii
 from unittest import mock
 import asyncio
@@ -77,6 +78,7 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
 
     mock_wallet = mock.Mock(spec=LbryWalletManager)
     mock_wallet.ledger.resolve = mock_resolve
+    mock_wallet.ledger.network.client.server = ('fakespv.lbry.com', 50001)
 
     async def get_balance(*_):
         return balance
@@ -130,6 +132,7 @@ class TestStreamManager(BlobExchangeTestBase):
             head_blob_duration = event['properties']['head_blob_duration']
             sd_blob_duration = event['properties']['sd_blob_duration']
             self.assertFalse(event['properties']['added_fixed_peers'])
+            self.assertEqual(event['properties']['wallet_server'], "fakespv.lbry.com:50001")
             self.assertTrue(total_duration >= resolve_duration + head_blob_duration + sd_blob_duration)
 
         await self._test_time_to_first_bytes(check_post)
@@ -172,6 +175,9 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertIsNone(event['properties']['sd_blob_duration'])
             self.assertFalse(event['properties']['added_fixed_peers'])
             self.assertEqual(event['properties']['connection_failures_count'],  1)
+            self.assertEqual(
+                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout'
+            )
 
         await self._test_time_to_first_bytes(check_post, DownloadSDTimeout, after_setup=after_setup)
 
@@ -213,6 +219,9 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertEqual(event['properties']['use_fixed_peers'], False)
             self.assertEqual(event['properties']['added_fixed_peers'], False)
             self.assertEqual(event['properties']['fixed_peer_delay'], None)
+            self.assertEqual(
+                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout'
+            )
 
         start = self.loop.time()
         await self._test_time_to_first_bytes(check_post, DownloadSDTimeout)
@@ -272,14 +281,21 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertListEqual(expected_events, received)
 
     async def _test_download_error_on_start(self, expected_error, timeout=None):
-        with self.assertRaises(expected_error):
+        error = None
+        try:
             await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager, timeout)
+        except Exception as err:
+            if isinstance(err, asyncio.CancelledError):
+                raise
+            error = err
+        self.assertEqual(expected_error, type(error))
 
-    async def _test_download_error_analytics_on_start(self, expected_error, timeout=None):
+    async def _test_download_error_analytics_on_start(self, expected_error, error_message, timeout=None):
         received = []
 
         async def check_post(event):
             self.assertEqual("Time To First Bytes", event['event'])
+            self.assertEqual(event['properties']['error_message'], error_message)
             received.append(event['properties']['error'])
 
         self.stream_manager.analytics_manager._post = check_post
@@ -295,7 +311,7 @@ class TestStreamManager(BlobExchangeTestBase):
             'version': '_0_0_1'
         }
         await self.setup_stream_manager(10.0, fee)
-        await self._test_download_error_on_start(InsufficientFundsError)
+        await self._test_download_error_on_start(InsufficientFundsError, "")
 
     async def test_fee_above_max_allowed(self):
         fee = {
@@ -305,7 +321,7 @@ class TestStreamManager(BlobExchangeTestBase):
             'version': '_0_0_1'
         }
         await self.setup_stream_manager(1000000.0, fee)
-        await self._test_download_error_on_start(KeyFeeAboveMaxAllowed)
+        await self._test_download_error_on_start(KeyFeeAboveMaxAllowed, "")
 
     async def test_resolve_error(self):
         await self.setup_stream_manager()
@@ -315,14 +331,27 @@ class TestStreamManager(BlobExchangeTestBase):
     async def test_download_sd_timeout(self):
         self.server.stop_server()
         await self.setup_stream_manager()
-        await self._test_download_error_analytics_on_start(DownloadSDTimeout, timeout=1)
+        await self._test_download_error_analytics_on_start(
+            DownloadSDTimeout, f'Failed to download sd blob {self.sd_hash} within timeout', timeout=1
+        )
 
     async def test_download_data_timeout(self):
         await self.setup_stream_manager()
         with open(os.path.join(self.server_dir, self.sd_hash), 'r') as sdf:
             head_blob_hash = json.loads(sdf.read())['blobs'][0]['blob_hash']
         self.server_blob_manager.delete_blob(head_blob_hash)
-        await self._test_download_error_analytics_on_start(DownloadDataTimeout, timeout=1)
+        await self._test_download_error_analytics_on_start(
+            DownloadDataTimeout, f'Failed to download data blobs for sd hash {self.sd_hash} within timeout', timeout=1
+        )
+
+    async def test_unexpected_error(self):
+        await self.setup_stream_manager()
+        err_msg = f"invalid blob directory '{self.client_dir}'"
+        shutil.rmtree(self.client_dir)
+        await self._test_download_error_analytics_on_start(
+            OSError, err_msg, timeout=1
+        )
+        os.mkdir(self.client_dir)  # so the test cleanup doesn't error
 
     async def test_non_head_data_timeout(self):
         await self.setup_stream_manager()
