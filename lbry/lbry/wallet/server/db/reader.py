@@ -188,7 +188,7 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
             if column == 'name':
                 column = 'normalized'
             sql_order_by.append(
-                f"claim.{column} ASC" if is_asc else f"claim.{column} DESC"
+                f"claim.{column} " + "ASC" if is_asc else "DESC"
             )
         constraints['order_by'] = sql_order_by
 
