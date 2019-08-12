@@ -131,41 +131,35 @@ class Account(BaseAccount):
         details['certificates'] = len(self.channel_keys)
         return details
 
-    @staticmethod
-    def constraint_spending_utxos(constraints):
-        constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
+    def get_transaction_history(self, **constraints):
+        return self.ledger.get_transaction_history(account=self, **constraints)
 
-    def get_utxos(self, **constraints):
-        self.constraint_spending_utxos(constraints)
-        return super().get_utxos(**constraints)
-
-    def get_utxo_count(self, **constraints):
-        self.constraint_spending_utxos(constraints)
-        return super().get_utxo_count(**constraints)
+    def get_transaction_history_count(self, **constraints):
+        return self.ledger.get_transaction_history_count(account=self, **constraints)
 
     def get_claims(self, **constraints):
-        return self.ledger.db.get_claims(account=self, **constraints)
+        return self.ledger.get_claims(account=self, **constraints)
 
     def get_claim_count(self, **constraints):
-        return self.ledger.db.get_claim_count(account=self, **constraints)
+        return self.ledger.get_claim_count(account=self, **constraints)
 
     def get_streams(self, **constraints):
-        return self.ledger.db.get_streams(account=self, **constraints)
+        return self.ledger.get_streams(account=self, **constraints)
 
     def get_stream_count(self, **constraints):
-        return self.ledger.db.get_stream_count(account=self, **constraints)
+        return self.ledger.get_stream_count(account=self, **constraints)
 
     def get_channels(self, **constraints):
-        return self.ledger.db.get_channels(account=self, **constraints)
+        return self.ledger.get_channels(account=self, **constraints)
 
     def get_channel_count(self, **constraints):
-        return self.ledger.db.get_channel_count(account=self, **constraints)
+        return self.ledger.get_channel_count(account=self, **constraints)
 
     def get_supports(self, **constraints):
-        return self.ledger.db.get_supports(account=self, **constraints)
+        return self.ledger.get_supports(account=self, **constraints)
 
     def get_support_count(self, **constraints):
-        return self.ledger.db.get_support_count(account=self, **constraints)
+        return self.ledger.get_support_count(account=self, **constraints)
 
     def get_support_summary(self):
         return self.ledger.db.get_supports_summary(account_id=self.id)

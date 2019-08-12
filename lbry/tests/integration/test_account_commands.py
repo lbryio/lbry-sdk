@@ -1,4 +1,9 @@
 from lbry.testcase import CommandTestCase
+from lbry.wallet.dewies import dewies_to_lbc
+
+
+def extract(d, keys):
+    return dict((k, d[k]) for k in keys)
 
 
 class AccountManagement(CommandTestCase):
@@ -65,3 +70,101 @@ class AccountManagement(CommandTestCase):
         self.account.channel_keys[keys[1]] = "some invalid junk"
         await self.account.maybe_migrate_certificates()
         self.assertEqual(list(self.account.channel_keys.keys()), [keys[2]])
+
+    async def assertFindsClaims(self, claim_names, awaitable):
+        self.assertEqual(claim_names, [txo.claim_name for txo in await awaitable])
+
+    async def assertOutputAmount(self, amounts, awaitable):
+        self.assertEqual(amounts, [dewies_to_lbc(txo.amount) for txo in await awaitable])
+
+    async def test_commands_across_accounts(self):
+        channel_list = self.daemon.jsonrpc_channel_list
+        stream_list = self.daemon.jsonrpc_stream_list
+        support_list = self.daemon.jsonrpc_support_list
+        utxo_list = self.daemon.jsonrpc_utxo_list
+        default_account = self.daemon.default_account
+        second_account = await self.daemon.jsonrpc_account_create('second account')
+
+        tx = await self.daemon.jsonrpc_account_send(
+            '0.05', await self.daemon.jsonrpc_address_unused(account_id=second_account.id)
+        )
+        await self.confirm_tx(tx.id)
+        await self.assertOutputAmount(['0.05', '9.949876'], utxo_list())
+        await self.assertOutputAmount(['0.05'], utxo_list(account_id=second_account.id))
+        await self.assertOutputAmount(['9.949876'], utxo_list(account_id=default_account.id))
+
+        channel1 = await self.channel_create('@channel-in-account1', '0.01')
+        channel2 = await self.channel_create(
+            '@channel-in-account2', '0.01', account_id=second_account.id, funding_account_ids=[default_account.id]
+        )
+
+        await self.assertFindsClaims(['@channel-in-account2', '@channel-in-account1'], channel_list())
+        await self.assertFindsClaims(['@channel-in-account1'], channel_list(account_id=default_account.id))
+        await self.assertFindsClaims(['@channel-in-account2'], channel_list(account_id=second_account.id))
+
+        stream1 = await self.stream_create('stream-in-account1', '0.01', channel_id=self.get_claim_id(channel1))
+        stream2 = await self.stream_create(
+            'stream-in-account2', '0.01', channel_id=self.get_claim_id(channel2),
+            account_id=second_account.id, funding_account_ids=[default_account.id]
+        )
+        await self.assertFindsClaims(['stream-in-account2', 'stream-in-account1'], stream_list())
+        await self.assertFindsClaims(['stream-in-account1'], stream_list(account_id=default_account.id))
+        await self.assertFindsClaims(['stream-in-account2'], stream_list(account_id=second_account.id))
+
+        await self.assertFindsClaims(
+            ['stream-in-account2', 'stream-in-account1', '@channel-in-account2', '@channel-in-account1'],
+            self.daemon.jsonrpc_claim_list()
+        )
+        await self.assertFindsClaims(
+            ['stream-in-account1', '@channel-in-account1'],
+            self.daemon.jsonrpc_claim_list(account_id=default_account.id)
+        )
+        await self.assertFindsClaims(
+            ['stream-in-account2', '@channel-in-account2'],
+            self.daemon.jsonrpc_claim_list(account_id=second_account.id)
+        )
+
+        support1 = await self.support_create(self.get_claim_id(stream1), '0.01')
+        support2 = await self.support_create(
+            self.get_claim_id(stream2), '0.01', account_id=second_account.id, funding_account_ids=[default_account.id]
+        )
+        self.assertEqual([support2['txid'], support1['txid']], [txo.tx_ref.id for txo in await support_list()])
+        self.assertEqual([support1['txid']], [txo.tx_ref.id for txo in await support_list(account_id=default_account.id)])
+        self.assertEqual([support2['txid']], [txo.tx_ref.id for txo in await support_list(account_id=second_account.id)])
+
+        history = await self.daemon.jsonrpc_transaction_list()
+        self.assertEqual(len(history), 8)
+        self.assertEqual(extract(history[0]['support_info'][0], ['claim_name', 'is_tip', 'amount', 'balance_delta']), {
+            'claim_name': 'stream-in-account2',
+            'is_tip': False,
+            'amount': '0.01',
+            'balance_delta': '-0.01'
+        })
+        self.assertEqual(extract(history[1]['support_info'][0], ['claim_name', 'is_tip', 'amount', 'balance_delta']), {
+            'claim_name': 'stream-in-account1',
+            'is_tip': False,
+            'amount': '0.01',
+            'balance_delta': '-0.01'
+        })
+        self.assertEqual(extract(history[2]['claim_info'][0], ['claim_name', 'amount', 'balance_delta']), {
+            'claim_name': 'stream-in-account2',
+            'amount': '0.01',
+            'balance_delta': '-0.01'
+        })
+        self.assertEqual(extract(history[3]['claim_info'][0], ['claim_name', 'amount', 'balance_delta']), {
+            'claim_name': 'stream-in-account1',
+            'amount': '0.01',
+            'balance_delta': '-0.01'
+        })
+        self.assertEqual(extract(history[4]['claim_info'][0], ['claim_name', 'amount', 'balance_delta']), {
+            'claim_name': '@channel-in-account2',
+            'amount': '0.01',
+            'balance_delta': '-0.01'
+        })
+        self.assertEqual(extract(history[5]['claim_info'][0], ['claim_name', 'amount', 'balance_delta']), {
+            'claim_name': '@channel-in-account1',
+            'amount': '0.01',
+            'balance_delta': '-0.01'
+        })
+        self.assertEqual(history[6]['value'], '0.0')
+        self.assertEqual(history[7]['value'], '10.0')

@@ -227,6 +227,18 @@ class BaseLedger(metaclass=LedgerRegistry):
     def release_tx(self, tx):
         return self.release_outputs([txi.txo_ref.txo for txi in tx.inputs])
 
+    def get_utxos(self, **constraints):
+        return self.db.get_utxos(**constraints)
+
+    def get_utxo_count(self, **constraints):
+        return self.db.get_utxo_count(**constraints)
+
+    def get_transactions(self, **constraints):
+        return self.db.get_transactions(**constraints)
+
+    def get_transaction_count(self, **constraints):
+        return self.db.get_transaction_count(**constraints)
+
     async def get_local_status_and_history(self, address):
         address_details = await self.db.get_address(address=address)
         history = address_details['history'] or ''
