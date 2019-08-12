@@ -137,6 +137,10 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         t1 = asyncio.Transport()
         t2 = asyncio.Transport()
+        t1.pause_reading = lambda: None
+        t1.resume_reading = lambda: None
+        t2.pause_reading = lambda: None
+        t2.resume_reading = lambda: None
 
         writer1 = blob.get_blob_writer(t1)
         writer2 = blob.get_blob_writer(t2)

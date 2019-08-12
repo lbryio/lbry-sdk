@@ -111,6 +111,16 @@ class AbstractBlob:
     def _write_blob(self, blob_bytes: bytes):
         raise NotImplementedError()
 
+    def pause_other_writers(self, transport: asyncio.Transport):
+        for other in self.writers:
+            if other and other is not transport:
+                other.pause_reading()
+
+    def resume_other_writers(self, transport: asyncio.Transport):
+        for other in self.writers:
+            if other and other is not transport:
+                other.resume_reading()
+
     def set_length(self, length) -> None:
         if self.length is not None and length == self.length:
             return
@@ -203,7 +213,11 @@ class AbstractBlob:
         if transport and transport in self.writers and not self.writers[transport].closed():
             raise OSError(f"attempted to download blob twice from {transport.get_extra_info('peername')}")
         fut = asyncio.Future(loop=self.loop)
-        writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
+        writer = HashBlobWriter(
+            self.blob_hash, self.get_length, fut,
+            lambda: self.pause_other_writers(transport),
+            lambda: self.resume_other_writers(transport)
+        )
         self.writers[transport] = writer
 
         def remove_writer(_):

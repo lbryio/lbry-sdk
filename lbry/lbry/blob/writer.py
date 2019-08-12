@@ -11,9 +11,13 @@ log = logging.getLogger(__name__)
 
 class HashBlobWriter:
     def __init__(self, expected_blob_hash: str, get_length: typing.Callable[[], int],
-                 finished: 'asyncio.Future[bytes]'):
+                 finished: 'asyncio.Future[bytes]', pause_other_writers: typing.Callable[[], None],
+                 resume_other_writers: typing.Callable[[], None]):
         self.expected_blob_hash = expected_blob_hash
         self.get_length = get_length
+        self.pause_other_writers = pause_other_writers
+        self.resume_other_writers = resume_other_writers
+        self.paused_others = False
         self.buffer = BytesIO()
         self.finished = finished
         self.finished.add_done_callback(lambda *_: self.close_handle())
@@ -60,6 +64,9 @@ class HashBlobWriter:
             elif self.finished and not (self.finished.done() or self.finished.cancelled()):
                 self.finished.set_result(self.buffer.getvalue())
             self.close_handle()
+        if self.len_so_far >= 64000 and not self.paused_others:
+            self.paused_others = True
+            self.pause_other_writers()
 
     def close_handle(self):
         if not self.finished.done():
@@ -67,3 +74,5 @@ class HashBlobWriter:
         if self.buffer is not None:
             self.buffer.close()
             self.buffer = None
+        if self.paused_others:
+            self.resume_other_writers()
