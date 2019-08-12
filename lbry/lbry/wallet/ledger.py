@@ -1,7 +1,8 @@
 import asyncio
 import logging
 from binascii import unhexlify
-from typing import Tuple, List, Dict
+from typing import Tuple, List
+from datetime import datetime
 
 from torba.client.baseledger import BaseLedger
 from torba.client.baseaccount import SingleKey
@@ -74,10 +75,10 @@ class MainNetLedger(BaseLedger):
                 result[url] = {'error': f'{url} did not resolve to a claim'}
         return result
 
-    async def claim_search(self, **kwargs) -> Tuple[List, int, int]:
+    async def claim_search(self, **kwargs) -> Tuple[List[Output], int, int]:
         return await self._inflate_outputs(self.network.claim_search(**kwargs))
 
-    async def get_claim_by_claim_id(self, claim_id) -> Dict[str, Output]:
+    async def get_claim_by_claim_id(self, claim_id) -> Output:
         for claim in (await self.claim_search(claim_id=claim_id))[0]:
             return claim
 
@@ -108,6 +109,157 @@ class MainNetLedger(BaseLedger):
             log.exception(
                 'Failed to display wallet state, please file issue '
                 'for this bug along with the traceback you see below:')
+
+    def constraint_account_or_all(self, constraints):
+        account = constraints.pop('account', None)
+        if account:
+            constraints['accounts'] = [account]
+        else:
+            constraints['accounts'] = self.accounts
+
+    def constraint_spending_utxos(self, constraints):
+        self.constraint_account_or_all(constraints)
+        constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
+
+    def get_utxos(self, **constraints):
+        self.constraint_spending_utxos(constraints)
+        return super().get_utxos(**constraints)
+
+    def get_utxo_count(self, **constraints):
+        self.constraint_spending_utxos(constraints)
+        return super().get_utxo_count(**constraints)
+
+    def get_claims(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_claims(**constraints)
+
+    def get_claim_count(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_claim_count(**constraints)
+
+    def get_streams(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_streams(**constraints)
+
+    def get_stream_count(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_stream_count(**constraints)
+
+    def get_channels(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_channels(**constraints)
+
+    def get_channel_count(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_channel_count(**constraints)
+
+    def get_supports(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_supports(**constraints)
+
+    def get_support_count(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_support_count(**constraints)
+
+    async def get_transaction_history(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        txs = await self.db.get_transactions(**constraints)
+        headers = self.headers
+        history = []
+        for tx in txs:
+            ts = headers[tx.height]['timestamp'] if tx.height > 0 else None
+            item = {
+                'txid': tx.id,
+                'timestamp': ts,
+                'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
+                'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
+                'claim_info': [],
+                'update_info': [],
+                'support_info': [],
+                'abandon_info': []
+            }
+            is_my_inputs = all([txi.is_my_account for txi in tx.inputs])
+            if is_my_inputs:
+                # fees only matter if we are the ones paying them
+                item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)
+                item['fee'] = dewies_to_lbc(-tx.fee)
+            else:
+                # someone else paid the fees
+                item['value'] = dewies_to_lbc(tx.net_account_balance)
+                item['fee'] = '0.0'
+            for txo in tx.my_claim_outputs:
+                item['claim_info'].append({
+                    'address': txo.get_address(self),
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                })
+            for txo in tx.my_update_outputs:
+                if is_my_inputs:  # updating my own claim
+                    previous = None
+                    for txi in tx.inputs:
+                        if txi.txo_ref.txo is not None:
+                            other_txo = txi.txo_ref.txo
+                            if (other_txo.is_claim or other_txo.script.is_support_claim) \
+                                    and other_txo.claim_id == txo.claim_id:
+                                previous = other_txo
+                                break
+                    if previous is not None:
+                        item['update_info'].append({
+                            'address': txo.get_address(self),
+                            'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
+                            'amount': dewies_to_lbc(txo.amount),
+                            'claim_id': txo.claim_id,
+                            'claim_name': txo.claim_name,
+                            'nout': txo.position
+                        })
+                else:  # someone sent us their claim
+                    item['update_info'].append({
+                        'address': txo.get_address(self),
+                        'balance_delta': dewies_to_lbc(0),
+                        'amount': dewies_to_lbc(txo.amount),
+                        'claim_id': txo.claim_id,
+                        'claim_name': txo.claim_name,
+                        'nout': txo.position
+                    })
+            for txo in tx.my_support_outputs:
+                item['support_info'].append({
+                    'address': txo.get_address(self),
+                    'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'is_tip': not is_my_inputs,
+                    'nout': txo.position
+                })
+            if is_my_inputs:
+                for txo in tx.other_support_outputs:
+                    item['support_info'].append({
+                        'address': txo.get_address(self),
+                        'balance_delta': dewies_to_lbc(-txo.amount),
+                        'amount': dewies_to_lbc(txo.amount),
+                        'claim_id': txo.claim_id,
+                        'claim_name': txo.claim_name,
+                        'is_tip': is_my_inputs,
+                        'nout': txo.position
+                    })
+            for txo in tx.my_abandon_outputs:
+                item['abandon_info'].append({
+                    'address': txo.get_address(self),
+                    'balance_delta': dewies_to_lbc(txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position
+                })
+            history.append(item)
+        return history
+
+    def get_transaction_history_count(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_transaction_count(**constraints)
 
 
 class TestNetLedger(MainNetLedger):

@@ -3,16 +3,13 @@ import json
 import logging
 from binascii import unhexlify
 
-from datetime import datetime
 
 from torba.client.basemanager import BaseWalletManager
 from torba.rpc.jsonrpc import CodeMessageError
 
 from lbry.wallet.ledger import MainNetLedger
-from lbry.wallet.account import BaseAccount
 from lbry.wallet.transaction import Transaction
 from lbry.wallet.database import WalletDatabase
-from lbry.wallet.dewies import dewies_to_lbc
 from lbry.conf import Config
 
 
@@ -208,102 +205,6 @@ class LbryWalletManager(BaseWalletManager):
             tx = self.ledger.transaction_class(unhexlify(raw))
             await self.ledger.maybe_verify_transaction(tx, height)
         return tx
-
-    @staticmethod
-    async def get_history(account: BaseAccount, **constraints):
-        headers = account.ledger.headers
-        txs = await account.get_transactions(**constraints)
-        history = []
-        for tx in txs:
-            ts = headers[tx.height]['timestamp'] if tx.height > 0 else None
-            item = {
-                'txid': tx.id,
-                'timestamp': ts,
-                'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-                'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
-                'claim_info': [],
-                'update_info': [],
-                'support_info': [],
-                'abandon_info': []
-            }
-            is_my_inputs = all([txi.is_my_account for txi in tx.inputs])
-            if is_my_inputs:
-                # fees only matter if we are the ones paying them
-                item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)
-                item['fee'] = dewies_to_lbc(-tx.fee)
-            else:
-                # someone else paid the fees
-                item['value'] = dewies_to_lbc(tx.net_account_balance)
-                item['fee'] = '0.0'
-            for txo in tx.my_claim_outputs:
-                item['claim_info'].append({
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
-                })
-            for txo in tx.my_update_outputs:
-                if is_my_inputs:  # updating my own claim
-                    previous = None
-                    for txi in tx.inputs:
-                        if txi.txo_ref.txo is not None:
-                            other_txo = txi.txo_ref.txo
-                            if (other_txo.is_claim or other_txo.script.is_support_claim) \
-                                    and other_txo.claim_id == txo.claim_id:
-                                previous = other_txo
-                                break
-                    if previous is not None:
-                        item['update_info'].append({
-                            'address': txo.get_address(account.ledger),
-                            'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
-                            'amount': dewies_to_lbc(txo.amount),
-                            'claim_id': txo.claim_id,
-                            'claim_name': txo.claim_name,
-                            'nout': txo.position
-                        })
-                else:  # someone sent us their claim
-                    item['update_info'].append({
-                        'address': txo.get_address(account.ledger),
-                        'balance_delta': dewies_to_lbc(0),
-                        'amount': dewies_to_lbc(txo.amount),
-                        'claim_id': txo.claim_id,
-                        'claim_name': txo.claim_name,
-                        'nout': txo.position
-                    })
-            for txo in tx.my_support_outputs:
-                item['support_info'].append({
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'is_tip': not is_my_inputs,
-                    'nout': txo.position
-                })
-            if is_my_inputs:
-                for txo in tx.other_support_outputs:
-                    item['support_info'].append({
-                        'address': txo.get_address(account.ledger),
-                        'balance_delta': dewies_to_lbc(-txo.amount),
-                        'amount': dewies_to_lbc(txo.amount),
-                        'claim_id': txo.claim_id,
-                        'claim_name': txo.claim_name,
-                        'is_tip': is_my_inputs,
-                        'nout': txo.position
-                    })
-            for txo in tx.my_abandon_outputs:
-                item['abandon_info'].append({
-                    'address': txo.get_address(account.ledger),
-                    'balance_delta': dewies_to_lbc(txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
-                })
-            history.append(item)
-        return history
 
     def save(self):
         for wallet in self.wallets:

@@ -478,7 +478,8 @@ class ChannelCommands(CommandTestCase):
         tx = await self.out(self.channel_update(claim_id, claim_address=other_address))
 
         # after sending
-        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 2)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=self.account.id)), 2)
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
 
         # shoud not have private key
@@ -618,11 +619,16 @@ class StreamCommands(ClaimTestCase):
         channels = await self.out(self.daemon.jsonrpc_channel_list(account1_id))
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@spam')
-        self.assertEqual(channels, await self.out(self.daemon.jsonrpc_channel_list()))
+        self.assertEqual(channels, await self.out(self.daemon.jsonrpc_channel_list(account1_id)))
 
         channels = await self.out(self.daemon.jsonrpc_channel_list(account2_id))
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0]['name'], '@baz')
+
+        channels = await self.out(self.daemon.jsonrpc_channel_list())
+        self.assertEqual(len(channels), 2)
+        self.assertEqual(channels[0]['name'], '@baz')
+        self.assertEqual(channels[1]['name'], '@spam')
 
         # defaults to using all accounts to lookup channel
         await self.stream_create('hovercraft1', '0.1', channel_id=baz_id)
@@ -806,13 +812,15 @@ class StreamCommands(ClaimTestCase):
 
         # before sending
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 4)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=self.account.id)), 4)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 0)
 
         other_address = await account2.receiving.get_or_create_usable_address()
         tx = await self.out(self.stream_update(claim_id, claim_address=other_address))
 
         # after sending
-        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 3)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 4)
+        self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=self.account.id)), 3)
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list(account_id=account2_id)), 1)
 
     async def test_setting_fee_fields(self):
@@ -1112,8 +1120,7 @@ class SupportCommands(CommandTestCase):
         await self.assertBalance(account2,     '5.0')
 
         # create the claim we'll be tipping and supporting
-        tx = await self.stream_create()
-        claim_id = self.get_claim_id(tx)
+        claim_id = self.get_claim_id(await self.stream_create())
 
         # account1 and account2 balances:
         await self.assertBalance(self.account, '3.979769')
@@ -1121,18 +1128,17 @@ class SupportCommands(CommandTestCase):
 
         # send a tip to the claim using account2
         tip = await self.out(
-            self.daemon.jsonrpc_support_create(claim_id, '1.0', True, account2_id)
+            self.daemon.jsonrpc_support_create(
+                claim_id, '1.0', True, account2_id, funding_account_ids=[account2_id])
         )
-        await self.on_transaction_dict(tip)
-        await self.generate(1)
-        await self.on_transaction_dict(tip)
+        await self.confirm_tx(tip['txid'])
 
         # tips don't affect balance so account1 balance is same but account2 balance went down
         await self.assertBalance(self.account, '3.979769')
         await self.assertBalance(account2,     '3.9998585')
 
         # verify that the incoming tip is marked correctly as is_tip=True in account1
-        txs = await self.out(self.daemon.jsonrpc_transaction_list())
+        txs = await self.out(self.daemon.jsonrpc_transaction_list(self.account.id))
         self.assertEqual(len(txs[0]['support_info']), 1)
         self.assertEqual(txs[0]['support_info'][0]['balance_delta'], '1.0')
         self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim_id)
@@ -1153,11 +1159,10 @@ class SupportCommands(CommandTestCase):
 
         # send a support to the claim using account2
         support = await self.out(
-            self.daemon.jsonrpc_support_create(claim_id, '2.0', False, account2_id)
+            self.daemon.jsonrpc_support_create(
+                claim_id, '2.0', False, account2_id, funding_account_ids=[account2_id])
         )
-        await self.on_transaction_dict(support)
-        await self.generate(1)
-        await self.on_transaction_dict(support)
+        await self.confirm_tx(support['txid'])
 
         # account2 balance went down ~2
         await self.assertBalance(self.account, '3.979769')

@@ -160,14 +160,10 @@ def query(select, **constraints):
     offset = constraints.pop('offset', None)
     order_by = constraints.pop('order_by', None)
 
-    constraints.pop('my_account', None)
-    account = constraints.pop('account', None)
-    if account is not None:
-        if not isinstance(account, list):
-            account = [account]
-        constraints['account__in'] = [
-            (a.public_key.address if isinstance(a, BaseAccount) else a) for a in account
-        ]
+    constraints.pop('my_accounts', None)
+    accounts = constraints.pop('accounts', None)
+    if accounts is not None:
+        constraints['account__in'] = [a.public_key.address for a in accounts]
 
     where, values = constraints_to_sql(constraints)
     if where:
@@ -395,22 +391,26 @@ class BaseDatabase(SQLiteMixin):
         # 2. update address histories removing deleted TXs
         return True
 
-    async def select_transactions(self, cols, account=None, **constraints):
-        if 'txid' not in constraints and account is not None:
-            constraints['$account'] = account.public_key.address
-            constraints['txid__in'] = """
+    async def select_transactions(self, cols, accounts=None, **constraints):
+        if 'txid' not in constraints:
+            assert accounts is not None, "'accounts' argument required when no 'txid' constraint"
+            constraints.update({
+                f'$account{i}': a.public_key.address for i, a in enumerate(accounts)
+            })
+            account_values = ', '.join([f':$account{i}' for i in range(len(accounts))])
+            constraints['txid__in'] = f"""
                 SELECT txo.txid FROM txo
-                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :$account
+                INNER JOIN pubkey_address USING (address) WHERE pubkey_address.account IN ({account_values})
               UNION
                 SELECT txi.txid FROM txi
-                JOIN pubkey_address USING (address) WHERE pubkey_address.account = :$account
+                INNER JOIN pubkey_address USING (address) WHERE pubkey_address.account IN ({account_values})
             """
         return await self.db.execute_fetchall(
             *query("SELECT {} FROM tx".format(cols), **constraints)
         )
 
-    async def get_transactions(self, my_account=None, **constraints):
-        my_account = my_account or constraints.get('account', None)
+    async def get_transactions(self, **constraints):
+        accounts = constraints.get('accounts', None)
 
         tx_rows = await self.select_transactions(
             'txid, raw, height, position, is_verified',
@@ -436,7 +436,7 @@ class BaseDatabase(SQLiteMixin):
             annotated_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
-                    my_account=my_account,
+                    my_accounts=accounts,
                     txid__in=txids[offset:offset+step],
                 ))
             })
@@ -446,7 +446,7 @@ class BaseDatabase(SQLiteMixin):
             referenced_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
-                    my_account=my_account,
+                    my_accounts=accounts,
                     txoid__in=txi_txoids[offset:offset+step],
                 ))
             })
@@ -484,12 +484,14 @@ class BaseDatabase(SQLiteMixin):
             " JOIN tx USING (txid)".format(cols), **constraints
         ))
 
-    async def get_txos(self, my_account=None, no_tx=False, **constraints):
-        my_account = my_account or constraints.get('account', None)
-        if isinstance(my_account, BaseAccount):
-            my_account = my_account.public_key.address
+    async def get_txos(self, my_accounts=None, no_tx=False, **constraints):
+        my_accounts = [
+            (a.public_key.address if isinstance(a, BaseAccount) else a)
+            for a in (my_accounts or constraints.get('accounts', []))
+        ]
         if 'order_by' not in constraints:
-            constraints['order_by'] = ["tx.height=0 DESC", "tx.height DESC", "tx.position DESC"]
+            constraints['order_by'] = [
+                "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"]
         rows = await self.select_txos(
             "tx.txid, raw, tx.height, tx.position, tx.is_verified, "
             "txo.position, chain, account, amount, script",
@@ -513,7 +515,7 @@ class BaseDatabase(SQLiteMixin):
                     )
                 txo = txs[row[0]].outputs[row[5]]
             txo.is_change = row[6] == 1
-            txo.is_my_account = row[7] == my_account
+            txo.is_my_account = row[7] in my_accounts
             txos.append(txo)
         return txos
 

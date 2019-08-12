@@ -50,7 +50,7 @@ class AddressManager:
 
     def _query_addresses(self, **constraints):
         return self.account.ledger.db.get_addresses(
-            account=self.account,
+            accounts=[self.account],
             chain=self.chain_number,
             **constraints
         )
@@ -406,7 +406,7 @@ class BaseAccount:
         if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})
-        return self.ledger.db.get_balance(account=self, **constraints)
+        return self.ledger.db.get_balance(accounts=[self], **constraints)
 
     async def get_max_gap(self):
         change_gap = await self.change.get_max_gap()
@@ -417,16 +417,16 @@ class BaseAccount:
         }
 
     def get_utxos(self, **constraints):
-        return self.ledger.db.get_utxos(account=self, **constraints)
+        return self.ledger.get_utxos(account=self, **constraints)
 
     def get_utxo_count(self, **constraints):
-        return self.ledger.db.get_utxo_count(account=self, **constraints)
+        return self.ledger.get_utxo_count(account=self, **constraints)
 
     def get_transactions(self, **constraints):
-        return self.ledger.db.get_transactions(account=self, **constraints)
+        return self.ledger.get_transactions(account=self, **constraints)
 
     def get_transaction_count(self, **constraints):
-        return self.ledger.db.get_transaction_count(account=self, **constraints)
+        return self.ledger.get_transaction_count(account=self, **constraints)
 
     async def fund(self, to_account, amount=None, everything=False,
                    outputs=1, broadcast=False, **constraints):

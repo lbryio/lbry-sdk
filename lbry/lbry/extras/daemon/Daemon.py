@@ -1703,12 +1703,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        account = self.get_account_or_default(account_id)
-        return maybe_paginate(
-            account.get_claims,
-            account.get_claim_count,
-            page, page_size
-        )
+        if account_id:
+            account = self.get_account_or_error(account_id)
+            claims = account.get_claims
+            claim_count = account.get_claim_count
+        else:
+            claims = self.ledger.get_claims
+            claim_count = self.ledger.get_claim_count
+        return maybe_paginate(claims, claim_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_search(self, **kwargs):
@@ -1859,7 +1861,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_create(
             self, name, bid, allow_duplicate_name=False, account_id=None, claim_address=None,
-            preview=False, blocking=False, **kwargs):
+            funding_account_ids=None, preview=False, blocking=False, **kwargs):
         """
         Create a new channel by generating a channel private key and establishing an '@' prefixed claim.
 
@@ -1871,6 +1873,7 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                            [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>]
+                           [--funding_account_ids=<funding_account_ids>...]
                            [--preview] [--blocking]
 
         Options:
@@ -1924,7 +1927,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
             --cover_url=<cover_url>        : (str) url of cover image
-            --account_id=<account_id>      : (str) id of the account to store channel
+            --account_id=<account_id>      : (str) account to use for holding the transaction
+          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --claim_address=<claim_address>: (str) address where the channel is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
@@ -1933,6 +1937,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
+        funding_accounts = self.get_accounts_or_all(funding_account_ids)
         self.valid_channel_name_or_error(name)
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
@@ -1948,7 +1953,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claim = Claim()
         claim.channel.update(**kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, [account], account
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
         )
         txo = tx.outputs[0]
         txo.generate_channel_private_key()
@@ -1970,7 +1975,8 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_channel_update(
             self, claim_id, bid=None, account_id=None, claim_address=None,
-            new_signing_key=False, preview=False, blocking=False, replace=False, **kwargs):
+            funding_account_ids=None, new_signing_key=False, preview=False,
+            blocking=False, replace=False, **kwargs):
         """
         Update an existing channel claim.
 
@@ -1984,6 +1990,7 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--locations=<locations>...] [--clear_locations]
                            [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--claim_address=<claim_address>] [--new_signing_key]
+                           [--funding_account_ids=<funding_account_ids>...]
                            [--preview] [--blocking] [--replace]
 
         Options:
@@ -2039,7 +2046,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --clear_locations              : (bool) clear existing locations (prior to adding new ones)
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
             --cover_url=<cover_url>        : (str) url of cover image
-            --account_id=<account_id>      : (str) id of the account to store channel
+            --account_id=<account_id>      : (str) account to use for holding the transaction
+          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --claim_address=<claim_address>: (str) address where the channel is sent
             --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
             --preview                      : (bool) do not broadcast the transaction
@@ -2052,6 +2060,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
+        funding_accounts = self.get_accounts_or_all(funding_account_ids)
 
         existing_channels = await account.get_claims(claim_id=claim_id)
         if len(existing_channels) != 1:
@@ -2081,7 +2090,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
         claim.channel.update(**kwargs)
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, [account], account
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0]
         )
         new_txo = tx.outputs[0]
 
@@ -2169,12 +2178,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        account = self.get_account_or_default(account_id)
-        return maybe_paginate(
-            account.get_channels,
-            account.get_channel_count,
-            page, page_size
-        )
+        if account_id:
+            account = self.get_account_or_error(account_id)
+            channels = account.get_channels
+            channel_count = account.get_channel_count
+        else:
+            channels = self.ledger.get_channels
+            channel_count = self.ledger.get_channel_count
+        return maybe_paginate(channels, channel_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_export(self, channel_id=None, channel_name=None, account_id=None):
@@ -2261,6 +2272,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>]
+                    [--funding_account_ids=<funding_account_ids>...]
                     [--preview] [--blocking]
 
         Options:
@@ -2328,7 +2340,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_name=<channel_name>  : (str) name of publisher channel
           --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
-            --account_id=<account_id>      : (str) account to use for funding the transaction
+            --account_id=<account_id>      : (str) account to use for holding the transaction
+          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
@@ -2359,8 +2372,8 @@ class Daemon(metaclass=JSONRPCServerType):
     async def jsonrpc_stream_create(
             self, name, bid, file_path, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
-            account_id=None, claim_address=None, preview=False, blocking=False,
-            **kwargs):
+            account_id=None, claim_address=None, funding_account_ids=None,
+            preview=False, blocking=False, **kwargs):
         """
         Make a new stream claim and announce the associated file to lbrynet.
 
@@ -2375,6 +2388,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>]
+                    [--funding_account_ids=<funding_account_ids>...]
                     [--preview] [--blocking]
 
         Options:
@@ -2444,7 +2458,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_name=<channel_name>  : (str) name of the publisher channel
           --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
-            --account_id=<account_id>      : (str) account to use for funding the transaction
+            --account_id=<account_id>      : (str) account to use for holding the transaction
+          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
@@ -2454,6 +2469,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         self.valid_stream_name_or_error(name)
         account = self.get_account_or_default(account_id)
+        funding_accounts = self.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
@@ -2470,7 +2486,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claim = Claim()
         claim.stream.update(file_path=file_path, sd_hash='0'*96, **kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, [account], account, channel
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
 
@@ -2501,7 +2517,7 @@ class Daemon(metaclass=JSONRPCServerType):
     async def jsonrpc_stream_update(
             self, claim_id, bid=None, file_path=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
-            account_id=None, claim_address=None,
+            account_id=None, claim_address=None, funding_account_ids=None,
             preview=False, blocking=False, replace=False, **kwargs):
         """
         Update an existing stream claim and if a new file is provided announce it to lbrynet.
@@ -2520,6 +2536,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--claim_address=<claim_address>]
+                    [--funding_account_ids=<funding_account_ids>...]
                     [--preview] [--blocking] [--replace]
 
         Options:
@@ -2595,7 +2612,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --clear_channel                : (bool) remove channel signature
           --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
-            --account_id=<account_id>      : (str) account to use for funding the transaction
+            --account_id=<account_id>      : (str) account to use for holding the transaction
+          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
@@ -2608,6 +2626,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
+        funding_accounts = self.get_accounts_or_all(funding_account_ids)
 
         existing_claims = await account.get_claims(claim_id=claim_id)
         if len(existing_claims) != 1:
@@ -2655,7 +2674,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
             claim.stream.update(file_path=file_path, **kwargs)
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, [account], account, channel
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
 
@@ -2753,12 +2772,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        account = self.get_account_or_default(account_id)
-        return maybe_paginate(
-            account.get_streams,
-            account.get_stream_count,
-            page, page_size
-        )
+        if account_id:
+            account = self.get_account_or_error(account_id)
+            streams = account.get_streams
+            stream_count = account.get_stream_count
+        else:
+            streams = self.ledger.get_streams
+            stream_count = self.ledger.get_stream_count
+        return maybe_paginate(streams, stream_count, page, page_size)
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, DATABASE_COMPONENT,
@@ -2785,7 +2806,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_support_create(
-            self, claim_id, amount, tip=False, account_id=None,
+            self, claim_id, amount, tip=False, account_id=None, funding_account_ids=None,
             preview=False, blocking=False):
         """
         Create a support or a tip for name claim.
@@ -2793,18 +2814,21 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             support_create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
                            [--tip] [--account_id=<account_id>] [--preview] [--blocking]
+                           [--funding_account_ids=<funding_account_ids>...]
 
         Options:
             --claim_id=<claim_id>     : (str) claim_id of the claim to support
             --amount=<amount>         : (decimal) amount of support
             --tip                     : (bool) send support to claim owner, default: false.
-            --account_id=<account_id> : (str) id of the account to use
+            --account_id=<account_id> : (str) account to use for holding the transaction
+          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --preview                 : (bool) do not broadcast the transaction
             --blocking                : (bool) wait until transaction is in mempool
 
         Returns: {Transaction}
         """
         account = self.get_account_or_default(account_id)
+        funding_accounts = self.get_accounts_or_all(funding_account_ids)
         amount = self.get_dewies_or_error("amount", amount)
         claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
@@ -2812,7 +2836,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
-            claim.claim_name, claim_id, amount, claim_address, [account], account
+            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0]
         )
 
         if not preview:
@@ -2847,12 +2871,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        account = self.get_account_or_default(account_id)
-        return maybe_paginate(
-            account.get_supports,
-            account.get_support_count,
-            page, page_size
-        )
+        if account_id:
+            account = self.get_account_or_error(account_id)
+            supports = account.get_supports
+            support_count = account.get_support_count
+        else:
+            supports = self.ledger.get_supports
+            support_count = self.ledger.get_support_count
+        return maybe_paginate(supports, support_count, page, page_size)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_support_abandon(
@@ -2978,12 +3004,14 @@ class Daemon(metaclass=JSONRPCServerType):
             }
 
         """
-        account = self.get_account_or_default(account_id)
-        return maybe_paginate(
-            self.wallet_manager.get_history,
-            self.ledger.db.get_transaction_count,
-            page, page_size, account=account
-        )
+        if account_id:
+            account = self.get_account_or_error(account_id)
+            transactions = account.get_transaction_history
+            transaction_count = account.get_transaction_history_count
+        else:
+            transactions = self.ledger.get_transaction_history
+            transaction_count = self.ledger.get_transaction_history_count
+        return maybe_paginate(transactions, transaction_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -3020,12 +3048,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        account = self.get_account_or_default(account_id)
-        return maybe_paginate(
-            account.get_utxos,
-            account.get_utxo_count,
-            page, page_size
-        )
+        if account_id:
+            account = self.get_account_or_error(account_id)
+            utxos = account.get_utxos
+            utxo_count = account.get_utxo_count
+        else:
+            utxos = self.ledger.get_utxos
+            utxo_count = self.ledger.get_utxo_count
+        return maybe_paginate(utxos, utxo_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_utxo_release(self, account_id=None):
