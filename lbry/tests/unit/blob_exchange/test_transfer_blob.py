@@ -274,3 +274,36 @@ class TestBlobExchange(BlobExchangeTestBase):
         self.assertFalse(called.is_set())
         protocol.data_received(b'0')
         self.assertTrue(called.is_set())
+
+    def test_bad_json(self):
+        protocol = BlobServerProtocol(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
+        called = asyncio.Event()
+        protocol.close = called.set
+        protocol.data_received(b'{{0}')
+        self.assertTrue(called.is_set())
+
+    def test_no_request(self):
+        protocol = BlobServerProtocol(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
+        called = asyncio.Event()
+        protocol.close = called.set
+        protocol.data_received(b'{}')
+        self.assertTrue(called.is_set())
+
+    async def test_transfer_timeout(self):
+        self.server.transfer_timeout = 1
+
+        blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
+        mock_blob_bytes = b'1' * ((2 * 2 ** 20) - 1)
+        await self._add_blob_to_server(blob_hash, mock_blob_bytes)
+        client_blob = self.client_blob_manager.get_blob(blob_hash)
+        server_blob = self.server_blob_manager.get_blob(blob_hash)
+
+        async def sendfile(writer):
+            await asyncio.sleep(2, loop=self.loop)
+            return 0
+
+        server_blob.sendfile = sendfile
+
+        with self.assertRaises(asyncio.CancelledError):
+            await request_blob(self.loop, client_blob, self.server_from_client.address,
+                               self.server_from_client.tcp_port, 2, 3)
