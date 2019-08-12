@@ -82,7 +82,7 @@ class Account(BaseAccount):
         get_total_balance = partial(self.get_balance, confirmations=confirmations, include_claims=True)
         total = await get_total_balance()
         if reserved_subtotals:
-            claims_balance = await get_total_balance(claim_type__or={'is_claim':True, 'is_update': True})
+            claims_balance = await get_total_balance(claim_type__or={'is_claim': True, 'is_update': True})
             for amount, spent, from_me, to_me, height in await self.get_support_summary():
                 if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
                     continue

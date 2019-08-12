@@ -38,42 +38,77 @@ class TransactionCommandsTestCase(CommandTestCase):
         await self.assertBalance(self.account, '11.0')
 
     async def test_granular_balances(self):
-        initial_balance = await self.daemon.jsonrpc_account_balance(reserved_subtotals=True)
-        self.assertEqual({
+        account_balance = self.daemon.jsonrpc_account_balance
+
+        self.assertEqual(await account_balance(reserved_subtotals=False), {
+            'total': '10.0',
+            'available': '10.0',
+            'reserved': '0.0',
+            'reserved_subtotals': None
+        })
+
+        self.assertEqual(await account_balance(reserved_subtotals=True), {
             'total': '10.0',
             'available': '10.0',
             'reserved': '0.0',
             'reserved_subtotals': {'claims': '0.0', 'supports': '0.0', 'tips': '0.0'}
-        }, initial_balance)
-        first_claim_id = self.get_claim_id(await self.stream_create('granularity', bid='3.0'))
-        await self.stream_update(first_claim_id, data=b'news', bid='1.0')
-        await self.support_create(first_claim_id, bid='2.0')
-        second_account_id = (await self.out(self.daemon.jsonrpc_account_create("Tip-er")))['id']
-        second_accound_address = await self.daemon.jsonrpc_address_unused(second_account_id)
-        await self.confirm_tx((await self.daemon.jsonrpc_account_send('1.0', second_accound_address)).id)
-        self.assertEqual({
+        })
+
+        # claim with update + supporting our own claim
+        stream1 = await self.stream_create('granularity', '3.0')
+        await self.stream_update(self.get_claim_id(stream1), data=b'news', bid='1.0')
+        await self.support_create(self.get_claim_id(stream1), '2.0')
+        self.assertEqual(await account_balance(reserved_subtotals=True), {
+            'total': '9.977534',
+            'available': '6.977534',
+            'reserved': '3.0',
+            'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
+        })
+
+        account2 = await self.daemon.jsonrpc_account_create("Tip-er")
+        address2 = await self.daemon.jsonrpc_address_unused(account2.id)
+
+        # send lbc to someone else
+        tx = await self.daemon.jsonrpc_account_send('1.0', address2)
+        await self.confirm_tx(tx.id)
+        self.assertEqual(await account_balance(reserved_subtotals=True), {
             'total': '8.97741',
             'available': '5.97741',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
-        }, await self.daemon.jsonrpc_account_balance(reserved_subtotals=True))
-        second_claim_id = self.get_claim_id(await self.stream_create(
-            name='granularity-is-cool', account_id=second_account_id, bid='0.1'))
-        await self.daemon.jsonrpc_support_create(second_claim_id, '0.5', tip=True)
-        first_account_tip_txid = await self.confirm_tx((await self.daemon.jsonrpc_support_create(
-            first_claim_id, '0.3', tip=True, account_id=second_account_id)).id)
-        for with_subtotals in (True, False):
-            self.assertEqual({
-                'total': '8.777264',
-                'available': '5.477264',
-                'reserved': '3.3',
-                'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.3'} if with_subtotals else None
-            }, await self.daemon.jsonrpc_account_balance(reserved_subtotals=with_subtotals))
-        await self.confirm_tx((await self.daemon.jsonrpc_support_abandon(txid=first_account_tip_txid, nout=0)).id)
-        for with_subtotals in (True, False):
-            self.assertEqual({
-                'total': '8.777157',
-                'available': '5.777157',
-                'reserved': '3.0',
-                'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'} if with_subtotals else None
-            }, await self.daemon.jsonrpc_account_balance(reserved_subtotals=with_subtotals))
+        })
+
+        # tip received
+        support1 = await self.support_create(
+            self.get_claim_id(stream1), '0.3', tip=True, funding_account_ids=[account2.id]
+        )
+        self.assertEqual(await account_balance(reserved_subtotals=True), {
+            'total': '9.27741',
+            'available': '5.97741',
+            'reserved': '3.3',
+            'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.3'}
+        })
+
+        # tip claimed
+        tx = await self.daemon.jsonrpc_support_abandon(txid=support1['txid'], nout=0)
+        await self.confirm_tx(tx.id)
+        self.assertEqual(await account_balance(reserved_subtotals=True), {
+            'total': '9.277303',
+            'available': '6.277303',
+            'reserved': '3.0',
+            'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
+        })
+
+        stream2 = await self.stream_create(
+            'granularity-is-cool', '0.1', account_id=account2.id, funding_account_ids=[account2.id]
+        )
+
+        # tip another claim
+        await self.support_create(
+            self.get_claim_id(stream2), '0.2', tip=True, funding_account_ids=[self.account.id])
+        self.assertEqual(await account_balance(reserved_subtotals=True), {
+            'total': '9.077157',
+            'available': '6.077157',
+            'reserved': '3.0',
+            'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
+        })

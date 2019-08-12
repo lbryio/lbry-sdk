@@ -1959,10 +1959,10 @@ class Daemon(metaclass=JSONRPCServerType):
         txo.generate_channel_private_key()
 
         if not preview:
-            await tx.sign([account])
+            await tx.sign(funding_accounts)
             account.add_channel_private_key(txo.private_key)
             self.default_wallet.save()
-            await self.broadcast_or_release(account, tx, blocking)
+            await self.broadcast_or_release(tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
@@ -2102,10 +2102,10 @@ class Daemon(metaclass=JSONRPCServerType):
         new_txo.script.generate()
 
         if not preview:
-            await tx.sign([account])
+            await tx.sign(funding_accounts)
             account.add_channel_private_key(new_txo.private_key)
             self.default_wallet.save()
-            await self.broadcast_or_release(account, tx, blocking)
+            await self.broadcast_or_release(tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
@@ -2155,7 +2155,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         if not preview:
-            await self.broadcast_or_release(account, tx, blocking)
+            await self.broadcast_or_release(tx, blocking)
             await self.analytics_manager.send_claim_action('abandon')
         else:
             await account.ledger.release_tx(tx)
@@ -2498,10 +2498,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if channel:
             new_txo.sign(channel)
-        await tx.sign([account])
+        await tx.sign(funding_accounts)
 
         if not preview:
-            await self.broadcast_or_release(account, tx, blocking)
+            await self.broadcast_or_release(tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
@@ -2694,10 +2694,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if channel:
             new_txo.sign(channel)
-        await tx.sign([account])
+        await tx.sign(funding_accounts)
 
         if not preview:
-            await self.broadcast_or_release(account, tx, blocking)
+            await self.broadcast_or_release(tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
@@ -2749,7 +2749,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         if not preview:
-            await self.broadcast_or_release(account, tx, blocking)
+            await self.broadcast_or_release(tx, blocking)
             await self.analytics_manager.send_claim_action('abandon')
         else:
             await account.ledger.release_tx(tx)
@@ -2827,12 +2827,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
-        account = self.get_account_or_default(account_id)
         funding_accounts = self.get_accounts_or_all(funding_account_ids)
         amount = self.get_dewies_or_error("amount", amount)
         claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
         if not tip:
+            account = self.get_account_or_default(account_id)
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
@@ -2840,8 +2840,8 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         if not preview:
-            await tx.sign([account])
-            await self.broadcast_or_release(account, tx, blocking)
+            await tx.sign(funding_accounts)
+            await self.broadcast_or_release(tx, blocking)
             await self.storage.save_supports({claim_id: [{
                 'txid': tx.id,
                 'nout': tx.position,
@@ -2851,7 +2851,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }]})
             await self.analytics_manager.send_claim_action('new_support')
         else:
-            await account.ledger.release_tx(tx)
+            await self.ledger.release_tx(tx)
 
         return tx
 
@@ -2903,12 +2903,18 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
-        account = self.get_account_or_default(account_id)
+        if account_id:
+            account = self.get_account_or_error(account_id)
+            funding_accounts = [account]
+            get_supports = account.get_supports
+        else:
+            funding_accounts = self.ledger.accounts
+            get_supports = self.ledger.get_supports
 
         if txid is not None and nout is not None:
-            supports = await account.get_supports(**{'txo.txid': txid, 'txo.position': nout})
+            supports = await get_supports(**{'txo.txid': txid, 'txo.position': nout})
         elif claim_id is not None:
-            supports = await account.get_supports(claim_id=claim_id)
+            supports = await get_supports(claim_id=claim_id)
         else:
             raise Exception('Must specify claim_id, or txid and nout')
 
@@ -2929,14 +2935,14 @@ class Daemon(metaclass=JSONRPCServerType):
             ]
 
         tx = await Transaction.create(
-            [Input.spend(txo) for txo in supports], outputs, [account], account
+            [Input.spend(txo) for txo in supports], outputs, funding_accounts, funding_accounts[0]
         )
 
         if not preview:
-            await self.broadcast_or_release(account, tx, blocking)
+            await self.broadcast_or_release(tx, blocking)
             await self.analytics_manager.send_claim_action('abandon')
         else:
-            await account.ledger.release_tx(tx)
+            await self.ledger.release_tx(tx)
 
         return tx
 
@@ -3567,13 +3573,13 @@ class Daemon(metaclass=JSONRPCServerType):
         comment_client.sign_comment(abandon_comment_body, channel, abandon=True)
         return await comment_client.jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
 
-    async def broadcast_or_release(self, account, tx, blocking=False):
+    async def broadcast_or_release(self, tx, blocking=False):
         try:
-            await account.ledger.broadcast(tx)
+            await self.ledger.broadcast(tx)
             if blocking:
-                await account.ledger.wait(tx)
+                await self.ledger.wait(tx)
         except:
-            await account.ledger.release_tx(tx)
+            await self.ledger.release_tx(tx)
             raise
 
     def valid_address_or_error(self, address):
