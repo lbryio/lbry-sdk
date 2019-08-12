@@ -265,3 +265,12 @@ class TestBlobExchange(BlobExchangeTestBase):
         await asyncio.sleep(0.1, loop=self.loop)
         self.assertIsNone(transport._sock)
         self.assertTrue(transport.is_closing())
+
+    def test_max_request_size(self):
+        protocol = BlobServerProtocol(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
+        called = asyncio.Event()
+        protocol.close = called.set
+        protocol.data_received(b'0' * 1199)
+        self.assertFalse(called.is_set())
+        protocol.data_received(b'0')
+        self.assertTrue(called.is_set())
