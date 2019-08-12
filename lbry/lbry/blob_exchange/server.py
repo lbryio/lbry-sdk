@@ -12,6 +12,9 @@ if typing.TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# a standard request will be 295 bytes
+MAX_REQUEST_SIZE = 1200
+
 
 class BlobServerProtocol(asyncio.Protocol):
     def __init__(self, loop: asyncio.AbstractEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str):
@@ -23,6 +26,10 @@ class BlobServerProtocol(asyncio.Protocol):
         self.transport = None
         self.lbrycrd_address = lbrycrd_address
         self.peer_address_and_port: typing.Optional[str] = None
+
+    def close(self):
+        if self.transport:
+            self.transport.close()
 
     def connection_made(self, transport):
         self.transport = transport
@@ -79,6 +86,10 @@ class BlobServerProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         request = None
+        if len(self.buf) + len(data or b'') >= MAX_REQUEST_SIZE:
+            log.warning("request from %s is too large", self.peer_address_and_port)
+            self.close()
+            return
         if data:
             self.blob_manager.connection_manager.received_data(self.peer_address_and_port, len(data))
             message, separator, remainder = data.rpartition(b'}')
