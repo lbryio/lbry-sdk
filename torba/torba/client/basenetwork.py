@@ -2,7 +2,7 @@ import logging
 import asyncio
 from operator import itemgetter
 from typing import Dict, Optional
-from time import time
+from time import perf_counter as time
 
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 class ClientSession(BaseClientSession):
 
-    def __init__(self, *args, network, server, timeout=30, **kwargs):
+    def __init__(self, *args, network, server, timeout=30, on_connect_callback=None, **kwargs):
         self.network = network
         self.server = server
         super().__init__(*args, **kwargs)
@@ -24,6 +24,7 @@ class ClientSession(BaseClientSession):
         self.timeout = timeout
         self.max_seconds_idle = timeout * 2
         self.latency = 1 << 32
+        self._on_connect_cb = on_connect_callback or (lambda: None)
 
     @property
     def available(self):
@@ -53,6 +54,7 @@ class ClientSession(BaseClientSession):
                 if self.is_closing():
                     await self.create_connection(self.timeout)
                     await self.ensure_server_version()
+                    self._on_connect_cb()
                 if (time() - self.last_send) > self.max_seconds_idle or self.latency == 1 << 32:
                     await self.send_request('server.banner')
                 retry_delay = default_delay
@@ -177,8 +179,9 @@ class SessionPool:
 
     def __init__(self, network: BaseNetwork, timeout: float):
         self.network = network
-        self.sessions: Dict[ClientSession, asyncio.Task] = dict()
+        self.sessions: Dict[ClientSession, Optional[asyncio.Task]] = dict()
         self.timeout = timeout
+        self.new_connection_event = asyncio.Event()
 
     @property
     def online(self):
@@ -195,8 +198,11 @@ class SessionPool:
         return min([(session.latency, session) for session in self.available_sessions], key=itemgetter(0))[1]
 
     def start(self, default_servers):
+        callback = self.new_connection_event.set
         self.sessions = {
-            ClientSession(network=self.network, server=server): None for server in default_servers
+            ClientSession(
+                network=self.network, server=server, on_connect_callback=callback
+            ): None for server in default_servers
         }
         self.ensure_connections()
 
@@ -214,9 +220,7 @@ class SessionPool:
                 self.sessions[session] = task
 
     async def wait_for_fastest_session(self):
-        while True:
-            fastest = self.fastest_session
-            if fastest:
-                return fastest
-            else:
-                await asyncio.sleep(0.5)
+        while not self.fastest_session:
+            self.new_connection_event.clear()
+            await self.new_connection_event.wait()
+        return self.fastest_session
