@@ -107,9 +107,9 @@ async def monitor(db, server, slackclient):
 
         except (aiohttp.ClientConnectorError, asyncio.TimeoutError):
             await boris_says(slackclient, random.choice([
-                f"Guys, we have a problem! Nobody home at {server}. Will check on it again in {delay} seconds."
+                f"Guys, we have a problem! Nobody home at {server}. Will check on it again in {delay} seconds.",
                 f"Something wrong with {server}. I think dead. Will poke it again in {delay} seconds.",
-                f"Don't hear anything from {server}, maybe dead. Will try it again in {delay} seconds."
+                f"Don't hear anything from {server}, maybe dead. Will try it again in {delay} seconds.",
             ]))
             await asyncio.sleep(delay)
             delay += 30
