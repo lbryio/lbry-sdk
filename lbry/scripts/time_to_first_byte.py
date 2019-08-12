@@ -75,7 +75,7 @@ async def main(cmd_args=None):
                 return 1
             else:
                 url_to_claim.update({
-                    claim['permanent_url']: claim for claim in response['items']
+                    claim['permanent_url']: claim for claim in response['items'] if claim['value_type'] == 'stream'
                 })
             print(f'Claim search page {page} took: {time.perf_counter() - start}')
     except (ClientConnectorError, ConnectionError):
@@ -127,7 +127,7 @@ async def main(cmd_args=None):
     if first_byte_times:
         result += f"Worst first byte time: {round(max(first_byte_times), 2)}\n" \
                   f"Best first byte time: {round(min(first_byte_times), 2)}\n" \
-                  f"95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}s\n" \
+                  f"*95% confidence time-to-first-byte: {confidence(first_byte_times, 1.984)}s*\n" \
                   f"99% confidence time-to-first-byte:  {confidence(first_byte_times, 2.626)}s\n" \
                   f"Variance: {variance(first_byte_times)}\n"
     if download_successes:
@@ -140,7 +140,7 @@ async def main(cmd_args=None):
     for reason in ('start', 'finish'):
         failures = [url for url, why in failed_to.items() if reason == why]
         if failures:
-            result += f"\nFailed to {reason}:\n" + "\n".join(failures)
+            result += f"\nFailed to {reason}:\n" + "\n•".join(failures)
     print(result)
 
     webhook = os.environ.get('TTFB_SLACK_TOKEN', None)
