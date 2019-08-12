@@ -135,12 +135,15 @@ class TestBlobExchange(BlobExchangeTestBase):
             write_blob(blob_bytes)
         blob._write_blob = wrap_write_blob
 
-        writer1 = blob.get_blob_writer(peer_port=1)
-        writer2 = blob.get_blob_writer(peer_port=2)
+        t1 = asyncio.Transport()
+        t2 = asyncio.Transport()
+
+        writer1 = blob.get_blob_writer(t1)
+        writer2 = blob.get_blob_writer(t2)
         reader1_ctx_before_write = blob.reader_context()
 
         with self.assertRaises(OSError):
-            blob.get_blob_writer(peer_port=2)
+            blob.get_blob_writer(t2)
         with self.assertRaises(OSError):
             with blob.reader_context():
                 pass

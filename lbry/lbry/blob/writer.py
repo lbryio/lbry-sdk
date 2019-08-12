@@ -1,16 +1,17 @@
 import typing
 import logging
-import asyncio
 from io import BytesIO
 from lbry.error import InvalidBlobHashError, InvalidDataError
 from lbry.cryptoutils import get_lbry_hash_obj
+if typing.TYPE_CHECKING:
+    import asyncio
 
 log = logging.getLogger(__name__)
 
 
 class HashBlobWriter:
     def __init__(self, expected_blob_hash: str, get_length: typing.Callable[[], int],
-                 finished: asyncio.Future):
+                 finished: 'asyncio.Future[bytes]'):
         self.expected_blob_hash = expected_blob_hash
         self.get_length = get_length
         self.buffer = BytesIO()

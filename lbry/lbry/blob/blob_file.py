@@ -79,7 +79,7 @@ class AbstractBlob:
         self.length = length
         self.blob_completed_callback = blob_completed_callback
         self.blob_directory = blob_directory
-        self.writers: typing.Dict[typing.Tuple[typing.Optional[str], typing.Optional[int]], HashBlobWriter] = {}
+        self.writers: typing.Dict[typing.Optional[asyncio.Transport], HashBlobWriter] = {}
         self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
         self.writing: asyncio.Event = asyncio.Event(loop=self.loop)
         self.readers: typing.List[typing.BinaryIO] = []
@@ -199,17 +199,16 @@ class AbstractBlob:
             if self.blob_completed_callback:
                 self.blob_completed_callback(self)
 
-    def get_blob_writer(self, peer_address: typing.Optional[str] = None,
-                        peer_port: typing.Optional[int] = None) -> HashBlobWriter:
-        if (peer_address, peer_port) in self.writers and not self.writers[(peer_address, peer_port)].closed():
-            raise OSError(f"attempted to download blob twice from {peer_address}:{peer_port}")
+    def get_blob_writer(self, transport: typing.Optional[asyncio.Transport] = None) -> HashBlobWriter:
+        if transport and transport in self.writers and not self.writers[transport].closed():
+            raise OSError(f"attempted to download blob twice from {transport.get_extra_info('peername')}")
         fut = asyncio.Future(loop=self.loop)
         writer = HashBlobWriter(self.blob_hash, self.get_length, fut)
-        self.writers[(peer_address, peer_port)] = writer
+        self.writers[transport] = writer
 
         def remove_writer(_):
-            if (peer_address, peer_port) in self.writers:
-                del self.writers[(peer_address, peer_port)]
+            if transport in self.writers:
+                del self.writers[transport]
 
         fut.add_done_callback(remove_writer)
 
@@ -299,11 +298,10 @@ class BlobFile(AbstractBlob):
     def is_writeable(self) -> bool:
         return super().is_writeable() and not os.path.isfile(self.file_path)
 
-    def get_blob_writer(self, peer_address: typing.Optional[str] = None,
-                        peer_port: typing.Optional[str] = None) -> HashBlobWriter:
+    def get_blob_writer(self, transport: typing.Optional[asyncio.Transport] = None) -> HashBlobWriter:
         if self.file_exists:
             raise OSError(f"File already exists '{self.file_path}'")
-        return super().get_blob_writer(peer_address, peer_port)
+        return super().get_blob_writer(transport)
 
     @contextlib.contextmanager
     def _reader_context(self) -> typing.ContextManager[typing.BinaryIO]:

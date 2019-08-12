@@ -72,7 +72,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 return
             self.sd_blob = self.blob_manager.get_blob(request['sd_blob_hash'], request['sd_blob_size'])
             if not self.sd_blob.get_is_verified():
-                self.writer = self.sd_blob.get_blob_writer(self.transport.get_extra_info('peername'))
+                self.writer = self.sd_blob.get_blob_writer(self.transport)
                 self.incoming.set()
                 self.send_response({"send_sd_blob": True})
                 try:
@@ -111,7 +111,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 return
             blob = self.blob_manager.get_blob(request['blob_hash'], request['blob_size'])
             if not blob.get_is_verified():
-                self.writer = blob.get_blob_writer(self.transport.get_extra_info('peername'))
+                self.writer = blob.get_blob_writer(self.transport)
                 self.incoming.set()
                 self.send_response({"send_blob": True})
                 try:
