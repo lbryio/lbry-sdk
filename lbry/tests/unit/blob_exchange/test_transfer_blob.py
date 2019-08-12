@@ -225,3 +225,43 @@ class TestBlobExchange(BlobExchangeTestBase):
             server_protocol.data_received(bytes([byte]))
         await asyncio.sleep(0.1)  # yield execution
         self.assertTrue(len(received_data.getvalue()) > 0)
+
+    async def test_idle_timeout(self):
+        self.server.idle_timeout = 1
+
+        blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
+        mock_blob_bytes = b'1' * ((2 * 2 ** 20) - 1)
+        await self._add_blob_to_server(blob_hash, mock_blob_bytes)
+        client_blob = self.client_blob_manager.get_blob(blob_hash)
+
+        # download the blob
+        downloaded, transport = await request_blob(self.loop, client_blob, self.server_from_client.address,
+                                                   self.server_from_client.tcp_port, 2, 3)
+        self.assertIsNotNone(transport)
+        self.assertFalse(transport.is_closing())
+        await client_blob.verified.wait()
+        self.assertTrue(client_blob.get_is_verified())
+        self.assertTrue(downloaded)
+        client_blob.delete()
+
+        # wait for less than the idle timeout
+        await asyncio.sleep(0.5, loop=self.loop)
+
+        # download the blob again
+        downloaded, transport2 = await request_blob(self.loop, client_blob, self.server_from_client.address,
+                                                   self.server_from_client.tcp_port, 2, 3,
+                                                    connected_transport=transport)
+        self.assertTrue(transport is transport2)
+        self.assertFalse(transport.is_closing())
+        await client_blob.verified.wait()
+        self.assertTrue(client_blob.get_is_verified())
+        self.assertTrue(downloaded)
+        client_blob.delete()
+
+        # check that the connection times out from the server side
+        await asyncio.sleep(0.9, loop=self.loop)
+        self.assertFalse(transport.is_closing())
+        self.assertIsNotNone(transport._sock)
+        await asyncio.sleep(0.1, loop=self.loop)
+        self.assertIsNone(transport._sock)
+        self.assertTrue(transport.is_closing())
