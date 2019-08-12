@@ -23,13 +23,13 @@ class ClientSession(BaseClientSession):
         self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
         self.timeout = timeout
         self.max_seconds_idle = timeout * 2
-        self.latency = 1 << 32
+        self.response_time: Optional[float] = None
         self._on_connect_cb = on_connect_callback or (lambda: None)
         self.trigger_urgent_reconnect = asyncio.Event()
 
     @property
     def available(self):
-        return not self.is_closing() and self._can_send.is_set() and self.latency < 1 << 32
+        return not self.is_closing() and self._can_send.is_set() and self.response_time is not None
 
     async def send_request(self, method, args=()):
         try:
@@ -37,13 +37,13 @@ class ClientSession(BaseClientSession):
             result = await asyncio.wait_for(
                 super().send_request(method, args), timeout=self.timeout
             )
-            self.latency = perf_counter() - start
+            self.response_time = perf_counter() - start
             return result
         except RPCError as e:
             log.warning("Wallet server returned an error. Code: %s Message: %s", *e.args)
             raise e
         except TimeoutError:
-            self.latency = 1 << 32
+            self.response_time = None
             raise
 
     async def ensure_session(self):
@@ -56,7 +56,7 @@ class ClientSession(BaseClientSession):
                     await self.create_connection(self.timeout)
                     await self.ensure_server_version()
                     self._on_connect_cb()
-                if (time() - self.last_send) > self.max_seconds_idle or self.latency == 1 << 32:
+                if (time() - self.last_send) > self.max_seconds_idle or self.response_time is None:
                     await self.send_request('server.banner')
                 retry_delay = default_delay
             except (asyncio.TimeoutError, OSError):
@@ -84,7 +84,7 @@ class ClientSession(BaseClientSession):
     def connection_lost(self, exc):
         log.debug("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
-        self.latency = 1 << 32
+        self.response_time = None
         self._on_disconnect_controller.add(True)
 
 
@@ -202,7 +202,9 @@ class SessionPool:
     def fastest_session(self):
         if not self.available_sessions:
             return None
-        return min([(session.latency, session) for session in self.available_sessions], key=itemgetter(0))[1]
+        return min(
+            [(session.response_time, session) for session in self.available_sessions], key=itemgetter(0)
+        )[1]
 
     def start(self, default_servers):
         callback = self.new_connection_event.set

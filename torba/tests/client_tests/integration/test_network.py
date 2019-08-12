@@ -29,16 +29,16 @@ class ReconnectTests(IntegrationTestCase):
         await asyncio.wait_for(self.on_transaction_id(sendtxid), 1.0)  # mempool
         await self.blockchain.generate(1)
         await self.on_transaction_id(sendtxid)  # confirmed
-        self.assertLess(self.ledger.network.client.latency, 1)  # latency properly set lower, we are fine
+        self.assertLess(self.ledger.network.client.response_time, 1)  # response time properly set lower, we are fine
 
         await self.assertBalance(self.account, '1.1337')
         # is it real? are we rich!? let me see this tx...
         d = self.ledger.network.get_transaction(sendtxid)
         # what's that smoke on my ethernet cable? oh no!
         self.ledger.network.client.connection_lost(Exception())
-        with self.assertRaises((asyncio.TimeoutError, asyncio.CancelledError)):
+        with self.assertRaises(asyncio.TimeoutError):
            await d
-        self.assertGreater(self.ledger.network.client.latency, 1000)  # latency skyrockets as it failed
+        self.assertIsNone(self.ledger.network.client.response_time)  # response time unknown as it failed
         # rich but offline? no way, no water, let's retry
         with self.assertRaisesRegex(ConnectionError, 'connection is not available'):
             await self.ledger.network.get_transaction(sendtxid)
