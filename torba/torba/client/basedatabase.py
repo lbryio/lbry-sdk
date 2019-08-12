@@ -392,7 +392,7 @@ class BaseDatabase(SQLiteMixin):
         return True
 
     async def select_transactions(self, cols, accounts=None, **constraints):
-        if 'txid' not in constraints:
+        if not set(constraints) & {'txid', 'txid__in'}:
             assert accounts is not None, "'accounts' argument required when no 'txid' constraint"
             constraints.update({
                 f'$account{i}': a.public_key.address for i, a in enumerate(accounts)

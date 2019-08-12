@@ -110,15 +110,8 @@ class MainNetLedger(BaseLedger):
                 'Failed to display wallet state, please file issue '
                 'for this bug along with the traceback you see below:')
 
-    def constraint_account_or_all(self, constraints):
-        account = constraints.pop('account', None)
-        if account:
-            constraints['accounts'] = [account]
-        else:
-            constraints['accounts'] = self.accounts
-
-    def constraint_spending_utxos(self, constraints):
-        self.constraint_account_or_all(constraints)
+    @staticmethod
+    def constraint_spending_utxos(constraints):
         constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
 
     def get_utxos(self, **constraints):
