@@ -179,7 +179,7 @@ class ManagedStream:
 
     @property
     def blobs_completed(self) -> int:
-        return sum([1 if self.blob_manager.is_blob_verified(b.blob_hash) else 0
+        return sum([1 if b.blob_hash in self.blob_manager.completed_blob_hashes else 0
                     for b in self.descriptor.blobs[:-1]])
 
     @property
