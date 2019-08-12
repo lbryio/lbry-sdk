@@ -386,14 +386,14 @@ class BaseAccount:
         return addresses
 
     async def get_addresses(self, **constraints) -> List[str]:
-        rows = await self.ledger.db.select_addresses('address', account=self, **constraints)
+        rows = await self.ledger.db.select_addresses('address', accounts=[self], **constraints)
         return [r[0] for r in rows]
 
     def get_address_records(self, **constraints):
-        return self.ledger.db.get_addresses(account=self, **constraints)
+        return self.ledger.db.get_addresses(accounts=[self], **constraints)
 
     def get_address_count(self, **constraints):
-        return self.ledger.db.get_address_count(account=self, **constraints)
+        return self.ledger.db.get_address_count(accounts=[self], **constraints)
 
     def get_private_key(self, chain: int, index: int) -> PrivateKey:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
