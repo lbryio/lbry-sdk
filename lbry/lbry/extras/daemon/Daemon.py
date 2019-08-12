@@ -1462,7 +1462,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (bool) true, if address is associated with current wallet
         """
         account = self.get_account_or_default(account_id)
-        match = await self.ledger.db.get_address(address=address, account=account)
+        match = await self.ledger.db.get_address(address=address, accounts=[account])
         if match is not None:
             return True
         return False
