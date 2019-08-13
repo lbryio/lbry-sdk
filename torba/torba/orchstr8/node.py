@@ -256,7 +256,7 @@ class BlockchainProcess(asyncio.SubprocessProtocol):
 
 class BlockchainNode:
 
-    def __init__(self, url, daemon, cli):
+    def __init__(self, url, daemon, cli, segwit_enabled=False):
         self.latest_release_url = url
         self.project_dir = os.path.dirname(os.path.dirname(__file__))
         self.bin_dir = os.path.join(self.project_dir, 'bin')
@@ -272,6 +272,7 @@ class BlockchainNode:
         self.rpcport = 9245 + 2  # avoid conflict with default rpc port
         self.rpcuser = 'rpcuser'
         self.rpcpassword = 'rpcpassword'
+        self.segwit_enabled = segwit_enabled
 
     @property
     def rpc_url(self):
@@ -330,7 +331,7 @@ class BlockchainNode:
             f'-datadir={self.data_path}', '-printtoconsole', '-regtest', '-server', '-txindex',
             f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.rpcport}',
             f'-port={self.peerport}'
-        )
+        ) + () if self.segwit_enabled else ('-addresstype=legacy', '-vbparams=segwit:0:999999999999')
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
             BlockchainProcess, *command
