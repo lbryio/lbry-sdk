@@ -1,4 +1,5 @@
 import struct
+import logging
 from typing import Optional
 from binascii import hexlify, unhexlify
 
@@ -32,7 +33,12 @@ class Headers(BaseHeaders):
 
     @staticmethod
     def deserialize(height, header):
-        version, = struct.unpack('<I', header[:4])
+        try:
+            version, = struct.unpack('<I', header[:4])
+        except struct.error as e:
+            log = logging.getLogger(__name__)
+            log.error(f'Could not unpack version bytes from header. Height: {height}. Header: {hexlify(header)}')
+            raise e
         timestamp, bits, nonce = struct.unpack('<III', header[100:112])
         return {
             'version': version,
