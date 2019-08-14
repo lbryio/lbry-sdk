@@ -67,12 +67,14 @@ def set_logging(ledger_module, level, handler=None):
 
 class Conductor:
 
-    def __init__(self, ledger_module=None, manager_module=None, verbosity=logging.WARNING):
+    def __init__(self, ledger_module=None, manager_module=None, verbosity=logging.WARNING,
+                 enable_segwit=False):
         self.ledger_module = ledger_module or get_ledger_from_environment()
         self.manager_module = manager_module or get_manager_from_environment()
         self.spv_module = get_spvserver_from_ledger(self.ledger_module)
 
         self.blockchain_node = get_blockchain_node_from_ledger(self.ledger_module)
+        self.blockchain_node.segwit_enabled = enable_segwit
         self.spv_node = SPVNode(self.spv_module)
         self.wallet_node = WalletNode(self.manager_module, self.ledger_module.RegTestLedger)
 
@@ -326,12 +328,14 @@ class BlockchainNode:
         self.data_path = tempfile.mkdtemp()
         loop = asyncio.get_event_loop()
         asyncio.get_child_watcher().attach_loop(loop)
-        command = (
+        command = [
             self.daemon_bin,
             f'-datadir={self.data_path}', '-printtoconsole', '-regtest', '-server', '-txindex',
             f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.rpcport}',
             f'-port={self.peerport}'
-        ) + () if self.segwit_enabled else ('-addresstype=legacy', '-vbparams=segwit:0:999999999999')
+        ]
+        if not self.segwit_enabled:
+            command.extend(['-addresstype=legacy', '-vbparams=segwit:0:999999999999'])
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
             BlockchainProcess, *command

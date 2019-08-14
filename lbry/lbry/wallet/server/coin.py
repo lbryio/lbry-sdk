@@ -102,7 +102,7 @@ class LBC(Coin):
         '''
         Overrides electrumx hashX from script by extracting addresses from claim scripts.
         '''
-        if script and script[0] == OpCodes.OP_RETURN:
+        if script and script[0] == OpCodes.OP_RETURN or not script:
             return None
         if script[0] in [
             OutputScript.OP_CLAIM_NAME,

@@ -33,6 +33,14 @@ class TestSessionBloat(IntegrationTestCase):
         self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 0)
 
 
+class TestSegwitServer(IntegrationTestCase):
+    LEDGER = lbry.wallet
+    ENABLE_SEGWIT = True
+
+    async def test_at_least_it_starts(self):
+        await asyncio.wait_for(self.ledger.network.get_headers(0, 1), 1.0)
+
+
 class TestHeadersComponent(CommandTestCase):
 
     LEDGER = lbry.wallet

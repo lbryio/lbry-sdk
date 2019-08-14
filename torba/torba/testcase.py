@@ -185,6 +185,7 @@ class IntegrationTestCase(AsyncioTestCase):
 
     LEDGER = None
     MANAGER = None
+    ENABLE_SEGWIT = False
     VERBOSITY = logging.WARN
 
     def __init__(self, *args, **kwargs):
@@ -199,7 +200,8 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.conductor = Conductor(
-            ledger_module=self.LEDGER, manager_module=self.MANAGER, verbosity=self.VERBOSITY
+            ledger_module=self.LEDGER, manager_module=self.MANAGER, verbosity=self.VERBOSITY,
+            enable_segwit=self.ENABLE_SEGWIT
         )
         await self.conductor.start_blockchain()
         self.addCleanup(self.conductor.stop_blockchain)
