@@ -255,7 +255,7 @@ class Template:
         self.opcodes = opcodes
 
     def parse(self, tokens):
-        return Parser(self.opcodes, tokens).parse().values
+        return Parser(self.opcodes, tokens).parse().values if self.opcodes else {}
 
     def generate(self, values):
         source = BCDataStream()
@@ -288,6 +288,8 @@ class Script:
 
     templates: List[Template] = []
 
+    NO_SCRIPT = Template('no_script', None)  # special case
+
     def __init__(self, source=None, template=None, values=None, template_hint=None):
         self.source = source
         self._template = template
@@ -318,6 +320,8 @@ class Script:
 
     def parse(self, template_hint=None):
         tokens = self.tokens
+        if not tokens and not template_hint:
+            template_hint = self.NO_SCRIPT
         for template in chain((template_hint,), self.templates):
             if not template:
                 continue
