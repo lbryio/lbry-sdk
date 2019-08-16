@@ -9,6 +9,7 @@ if typing.TYPE_CHECKING:
     from lbry.dht.peer import KademliaPeer
     from lbry.blob.blob_manager import BlobManager
     from lbry.blob.blob_file import AbstractBlob
+    from lbry.blob_exchange.client import BlobExchangeClientProtocol
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class BlobDownloader:
         self.scores: typing.Dict['KademliaPeer', int] = {}
         self.failures: typing.Dict['KademliaPeer', int] = {}
         self.connection_failures: typing.List['KademliaPeer'] = []
-        self.connections: typing.Dict['KademliaPeer', asyncio.Transport] = {}
+        self.connections: typing.Dict['KademliaPeer', 'BlobExchangeClientProtocol'] = {}
         self.is_running = asyncio.Event(loop=self.loop)
 
     def should_race_continue(self, blob: 'AbstractBlob'):
@@ -40,26 +41,24 @@ class BlobDownloader:
                                      just_probe: bool = False):
         if blob.get_is_verified():
             return
-        transport = self.connections.get(peer)
         start = self.loop.time()
-        bytes_received, transport = await request_blob(
+        bytes_received, protocol = await request_blob(
             self.loop, blob if not just_probe else None, peer.address, peer.tcp_port, self.config.peer_connect_timeout,
-            self.config.blob_download_timeout, connected_transport=transport, connection_id=connection_id,
-            connection_manager=self.blob_manager.connection_manager
-
+            self.config.blob_download_timeout, connected_protocol=self.connections.get(peer),
+            connection_id=connection_id, connection_manager=self.blob_manager.connection_manager
         )
-        if not bytes_received and not transport and peer not in self.connection_failures:
+        if not bytes_received and not protocol and peer not in self.connection_failures:
             self.connection_failures.append(peer)
-        if not transport and peer not in self.ignored:
+        if not protocol and peer not in self.ignored:
             self.ignored[peer] = self.loop.time()
             log.debug("drop peer %s:%i", peer.address, peer.tcp_port)
             self.failures[peer] = self.failures.get(peer, 0) + 1
             if peer in self.connections:
                 del self.connections[peer]
-        elif transport:
+        elif protocol:
             log.debug("keep peer %s:%i", peer.address, peer.tcp_port)
             self.failures[peer] = 0
-            self.connections[peer] = transport
+            self.connections[peer] = protocol
             elapsed = self.loop.time() - start
             self.scores[peer] = bytes_received / elapsed if bytes_received and elapsed else 1
 
@@ -120,8 +119,8 @@ class BlobDownloader:
         self.scores.clear()
         self.ignored.clear()
         self.is_running.clear()
-        for transport in self.connections.values():
-            transport.close()
+        for protocol in self.connections.values():
+            protocol.close()
 
 
 async def download_blob(loop, config: 'Config', blob_manager: 'BlobManager', node: 'Node',
