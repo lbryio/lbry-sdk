@@ -22,7 +22,6 @@ class TestSessionBloat(IntegrationTestCase):
         await self.conductor.start_spv()
         session = ClientSession(network=None, server=self.ledger.network.client.server, timeout=0.2)
         await session.create_connection()
-        session.ping_task.cancel()
         await session.send_request('server.banner', ())
         self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 1)
         self.assertFalse(session.is_closing())

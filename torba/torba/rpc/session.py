@@ -456,7 +456,7 @@ class RPCSession(SessionBase):
 
     def connection_lost(self, exc):
         # Cancel pending requests and message processing
-        self.connection.cancel_pending_requests()
+        self.connection.time_out_pending_requests()
         super().connection_lost(exc)
 
     # External API
@@ -473,6 +473,8 @@ class RPCSession(SessionBase):
 
     async def send_request(self, method, args=()):
         """Send an RPC request over the network."""
+        if self.is_closing():
+            raise asyncio.TimeoutError("Trying to send request on a recently dropped connection.")
         message, event = self.connection.send_request(Request(method, args))
         await self._send_message(message)
         await event.wait()
