@@ -34,7 +34,7 @@ class DHTIntegrationTest(AsyncioTestCase):
 
     async def test_replace_bad_nodes(self):
         await self.setup_network(20)
-        self.assertEquals(len(self.nodes), 20)
+        self.assertEqual(len(self.nodes), 20)
         node = self.nodes[0]
         bad_peers = []
         for candidate in self.nodes[1:10]:
