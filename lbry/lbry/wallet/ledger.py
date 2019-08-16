@@ -9,7 +9,6 @@ from torba.client.baseaccount import SingleKey
 from lbry.schema.result import Outputs
 from lbry.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc
-from lbry.wallet.resolve import Resolver
 from lbry.wallet.account import Account
 from lbry.wallet.network import Network
 from lbry.wallet.database import WalletDatabase
@@ -52,7 +51,6 @@ class MainNetLedger(BaseLedger):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
-        self.resolver = Resolver(self)
 
     async def _inflate_outputs(self, query):
         outputs = Outputs.from_base64(await query)

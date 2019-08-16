@@ -148,7 +148,7 @@ class JSONResponseEncoder(JSONEncoder):
             'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger),
             'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
-            'timestamp': self.ledger.headers[tx_height]['timestamp'] if tx_height > 0 else None
+            'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None
         }
         if txo.is_change is not None:
             output['is_change'] = txo.is_change
@@ -200,7 +200,7 @@ class JSONResponseEncoder(JSONEncoder):
             if key.endswith('_amount'):
                 if isinstance(value, int):
                     meta[key] = dewies_to_lbc(value)
-        if meta.get('creation_height', 0) > 0:
+        if 0 < meta.get('creation_height', 0) <= self.ledger.headers.height:
             meta['creation_timestamp'] = self.ledger.headers[meta['creation_height']]['timestamp']
         return meta
 
@@ -224,7 +224,7 @@ class JSONResponseEncoder(JSONEncoder):
         file.update({
             'height': tx_height,
             'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
-            'timestamp': self.ledger.headers[tx_height]['timestamp'] if tx_height > 0 else None
+            'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None
         })
         return file
 
