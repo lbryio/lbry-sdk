@@ -94,6 +94,17 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
         await headers.connect(len(headers), remainder)
         self.assertEqual(headers.height, 32259)
 
+    async def test_bounds(self):
+        headers = MainHeaders(':memory:')
+        await headers.connect(0, self.get_bytes(block_bytes(3001)))
+        self.assertEqual(headers.height, 3000)
+        with self.assertRaises(IndexError):
+            _ = headers[3001]
+        with self.assertRaises(IndexError):
+            _ = headers[-1]
+        self.assertIsNotNone(headers[3000])
+        self.assertIsNotNone(headers[0])
+
     async def test_repair(self):
         headers = MainHeaders(':memory:')
         await headers.connect(0, self.get_bytes(block_bytes(3001)))
