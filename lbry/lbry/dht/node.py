@@ -213,12 +213,13 @@ class Node:
                 await self.protocol.get_rpc_peer(_peer).ping()
                 result_queue.put_nowait([_peer])
             except asyncio.TimeoutError:
-                log.info("blob peer timed out udp")
                 pass
 
         async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
             to_put = []
             for peer in results:
+                if peer.address == self.protocol.external_ip and self.protocol.peer_port == peer.tcp_port:
+                    continue
                 is_good = self.protocol.peer_manager.peer_is_good(peer)
                 if is_good:
                     to_put.append(peer)
@@ -231,7 +232,6 @@ class Node:
                         if not peer.udp_port:
                             udp_port_to_try = peer.tcp_port
                     if not peer.udp_port:
-                        log.info("guess %i for %s:%i", udp_port_to_try, peer.address, peer.tcp_port)
                         peer.update_udp_port(udp_port_to_try)
                     self.loop.create_task(ping(peer))
                 else:
