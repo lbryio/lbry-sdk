@@ -3169,9 +3169,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             search_bottom_out_limit = 4
         peers = []
-        async for new_peers in self.dht_node.get_iterative_value_finder(unhexlify(blob_hash.encode()), max_results=1,
-                                                                        bottom_out_limit=search_bottom_out_limit):
-            peers.extend(new_peers)
+        peer_q = asyncio.Queue(loop=self.component_manager.loop)
+        await self.dht_node._value_producer(blob_hash, peer_q)
+        while not peer_q.empty():
+            peers.extend(peer_q.get_nowait())
         results = [
             {
                 "node_id": hexlify(peer.node_id).decode(),
