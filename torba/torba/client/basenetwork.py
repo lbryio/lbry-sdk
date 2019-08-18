@@ -135,30 +135,32 @@ class BaseNetwork:
         self.running = False
         if self.session_pool:
             self.session_pool.stop()
-        if self.is_connected:
-            disconnected = self.client.on_disconnected.first
-            await self.client.close()
-            await disconnected
 
     @property
     def is_connected(self):
         return self.client and not self.client.is_closing()
 
-    def rpc(self, list_or_method, args):
-        fastest = self.session_pool.fastest_session
-        if fastest is not None and self.client != fastest:
-            self.switch_event.set()
-        if self.is_connected:
-            return self.client.send_request(list_or_method, args)
+    def rpc(self, list_or_method, args, session=None):
+        session = session or self.session_pool.fastest_session
+        if session:
+            return session.send_request(list_or_method, args)
         else:
             self.session_pool.trigger_nodelay_connect()
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
 
+    async def retriable_call(self, function, *args, **kwargs):
+        while True:
+            try:
+                return await function(*args, **kwargs)
+            except asyncio.TimeoutError:
+                log.warning("Wallet server call timed out, retrying.")
+            except ConnectionError:
+                if not self.is_connected:
+                    log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+                    await self.on_connected.first
+
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
-
-    def broadcast(self, raw_transaction):
-        return self.rpc('blockchain.transaction.broadcast', [raw_transaction])
 
     def get_history(self, address):
         return self.rpc('blockchain.address.get_history', [address])
@@ -175,11 +177,19 @@ class BaseNetwork:
     def get_headers(self, height, count=10000):
         return self.rpc('blockchain.block.headers', [height, count])
 
-    def subscribe_headers(self):
-        return self.rpc('blockchain.headers.subscribe', [True])
+    #  --- Subscribes and broadcasts are always aimed towards the master client directly
+    def broadcast(self, raw_transaction):
+        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], session=self.client)
 
-    def subscribe_address(self, address):
-        return self.rpc('blockchain.address.subscribe', [address])
+    def subscribe_headers(self):
+        return self.rpc('blockchain.headers.subscribe', [True], session=self.client)
+
+    async def subscribe_address(self, *addresses):
+        async with self.client.send_batch() as batch:
+            for address in addresses:
+                batch.add_request('blockchain.address.subscribe', [address])
+        for address, status in zip(addresses, batch.results):
+            yield address, status
 
 
 class SessionPool:
@@ -218,6 +228,7 @@ class SessionPool:
     def stop(self):
         for session, task in self.sessions.items():
             task.cancel()
+            session.connection_lost(asyncio.CancelledError())
             session.abort()
         self.sessions.clear()
 

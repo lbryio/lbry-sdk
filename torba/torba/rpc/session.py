@@ -146,7 +146,7 @@ class SessionBase(asyncio.Protocol):
             await asyncio.wait_for(self._can_send.wait(), secs)
         except asyncio.TimeoutError:
             self.abort()
-            raise asyncio.CancelledError(f'task timed out after {secs}s')
+            raise asyncio.TimeoutError(f'task timed out after {secs}s')
 
     async def _send_message(self, message):
         if not self._can_send.is_set():
@@ -215,7 +215,8 @@ class SessionBase(asyncio.Protocol):
         self._address = None
         self.transport = None
         self._task_group.cancel()
-        self._pm_task.cancel()
+        if self._pm_task:
+            self._pm_task.cancel()
         # Release waiting tasks
         self._can_send.set()
 
@@ -456,7 +457,7 @@ class RPCSession(SessionBase):
 
     def connection_lost(self, exc):
         # Cancel pending requests and message processing
-        self.connection.time_out_pending_requests()
+        self.connection.raise_pending_requests(exc)
         super().connection_lost(exc)
 
     # External API

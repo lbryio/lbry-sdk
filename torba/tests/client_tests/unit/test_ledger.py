@@ -18,6 +18,9 @@ class MockNetwork:
         self.get_transaction_called = []
         self.is_connected = False
 
+    def retriable_call(self, function, *args, **kwargs):
+        return function(*args, **kwargs)
+
     async def get_history(self, address):
         self.get_history_called.append(address)
         self.address = address
@@ -121,8 +124,9 @@ class TestSynchronization(LedgerTestCase):
         )
 
 
-class MocHeaderNetwork:
+class MocHeaderNetwork(MockNetwork):
     def __init__(self, responses):
+        super().__init__(None, None)
         self.responses = responses
 
     async def get_headers(self, height, blocks):
