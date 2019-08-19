@@ -1,7 +1,9 @@
 import asyncio
+import time
 import logging
 import typing
 import binascii
+from typing import Optional
 from lbry.error import InvalidBlobHashError, InvalidDataError
 from lbry.blob_exchange.serialization import BlobResponse, BlobRequest
 from lbry.utils import cache_concurrent
@@ -65,7 +67,8 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 self.blob.set_length(blob_response.length)
             elif blob_response and not blob_response.error and self.blob.blob_hash != blob_response.blob_hash:
                 # the server started sending a blob we didn't request
-                log.warning("mismatch with self.blob %s", self.blob.blob_hash)
+                log.warning("%s started sending blob we didnt request %s instead of %s", self.peer_address,
+                            blob_response.blob_hash, self.blob.blob_hash)
                 return
         if response.responses:
             log.debug("got response from %s:%i <- %s", self.peer_address, self.peer_port, response.to_dict())
@@ -94,10 +97,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
 
-    async def _download_blob(self) -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
+    async def _download_blob(self) -> typing.Tuple[int, Optional['BlobExchangeClientProtocol']]:
         """
-        :return: download success (bool), keep connection (bool)
+        :return: download success (bool), connected protocol (BlobExchangeClientProtocol)
         """
+        start_time = time.perf_counter()
         request = BlobRequest.make_request_for_blob_hash(self.blob.blob_hash)
         blob_hash = self.blob.blob_hash
         if not self.peer_address:
@@ -147,12 +151,14 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 return self._blob_bytes_received, self.close()
             msg = f"downloading {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}," \
                 f" timeout in {self.peer_timeout}"
-            log.debug(msg)
+            log.info(msg)
             msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}"
             await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
-            log.info(msg)
+            log.info("%s at %fMB/s", msg,
+                     round((float(self._blob_bytes_received) /
+                            float(time.perf_counter() - start_time)) / 1000000.0, 2))
             # await self.blob.finished_writing.wait()  not necessary, but a dangerous change. TODO: is it needed?
-            return self._blob_bytes_received, self.transport
+            return self._blob_bytes_received, self
         except asyncio.TimeoutError:
             return self._blob_bytes_received, self.close()
         except (InvalidBlobHashError, InvalidDataError):
@@ -173,11 +179,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.transport = None
         self.buf = b''
 
-    async def download_blob(self, blob: 'AbstractBlob') -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
+    async def download_blob(self, blob: 'AbstractBlob') -> typing.Tuple[int, Optional['BlobExchangeClientProtocol']]:
         self.closed.clear()
         blob_hash = blob.blob_hash
         if blob.get_is_verified() or not blob.is_writeable():
-            return 0, self.transport
+            return 0, self
         try:
             self._blob_bytes_received = 0
             self.blob, self.writer = blob, blob.get_blob_writer(self.peer_address, self.peer_port)
@@ -218,33 +224,32 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
 
 
 @cache_concurrent
-async def request_blob(loop: asyncio.AbstractEventLoop, blob: typing.Optional['AbstractBlob'], address: str,
+async def request_blob(loop: asyncio.AbstractEventLoop, blob: Optional['AbstractBlob'], address: str,
                        tcp_port: int, peer_connect_timeout: float, blob_download_timeout: float,
-                       connected_transport: asyncio.Transport = None, connection_id: int = 0,
-                       connection_manager: typing.Optional['ConnectionManager'] = None)\
-        -> typing.Tuple[int, typing.Optional[asyncio.Transport]]:
+                       connected_protocol: Optional['BlobExchangeClientProtocol'] = None,
+                       connection_id: int = 0, connection_manager: Optional['ConnectionManager'] = None)\
+        -> typing.Tuple[int, Optional['BlobExchangeClientProtocol']]:
     """
-    Returns [<downloaded blob>, <keep connection>]
+    Returns [<amount of bytes received>, <client protocol if connected>]
     """
 
-    protocol = BlobExchangeClientProtocol(
-        loop, blob_download_timeout, connection_manager
-    )
-    if connected_transport and not connected_transport.is_closing():
-        connected_transport.set_protocol(protocol)
-        protocol.transport = connected_transport
-        log.debug("reusing connection for %s:%d", address, tcp_port)
+    protocol = connected_protocol
+    if not connected_protocol or not connected_protocol.transport or connected_protocol.transport.is_closing():
+        connected_protocol = None
+        protocol = BlobExchangeClientProtocol(
+            loop, blob_download_timeout, connection_manager
+        )
     else:
-        connected_transport = None
+        log.debug("reusing connection for %s:%d", address, tcp_port)
     try:
-        if not connected_transport:
+        if not connected_protocol:
             await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
                                    peer_connect_timeout, loop=loop)
-            connected_transport = protocol.transport
+            connected_protocol = protocol
         if blob is None or blob.get_is_verified() or not blob.is_writeable():
             # blob is None happens when we are just opening a connection
             # file exists but not verified means someone is writing right now, give it time, come back later
-            return 0, connected_transport
-        return await protocol.download_blob(blob)
+            return 0, connected_protocol
+        return await connected_protocol.download_blob(blob)
     except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionAbortedError, OSError):
         return 0, None

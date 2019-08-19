@@ -208,8 +208,36 @@ class Node:
                 task.cancel()
 
     async def _value_producer(self, blob_hash: str, result_queue: asyncio.Queue):
+        async def ping(_peer):
+            try:
+                await self.protocol.get_rpc_peer(_peer).ping()
+                result_queue.put_nowait([_peer])
+            except asyncio.TimeoutError:
+                pass
+
         async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
-            result_queue.put_nowait(results)
+            to_put = []
+            for peer in results:
+                if peer.address == self.protocol.external_ip and self.protocol.peer_port == peer.tcp_port:
+                    continue
+                is_good = self.protocol.peer_manager.peer_is_good(peer)
+                if is_good:
+                    to_put.append(peer)
+                elif is_good is None:
+                    udp_port_to_try = 4444
+                    if 3400 > peer.tcp_port > 3332:
+                        if not peer.udp_port:
+                            udp_port_to_try = (peer.tcp_port - 3333) + 4444
+                    elif 4500 > peer.tcp_port > 4443:
+                        if not peer.udp_port:
+                            udp_port_to_try = peer.tcp_port
+                    if not peer.udp_port:
+                        peer.update_udp_port(udp_port_to_try)
+                    self.loop.create_task(ping(peer))
+                else:
+                    log.debug("skip bad peer %s:%i for %s", peer.address, peer.tcp_port, blob_hash)
+            if to_put:
+                result_queue.put_nowait(to_put)
 
     def accumulate_peers(self, search_queue: asyncio.Queue,
                          peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[

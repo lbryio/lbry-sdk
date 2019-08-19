@@ -102,7 +102,7 @@ class BlobServerProtocol(asyncio.Protocol):
                 try:
                     sent = await asyncio.wait_for(blob.sendfile(self), self.transfer_timeout, loop=self.loop)
                     self.blob_manager.connection_manager.sent_data(self.peer_address_and_port, sent)
-                    log.debug("sent %s (%i bytes) to %s:%i", bh, sent, peer_address, peer_port)
+                    log.info("sent %s (%i bytes) to %s:%i", bh, sent, peer_address, peer_port)
                 except (ConnectionResetError, BrokenPipeError, RuntimeError, OSError, asyncio.TimeoutError) as err:
                     if isinstance(err, asyncio.TimeoutError):
                         log.debug("timed out sending blob %s to %s", bh, peer_address)
