@@ -54,7 +54,10 @@ class LBRYSessionManager(SessionManager):
 
     async def process_metrics(self):
         while self.running:
-            data = self.metrics.to_json_and_reset({'sessions': self.session_count()})
+            data = self.metrics.to_json_and_reset({
+                'sessions': self.session_count(),
+                'height': self.db.db_height,
+            })
             if self.websocket is not None:
                 self.websocket.send_message(data)
             await asyncio.sleep(1)
