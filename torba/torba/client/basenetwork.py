@@ -20,7 +20,8 @@ class ClientSession(BaseClientSession):
         super().__init__(*args, **kwargs)
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
-        self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
+        self.framer.max_size = self.max_errors = 1 << 32
+        self.bw_limit = -1
         self.timeout = timeout
         self.max_seconds_idle = timeout * 2
         self.response_time: Optional[float] = None
@@ -30,6 +31,10 @@ class ClientSession(BaseClientSession):
     @property
     def available(self):
         return not self.is_closing() and self._can_send.is_set() and self.response_time is not None
+
+    @property
+    def pending_size(self):
+        return len(self.connection.pending_requests())
 
     async def send_request(self, method, args=()):
         try:
@@ -215,7 +220,8 @@ class SessionPool:
         if not self.available_sessions:
             return None
         return min(
-            [(session.response_time, session) for session in self.available_sessions], key=itemgetter(0)
+            [(session.response_time * session.pending_size, session) for session in self.available_sessions],
+            key=itemgetter(0)
         )[1]
 
     def start(self, default_servers):
