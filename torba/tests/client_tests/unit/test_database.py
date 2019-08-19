@@ -255,7 +255,7 @@ class TestQueries(AsyncioTestCase):
         self.ledger.db.db.execute_fetchall = check_parameters_length
         account = await self.create_account()
         tx = await self.create_tx_from_nothing(account, 0)
-        for height in range(1200):
+        for height in range(1, 1200):
             tx = await self.create_tx_from_txo(tx.outputs[0], account, height=height)
         variable_limit = self.ledger.db.MAX_QUERY_VARIABLES
         for limit in range(variable_limit-2, variable_limit+2):
