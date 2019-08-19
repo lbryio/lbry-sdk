@@ -235,7 +235,7 @@ class Node:
                         peer.update_udp_port(udp_port_to_try)
                     self.loop.create_task(ping(peer))
                 else:
-                    log.debug("skip bad peer %s:%i for %s", blob_hash)
+                    log.debug("skip bad peer %s:%i for %s", peer.address, peer.tcp_port, blob_hash)
             if to_put:
                 result_queue.put_nowait(to_put)
 

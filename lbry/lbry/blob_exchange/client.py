@@ -154,7 +154,9 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             log.info(msg)
             msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}"
             await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
-            log.info(msg + f" at {round((float(self._blob_bytes_received) / float(time.perf_counter() - start_time)) / 1000000.0, 2)}MB/s")
+            log.info("%s at %fMB/s", msg,
+                     round((float(self._blob_bytes_received) /
+                            float(time.perf_counter() - start_time)) / 1000000.0, 2))
             # await self.blob.finished_writing.wait()  not necessary, but a dangerous change. TODO: is it needed?
             return self._blob_bytes_received, self
         except asyncio.TimeoutError:
