@@ -67,6 +67,9 @@ class ClientSession(BaseClientSession):
                 await asyncio.wait_for(self.trigger_urgent_reconnect.wait(), timeout=retry_delay)
             except asyncio.TimeoutError:
                 pass
+            except asyncio.CancelledError as exception:
+                self.connection_lost(exception)
+                raise exception
             finally:
                 self.trigger_urgent_reconnect.clear()
 
@@ -133,8 +136,7 @@ class BaseNetwork:
 
     async def stop(self):
         self.running = False
-        if self.session_pool:
-            self.session_pool.stop()
+        self.session_pool.stop()
 
     @property
     def is_connected(self):
@@ -149,13 +151,13 @@ class BaseNetwork:
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
 
     async def retriable_call(self, function, *args, **kwargs):
-        while True:
+        while self.running:
             try:
                 return await function(*args, **kwargs)
             except asyncio.TimeoutError:
                 log.warning("Wallet server call timed out, retrying.")
             except ConnectionError:
-                if not self.is_connected:
+                if not self.is_connected and self.running:
                     log.warning("Wallet server unavailable, waiting for it to come back and retry.")
                     await self.on_connected.first
 
@@ -226,10 +228,8 @@ class SessionPool:
         self.ensure_connections()
 
     def stop(self):
-        for session, task in self.sessions.items():
+        for task in self.sessions.values():
             task.cancel()
-            session.connection_lost(asyncio.CancelledError())
-            session.abort()
         self.sessions.clear()
 
     def ensure_connections(self):
