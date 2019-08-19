@@ -235,10 +235,10 @@ class TestBlobExchange(BlobExchangeTestBase):
         client_blob = self.client_blob_manager.get_blob(blob_hash)
 
         # download the blob
-        downloaded, transport = await request_blob(self.loop, client_blob, self.server_from_client.address,
+        downloaded, protocol = await request_blob(self.loop, client_blob, self.server_from_client.address,
                                                    self.server_from_client.tcp_port, 2, 3)
-        self.assertIsNotNone(transport)
-        self.assertFalse(transport.is_closing())
+        self.assertIsNotNone(protocol)
+        self.assertFalse(protocol.transport.is_closing())
         await client_blob.verified.wait()
         self.assertTrue(client_blob.get_is_verified())
         self.assertTrue(downloaded)
@@ -248,11 +248,11 @@ class TestBlobExchange(BlobExchangeTestBase):
         await asyncio.sleep(0.5, loop=self.loop)
 
         # download the blob again
-        downloaded, transport2 = await request_blob(self.loop, client_blob, self.server_from_client.address,
+        downloaded, protocol2 = await request_blob(self.loop, client_blob, self.server_from_client.address,
                                                    self.server_from_client.tcp_port, 2, 3,
-                                                    connected_transport=transport)
-        self.assertTrue(transport is transport2)
-        self.assertFalse(transport.is_closing())
+                                                    connected_protocol=protocol)
+        self.assertTrue(protocol is protocol2)
+        self.assertFalse(protocol.transport.is_closing())
         await client_blob.verified.wait()
         self.assertTrue(client_blob.get_is_verified())
         self.assertTrue(downloaded)
@@ -260,11 +260,10 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         # check that the connection times out from the server side
         await asyncio.sleep(0.9, loop=self.loop)
-        self.assertFalse(transport.is_closing())
-        self.assertIsNotNone(transport._sock)
+        self.assertFalse(protocol.transport.is_closing())
+        self.assertIsNotNone(protocol.transport._sock)
         await asyncio.sleep(0.1, loop=self.loop)
-        self.assertIsNone(transport._sock)
-        self.assertTrue(transport.is_closing())
+        self.assertIsNone(protocol.transport)
 
     def test_max_request_size(self):
         protocol = BlobServerProtocol(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
