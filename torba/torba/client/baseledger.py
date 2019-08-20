@@ -542,4 +542,4 @@ class BaseLedger(metaclass=LedgerRegistry):
             )) for address_record in records
         ], timeout=timeout)
         if pending:
-            raise TimeoutError('Timed out waiting for transaction.')
+            raise asyncio.TimeoutError('Timed out waiting for transaction.')
