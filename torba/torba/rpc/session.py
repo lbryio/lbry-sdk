@@ -254,6 +254,7 @@ class SessionBase(asyncio.Protocol):
         if self.transport:
             self.transport.abort()
 
+    # TODO: replace with synchronous_close
     async def close(self, *, force_after=30):
         """Close the connection and return when closed."""
         self._close()
@@ -262,6 +263,11 @@ class SessionBase(asyncio.Protocol):
                 await asyncio.wait([self._pm_task], timeout=force_after)
                 self.abort()
                 await self._pm_task
+
+    def synchronous_close(self):
+        self._close()
+        if self._pm_task and not self._pm_task.done():
+            self._pm_task.cancel()
 
 
 class MessageSession(SessionBase):

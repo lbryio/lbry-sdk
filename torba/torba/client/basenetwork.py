@@ -80,9 +80,9 @@ class ClientSession(BaseClientSession):
                 await asyncio.wait_for(self.trigger_urgent_reconnect.wait(), timeout=retry_delay)
             except asyncio.TimeoutError:
                 pass
-            except asyncio.CancelledError as exception:
-                self.connection_lost(exception)
-                raise exception
+            except asyncio.CancelledError:
+                self.synchronous_close()
+                raise
             finally:
                 self.trigger_urgent_reconnect.clear()
 
