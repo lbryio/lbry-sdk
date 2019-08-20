@@ -1,0 +1,159 @@
+default:
+  image: python:3.7
+
+
+#cache:
+#  directories:
+#    - $HOME/venv
+#    - $HOME/.cache/pip
+#    - $HOME/Library/Caches/pip
+#    - $HOME/Library/Caches/Homebrew
+#    - $TRAVIS_BUILD_DIR/.tox
+
+
+stages:
+  - test
+  - build
+  - release
+
+
+# could also use extends: instead of yaml anchors (https://docs.gitlab.com/ee/ci/yaml/README.html#extends)
+.codecov.io: &codecovio
+  after_script:
+    - coverage combine lbry/
+    - bash <(curl -s https://codecov.io/bash)
+
+test:lint:
+  stage: test
+  script:
+    - make install
+    - make lint
+
+test:lbry-unit:
+  stage: test
+  script:
+    - make install
+    - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
+#  <<: *codecovio
+
+
+test:lbry-integ:
+  stage: test
+  script:
+    - pip install coverage tox-travis
+    - cd lbry && tox
+#  <<: *codecovio
+
+
+.torba-tests: &torba_tests
+  stage: test
+  script:
+    - pip install coverage tox-travis
+    - cd torba && tox
+#  <<: *codecovio
+
+test:torba-unit:
+  before_script:
+    - export TESTTYPE=unit
+  <<: *torba_tests
+
+test:torba-integ:
+  before_script:
+    - export TESTTYPE=integration
+  <<: *torba_tests
+
+test:json-api:
+  stage: test
+  script:
+    - make install
+    - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
+#  <<: *codecovio
+
+
+
+.build:
+  stage: build
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - lbrynet-${OS}.zip
+  script:
+    - pip install pyinstaller
+    - pip install -e torba/.
+    - cd lbry
+    - python3.7 scripts/set_build.py
+    - pip install -e .
+    - pyinstaller --onefile --name lbrynet lbry/extras/cli.py
+    - cd dist
+    - chmod +x lbrynet
+    - zip --junk-paths ${CI_PROJECT_DIR}/lbrynet-${OS}.zip lbrynet  # gitlab expects artifacts to be in $CI_PROJECT_DIR
+    - openssl dgst -sha256 ${CI_PROJECT_DIR}/lbrynet-${OS}.zip | egrep -o [0-9a-f]+$ # get sha256 of asset. works on mac and ubuntu
+    - ./lbrynet --version
+
+build:linux:
+  extends: .build
+  image: ubuntu:18.04  # cant use python3.7 image - binary won't run on ubuntu
+  variables:
+    OS: linux
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends software-properties-common zip curl build-essential
+    - add-apt-repository -y ppa:deadsnakes/ppa
+    - apt-get install -y --no-install-recommends python3.7-dev python3-setuptools python3-wheel
+    - python3.7 <(curl -q https://bootstrap.pypa.io/get-pip.py) # make sure we get pip with python3.7
+
+build:mac:
+  extends: .build
+  tags: [macos] # makes gitlab use the mac runner
+  variables:
+    OS: mac
+    GIT_DEPTH: 5
+    VENV: /tmp/gitlab-lbry-sdk-venv
+  before_script:
+#    - brew upgrade python || true
+    - python3 --version | grep -q '^Python 3\.7\.' # dont upgrade python on every run. just make sure we're on the right Python
+#    - pip3 install --user --upgrade pip virtualenv
+    - pip3 --version | grep -q '\(python 3\.7\)'
+    - virtualenv --python=python3.7 "${VENV}"
+    - source "${VENV}/bin/activate"
+  after_script:
+    - rm -rf "${VENV}"
+
+
+
+# upload could be done by making it a yaml alias and putting it right into the build step. that way if one OS fails, the others still get uploaded
+.upload:
+  stage: release
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - pip install awscli
+    - S3_PATH="daemon/gitlab-build-${CI_PIPELINE_ID}_commit-${CI_COMMIT_SHA:0:7}$( if [ ! -z ${CI_COMMIT_TAG} ]; then echo _tag-${CI_COMMIT_TAG}; else echo _branch-${CI_COMMIT_REF_NAME}; fi )"
+    - AWS_ACCESS_KEY_ID=${ARTIFACTS_KEY} AWS_SECRET_ACCESS_KEY=${ARTIFACTS_SECRET} AWS_REGION=${ARTIFACTS_REGION}
+      aws s3 cp lbrynet-${OS}.zip s3://${ARTIFACTS_BUCKET}/${S3_PATH}/lbrynet-${OS}.zip
+
+s3:linux:
+  extends: .upload
+  variables:
+    OS: linux
+  dependencies:
+    - build:linux
+
+s3:mac:
+  extends: .upload
+  variables:
+    OS: mac
+  dependencies:
+    - build:mac
+
+#release:linux:
+#  stage: release
+#  only: [tags]
+#  variables:
+#    OS: linux
+#    GIT_STRATEGY: none
+#  dependencies: [build:linux]
+#  script:
+#    - pip install githubrelease
+#    - githubrelease asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
+

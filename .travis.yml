@@ -115,6 +115,7 @@ jobs:
         - 7z a -tzip lbrynet-windows.zip lbrynet.exe
         - sha256sum -b lbrynet-windows.zip
         - ./lbrynet.exe --version
+
     - if: tag IS present
       stage: build
       name: "Wallet Server Docker Image - Tagged Release"
