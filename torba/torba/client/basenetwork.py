@@ -25,6 +25,7 @@ class ClientSession(BaseClientSession):
         self.timeout = timeout
         self.max_seconds_idle = timeout * 2
         self.response_time: Optional[float] = None
+        self.connection_latency: Optional[float] = None
         self._response_samples = 0
         self.pending_amount = 0
         self._on_connect_cb = on_connect_callback or (lambda: None)
@@ -91,7 +92,9 @@ class ClientSession(BaseClientSession):
 
     async def create_connection(self, timeout=6):
         connector = Connector(lambda: self, *self.server)
+        start = perf_counter()
         await asyncio.wait_for(connector.create_connection(), timeout=timeout)
+        self.connection_latency = perf_counter() - start
 
     async def handle_request(self, request):
         controller = self.network.subscription_controllers[request.method]
@@ -101,6 +104,7 @@ class ClientSession(BaseClientSession):
         log.debug("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
         self.response_time = None
+        self.connection_latency = None
         self._response_samples = 0
         self._on_disconnect_controller.add(True)
 
