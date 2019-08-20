@@ -37,7 +37,7 @@ class ClientSession(BaseClientSession):
     @property
     def server_address_and_port(self) -> Optional[Tuple[str, int]]:
         if not self.transport:
-            return
+            return None
         return self.transport.get_extra_info('peername')
 
     async def send_timed_server_version_request(self, args=()):
@@ -278,7 +278,8 @@ class SessionPool:
                 network=self.network, server=server
             )
             session._on_connect_cb = self._get_session_connect_callback(session)
-        if session not in self.sessions or not self.sessions[session] or self.sessions[session].done():
+        task = self.sessions.get(session, None)
+        if not task or task.done():
             task = asyncio.create_task(session.ensure_session())
             task.add_done_callback(lambda _: self.ensure_connections())
             self.sessions[session] = task
