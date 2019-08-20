@@ -103,7 +103,7 @@ class SessionBase(asyncio.Protocol):
         # Force-close a connection if a send doesn't succeed in this time
         self.max_send_delay = 60
         # Statistics.  The RPC object also keeps its own statistics.
-        self.start_time = time.time()
+        self.start_time = time.perf_counter()
         self.errors = 0
         self.send_count = 0
         self.send_size = 0
@@ -123,7 +123,7 @@ class SessionBase(asyncio.Protocol):
         # A non-positive value means not to limit concurrency
         if self.bw_limit <= 0:
             return
-        now = time.time()
+        now = time.perf_counter()
         # Reduce the recorded usage in proportion to the elapsed time
         refund = (now - self.bw_time) * (self.bw_limit / 3600)
         self.bw_charge = max(0, self.bw_charge - int(refund))
@@ -156,7 +156,7 @@ class SessionBase(asyncio.Protocol):
             self.send_size += len(framed_message)
             self._using_bandwidth(len(framed_message))
             self.send_count += 1
-            self.last_send = time.time()
+            self.last_send = time.perf_counter()
             if self.verbosity >= 4:
                 self.logger.debug(f'Sending framed message {framed_message}')
             self.transport.write(framed_message)
@@ -303,7 +303,7 @@ class MessageSession(SessionBase):
                 )
                 self._bump_errors()
             else:
-                self.last_recv = time.time()
+                self.last_recv = time.perf_counter()
                 self.recv_count += 1
                 if self.recv_count % 10 == 0:
                     await self._update_concurrency()
@@ -423,7 +423,7 @@ class RPCSession(SessionBase):
                 self.logger.warning(f'{e!r}')
                 continue
 
-            self.last_recv = time.time()
+            self.last_recv = time.perf_counter()
             self.recv_count += 1
             if self.recv_count % 10 == 0:
                 await self._update_concurrency()
