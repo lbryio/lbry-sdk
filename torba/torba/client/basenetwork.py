@@ -2,7 +2,7 @@ import logging
 import asyncio
 from operator import itemgetter
 from typing import Dict, Optional, Tuple
-from time import time, perf_counter
+from time import perf_counter
 
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
@@ -60,7 +60,8 @@ class ClientSession(BaseClientSession):
                 super().send_request(method, args), timeout=self.timeout
             )
         except RPCError as e:
-            log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s", *self.server, *e.args)
+            log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
+                        *self.server, *e.args)
             raise e
         finally:
             self.pending_amount -= 1
@@ -257,7 +258,7 @@ class SessionPool:
                 self.sessions.pop(session).cancel()
                 session.synchronous_close()
                 log.info("wallet server %s resolves to the same server as %s, rechecking in an hour",
-                          session.server[0], already_connected.server[0])
+                         session.server[0], already_connected.server[0])
                 loop.call_later(3600, self._connect_session, session.server)
                 return
             self.new_connection_event.set()
@@ -290,7 +291,7 @@ class SessionPool:
         self.sessions.clear()
 
     def ensure_connections(self):
-        for session, task in list(self.sessions.items()):
+        for session in self.sessions:
             self._connect_session(session.server)
 
     def trigger_nodelay_connect(self):
