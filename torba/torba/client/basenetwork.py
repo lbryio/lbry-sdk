@@ -40,26 +40,30 @@ class ClientSession(BaseClientSession):
             return self.transport.get_extra_info('peername')
 
     async def send_timed_server_version_request(self, args=()):
+        log.debug("send version request to %s:%i", *self.server)
         start = perf_counter()
         result = await asyncio.wait_for(
             super().send_request('server.version', args), timeout=self.timeout
         )
         current_response_time = perf_counter() - start
-        response_sum = self.response_time * self._response_samples + current_response_time
+        response_sum = (self.response_time or 0) * self._response_samples + current_response_time
         self.response_time = response_sum / (self._response_samples + 1)
         self._response_samples += 1
         return result
 
     async def send_request(self, method, args=()):
-        if method == 'server.version':
-            return await self.send_timed_server_version_request(args)
+        self.pending_amount += 1
         try:
+            if method == 'server.version':
+                return await self.send_timed_server_version_request(args)
             return await asyncio.wait_for(
                 super().send_request(method, args), timeout=self.timeout
             )
         except RPCError as e:
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s", *self.server, *e.args)
             raise e
+        finally:
+            self.pending_amount -= 1
 
     async def ensure_session(self):
         # Handles reconnecting and maintaining a session alive
@@ -107,6 +111,7 @@ class ClientSession(BaseClientSession):
         self.response_time = None
         self.connection_latency = None
         self._response_samples = 0
+        self.pending_amount = 0
         self._on_disconnect_controller.add(True)
 
 
@@ -234,7 +239,7 @@ class SessionPool:
         if not self.available_sessions:
             return None
         return min(
-            [(session.response_time * session.pending_amount, session)
+            [((session.response_time + session.connection_latency) * (session.pending_amount + 1), session)
              for session in self.available_sessions],
             key=itemgetter(0)
         )[1]
