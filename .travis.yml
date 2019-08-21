@@ -25,6 +25,7 @@ jobs:
     - name: "LBRY Integration Tests"
       install:
         - pip install coverage tox-travis
+        - sudo mount -o mode=1777,nosuid,nodev -t tmpfs tmpfs /tmp
       script: cd lbry && tox
       after_success:
         - coverage combine lbry
