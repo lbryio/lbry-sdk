@@ -218,6 +218,7 @@ class HeadersComponent(Component):
                 await self.headers.close()
             else:
                 log.info("Header checkpoint verified.")
+
     async def stop(self):
         pass
 
@@ -239,14 +240,14 @@ class WalletComponent(Component):
             local_height = self.wallet_manager.ledger.headers.height
             remote_height = self.wallet_manager.ledger.network.remote_height
             best_hash = self.wallet_manager.get_best_blockhash()
-            server = self.wallet_manager.ledger.network.client.server
             return {
                 'connected_servers': [
                     {
-                        'host': server[0],
-                        'port': server[1],
-                        'latency': 0  # TODO: use real latency
-                    }
+                        'host': session.server[0],
+                        'port': session.server[1],
+                        'latency': round(session.connection_latency, 2),
+                    } for session in self.wallet_manager.ledger.network.session_pool.sessions
+                    if session and session.available
                 ],
                 'blocks': max(local_height, 0),
                 'blocks_behind': max(remote_height - local_height, 0),
