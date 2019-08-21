@@ -1,4 +1,5 @@
 import asyncio
+from aiohttp.client_exceptions import ClientError
 import json
 import logging.handlers
 import traceback
@@ -49,9 +50,12 @@ class HTTPSLogglyHandler(logging.Handler):
             return record.getMessage()
 
     async def _emit(self, record):
-        payload = self.format(record)
-        async with utils.aiohttp_request('post', self.url, data=payload.encode(), cookies=self.cookies) as response:
-            self.cookies.update(response.cookies)
+        try:
+            async with utils.aiohttp_request('post', self.url, data=self.format(record).encode(),
+                                             cookies=self.cookies) as response:
+                self.cookies.update(response.cookies)
+        except ClientError:
+            pass
 
     def emit(self, record):
         asyncio.ensure_future(self._emit(record))
