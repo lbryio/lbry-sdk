@@ -1,8 +1,8 @@
 import logging
 import asyncio
 from operator import itemgetter
-from typing import Dict, Optional
-from time import time, perf_counter
+from typing import Dict, Optional, Tuple
+from time import perf_counter
 
 from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
 
@@ -13,17 +13,20 @@ log = logging.getLogger(__name__)
 
 
 class ClientSession(BaseClientSession):
-
     def __init__(self, *args, network, server, timeout=30, on_connect_callback=None, **kwargs):
         self.network = network
         self.server = server
         super().__init__(*args, **kwargs)
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
-        self.bw_limit = self.framer.max_size = self.max_errors = 1 << 32
+        self.framer.max_size = self.max_errors = 1 << 32
+        self.bw_limit = -1
         self.timeout = timeout
         self.max_seconds_idle = timeout * 2
         self.response_time: Optional[float] = None
+        self.connection_latency: Optional[float] = None
+        self._response_samples = 0
+        self.pending_amount = 0
         self._on_connect_cb = on_connect_callback or (lambda: None)
         self.trigger_urgent_reconnect = asyncio.Event()
 
@@ -31,20 +34,38 @@ class ClientSession(BaseClientSession):
     def available(self):
         return not self.is_closing() and self._can_send.is_set() and self.response_time is not None
 
+    @property
+    def server_address_and_port(self) -> Optional[Tuple[str, int]]:
+        if not self.transport:
+            return None
+        return self.transport.get_extra_info('peername')
+
+    async def send_timed_server_version_request(self, args=()):
+        log.debug("send version request to %s:%i", *self.server)
+        start = perf_counter()
+        result = await asyncio.wait_for(
+            super().send_request('server.version', args), timeout=self.timeout
+        )
+        current_response_time = perf_counter() - start
+        response_sum = (self.response_time or 0) * self._response_samples + current_response_time
+        self.response_time = response_sum / (self._response_samples + 1)
+        self._response_samples += 1
+        return result
+
     async def send_request(self, method, args=()):
+        self.pending_amount += 1
         try:
-            start = perf_counter()
-            result = await asyncio.wait_for(
+            if method == 'server.version':
+                return await self.send_timed_server_version_request(args)
+            return await asyncio.wait_for(
                 super().send_request(method, args), timeout=self.timeout
             )
-            self.response_time = perf_counter() - start
-            return result
         except RPCError as e:
-            log.warning("Wallet server returned an error. Code: %s Message: %s", *e.args)
+            log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
+                        *self.server, *e.args)
             raise e
-        except TimeoutError:
-            self.response_time = None
-            raise
+        finally:
+            self.pending_amount -= 1
 
     async def ensure_session(self):
         # Handles reconnecting and maintaining a session alive
@@ -56,8 +77,8 @@ class ClientSession(BaseClientSession):
                     await self.create_connection(self.timeout)
                     await self.ensure_server_version()
                     self._on_connect_cb()
-                if (time() - self.last_send) > self.max_seconds_idle or self.response_time is None:
-                    await self.send_request('server.banner')
+                if (perf_counter() - self.last_send) > self.max_seconds_idle or self.response_time is None:
+                    await self.ensure_server_version()
                 retry_delay = default_delay
             except (asyncio.TimeoutError, OSError):
                 await self.close()
@@ -67,6 +88,9 @@ class ClientSession(BaseClientSession):
                 await asyncio.wait_for(self.trigger_urgent_reconnect.wait(), timeout=retry_delay)
             except asyncio.TimeoutError:
                 pass
+            except asyncio.CancelledError:
+                self.synchronous_close()
+                raise
             finally:
                 self.trigger_urgent_reconnect.clear()
 
@@ -75,7 +99,9 @@ class ClientSession(BaseClientSession):
 
     async def create_connection(self, timeout=6):
         connector = Connector(lambda: self, *self.server)
+        start = perf_counter()
         await asyncio.wait_for(connector.create_connection(), timeout=timeout)
+        self.connection_latency = perf_counter() - start
 
     async def handle_request(self, request):
         controller = self.network.subscription_controllers[request.method]
@@ -85,6 +111,9 @@ class ClientSession(BaseClientSession):
         log.debug("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
         self.response_time = None
+        self.connection_latency = None
+        self._response_samples = 0
+        self.pending_amount = 0
         self._on_disconnect_controller.add(True)
 
 
@@ -133,32 +162,33 @@ class BaseNetwork:
 
     async def stop(self):
         self.running = False
-        if self.session_pool:
-            self.session_pool.stop()
-        if self.is_connected:
-            disconnected = self.client.on_disconnected.first
-            await self.client.close()
-            await disconnected
+        self.session_pool.stop()
 
     @property
     def is_connected(self):
         return self.client and not self.client.is_closing()
 
-    def rpc(self, list_or_method, args):
-        fastest = self.session_pool.fastest_session
-        if fastest is not None and self.client != fastest:
-            self.switch_event.set()
-        if self.is_connected:
-            return self.client.send_request(list_or_method, args)
+    def rpc(self, list_or_method, args, session=None):
+        session = session or self.session_pool.fastest_session
+        if session:
+            return session.send_request(list_or_method, args)
         else:
             self.session_pool.trigger_nodelay_connect()
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
 
+    async def retriable_call(self, function, *args, **kwargs):
+        while self.running:
+            try:
+                return await function(*args, **kwargs)
+            except asyncio.TimeoutError:
+                log.warning("Wallet server call timed out, retrying.")
+            except ConnectionError:
+                if not self.is_connected and self.running:
+                    log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+                    await self.on_connected.first
+
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
-
-    def broadcast(self, raw_transaction):
-        return self.rpc('blockchain.transaction.broadcast', [raw_transaction])
 
     def get_history(self, address):
         return self.rpc('blockchain.address.get_history', [address])
@@ -175,11 +205,19 @@ class BaseNetwork:
     def get_headers(self, height, count=10000):
         return self.rpc('blockchain.block.headers', [height, count])
 
-    def subscribe_headers(self):
-        return self.rpc('blockchain.headers.subscribe', [True])
+    #  --- Subscribes and broadcasts are always aimed towards the master client directly
+    def broadcast(self, raw_transaction):
+        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], session=self.client)
 
-    def subscribe_address(self, address):
-        return self.rpc('blockchain.address.subscribe', [address])
+    def subscribe_headers(self):
+        return self.rpc('blockchain.headers.subscribe', [True], session=self.client)
+
+    async def subscribe_address(self, *addresses):
+        async with self.client.send_batch() as batch:
+            for address in addresses:
+                batch.add_request('blockchain.address.subscribe', [address])
+        for address, status in zip(addresses, batch.results):
+            yield address, status
 
 
 class SessionPool:
@@ -203,30 +241,61 @@ class SessionPool:
         if not self.available_sessions:
             return None
         return min(
-            [(session.response_time, session) for session in self.available_sessions], key=itemgetter(0)
+            [((session.response_time + session.connection_latency) * (session.pending_amount + 1), session)
+             for session in self.available_sessions],
+            key=itemgetter(0)
         )[1]
 
+    def _get_session_connect_callback(self, session: ClientSession):
+        loop = asyncio.get_event_loop()
+
+        def callback():
+            duplicate_connections = [
+                s for s in self.sessions
+                if s is not session and s.server_address_and_port == session.server_address_and_port
+            ]
+            already_connected = None if not duplicate_connections else duplicate_connections[0]
+            if already_connected:
+                self.sessions.pop(session).cancel()
+                session.synchronous_close()
+                log.info("wallet server %s resolves to the same server as %s, rechecking in an hour",
+                         session.server[0], already_connected.server[0])
+                loop.call_later(3600, self._connect_session, session.server)
+                return
+            self.new_connection_event.set()
+            log.info("connected to %s:%i", *session.server)
+
+        return callback
+
+    def _connect_session(self, server: Tuple[str, int]):
+        session = None
+        for s in self.sessions:
+            if s.server == server:
+                session = s
+                break
+        if not session:
+            session = ClientSession(
+                network=self.network, server=server
+            )
+            session._on_connect_cb = self._get_session_connect_callback(session)
+        task = self.sessions.get(session, None)
+        if not task or task.done():
+            task = asyncio.create_task(session.ensure_session())
+            task.add_done_callback(lambda _: self.ensure_connections())
+            self.sessions[session] = task
+
     def start(self, default_servers):
-        callback = self.new_connection_event.set
-        self.sessions = {
-            ClientSession(
-                network=self.network, server=server, on_connect_callback=callback
-            ): None for server in default_servers
-        }
-        self.ensure_connections()
+        for server in default_servers:
+            self._connect_session(server)
 
     def stop(self):
-        for session, task in self.sessions.items():
+        for task in self.sessions.values():
             task.cancel()
-            session.abort()
         self.sessions.clear()
 
     def ensure_connections(self):
-        for session, task in list(self.sessions.items()):
-            if not task or task.done():
-                task = asyncio.create_task(session.ensure_session())
-                task.add_done_callback(lambda _: self.ensure_connections())
-                self.sessions[session] = task
+        for session in self.sessions:
+            self._connect_session(session.server)
 
     def trigger_nodelay_connect(self):
         # used when other parts of the system sees we might have internet back

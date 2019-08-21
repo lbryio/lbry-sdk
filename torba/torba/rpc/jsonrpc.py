@@ -746,10 +746,8 @@ class JSONRPCConnection(object):
             self._protocol = item
             return self.receive_message(message)
 
-    def time_out_pending_requests(self):
-        """Times out all pending requests."""
-        # this used to be CancelledError, but thats confusing as in are we closing the whole sdk or failing?
-        exception = asyncio.TimeoutError()
+    def raise_pending_requests(self, exception):
+        exception = exception or asyncio.TimeoutError()
         for request, event in self._requests.values():
             event.result = exception
             event.set()
