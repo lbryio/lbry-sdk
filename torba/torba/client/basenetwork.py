@@ -258,8 +258,8 @@ class SessionPool:
             if already_connected:
                 self.sessions.pop(session).cancel()
                 session.synchronous_close()
-                log.info("wallet server %s resolves to the same server as %s, rechecking in an hour",
-                         session.server[0], already_connected.server[0])
+                log.debug("wallet server %s resolves to the same server as %s, rechecking in an hour",
+                          session.server[0], already_connected.server[0])
                 loop.call_later(3600, self._connect_session, session.server)
                 return
             self.new_connection_event.set()
