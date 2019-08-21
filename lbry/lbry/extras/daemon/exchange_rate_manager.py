@@ -3,7 +3,8 @@ import time
 import logging
 import json
 from decimal import Decimal
-
+from typing import Optional
+from aiohttp.client_exceptions import ClientError
 from lbry.error import InvalidExchangeRateResponse, CurrencyConversionError
 from lbry.utils import aiohttp_request
 
@@ -44,7 +45,7 @@ class MarketFeed:
         self.params = params
         self.fee = fee
         self.rate = None
-        self._task: asyncio.Task = None
+        self._task: Optional[asyncio.Task] = None
         self._online = True
 
     def rate_is_initialized(self):
@@ -80,7 +81,7 @@ class MarketFeed:
             try:
                 response = await asyncio.wait_for(self._make_request(), self.REQUESTS_TIMEOUT)
                 self._save_price(self._subtract_fee(self._handle_response(response)))
-            except (asyncio.TimeoutError, InvalidExchangeRateResponse) as err:
+            except (asyncio.TimeoutError, InvalidExchangeRateResponse, ClientError) as err:
                 self._on_error(err)
             await asyncio.sleep(self.EXCHANGE_RATE_UPDATE_RATE_SEC)
 
