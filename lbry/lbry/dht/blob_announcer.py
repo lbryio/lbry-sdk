@@ -22,12 +22,11 @@ class BlobAnnouncer:
             if peers > 4:
                 return blob_hash
             else:
-                log.warning("failed to announce %s, could only find %d peers, retrying soon.", blob_hash[:8], peers)
+                log.debug("failed to announce %s, could only find %d peers, retrying soon.", blob_hash[:8], peers)
         except Exception as err:
             if isinstance(err, asyncio.CancelledError):
                 raise err
             log.warning("error announcing %s: %s", blob_hash[:8], str(err))
-
 
     async def _announce(self, batch_size: typing.Optional[int] = 10):
         while batch_size:
