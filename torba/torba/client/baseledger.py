@@ -505,7 +505,7 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     async def maybe_verify_transaction(self, tx, remote_height):
         tx.height = remote_height
-        if 0 < remote_height <= len(self.headers):
+        if 0 < remote_height < len(self.headers):
             merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
             header = self.headers[remote_height]
