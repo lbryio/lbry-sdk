@@ -54,14 +54,18 @@ class ClientSession(BaseClientSession):
         return result
 
     async def send_request(self, method, args=(), timeout=None):
+        log.info("send %s to %s:%i", method, *self.server)
         timeout = timeout or self.timeout
         self.pending_amount += 1
         try:
             if method == 'server.version':
-                return await self.send_timed_server_version_request(args, timeout)
-            return await asyncio.wait_for(
-                super().send_request(method, args), timeout=timeout
-            )
+                reply = await self.send_timed_server_version_request(args, timeout)
+            else:
+                reply = await asyncio.wait_for(
+                    super().send_request(method, args), timeout=timeout
+                )
+            log.info("got reply for %s from %s:%i", method, *self.server)
+            return reply
         except RPCError as e:
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)
@@ -71,8 +75,10 @@ class ClientSession(BaseClientSession):
             self.synchronous_close()
             raise asyncio.CancelledError(f"connection to {self.server[0]}:{self.server[1]} lost")
         except asyncio.TimeoutError:
+            log.info("timeout sending %s to %s:%i", method, *self.server)
             raise
         except asyncio.CancelledError:
+            log.info("cancelled sending %s to %s:%i", method, *self.server)
             self.synchronous_close()
             raise
         finally:
