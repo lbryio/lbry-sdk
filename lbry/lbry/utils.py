@@ -81,28 +81,22 @@ def check_connection(server="lbry.com", port=80, timeout=5) -> bool:
     try:
         server = socket.gethostbyname(server)
         socket.create_connection((server, port), timeout).close()
-        log.debug('Connection successful')
         return True
     except (socket.gaierror, socket.herror) as ex:
-        log.warning("Failed to connect to %s:%s. Unable to resolve domain. Trying to bypass DNS",
-                    server, port)
+        log.debug("Failed to connect to %s:%s. Unable to resolve domain. Trying to bypass DNS",
+                  server, port)
         try:
             server = "8.8.8.8"
             port = 53
             socket.create_connection((server, port), timeout).close()
-            log.debug('Connection successful')
             return True
-        except Exception:
-            log.error("Failed to connect to %s:%s. Maybe the internet connection is not working",
-                      server, port)
+        except OSError:
             return False
-    except Exception:
-        log.error("Failed to connect to %s:%s. Maybe the internet connection is not working",
-                  server, port)
+    except OSError:
         return False
 
 
-async def async_check_connection(server="lbry.com", port=80, timeout=5) -> bool:
+async def async_check_connection(server="lbry.com", port=80, timeout=1) -> bool:
     return await asyncio.get_event_loop().run_in_executor(None, check_connection, server, port, timeout)
 
 

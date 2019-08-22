@@ -392,6 +392,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def update_connection_status(self):
         connected = await utils.async_check_connection()
+        if connected and not self._connection_status[1]:
+            log.info("detected internet connection is working")
+        elif not connected and self._connection_status[1]:
+            log.warning("detected internet connection was lost")
         self._connection_status = (self.component_manager.loop.time(), connected)
 
     async def get_connection_status(self) -> str:
