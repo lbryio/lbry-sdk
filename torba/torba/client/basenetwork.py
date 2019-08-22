@@ -242,12 +242,8 @@ class BaseNetwork:
     def subscribe_headers(self):
         return self.rpc('blockchain.headers.subscribe', [True], session=self.client)
 
-    async def subscribe_address(self, *addresses):
-        async with self.client.send_batch() as batch:
-            for address in addresses:
-                batch.add_request('blockchain.address.subscribe', [address])
-        for address, status in zip(addresses, batch.results):
-            yield address, status
+    def subscribe_address(self, address):
+        return self.rpc('blockchain.address.subscribe', [address], session=self.client)
 
 
 class SessionPool:
