@@ -145,8 +145,8 @@ class Stream:
     def first(self):
         future = asyncio.get_event_loop().create_future()
         subscription = self.listen(
-            lambda value: self._cancel_and_callback(subscription, future, value),
-            lambda exception: self._cancel_and_error(subscription, future, exception)
+            lambda value: not future.done() and self._cancel_and_callback(subscription, future, value),
+            lambda exception: not future.done() and self._cancel_and_error(subscription, future, exception)
         )
         return future
 
