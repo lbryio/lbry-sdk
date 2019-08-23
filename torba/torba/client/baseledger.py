@@ -476,6 +476,8 @@ class BaseLedger(metaclass=LedgerRegistry):
                     "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
                     remote_status, len(remote_history), local_status, len(local_history)
                 )
+                log.warning("local: %s", local_history)
+                log.warning("remote: %s", remote_history)
             else:
                 log.info("Sync completed for: %s", address)
 
