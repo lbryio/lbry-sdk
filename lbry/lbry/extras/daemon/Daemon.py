@@ -390,6 +390,15 @@ class Daemon(metaclass=JSONRPCServerType):
                 install_id_file.write(self._installation_id)
         return self._installation_id
 
+    @staticmethod
+    def log_function_params(fname, debug=False, **params):
+        params_passed = [f'{k}: {repr(v)}' for k, v in params.items() if v is not None]
+        logstr = f'{fname}: {{{", ".join(params_passed)}}}'
+        if not debug:
+            log.info(logstr)
+        else:
+            log.debug(logstr)
+
     def ensure_data_dir(self):
         if not os.path.isdir(self.conf.data_dir):
             os.makedirs(self.conf.data_dir)
@@ -553,6 +562,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         try:
             function_name = data['method']
+            self.log_function_params(function_name, **args)
         except KeyError:
             return JSONRPCError(
                 "Missing 'method' value in request.", JSONRPCError.CODE_METHOD_NOT_FOUND
@@ -2827,7 +2837,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
-        log.info("publishing: name: %s params: %s", name, kwargs)
         self.valid_stream_name_or_error(name)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.get('wallet_id'))
         if kwargs.get('account_id'):
