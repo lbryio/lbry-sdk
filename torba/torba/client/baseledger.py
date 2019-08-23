@@ -469,15 +469,17 @@ class BaseLedger(metaclass=LedgerRegistry):
 
             if address_manager is not None:
                 await address_manager.ensure_address_gap()
-            local_status, local_history = await self.get_local_status_and_history(address)
 
+            local_status, local_history = await self.get_local_status_and_history(address)
             if local_status != remote_status:
-                log.warning(
+                log.debug(
                     "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
                     remote_status, len(remote_history), local_status, len(local_history)
                 )
+                log.debug("local: %s", local_history)
+                log.debug("remote: %s", remote_history)
             else:
-                log.info("Sync completed for: %s", address)
+                log.debug("Sync completed for: %s", address)
 
     async def cache_transaction(self, txid, remote_height):
         cache_item = self._tx_cache.get(txid)
