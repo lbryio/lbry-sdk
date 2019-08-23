@@ -29,6 +29,8 @@ class ClientSession(BaseClientSession):
         self.pending_amount = 0
         self._on_connect_cb = on_connect_callback or (lambda: None)
         self.trigger_urgent_reconnect = asyncio.Event()
+        # one request per second of timeout, conservative default
+        self._semaphore = asyncio.Semaphore(self.timeout)
 
     @property
     def available(self):
@@ -54,8 +56,12 @@ class ClientSession(BaseClientSession):
         return result
 
     async def send_request(self, method, args=()):
-        log.debug("send %s to %s:%i", method, *self.server)
         self.pending_amount += 1
+        async with self._semaphore:
+            return await self._send_request(method, args)
+
+    async def _send_request(self, method, args=()):
+        log.debug("send %s to %s:%i", method, *self.server)
         try:
             if method == 'server.version':
                 reply = await self.send_timed_server_version_request(args, self.timeout)
