@@ -391,13 +391,11 @@ class Daemon(metaclass=JSONRPCServerType):
         return self._installation_id
 
     @staticmethod
-    def log_function_params(fname, debug=False, **params):
+    def log_function_params(fname, **params):
         params_passed = [f'{k}: {repr(v)}' for k, v in params.items() if v is not None]
         logstr = f'{fname}: {{{", ".join(params_passed)}}}'
-        if not debug:
-            log.info(logstr)
-        else:
-            log.debug(logstr)
+        log.info(logstr)
+
 
     def ensure_data_dir(self):
         if not os.path.isdir(self.conf.data_dir):
