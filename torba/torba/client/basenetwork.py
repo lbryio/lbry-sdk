@@ -221,9 +221,6 @@ class BaseNetwork:
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
 
-    def get_history(self, address):
-        return self.rpc('blockchain.address.get_history', [address])
-
     def get_transaction(self, tx_hash):
         return self.rpc('blockchain.transaction.get', [tx_hash])
 
@@ -236,7 +233,10 @@ class BaseNetwork:
     def get_headers(self, height, count=10000):
         return self.rpc('blockchain.block.headers', [height, count])
 
-    #  --- Subscribes and broadcasts are always aimed towards the master client directly
+    #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
+    def get_history(self, address):
+        return self.rpc('blockchain.address.get_history', [address], session=self.client)
+
     def broadcast(self, raw_transaction):
         return self.rpc('blockchain.transaction.broadcast', [raw_transaction], session=self.client)
 
