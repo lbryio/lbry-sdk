@@ -112,33 +112,44 @@ class LBRYElectrumX(ElectrumX):
         }
         self.request_handlers.update(handlers)
 
-    async def run_in_executor(self, metrics: APICallMetrics, func, kwargs):
+    def get_metrics_or_placeholder_for_api(self, query_name):
+        """ Do not hold on to a reference to the metrics
+            returned by this method past an `await` or
+            you may be working with a stale metrics object.
+        """
+        if self.env.track_metrics:
+            return self.session_mgr.metrics.for_api(query_name)
+        else:
+            return APICallMetrics(query_name)
+
+    async def run_in_executor(self, query_name, func, kwargs):
         start = time.perf_counter()
         try:
             result = await asyncio.get_running_loop().run_in_executor(
                 self.session_mgr.query_executor, func, kwargs
             )
         except reader.SQLiteInterruptedError as error:
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_interrupt(start, error.metrics)
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
         except reader.SQLiteOperationalError as error:
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, error.metrics)
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
         except:
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, {})
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
 
         if self.env.track_metrics:
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
             (result, metrics_data) = result
             metrics.query_response(start, metrics_data)
 
         return base64.b64encode(result).decode()
 
     async def run_and_cache_query(self, query_name, function, kwargs):
-        if self.env.track_metrics:
-            metrics = self.session_mgr.metrics.for_api(query_name)
-        else:
-            metrics = APICallMetrics(query_name)
+        metrics = self.get_metrics_or_placeholder_for_api(query_name)
         metrics.start()
         cache = self.session_mgr.search_cache[query_name]
         cache_key = str(kwargs)
@@ -151,9 +162,10 @@ class LBRYElectrumX(ElectrumX):
         async with cache_item.lock:
             if cache_item.result is None:
                 cache_item.result = await self.run_in_executor(
-                    metrics, function, kwargs
+                    query_name, function, kwargs
                 )
             else:
+                metrics = self.get_metrics_or_placeholder_for_api(query_name)
                 metrics.cache_response()
             return cache_item.result
 

@@ -52,7 +52,7 @@ class APICallMetrics:
         self.errored_queries = set()
         self.interrupted_queries = set()
 
-    def to_json_and_reset(self):
+    def to_json(self):
         return {
             # total requests received
             "receive_count": self.receive_count,
@@ -128,7 +128,7 @@ class ServerLoadData:
     def to_json_and_reset(self, status):
         try:
             return {
-                'api': {name: api.to_json_and_reset() for name, api in self._apis.items()},
+                'api': {name: api.to_json() for name, api in self._apis.items()},
                 'status': status
             }
         finally:
