@@ -45,10 +45,12 @@ class BroadcastSubscription:
 
 class StreamController:
 
-    def __init__(self):
+    def __init__(self, merge_repeated_events=False):
         self.stream = Stream(self)
         self._first_subscription = None
         self._last_subscription = None
+        self._last_event = None
+        self._merge_repeated = merge_repeated_events
 
     @property
     def has_listener(self):
@@ -76,8 +78,10 @@ class StreamController:
             return f
 
     def add(self, event):
+        skip = self._merge_repeated and event == self._last_event
+        self._last_event = event
         return self._notify_and_ensure_future(
-            lambda subscription: subscription._add(event)
+            lambda subscription: None if skip else subscription._add(event)
         )
 
     def add_error(self, exception):
@@ -141,8 +145,8 @@ class Stream:
     def first(self):
         future = asyncio.get_event_loop().create_future()
         subscription = self.listen(
-            lambda value: self._cancel_and_callback(subscription, future, value),
-            lambda exception: self._cancel_and_error(subscription, future, exception)
+            lambda value: not future.done() and self._cancel_and_callback(subscription, future, value),
+            lambda exception: not future.done() and self._cancel_and_error(subscription, future, exception)
         )
         return future
 

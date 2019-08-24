@@ -258,7 +258,7 @@ class SessionManager:
         session_timeout = self.env.session_timeout
         while True:
             await sleep(session_timeout // 10)
-            stale_cutoff = time.time() - session_timeout
+            stale_cutoff = time.perf_counter() - session_timeout
             stale_sessions = [session for session in self.sessions
                               if session.last_recv < stale_cutoff]
             if stale_sessions:

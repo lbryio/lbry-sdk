@@ -287,7 +287,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 subscription_update = False
 
             if not headers:
-                header_response = await self.network.get_headers(height, 2001)
+                header_response = await self.network.retriable_call(self.network.get_headers, height, 2001)
                 headers = header_response['hex']
 
             if not headers:
@@ -394,7 +394,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             if local_status == remote_status:
                 return
 
-            remote_history = await self.network.get_history(address)
+            remote_history = await self.network.retriable_call(self.network.get_history, address)
 
             cache_tasks = []
             synced_history = StringIO()
@@ -447,6 +447,17 @@ class BaseLedger(metaclass=LedgerRegistry):
             if address_manager is not None:
                 await address_manager.ensure_address_gap()
 
+            local_status, local_history = await self.get_local_status_and_history(address)
+            if local_status != remote_status:
+                log.debug(
+                    "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
+                    remote_status, len(remote_history), local_status, len(local_history)
+                )
+                log.debug("local: %s", local_history)
+                log.debug("remote: %s", remote_history)
+            else:
+                log.debug("Sync completed for: %s", address)
+
     async def cache_transaction(self, txid, remote_height):
         cache_item = self._tx_cache.get(txid)
         if cache_item is None:
@@ -466,7 +477,7 @@ class BaseLedger(metaclass=LedgerRegistry):
 
             if tx is None:
                 # fetch from network
-                _raw = await self.network.get_transaction(txid)
+                _raw = await self.network.retriable_call(self.network.get_transaction, txid)
                 if _raw:
                     tx = self.transaction_class(unhexlify(_raw))
                     await self.maybe_verify_transaction(tx, remote_height)
@@ -486,8 +497,8 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     async def maybe_verify_transaction(self, tx, remote_height):
         tx.height = remote_height
-        if 0 < remote_height <= len(self.headers):
-            merkle = await self.network.get_merkle(tx.id, remote_height)
+        if 0 < remote_height < len(self.headers):
+            merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
             header = self.headers[remote_height]
             tx.position = merkle['pos']
@@ -501,6 +512,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         return None
 
     def broadcast(self, tx):
+        # broadcast cant be a retriable call yet
         return self.network.broadcast(hexlify(tx.raw).decode())
 
     async def wait(self, tx: basetransaction.BaseTransaction, height=-1, timeout=None):
@@ -522,4 +534,4 @@ class BaseLedger(metaclass=LedgerRegistry):
             )) for address_record in records
         ], timeout=timeout)
         if pending:
-            raise TimeoutError('Timed out waiting for transaction.')
+            raise asyncio.TimeoutError('Timed out waiting for transaction.')

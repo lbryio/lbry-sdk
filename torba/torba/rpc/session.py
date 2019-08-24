@@ -103,7 +103,7 @@ class SessionBase(asyncio.Protocol):
         # Force-close a connection if a send doesn't succeed in this time
         self.max_send_delay = 60
         # Statistics.  The RPC object also keeps its own statistics.
-        self.start_time = time.time()
+        self.start_time = time.perf_counter()
         self.errors = 0
         self.send_count = 0
         self.send_size = 0
@@ -123,7 +123,7 @@ class SessionBase(asyncio.Protocol):
         # A non-positive value means not to limit concurrency
         if self.bw_limit <= 0:
             return
-        now = time.time()
+        now = time.perf_counter()
         # Reduce the recorded usage in proportion to the elapsed time
         refund = (now - self.bw_time) * (self.bw_limit / 3600)
         self.bw_charge = max(0, self.bw_charge - int(refund))
@@ -146,7 +146,7 @@ class SessionBase(asyncio.Protocol):
             await asyncio.wait_for(self._can_send.wait(), secs)
         except asyncio.TimeoutError:
             self.abort()
-            raise asyncio.CancelledError(f'task timed out after {secs}s')
+            raise asyncio.TimeoutError(f'task timed out after {secs}s')
 
     async def _send_message(self, message):
         if not self._can_send.is_set():
@@ -156,7 +156,7 @@ class SessionBase(asyncio.Protocol):
             self.send_size += len(framed_message)
             self._using_bandwidth(len(framed_message))
             self.send_count += 1
-            self.last_send = time.time()
+            self.last_send = time.perf_counter()
             if self.verbosity >= 4:
                 self.logger.debug(f'Sending framed message {framed_message}')
             self.transport.write(framed_message)
@@ -215,7 +215,8 @@ class SessionBase(asyncio.Protocol):
         self._address = None
         self.transport = None
         self._task_group.cancel()
-        self._pm_task.cancel()
+        if self._pm_task:
+            self._pm_task.cancel()
         # Release waiting tasks
         self._can_send.set()
 
@@ -253,6 +254,7 @@ class SessionBase(asyncio.Protocol):
         if self.transport:
             self.transport.abort()
 
+    # TODO: replace with synchronous_close
     async def close(self, *, force_after=30):
         """Close the connection and return when closed."""
         self._close()
@@ -261,6 +263,11 @@ class SessionBase(asyncio.Protocol):
                 await asyncio.wait([self._pm_task], timeout=force_after)
                 self.abort()
                 await self._pm_task
+
+    def synchronous_close(self):
+        self._close()
+        if self._pm_task and not self._pm_task.done():
+            self._pm_task.cancel()
 
 
 class MessageSession(SessionBase):
@@ -296,7 +303,7 @@ class MessageSession(SessionBase):
                 )
                 self._bump_errors()
             else:
-                self.last_recv = time.time()
+                self.last_recv = time.perf_counter()
                 self.recv_count += 1
                 if self.recv_count % 10 == 0:
                     await self._update_concurrency()
@@ -416,7 +423,7 @@ class RPCSession(SessionBase):
                 self.logger.warning(f'{e!r}')
                 continue
 
-            self.last_recv = time.time()
+            self.last_recv = time.perf_counter()
             self.recv_count += 1
             if self.recv_count % 10 == 0:
                 await self._update_concurrency()
@@ -456,7 +463,7 @@ class RPCSession(SessionBase):
 
     def connection_lost(self, exc):
         # Cancel pending requests and message processing
-        self.connection.cancel_pending_requests()
+        self.connection.raise_pending_requests(exc)
         super().connection_lost(exc)
 
     # External API
@@ -473,6 +480,8 @@ class RPCSession(SessionBase):
 
     async def send_request(self, method, args=()):
         """Send an RPC request over the network."""
+        if self.is_closing():
+            raise asyncio.TimeoutError("Trying to send request on a recently dropped connection.")
         message, event = self.connection.send_request(Request(method, args))
         await self._send_message(message)
         await event.wait()

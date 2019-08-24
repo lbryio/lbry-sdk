@@ -70,8 +70,10 @@ class BaseHeaders:
         return True
 
     def __getitem__(self, height) -> dict:
-        assert not isinstance(height, slice), \
-            "Slicing of header chain has not been implemented yet."
+        if isinstance(height, slice):
+            raise NotImplementedError("Slicing of header chain has not been implemented yet.")
+        if not 0 <= height <= self.height:
+            raise IndexError(f"{height} is out of bounds, current height: {self.height}")
         return self.deserialize(height, self.get_raw_header(height))
 
     def get_raw_header(self, height) -> bytes:

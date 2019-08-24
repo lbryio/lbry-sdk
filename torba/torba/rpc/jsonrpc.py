@@ -33,6 +33,7 @@ __all__ = ('JSONRPC', 'JSONRPCv1', 'JSONRPCv2', 'JSONRPCLoose',
 import itertools
 import json
 import typing
+import asyncio
 from functools import partial
 from numbers import Number
 
@@ -745,9 +746,8 @@ class JSONRPCConnection(object):
             self._protocol = item
             return self.receive_message(message)
 
-    def cancel_pending_requests(self):
-        """Cancel all pending requests."""
-        exception = CancelledError()
+    def raise_pending_requests(self, exception):
+        exception = exception or asyncio.TimeoutError()
         for request, event in self._requests.values():
             event.result = exception
             event.set()
