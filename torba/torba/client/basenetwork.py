@@ -78,7 +78,7 @@ class ClientSession(BaseClientSession):
         except ConnectionError:
             log.warning("connection to %s:%i lost", *self.server)
             self.synchronous_close()
-            raise asyncio.CancelledError(f"connection to {self.server[0]}:{self.server[1]} lost")
+            raise
         except asyncio.TimeoutError:
             log.info("timeout sending %s to %s:%i", method, *self.server)
             raise
@@ -203,8 +203,10 @@ class BaseNetwork:
         return self.client and not self.client.is_closing()
 
     def rpc(self, list_or_method, args, session=None):
-        session = session or self.session_pool.fastest_session
-        if session:
+        # fixme: use fastest unloaded session, but for now it causes issues with wallet sync
+        # session = session or self.session_pool.fastest_session
+        session = self.client
+        if session and not session.is_closing():
             return session.send_request(list_or_method, args)
         else:
             self.session_pool.trigger_nodelay_connect()
