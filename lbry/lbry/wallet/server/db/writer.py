@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from typing import Union, Tuple, Set, List
 from itertools import chain
@@ -705,7 +706,8 @@ class LBRYDB(DB):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.sql = SQLDB(self, 'claims.db')
+        path = os.path.join(self.env.db_dir, 'claims.db')
+        self.sql = SQLDB(self, path)
 
     def close(self):
         super().close()

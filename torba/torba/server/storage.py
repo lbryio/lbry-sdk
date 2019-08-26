@@ -13,20 +13,21 @@ from functools import partial
 from torba.server import util
 
 
-def db_class(name):
+def db_class(db_dir, name):
     """Returns a DB engine class."""
     for db_class in util.subclasses(Storage):
         if db_class.__name__.lower() == name.lower():
             db_class.import_module()
-            return db_class
+            return partial(db_class, db_dir)
     raise RuntimeError('unrecognised DB engine "{}"'.format(name))
 
 
 class Storage:
     """Abstract base class of the DB backend abstraction."""
 
-    def __init__(self, name, for_sync):
-        self.is_new = not os.path.exists(name)
+    def __init__(self, db_dir, name, for_sync):
+        self.db_dir = db_dir
+        self.is_new = not os.path.exists(os.path.join(db_dir, name))
         self.for_sync = for_sync or self.is_new
         self.open(name, create=self.is_new)
 
@@ -78,8 +79,9 @@ class LevelDB(Storage):
 
     def open(self, name, create):
         mof = 512 if self.for_sync else 128
+        path = os.path.join(self.db_dir, name)
         # Use snappy compression (the default)
-        self.db = self.module.DB(name, create_if_missing=create,
+        self.db = self.module.DB(path, create_if_missing=create,
                                  max_open_files=mof)
         self.close = self.db.close
         self.get = self.db.get
@@ -99,12 +101,13 @@ class RocksDB(Storage):
 
     def open(self, name, create):
         mof = 512 if self.for_sync else 128
+        path = os.path.join(self.db_dir, name)
         # Use snappy compression (the default)
         options = self.module.Options(create_if_missing=create,
                                       use_fsync=True,
                                       target_file_size_base=33554432,
                                       max_open_files=mof)
-        self.db = self.module.DB(name, options)
+        self.db = self.module.DB(path, options)
         self.get = self.db.get
         self.put = self.db.put
 
