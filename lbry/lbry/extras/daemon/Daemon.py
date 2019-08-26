@@ -2897,7 +2897,7 @@ class Daemon(metaclass=JSONRPCServerType):
                             [--account_id=<account_id>] [--preview] [--blocking]
 
         Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
+            --claim_id=<claim_id>     : (str) claim_id of the support to abandon
             --txid=<txid>             : (str) txid of the claim to abandon
             --nout=<nout>             : (int) nout of the claim to abandon
             --keep=<keep>             : (decimal) amount of lbc to keep as support
