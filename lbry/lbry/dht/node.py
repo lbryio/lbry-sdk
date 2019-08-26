@@ -88,10 +88,10 @@ class Node:
         )
         stored_to = [node_id for node_id, contacted in stored_to_tup if contacted]
         if stored_to:
-            log.info("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
+            log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
                      len(stored_to), len(peers))
         else:
-            log.warning("Failed announcing %s, stored to 0 peers", blob_hash[:8])
+            log.debug("Failed announcing %s, stored to 0 peers", blob_hash[:8])
         return stored_to
 
     def stop(self) -> None:

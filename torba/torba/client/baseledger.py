@@ -395,9 +395,13 @@ class BaseLedger(metaclass=LedgerRegistry):
 
     async def subscribe_addresses(self, address_manager: baseaccount.AddressManager, addresses: List[str]):
         if self.network.is_connected and addresses:
-            async for address, remote_status in self.network.subscribe_address(*addresses):
-                # subscribe isnt a retriable call as it happens right after a connection is made
-                self._update_tasks.add(self.update_history(address, remote_status, address_manager))
+            await asyncio.wait([
+                self.subscribe_address(address_manager, address) for address in addresses
+            ])
+
+    async def subscribe_address(self, address_manager: baseaccount.AddressManager, address: str):
+        remote_status = await self.network.subscribe_address(address)
+        self._update_tasks.add(self.update_history(address, remote_status, address_manager))
 
     def process_status_update(self, update):
         address, remote_status = update
@@ -465,6 +469,17 @@ class BaseLedger(metaclass=LedgerRegistry):
 
             if address_manager is not None:
                 await address_manager.ensure_address_gap()
+
+            local_status, local_history = await self.get_local_status_and_history(address)
+            if local_status != remote_status:
+                log.debug(
+                    "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
+                    remote_status, len(remote_history), local_status, len(local_history)
+                )
+                log.debug("local: %s", local_history)
+                log.debug("remote: %s", remote_history)
+            else:
+                log.debug("Sync completed for: %s", address)
 
     async def cache_transaction(self, txid, remote_height):
         cache_item = self._tx_cache.get(txid)

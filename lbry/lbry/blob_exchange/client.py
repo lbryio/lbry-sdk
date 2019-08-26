@@ -151,7 +151,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 return self._blob_bytes_received, self.close()
             msg = f"downloading {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}," \
                 f" timeout in {self.peer_timeout}"
-            log.info(msg)
+            log.debug(msg)
             msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}"
             await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
             log.info("%s at %fMB/s", msg,
