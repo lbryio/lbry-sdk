@@ -29,6 +29,8 @@ class ClientSession(BaseClientSession):
         self.pending_amount = 0
         self._on_connect_cb = on_connect_callback or (lambda: None)
         self.trigger_urgent_reconnect = asyncio.Event()
+        # one request per second of timeout, conservative default
+        self._semaphore = asyncio.Semaphore(self.timeout)
 
     @property
     def available(self):
@@ -40,11 +42,12 @@ class ClientSession(BaseClientSession):
             return None
         return self.transport.get_extra_info('peername')
 
-    async def send_timed_server_version_request(self, args=()):
+    async def send_timed_server_version_request(self, args=(), timeout=None):
+        timeout = timeout or self.timeout
         log.debug("send version request to %s:%i", *self.server)
         start = perf_counter()
         result = await asyncio.wait_for(
-            super().send_request('server.version', args), timeout=self.timeout
+            super().send_request('server.version', args), timeout=timeout
         )
         current_response_time = perf_counter() - start
         response_sum = (self.response_time or 0) * self._response_samples + current_response_time
@@ -54,23 +57,42 @@ class ClientSession(BaseClientSession):
 
     async def send_request(self, method, args=()):
         self.pending_amount += 1
+        async with self._semaphore:
+            return await self._send_request(method, args)
+
+    async def _send_request(self, method, args=()):
+        log.debug("send %s to %s:%i", method, *self.server)
         try:
             if method == 'server.version':
-                return await self.send_timed_server_version_request(args)
-            return await asyncio.wait_for(
-                super().send_request(method, args), timeout=self.timeout
-            )
+                reply = await self.send_timed_server_version_request(args, self.timeout)
+            else:
+                reply = await asyncio.wait_for(
+                    super().send_request(method, args), timeout=self.timeout
+                )
+            log.debug("got reply for %s from %s:%i", method, *self.server)
+            return reply
         except RPCError as e:
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)
             raise e
+        except ConnectionError:
+            log.warning("connection to %s:%i lost", *self.server)
+            self.synchronous_close()
+            raise
+        except asyncio.TimeoutError:
+            log.info("timeout sending %s to %s:%i", method, *self.server)
+            raise
+        except asyncio.CancelledError:
+            log.info("cancelled sending %s to %s:%i", method, *self.server)
+            self.synchronous_close()
+            raise
         finally:
             self.pending_amount -= 1
 
     async def ensure_session(self):
         # Handles reconnecting and maintaining a session alive
         # TODO: change to 'ping' on newer protocol (above 1.2)
-        retry_delay = default_delay = 0.1
+        retry_delay = default_delay = 1.0
         while True:
             try:
                 if self.is_closing():
@@ -83,19 +105,18 @@ class ClientSession(BaseClientSession):
             except (asyncio.TimeoutError, OSError):
                 await self.close()
                 retry_delay = min(60, retry_delay * 2)
-                log.warning("Wallet server timeout (retry in %s seconds): %s:%d", retry_delay, *self.server)
+                log.debug("Wallet server timeout (retry in %s seconds): %s:%d", retry_delay, *self.server)
             try:
                 await asyncio.wait_for(self.trigger_urgent_reconnect.wait(), timeout=retry_delay)
             except asyncio.TimeoutError:
                 pass
-            except asyncio.CancelledError:
-                self.synchronous_close()
-                raise
             finally:
                 self.trigger_urgent_reconnect.clear()
 
-    def ensure_server_version(self, required='1.2'):
-        return self.send_request('server.version', [__version__, required])
+    async def ensure_server_version(self, required='1.2', timeout=3):
+        return await asyncio.wait_for(
+            self.send_request('server.version', [__version__, required]), timeout=timeout
+        )
 
     async def create_connection(self, timeout=6):
         connector = Connector(lambda: self, *self.server)
@@ -120,7 +141,6 @@ class ClientSession(BaseClientSession):
 class BaseNetwork:
 
     def __init__(self, ledger):
-        self.switch_event = asyncio.Event()
         self.config = ledger.config
         self.session_pool = SessionPool(network=self, timeout=self.config.get('connect_timeout', 6))
         self.client: Optional[ClientSession] = None
@@ -141,24 +161,38 @@ class BaseNetwork:
             'blockchain.address.subscribe': self._on_status_controller,
         }
 
+    async def switch_to_fastest(self):
+        try:
+            client = await asyncio.wait_for(self.session_pool.wait_for_fastest_session(), 30)
+        except asyncio.TimeoutError:
+            if self.client:
+                await self.client.close()
+            self.client = None
+            for session in self.session_pool.sessions:
+                session.synchronous_close()
+            log.warning("not connected to any wallet servers")
+            return
+        current_client = self.client
+        self.client = client
+        log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
+        self._on_connected_controller.add(True)
+        try:
+            self._update_remote_height((await self.subscribe_headers(),))
+            log.info("Subscribed to headers: %s:%d", *self.client.server)
+        except asyncio.TimeoutError:
+            if self.client:
+                await self.client.close()
+                self.client = current_client
+            return
+        self.session_pool.new_connection_event.clear()
+        return await self.session_pool.new_connection_event.wait()
+
     async def start(self):
         self.running = True
         self.session_pool.start(self.config['default_servers'])
         self.on_header.listen(self._update_remote_height)
         while self.running:
-            try:
-                self.client = await self.session_pool.wait_for_fastest_session()
-                self._update_remote_height((await self.subscribe_headers(),))
-                log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
-                self._on_connected_controller.add(True)
-                self.client.on_disconnected.listen(lambda _: self.switch_event.set())
-                await self.switch_event.wait()
-                self.switch_event.clear()
-            except asyncio.CancelledError:
-                await self.stop()
-                raise
-            except asyncio.TimeoutError:
-                pass
+            await self.switch_to_fastest()
 
     async def stop(self):
         self.running = False
@@ -169,8 +203,10 @@ class BaseNetwork:
         return self.client and not self.client.is_closing()
 
     def rpc(self, list_or_method, args, session=None):
-        session = session or self.session_pool.fastest_session
-        if session:
+        # fixme: use fastest unloaded session, but for now it causes issues with wallet sync
+        # session = session or self.session_pool.fastest_session
+        session = self.client
+        if session and not session.is_closing():
             return session.send_request(list_or_method, args)
         else:
             self.session_pool.trigger_nodelay_connect()
@@ -178,20 +214,20 @@ class BaseNetwork:
 
     async def retriable_call(self, function, *args, **kwargs):
         while self.running:
+            if not self.is_connected:
+                log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+                await self.on_connected.first
+            await self.session_pool.wait_for_fastest_session()
             try:
                 return await function(*args, **kwargs)
             except asyncio.TimeoutError:
                 log.warning("Wallet server call timed out, retrying.")
             except ConnectionError:
-                if not self.is_connected and self.running:
-                    log.warning("Wallet server unavailable, waiting for it to come back and retry.")
-                    await self.on_connected.first
+                pass
+        raise asyncio.CancelledError()  # if we got here, we are shutting down
 
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
-
-    def get_history(self, address):
-        return self.rpc('blockchain.address.get_history', [address])
 
     def get_transaction(self, tx_hash):
         return self.rpc('blockchain.transaction.get', [tx_hash])
@@ -205,19 +241,23 @@ class BaseNetwork:
     def get_headers(self, height, count=10000):
         return self.rpc('blockchain.block.headers', [height, count])
 
-    #  --- Subscribes and broadcasts are always aimed towards the master client directly
+    #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
+    def get_history(self, address):
+        return self.rpc('blockchain.address.get_history', [address], session=self.client)
+
     def broadcast(self, raw_transaction):
         return self.rpc('blockchain.transaction.broadcast', [raw_transaction], session=self.client)
 
     def subscribe_headers(self):
         return self.rpc('blockchain.headers.subscribe', [True], session=self.client)
 
-    async def subscribe_address(self, *addresses):
-        async with self.client.send_batch() as batch:
-            for address in addresses:
-                batch.add_request('blockchain.address.subscribe', [address])
-        for address, status in zip(addresses, batch.results):
-            yield address, status
+    async def subscribe_address(self, address):
+        try:
+            return await self.rpc('blockchain.address.subscribe', [address], session=self.client)
+        except asyncio.TimeoutError:
+            # abort and cancel, we cant lose a subscription, it will happen again on reconnect
+            self.client.abort()
+            raise asyncio.CancelledError()
 
 
 class SessionPool:
