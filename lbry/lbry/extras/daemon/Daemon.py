@@ -3424,7 +3424,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_list(self, claim_id, parent_id=None, page=1, page_size=50,
-                                   include_replies=True, is_channel_signature_valid=False):
+                                   include_replies=True, is_channel_signature_valid=False,
+                                   hidden=False, visible=False):
         """
         List comments associated with a claim.
 
@@ -3433,6 +3434,7 @@ class Daemon(metaclass=JSONRPCServerType):
                             [(--page=<page> --page_size=<page_size>)]
                             [--parent_id=<parent_id>] [--include_replies]
                             [--is_channel_signature_valid]
+                            [--visible | --hidden]
 
         Options:
             --claim_id=<claim_id>           : (str) The claim on which the comment will be made on
@@ -3443,6 +3445,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --is_channel_signature_valid    : (bool) Only include comments with valid signatures.
                                               [Warning: Paginated total size will not change, even
                                                if list reduces]
+            --visible                       : (bool) Select only Visisble Comments
+            --hidden                        : (bool) Select only Hidden Comments
 
         Returns:
             (dict)  Containing the list, and information about the paginated content:
@@ -3467,15 +3471,25 @@ class Daemon(metaclass=JSONRPCServerType):
                 ]
             }
         """
-        result = await comment_client.jsonrpc_post(
-            self.conf.comment_server,
-            "get_claim_comments",
-            claim_id=claim_id,
-            parent_id=parent_id,
-            page=page,
-            page_size=page_size,
-            top_level=not include_replies
-        )
+        if hidden ^ visible:
+            result = await comment_client.jsonrpc_post(
+                self.conf.comment_server,
+                'get_claim_hidden_comments',
+                claim_id=claim_id,
+                hidden=hidden,
+                page=page,
+                page_size=page_size
+            )
+        else:
+            result = await comment_client.jsonrpc_post(
+                self.conf.comment_server,
+                'get_claim_comments',
+                claim_id=claim_id,
+                parent_id=parent_id,
+                page=page,
+                page_size=page_size,
+                top_level=not include_replies
+            )
         for comment in result.get('items', []):
             channel_url = comment.get('channel_url')
             if not channel_url:
@@ -3554,13 +3568,13 @@ class Daemon(metaclass=JSONRPCServerType):
             comment_abandon  (<comment_id> | --comment_id=<comment_id>)
 
         Options:
-            --comment_id=<comment_id>   : (str) The ID of the comment to be deleted.
+            --comment_id=<comment_id>   : (str) The ID of the comment to be abandoned.
 
         Returns:
-            (dict) Object with the `comment_id` passed in as the key, and a flag indicating if it was deleted
+            (dict) Object with the `comment_id` passed in as the key, and a flag indicating if it was abandoned
             {
                 <comment_id> (str): {
-                    "deleted": (bool)
+                    "abandoned": (bool)
                 }
             }
         """
@@ -3569,14 +3583,54 @@ class Daemon(metaclass=JSONRPCServerType):
             self.conf.comment_server, 'get_channel_from_comment_id', comment_id=comment_id
         )
         if 'error' in channel:
-            return {comment_id: {'deleted': False}}
+            return {comment_id: {'abandoned': False}}
         channel = await self.get_channel_or_none(None, **channel)
         abandon_comment_body.update({
             'channel_id': channel.claim_id,
             'channel_name': channel.claim_name,
         })
         comment_client.sign_comment(abandon_comment_body, channel, abandon=True)
-        return await comment_client.jsonrpc_post(self.conf.comment_server, 'delete_comment', abandon_comment_body)
+        return await comment_client.jsonrpc_post(self.conf.comment_server, 'abandon_comment', abandon_comment_body)
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_comment_hide(self, comment_ids: typing.Union[str, list]):
+        """
+        Hide a comment published to a claim you control.
+
+        Usage:
+            comment_hide  <comment_ids>...
+
+        Options:
+            --comment_ids=<comment_ids>   : (str, list) one or more comment_id to hide.
+
+        Returns:
+            (dict) keyed by comment_id, containing success info
+            '<comment_id>': {
+                "hidden": (bool)  flag indicating if comment_id was hidden
+            }
+        """
+        if isinstance(comment_ids, str):
+            comment_ids = [comment_ids]
+
+        comments = await comment_client.jsonrpc_post(
+            self.conf.comment_server, 'get_comments_by_id', comment_ids=comment_ids
+        )
+        claim_ids = {comment['claim_id'] for comment in comments}
+        claims = {cid: await self.ledger.get_claim_by_claim_id(claim_id=cid) for cid in claim_ids}
+        pieces = []
+        for comment in comments:
+            claim = claims.get(comment['claim_id'])
+            if claim:
+                channel = await self.get_channel_or_none(
+                    account_ids=[],
+                    channel_id=claim.channel.claim_id,
+                    channel_name=claim.channel.claim_name,
+                    for_signing=True
+                )
+                piece = {'comment_id': comment['comment_id']}
+                comment_client.sign_comment(piece, channel, abandon=True)
+                pieces.append(piece)
+        return await comment_client.jsonrpc_post(self.conf.comment_server, 'hide_comments', pieces=pieces)
 
     async def broadcast_or_release(self, tx, blocking=False):
         try:
@@ -3597,18 +3651,14 @@ class Daemon(metaclass=JSONRPCServerType):
     def valid_stream_name_or_error(name: str):
         try:
             if not name:
-                raise Exception(
-                    "Stream name cannot be blank."
-                )
+                raise Exception('Stream name cannot be blank.')
             parsed = URL.parse(name)
             if parsed.has_channel:
                 raise Exception(
                     "Stream names cannot start with '@' symbol. This is reserved for channels claims."
                 )
             if not parsed.has_stream or parsed.stream.name != name:
-                raise Exception(
-                    "Stream name has invalid characters."
-                )
+                raise Exception('Stream name has invalid characters.')
         except (TypeError, ValueError):
             raise Exception("Invalid stream name.")
 

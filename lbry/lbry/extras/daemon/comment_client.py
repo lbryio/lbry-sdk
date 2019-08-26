@@ -57,8 +57,7 @@ async def jsonrpc_post(url: str, method: str, params: dict = None, **kwargs) -> 
     params = params or {}
     params.update(kwargs)
     json_body = {'jsonrpc': '2.0', 'id': None, 'method': method, 'params': params}
-    headers = {'Content-Type': 'application/json'}
-    async with utils.aiohttp_request('POST', url, json=json_body, headers=headers) as response:
+    async with utils.aiohttp_request('POST', url, json=json_body) as response:
         try:
             result = await response.json()
             return result['result'] if 'result' in result else result
