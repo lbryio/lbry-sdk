@@ -2887,23 +2887,26 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_support_abandon(
             self, claim_id=None, txid=None, nout=None, keep=None,
-            account_id=None, preview=False, blocking=False):
+            account_id=None, spend_address=None, preview=False, blocking=False):
         """
         Abandon supports, including tips, of a specific claim, optionally
         keeping some amount as supports.
 
         Usage:
             support_abandon [--claim_id=<claim_id>] [(--txid=<txid> --nout=<nout>)] [--keep=<keep>]
-                            [--account_id=<account_id>] [--preview] [--blocking]
+                            [--account_id=<account_id>] [--spend_address=<spend_address>]
+                            [--preview] [--blocking]
+
 
         Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
-            --txid=<txid>             : (str) txid of the claim to abandon
-            --nout=<nout>             : (int) nout of the claim to abandon
-            --keep=<keep>             : (decimal) amount of lbc to keep as support
-            --account_id=<account_id> : (str) id of the account to use
-            --preview                 : (bool) do not broadcast the transaction
-            --blocking                : (bool) wait until abandon is in mempool
+            --claim_id=<claim_id>           : (str) claim_id of the claim to abandon
+            --txid=<txid>                   : (str) txid of the claim to abandon
+            --nout=<nout>                   : (int) nout of the claim to abandon
+            --keep=<keep>                   : (decimal) amount of lbc to keep as support
+            --account_id=<account_id>       : (str) id of the account to use
+            --spend_address=<spend_address> : (str) Address to receive the amount returned from the support
+            --preview                       : (bool) do not broadcast the transaction
+            --blocking                      : (bool) wait until abandon is in mempool
 
         Returns: {Transaction}
         """
@@ -2941,6 +2944,11 @@ class Daemon(metaclass=JSONRPCServerType):
         tx = await Transaction.create(
             [Input.spend(txo) for txo in supports], outputs, funding_accounts, funding_accounts[0]
         )
+
+        if spend_address is not None:
+            output = tx.outputs[0]
+            output = Output.pay_pubkey_hash(output.amount, self.ledger.address_to_hash160(spend_address))
+            tx = await Transaction.create(tx.inputs, [output], funding_accounts, funding_accounts[0])
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)

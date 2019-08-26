@@ -1115,9 +1115,15 @@ class SupportCommands(CommandTestCase):
         ))
         await self.on_transaction_dict(result)
 
+        # account3 will be used to receive abandoned supports
+        account3_id = (await self.out(self.daemon.jsonrpc_account_create('Receiving Account')))['id']
+        account3 = self.daemon.get_account_or_error(account3_id)
+        account3_address = await self.daemon.jsonrpc_address_unused(account3_id)
+
         # account1 and account2 balances:
         await self.assertBalance(self.account, '4.999876')
         await self.assertBalance(account2,     '5.0')
+        await self.assertBalance(account3,     '0.0')
 
         # create the claim we'll be tipping and supporting
         claim_id = self.get_claim_id(await self.stream_create())
@@ -1125,6 +1131,7 @@ class SupportCommands(CommandTestCase):
         # account1 and account2 balances:
         await self.assertBalance(self.account, '3.979769')
         await self.assertBalance(account2,     '5.0')
+        await self.assertBalance(account3,     '0.0')
 
         # send a tip to the claim using account2
         tip = await self.out(
@@ -1136,6 +1143,7 @@ class SupportCommands(CommandTestCase):
         # tips don't affect balance so account1 balance is same but account2 balance went down
         await self.assertBalance(self.account, '3.979769')
         await self.assertBalance(account2,     '3.9998585')
+        await self.assertBalance(account3,     '0.0')
 
         # verify that the incoming tip is marked correctly as is_tip=True in account1
         txs = await self.out(self.daemon.jsonrpc_transaction_list(self.account.id))
@@ -1167,6 +1175,7 @@ class SupportCommands(CommandTestCase):
         # account2 balance went down ~2
         await self.assertBalance(self.account, '3.979769')
         await self.assertBalance(account2,     '1.999717')
+        await self.assertBalance(account3,     '0.0')
 
         # verify that the outgoing support is marked correctly as is_tip=False in account2
         txs2 = await self.out(self.daemon.jsonrpc_transaction_list(account2_id))
@@ -1176,3 +1185,16 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
+
+        # Abandon the support made on claim_id and send the amount to account3
+        support = await self.out(
+            self.daemon.jsonrpc_support_abandon(
+                claim_id, account_id=account2_id, spend_address=account3_address
+            )
+        )
+        await self.confirm_tx(support['txid'])
+
+        # account2 balance doesn't change, but account3 receives the ~2 LBC tip output
+        await self.assertBalance(self.account, '3.979769')
+        await self.assertBalance(account2, '1.999717')
+        await self.assertBalance(account3, '1.999893')
