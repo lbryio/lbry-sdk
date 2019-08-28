@@ -1774,7 +1774,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
                       [--blobs_remaining=<blobs_remaining>] [--sort=<sort_by>]
                       [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
-                      [--page=<page>] [--page_size=<page_size>]
+                      [(--page=<page> --page_size=<page_size>)]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
