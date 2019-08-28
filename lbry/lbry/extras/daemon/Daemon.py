@@ -1763,7 +1763,7 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(STREAM_MANAGER_COMPONENT)
-    def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, **kwargs):
+    def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, page=None, page_size=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1774,6 +1774,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
                       [--blobs_remaining=<blobs_remaining>] [--sort=<sort_by>]
                       [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
+                      [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1792,14 +1793,31 @@ class Daemon(metaclass=JSONRPCServerType):
             --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
             --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
             --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le)
+            --page=<page>                          : (int) page to view within paginated output
+            --page_size=<page_size>                : (int) size of each page within paginated output
 
-        Returns: {List[File]}
+        Returns: {Paginated[Output]}
         """
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
-        return self.stream_manager.get_filtered_streams(
+
+        file_list = self.stream_manager.get_filtered_streams(
             sort, reverse, comparison, **kwargs
         )
+
+        if None not in (page, page_size):
+            total_items = len(file_list)
+            offset = page_size * (page-1)
+            return {
+                'total_items': total_items,
+                'total_pages': int((total_items + (page_size-1)) / page_size),
+                'page': page,
+                'page_size': page_size,
+                'items': file_list[offset:offset+page_size]
+            }
+
+        return file_list
+
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
