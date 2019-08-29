@@ -144,6 +144,7 @@ class BaseNetwork:
         self.config = ledger.config
         self.session_pool = SessionPool(network=self, timeout=self.config.get('connect_timeout', 6))
         self.client: Optional[ClientSession] = None
+        self._switch_task: Optional[asyncio.Task] = None
         self.running = False
         self.remote_height: int = 0
 
@@ -161,42 +162,34 @@ class BaseNetwork:
             'blockchain.address.subscribe': self._on_status_controller,
         }
 
-    async def switch_to_fastest(self):
-        try:
-            client = await asyncio.wait_for(self.session_pool.wait_for_fastest_session(), 30)
-        except asyncio.TimeoutError:
-            if self.client:
-                await self.client.close()
-            self.client = None
-            for session in self.session_pool.sessions:
-                session.synchronous_close()
-            log.warning("not connected to any wallet servers")
-            return
-        current_client = self.client
-        self.client = client
-        log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
-        self._on_connected_controller.add(True)
-        try:
-            self._update_remote_height((await self.subscribe_headers(),))
-            log.info("Subscribed to headers: %s:%d", *self.client.server)
-        except asyncio.TimeoutError:
-            if self.client:
-                await self.client.close()
-                self.client = current_client
-            return
-        self.session_pool.new_connection_event.clear()
-        return await self.session_pool.new_connection_event.wait()
+    async def switch_forever(self):
+        while self.running:
+            if self.is_connected:
+                await self.client.on_disconnected.first
+                self.client = None
+                continue
+            self.client = await self.session_pool.wait_for_fastest_session()
+            log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
+            self._on_connected_controller.add(True)
+            try:
+                self._update_remote_height((await self.subscribe_headers(),))
+                log.info("Subscribed to headers: %s:%d", *self.client.server)
+            except asyncio.TimeoutError:
+                log.info("Switching to %s:%d timed out, closing and retrying.")
+                self.client.synchronous_close()
+                self.client = None
 
     async def start(self):
         self.running = True
+        self._switch_task = asyncio.ensure_future(self.switch_forever())
         self.session_pool.start(self.config['default_servers'])
         self.on_header.listen(self._update_remote_height)
-        while self.running:
-            await self.switch_to_fastest()
 
     async def stop(self):
-        self.running = False
-        self.session_pool.stop()
+        if self.running:
+            self.running = False
+            self._switch_task.cancel()
+            self.session_pool.stop()
 
     @property
     def is_connected(self):
@@ -329,8 +322,9 @@ class SessionPool:
             self._connect_session(server)
 
     def stop(self):
-        for task in self.sessions.values():
+        for session, task in self.sessions.items():
             task.cancel()
+            session.synchronous_close()
         self.sessions.clear()
 
     def ensure_connections(self):
