@@ -172,7 +172,7 @@ class JSONResponseEncoder(JSONEncoder):
                 'normalized_name': txo.normalized_name,
                 'claim_id': txo.claim_id,
                 'permanent_url': txo.permanent_url,
-                'meta': self.encode_claim_meta(txo.meta)
+                'meta': self.encode_claim_meta(txo.meta.copy())
             })
             if 'short_url' in output['meta']:
                 output['short_url'] = output['meta'].pop('short_url')
