@@ -33,7 +33,7 @@ class ReconnectTests(IntegrationTestCase):
         for session in self.ledger.network.session_pool.sessions:
             session.trigger_urgent_reconnect.set()
         await asyncio.wait_for(self.ledger.network.session_pool.new_connection_event.wait(), timeout=1)
-        self.assertEqual(2, len(self.ledger.network.session_pool.available_sessions))
+        self.assertEqual(2, len(list(self.ledger.network.session_pool.available_sessions)))
         self.assertTrue(self.ledger.network.is_connected)
         switch_event = self.ledger.network.on_connected.first
         await node2.stop(True)
@@ -126,4 +126,4 @@ class ServerPickingTestCase(AsyncioTestCase):
         self.assertTrue(all([not session.is_closing() for session in network.session_pool.available_sessions]))
         # ensure we are connected to all of them after a while
         await asyncio.sleep(1)
-        self.assertEqual(len(network.session_pool.available_sessions), 3)
+        self.assertEqual(len(list(network.session_pool.available_sessions)), 3)

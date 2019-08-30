@@ -227,16 +227,19 @@ class SQLiteMixin:
         await self.db.close()
 
     @staticmethod
-    def _insert_sql(table: str, data: dict, ignore_duplicate: bool = False) -> Tuple[str, List]:
+    def _insert_sql(table: str, data: dict, ignore_duplicate: bool = False,
+                    replace: bool = False) -> Tuple[str, List]:
         columns, values = [], []
         for column, value in data.items():
             columns.append(column)
             values.append(value)
-        or_ignore = ""
+        policy = ""
         if ignore_duplicate:
-            or_ignore = " OR IGNORE"
+            policy = " OR IGNORE"
+        if replace:
+            policy = " OR REPLACE"
         sql = "INSERT{} INTO {} ({}) VALUES ({})".format(
-            or_ignore, table, ', '.join(columns), ', '.join(['?'] * len(values))
+            policy, table, ', '.join(columns), ', '.join(['?'] * len(values))
         )
         return sql, values
 
@@ -348,35 +351,47 @@ class BaseDatabase(SQLiteMixin):
             'height': tx.height, 'position': tx.position, 'is_verified': tx.is_verified
         }, 'txid = ?', (tx.id,)))
 
+    def _transaction_io(self, conn: sqlite3.Connection, tx: BaseTransaction, address, txhash, history):
+        conn.execute(*self._insert_sql('tx', {
+            'txid': tx.id,
+            'raw': sqlite3.Binary(tx.raw),
+            'height': tx.height,
+            'position': tx.position,
+            'is_verified': tx.is_verified
+        }, replace=True))
+
+        for txo in tx.outputs:
+            if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
+                conn.execute(*self._insert_sql(
+                    "txo", self.txo_to_row(tx, address, txo), ignore_duplicate=True
+                ))
+            elif txo.script.is_pay_script_hash:
+                # TODO: implement script hash payments
+                log.warning('Database.save_transaction_io: pay script hash is not implemented!')
+
+        for txi in tx.inputs:
+            if txi.txo_ref.txo is not None:
+                txo = txi.txo_ref.txo
+                if txo.get_address(self.ledger) == address:
+                    conn.execute(*self._insert_sql("txi", {
+                        'txid': tx.id,
+                        'txoid': txo.id,
+                        'address': address,
+                    }, ignore_duplicate=True))
+
+        conn.execute(
+            "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
+            (history, history.count(':') // 2, address)
+        )
+
     def save_transaction_io(self, tx: BaseTransaction, address, txhash, history):
+        return self.db.run(self._transaction_io, tx, address, txhash, history)
 
-        def _transaction(conn: sqlite3.Connection, tx: BaseTransaction, address, txhash, history):
-
-            for txo in tx.outputs:
-                if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
-                    conn.execute(*self._insert_sql(
-                        "txo", self.txo_to_row(tx, address, txo), ignore_duplicate=True
-                    ))
-                elif txo.script.is_pay_script_hash:
-                    # TODO: implement script hash payments
-                    log.warning('Database.save_transaction_io: pay script hash is not implemented!')
-
-            for txi in tx.inputs:
-                if txi.txo_ref.txo is not None:
-                    txo = txi.txo_ref.txo
-                    if txo.get_address(self.ledger) == address:
-                        conn.execute(*self._insert_sql("txi", {
-                            'txid': tx.id,
-                            'txoid': txo.id,
-                            'address': address,
-                        }, ignore_duplicate=True))
-
-            conn.execute(
-                "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
-                (history, history.count(':')//2, address)
-            )
-
-        return self.db.run(_transaction, tx, address, txhash, history)
+    def save_transaction_io_batch(self, txs: Iterable[BaseTransaction], address, txhash, history):
+        def __many(conn):
+            for tx in txs:
+                self._transaction_io(conn, tx, address, txhash, history)
+        return self.db.run(__many)
 
     async def reserve_outputs(self, txos, is_reserved=True):
         txoids = ((is_reserved, txo.id) for txo in txos)

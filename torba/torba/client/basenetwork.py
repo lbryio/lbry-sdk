@@ -30,11 +30,11 @@ class ClientSession(BaseClientSession):
         self._on_connect_cb = on_connect_callback or (lambda: None)
         self.trigger_urgent_reconnect = asyncio.Event()
         # one request per second of timeout, conservative default
-        self._semaphore = asyncio.Semaphore(self.timeout)
+        self._semaphore = asyncio.Semaphore(self.timeout * 2)
 
     @property
     def available(self):
-        return not self.is_closing() and self._can_send.is_set() and self.response_time is not None
+        return not self.is_closing() and self.response_time is not None
 
     @property
     def server_address_and_port(self) -> Optional[Tuple[str, int]]:
@@ -195,10 +195,8 @@ class BaseNetwork:
     def is_connected(self):
         return self.client and not self.client.is_closing()
 
-    def rpc(self, list_or_method, args, session=None):
-        # fixme: use fastest unloaded session, but for now it causes issues with wallet sync
-        # session = session or self.session_pool.fastest_session
-        session = self.client
+    def rpc(self, list_or_method, args, restricted=False):
+        session = self.client if restricted else self.session_pool.fastest_session
         if session and not session.is_closing():
             return session.send_request(list_or_method, args)
         else:
@@ -225,28 +223,35 @@ class BaseNetwork:
     def get_transaction(self, tx_hash):
         return self.rpc('blockchain.transaction.get', [tx_hash])
 
-    def get_transaction_height(self, tx_hash):
-        return self.rpc('blockchain.transaction.get_height', [tx_hash])
+    def get_transaction_height(self, tx_hash, known_height=None):
+        restricted = True  # by default, check master for consistency
+        if known_height:
+            if 0 < known_height < self.remote_height - 10:
+                restricted = False  # we can get from any server, its old
+        return self.rpc('blockchain.transaction.get_height', [tx_hash], restricted)
 
     def get_merkle(self, tx_hash, height):
-        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height])
+        restricted = True  # by default, check master for consistency
+        if 0 < height < self.remote_height - 10:
+            restricted = False  # we can get from any server, its old
+        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted)
 
     def get_headers(self, height, count=10000):
         return self.rpc('blockchain.block.headers', [height, count])
 
     #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
     def get_history(self, address):
-        return self.rpc('blockchain.address.get_history', [address], session=self.client)
+        return self.rpc('blockchain.address.get_history', [address], True)
 
     def broadcast(self, raw_transaction):
-        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], session=self.client)
+        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], True)
 
     def subscribe_headers(self):
-        return self.rpc('blockchain.headers.subscribe', [True], session=self.client)
+        return self.rpc('blockchain.headers.subscribe', [True], True)
 
     async def subscribe_address(self, address):
         try:
-            return await self.rpc('blockchain.address.subscribe', [address], session=self.client)
+            return await self.rpc('blockchain.address.subscribe', [address], True)
         except asyncio.TimeoutError:
             # abort and cancel, we cant lose a subscription, it will happen again on reconnect
             self.client.abort()
@@ -267,11 +272,11 @@ class SessionPool:
 
     @property
     def available_sessions(self):
-        return [session for session in self.sessions if session.available]
+        return (session for session in self.sessions if session.available)
 
     @property
     def fastest_session(self):
-        if not self.available_sessions:
+        if not self.online:
             return None
         return min(
             [((session.response_time + session.connection_latency) * (session.pending_amount + 1), session)
