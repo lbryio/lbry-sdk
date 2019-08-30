@@ -415,7 +415,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             local_status, local_history = await self.get_local_status_and_history(address)
 
             if local_status == remote_status:
-                return
+                return True
 
             remote_history = await self.network.retriable_call(self.network.get_history, address)
 
@@ -472,14 +472,18 @@ class BaseLedger(metaclass=LedgerRegistry):
 
             local_status, local_history = await self.get_local_status_and_history(address)
             if local_status != remote_status:
+                remote_history = list(map(itemgetter('tx_hash', 'height'), remote_history))
+                if remote_history == local_history:
+                    return True
                 log.debug(
                     "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
                     remote_status, len(remote_history), local_status, len(local_history)
                 )
                 log.debug("local: %s", local_history)
                 log.debug("remote: %s", remote_history)
+                return False
             else:
-                log.debug("Sync completed for: %s", address)
+                return True
 
     async def cache_transaction(self, txid, remote_height):
         cache_item = self._tx_cache.get(txid)
