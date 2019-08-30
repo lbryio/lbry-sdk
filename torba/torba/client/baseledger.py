@@ -142,6 +142,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         self._address_update_locks: Dict[str, asyncio.Lock] = {}
 
         self.coin_selection_strategy = None
+        self._known_addresses_out_of_sync = set()
 
     @classmethod
     def get_id(cls):
@@ -411,6 +412,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                              address_manager: baseaccount.AddressManager = None):
 
         async with self._address_update_locks.setdefault(address, asyncio.Lock()):
+            self._known_addresses_out_of_sync.discard(address)
 
             local_status, local_history = await self.get_local_status_and_history(address)
 
@@ -422,7 +424,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             cache_tasks = []
             synced_history = StringIO()
             for i, (txid, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
-                if i < len(local_history) and local_history[i] == (txid, remote_height):
+                if i < len(local_history) and local_history[i] == (txid, remote_height) and not cache_tasks:
                     synced_history.write(f'{txid}:{remote_height}:')
                 else:
                     cache_tasks.append(asyncio.ensure_future(
@@ -472,15 +474,15 @@ class BaseLedger(metaclass=LedgerRegistry):
 
             local_status, local_history = await self.get_local_status_and_history(address)
             if local_status != remote_status:
-                remote_history = list(map(itemgetter('tx_hash', 'height'), remote_history))
-                if remote_history == local_history:
+                if local_history == list(map(itemgetter('tx_hash', 'height'), remote_history)):
                     return True
-                log.debug(
+                log.warning(
                     "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
                     remote_status, len(remote_history), local_status, len(local_history)
                 )
-                log.debug("local: %s", local_history)
-                log.debug("remote: %s", remote_history)
+                log.warning("local: %s", local_history)
+                log.warning("remote: %s", remote_history)
+                self._known_addresses_out_of_sync.add(address)
                 return False
             else:
                 return True

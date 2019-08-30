@@ -168,3 +168,9 @@ class BasicTransactionTests(IntegrationTestCase):
         await asyncio.wait([self.on_transaction_address(tx, address) for tx in txs], timeout=1)
         remote_status = await self.ledger.network.subscribe_address(address)
         self.assertTrue(await self.ledger.update_history(address, remote_status))
+        # server history grows unordered
+        txid = await self.blockchain.send_to_address(address, 1)
+        await self.on_transaction_id(txid)
+        self.assertTrue(await self.ledger.update_history(address, remote_status))
+        self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
+        self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
