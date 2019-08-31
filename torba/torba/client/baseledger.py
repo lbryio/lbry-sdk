@@ -287,7 +287,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         await self.join_network()
         self.network.on_connected.listen(self.join_network)
 
-    async def join_network(self, *args):
+    async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
         async with self._header_processing_lock:
             await self.update_headers()
@@ -472,9 +472,10 @@ class BaseLedger(metaclass=LedgerRegistry):
             await self.db.save_transaction_io_batch(
                 synced_txs, address, self.address_to_hash160(address), synced_history.getvalue()
             )
-
-            for tx in synced_txs:
-                await self._on_transaction_controller.add(TransactionEvent(address, tx))
+            await asyncio.wait([
+                self._on_transaction_controller.add(TransactionEvent(address, tx))
+                for tx in synced_txs
+            ])
 
             if address_manager is None:
                 address_manager = await self.get_address_manager_for_address(address)
@@ -517,7 +518,7 @@ class BaseLedger(metaclass=LedgerRegistry):
 
             if tx is None:
                 # fetch from network
-                _raw = await self.network.retriable_call(self.network.get_transaction, txid)
+                _raw = await self.network.retriable_call(self.network.get_transaction, txid, remote_height)
                 if _raw:
                     tx = self.transaction_class(unhexlify(_raw))
                     cache_item.tx = tx  # make sure it's saved before caching it

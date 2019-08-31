@@ -220,7 +220,7 @@ class SQLiteMixin:
 
     async def open(self):
         log.info("connecting to database: %s", self._db_path)
-        self.db = await AIOSQLite.connect(self._db_path)
+        self.db = await AIOSQLite.connect(self._db_path, isolation_level=None)
         await self.db.executescript(self.CREATE_TABLES_QUERY)
 
     async def close(self):

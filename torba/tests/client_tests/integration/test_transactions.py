@@ -138,6 +138,7 @@ class BasicTransactionTests(IntegrationTestCase):
         address = await self.account.receiving.get_or_create_usable_address()
         # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
         original_summary = self.conductor.spv_node.server.mempool.transaction_summaries
+
         async def random_summary(*args, **kwargs):
             summary = await original_summary(*args, **kwargs)
             if summary and len(summary) > 2:
@@ -174,3 +175,5 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertTrue(await self.ledger.update_history(address, remote_status))
         self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
+        # should be another test, but it would be too much to setup just for that and it affects sync
+        self.assertIsNone(await self.ledger.network.get_transaction('1'*64))

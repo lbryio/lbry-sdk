@@ -59,7 +59,7 @@ class ReconnectTests(IntegrationTestCase):
         master_client = self.ledger.network.client
         self.ledger.network.client.connection_lost(Exception())
         with self.assertRaises(asyncio.TimeoutError):
-           await d
+            await d
         self.assertIsNone(master_client.response_time)  # response time unknown as it failed
         # rich but offline? no way, no water, let's retry
         with self.assertRaisesRegex(ConnectionError, 'connection is not available'):

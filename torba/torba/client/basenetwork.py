@@ -72,6 +72,10 @@ class ClientSession(BaseClientSession):
             log.debug("got reply for %s from %s:%i", method, *self.server)
             return reply
         except RPCError as e:
+            if str(e).find('.*no such .*transaction.*') and args:
+                # shouldnt the server return none instead?
+                log.warning("Requested transaction missing from server: %s", args[0])
+                return None
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)
             raise e
@@ -220,20 +224,17 @@ class BaseNetwork:
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
 
-    def get_transaction(self, tx_hash):
-        return self.rpc('blockchain.transaction.get', [tx_hash])
+    def get_transaction(self, tx_hash, known_height=None):
+        # use any server if its old, otherwise restrict to who gave us the history
+        restricted = not known_height or 0 > known_height > self.remote_height - 10
+        return self.rpc('blockchain.transaction.get', [tx_hash], restricted)
 
     def get_transaction_height(self, tx_hash, known_height=None):
-        restricted = True  # by default, check master for consistency
-        if known_height:
-            if 0 < known_height < self.remote_height - 10:
-                restricted = False  # we can get from any server, its old
+        restricted = not known_height or 0 > known_height > self.remote_height - 10
         return self.rpc('blockchain.transaction.get_height', [tx_hash], restricted)
 
     def get_merkle(self, tx_hash, height):
-        restricted = True  # by default, check master for consistency
-        if 0 < height < self.remote_height - 10:
-            restricted = False  # we can get from any server, its old
+        restricted = 0 > height > self.remote_height - 10
         return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted)
 
     def get_headers(self, height, count=10000):

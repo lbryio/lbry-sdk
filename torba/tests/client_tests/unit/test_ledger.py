@@ -29,7 +29,7 @@ class MockNetwork:
     async def get_merkle(self, txid, height):
         return {'merkle': ['abcd01'], 'pos': 1}
 
-    async def get_transaction(self, tx_hash):
+    async def get_transaction(self, tx_hash, _=None):
         self.get_transaction_called.append(tx_hash)
         return self.transaction[tx_hash]
 
