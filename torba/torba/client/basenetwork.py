@@ -4,7 +4,7 @@ from operator import itemgetter
 from typing import Dict, Optional, Tuple
 from time import perf_counter
 
-from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
+from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 
 from torba import __version__
 from torba.stream import StreamController
@@ -71,10 +71,9 @@ class ClientSession(BaseClientSession):
                 )
             log.debug("got reply for %s from %s:%i", method, *self.server)
             return reply
-        except RPCError as e:
-            if str(e).find('.*no such .*transaction.*') and args:
+        except (RPCError, ProtocolError) as e:
+            if str(e).find('.*no such .*transaction.*'):
                 # shouldnt the server return none instead?
-                log.warning("Requested transaction missing from server: %s", args[0])
                 return None
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)

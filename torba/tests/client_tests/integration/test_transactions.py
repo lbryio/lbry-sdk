@@ -176,4 +176,4 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
         # should be another test, but it would be too much to setup just for that and it affects sync
-        self.assertIsNone(await self.ledger.network.get_transaction('1'*64))
+        self.assertIsNone(await self.ledger.network.retriable_call(self.ledger.network.get_transaction, '1'*64))
