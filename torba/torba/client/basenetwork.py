@@ -198,7 +198,7 @@ class BaseNetwork:
     def is_connected(self):
         return self.client and not self.client.is_closing()
 
-    def rpc(self, list_or_method, args, restricted=False):
+    def rpc(self, list_or_method, args, restricted=True):
         session = self.client if restricted else self.session_pool.fastest_session
         if session and not session.is_closing():
             return session.send_request(list_or_method, args)
