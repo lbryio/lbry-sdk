@@ -1045,6 +1045,8 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Dictionary with key/value of new preference
         """
         account = self.get_account_or_default(account_id)
+        if value and isinstance(value, str) and value[0] in ('[', '{'):
+            value = json.loads(value)
         account.preferences[key] = value
         account.modified_on = time.time()
         self.default_wallet.save()
