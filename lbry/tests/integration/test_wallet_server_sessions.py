@@ -16,12 +16,13 @@ class TestSessionBloat(IntegrationTestCase):
     LEDGER = lbry.wallet
 
     async def test_session_bloat_from_socket_timeout(self):
-        client = self.ledger.network.client
         await self.conductor.stop_spv()
         await self.ledger.stop()
         self.conductor.spv_node.session_timeout = 1
         await self.conductor.start_spv()
-        session = ClientSession(network=None, server=client.server, timeout=0.2)
+        session = ClientSession(
+            network=None, server=(self.conductor.spv_node.hostname, self.conductor.spv_node.port), timeout=0.2
+        )
         await session.create_connection()
         await session.send_request('server.banner', ())
         self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 1)
