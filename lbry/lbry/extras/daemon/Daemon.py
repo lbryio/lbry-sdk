@@ -1004,6 +1004,52 @@ class Daemon(metaclass=JSONRPCServerType):
             setattr(c, key, cleaned)
         return {key: cleaned}
 
+    PREFERENCE_DOC = """
+    Preferences management.
+    """
+
+    def jsonrpc_preference_get(self, key=None, account_id=None):
+        """
+        Get preference value for key or all values if not key is passed in.
+
+        Usage:
+            preference_get [<key>]
+
+        Options:
+            --key=<key> : (str) key associated with value
+            --account_id=<account_id> : (str) id of the account containing value
+
+        Returns:
+            (dict) Dictionary of preference(s)
+        """
+        account = self.get_account_or_default(account_id)
+        if key:
+            if key in account.preferences:
+                return {key: account.preferences[key]}
+            return
+        return account.preferences
+
+    def jsonrpc_preference_set(self, key, value, account_id=None):
+        """
+        Set preferences
+
+        Usage:
+            preference_set (<key>) (<value>)
+
+        Options:
+            --key=<key> : (str) key associated with value
+            --value=<key> : (str) key associated with value
+            --account_id=<account_id> : (str) id of the account containing value
+
+        Returns:
+            (dict) Dictionary with key/value of new preference
+        """
+        account = self.get_account_or_default(account_id)
+        account.preferences[key] = value
+        account.modified_on = time.time()
+        self.default_wallet.save()
+        return {key: value}
+
     ACCOUNT_DOC = """
     Create, modify and inspect wallet accounts.
     """
