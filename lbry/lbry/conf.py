@@ -377,12 +377,11 @@ class BaseConfig:
 
     @contextmanager
     def update_config(self):
-        if not isinstance(self.persisted, ConfigFileAccess):
-            raise TypeError("Config file cannot be updated.")
         self._updating_config = True
         yield self
         self._updating_config = False
-        self.persisted.save()
+        if isinstance(self.persisted, ConfigFileAccess):
+            self.persisted.save()
 
     @property
     def modify_order(self):
