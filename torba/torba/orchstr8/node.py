@@ -190,14 +190,15 @@ class WalletNode:
 
 class SPVNode:
 
-    def __init__(self, coin_class):
+    def __init__(self, coin_class, node_number=1):
         self.coin_class = coin_class
         self.controller = None
         self.data_path = None
         self.server = None
         self.hostname = 'localhost'
-        self.port = 50001 + 1  # avoid conflict with default daemon
+        self.port = 50001 + node_number  # avoid conflict with default daemon
         self.session_timeout = 600
+        self.rpc_port = '0'  # disabled by default
 
     async def start(self, blockchain_node: 'BlockchainNode'):
         self.data_path = tempfile.mkdtemp()
@@ -210,6 +211,7 @@ class SPVNode:
             'SESSION_TIMEOUT': str(self.session_timeout),
             'MAX_QUERY_WORKERS': '0',
             'INDIVIDUAL_TAG_INDEXES': '',
+            'RPC_PORT': self.rpc_port
         }
         # TODO: don't use os.environ
         os.environ.update(conf)

@@ -1,6 +1,9 @@
 import logging
 import asyncio
+import random
 from itertools import chain
+from random import shuffle
+
 from torba.testcase import IntegrationTestCase
 from torba.client.util import satoshis_to_coins, coins_to_satoshis
 
@@ -129,3 +132,48 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address2)
         self.assertEqual(tx.outputs[0].is_change, False)
         self.assertEqual(tx.outputs[1].is_change, True)
+
+    async def test_history_edge_cases(self):
+        await self.assertBalance(self.account, '0.0')
+        address = await self.account.receiving.get_or_create_usable_address()
+        # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
+        original_summary = self.conductor.spv_node.server.mempool.transaction_summaries
+
+        async def random_summary(*args, **kwargs):
+            summary = await original_summary(*args, **kwargs)
+            if summary and len(summary) > 2:
+                ordered = summary.copy()
+                while summary == ordered:
+                    random.shuffle(summary)
+            return summary
+        self.conductor.spv_node.server.mempool.transaction_summaries = random_summary
+        # 10 unconfirmed txs, all from blockchain wallet
+        sends = list(self.blockchain.send_to_address(address, 10) for _ in range(10))
+        # use batching to reduce issues with send_to_address on cli
+        for batch in range(0, len(sends), 10):
+            txids = await asyncio.gather(*sends[batch:batch + 10])
+            await asyncio.wait([self.on_transaction_id(txid) for txid in txids])
+        remote_status = await self.ledger.network.subscribe_address(address)
+        self.assertTrue(await self.ledger.update_history(address, remote_status))
+        # 20 unconfirmed txs, 10 from blockchain, 10 from local to local
+        utxos = await self.account.get_utxos()
+        txs = []
+        for utxo in utxos:
+            tx = await self.ledger.transaction_class.create(
+                [self.ledger.transaction_class.input_class.spend(utxo)],
+                [],
+                [self.account], self.account
+            )
+            await self.broadcast(tx)
+            txs.append(tx)
+        await asyncio.wait([self.on_transaction_address(tx, address) for tx in txs], timeout=1)
+        remote_status = await self.ledger.network.subscribe_address(address)
+        self.assertTrue(await self.ledger.update_history(address, remote_status))
+        # server history grows unordered
+        txid = await self.blockchain.send_to_address(address, 1)
+        await self.on_transaction_id(txid)
+        self.assertTrue(await self.ledger.update_history(address, remote_status))
+        self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
+        self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
+        # should be another test, but it would be too much to setup just for that and it affects sync
+        self.assertIsNone(await self.ledger.network.retriable_call(self.ledger.network.get_transaction, '1'*64))

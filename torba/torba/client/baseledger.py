@@ -10,6 +10,7 @@ from operator import itemgetter
 from collections import namedtuple
 
 import pylru
+from torba.client.basetransaction import BaseTransaction
 from torba.tasks import TaskGroup
 from torba.client import baseaccount, basenetwork, basetransaction
 from torba.client.basedatabase import BaseDatabase
@@ -142,6 +143,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         self._address_update_locks: Dict[str, asyncio.Lock] = {}
 
         self.coin_selection_strategy = None
+        self._known_addresses_out_of_sync = set()
 
     @classmethod
     def get_id(cls):
@@ -250,9 +252,10 @@ class BaseLedger(metaclass=LedgerRegistry):
         self.constraint_account_or_all(constraints)
         return self.db.get_transaction_count(**constraints)
 
-    async def get_local_status_and_history(self, address):
-        address_details = await self.db.get_address(address=address)
-        history = address_details['history'] or ''
+    async def get_local_status_and_history(self, address, history=None):
+        if not history:
+            address_details = await self.db.get_address(address=address)
+            history = address_details['history'] or ''
         parts = history.split(':')[:-1]
         return (
             hexlify(sha256(history.encode())).decode() if history else None,
@@ -284,7 +287,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         await self.join_network()
         self.network.on_connected.listen(self.join_network)
 
-    async def join_network(self, *args):
+    async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
         async with self._header_processing_lock:
             await self.update_headers()
@@ -411,24 +414,31 @@ class BaseLedger(metaclass=LedgerRegistry):
                              address_manager: baseaccount.AddressManager = None):
 
         async with self._address_update_locks.setdefault(address, asyncio.Lock()):
+            self._known_addresses_out_of_sync.discard(address)
 
             local_status, local_history = await self.get_local_status_and_history(address)
 
             if local_status == remote_status:
-                return
+                return True
 
             remote_history = await self.network.retriable_call(self.network.get_history, address)
+            remote_history = list(map(itemgetter('tx_hash', 'height'), remote_history))
+            we_need = set(remote_history) - set(local_history)
+            if not we_need:
+                return True
 
-            cache_tasks = []
+            cache_tasks: List[asyncio.Future[BaseTransaction]] = []
             synced_history = StringIO()
-            for i, (txid, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
-                if i < len(local_history) and local_history[i] == (txid, remote_height):
+            for i, (txid, remote_height) in enumerate(remote_history):
+                if i < len(local_history) and local_history[i] == (txid, remote_height) and not cache_tasks:
                     synced_history.write(f'{txid}:{remote_height}:')
                 else:
+                    check_local = (txid, remote_height) not in we_need
                     cache_tasks.append(asyncio.ensure_future(
-                        self.cache_transaction(txid, remote_height)
+                        self.cache_transaction(txid, remote_height, check_local=check_local)
                     ))
 
+            synced_txs = []
             for task in cache_tasks:
                 tx = await task
 
@@ -457,12 +467,15 @@ class BaseLedger(metaclass=LedgerRegistry):
                         txi.txo_ref = referenced_txo.ref
 
                 synced_history.write(f'{tx.id}:{tx.height}:')
+                synced_txs.append(tx)
 
-                await self.db.save_transaction_io(
-                    tx, address, self.address_to_hash160(address), synced_history.getvalue()
-                )
-
-                await self._on_transaction_controller.add(TransactionEvent(address, tx))
+            await self.db.save_transaction_io_batch(
+                synced_txs, address, self.address_to_hash160(address), synced_history.getvalue()
+            )
+            await asyncio.wait([
+                self._on_transaction_controller.add(TransactionEvent(address, tx))
+                for tx in synced_txs
+            ])
 
             if address_manager is None:
                 address_manager = await self.get_address_manager_for_address(address)
@@ -470,18 +483,23 @@ class BaseLedger(metaclass=LedgerRegistry):
             if address_manager is not None:
                 await address_manager.ensure_address_gap()
 
-            local_status, local_history = await self.get_local_status_and_history(address)
+            local_status, local_history = \
+                await self.get_local_status_and_history(address, synced_history.getvalue())
             if local_status != remote_status:
-                log.debug(
+                if local_history == remote_history:
+                    return True
+                log.warning(
                     "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
                     remote_status, len(remote_history), local_status, len(local_history)
                 )
-                log.debug("local: %s", local_history)
-                log.debug("remote: %s", remote_history)
+                log.warning("local: %s", local_history)
+                log.warning("remote: %s", remote_history)
+                self._known_addresses_out_of_sync.add(address)
+                return False
             else:
-                log.debug("Sync completed for: %s", address)
+                return True
 
-    async def cache_transaction(self, txid, remote_height):
+    async def cache_transaction(self, txid, remote_height, check_local=True):
         cache_item = self._tx_cache.get(txid)
         if cache_item is None:
             cache_item = self._tx_cache[txid] = TransactionCacheItem()
@@ -494,28 +512,21 @@ class BaseLedger(metaclass=LedgerRegistry):
 
             tx = cache_item.tx
 
-            if tx is None:
+            if tx is None and check_local:
                 # check local db
                 tx = cache_item.tx = await self.db.get_transaction(txid=txid)
 
             if tx is None:
                 # fetch from network
-                _raw = await self.network.retriable_call(self.network.get_transaction, txid)
+                _raw = await self.network.retriable_call(self.network.get_transaction, txid, remote_height)
                 if _raw:
                     tx = self.transaction_class(unhexlify(_raw))
-                    await self.maybe_verify_transaction(tx, remote_height)
-                    await self.db.insert_transaction(tx)
                     cache_item.tx = tx  # make sure it's saved before caching it
-                    return tx
 
             if tx is None:
                 raise ValueError(f'Transaction {txid} was not in database and not on network.')
 
-            if remote_height > 0 and not tx.is_verified:
-                # tx from cache / db is not up-to-date
-                await self.maybe_verify_transaction(tx, remote_height)
-                await self.db.update_transaction(tx)
-
+            await self.maybe_verify_transaction(tx, remote_height)
             return tx
 
     async def maybe_verify_transaction(self, tx, remote_height):

@@ -17,6 +17,7 @@ import time
 from asyncio import sleep
 from bisect import bisect_right
 from collections import namedtuple
+from functools import partial
 from glob import glob
 from struct import pack, unpack
 
@@ -72,9 +73,8 @@ class DB:
             self.header_len = self.dynamic_header_len
 
         self.logger.info(f'switching current directory to {env.db_dir}')
-        os.chdir(env.db_dir)
 
-        self.db_class = db_class(self.env.db_engine)
+        self.db_class = db_class(env.db_dir, self.env.db_engine)
         self.history = History()
         self.utxo_db = None
         self.tx_counts = None
@@ -86,12 +86,13 @@ class DB:
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
-        self.headers_file = util.LogicalFile('meta/headers', 2, 16000000)
-        self.tx_counts_file = util.LogicalFile('meta/txcounts', 2, 2000000)
-        self.hashes_file = util.LogicalFile('meta/hashes', 4, 16000000)
+        path = partial(os.path.join, self.env.db_dir)
+        self.headers_file = util.LogicalFile(path('meta/headers'), 2, 16000000)
+        self.tx_counts_file = util.LogicalFile(path('meta/txcounts'), 2, 2000000)
+        self.hashes_file = util.LogicalFile(path('meta/hashes'), 4, 16000000)
         if not self.coin.STATIC_BLOCK_HEADERS:
             self.headers_offsets_file = util.LogicalFile(
-                'meta/headers_offsets', 2, 16000000)
+                path('meta/headers_offsets'), 2, 16000000)
 
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
@@ -115,8 +116,9 @@ class DB:
         if self.utxo_db.is_new:
             self.logger.info('created new database')
             self.logger.info('creating metadata directory')
-            os.mkdir('meta')
-            with util.open_file('COIN', create=True) as f:
+            os.mkdir(os.path.join(self.env.db_dir, 'meta'))
+            coin_path = os.path.join(self.env.db_dir, 'meta', 'COIN')
+            with util.open_file(coin_path, create=True) as f:
                 f.write(f'ElectrumX databases and metadata for '
                         f'{self.coin.NAME} {self.coin.NET}'.encode())
             if not self.coin.STATIC_BLOCK_HEADERS:
@@ -474,7 +476,7 @@ class DB:
         return 'meta/block'
 
     def raw_block_path(self, height):
-        return f'{self.raw_block_prefix()}{height:d}'
+        return os.path.join(self.env.db_dir, f'{self.raw_block_prefix()}{height:d}')
 
     def read_raw_block(self, height):
         """Returns a raw block read from disk.  Raises FileNotFoundError

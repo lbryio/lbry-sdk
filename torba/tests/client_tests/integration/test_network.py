@@ -3,6 +3,7 @@ import asyncio
 from unittest.mock import Mock
 
 from torba.client.basenetwork import BaseNetwork
+from torba.orchstr8.node import SPVNode
 from torba.rpc import RPCSession
 from torba.testcase import IntegrationTestCase, AsyncioTestCase
 
@@ -20,6 +21,26 @@ class ReconnectTests(IntegrationTestCase):
 
     VERBOSITY = logging.WARN
 
+    async def test_multiple_servers(self):
+        # we have a secondary node that connects later, so
+        node2 = SPVNode(self.conductor.spv_module, node_number=2)
+        self.ledger.network.config['default_servers'].append((node2.hostname, node2.port))
+        await asyncio.wait_for(self.ledger.stop(), timeout=1)
+        await asyncio.wait_for(self.ledger.start(), timeout=1)
+        self.ledger.network.session_pool.new_connection_event.clear()
+        await node2.start(self.blockchain)
+        # this is only to speed up the test as retrying would take 4+ seconds
+        for session in self.ledger.network.session_pool.sessions:
+            session.trigger_urgent_reconnect.set()
+        await asyncio.wait_for(self.ledger.network.session_pool.new_connection_event.wait(), timeout=1)
+        self.assertEqual(2, len(list(self.ledger.network.session_pool.available_sessions)))
+        self.assertTrue(self.ledger.network.is_connected)
+        switch_event = self.ledger.network.on_connected.first
+        await node2.stop(True)
+        # secondary down, but primary is ok, do not switch! (switches trigger new on_connected events)
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(switch_event, timeout=1)
+
     async def test_connection_drop_still_receives_events_after_reconnected(self):
         address1 = await self.account.receiving.get_or_create_usable_address()
         # disconnect and send a new tx, should reconnect and get it
@@ -35,10 +56,11 @@ class ReconnectTests(IntegrationTestCase):
         # is it real? are we rich!? let me see this tx...
         d = self.ledger.network.get_transaction(sendtxid)
         # what's that smoke on my ethernet cable? oh no!
+        master_client = self.ledger.network.client
         self.ledger.network.client.connection_lost(Exception())
         with self.assertRaises(asyncio.TimeoutError):
-           await d
-        self.assertIsNone(self.ledger.network.client.response_time)  # response time unknown as it failed
+            await d
+        self.assertIsNone(master_client.response_time)  # response time unknown as it failed
         # rich but offline? no way, no water, let's retry
         with self.assertRaisesRegex(ConnectionError, 'connection is not available'):
             await self.ledger.network.get_transaction(sendtxid)
@@ -104,4 +126,4 @@ class ServerPickingTestCase(AsyncioTestCase):
         self.assertTrue(all([not session.is_closing() for session in network.session_pool.available_sessions]))
         # ensure we are connected to all of them after a while
         await asyncio.sleep(1)
-        self.assertEqual(len(network.session_pool.available_sessions), 3)
+        self.assertEqual(len(list(network.session_pool.available_sessions)), 3)
