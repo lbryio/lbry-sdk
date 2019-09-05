@@ -3591,7 +3591,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         comment_body = {
-            'comment': comment,
+            'comment': comment.strip(),
             'claim_id': claim_id,
             'parent_id': parent_id,
         }
