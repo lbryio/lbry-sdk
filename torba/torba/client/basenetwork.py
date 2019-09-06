@@ -4,7 +4,7 @@ from operator import itemgetter
 from typing import Dict, Optional, Tuple
 from time import perf_counter
 
-from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError
+from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 
 from torba import __version__
 from torba.stream import StreamController
@@ -30,11 +30,11 @@ class ClientSession(BaseClientSession):
         self._on_connect_cb = on_connect_callback or (lambda: None)
         self.trigger_urgent_reconnect = asyncio.Event()
         # one request per second of timeout, conservative default
-        self._semaphore = asyncio.Semaphore(self.timeout)
+        self._semaphore = asyncio.Semaphore(self.timeout * 2)
 
     @property
     def available(self):
-        return not self.is_closing() and self._can_send.is_set() and self.response_time is not None
+        return not self.is_closing() and self.response_time is not None
 
     @property
     def server_address_and_port(self) -> Optional[Tuple[str, int]]:
@@ -71,7 +71,10 @@ class ClientSession(BaseClientSession):
                 )
             log.debug("got reply for %s from %s:%i", method, *self.server)
             return reply
-        except RPCError as e:
+        except (RPCError, ProtocolError) as e:
+            if str(e).find('.*no such .*transaction.*'):
+                # shouldnt the server return none instead?
+                return None
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)
             raise e
@@ -144,6 +147,7 @@ class BaseNetwork:
         self.config = ledger.config
         self.session_pool = SessionPool(network=self, timeout=self.config.get('connect_timeout', 6))
         self.client: Optional[ClientSession] = None
+        self._switch_task: Optional[asyncio.Task] = None
         self.running = False
         self.remote_height: int = 0
 
@@ -161,51 +165,41 @@ class BaseNetwork:
             'blockchain.address.subscribe': self._on_status_controller,
         }
 
-    async def switch_to_fastest(self):
-        try:
-            client = await asyncio.wait_for(self.session_pool.wait_for_fastest_session(), 30)
-        except asyncio.TimeoutError:
-            if self.client:
-                await self.client.close()
-            self.client = None
-            for session in self.session_pool.sessions:
-                session.synchronous_close()
-            log.warning("not connected to any wallet servers")
-            return
-        current_client = self.client
-        self.client = client
-        log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
-        self._on_connected_controller.add(True)
-        try:
-            self._update_remote_height((await self.subscribe_headers(),))
-            log.info("Subscribed to headers: %s:%d", *self.client.server)
-        except asyncio.TimeoutError:
-            if self.client:
-                await self.client.close()
-                self.client = current_client
-            return
-        self.session_pool.new_connection_event.clear()
-        return await self.session_pool.new_connection_event.wait()
+    async def switch_forever(self):
+        while self.running:
+            if self.is_connected:
+                await self.client.on_disconnected.first
+                self.client = None
+                continue
+            self.client = await self.session_pool.wait_for_fastest_session()
+            log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
+            self._on_connected_controller.add(True)
+            try:
+                self._update_remote_height((await self.subscribe_headers(),))
+                log.info("Subscribed to headers: %s:%d", *self.client.server)
+            except asyncio.TimeoutError:
+                log.info("Switching to %s:%d timed out, closing and retrying.")
+                self.client.synchronous_close()
+                self.client = None
 
     async def start(self):
         self.running = True
+        self._switch_task = asyncio.ensure_future(self.switch_forever())
         self.session_pool.start(self.config['default_servers'])
         self.on_header.listen(self._update_remote_height)
-        while self.running:
-            await self.switch_to_fastest()
 
     async def stop(self):
-        self.running = False
-        self.session_pool.stop()
+        if self.running:
+            self.running = False
+            self._switch_task.cancel()
+            self.session_pool.stop()
 
     @property
     def is_connected(self):
         return self.client and not self.client.is_closing()
 
-    def rpc(self, list_or_method, args, session=None):
-        # fixme: use fastest unloaded session, but for now it causes issues with wallet sync
-        # session = session or self.session_pool.fastest_session
-        session = self.client
+    def rpc(self, list_or_method, args, restricted=True):
+        session = self.client if restricted else self.session_pool.fastest_session
         if session and not session.is_closing():
             return session.send_request(list_or_method, args)
         else:
@@ -229,31 +223,35 @@ class BaseNetwork:
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
 
-    def get_transaction(self, tx_hash):
-        return self.rpc('blockchain.transaction.get', [tx_hash])
+    def get_transaction(self, tx_hash, known_height=None):
+        # use any server if its old, otherwise restrict to who gave us the history
+        restricted = not known_height or 0 > known_height > self.remote_height - 10
+        return self.rpc('blockchain.transaction.get', [tx_hash], restricted)
 
-    def get_transaction_height(self, tx_hash):
-        return self.rpc('blockchain.transaction.get_height', [tx_hash])
+    def get_transaction_height(self, tx_hash, known_height=None):
+        restricted = not known_height or 0 > known_height > self.remote_height - 10
+        return self.rpc('blockchain.transaction.get_height', [tx_hash], restricted)
 
     def get_merkle(self, tx_hash, height):
-        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height])
+        restricted = 0 > height > self.remote_height - 10
+        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted)
 
     def get_headers(self, height, count=10000):
         return self.rpc('blockchain.block.headers', [height, count])
 
     #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
     def get_history(self, address):
-        return self.rpc('blockchain.address.get_history', [address], session=self.client)
+        return self.rpc('blockchain.address.get_history', [address], True)
 
     def broadcast(self, raw_transaction):
-        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], session=self.client)
+        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], True)
 
     def subscribe_headers(self):
-        return self.rpc('blockchain.headers.subscribe', [True], session=self.client)
+        return self.rpc('blockchain.headers.subscribe', [True], True)
 
     async def subscribe_address(self, address):
         try:
-            return await self.rpc('blockchain.address.subscribe', [address], session=self.client)
+            return await self.rpc('blockchain.address.subscribe', [address], True)
         except asyncio.TimeoutError:
             # abort and cancel, we cant lose a subscription, it will happen again on reconnect
             self.client.abort()
@@ -274,11 +272,11 @@ class SessionPool:
 
     @property
     def available_sessions(self):
-        return [session for session in self.sessions if session.available]
+        return (session for session in self.sessions if session.available)
 
     @property
     def fastest_session(self):
-        if not self.available_sessions:
+        if not self.online:
             return None
         return min(
             [((session.response_time + session.connection_latency) * (session.pending_amount + 1), session)
@@ -329,8 +327,9 @@ class SessionPool:
             self._connect_session(server)
 
     def stop(self):
-        for task in self.sessions.values():
+        for session, task in self.sessions.items():
             task.cancel()
+            session.synchronous_close()
         self.sessions.clear()
 
     def ensure_connections(self):

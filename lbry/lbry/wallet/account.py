@@ -27,6 +27,7 @@ class Account(BaseAccount):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.channel_keys = {}
+        self.preferences = {}
 
     @property
     def hash(self) -> bytes:
@@ -38,6 +39,7 @@ class Account(BaseAccount):
     def apply(self, d: dict):
         super().apply(d)
         self.channel_keys.update(d.get('certificates', {}))
+        self.preferences.update(d.get('preferences', {}))
 
     def add_channel_private_key(self, private_key):
         public_key_bytes = private_key.get_verifying_key().to_der()
@@ -118,17 +120,22 @@ class Account(BaseAccount):
     def from_dict(cls, ledger, wallet, d: dict) -> 'Account':
         account = super().from_dict(ledger, wallet, d)
         account.channel_keys = d.get('certificates', {})
+        account.preferences = d.get('preferences', {})
         return account
 
-    def to_dict(self, include_channel_keys=True):
+    def to_dict(self, include_channel_keys=True, include_preferences=True):
         d = super().to_dict()
         if include_channel_keys:
             d['certificates'] = self.channel_keys
+        if include_preferences and self.preferences:
+            d['preferences'] = self.preferences
         return d
 
     async def get_details(self, **kwargs):
         details = await super().get_details(**kwargs)
         details['certificates'] = len(self.channel_keys)
+        if self.preferences:
+            details['preferences'] = self.preferences
         return details
 
     def get_transaction_history(self, **constraints):

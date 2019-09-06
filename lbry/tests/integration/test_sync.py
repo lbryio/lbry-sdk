@@ -84,3 +84,31 @@ class AccountSynchronization(AsyncioTestCase):
         self.daemon.jsonrpc_sync_apply('password', data=add_cert)
         self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_cert)
         self.assertEqual(self.account.channel_keys, {'abcdefg1234:0': '---PRIVATE KEY---'})
+
+    @mock.patch('time.time', mock.Mock(return_value=12345))
+    def test_account_preferences_syncing(self):
+        starting_hash = '69afcd60a300f47933917d77ef011beeeb4decfafebbda91c144c84282c6814f'
+        self.account.modified_on = 123.456
+        self.assertEqual(self.daemon.jsonrpc_sync_hash(), starting_hash)
+        self.assertEqual(self.daemon.jsonrpc_sync_apply('password')['hash'], starting_hash)
+        self.assertFalse(self.daemon.jsonrpc_preference_get())
+
+        hash_w_pref = '2fe43f0b2f8bbf1fbb55537f862d8bcb0823791019a7151c848bd5f5bd32d336'
+        add_pref = (
+            'czo4MTkyOjE2OjE6Jgn3nAGrfYP2usMA4KQ/73+YHAwMyiGdSWuxCmgZKlpwSpnfQv8R7R0tum/n2oTSBQxjdL'
+            'OlTW+tv/G5L2GfQ5op3xaT89gN+F/JJnvf3cdWvYH7Nc+uTUMb7cKhJP7hQvFW5bb1Y3jX3EBBY00Jkqyj9RCR'
+            'XPtbLVu71KbVRvCAR/oAnMEsgD+ITsC3WkXMwE3BS2LjJDQmeqbH4YXNdcjJN/JzQ6fxOmr3Uk1GqnpuhFsta8'
+            'H14ViRilq1pLKOSZIN80rrm5cKq45nFO5kFeoqBCEaal4u2/OkX9nOnpQlO3E95wD8hkCmZ3i20aSte6nqwqXx'
+            'ZKVRZqR2a0TjwVWB8kPXPA2ewKvPILaj190bXPl8EVu+TAnTCQwMgytinYjtcKNZmMz3ENJyI2mCANwpWlX7xl'
+            'y/J+qLi5b9N+agghTxggs5rVJ/hkaue7GS542dXDrwMrw9nwGqNw3dS/lcU+1wRUQ0fnHwb/85XbbwyO2aDj2i'
+            'DFNkdyLyUIiIUvB1JfWAnWqX3vQcL1REK1ePgUei7dCHJ3WyWdsRx3cVXzlK8yOPkf0N6d3AKrZQWVebwDC7Nd'
+            'eL4sDW8AkaXuBIrbuZw6XUHd6WI0NvU/q10j2qMm0YoXSu+dExou1/1THwx5g86MxcX5nwodKUEVCOTzKMyrLz'
+            'CRsitH/+dAXhZNRp/FbnDCGBMyD3MOYCjZvAFbCZUasoRwqponxILw=='
+        )
+        self.daemon.jsonrpc_sync_apply('password', data=add_pref)
+        self.assertEqual(self.daemon.jsonrpc_sync_hash(), hash_w_pref)
+        self.assertEqual(self.daemon.jsonrpc_preference_get(), {"fruit": ["apple", "orange"]})
+
+        self.daemon.jsonrpc_preference_set("fruit", ["peach", "apricot"])
+        self.assertEqual(self.daemon.jsonrpc_preference_get(), {"fruit": ["peach", "apricot"]})
+        self.assertNotEqual(self.daemon.jsonrpc_sync_hash(), hash_w_pref)

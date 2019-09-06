@@ -199,6 +199,8 @@ class LbryWalletManager(BaseWalletManager):
         if not tx:
             try:
                 raw = await self.ledger.network.get_transaction(txid)
+                if not raw:
+                    return {'success': False, 'code': 404, 'message': 'transaction not found'}
                 height = await self.ledger.network.get_transaction_height(txid)
             except CodeMessageError as e:
                 return {'success': False, 'code': e.code, 'message': e.message}

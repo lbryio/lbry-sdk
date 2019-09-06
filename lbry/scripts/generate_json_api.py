@@ -78,9 +78,29 @@ class Examples(CommandTestCase):
             'Get version',
             'version'
         )
+
+        # settings
+
         await r(
             'Get settings',
             'settings', 'get'
+        )
+
+        await r(
+            'Set settings',
+            'settings', 'set', '"tcp_port"', '99'
+        )
+
+        # preferences
+
+        await r(
+            'Set preference',
+            'preference', 'set', '"theme"', '"dark"'
+        )
+
+        await r(
+            'Get preferences',
+            'preference', 'get'
         )
 
         # accounts
