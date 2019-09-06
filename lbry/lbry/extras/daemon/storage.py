@@ -90,20 +90,6 @@ def get_claims_from_stream_hashes(transaction: sqlite3.Connection,
     }
 
 
-def get_content_claim_from_outpoint(transaction: sqlite3.Connection,
-                                    outpoint: str) -> typing.Optional[StoredStreamClaim]:
-    query = (
-        "select content_claim.stream_hash, c.*, case when c.channel_claim_id is not null then "
-        "   (select claim_name from claim where claim_id==c.channel_claim_id) "
-        "   else null end as channel_name "
-        " from content_claim "
-        " inner join claim c on c.claim_outpoint=content_claim.claim_outpoint and content_claim.claim_outpoint=?"
-    )
-    claim_fields = transaction.execute(query, (outpoint, )).fetchone()
-    if claim_fields:
-        return StoredStreamClaim(*claim_fields)
-
-
 def _batched_select(transaction, query, parameters, batch_size=900):
     for start_index in range(0, len(parameters), batch_size):
         current_batch = parameters[start_index:start_index+batch_size]
@@ -325,31 +311,6 @@ class SQLiteStorage(SQLiteMixin):
             "select status from blob where blob_hash=?", blob_hash
         )
 
-    def should_announce(self, blob_hash: str):
-        return self.run_and_return_one_or_none(
-            "select should_announce from blob where blob_hash=?", blob_hash
-        )
-
-    def count_should_announce_blobs(self):
-        return self.run_and_return_one_or_none(
-            "select count(*) from blob where should_announce=1 and status='finished'"
-        )
-
-    def get_all_should_announce_blobs(self):
-        return self.run_and_return_list(
-            "select blob_hash from blob where should_announce=1 and status='finished'"
-        )
-
-    def get_all_finished_blobs(self):
-        return self.run_and_return_list(
-            "select blob_hash from blob where status='finished'"
-        )
-
-    def count_finished_blobs(self):
-        return self.run_and_return_one_or_none(
-            "select count(*) from blob where status='finished'"
-        )
-
     def update_last_announced_blobs(self, blob_hashes: typing.List[str]):
         def _update_last_announced_blobs(transaction: sqlite3.Connection):
             last_announced = self.time_getter()
@@ -427,26 +388,6 @@ class SQLiteStorage(SQLiteMixin):
             }
         return self.db.run(_sync_blobs)
 
-    def sync_files_to_blobs(self):
-        def _sync_blobs(transaction: sqlite3.Connection):
-            transaction.executemany(
-                "update file set status='stopped' where stream_hash=?",
-                transaction.execute(
-                    "select distinct sb.stream_hash from stream_blob sb "
-                    "inner join blob b on b.blob_hash=sb.blob_hash and b.status=='pending'"
-                ).fetchall()
-            )
-        return self.db.run(_sync_blobs)
-
-    def set_files_as_streaming(self, stream_hashes: typing.List[str]):
-        def _set_streaming(transaction: sqlite3.Connection):
-            transaction.executemany(
-                "update file set file_name=null, download_directory=null where stream_hash=?",
-                [(stream_hash, ) for stream_hash in stream_hashes]
-            )
-
-        return self.db.run(_set_streaming)
-
     # # # # # # # # # stream functions # # # # # # # # #
 
     async def stream_exists(self, sd_hash: str) -> bool:
@@ -458,11 +399,6 @@ class SQLiteStorage(SQLiteMixin):
                                                         "inner join stream s on "
                                                         "s.stream_hash=f.stream_hash and s.sd_hash=?", sd_hash)
         return streams is not None
-
-    def rowid_for_stream(self, stream_hash: str) -> typing.Awaitable[typing.Optional[int]]:
-        return self.run_and_return_one_or_none(
-            "select rowid from file where stream_hash=?", stream_hash
-        )
 
     def store_stream(self, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
         return self.db.run(store_stream, sd_blob, descriptor)
@@ -507,12 +443,6 @@ class SQLiteStorage(SQLiteMixin):
     def get_stream_hash_for_sd_hash(self, sd_blob_hash):
         return self.run_and_return_one_or_none(
             "select stream_hash from stream where sd_hash = ?", sd_blob_hash
-        )
-
-    def get_stream_info_for_sd_hash(self, sd_blob_hash):
-        return self.run_and_return_one_or_none(
-            "select stream_hash, stream_name, suggested_filename, stream_key from stream where sd_hash = ?",
-            sd_blob_hash
         )
 
     def delete_stream(self, descriptor: 'StreamDescriptor'):
@@ -787,55 +717,6 @@ class SQLiteStorage(SQLiteMixin):
                 claim['supports'] = supports
                 claim['effective_amount'] = calculate_effective_amount(claim['amount'], supports)
         return claim
-
-    async def get_claims_from_stream_hashes(self, stream_hashes: typing.List[str],
-                                            include_supports: typing.Optional[bool] = True):
-        claims = await self.db.run(get_claims_from_stream_hashes, stream_hashes)
-        return {stream_hash: claim_info.as_dict() for stream_hash, claim_info in claims.items()}
-
-    async def get_claim(self, claim_outpoint, include_supports=True):
-        claim_info = await self.db.run(get_content_claim_from_outpoint, claim_outpoint)
-        if not claim_info:
-            return
-        result = claim_info.as_dict()
-        if include_supports:
-            supports = await self.get_supports(result['claim_id'])
-            result['supports'] = supports
-            result['effective_amount'] = calculate_effective_amount(result['amount'], supports)
-        return result
-
-    def get_unknown_certificate_ids(self):
-        def _get_unknown_certificate_claim_ids(transaction):
-            return [
-                claim_id for (claim_id,) in transaction.execute(
-                    "select distinct c1.channel_claim_id from claim as c1 "
-                    "where c1.channel_claim_id!='' "
-                    "and c1.channel_claim_id not in "
-                    "(select c2.claim_id from claim as c2)"
-                ).fetchall()
-            ]
-        return self.db.run(_get_unknown_certificate_claim_ids)
-
-    async def get_pending_claim_outpoints(self):
-        claim_outpoints = await self.run_and_return_list("select claim_outpoint from claim where height=-1")
-        results = {}  # {txid: [nout, ...]}
-        for outpoint_str in claim_outpoints:
-            txid, nout = outpoint_str.split(":")
-            outputs = results.get(txid, [])
-            outputs.append(int(nout))
-            results[txid] = outputs
-        if results:
-            log.debug("missing transaction heights for %i claims", len(results))
-        return results
-
-    def save_claim_tx_heights(self, claim_tx_heights):
-        def _save_claim_heights(transaction):
-            for outpoint, height in claim_tx_heights.items():
-                transaction.execute(
-                    "update claim set height=? where claim_outpoint=? and height=-1",
-                    (height, outpoint)
-                )
-        return self.db.run(_save_claim_heights)
 
     # # # # # # # # # reflector functions # # # # # # # # #
 
