@@ -165,15 +165,15 @@ class FileCommands(CommandTestCase):
         file_list = self.daemon.jsonrpc_file_list()
         self.assertIsInstance(file_list, list)
 
-        # Should return a list
+        # Should paginate
         file_list = self.daemon.jsonrpc_file_list(page=1)
-        self.assertIsInstance(file_list, list)
+        self.assertIsInstance(file_list, dict)
 
-        # SHould return a list
+        # Also should paginate
         file_list = self.daemon.jsonrpc_file_list(page_size=212312)
-        self.assertIsInstance(file_list, list)
+        self.assertIsInstance(file_list, dict)
 
-        # Should return a paginated dict holding the list
+        # Definitely should paginate
         file_list = self.daemon.jsonrpc_file_list(page=1, page_size=50)
         self.assertIsInstance(file_list, dict)
 
