@@ -207,6 +207,11 @@ class ConfigurationTests(unittest.TestCase):
                 c.max_key_fee = None
             with open(config, 'r') as fd:
                 self.assertEqual(fd.read(), 'max_key_fee: null\n')
+            c = Config.create_from_arguments(
+                types.SimpleNamespace(config=config)
+            )
+            with open(config, 'r') as fd:
+                self.assertEqual(c.max_key_fee, None)
 
     def test_max_key_fee_from_args(self):
         parser = argparse.ArgumentParser()
@@ -219,6 +224,14 @@ class ConfigurationTests(unittest.TestCase):
 
         # disabled
         args = parser.parse_args(['--no-max-key-fee'])
+        c = Config.create_from_arguments(args)
+        self.assertEqual(c.max_key_fee, None)
+
+        args = parser.parse_args(['--max-key-fee', 'null'])
+        c = Config.create_from_arguments(args)
+        self.assertEqual(c.max_key_fee, None)
+
+        args = parser.parse_args(['--max-key-fee', ''])
         c = Config.create_from_arguments(args)
         self.assertEqual(c.max_key_fee, None)
 
