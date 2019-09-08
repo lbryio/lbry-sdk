@@ -1774,7 +1774,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
                       [--blobs_remaining=<blobs_remaining>] [--sort=<sort_by>]
                       [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
-                      [(--page=<page> --page_size=<page_size>)]
+                      [--page=<page> --page_size=<page_size>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1793,8 +1793,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
             --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
             --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le)
-            --page=<page>                          : (int) page to view within paginated output
-            --page_size=<page_size>                : (int) size of each page within paginated output
+            --page=<page>                          : (int) page to return during paginating
+            --page_size=<page_size>                : (int) number of items on page during pagination
 
         Returns: {Paginated[Output]}
         """
@@ -1805,7 +1805,9 @@ class Daemon(metaclass=JSONRPCServerType):
             sort, reverse, comparison, **kwargs
         )
 
-        if None not in (page, page_size):
+        if page is not None or page_size is not None:
+            page = page or 1
+            page_size = page_size or 10
             total_items = len(file_list)
             offset = page_size * (page-1)
             return {
@@ -1817,7 +1819,6 @@ class Daemon(metaclass=JSONRPCServerType):
             }
 
         return file_list
-
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
