@@ -177,8 +177,8 @@ class BaseNetwork:
             try:
                 self._update_remote_height((await self.subscribe_headers(),))
                 log.info("Subscribed to headers: %s:%d", *self.client.server)
-            except asyncio.TimeoutError:
-                log.info("Switching to %s:%d timed out, closing and retrying.")
+            except (asyncio.TimeoutError, ConnectionError):
+                log.info("Switching to %s:%d timed out, closing and retrying.", *self.client.server)
                 self.client.synchronous_close()
                 self.client = None
 
@@ -254,7 +254,8 @@ class BaseNetwork:
             return await self.rpc('blockchain.address.subscribe', [address], True)
         except asyncio.TimeoutError:
             # abort and cancel, we cant lose a subscription, it will happen again on reconnect
-            self.client.abort()
+            if self.client:
+                self.client.abort()
             raise asyncio.CancelledError()
 
 
