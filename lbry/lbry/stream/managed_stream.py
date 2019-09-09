@@ -18,7 +18,7 @@ if typing.TYPE_CHECKING:
     from lbry.blob.blob_info import BlobInfo
     from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
-    from lbry.wallet.transaction import Transaction
+    from lbry.wallet.transaction import Transaction, Output
 
 log = logging.getLogger(__name__)
 
@@ -68,7 +68,8 @@ class ManagedStream:
         'saving',
         'finished_writing',
         'started_writing',
-        'finished_write_attempt'
+        'finished_write_attempt',
+        'claim_output'
     ]
 
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
@@ -77,7 +78,8 @@ class ManagedStream:
                  download_id: typing.Optional[str] = None, rowid: typing.Optional[int] = None,
                  descriptor: typing.Optional[StreamDescriptor] = None,
                  content_fee: typing.Optional['Transaction'] = None,
-                 analytics_manager: typing.Optional['AnalyticsManager'] = None):
+                 analytics_manager: typing.Optional['AnalyticsManager'] = None,
+                 output: typing.Optional['Output'] = None):
         self.loop = loop
         self.config = config
         self.blob_manager = blob_manager
@@ -91,6 +93,7 @@ class ManagedStream:
         self.content_fee = content_fee
         self.downloader = StreamDownloader(self.loop, self.config, self.blob_manager, sd_hash, descriptor)
         self.analytics_manager = analytics_manager
+        self.claim_output = output
 
         self.fully_reflected = asyncio.Event(loop=self.loop)
         self.file_output_task: typing.Optional[asyncio.Task] = None

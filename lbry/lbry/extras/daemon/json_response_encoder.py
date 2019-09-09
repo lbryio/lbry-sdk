@@ -227,6 +227,7 @@ class JSONResponseEncoder(JSONEncoder):
             'file_name': managed_stream.file_name if output_exists else None,
             'download_directory': managed_stream.download_directory if output_exists else None,
             'download_path': managed_stream.full_path if output_exists else None,
+            'claim_output': managed_stream.claim_output,
             'points_paid': 0.0,
             'stopped': not managed_stream.running,
             'stream_hash': managed_stream.stream_hash,

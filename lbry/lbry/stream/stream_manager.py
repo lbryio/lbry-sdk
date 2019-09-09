@@ -1,5 +1,6 @@
 import os
 import asyncio
+import time
 import typing
 import binascii
 import logging
@@ -126,12 +127,15 @@ class StreamManager:
             claim, content_fee=content_fee, rowid=rowid, descriptor=descriptor,
             analytics_manager=self.analytics_manager
         )
+        tx = await self.wallet.get_transaction(claim.txid, save_missing=True)
+        stream.claim_output = tx.outputs[claim.nout]
         self.streams[sd_hash] = stream
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
     async def load_and_resume_streams_from_database(self):
         to_recover = []
         to_start = []
+        start = time.time()
 
         await self.storage.update_manually_removed_files_since_last_run()
 
@@ -161,6 +165,7 @@ class StreamManager:
         if add_stream_tasks:
             await asyncio.gather(*add_stream_tasks, loop=self.loop)
         log.info("Started stream manager with %i files", len(self.streams))
+        log.info("took %s seconds", time.time() - start)
         if not self.node:
             log.warning("no DHT node given, resuming downloads trusting that we can contact reflector")
         if to_resume_saving:

@@ -194,7 +194,7 @@ class LbryWalletManager(BaseWalletManager):
         await account.ledger.broadcast(tx)
         return tx
 
-    async def get_transaction(self, txid):
+    async def get_transaction(self, txid, save_missing=False):
         tx = await self.db.get_transaction(txid=txid)
         if not tx:
             try:
@@ -206,6 +206,8 @@ class LbryWalletManager(BaseWalletManager):
                 return {'success': False, 'code': e.code, 'message': e.message}
             tx = self.ledger.transaction_class(unhexlify(raw))
             await self.ledger.maybe_verify_transaction(tx, height)
+            if save_missing:
+                await self.db.insert_transaction(tx)
         return tx
 
     def save(self):
