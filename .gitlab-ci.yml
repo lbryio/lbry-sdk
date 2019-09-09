@@ -119,6 +119,33 @@ build:mac:
   after_script:
     - rm -rf "${VENV}"
 
+build:windows:
+  extends: .build
+  tags: [windows] # makes gitlab use the windows runner
+  variables:
+    OS: windows
+    GIT_DEPTH: 5
+  before_script:
+    - ./build/install_choco.ps1
+    - choco install -y --x86 python3 7zip checksum
+#    - python --version | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
+#    - pip --version | findstr /E '\(python 3\.7\)'
+    - pip install virtualenv pywin32
+    - virtualenv venv
+    - venv/Scripts/activate.ps1
+  after_script:
+    - rmdir -Recurse venv
+  script:
+    - pip install pyinstaller
+    - pip install -e torba\.
+    - cd lbry
+    - python scripts\set_build.py
+    - pip install -e .
+    - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
+    - cd dist
+    - 7z a -tzip $env:CI_PROJECT_DIR/lbrynet-${OS}.zip lbrynet.exe
+    - checksum --type=sha256 --file=$env:CI_PROJECT_DIR/lbrynet-${OS}.zip
+    - ./lbrynet.exe --version
 
 
 # upload could be done by making it a yaml alias and putting it right into the build step. that way if one OS fails, the others still get uploaded
@@ -145,6 +172,13 @@ s3:mac:
     OS: mac
   dependencies:
     - build:mac
+
+s3:windows:
+  extends: .upload
+  variables:
+    OS: windows
+  dependencies:
+    - build:windows
 
 #release:linux:
 #  stage: release
