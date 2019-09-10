@@ -1,5 +1,9 @@
+import asyncio
+import sqlite3
 from lbry.testcase import CommandTestCase
+from torba.client.basedatabase import SQLiteMixin
 from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.account import Account
 
 
 def extract(d, keys):
@@ -7,6 +11,13 @@ def extract(d, keys):
 
 
 class AccountManagement(CommandTestCase):
+    async def test_sqlite_binding_error(self):
+        tasks = [
+            self.loop.create_task(self.daemon.jsonrpc_account_create('second account' + str(x))) for x in range(100)
+        ]
+        await asyncio.wait(tasks)
+        for result in tasks:
+            self.assertFalse(isinstance(result.result(), Exception))
 
     async def test_account_list_set_create_remove_add(self):
         # check initial account
