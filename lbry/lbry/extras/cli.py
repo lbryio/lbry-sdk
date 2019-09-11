@@ -1,6 +1,7 @@
 import os
 import sys
 import signal
+import tempfile
 import pathlib
 import json
 import asyncio
@@ -14,7 +15,7 @@ from docopt import docopt
 
 from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.loggly_handler import get_loggly_handler
-from lbry.conf import Config, CLIConfig
+from lbry.conf import Config, CLIConfig, Path
 from lbry.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger('lbry')
@@ -215,11 +216,6 @@ def get_argument_parser():
     return main
 
 
-def ensure_directory_exists(path: str):
-    if not os.path.isdir(path):
-        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-
-
 LOG_MODULES = ('lbry', 'torba', 'aioupnp')
 
 
@@ -280,6 +276,31 @@ def run_daemon(args: argparse.Namespace, conf: Config):
     if hasattr(loop, 'shutdown_asyncgens'):
         loop.run_until_complete(loop.shutdown_asyncgens())
 
+def prepare_directory(dir_path: str):
+    if not os.path.isdir(dir_path):
+        pathlib.Path(dir_path).mkdir(parents=True, exist_ok=True)
+    testfile = tempfile.TemporaryFile(dir=dir_path)
+    testfile.close()
+
+
+def change_to_default_if_inaccessible(parsed_path: str, path_obj: Path, conf: Config):
+    assert path_obj.metavar in ('DIR', 'FILE'), "Path must be either to a directory or a file"
+    handled_errors = (OSError, IOError, PermissionError)
+    is_file = path_obj.metavar == 'FILE'
+    default_path = path_obj.default
+    dir_path = os.path.basename(parsed_path) if is_file else parsed_path
+    default_dir_path = os.path.basename(default_path) if is_file else default_path
+    try:
+        prepare_directory(dir_path)
+    except handled_errors:
+        log.warning("Failed to access %s, setting to %s", dir_path, default_dir_path)
+        setattr(conf, path_obj.name, default_dir_path)
+        try:
+            prepare_directory(default_dir_path)
+        except handled_errors as e:
+            log.critical("Failed to access both %s and %s", dir_path, default_dir_path)
+            raise e
+
 
 def main(argv=None):
     argv = argv or sys.argv[1:]
@@ -287,8 +308,11 @@ def main(argv=None):
     args, command_args = parser.parse_known_args(argv)
 
     conf = Config.create_from_arguments(args)
-    for directory in (conf.data_dir, conf.download_dir, conf.wallet_dir):
-        ensure_directory_exists(directory)
+
+    change_to_default_if_inaccessible(conf.data_dir, Config.data_dir, conf)
+    change_to_default_if_inaccessible(conf.config, Config.config, conf)
+    change_to_default_if_inaccessible(conf.download_dir, Config.download_dir, conf)
+    change_to_default_if_inaccessible(conf.wallet_dir, Config.wallet_dir, conf)
 
     if args.cli_version:
         print(f"lbrynet {lbrynet_version}")
