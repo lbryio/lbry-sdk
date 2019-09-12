@@ -1775,7 +1775,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid>] [--nout=<nout>]
-                         [--channel=<channel> | --channel_ids=<channel_ids>... --not_channel_ids=<not_channel_ids>...]
+                         [--channel=<channel> |
+                             [[--channel_ids=<channel_ids>...] [--not_channel_ids=<not_channel_ids>...]]]
                          [--has_channel_signature] [--valid_channel_signature | --invalid_channel_signature]
                          [--is_controlling] [--release_time=<release_time>] [--public_key_id=<public_key_id>]
                          [--timestamp=<timestamp>] [--creation_timestamp=<creation_timestamp>]
