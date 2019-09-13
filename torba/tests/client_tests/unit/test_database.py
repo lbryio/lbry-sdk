@@ -2,6 +2,8 @@ import unittest
 import sqlite3
 import tempfile
 import os
+import asyncio
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from torba.client.wallet import Wallet
 from torba.client.constants import COIN
@@ -431,3 +433,65 @@ class TestUpgrade(AsyncioTestCase):
         self.assertEqual(self.get_tables(), ['foo', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         self.assertEqual(self.get_addresses(), [])  # all tables got reset
         await self.ledger.db.close()
+
+
+class TestSQLiteRace(AsyncioTestCase):
+    def setup_db(self):
+        self.db = sqlite3.connect(":memory:", isolation_level=None)
+        self.db.executescript(
+            "create table test1 (id text primary key not null, val text);\n" +
+            "create table test2 (id text primary key not null, val text);\n" +
+            "\n".join(f"insert into test1 values ({v}, NULL);" for v in range(1000))
+        )
+
+    async def asyncSetUp(self):
+        self.executor = ThreadPoolExecutor(1)
+        await self.loop.run_in_executor(self.executor, self.setup_db)
+
+    async def asyncTearDown(self):
+        await self.loop.run_in_executor(self.executor, self.db.close)
+        self.executor.shutdown()
+
+    async def test_binding_param_0_error(self):
+        # test real param 0 binding errors
+
+        for supported_type in [str, int, bytes]:
+            await self.loop.run_in_executor(
+                self.executor, self.db.executemany, "insert into test2 values (?, NULL)",
+                [(supported_type(1), ), (supported_type(2), )]
+            )
+            await self.loop.run_in_executor(
+                self.executor, self.db.execute, "delete from test2 where id in (1, 2)"
+            )
+        for unsupported_type in [lambda x: (x, ), lambda x: [x], lambda x: {x}]:
+            try:
+                await self.loop.run_in_executor(
+                    self.executor, self.db.executemany, "insert into test2 (id, val) values (?, NULL)",
+                    [(unsupported_type(1), ), (unsupported_type(2), )]
+                )
+                self.assertTrue(False)
+            except sqlite3.InterfaceError as err:
+                self.assertEqual(str(err), "Error binding parameter 0 - probably unsupported type.")
+
+    async def test_unhandled_sqlite_misuse(self, max_attempts=100000):
+        # test SQLITE_MISUSE being incorrectly raised as a param 0 binding error
+        attempts = 0
+        try:
+            while attempts < max_attempts:
+                f1 = asyncio.wrap_future(
+                    self.loop.run_in_executor(
+                        self.executor, self.db.executemany, "update test1 set val='derp' where id=?",
+                        ((str(i),) for i in range(2))
+                    )
+                )
+                f2 = asyncio.wrap_future(
+                    self.loop.run_in_executor(
+                        self.executor, self.db.executemany, "update test2 set val='derp' where id=?",
+                        ((str(i),) for i in range(2))
+                    )
+                )
+                attempts += 1
+                await asyncio.gather(f1, f2)
+            self.assertTrue(False, f'failed to raise SQLITE_MISUSE within {max_attempts} tries')
+        except sqlite3.InterfaceError as err:
+            self.assertEqual(str(err), "Error binding parameter 0 - probably unsupported type.")
