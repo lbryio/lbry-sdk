@@ -39,7 +39,10 @@ class WalletDatabase(BaseDatabase):
     def txo_to_row(self, tx, address, txo):
         row = super().txo_to_row(tx, address, txo)
         if txo.is_claim:
-            row['txo_type'] = TXO_TYPES.get(txo.claim.claim_type, 0)
+            if txo.can_decode_claim:
+                row['txo_type'] = TXO_TYPES.get(txo.claim.claim_type, TXO_TYPES['stream'])
+            else:
+                row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
             row['txo_type'] = TXO_TYPES['support']
         if txo.script.is_claim_involved:
