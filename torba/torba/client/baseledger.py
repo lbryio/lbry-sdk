@@ -230,6 +230,8 @@ class BaseLedger(metaclass=LedgerRegistry):
         return self.release_outputs([txi.txo_ref.txo for txi in tx.inputs])
 
     def constraint_account_or_all(self, constraints):
+        if 'accounts' in constraints:
+            return
         account = constraints.pop('account', None)
         if account:
             constraints['accounts'] = [account]

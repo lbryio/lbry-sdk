@@ -110,7 +110,7 @@ class MainNetLedger(BaseLedger):
 
     @staticmethod
     def constraint_spending_utxos(constraints):
-        constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
+        constraints['txo_type'] = 0
 
     def get_utxos(self, **constraints):
         self.constraint_spending_utxos(constraints)

@@ -3,6 +3,7 @@ from typing import List
 from torba.client.basedatabase import BaseDatabase
 
 from lbry.wallet.transaction import Output
+from lbry.wallet.constants import TXO_TYPES
 
 
 class WalletDatabase(BaseDatabase):
@@ -17,15 +18,12 @@ class WalletDatabase(BaseDatabase):
             script blob not null,
             is_reserved boolean not null default 0,
 
+            txo_type integer not null default 0,
             claim_id text,
-            claim_name text,
-            is_claim boolean not null default 0,
-            is_update boolean not null default 0,
-            is_support boolean not null default 0,
-            is_buy boolean not null default 0,
-            is_sell boolean not null default 0
+            claim_name text
         );
         create index if not exists txo_claim_id_idx on txo (claim_id);
+        create index if not exists txo_txo_type_idx on txo (txo_type);
     """
 
     CREATE_TABLES_QUERY = (
@@ -40,13 +38,10 @@ class WalletDatabase(BaseDatabase):
 
     def txo_to_row(self, tx, address, txo):
         row = super().txo_to_row(tx, address, txo)
-        row.update({
-            'is_claim': txo.script.is_claim_name,
-            'is_update': txo.script.is_update_claim,
-            'is_support': txo.script.is_support_claim,
-            'is_buy': txo.script.is_buy_claim,
-            'is_sell': txo.script.is_sell_claim,
-        })
+        if txo.is_claim:
+            row['txo_type'] = TXO_TYPES.get(txo.claim.claim_type, 0)
+        elif txo.is_support:
+            row['txo_type'] = TXO_TYPES['support']
         if txo.script.is_claim_involved:
             row['claim_id'] = txo.claim_id
             row['claim_name'] = txo.claim_name
@@ -87,7 +82,9 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_claims(constraints):
-        constraints['claim_type__any'] = {'is_claim': 1, 'is_update': 1}
+        constraints['txo_type__in'] = [
+            TXO_TYPES['stream'], TXO_TYPES['channel']
+        ]
 
     async def get_claims(self, **constraints) -> List[Output]:
         self.constrain_claims(constraints)
@@ -99,8 +96,7 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_streams(constraints):
-        if 'claim_name' not in constraints or 'claim_id' not in constraints:
-            constraints['claim_name__not_like'] = '@%'
+        constraints['txo_type'] = TXO_TYPES['stream']
 
     def get_streams(self, **constraints):
         self.constrain_streams(constraints)
@@ -112,8 +108,7 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_channels(constraints):
-        if 'claim_name' not in constraints or 'claim_id' not in constraints:
-            constraints['claim_name__like'] = '@%'
+        constraints['txo_type'] = TXO_TYPES['channel']
 
     def get_channels(self, **constraints):
         self.constrain_channels(constraints)
@@ -125,7 +120,7 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_supports(constraints):
-        constraints['is_support'] = 1
+        constraints['txo_type'] = TXO_TYPES['support']
 
     def get_supports(self, **constraints):
         self.constrain_supports(constraints)
@@ -144,12 +139,12 @@ class WalletDatabase(BaseDatabase):
         )
 
     def get_supports_summary(self, account_id):
-        return self.db.execute_fetchall("""
+        return self.db.execute_fetchall(f"""
             select txo.amount, exists(select * from txi where txi.txoid=txo.txoid) as spent,
                 (txo.txid in
                 (select txi.txid from txi join pubkey_address a on txi.address = a.address
                     where a.account = ?)) as from_me,
                 (txo.address in (select address from pubkey_address where account=?)) as to_me,
                 tx.height
-            from txo join tx using (txid) where is_support=1
+            from txo join tx using (txid) where txo_type={TXO_TYPES['support']}
         """, (account_id, account_id))

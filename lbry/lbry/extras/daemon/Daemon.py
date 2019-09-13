@@ -2291,15 +2291,38 @@ class Daemon(metaclass=JSONRPCServerType):
         channel_private_key = ecdsa.SigningKey.from_pem(
             data['signing_private_key'], hashfunc=hashlib.sha256
         )
-        account: LBCAccount = await self.ledger.get_account_for_address(data['holding_address'])
-        if not account:
-            account = LBCAccount.from_dict(self.ledger, self.default_wallet, {
-                'name': f"Holding Account For Channel {data['name']}",
-                'public_key': data['holding_public_key'],
-                'address_generator': {'name': 'single-address'}
-            })
-            if self.ledger.network.is_connected:
-                await self.ledger.subscribe_account(account)
+        public_key_der = channel_private_key.get_verifying_key().to_der()
+
+        # check that the holding_address hasn't changed since the export was made
+        holding_address = data['holding_address']
+        channels, _, _ = await self.ledger.claim_search(
+            public_key_id=self.ledger.public_key_to_address(public_key_der)
+        )
+        if channels and channels[0].get_address(self.ledger) != holding_address:
+            holding_address = channels[0].get_address(self.ledger)
+
+        account: LBCAccount = await self.ledger.get_account_for_address(holding_address)
+        if account:
+            # Case 1: channel holding address is in one of the accounts we already have
+            #         simply add the certificate to existing account
+            pass
+        else:
+            # Case 2: channel holding address hasn't changed and thus is in the bundled read-only account
+            #         create a single-address holding account to manage the channel
+            if holding_address == data['holding_address']:
+                account = LBCAccount.from_dict(self.ledger, self.default_wallet, {
+                    'name': f"Holding Account For Channel {data['name']}",
+                    'public_key': data['holding_public_key'],
+                    'address_generator': {'name': 'single-address'}
+                })
+                if self.ledger.network.is_connected:
+                    await self.ledger.subscribe_account(account)
+            # Case 3: the holding address has changed and we can't create or find an account for it
+            else:
+                raise Exception(
+                    "Channel owning account has changed since the channel was exported and "
+                    "it is not an account to which you have access."
+                )
         account.add_channel_private_key(channel_private_key)
         self.default_wallet.save()
         return f"Added channel signing key for {data['name']}."
@@ -3751,17 +3774,19 @@ class Daemon(metaclass=JSONRPCServerType):
             key, value = 'name', channel_name
         else:
             raise ValueError("Couldn't find channel because a channel_id or channel_name was not provided.")
-        for account in self.get_accounts_or_all(account_ids):
-            channels = await account.get_channels(**{f'claim_{key}': value}, limit=1)
-            if len(channels) == 1:
-                if for_signing and channels[0].private_key is None:
-                    raise Exception(f"Couldn't find private key for {key} '{value}'. ")
-                return channels[0]
-            elif len(channels) > 1:
-                raise ValueError(
-                    f"Multiple channels found with channel_{key} '{value}', "
-                    f"pass a channel_id to narrow it down."
-                )
+        channels = await self.ledger.get_channels(
+            accounts=self.get_accounts_or_all(account_ids),
+            **{f'claim_{key}': value}
+        )
+        if len(channels) == 1:
+            if for_signing and not channels[0].has_private_key:
+                raise Exception(f"Couldn't find private key for {key} '{value}'. ")
+            return channels[0]
+        elif len(channels) > 1:
+            raise ValueError(
+                f"Multiple channels found with channel_{key} '{value}', "
+                f"pass a channel_id to narrow it down."
+            )
         raise ValueError(f"Couldn't find channel with channel_{key} '{value}'.")
 
     def get_account_or_default(self, account_id: str, argument_name: str = "account", lbc_only=True) -> LBCAccount:
