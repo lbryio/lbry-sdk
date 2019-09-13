@@ -499,44 +499,9 @@ class ChannelCommands(CommandTestCase):
         claim_id = self.get_claim_id(tx)
         channel_private_key = (await self.account.get_channels())[0].private_key
         exported_data = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
-
         daemon2 = await self.add_daemon()
-
-        # before importing channel
-        self.assertEqual(1, len(daemon2.default_wallet.accounts))
-
-        # importing channel which will create a new single key account
         await daemon2.jsonrpc_channel_import(exported_data)
-
-        # after import
-        self.assertEqual(2, len(daemon2.default_wallet.accounts))
-        new_account = daemon2.default_wallet.accounts[1]
-        await daemon2.ledger._update_tasks.done.wait()
-        channels = await new_account.get_channels()
-        self.assertEqual(1, len(channels))
-        self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
-
-    async def test_channel_export_import_into_existing_account(self):
-        tx = await self.channel_create('@foo', '1.0')
-        claim_id = self.get_claim_id(tx)
-        channel_private_key = (await self.account.get_channels())[0].private_key
-        exported_data = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
-
-        daemon2 = await self.add_daemon(seed=self.account.seed)
-        await daemon2.ledger._update_tasks.done.wait()  # will sync channel previously created
-
-        # before importing channel key, has channel without key
-        self.assertEqual(1, len(daemon2.default_wallet.accounts))
-        channels = await daemon2.default_account.get_channels()
-        self.assertEqual(1, len(channels))
-        self.assertIsNone(channels[0].private_key)
-
-        # importing channel will add it to existing account
-        await daemon2.jsonrpc_channel_import(exported_data)
-
-        # after import, still just one account but with private key now
-        self.assertEqual(1, len(daemon2.default_wallet.accounts))
-        channels = await daemon2.default_account.get_channels()
+        channels = await daemon2.jsonrpc_channel_list()
         self.assertEqual(1, len(channels))
         self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
 
@@ -652,6 +617,15 @@ class StreamCommands(ClaimTestCase):
             await self.stream_create(
                 'hovercraft5', '0.1', channel_name='@baz', channel_account_id=[account1_id]
             )
+
+        # signing with channel works even if channel and certificate are in different accounts
+        await self.channel_update(
+            baz_id, account_id=account2_id,
+            claim_address=await self.daemon.jsonrpc_address_unused(account1_id)
+        )
+        await self.stream_create(
+            'hovercraft5', '0.1', channel_id=baz_id
+        )
 
     async def test_preview_works_with_signed_streams(self):
         await self.out(self.channel_create('@spam', '1.0'))

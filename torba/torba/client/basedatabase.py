@@ -339,14 +339,18 @@ class BaseDatabase(SQLiteMixin):
             'script': sqlite3.Binary(txo.script.source)
         }
 
-    async def insert_transaction(self, tx):
-        await self.db.execute(*self._insert_sql('tx', {
+    @staticmethod
+    def tx_to_row(tx):
+        return {
             'txid': tx.id,
             'raw': sqlite3.Binary(tx.raw),
             'height': tx.height,
             'position': tx.position,
             'is_verified': tx.is_verified
-        }))
+        }
+
+    async def insert_transaction(self, tx):
+        await self.db.execute(*self._insert_sql('tx', self.tx_to_row(tx)))
 
     async def update_transaction(self, tx):
         await self.db.execute(*self._update_sql("tx", {
@@ -354,13 +358,7 @@ class BaseDatabase(SQLiteMixin):
         }, 'txid = ?', (tx.id,)))
 
     def _transaction_io(self, conn: sqlite3.Connection, tx: BaseTransaction, address, txhash, history):
-        conn.execute(*self._insert_sql('tx', {
-            'txid': tx.id,
-            'raw': sqlite3.Binary(tx.raw),
-            'height': tx.height,
-            'position': tx.position,
-            'is_verified': tx.is_verified
-        }, replace=True))
+        conn.execute(*self._insert_sql('tx', self.tx_to_row(tx), replace=True))
 
         for txo in tx.outputs:
             if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:

@@ -6,6 +6,7 @@ from string import hexdigits
 
 import ecdsa
 from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.constants import TXO_TYPES
 
 from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
 
@@ -76,7 +77,7 @@ class Account(BaseAccount):
 
     def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
-            constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
+            constraints.update({'txo_type': 0})
         return super().get_balance(confirmations, **constraints)
 
     async def get_granular_balances(self, confirmations=0, reserved_subtotals=False):
@@ -84,7 +85,7 @@ class Account(BaseAccount):
         get_total_balance = partial(self.get_balance, confirmations=confirmations, include_claims=True)
         total = await get_total_balance()
         if reserved_subtotals:
-            claims_balance = await get_total_balance(claim_type__or={'is_claim': True, 'is_update': True})
+            claims_balance = await get_total_balance(txo_type__in=[TXO_TYPES['stream'], TXO_TYPES['channel']])
             for amount, spent, from_me, to_me, height in await self.get_support_summary():
                 if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
                     continue
@@ -96,8 +97,7 @@ class Account(BaseAccount):
             reserved = claims_balance + supports_balance + tips_balance
         else:
             reserved = await self.get_balance(
-                confirmations=confirmations, include_claims=True,
-                claim_type__or={'is_claim': True, 'is_support': True, 'is_update': True}
+                confirmations=confirmations, include_claims=True, txo_type__gt=0
             )
         return {
             'total': dewies_to_lbc(total),
