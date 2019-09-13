@@ -2317,6 +2317,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 })
                 if self.ledger.network.is_connected:
                     await self.ledger.subscribe_account(account)
+                    await self.ledger._update_tasks.done.wait()
             # Case 3: the holding address has changed and we can't create or find an account for it
             else:
                 raise Exception(
