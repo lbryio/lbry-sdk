@@ -123,6 +123,14 @@ class ManagedStream:
     def written_bytes(self) -> int:
         return 0 if not self.output_file_exists else os.stat(self.full_path).st_size
 
+    @property
+    def completed(self):
+        return self.written_bytes >= self.descriptor.lower_bound_decrypted_length()
+
+    @property
+    def stream_url(self):
+        return f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.sd_hash}"
+
     async def update_status(self, status: str):
         assert status in [self.STATUS_RUNNING, self.STATUS_STOPPED, self.STATUS_FINISHED]
         self._status = status
@@ -202,47 +210,6 @@ class ManagedStream:
     @property
     def mime_type(self):
         return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
-
-    def as_dict(self) -> typing.Dict:
-        full_path = self.full_path
-        file_name = self.file_name
-        download_directory = self.download_directory
-        if not self.output_file_exists:
-            full_path = None
-            file_name = None
-            download_directory = None
-        return {
-            'streaming_url': f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.sd_hash}",
-            'completed': self.written_bytes >= self.descriptor.lower_bound_decrypted_length(),
-            'file_name': file_name,
-            'download_directory': download_directory,
-            'points_paid': 0.0,
-            'stopped': not self.running,
-            'stream_hash': self.stream_hash,
-            'stream_name': self.descriptor.stream_name,
-            'suggested_file_name': self.descriptor.suggested_file_name,
-            'sd_hash': self.descriptor.sd_hash,
-            'download_path': full_path,
-            'mime_type': self.mime_type,
-            'key': self.descriptor.key,
-            'total_bytes_lower_bound': self.descriptor.lower_bound_decrypted_length(),
-            'total_bytes': self.descriptor.upper_bound_decrypted_length(),
-            'written_bytes': self.written_bytes,
-            'blobs_completed': self.blobs_completed,
-            'blobs_in_stream': self.blobs_in_stream,
-            'blobs_remaining': self.blobs_remaining,
-            'status': self.status,
-            'claim_id': self.claim_id,
-            'txid': self.txid,
-            'nout': self.nout,
-            'outpoint': self.outpoint,
-            'metadata': self.metadata,
-            'protobuf': self.metadata_protobuf,
-            'channel_claim_id': self.channel_claim_id,
-            'channel_name': self.channel_name,
-            'claim_name': self.claim_name,
-            'content_fee': self.content_fee
-        }
 
     @classmethod
     async def create(cls, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',

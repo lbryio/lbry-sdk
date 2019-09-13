@@ -218,15 +218,44 @@ class JSONResponseEncoder(JSONEncoder):
         return result
 
     def encode_file(self, managed_stream):
-        file = managed_stream.as_dict()
+        output_exists = managed_stream.output_file_exists
         tx_height = managed_stream.stream_claim_info.height
         best_height = self.ledger.headers.height
-        file.update({
+        return {
+            'streaming_url': managed_stream.stream_url,
+            'completed': managed_stream.completed,
+            'file_name': managed_stream.file_name if output_exists else None,
+            'download_directory': managed_stream.download_directory if output_exists else None,
+            'download_path': managed_stream.full_path if output_exists else None,
+            'points_paid': 0.0,
+            'stopped': not managed_stream.running,
+            'stream_hash': managed_stream.stream_hash,
+            'stream_name': managed_stream.descriptor.stream_name,
+            'suggested_file_name': managed_stream.descriptor.suggested_file_name,
+            'sd_hash': managed_stream.descriptor.sd_hash,
+            'mime_type': managed_stream.mime_type,
+            'key': managed_stream.descriptor.key,
+            'total_bytes_lower_bound': managed_stream.descriptor.lower_bound_decrypted_length(),
+            'total_bytes': managed_stream.descriptor.upper_bound_decrypted_length(),
+            'written_bytes': managed_stream.written_bytes,
+            'blobs_completed': managed_stream.blobs_completed,
+            'blobs_in_stream': managed_stream.blobs_in_stream,
+            'blobs_remaining': managed_stream.blobs_remaining,
+            'status': managed_stream.status,
+            'claim_id': managed_stream.claim_id,
+            'txid': managed_stream.txid,
+            'nout': managed_stream.nout,
+            'outpoint': managed_stream.outpoint,
+            'metadata': managed_stream.metadata,
+            'protobuf': managed_stream.metadata_protobuf,
+            'channel_claim_id': managed_stream.channel_claim_id,
+            'channel_name': managed_stream.channel_name,
+            'claim_name': managed_stream.claim_name,
+            'content_fee': managed_stream.content_fee,
             'height': tx_height,
-            'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
+            'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None
-        })
-        return file
+        }
 
     def encode_claim(self, claim):
         encoded = getattr(claim, claim.claim_type).to_dict()

@@ -43,11 +43,11 @@ class TestManagedStream(BlobExchangeTestBase):
     async def test_status_file_completed(self):
         await self._test_transfer_stream(10)
         self.assertTrue(self.stream.output_file_exists)
-        self.assertTrue(self.stream.as_dict()['completed'])
+        self.assertTrue(self.stream.completed)
         with open(self.stream.full_path, 'w+b') as outfile:
             outfile.truncate(1)
         self.assertTrue(self.stream.output_file_exists)
-        self.assertFalse(self.stream.as_dict()['completed'])
+        self.assertFalse(self.stream.completed)
 
     async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None, stop_when_done=True):
         await self.setup_stream(blob_count)
