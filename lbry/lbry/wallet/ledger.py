@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from binascii import unhexlify
+from functools import partial
 from typing import Tuple, List
 from datetime import datetime
 
@@ -60,7 +61,8 @@ class MainNetLedger(BaseLedger):
         return outputs.inflate(txs), outputs.offset, outputs.total
 
     async def resolve(self, urls):
-        txos = (await self._inflate_outputs(self.network.resolve(urls)))[0]
+        resolve = partial(self.network.retriable_call, self.network.resolve)
+        txos = (await self._inflate_outputs(resolve(urls)))[0]
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
