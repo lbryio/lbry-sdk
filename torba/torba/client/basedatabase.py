@@ -50,6 +50,10 @@ class AIOSQLite:
         parameters = parameters if parameters is not None else []
         return self.run(lambda conn: conn.execute(sql, parameters).fetchall())
 
+    def execute_fetchone(self, sql: str, parameters: Iterable = None) -> Awaitable[Iterable[sqlite3.Row]]:
+        parameters = parameters if parameters is not None else []
+        return self.run(lambda conn: conn.execute(sql, parameters).fetchone())
+
     def execute(self, sql: str, parameters: Iterable = None) -> Awaitable[sqlite3.Cursor]:
         parameters = parameters if parameters is not None else []
         return self.run(lambda conn: conn.execute(sql, parameters))
@@ -212,8 +216,15 @@ def rows_to_dict(rows, fields):
 
 class SQLiteMixin:
 
+    SCHEMA_VERSION: str = None
     CREATE_TABLES_QUERY: str
     MAX_QUERY_VARIABLES = 900
+
+    CREATE_VERSION_TABLE = """
+        create table if not exists version (
+            version text
+        );
+    """
 
     def __init__(self, path):
         self._db_path = path
@@ -223,6 +234,20 @@ class SQLiteMixin:
     async def open(self):
         log.info("connecting to database: %s", self._db_path)
         self.db = await AIOSQLite.connect(self._db_path, isolation_level=None)
+        if self.SCHEMA_VERSION:
+            tables = [t[0] for t in await self.db.execute_fetchall(
+                "SELECT name FROM sqlite_master WHERE type='table';"
+            )]
+            if tables:
+                if 'version' in tables:
+                    version = await self.db.execute_fetchone("SELECT version FROM version LIMIT 1;")
+                    if version == (self.SCHEMA_VERSION,):
+                        return
+                await self.db.executescript('\n'.join(
+                    f"DROP TABLE {table};" for table in tables
+                ))
+            await self.db.execute(self.CREATE_VERSION_TABLE)
+            await self.db.execute("INSERT INTO version VALUES (?)", (self.SCHEMA_VERSION,))
         await self.db.executescript(self.CREATE_TABLES_QUERY)
 
     async def close(self):
@@ -260,6 +285,8 @@ class SQLiteMixin:
 
 
 class BaseDatabase(SQLiteMixin):
+
+    SCHEMA_VERSION = "1.0"
 
     PRAGMAS = """
         pragma journal_mode=WAL;
