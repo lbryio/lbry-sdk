@@ -8,7 +8,7 @@ RUN mkdir -p /home/$user/
 RUN chown -R $user:$user /home/$user/
 
 # install python, pip, git and clean up
-RUN apt-get update && apt-get -y --no-install-recommends install build-essential git python3.7 python3.7-dev python3-pip && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get -y --no-install-recommends install build-essential git tar wget python3.7 python3.7-dev python3-pip && rm -rf /var/lib/apt/lists/*
 
 # create and chown database dir
 ARG db_dir=/database
@@ -53,4 +53,5 @@ ENV BANDWIDTH_LIMIT=1000000000000000000000000000000000000000000
 ENV MAX_SESSIONS=1000000000
 ENV MAX_SEND=1000000000000000000
 ENV EVENT_LOOP_POLICY=uvloop
-ENTRYPOINT ["/home/lbry/.local/bin/torba-server"]
+COPY ./lbry/scripts/wallet_server_entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
