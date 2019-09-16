@@ -3,7 +3,7 @@ import asyncio
 from binascii import hexlify
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable
+from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Optional
 
 import sqlite3
 
@@ -216,7 +216,7 @@ def rows_to_dict(rows, fields):
 
 class SQLiteMixin:
 
-    SCHEMA_VERSION: str = None
+    SCHEMA_VERSION: Optional[str] = None
     CREATE_TABLES_QUERY: str
     MAX_QUERY_VARIABLES = 900
 
