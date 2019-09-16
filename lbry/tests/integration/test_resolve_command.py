@@ -86,6 +86,12 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertEqual(claim['name'], 'gibberish')
         self.assertNotIn('value', claim)
 
+        # resolve retries
+        await self.conductor.spv_node.stop()
+        resolving_future = asyncio.ensure_future(self.resolve('foo'))
+        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        self.assertIsNotNone((await resolving_future)['foo']['claim_id'])
+
     async def test_winning_by_effective_amount(self):
         # first one remains winner unless something else changes
         claim_id1 = self.get_claim_id(
