@@ -9,6 +9,7 @@ import base58
 import random
 import ecdsa
 import hashlib
+import tracemalloc
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -143,6 +144,14 @@ def sort_claim_results(claims):
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
 WALLET_IS_UNLOCKED = "wallet_is_unlocked"
+
+
+def debug_log_tracemalloc():
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+    log.debug("[ Top 10 memory usage ]")
+    for stat in top_stats[:10]:
+        log.debug(stat)
 
 
 class DHTHasContacts(RequiredCondition):
@@ -795,6 +804,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 }
             }
         """
+        if tracemalloc.is_tracing():
+            debug_log_tracemalloc()
 
         connection_code = await self.get_connection_status()
 
