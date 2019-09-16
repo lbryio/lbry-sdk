@@ -10,7 +10,8 @@ def get_argument_parser():
     parser = argparse.ArgumentParser(
         prog="torba-server"
     )
-    parser.add_argument("spvserver", type=str, help="Python class path to SPV server implementation.")
+    parser.add_argument("spvserver", type=str, help="Python class path to SPV server implementation.",
+                        nargs="?", default="lbry.wallet.server.coin.LBC")
     return parser
 
 
