@@ -3,7 +3,7 @@ import asyncio
 from binascii import hexlify
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Optional
+from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
 
 import sqlite3
 
@@ -159,7 +159,7 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
     return joiner.join(sql) if sql else '', values
 
 
-def query(select, **constraints):
+def query(select, **constraints) -> Tuple[str, Dict[str, Any]]:
     sql = [select]
     limit = constraints.pop('limit', None)
     offset = constraints.pop('offset', None)
