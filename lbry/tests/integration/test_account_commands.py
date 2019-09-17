@@ -11,14 +11,6 @@ def extract(d, keys):
 
 
 class AccountManagement(CommandTestCase):
-    async def test_sqlite_binding_error(self):
-        tasks = [
-            self.loop.create_task(self.daemon.jsonrpc_account_create('second account' + str(x))) for x in range(100)
-        ]
-        await asyncio.wait(tasks)
-        for result in tasks:
-            self.assertFalse(isinstance(result.result(), Exception))
-
     async def test_account_list_set_create_remove_add(self):
         # check initial account
         response = await self.daemon.jsonrpc_account_list()
