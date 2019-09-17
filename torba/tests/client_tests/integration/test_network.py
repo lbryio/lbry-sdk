@@ -30,7 +30,7 @@ class NetworkTests(IntegrationTestCase):
                           'server_version': '0.5.7'}, await self.ledger.network.get_server_features())
         await self.conductor.spv_node.stop()
         address = (await self.account.get_addresses(limit=1))[0]
-        os.environ.update({'DESCRIPTION': 'Fastest server in the west.', 'PAYMENT_ADDRESS': address, 'DAILY_FEE': '42'})
+        os.environ.update({'DESCRIPTION': 'Fastest server in the west.', 'DONATION_ADDRESS': address, 'DAILY_FEE': '42'})
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
         await self.ledger.network.on_connected.first
         self.assertEqual({'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
