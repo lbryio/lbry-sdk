@@ -1520,26 +1520,33 @@ class Daemon(metaclass=JSONRPCServerType):
         return False
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_address_list(self, account_id=None, page=None, page_size=None):
+    def jsonrpc_address_list(self, address=None, account_id=None, page=None, page_size=None):
         """
-        List account addresses
+        List account addresses or details of single address.
 
         Usage:
-            address_list [<account_id> | --account_id=<account_id>]
+            address_list [--address=<address>] [--account_id=<account_id>]
                          [--page=<page>] [--page_size=<page_size>]
 
         Options:
+            --address=<address>        : (str) just show details for single address
             --account_id=<account_id>  : (str) id of the account to use
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
 
         Returns: {Paginated[Address]}
         """
-        account = self.get_account_or_default(account_id)
+        constraints = {
+            'cols': ('address', 'account', 'used_times')
+        }
+        if address:
+            constraints['address'] = address
+        if account_id:
+            constraints['accounts'] = [self.get_account_or_error(account_id)]
         return maybe_paginate(
-            account.get_addresses,
-            account.get_address_count,
-            page, page_size
+            self.ledger.get_addresses,
+            self.ledger.get_address_count,
+            page, page_size, **constraints
         )
 
     @requires(WALLET_COMPONENT)
