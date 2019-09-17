@@ -1,7 +1,8 @@
+import sys
+import os
 import unittest
 import sqlite3
 import tempfile
-import os
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 
@@ -478,6 +479,7 @@ class TestSQLiteRace(AsyncioTestCase):
     async def test_unhandled_sqlite_misuse(self):
         # test SQLITE_MISUSE being incorrectly raised as a param 0 binding error
         attempts = 0
+        python_version = sys.version.split('\n')[0].rstrip(' ')
 
         try:
             while attempts < self.max_misuse_attempts:
@@ -495,12 +497,16 @@ class TestSQLiteRace(AsyncioTestCase):
                 )
                 attempts += 1
                 await asyncio.gather(f1, f2)
-            self.assertTrue(False, f'failed to raise SQLITE_MISUSE within {self.max_misuse_attempts} tries\n'
-                                   f'this test failing means either the sqlite race conditions '
-                                   f'have been fixed in cpython or the test max_attempts needs to be increased')
+            print(f"\nsqlite3 {sqlite3.version}/python {python_version} "
+                  f"did not raise SQLITE_MISUSE within {attempts} attempts of the race condition")
+            self.assertTrue(False, 'this test failing means either the sqlite race conditions '
+                                   'have been fixed in cpython or the test max_attempts needs to be increased')
         except sqlite3.InterfaceError as err:
             self.assertEqual(str(err), "Error binding parameter 0 - probably unsupported type.")
+        print(f"\nsqlite3 {sqlite3.version}/python {python_version} raised SQLITE_MISUSE "
+              f"after {attempts} attempts of the race condition")
 
+    @unittest.SkipTest
     async def test_fetchall_prevents_sqlite_misuse(self):
         # test that calling fetchall sufficiently avoids the race
         attempts = 0
