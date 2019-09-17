@@ -19,6 +19,7 @@ class AIOSQLite:
         # has to be single threaded as there is no mapping of thread:connection
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.connection: sqlite3.Connection = None
+        self._closing = False
 
     @classmethod
     async def connect(cls, path: Union[bytes, str], *args, **kwargs):
@@ -29,14 +30,12 @@ class AIOSQLite:
         return db
 
     async def close(self):
-        def __close(conn):
-            self.executor.submit(conn.close)
-            self.executor.shutdown(wait=True)
-        conn = self.connection
-        if not conn:
+        if self._closing:
             return
+        self._closing = True
+        await asyncio.get_event_loop().run_in_executor(self.executor, self.connection.close)
+        self.executor.shutdown(wait=True)
         self.connection = None
-        return asyncio.get_event_loop_policy().get_event_loop().call_later(0.01, __close, conn)
 
     def executemany(self, sql: str, params: Iterable):
         params = params if params is not None else []
