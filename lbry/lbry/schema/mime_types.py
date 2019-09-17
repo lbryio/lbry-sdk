@@ -139,6 +139,7 @@ types_map = {
     # These are non-standard types, commonly found in the wild.
     '.cbr': ('application/vnd.comicbook-rar', 'document'),
     '.cbz': ('application/vnd.comicbook+zip', 'document'),
+    '.flac': ('audio/flac', 'audio'),
     '.lbry': ('application/x-ext-lbry', 'document'),
     '.m4v': ('video/m4v', 'video'),
     '.mid': ('audio/midi', 'audio'),
