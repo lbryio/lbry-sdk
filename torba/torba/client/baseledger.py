@@ -19,6 +19,7 @@ from torba.client.coinselection import CoinSelector
 from torba.client.constants import COIN, NULL_HASH32
 from torba.stream import StreamController
 from torba.client.hash import hash160, double_sha256, sha256, Base58
+from torba.client.bip32 import PubKey, PrivateKey
 
 log = logging.getLogger(__name__)
 
@@ -185,13 +186,13 @@ class BaseLedger(metaclass=LedgerRegistry):
                 if match['account'] == account.public_key.address:
                     return account, match
 
-    async def get_private_key_for_address(self, address):
+    async def get_private_key_for_address(self, address) -> Optional[PrivateKey]:
         match = await self._get_account_and_address_info_for_address(address)
         if match:
             account, address_info = match
             return account.get_private_key(address_info['chain'], address_info['position'])
 
-    async def get_public_key_for_address(self, address):
+    async def get_public_key_for_address(self, address) -> Optional[PubKey]:
         match = await self._get_account_and_address_info_for_address(address)
         if match:
             account, address_info = match
@@ -209,6 +210,18 @@ class BaseLedger(metaclass=LedgerRegistry):
             for utxo in utxos:
                 estimators.append(utxo.get_estimator(self))
         return estimators
+
+    async def get_addresses(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        addresses = await self.db.get_addresses(**constraints)
+        for address in addresses:
+            public_key = await self.get_public_key_for_address(address['address'])
+            address['public_key'] = public_key.extended_key_string()
+        return addresses
+
+    def get_address_count(self, **constraints):
+        self.constraint_account_or_all(constraints)
+        return self.db.get_address_count(**constraints)
 
     async def get_spendable_utxos(self, amount: int, funding_accounts):
         async with self._utxo_reservation_lock:
