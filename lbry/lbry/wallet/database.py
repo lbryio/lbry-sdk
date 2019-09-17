@@ -134,11 +134,11 @@ class WalletDatabase(BaseDatabase):
         return self.get_utxo_count(**constraints)
 
     async def release_all_outputs(self, account):
-        await self.db.execute(
+        await self.db.execute_fetchall(
             "UPDATE txo SET is_reserved = 0 WHERE"
             "  is_reserved = 1 AND txo.address IN ("
             "    SELECT address from pubkey_address WHERE account = ?"
-            "  )", [account.public_key.address]
+            "  )", (account.public_key.address, )
         )
 
     def get_supports_summary(self, account_id):

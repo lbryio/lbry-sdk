@@ -86,10 +86,10 @@ class AIOSQLite:
         if not foreign_keys_enabled:
             raise sqlite3.IntegrityError("foreign keys are disabled, use `AIOSQLite.run` instead")
         try:
-            self.connection.execute('pragma foreign_keys=off')
+            self.connection.execute('pragma foreign_keys=off').fetchone()
             return self.__run_transaction(fun, *args, **kwargs)
         finally:
-            self.connection.execute('pragma foreign_keys=on')
+            self.connection.execute('pragma foreign_keys=on').fetchone()
 
 
 def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
@@ -376,10 +376,10 @@ class BaseDatabase(SQLiteMixin):
         }
 
     async def insert_transaction(self, tx):
-        await self.db.execute(*self._insert_sql('tx', self.tx_to_row(tx)))
+        await self.db.execute_fetchall(*self._insert_sql('tx', self.tx_to_row(tx)))
 
     async def update_transaction(self, tx):
-        await self.db.execute(*self._update_sql("tx", {
+        await self.db.execute_fetchall(*self._update_sql("tx", {
             'height': tx.height, 'position': tx.position, 'is_verified': tx.is_verified
         }, 'txid = ?', (tx.id,)))
 
@@ -390,7 +390,7 @@ class BaseDatabase(SQLiteMixin):
             if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
                 conn.execute(*self._insert_sql(
                     "txo", self.txo_to_row(tx, address, txo), ignore_duplicate=True
-                ))
+                )).fetchall()
             elif txo.script.is_pay_script_hash:
                 # TODO: implement script hash payments
                 log.warning('Database.save_transaction_io: pay script hash is not implemented!')
@@ -403,7 +403,7 @@ class BaseDatabase(SQLiteMixin):
                         'txid': tx.id,
                         'txoid': txo.id,
                         'address': address,
-                    }, ignore_duplicate=True))
+                    }, ignore_duplicate=True)).fetchall()
 
         conn.execute(
             "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
@@ -618,7 +618,7 @@ class BaseDatabase(SQLiteMixin):
         )
 
     async def _set_address_history(self, address, history):
-        await self.db.execute(
+        await self.db.execute_fetchall(
             "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
             (history, history.count(':')//2, address)
         )
