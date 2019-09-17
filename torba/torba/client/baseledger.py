@@ -191,12 +191,14 @@ class BaseLedger(metaclass=LedgerRegistry):
         if match:
             account, address_info = match
             return account.get_private_key(address_info['chain'], address_info['position'])
+        return None
 
     async def get_public_key_for_address(self, address) -> Optional[PubKey]:
         match = await self._get_account_and_address_info_for_address(address)
         if match:
             account, address_info = match
             return account.get_public_key(address_info['chain'], address_info['position'])
+        return None
 
     async def get_account_for_address(self, address):
         match = await self._get_account_and_address_info_for_address(address)

@@ -532,6 +532,7 @@ class BaseTransaction:
             if txo_script.is_pay_pubkey_hash:
                 address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
                 private_key = await ledger.get_private_key_for_address(address)
+                assert private_key is not None
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = \
                     private_key.sign(tx) + bytes((self.signature_hash_type(1),))
