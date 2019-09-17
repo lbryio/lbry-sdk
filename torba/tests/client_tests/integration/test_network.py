@@ -1,4 +1,5 @@
 import logging
+import os
 import asyncio
 from unittest.mock import Mock
 
@@ -15,6 +16,33 @@ class NetworkTests(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.ledger.network.on_header.first
         self.assertEqual(self.ledger.network.remote_height, initial_height + 1)
+
+    async def test_server_features(self):
+        self.assertEqual({'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
+                          'hash_function': 'sha256',
+                          'hosts': {},
+                          'protocol_max': '1.4',
+                          'protocol_min': '1.1',
+                          'pruning': None,
+                          'description': '',
+                          'payment_address': '',
+                          'daily_fee': 0,
+                          'server_version': '0.5.7'}, await self.ledger.network.get_server_features())
+        await self.conductor.spv_node.stop()
+        address = (await self.account.get_addresses(limit=1))[0]
+        os.environ.update({'DESCRIPTION': 'Fastest server in the west.', 'PAYMENT_ADDRESS': address, 'DAILY_FEE': '42'})
+        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.ledger.network.on_connected.first
+        self.assertEqual({'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
+                          'hash_function': 'sha256',
+                          'hosts': {},
+                          'protocol_max': '1.4',
+                          'protocol_min': '1.1',
+                          'pruning': None,
+                          'description': 'Fastest server in the west.',
+                          'payment_address': address,
+                          'daily_fee': 42,
+                          'server_version': '0.5.7'}, await self.ledger.network.get_server_features())
 
 
 class ReconnectTests(IntegrationTestCase):
