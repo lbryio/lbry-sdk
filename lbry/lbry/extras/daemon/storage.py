@@ -370,22 +370,18 @@ class SQLiteStorage(SQLiteMixin):
 
     def sync_missing_blobs(self, blob_files: typing.Set[str]) -> typing.Awaitable[typing.Set[str]]:
         def _sync_blobs(transaction: sqlite3.Connection) -> typing.Set[str]:
-            to_update = [
-                (blob_hash, )
-                for (blob_hash, ) in transaction.execute("select blob_hash from blob where status='finished'")
-                if blob_hash not in blob_files
-            ]
+            finished_blob_hashes = tuple(
+                blob_hash for (blob_hash, ) in transaction.execute(
+                    "select blob_hash from blob where status='finished'"
+                ).fetchall()
+            )
+            finished_blobs_set = set(finished_blob_hashes)
+            to_update_set = finished_blobs_set.difference(blob_files)
             transaction.executemany(
                 "update blob set status='pending' where blob_hash=?",
-                to_update
-            )
-            return {
-                blob_hash
-                for blob_hash, in _batched_select(
-                    transaction, "select blob_hash from blob where status='finished' and blob_hash in {}",
-                    list(blob_files)
-                )
-            }
+                ((blob_hash, ) for blob_hash in to_update_set)
+            ).fetchall()
+            return blob_files.intersection(finished_blobs_set)
         return self.db.run(_sync_blobs)
 
     # # # # # # # # # stream functions # # # # # # # # #
