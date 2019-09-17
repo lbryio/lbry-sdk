@@ -80,6 +80,9 @@ class Env:
         self.bandwidth_limit = self.integer('BANDWIDTH_LIMIT', 2000000)
         self.session_timeout = self.integer('SESSION_TIMEOUT', 600)
         self.drop_client = self.custom("DROP_CLIENT", None, re.compile)
+        self.description = self.default('DESCRIPTION', '')
+        self.payment_address = self.default('PAYMENT_ADDRESS', '')
+        self.daily_fee = self.integer('DAILY_FEE', 0)
 
         # Identities
         clearnet_identity = self.clearnet_identity()

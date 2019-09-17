@@ -767,6 +767,9 @@ class ElectrumX(SessionBase):
             'protocol_min': min_str,
             'protocol_max': max_str,
             'genesis_hash': env.coin.GENESIS_HASH,
+            'description': env.description,
+            'payment_address': env.payment_address,
+            'daily_fee': env.daily_fee,
             'hash_function': 'sha256',
         }
 

@@ -258,6 +258,9 @@ class BaseNetwork:
                 self.client.abort()
             raise asyncio.CancelledError()
 
+    def get_server_features(self):
+        return self.rpc('server.features', (), restricted=True)
+
 
 class SessionPool:
 
