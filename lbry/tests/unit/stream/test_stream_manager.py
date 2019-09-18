@@ -76,8 +76,14 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
             claim['permanent_url']: claim
         }
 
-    mock_wallet = mock.Mock(spec=LbryWalletManager)
+    async def mock_send_amount_to_address(*args):
+        transaction = mock.Mock()
+        transaction.raw = b'raw transaction'
+        return transaction
+
+    mock_wallet = mock.Mock(spec=LbryWalletManager, return_value=asyncio.Future())
     mock_wallet.ledger.resolve = mock_resolve
+    mock_wallet.send_amount_to_address = mock_send_amount_to_address
     mock_wallet.ledger.network.client.server = ('fakespv.lbry.com', 50001)
 
     async def get_balance(*_):
@@ -322,6 +328,22 @@ class TestStreamManager(BlobExchangeTestBase):
         }
         await self.setup_stream_manager(1000000.0, fee)
         await self._test_download_error_on_start(KeyFeeAboveMaxAllowed, "")
+
+    async def test_null_max_key_fee(self):
+        fee = {
+            'currency': 'LBC',
+            'amount': 0.001,
+            'address': 'bYFeMtSL7ARuG1iMpjFyrnTe4oJHSAVNXF',
+            'version': '_0_0_1'
+        }
+        self.client_config.max_key_fee = None
+        error = None
+        await self.setup_stream_manager(1000000.0, fee)
+        try:
+            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        except Exception as err:
+            error = err
+        self.assertIsNone(error)
 
     async def test_resolve_error(self):
         await self.setup_stream_manager()

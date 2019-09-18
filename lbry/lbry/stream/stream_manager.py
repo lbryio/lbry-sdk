@@ -401,8 +401,8 @@ class StreamManager:
                 ), 5)
                 max_fee_amount = round(exchange_rate_manager.convert_currency(
                     self.config.max_key_fee['currency'], "LBC", Decimal(self.config.max_key_fee['amount'])
-                ), 5)
-                if fee_amount > max_fee_amount:
+                ), 5) if self.config.max_key_fee else None
+                if max_fee_amount and fee_amount > max_fee_amount:
                     msg = f"fee of {fee_amount} exceeds max configured to allow of {max_fee_amount}"
                     log.warning(msg)
                     raise KeyFeeAboveMaxAllowed(msg)
