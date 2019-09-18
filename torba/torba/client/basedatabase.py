@@ -3,7 +3,7 @@ import asyncio
 from binascii import hexlify
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Optional
+from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
 
 import sqlite3
 
@@ -19,6 +19,7 @@ class AIOSQLite:
         # has to be single threaded as there is no mapping of thread:connection
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.connection: sqlite3.Connection = None
+        self._closing = False
 
     @classmethod
     async def connect(cls, path: Union[bytes, str], *args, **kwargs):
@@ -29,14 +30,12 @@ class AIOSQLite:
         return db
 
     async def close(self):
-        def __close(conn):
-            self.executor.submit(conn.close)
-            self.executor.shutdown(wait=True)
-        conn = self.connection
-        if not conn:
+        if self._closing:
             return
+        self._closing = True
+        await asyncio.get_event_loop().run_in_executor(self.executor, self.connection.close)
+        self.executor.shutdown(wait=True)
         self.connection = None
-        return asyncio.get_event_loop_policy().get_event_loop().call_later(0.01, __close, conn)
 
     def executemany(self, sql: str, params: Iterable):
         params = params if params is not None else []
@@ -87,10 +86,10 @@ class AIOSQLite:
         if not foreign_keys_enabled:
             raise sqlite3.IntegrityError("foreign keys are disabled, use `AIOSQLite.run` instead")
         try:
-            self.connection.execute('pragma foreign_keys=off')
+            self.connection.execute('pragma foreign_keys=off').fetchone()
             return self.__run_transaction(fun, *args, **kwargs)
         finally:
-            self.connection.execute('pragma foreign_keys=on')
+            self.connection.execute('pragma foreign_keys=on').fetchone()
 
 
 def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
@@ -160,7 +159,7 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
     return joiner.join(sql) if sql else '', values
 
 
-def query(select, **constraints):
+def query(select, **constraints) -> Tuple[str, Dict[str, Any]]:
     sql = [select]
     limit = constraints.pop('limit', None)
     offset = constraints.pop('offset', None)
@@ -377,10 +376,10 @@ class BaseDatabase(SQLiteMixin):
         }
 
     async def insert_transaction(self, tx):
-        await self.db.execute(*self._insert_sql('tx', self.tx_to_row(tx)))
+        await self.db.execute_fetchall(*self._insert_sql('tx', self.tx_to_row(tx)))
 
     async def update_transaction(self, tx):
-        await self.db.execute(*self._update_sql("tx", {
+        await self.db.execute_fetchall(*self._update_sql("tx", {
             'height': tx.height, 'position': tx.position, 'is_verified': tx.is_verified
         }, 'txid = ?', (tx.id,)))
 
@@ -391,7 +390,7 @@ class BaseDatabase(SQLiteMixin):
             if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
                 conn.execute(*self._insert_sql(
                     "txo", self.txo_to_row(tx, address, txo), ignore_duplicate=True
-                ))
+                )).fetchall()
             elif txo.script.is_pay_script_hash:
                 # TODO: implement script hash payments
                 log.warning('Database.save_transaction_io: pay script hash is not implemented!')
@@ -404,7 +403,7 @@ class BaseDatabase(SQLiteMixin):
                         'txid': tx.id,
                         'txoid': txo.id,
                         'address': address,
-                    }, ignore_duplicate=True))
+                    }, ignore_duplicate=True)).fetchall()
 
         conn.execute(
             "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
@@ -619,7 +618,7 @@ class BaseDatabase(SQLiteMixin):
         )
 
     async def _set_address_history(self, address, history):
-        await self.db.execute(
+        await self.db.execute_fetchall(
             "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
             (history, history.count(':')//2, address)
         )
