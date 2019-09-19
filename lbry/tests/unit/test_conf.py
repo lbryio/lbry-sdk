@@ -231,10 +231,6 @@ class ConfigurationTests(unittest.TestCase):
         c = Config.create_from_arguments(args)
         self.assertEqual(c.max_key_fee, None)
 
-        args = parser.parse_args(['--max-key-fee', ''])
-        c = Config.create_from_arguments(args)
-        self.assertEqual(c.max_key_fee, None)
-
         # set
         args = parser.parse_args(['--max-key-fee', '1.0', 'BTC'])
         c = Config.create_from_arguments(args)
