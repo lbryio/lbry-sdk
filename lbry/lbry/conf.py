@@ -148,10 +148,12 @@ class MaxKeyFee(Setting[dict]):
 
     @staticmethod
     def _parse_list(l):
-        if len(l) == 1 and (l[0] == 'null' or not l[0]):
+        if len(l) == 1 and l[0] == 'null':
             return None
-        assert len(l) == 2, ('Max key fee is made up of either two values: '
-                             '"AMOUNT CURRENCY", or "null" (to set no limit)')
+        assert len(l) == 2, (
+            'Max key fee is made up of either two values: '
+            '"AMOUNT CURRENCY", or "null" (to set no limit)'
+        )
         try:
             amount = float(l[0])
         except ValueError:
@@ -162,8 +164,8 @@ class MaxKeyFee(Setting[dict]):
         return {'amount': amount, 'currency': currency}
 
     def deserialize(self, value):
-        if not value:
-            return None
+        if value is None:
+            return
         if isinstance(value, dict):
             return {
                 'currency': value['currency'],
