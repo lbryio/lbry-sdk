@@ -277,6 +277,33 @@ class FileCommands(CommandTestCase):
         self.assertEqual(response['content_fee']['outputs'][0]['amount'], '2.0')
         self.assertEqual(response['content_fee']['outputs'][0]['address'], target_address)
 
+    async def test_null_max_key_fee(self):
+        target_address = await self.blockchain.get_raw_change_address()
+        self.daemon.conf.max_key_fee = None
+
+        await self.stream_create(
+            'somename', '0.5', data=b'Yes, please',
+            fee_currency='LBC', fee_amount='1.0', fee_address=target_address
+        )
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='somename'))
+        # Assert the fee and bid are subtracted
+        await self.assertBalance(self.account, '9.483893')
+        response = await self.daemon.jsonrpc_get('lbry://somename')
+        await self.ledger.wait(response.content_fee)
+        await self.assertBalance(self.account, '8.483769')
+
+        # Assert the file downloads
+        await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 1)
+
+        # Assert the transaction is recorded to the blockchain
+        starting_balance = await self.blockchain.get_balance()
+        await self.generate(1)
+        block_reward_and_claim_fee = 2.0
+        self.assertEqual(
+            await self.blockchain.get_balance(), starting_balance + block_reward_and_claim_fee
+        )
+
     async def test_null_fee(self):
         target_address = await self.blockchain.get_raw_change_address()
         tx = await self.stream_create(
