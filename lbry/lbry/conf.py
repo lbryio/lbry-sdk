@@ -148,7 +148,7 @@ class MaxKeyFee(Setting[dict]):
 
     @staticmethod
     def _parse_list(l):
-        if len(l) == 1 and l[0] == 'null':
+        if l == ['null']:
             return None
         assert len(l) == 2, (
             'Max key fee is made up of either two values: '
