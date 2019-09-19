@@ -4,7 +4,10 @@ from typing import NamedTuple, Tuple
 
 
 def _create_url_regex():
-    # see https://spec.lbry.com/
+    # see https://spec.lbry.com/ and test_url.py
+    invalid_names_regex = \
+        r"[^=&#:$@%?;\"/\\<>%{}|^~`\[\]" \
+        r"\u0000-\u0008\u000b-\u000c\u000e-\u001F\uD800-\uDFFF\uFFFE-\uFFFF]+"
 
     def _named(name, regex):
         return "(?P<" + name + ">" + regex + ")"
@@ -17,7 +20,7 @@ def _create_url_regex():
 
     def _claim(name, prefix=""):
         return _group(
-            _named(name+"_name", prefix + "[^=&#:$@%?/]+") +
+            _named(name+"_name", prefix + invalid_names_regex) +
             _oneof(
                 _group('#' + _named(name+"_claim_id", "[0-9a-f]{1,40}")),
                 _group(':' + _named(name+"_sequence", '[1-9][0-9]*')),
