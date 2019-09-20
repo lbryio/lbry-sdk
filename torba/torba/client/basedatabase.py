@@ -600,8 +600,8 @@ class BaseDatabase(SQLiteMixin):
             **constraints
         ))
 
-    async def get_addresses(self, **constraints):
-        cols = (
+    async def get_addresses(self, cols=None, **constraints):
+        cols = cols or (
             'address', 'account', 'chain', 'history', 'used_times',
             'pubkey', 'chain_code', 'n', 'depth'
         )

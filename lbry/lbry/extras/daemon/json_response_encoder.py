@@ -6,6 +6,7 @@ from json import JSONEncoder
 
 from google.protobuf.message import DecodeError
 
+from torba.client.bip32 import PubKey
 from lbry.schema.claim import Claim
 from lbry.wallet.ledger import MainNetLedger, Account
 from lbry.wallet.transaction import Transaction, Output
@@ -118,6 +119,8 @@ class JSONResponseEncoder(JSONEncoder):
             return self.encode_output(obj)
         if isinstance(obj, Claim):
             return self.encode_claim(obj)
+        if isinstance(obj, PubKey):
+            return obj.extended_key_string()
         if isinstance(obj, datetime):
             return obj.strftime("%Y%m%dT%H:%M:%S")
         if isinstance(obj, Decimal):

@@ -1014,7 +1014,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Get preference value for key or all values if not key is passed in.
 
         Usage:
-            preference_get [<key>]
+            preference_get [<key>] [--wallet_id=<wallet_id>]
 
         Options:
             --key=<key> : (str) key associated with value
@@ -1024,7 +1024,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Dictionary of preference(s)
         """
-        account = self.get_account_or_default(account_id)
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        account = wallet.get_account_or_default(account_id)
         if key:
             if key in account.preferences:
                 return {key: account.preferences[key]}
@@ -1036,7 +1037,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Set preferences
 
         Usage:
-            preference_set (<key>) (<value>)
+            preference_set (<key>) (<value>) [--wallet_id=<wallet_id>]
 
         Options:
             --key=<key> : (str) key associated with value
@@ -1047,7 +1048,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Dictionary with key/value of new preference
         """
-        account = self.get_account_or_default(account_id)
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        account = wallet.get_account_or_default(account_id)
         if value and isinstance(value, str) and value[0] in ('[', '{'):
             value = json.loads(value)
         account.preferences[key] = value
@@ -1199,7 +1201,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires("wallet")
     async def jsonrpc_account_add(
-            self, account_name, single_key=False, seed=None, private_key=None, public_key=None):
+            self, account_name, wallet_id=None, single_key=False,
+            seed=None, private_key=None, public_key=None):
         """
         Add a previously created account from a seed, private key or public key (read-only).
         Specify --single_key for single address or vanity address accounts.
@@ -1207,7 +1210,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             account_add (<account_name> | --account_name=<account_name>)
                  (--seed=<seed> | --private_key=<private_key> | --public_key=<public_key>)
-                 [--single_key]
+                 [--single_key] [--wallet_id=<wallet_id>]
 
         Options:
             --account_name=<account_name>  : (str) name of the account to add
@@ -1215,11 +1218,13 @@ class Daemon(metaclass=JSONRPCServerType):
             --private_key=<private_key>    : (str) private key for new account
             --public_key=<public_key>      : (str) public key for new account
             --single_key                   : (bool) create single key account, default is multi-key
+            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
 
         Returns: {Account}
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = LBCAccount.from_dict(
-            self.ledger, self.default_wallet, {
+            self.ledger, wallet, {
                 'name': account_name,
                 'seed': seed,
                 'private_key': private_key,
@@ -1229,40 +1234,37 @@ class Daemon(metaclass=JSONRPCServerType):
                 }
             }
         )
-
+        wallet.save()
         if self.ledger.network.is_connected:
             await self.ledger.subscribe_account(account)
-
-        self.default_wallet.save()
-
         return account
 
     @requires("wallet")
-    async def jsonrpc_account_create(self, account_name, single_key=False):
+    async def jsonrpc_account_create(self, account_name, single_key=False, wallet_id=None):
         """
         Create a new account. Specify --single_key if you want to use
         the same address for all transactions (not recommended).
 
         Usage:
-            account_create (<account_name> | --account_name=<account_name>) [--single_key]
+            account_create (<account_name> | --account_name=<account_name>)
+                           [--single_key] [--wallet_id=<wallet_id>]
 
         Options:
             --account_name=<account_name>  : (str) name of the account to create
             --single_key                   : (bool) create single key account, default is multi-key
+            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
 
         Returns: {Account}
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = LBCAccount.generate(
-            self.ledger, self.default_wallet, account_name, {
+            self.ledger, wallet, account_name, {
                 'name': SingleKey.name if single_key else HierarchicalDeterministic.name
             }
         )
-
+        wallet.save()
         if self.ledger.network.is_connected:
             await self.ledger.subscribe_account(account)
-
-        self.default_wallet.save()
-
         return account
 
     @requires("wallet")
@@ -1538,60 +1540,65 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires("wallet")
-    def jsonrpc_sync_hash(self):
+    def jsonrpc_sync_hash(self, wallet_id=None):
         """
         Deterministic hash of the wallet.
 
         Usage:
-            sync_hash
+            sync_hash [<wallet_id> | --wallet_id=<wallet_id>]
 
         Options:
+            --wallet_id=<wallet_id>   : (str) wallet for which to generate hash
 
         Returns:
             (str) sha256 hash of wallet
         """
-        return hexlify(self.default_wallet.hash).decode()
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return hexlify(wallet.hash).decode()
 
     @requires("wallet")
-    def jsonrpc_sync_apply(self, password, data=None, encrypt_password=None):
+    def jsonrpc_sync_apply(self, password, data=None, encrypt_password=None, wallet_id=None):
         """
         Apply incoming synchronization data, if provided, and then produce a sync hash and
         an encrypted wallet.
 
         Usage:
             sync_apply <password> [--data=<data>] [--encrypt-password=<encrypt_password>]
+                       [--wallet_id=<wallet_id>]
 
         Options:
             --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
             --data=<data>                 : (str) incoming sync data, if any
             --encrypt-password=<encrypt_password> : (str) password to encrypt outgoing data if different
                                                     from the decrypt password, used during password changes
+            --wallet_id=<wallet_id>       : (str) wallet being sync'ed
 
         Returns:
             (map) sync hash and data
 
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if data is not None:
             decrypted_data = Wallet.unpack(password, data)
             for account_data in decrypted_data['accounts']:
                 _, _, pubkey = LBCAccount.keys_from_dict(self.ledger, account_data)
                 account_id = pubkey.address
                 local_match = None
-                for local_account in self.default_wallet.accounts:
+                for local_account in wallet.accounts:
                     if account_id == local_account.id:
                         local_match = local_account
                         break
                 if local_match is not None:
                     local_match.apply(account_data)
                 else:
-                    new_account = LBCAccount.from_dict(self.ledger, self.default_wallet, account_data)
+                    new_account = LBCAccount.from_dict(self.ledger, wallet, account_data)
                     if self.ledger.network.is_connected:
                         asyncio.create_task(self.ledger.subscribe_account(new_account))
-            self.default_wallet.save()
+            wallet.save()
 
-        encrypted = self.default_wallet.pack(encrypt_password or password)
+        encrypted = wallet.pack(encrypt_password or password)
         return {
-            'hash': self.jsonrpc_sync_hash(),
+            'hash': self.jsonrpc_sync_hash(wallet_id),
             'data': encrypted.decode()
         }
 
@@ -1616,7 +1623,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true, if address is associated with current wallet
         """
-        account = self.get_account_or_default(account_id)
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        account = wallet.get_account_or_default(account_id)
         match = await self.ledger.db.get_address(address=address, accounts=[account])
         if match is not None:
             return True
@@ -1640,13 +1648,16 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Address]}
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         constraints = {
-            'cols': ('address', 'account', 'used_times')
+            'cols': ('address', 'account', 'used_times', 'pubkey', 'chain_code', 'n', 'depth')
         }
         if address:
             constraints['address'] = address
         if account_id:
-            constraints['accounts'] = [self.get_account_or_error(account_id)]
+            constraints['accounts'] = [wallet.get_account_or_error(account_id)]
+        else:
+            constraints['accounts'] = wallet.accounts
         return maybe_paginate(
             self.ledger.get_addresses,
             self.ledger.get_address_count,
@@ -3312,7 +3323,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             None
         """
-        return self.get_account_or_default(account_id).release_all_outputs()
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return wallet.get_account_or_default(account_id).release_all_outputs()
 
     BLOB_DOC = """
     Blob management.
@@ -3736,7 +3748,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_create(self, claim_id, comment, parent_id=None, channel_account_id=None,
-                                     channel_name=None, channel_id=None):
+                                     channel_name=None, channel_id=None, wallet_id=None):
         """
         Create and associate a comment with a claim using your channel identity.
 
@@ -3745,7 +3757,7 @@ class Daemon(metaclass=JSONRPCServerType):
                             (<claim_id> | --claim_id=<claim_id>)
                             [--parent_id=<parent_id>]
                             [--channel_id=<channel_id>] [--channel_name=<channel_name>]
-                            [--channel_account_id=<channel_account_id>...]
+                            [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
 
         Options:
             --comment=<comment>                         : (str) Comment to be made, should be at most 2000 characters.
@@ -3755,6 +3767,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_name=<channel_name>               : (str) The channel you want to post as, prepend with a '@'
             --channel_account_id=<channel_account_id>   : (str) one or more account ids for accounts to look in
                                                           for channel certificates, defaults to all accounts.
+            --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
 
         Returns:
             (dict) Comment object if successfully made, (None) otherwise
@@ -3769,12 +3782,15 @@ class Daemon(metaclass=JSONRPCServerType):
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
             }
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         comment_body = {
             'comment': comment.strip(),
             'claim_id': claim_id,
             'parent_id': parent_id,
         }
-        channel = await self.get_channel_or_none(channel_account_id, channel_id, channel_name, for_signing=True)
+        channel = await self.get_channel_or_none(
+            wallet, channel_account_id, channel_id, channel_name, for_signing=True
+        )
         if channel:
             comment_body.update({
                 'channel_id': channel.claim_id,
@@ -3787,15 +3803,16 @@ class Daemon(metaclass=JSONRPCServerType):
         return response
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_comment_abandon(self, comment_id):
+    async def jsonrpc_comment_abandon(self, comment_id, wallet_id=None):
         """
         Abandon a comment published under your channel identity.
 
         Usage:
-            comment_abandon  (<comment_id> | --comment_id=<comment_id>)
+            comment_abandon  (<comment_id> | --comment_id=<comment_id>) [--wallet_id=<wallet_id>]
 
         Options:
             --comment_id=<comment_id>   : (str) The ID of the comment to be abandoned.
+            --wallet_id=<wallet_id      : (str) restrict operation to specific wallet
 
         Returns:
             (dict) Object with the `comment_id` passed in as the key, and a flag indicating if it was abandoned
@@ -3805,13 +3822,14 @@ class Daemon(metaclass=JSONRPCServerType):
                 }
             }
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         abandon_comment_body = {'comment_id': comment_id}
         channel = await comment_client.jsonrpc_post(
             self.conf.comment_server, 'get_channel_from_comment_id', comment_id=comment_id
         )
         if 'error' in channel:
             return {comment_id: {'abandoned': False}}
-        channel = await self.get_channel_or_none(None, **channel)
+        channel = await self.get_channel_or_none(wallet, None, **channel)
         abandon_comment_body.update({
             'channel_id': channel.claim_id,
             'channel_name': channel.claim_name,
