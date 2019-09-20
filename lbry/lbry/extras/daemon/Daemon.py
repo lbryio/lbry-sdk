@@ -1047,18 +1047,20 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires("wallet")
-    def jsonrpc_wallet_list(self):
+    def jsonrpc_wallet_list(self, wallet_id=None):
         """
         List wallets.
 
         Usage:
-            wallet_list
+            wallet_list [--wallet_id=<wallet_id>]
 
         Options:
-            None
+            --wallet_id=<wallet_id>  : (str) show specific wallet only
 
         Returns: {List[Wallet]}
         """
+        if wallet_id:
+            return [self.wallet_manager.get_wallet_or_error(wallet_id)]
         return self.wallet_manager.wallets
 
     @requires("wallet")
