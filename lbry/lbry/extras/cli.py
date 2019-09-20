@@ -45,7 +45,7 @@ async def execute_command(conf, method, params, callback=display):
 def normalize_value(x, key=None):
     if not isinstance(x, str):
         return x
-    if key in ('uri', 'channel_name', 'name', 'file_name', 'download_directory'):
+    if key in ('uri', 'channel_name', 'name', 'file_name', 'claim_name', 'download_directory'):
         return x
     if x.lower() == 'true':
         return True

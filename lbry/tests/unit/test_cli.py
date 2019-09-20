@@ -51,6 +51,7 @@ class CLITest(AsyncioTestCase):
         self.assertEqual('3', normalize_value('3', key="name"))
         self.assertEqual('3', normalize_value('3', key="download_directory"))
         self.assertEqual('3', normalize_value('3', key="channel_name"))
+        self.assertEqual('3', normalize_value('3', key="claim_name"))
 
         self.assertEqual(3, normalize_value('3', key="some_other_thing"))
 
