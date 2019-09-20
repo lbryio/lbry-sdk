@@ -554,7 +554,7 @@ class BaseDatabase(SQLiteMixin):
                         row[1], height=row[2], position=row[3], is_verified=row[4]
                     )
                 txo = txs[row[0]].outputs[row[5]]
-            row_accounts = dict([a.split('|') for a in row[8].split(',')])
+            row_accounts = {k: v for k, v in (a.split('|') for a in row[8].split(','))}
             account_match = set(row_accounts) & my_accounts
             if account_match:
                 txo.is_my_account = True
