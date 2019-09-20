@@ -639,20 +639,6 @@ class Daemon(metaclass=JSONRPCServerType):
         return None, None
 
     @property
-    def default_wallet(self):
-        try:
-            return self.wallet_manager.default_wallet
-        except AttributeError:
-            return None
-
-    @property
-    def default_account(self) -> Optional[LBCAccount]:
-        try:
-            return self.wallet_manager.default_account
-        except AttributeError:
-            return None
-
-    @property
     def ledger(self) -> Optional['MainNetLedger']:
         try:
             return self.wallet_manager.default_account.ledger
@@ -1054,7 +1040,7 @@ class Daemon(metaclass=JSONRPCServerType):
             value = json.loads(value)
         account.preferences[key] = value
         account.modified_on = time.time()
-        self.default_wallet.save()
+        wallet.save()
         return {key: value}
 
     WALLET_DOC = """
@@ -1335,13 +1321,13 @@ class Daemon(metaclass=JSONRPCServerType):
             change_made = True
 
         if default:
-            self.default_wallet.accounts.remove(account)
-            self.default_wallet.accounts.insert(0, account)
+            wallet.accounts.remove(account)
+            wallet.accounts.insert(0, account)
             change_made = True
 
         if change_made:
             account.modified_on = time.time()
-            self.default_wallet.save()
+            wallet.save()
 
         return account
 
@@ -2142,7 +2128,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if not preview:
             await tx.sign(funding_accounts)
             account.add_channel_private_key(txo.private_key)
-            self.default_wallet.save()
+            wallet.save()
             await self.broadcast_or_release(tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
@@ -2290,7 +2276,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if not preview:
             await tx.sign(funding_accounts)
             account.add_channel_private_key(new_txo.private_key)
-            self.default_wallet.save()
+            wallet.save()
             await self.broadcast_or_release(tx, blocking)
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
