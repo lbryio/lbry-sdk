@@ -13,13 +13,15 @@ from lbry.extras.daemon.Daemon import (
     Daemon, jsonrpc_dumps_pretty, encode_pagination_doc
 )
 from lbry.extras.daemon.json_response_encoder import (
-    encode_tx_doc, encode_txo_doc, encode_account_doc, encode_file_doc
+    encode_tx_doc, encode_txo_doc, encode_account_doc, encode_file_doc,
+    encode_wallet_doc
 )
 from lbry.testcase import CommandTestCase
 
 
 RETURN_DOCS = {
     'Account': encode_account_doc(),
+    'Wallet': encode_wallet_doc(),
     'File': encode_file_doc(),
     'Transaction': encode_tx_doc(),
     'Output': encode_txo_doc(),
@@ -101,6 +103,13 @@ class Examples(CommandTestCase):
         await r(
             'Get preferences',
             'preference', 'get'
+        )
+
+        # wallets
+
+        await r(
+            'List your wallets',
+            'wallet', 'list'
         )
 
         # accounts
