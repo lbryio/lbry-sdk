@@ -9,7 +9,6 @@ import base58
 import random
 import ecdsa
 import hashlib
-from decimal import Decimal
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -1063,12 +1062,12 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.wallet_manager.wallets
 
     @requires("wallet")
-    async def jsonrpc_wallet_balance(self, wallet_id):
+    async def jsonrpc_wallet_balance(self, wallet_id=None):
         """
         Return the balance of an entire wallet
 
         Usage:
-            account_balance (<wallet_id> | --wallet_id=<wallet_id>)
+            wallet_balance [<wallet_id> | --wallet_id=<wallet_id>]
 
         Options:
             --wallet_id=<wallet_id>  : (str) balance for specific wallet
@@ -1077,10 +1076,10 @@ class Daemon(metaclass=JSONRPCServerType):
             (decimal) amount of lbry credits in wallet
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        balance = Decimal(0)
+        balance = 0
         for account in wallet.accounts:
-            balance += account.get_balance()
-        return balance
+            balance += await account.get_balance()
+        return dewies_to_lbc(balance)
 
     @requires("wallet")
     async def jsonrpc_wallet_add(self, wallet_id, create_wallet=False, create_account=False):
@@ -1111,7 +1110,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires("wallet")
     def jsonrpc_wallet_remove(self, wallet_id):
         """
-        Remove an existing account.
+        Remove an existing wallet.
 
         Usage:
             wallet_remove (<wallet_id> | --wallet_id=<wallet_id>)
@@ -1332,12 +1331,14 @@ class Daemon(metaclass=JSONRPCServerType):
         return account
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_account_unlock(self, password, account_id=None):
+    def jsonrpc_account_unlock(self, password, account_id=None, wallet_id=None):
         """
         Unlock an encrypted account
 
         Usage:
-            account_unlock (<password> | --password=<password>) [<account_id> | --account_id=<account_id>]
+            account_unlock (<password> | --password=<password>)
+                           [<account_id> | --account_id=<account_id>]
+                           [--wallet_id=<wallet_id>]
 
         Options:
             --password=<password>      : (str) password to use for unlocking
@@ -1348,18 +1349,18 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if account is unlocked, otherwise false
         """
-
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return self.wallet_manager.unlock_account(
-            password, self.get_account_or_default(account_id, lbc_only=False)
+            password, wallet.get_account_or_default(account_id)
         )
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_account_lock(self, account_id=None):
+    def jsonrpc_account_lock(self, account_id=None, wallet_id=None):
         """
         Lock an unlocked account
 
         Usage:
-            account_lock [<account_id> | --account_id=<account_id>]
+            account_lock [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
 
         Options:
             --account_id=<account_id>  : (str) id for the account to lock
@@ -1368,16 +1369,18 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if account is locked, otherwise false
         """
-
-        return self.wallet_manager.lock_account(self.get_account_or_default(account_id, lbc_only=False))
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return self.wallet_manager.lock_account(
+            wallet.get_account_or_default(account_id)
+        )
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_account_decrypt(self, account_id=None):
+    def jsonrpc_account_decrypt(self, account_id=None, wallet_id=None):
         """
         Decrypt an encrypted account, this will remove the wallet password. The account must be unlocked to decrypt it
 
         Usage:
-            account_decrypt [<account_id> | --account_id=<account_id>]
+            account_decrypt [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
 
         Options:
             --account_id=<account_id>  : (str) id for the account to decrypt
@@ -1386,17 +1389,20 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-
-        return self.wallet_manager.decrypt_account(self.get_account_or_default(account_id, lbc_only=False))
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return self.wallet_manager.decrypt_account(
+            wallet.get_account_or_default(account_id)
+        )
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_account_encrypt(self, new_password, account_id=None):
+    def jsonrpc_account_encrypt(self, new_password, account_id=None, wallet_id=None):
         """
         Encrypt an unencrypted account with a password
 
         Usage:
             account_encrypt (<new_password> | --new_password=<new_password>)
                             [<account_id> | --account_id=<account_id>]
+                            [--wallet_id=<wallet_id>]
 
         Options:
             --new_password=<new_password>  : (str) password to encrypt account
@@ -1407,14 +1413,13 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return self.wallet_manager.encrypt_account(
-            new_password,
-            self.get_account_or_default(account_id, lbc_only=False)
+            new_password, wallet.get_account_or_default(account_id)
         )
 
     @requires("wallet")
-    def jsonrpc_account_max_address_gap(self, account_id):
+    def jsonrpc_account_max_address_gap(self, account_id, wallet_id=None):
         """
         Finds ranges of consecutive addresses that are unused and returns the length
         of the longest such range: for change and receiving address chains. This is
@@ -1423,6 +1428,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             account_max_address_gap (<account_id> | --account_id=<account_id>)
+                                    [--wallet_id=<wallet_id>]
 
         Options:
             --account_id=<account_id>  : (str) account for which to get max gaps
@@ -1431,7 +1437,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (map) maximum gap for change and receiving addresses
         """
-        return self.get_account_or_error(account_id).get_max_gap()
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return wallet.get_account_or_error(account_id).get_max_gap()
 
     @requires("wallet")
     def jsonrpc_account_fund(self, to_account=None, from_account=None, amount='0.0',
