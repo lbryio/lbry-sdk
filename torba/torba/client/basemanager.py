@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Type, MutableSequence, MutableMapping
+from typing import Type, MutableSequence, MutableMapping, Optional
 
 from torba.client.baseledger import BaseLedger, LedgerRegistry
 from torba.client.wallet import Wallet, WalletStorage
@@ -41,16 +41,6 @@ class BaseWalletManager:
         self.wallets.append(wallet)
         return wallet
 
-    async def get_detailed_accounts(self, **kwargs):
-        ledgers = {}
-        for i, account in enumerate(self.accounts):
-            details = await account.get_details(**kwargs)
-            details['is_default'] = i == 0
-            ledger_id = account.ledger.get_id()
-            ledgers.setdefault(ledger_id, [])
-            ledgers[ledger_id].append(details)
-        return ledgers
-
     @property
     def default_wallet(self):
         for wallet in self.wallets:
@@ -78,3 +68,14 @@ class BaseWalletManager:
             l.stop() for l in self.ledgers.values()
         ))
         self.running = False
+
+    def get_wallet_or_default(self, wallet_id: Optional[str]) -> Wallet:
+        if wallet_id is None:
+            return self.default_wallet
+        return self.get_wallet_or_error(wallet_id)
+
+    def get_wallet_or_error(self, wallet_id: str) -> Wallet:
+        for wallet in self.wallets:
+            if wallet.id == wallet_id:
+                return wallet
+        raise ValueError(f"Couldn't find wallet: {wallet_id}.")

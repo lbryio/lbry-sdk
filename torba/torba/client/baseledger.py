@@ -179,29 +179,29 @@ class BaseLedger(metaclass=LedgerRegistry):
     def add_account(self, account: baseaccount.BaseAccount):
         self.accounts.append(account)
 
-    async def _get_account_and_address_info_for_address(self, address):
-        match = await self.db.get_address(address=address)
+    async def _get_account_and_address_info_for_address(self, wallet, address):
+        match = await self.db.get_address(accounts=wallet.accounts, address=address)
         if match:
-            for account in self.accounts:
+            for account in wallet.accounts:
                 if match['account'] == account.public_key.address:
                     return account, match
 
-    async def get_private_key_for_address(self, address) -> Optional[PrivateKey]:
-        match = await self._get_account_and_address_info_for_address(address)
+    async def get_private_key_for_address(self, wallet, address) -> Optional[PrivateKey]:
+        match = await self._get_account_and_address_info_for_address(wallet, address)
         if match:
             account, address_info = match
-            return account.get_private_key(address_info['chain'], address_info['position'])
+            return account.get_private_key(address_info['chain'], address_info['pubkey'].n)
         return None
 
-    async def get_public_key_for_address(self, address) -> Optional[PubKey]:
-        match = await self._get_account_and_address_info_for_address(address)
+    async def get_public_key_for_address(self, wallet, address) -> Optional[PubKey]:
+        match = await self._get_account_and_address_info_for_address(wallet, address)
         if match:
-            account, address_info = match
-            return account.get_public_key(address_info['chain'], address_info['position'])
+            _, address_info = match
+            return address_info['pubkey']
         return None
 
-    async def get_account_for_address(self, address):
-        match = await self._get_account_and_address_info_for_address(address)
+    async def get_account_for_address(self, wallet, address):
+        match = await self._get_account_and_address_info_for_address(wallet, address)
         if match:
             return match[0]
 
@@ -214,15 +214,9 @@ class BaseLedger(metaclass=LedgerRegistry):
         return estimators
 
     async def get_addresses(self, **constraints):
-        self.constraint_account_or_all(constraints)
-        addresses = await self.db.get_addresses(**constraints)
-        for address in addresses:
-            public_key = await self.get_public_key_for_address(address['address'])
-            address['public_key'] = public_key.extended_key_string()
-        return addresses
+        return await self.db.get_addresses(**constraints)
 
     def get_address_count(self, **constraints):
-        self.constraint_account_or_all(constraints)
         return self.db.get_address_count(**constraints)
 
     async def get_spendable_utxos(self, amount: int, funding_accounts):
@@ -244,29 +238,16 @@ class BaseLedger(metaclass=LedgerRegistry):
     def release_tx(self, tx):
         return self.release_outputs([txi.txo_ref.txo for txi in tx.inputs])
 
-    def constraint_account_or_all(self, constraints):
-        if 'accounts' in constraints:
-            return
-        account = constraints.pop('account', None)
-        if account:
-            constraints['accounts'] = [account]
-        else:
-            constraints['accounts'] = self.accounts
-
     def get_utxos(self, **constraints):
-        self.constraint_account_or_all(constraints)
         return self.db.get_utxos(**constraints)
 
     def get_utxo_count(self, **constraints):
-        self.constraint_account_or_all(constraints)
         return self.db.get_utxo_count(**constraints)
 
     def get_transactions(self, **constraints):
-        self.constraint_account_or_all(constraints)
         return self.db.get_transactions(**constraints)
 
     def get_transaction_count(self, **constraints):
-        self.constraint_account_or_all(constraints)
         return self.db.get_transaction_count(**constraints)
 
     async def get_local_status_and_history(self, address, history=None):
@@ -577,7 +558,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             addresses.add(
                 self.hash160_to_address(txo.script.values['pubkey_hash'])
             )
-        records = await self.db.get_addresses(cols=('address',), address__in=addresses)
+        records = await self.db.get_addresses(address__in=addresses)
         _, pending = await asyncio.wait([
             self.on_transaction.where(partial(
                 lambda a, e: a == e.address and e.tx.height >= height and e.tx.id == tx.id,

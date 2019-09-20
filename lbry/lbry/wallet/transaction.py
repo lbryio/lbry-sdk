@@ -203,7 +203,7 @@ class Transaction(BaseTransaction):
 
     @classmethod
     def pay(cls, amount: int, address: bytes, funding_accounts: List[Account], change_account: Account):
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
         return cls.create([], [output], funding_accounts, change_account)
 
@@ -211,7 +211,7 @@ class Transaction(BaseTransaction):
     def claim_create(
             cls, name: str, claim: Claim, amount: int, holding_address: str,
             funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
             amount, name, claim, ledger.address_to_hash160(holding_address)
         )
@@ -223,7 +223,7 @@ class Transaction(BaseTransaction):
     def claim_update(
             cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
             funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
             claim, ledger.address_to_hash160(holding_address)
@@ -239,7 +239,7 @@ class Transaction(BaseTransaction):
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
                 funding_accounts: List[Account], change_account: Account):
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         support_output = Output.pay_support_pubkey_hash(
             amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
         )
@@ -248,7 +248,7 @@ class Transaction(BaseTransaction):
     @classmethod
     def purchase(cls, claim: Output, amount: int, merchant_address: bytes,
                  funding_accounts: List[Account], change_account: Account):
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         claim_output = Output.purchase_claim_pubkey_hash(
             amount, claim.claim_id, ledger.address_to_hash160(merchant_address)
         )

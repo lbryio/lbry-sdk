@@ -151,7 +151,9 @@ class WalletNode:
 
     async def start(self, spv_node: 'SPVNode', seed=None, connect=True):
         self.data_path = tempfile.mkdtemp()
-        wallet_file_name = os.path.join(self.data_path, 'my_wallet.json')
+        wallets_dir = os.path.join(self.data_path, 'wallets')
+        os.mkdir(wallets_dir)
+        wallet_file_name = os.path.join(wallets_dir, 'my_wallet.json')
         with open(wallet_file_name, 'w') as wallet_file:
             wallet_file.write('{"version": 1, "accounts": []}\n')
         self.manager = self.manager_class.from_config({

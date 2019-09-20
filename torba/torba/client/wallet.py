@@ -3,7 +3,7 @@ import stat
 import json
 import zlib
 import typing
-from typing import Sequence, MutableSequence
+from typing import List, Sequence, MutableSequence, Optional
 from hashlib import sha256
 from operator import attrgetter
 from torba.client.hash import better_aes_encrypt, better_aes_decrypt
@@ -25,11 +25,50 @@ class Wallet:
         self.accounts = accounts or []
         self.storage = storage or WalletStorage()
 
-    def add_account(self, account):
+    @property
+    def id(self):
+        if self.storage.path:
+            return os.path.basename(self.storage.path)
+        return self.name
+
+    def add_account(self, account: 'baseaccount.BaseAccount'):
         self.accounts.append(account)
 
     def generate_account(self, ledger: 'baseledger.BaseLedger') -> 'baseaccount.BaseAccount':
         return ledger.account_class.generate(ledger, self)
+
+    @property
+    def default_account(self) -> Optional['baseaccount.BaseAccount']:
+        for account in self.accounts:
+            return account
+        return None
+
+    def get_account_or_default(self, account_id: str) -> Optional['baseaccount.BaseAccount']:
+        if account_id is None:
+            return self.default_account
+        return self.get_account_or_error(account_id)
+
+    def get_account_or_error(self, account_id: str) -> 'baseaccount.BaseAccount':
+        for account in self.accounts:
+            if account.id == account_id:
+                return account
+        raise ValueError(f"Couldn't find account: {account_id}.")
+
+    def get_accounts_or_all(self, account_ids: List[str]) -> Sequence['baseaccount.BaseAccount']:
+        return [
+            self.get_account_or_error(account_id)
+            for account_id in account_ids
+        ] if account_ids else self.accounts
+
+    async def get_detailed_accounts(self, **kwargs):
+        ledgers = {}
+        for i, account in enumerate(self.accounts):
+            details = await account.get_details(**kwargs)
+            details['is_default'] = i == 0
+            ledger_id = account.ledger.get_id()
+            ledgers.setdefault(ledger_id, [])
+            ledgers[ledger_id].append(details)
+        return ledgers
 
     @classmethod
     def from_storage(cls, storage: 'WalletStorage', manager: 'basemanager.BaseWalletManager') -> 'Wallet':
@@ -53,11 +92,6 @@ class Wallet:
 
     def save(self):
         self.storage.write(self.to_dict())
-
-    @property
-    def default_account(self):
-        for account in self.accounts:
-            return account
 
     @property
     def hash(self) -> bytes:

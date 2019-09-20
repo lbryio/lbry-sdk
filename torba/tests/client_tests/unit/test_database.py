@@ -199,13 +199,14 @@ class TestQueries(AsyncioTestCase):
             'db': ledger_class.database_class(':memory:'),
             'headers': ledger_class.headers_class(':memory:'),
         })
+        self.wallet = Wallet()
         await self.ledger.db.open()
 
     async def asyncTearDown(self):
         await self.ledger.db.close()
 
-    async def create_account(self):
-        account = self.ledger.account_class.generate(self.ledger, Wallet())
+    async def create_account(self, wallet=None):
+        account = self.ledger.account_class.generate(self.ledger, wallet or self.wallet)
         await account.ensure_address_gap()
         return account
 
@@ -264,7 +265,8 @@ class TestQueries(AsyncioTestCase):
             tx = await self.create_tx_from_txo(tx.outputs[0], account, height=height)
         variable_limit = self.ledger.db.MAX_QUERY_VARIABLES
         for limit in range(variable_limit-2, variable_limit+2):
-            txs = await self.ledger.get_transactions(limit=limit, order_by='height asc')
+            txs = await self.ledger.get_transactions(
+                accounts=self.wallet.accounts, limit=limit, order_by='height asc')
             self.assertEqual(len(txs), limit)
             inputs, outputs, last_tx = set(), set(), txs[0]
             for tx in txs[1:]:
@@ -274,19 +276,23 @@ class TestQueries(AsyncioTestCase):
                 last_tx = tx
 
     async def test_queries(self):
-        self.assertEqual(0, await self.ledger.db.get_address_count())
-        account1 = await self.create_account()
-        self.assertEqual(26, await self.ledger.db.get_address_count())
-        account2 = await self.create_account()
-        self.assertEqual(52, await self.ledger.db.get_address_count())
+        wallet1 = Wallet()
+        account1 = await self.create_account(wallet1)
+        self.assertEqual(26, await self.ledger.db.get_address_count(accounts=[account1]))
+        wallet2 = Wallet()
+        account2 = await self.create_account(wallet2)
+        account3 = await self.create_account(wallet2)
+        self.assertEqual(26, await self.ledger.db.get_address_count(accounts=[account2]))
 
-        self.assertEqual(0, await self.ledger.db.get_transaction_count(accounts=[account1, account2]))
+        self.assertEqual(0, await self.ledger.db.get_transaction_count(accounts=[account1, account2, account3]))
         self.assertEqual(0, await self.ledger.db.get_utxo_count())
         self.assertEqual([], await self.ledger.db.get_utxos())
         self.assertEqual(0, await self.ledger.db.get_txo_count())
-        self.assertEqual(0, await self.ledger.db.get_balance())
+        self.assertEqual(0, await self.ledger.db.get_balance(wallet=wallet1))
+        self.assertEqual(0, await self.ledger.db.get_balance(wallet=wallet2))
         self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account1]))
         self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account2]))
+        self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account3]))
 
         tx1 = await self.create_tx_from_nothing(account1, 1)
         self.assertEqual(1, await self.ledger.db.get_transaction_count(accounts=[account1]))
@@ -294,20 +300,28 @@ class TestQueries(AsyncioTestCase):
         self.assertEqual(1, await self.ledger.db.get_utxo_count(accounts=[account1]))
         self.assertEqual(1, await self.ledger.db.get_txo_count(accounts=[account1]))
         self.assertEqual(0, await self.ledger.db.get_txo_count(accounts=[account2]))
-        self.assertEqual(10**8, await self.ledger.db.get_balance())
+        self.assertEqual(10**8, await self.ledger.db.get_balance(wallet=wallet1))
+        self.assertEqual(0, await self.ledger.db.get_balance(wallet=wallet2))
         self.assertEqual(10**8, await self.ledger.db.get_balance(accounts=[account1]))
         self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account2]))
+        self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account3]))
 
         tx2 = await self.create_tx_from_txo(tx1.outputs[0], account2, 2)
+        tx2b = await self.create_tx_from_nothing(account3, 2)
         self.assertEqual(2, await self.ledger.db.get_transaction_count(accounts=[account1]))
         self.assertEqual(1, await self.ledger.db.get_transaction_count(accounts=[account2]))
+        self.assertEqual(1, await self.ledger.db.get_transaction_count(accounts=[account3]))
         self.assertEqual(0, await self.ledger.db.get_utxo_count(accounts=[account1]))
         self.assertEqual(1, await self.ledger.db.get_txo_count(accounts=[account1]))
         self.assertEqual(1, await self.ledger.db.get_utxo_count(accounts=[account2]))
         self.assertEqual(1, await self.ledger.db.get_txo_count(accounts=[account2]))
-        self.assertEqual(10**8, await self.ledger.db.get_balance())
+        self.assertEqual(1, await self.ledger.db.get_utxo_count(accounts=[account3]))
+        self.assertEqual(1, await self.ledger.db.get_txo_count(accounts=[account3]))
+        self.assertEqual(0, await self.ledger.db.get_balance(wallet=wallet1))
+        self.assertEqual(10**8+10**8, await self.ledger.db.get_balance(wallet=wallet2))
         self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account1]))
         self.assertEqual(10**8, await self.ledger.db.get_balance(accounts=[account2]))
+        self.assertEqual(10**8, await self.ledger.db.get_balance(accounts=[account3]))
 
         tx3 = await self.create_tx_to_nowhere(tx2.outputs[0], 3)
         self.assertEqual(2, await self.ledger.db.get_transaction_count(accounts=[account1]))
@@ -316,22 +330,24 @@ class TestQueries(AsyncioTestCase):
         self.assertEqual(1, await self.ledger.db.get_txo_count(accounts=[account1]))
         self.assertEqual(0, await self.ledger.db.get_utxo_count(accounts=[account2]))
         self.assertEqual(1, await self.ledger.db.get_txo_count(accounts=[account2]))
-        self.assertEqual(0, await self.ledger.db.get_balance())
+        self.assertEqual(0, await self.ledger.db.get_balance(wallet=wallet1))
+        self.assertEqual(10**8, await self.ledger.db.get_balance(wallet=wallet2))
         self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account1]))
         self.assertEqual(0, await self.ledger.db.get_balance(accounts=[account2]))
+        self.assertEqual(10**8, await self.ledger.db.get_balance(accounts=[account3]))
 
         txs = await self.ledger.db.get_transactions(accounts=[account1, account2])
         self.assertEqual([tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
         self.assertEqual([3, 2, 1], [tx.height for tx in txs])
 
-        txs = await self.ledger.db.get_transactions(accounts=[account1])
+        txs = await self.ledger.db.get_transactions(wallet=wallet1, accounts=wallet1.accounts)
         self.assertEqual([tx2.id, tx1.id], [tx.id for tx in txs])
         self.assertEqual(txs[0].inputs[0].is_my_account, True)
         self.assertEqual(txs[0].outputs[0].is_my_account, False)
         self.assertEqual(txs[1].inputs[0].is_my_account, False)
         self.assertEqual(txs[1].outputs[0].is_my_account, True)
 
-        txs = await self.ledger.db.get_transactions(accounts=[account2])
+        txs = await self.ledger.db.get_transactions(wallet=wallet2, accounts=[account2])
         self.assertEqual([tx3.id, tx2.id], [tx.id for tx in txs])
         self.assertEqual(txs[0].inputs[0].is_my_account, True)
         self.assertEqual(txs[0].outputs[0].is_my_account, False)
@@ -343,18 +359,18 @@ class TestQueries(AsyncioTestCase):
         self.assertEqual(tx.id, tx2.id)
         self.assertEqual(tx.inputs[0].is_my_account, False)
         self.assertEqual(tx.outputs[0].is_my_account, False)
-        tx = await self.ledger.db.get_transaction(txid=tx2.id, accounts=[account1])
+        tx = await self.ledger.db.get_transaction(wallet=wallet1, txid=tx2.id)
         self.assertEqual(tx.inputs[0].is_my_account, True)
         self.assertEqual(tx.outputs[0].is_my_account, False)
-        tx = await self.ledger.db.get_transaction(txid=tx2.id, accounts=[account2])
+        tx = await self.ledger.db.get_transaction(wallet=wallet2, txid=tx2.id)
         self.assertEqual(tx.inputs[0].is_my_account, False)
         self.assertEqual(tx.outputs[0].is_my_account, True)
 
         # height 0 sorted to the top with the rest in descending order
         tx4 = await self.create_tx_from_nothing(account1, 0)
         txos = await self.ledger.db.get_txos()
-        self.assertEqual([0, 2, 1], [txo.tx_ref.height for txo in txos])
-        self.assertEqual([tx4.id, tx2.id, tx1.id], [txo.tx_ref.id for txo in txos])
+        self.assertEqual([0, 2, 2, 1], [txo.tx_ref.height for txo in txos])
+        self.assertEqual([tx4.id, tx2.id, tx2b.id, tx1.id], [txo.tx_ref.id for txo in txos])
         txs = await self.ledger.db.get_transactions(accounts=[account1, account2])
         self.assertEqual([0, 3, 2, 1], [tx.height for tx in txs])
         self.assertEqual([tx4.id, tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
@@ -382,13 +398,13 @@ class TestUpgrade(AsyncioTestCase):
     def add_address(self, address):
         with sqlite3.connect(self.path) as conn:
             conn.execute("""
-            INSERT INTO pubkey_address (address, account, chain, position, pubkey)
-            VALUES (?, 'account1', 0, 0, 'pubkey blob')
+            INSERT INTO account_address (address, account, chain, n, pubkey, chain_code, depth)
+            VALUES (?, 'account1', 0, 0, 'pubkey', 'chain_code', 0)
             """, (address,))
 
     def get_addresses(self):
         with sqlite3.connect(self.path) as conn:
-            sql = "SELECT address FROM pubkey_address ORDER BY address;"
+            sql = "SELECT address FROM account_address ORDER BY address;"
             return [col[0] for col in conn.execute(sql).fetchall()]
 
     async def test_reset_on_version_change(self):
@@ -401,7 +417,7 @@ class TestUpgrade(AsyncioTestCase):
         self.ledger.db.SCHEMA_VERSION = None
         self.assertEqual(self.get_tables(), [])
         await self.ledger.db.open()
-        self.assertEqual(self.get_tables(), ['pubkey_address', 'tx', 'txi', 'txo'])
+        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo'])
         self.assertEqual(self.get_addresses(), [])
         self.add_address('address1')
         await self.ledger.db.close()
@@ -410,17 +426,17 @@ class TestUpgrade(AsyncioTestCase):
         self.ledger.db.SCHEMA_VERSION = '1.0'
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.0')
-        self.assertEqual(self.get_tables(), ['pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         self.assertEqual(self.get_addresses(), [])  # address1 deleted during version upgrade
         self.add_address('address2')
         await self.ledger.db.close()
 
         # nothing changes
         self.assertEqual(self.get_version(), '1.0')
-        self.assertEqual(self.get_tables(), ['pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.0')
-        self.assertEqual(self.get_tables(), ['pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         self.assertEqual(self.get_addresses(), ['address2'])
         await self.ledger.db.close()
 
@@ -431,7 +447,7 @@ class TestUpgrade(AsyncioTestCase):
         """
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.1')
-        self.assertEqual(self.get_tables(), ['foo', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertEqual(self.get_tables(), ['account_address', 'foo', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         self.assertEqual(self.get_addresses(), [])  # all tables got reset
         await self.ledger.db.close()
 

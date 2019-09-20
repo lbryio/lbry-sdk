@@ -466,44 +466,46 @@ class ChannelCommands(CommandTestCase):
             'title': 'foo', 'email': 'new@email.com'}
         )
 
-        # send channel to someone else
+        # move channel to another account
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
-        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+        account2_id, account2 = new_account['id'], self.wallet.get_account_or_error(new_account['id'])
 
-        # before sending
+        # before moving
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 3)
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 0)
 
         other_address = await account2.receiving.get_or_create_usable_address()
         tx = await self.out(self.channel_update(claim_id, claim_address=other_address))
 
-        # after sending
+        # after moving
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list()), 3)
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=self.account.id)), 2)
         self.assertEqual(len(await self.daemon.jsonrpc_channel_list(account_id=account2_id)), 1)
 
-        # shoud not have private key
-        txo = (await account2.get_channels())[0]
-        self.assertIsNone(txo.private_key)
-
-        # send the private key too
-        private_key = self.account.get_channel_private_key(unhexlify(channel['public_key']))
-        account2.add_channel_private_key(private_key)
-
-        # now should have private key
-        txo = (await account2.get_channels())[0]
-        self.assertIsNotNone(txo.private_key)
-
-    async def test_channel_export_import_into_new_account(self):
+    async def test_channel_export_import_before_sending_channel(self):
+        # export
         tx = await self.channel_create('@foo', '1.0')
         claim_id = self.get_claim_id(tx)
         channel_private_key = (await self.account.get_channels())[0].private_key
         exported_data = await self.out(self.daemon.jsonrpc_channel_export(claim_id))
+
+        # import
         daemon2 = await self.add_daemon()
+        self.assertEqual(0, len(await daemon2.jsonrpc_channel_list()))
         await daemon2.jsonrpc_channel_import(exported_data)
         channels = await daemon2.jsonrpc_channel_list()
         self.assertEqual(1, len(channels))
         self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
+
+        # second wallet can't update until channel is sent to it
+        with self.assertRaisesRegex(AssertionError, 'Cannot find private key for signing output.'):
+            await daemon2.jsonrpc_channel_update(claim_id, bid='0.5')
+
+        # now send the channel as well
+        await self.channel_update(claim_id, claim_address=await daemon2.jsonrpc_address_unused())
+
+        # second wallet should be able to update now
+        await daemon2.jsonrpc_channel_update(claim_id, bid='0.5')
 
 
 class StreamCommands(ClaimTestCase):
@@ -565,7 +567,7 @@ class StreamCommands(ClaimTestCase):
     async def test_publishing_checks_all_accounts_for_channel(self):
         account1_id, account1 = self.account.id, self.account
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
-        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+        account2_id, account2 = new_account['id'], self.wallet.get_account_or_error(new_account['id'])
 
         await self.out(self.channel_create('@spam', '1.0'))
         self.assertEqual('8.989893', (await self.daemon.jsonrpc_account_balance())['available'])
@@ -782,7 +784,7 @@ class StreamCommands(ClaimTestCase):
 
         # send claim to someone else
         new_account = await self.out(self.daemon.jsonrpc_account_create('second account'))
-        account2_id, account2 = new_account['id'], self.daemon.get_account_or_error(new_account['id'])
+        account2_id, account2 = new_account['id'], self.wallet.get_account_or_error(new_account['id'])
 
         # before sending
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 4)
@@ -1079,13 +1081,12 @@ class StreamCommands(ClaimTestCase):
 class SupportCommands(CommandTestCase):
 
     async def test_regular_supports_and_tip_supports(self):
-        # account2 will be used to send tips and supports to account1
-        account2_id = (await self.out(self.daemon.jsonrpc_account_create('second account')))['id']
-        account2 = self.daemon.get_account_or_error(account2_id)
+        wallet2 = await self.daemon.jsonrpc_wallet_add('wallet2', create_wallet=True, create_account=True)
+        account2 = wallet2.accounts[0]
 
         # send account2 5 LBC out of the 10 LBC in account1
         result = await self.out(self.daemon.jsonrpc_account_send(
-            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+            '5.0', await self.daemon.jsonrpc_address_unused(wallet_id='wallet2')
         ))
         await self.on_transaction_dict(result)
 
@@ -1103,7 +1104,7 @@ class SupportCommands(CommandTestCase):
         # send a tip to the claim using account2
         tip = await self.out(
             self.daemon.jsonrpc_support_create(
-                claim_id, '1.0', True, account2_id, funding_account_ids=[account2_id])
+                claim_id, '1.0', True, account2.id, 'wallet2', funding_account_ids=[account2.id])
         )
         await self.confirm_tx(tip['txid'])
 
@@ -1122,7 +1123,7 @@ class SupportCommands(CommandTestCase):
 
         # verify that the outgoing tip is marked correctly as is_tip=True in account2
         txs2 = await self.out(
-            self.daemon.jsonrpc_transaction_list(account2_id)
+            self.daemon.jsonrpc_transaction_list(wallet_id='wallet2', account_id=account2.id)
         )
         self.assertEqual(len(txs2[0]['support_info']), 1)
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
@@ -1134,7 +1135,7 @@ class SupportCommands(CommandTestCase):
         # send a support to the claim using account2
         support = await self.out(
             self.daemon.jsonrpc_support_create(
-                claim_id, '2.0', False, account2_id, funding_account_ids=[account2_id])
+                claim_id, '2.0', False, account2.id, 'wallet2', funding_account_ids=[account2.id])
         )
         await self.confirm_tx(support['txid'])
 
@@ -1143,7 +1144,7 @@ class SupportCommands(CommandTestCase):
         await self.assertBalance(account2,     '1.999717')
 
         # verify that the outgoing support is marked correctly as is_tip=False in account2
-        txs2 = await self.out(self.daemon.jsonrpc_transaction_list(account2_id))
+        txs2 = await self.out(self.daemon.jsonrpc_transaction_list(wallet_id='wallet2'))
         self.assertEqual(len(txs2[0]['support_info']), 1)
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)

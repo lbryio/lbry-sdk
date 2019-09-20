@@ -115,7 +115,7 @@ class HierarchicalDeterministic(AddressManager):
         return self.account.public_key.child(self.chain_number).child(index)
 
     async def get_max_gap(self) -> int:
-        addresses = await self._query_addresses(order_by="position ASC")
+        addresses = await self._query_addresses(order_by="n asc")
         max_gap = 0
         current_gap = 0
         for address in addresses:
@@ -128,7 +128,7 @@ class HierarchicalDeterministic(AddressManager):
 
     async def ensure_address_gap(self) -> List[str]:
         async with self.address_generator_lock:
-            addresses = await self._query_addresses(limit=self.gap, order_by="position DESC")
+            addresses = await self._query_addresses(limit=self.gap, order_by="n desc")
 
             existing_gap = 0
             for address in addresses:
@@ -140,7 +140,7 @@ class HierarchicalDeterministic(AddressManager):
             if existing_gap == self.gap:
                 return []
 
-            start = addresses[0]['position']+1 if addresses else 0
+            start = addresses[0]['pubkey'].n+1 if addresses else 0
             end = start + (self.gap - existing_gap)
             new_keys = await self._generate_keys(start, end-1)
             await self.account.ledger.announce_addresses(self, new_keys)
@@ -149,15 +149,15 @@ class HierarchicalDeterministic(AddressManager):
     async def _generate_keys(self, start: int, end: int) -> List[str]:
         if not self.address_generator_lock.locked():
             raise RuntimeError('Should not be called outside of address_generator_lock.')
-        keys = [(index, self.public_key.child(index)) for index in range(start, end+1)]
+        keys = [self.public_key.child(index) for index in range(start, end+1)]
         await self.account.ledger.db.add_keys(self.account, self.chain_number, keys)
-        return [key[1].address for key in keys]
+        return [key.address for key in keys]
 
     def get_address_records(self, only_usable: bool = False, **constraints):
         if only_usable:
             constraints['used_times__lt'] = self.maximum_uses_per_address
         if 'order_by' not in constraints:
-            constraints['order_by'] = "used_times ASC, position ASC"
+            constraints['order_by'] = "used_times asc, n asc"
         return self._query_addresses(**constraints)
 
 
@@ -190,9 +190,7 @@ class SingleKey(AddressManager):
         async with self.address_generator_lock:
             exists = await self.get_address_records()
             if not exists:
-                await self.account.ledger.db.add_keys(
-                    self.account, self.chain_number, [(0, self.public_key)]
-                )
+                await self.account.ledger.db.add_keys(self.account, self.chain_number, [self.public_key])
                 new_keys = [self.public_key.address]
                 await self.account.ledger.announce_addresses(self, new_keys)
                 return new_keys
@@ -417,16 +415,16 @@ class BaseAccount:
         }
 
     def get_utxos(self, **constraints):
-        return self.ledger.get_utxos(account=self, **constraints)
+        return self.ledger.get_utxos(wallet=self.wallet, accounts=[self], **constraints)
 
     def get_utxo_count(self, **constraints):
-        return self.ledger.get_utxo_count(account=self, **constraints)
+        return self.ledger.get_utxo_count(wallet=self.wallet, accounts=[self], **constraints)
 
     def get_transactions(self, **constraints):
-        return self.ledger.get_transactions(account=self, **constraints)
+        return self.ledger.get_transactions(wallet=self.wallet, accounts=[self], **constraints)
 
     def get_transaction_count(self, **constraints):
-        return self.ledger.get_transaction_count(account=self, **constraints)
+        return self.ledger.get_transaction_count(wallet=self.wallet, accounts=[self], **constraints)
 
     async def fund(self, to_account, amount=None, everything=False,
                    outputs=1, broadcast=False, **constraints):
