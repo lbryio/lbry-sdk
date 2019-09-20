@@ -1,6 +1,5 @@
 import logging
 import asyncio
-import json
 from binascii import hexlify
 from concurrent.futures.thread import ThreadPoolExecutor
 
@@ -532,7 +531,7 @@ class BaseDatabase(SQLiteMixin):
         rows = await self.select_txos(
             """
             tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, amount, script, (
-                select json_group_object(account, chain) from account_address
+                select group_concat(account||"|"||chain) from account_address
                 where account_address.address=txo.address
             )
             """,
@@ -555,7 +554,7 @@ class BaseDatabase(SQLiteMixin):
                         row[1], height=row[2], position=row[3], is_verified=row[4]
                     )
                 txo = txs[row[0]].outputs[row[5]]
-            row_accounts = json.loads(row[8])
+            row_accounts = dict([a.split('|') for a in row[8].split(',')])
             account_match = set(row_accounts) & my_accounts
             if account_match:
                 txo.is_my_account = True
