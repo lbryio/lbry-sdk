@@ -1,6 +1,6 @@
 import logging
 import typing
-from typing import List, Iterable, Optional
+from typing import List, Iterable, Optional, Tuple
 from binascii import hexlify
 
 from torba.client.basescript import BaseInputScript, BaseOutputScript
@@ -12,7 +12,7 @@ from torba.client.util import ReadOnlyList
 from torba.client.errors import InsufficientFundsError
 
 if typing.TYPE_CHECKING:
-    from torba.client import baseledger
+    from torba.client import baseledger, wallet as basewallet
 
 log = logging.getLogger()
 
@@ -431,21 +431,32 @@ class BaseTransaction:
             self.locktime = stream.read_uint32()
 
     @classmethod
-    def ensure_all_have_same_ledger(cls, funding_accounts: Iterable[BaseAccount],
-                                    change_account: BaseAccount = None) -> 'baseledger.BaseLedger':
-        ledger = None
+    def ensure_all_have_same_ledger_and_wallet(
+            cls, funding_accounts: Iterable[BaseAccount],
+            change_account: BaseAccount = None) -> Tuple['baseledger.BaseLedger', 'basewallet.Wallet']:
+        ledger = wallet = None
         for account in funding_accounts:
             if ledger is None:
                 ledger = account.ledger
+                wallet = account.wallet
             if ledger != account.ledger:
                 raise ValueError(
                     'All funding accounts used to create a transaction must be on the same ledger.'
                 )
-        if change_account is not None and change_account.ledger != ledger:
-            raise ValueError('Change account must use same ledger as funding accounts.')
+            if wallet != account.wallet:
+                raise ValueError(
+                    'All funding accounts used to create a transaction must be from the same wallet.'
+                )
+        if change_account is not None:
+            if change_account.ledger != ledger:
+                raise ValueError('Change account must use same ledger as funding accounts.')
+            if change_account.wallet != wallet:
+                raise ValueError('Change account must use same wallet as funding accounts.')
         if ledger is None:
             raise ValueError('No ledger found.')
-        return ledger
+        if wallet is None:
+            raise ValueError('No wallet found.')
+        return ledger, wallet
 
     @classmethod
     async def create(cls, inputs: Iterable[BaseInput], outputs: Iterable[BaseOutput],
@@ -458,7 +469,7 @@ class BaseTransaction:
             .add_inputs(inputs) \
             .add_outputs(outputs)
 
-        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
 
         # value of the outputs plus associated fees
         cost = (
@@ -524,15 +535,15 @@ class BaseTransaction:
         return hash_type
 
     async def sign(self, funding_accounts: Iterable[BaseAccount]):
-        ledger = self.ensure_all_have_same_ledger(funding_accounts)
+        ledger, wallet = self.ensure_all_have_same_ledger_and_wallet(funding_accounts)
         for i, txi in enumerate(self._inputs):
             assert txi.script is not None
             assert txi.txo_ref.txo is not None
             txo_script = txi.txo_ref.txo.script
             if txo_script.is_pay_pubkey_hash:
                 address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
-                private_key = await ledger.get_private_key_for_address(address)
-                assert private_key is not None
+                private_key = await ledger.get_private_key_for_address(wallet, address)
+                assert private_key is not None, 'Cannot find private key for signing output.'
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = \
                     private_key.sign(tx) + bytes((self.signature_hash_type(1),))

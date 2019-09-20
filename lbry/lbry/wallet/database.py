@@ -22,18 +22,18 @@ class WalletDatabase(BaseDatabase):
             claim_id text,
             claim_name text
         );
+        create index if not exists txo_address_idx on txo (address);
         create index if not exists txo_claim_id_idx on txo (claim_id);
         create index if not exists txo_txo_type_idx on txo (txo_type);
     """
 
     CREATE_TABLES_QUERY = (
-            BaseDatabase.CREATE_TX_TABLE +
-            BaseDatabase.CREATE_PUBKEY_ADDRESS_TABLE +
-            BaseDatabase.CREATE_PUBKEY_ADDRESS_INDEX +
-            CREATE_TXO_TABLE +
-            BaseDatabase.CREATE_TXO_INDEX +
-            BaseDatabase.CREATE_TXI_TABLE +
-            BaseDatabase.CREATE_TXI_INDEX
+        BaseDatabase.PRAGMAS +
+        BaseDatabase.CREATE_ACCOUNT_TABLE +
+        BaseDatabase.CREATE_PUBKEY_ADDRESS_TABLE +
+        BaseDatabase.CREATE_TX_TABLE +
+        CREATE_TXO_TABLE +
+        BaseDatabase.CREATE_TXI_TABLE
     )
 
     def txo_to_row(self, tx, address, txo):
@@ -50,18 +50,16 @@ class WalletDatabase(BaseDatabase):
             row['claim_name'] = txo.claim_name
         return row
 
-    async def get_txos(self, **constraints) -> List[Output]:
-        my_accounts = constraints.get('my_accounts', constraints.get('accounts', []))
-
-        txos = await super().get_txos(**constraints)
+    async def get_txos(self, wallet=None, no_tx=False, **constraints) -> List[Output]:
+        txos = await super().get_txos(wallet=wallet, no_tx=no_tx, **constraints)
 
         channel_ids = set()
         for txo in txos:
             if txo.is_claim and txo.can_decode_claim:
                 if txo.claim.is_signed:
                     channel_ids.add(txo.claim.signing_channel_id)
-                if txo.claim.is_channel and my_accounts:
-                    for account in my_accounts:
+                if txo.claim.is_channel and wallet:
+                    for account in wallet.accounts:
                         private_key = account.get_channel_private_key(
                             txo.claim.channel.public_key_bytes
                         )
@@ -73,7 +71,7 @@ class WalletDatabase(BaseDatabase):
             channels = {
                 txo.claim_id: txo for txo in
                 (await self.get_claims(
-                    my_accounts=my_accounts,
+                    wallet=wallet,
                     claim_id__in=channel_ids
                 ))
             }

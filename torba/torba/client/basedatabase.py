@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import json
 from binascii import hexlify
 from concurrent.futures.thread import ThreadPoolExecutor
 
@@ -8,7 +9,7 @@ from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict,
 import sqlite3
 
 from torba.client.basetransaction import BaseTransaction, TXRefImmutable
-from torba.client.baseaccount import BaseAccount
+from torba.client.bip32 import PubKey
 
 log = logging.getLogger(__name__)
 
@@ -165,9 +166,8 @@ def query(select, **constraints) -> Tuple[str, Dict[str, Any]]:
     offset = constraints.pop('offset', None)
     order_by = constraints.pop('order_by', None)
 
-    constraints.pop('my_accounts', None)
-    accounts = constraints.pop('accounts', None)
-    if accounts is not None:
+    accounts = constraints.pop('accounts', [])
+    if accounts:
         constraints['account__in'] = [a.public_key.address for a in accounts]
 
     where, values = constraints_to_sql(constraints)
@@ -285,25 +285,32 @@ class SQLiteMixin:
 
 class BaseDatabase(SQLiteMixin):
 
-    SCHEMA_VERSION = "1.0"
+    SCHEMA_VERSION = "1.1"
 
     PRAGMAS = """
         pragma journal_mode=WAL;
     """
 
+    CREATE_ACCOUNT_TABLE = """
+        create table if not exists account_address (
+            account text not null,
+            address text not null,
+            chain integer not null,
+            pubkey blob not null,
+            chain_code blob not null,
+            n integer not null,
+            depth integer not null,
+            primary key (account, address)
+        );
+        create index if not exists address_account_idx on account_address (address, account);
+    """
+
     CREATE_PUBKEY_ADDRESS_TABLE = """
         create table if not exists pubkey_address (
             address text primary key,
-            account text not null,
-            chain integer not null,
-            position integer not null,
-            pubkey blob not null,
             history text,
             used_times integer not null default 0
         );
-    """
-    CREATE_PUBKEY_ADDRESS_INDEX = """
-        create index if not exists pubkey_address_account_idx on pubkey_address (account);
     """
 
     CREATE_TX_TABLE = """
@@ -326,8 +333,6 @@ class BaseDatabase(SQLiteMixin):
             script blob not null,
             is_reserved boolean not null default 0
         );
-    """
-    CREATE_TXO_INDEX = """
         create index if not exists txo_address_idx on txo (address);
     """
 
@@ -337,21 +342,17 @@ class BaseDatabase(SQLiteMixin):
             txoid text references txo,
             address text references pubkey_address
         );
-    """
-    CREATE_TXI_INDEX = """
         create index if not exists txi_address_idx on txi (address);
         create index if not exists txi_txoid_idx on txi (txoid);
     """
 
     CREATE_TABLES_QUERY = (
         PRAGMAS +
-        CREATE_TX_TABLE +
+        CREATE_ACCOUNT_TABLE +
         CREATE_PUBKEY_ADDRESS_TABLE +
-        CREATE_PUBKEY_ADDRESS_INDEX +
+        CREATE_TX_TABLE +
         CREATE_TXO_TABLE +
-        CREATE_TXO_INDEX +
-        CREATE_TXI_TABLE +
-        CREATE_TXI_INDEX
+        CREATE_TXI_TABLE
     )
 
     @staticmethod
@@ -434,25 +435,22 @@ class BaseDatabase(SQLiteMixin):
 
     async def select_transactions(self, cols, accounts=None, **constraints):
         if not set(constraints) & {'txid', 'txid__in'}:
-            assert accounts is not None, "'accounts' argument required when no 'txid' constraint"
+            assert accounts, "'accounts' argument required when no 'txid' constraint is present"
             constraints.update({
                 f'$account{i}': a.public_key.address for i, a in enumerate(accounts)
             })
             account_values = ', '.join([f':$account{i}' for i in range(len(accounts))])
+            where = f" WHERE account_address.account IN ({account_values})"
             constraints['txid__in'] = f"""
-                SELECT txo.txid FROM txo
-                INNER JOIN pubkey_address USING (address) WHERE pubkey_address.account IN ({account_values})
+                SELECT txo.txid FROM txo JOIN account_address USING (address) {where}
               UNION
-                SELECT txi.txid FROM txi
-                INNER JOIN pubkey_address USING (address) WHERE pubkey_address.account IN ({account_values})
+                SELECT txi.txid FROM txi JOIN account_address USING (address) {where}
             """
         return await self.db.execute_fetchall(
             *query("SELECT {} FROM tx".format(cols), **constraints)
         )
 
-    async def get_transactions(self, **constraints):
-        accounts = constraints.get('accounts', None)
-
+    async def get_transactions(self, wallet=None, **constraints):
         tx_rows = await self.select_transactions(
             'txid, raw, height, position, is_verified',
             order_by=constraints.pop('order_by', ["height=0 DESC", "height DESC", "position DESC"]),
@@ -477,7 +475,7 @@ class BaseDatabase(SQLiteMixin):
             annotated_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
-                    my_accounts=accounts,
+                    wallet=wallet,
                     txid__in=txids[offset:offset+step],
                 ))
             })
@@ -487,7 +485,7 @@ class BaseDatabase(SQLiteMixin):
             referenced_txos.update({
                 txo.id: txo for txo in
                 (await self.get_txos(
-                    my_accounts=accounts,
+                    wallet=wallet,
                     txoid__in=txi_txoids[offset:offset+step],
                 ))
             })
@@ -507,6 +505,7 @@ class BaseDatabase(SQLiteMixin):
         return txs
 
     async def get_transaction_count(self, **constraints):
+        constraints.pop('wallet', None)
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
@@ -519,23 +518,24 @@ class BaseDatabase(SQLiteMixin):
             return txs[0]
 
     async def select_txos(self, cols, **constraints):
-        return await self.db.execute_fetchall(*query(
-            "SELECT {} FROM txo"
-            " JOIN pubkey_address USING (address)"
-            " JOIN tx USING (txid)".format(cols), **constraints
-        ))
+        sql = "SELECT {} FROM txo JOIN tx USING (txid)"
+        if 'accounts' in constraints:
+            sql += " JOIN account_address USING (address)"
+        return await self.db.execute_fetchall(*query(sql.format(cols), **constraints))
 
-    async def get_txos(self, my_accounts=None, no_tx=False, **constraints):
-        my_accounts = [
-            (a.public_key.address if isinstance(a, BaseAccount) else a)
-            for a in (my_accounts or constraints.get('accounts', []))
-        ]
+    async def get_txos(self, wallet=None, no_tx=False, **constraints):
+        my_accounts = set(a.public_key.address for a in wallet.accounts) if wallet else set()
         if 'order_by' not in constraints:
             constraints['order_by'] = [
-                "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"]
+                "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"
+            ]
         rows = await self.select_txos(
-            "tx.txid, raw, tx.height, tx.position, tx.is_verified, "
-            "txo.position, chain, account, amount, script",
+            """
+            tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, amount, script, (
+                select json_group_object(account, chain) from account_address
+                where account_address.address=txo.address
+            )
+            """,
             **constraints
         )
         txos = []
@@ -544,8 +544,8 @@ class BaseDatabase(SQLiteMixin):
         for row in rows:
             if no_tx:
                 txo = output_class(
-                    amount=row[8],
-                    script=output_class.script_class(row[9]),
+                    amount=row[6],
+                    script=output_class.script_class(row[7]),
                     tx_ref=TXRefImmutable.from_id(row[0], row[2]),
                     position=row[5]
                 )
@@ -555,12 +555,18 @@ class BaseDatabase(SQLiteMixin):
                         row[1], height=row[2], position=row[3], is_verified=row[4]
                     )
                 txo = txs[row[0]].outputs[row[5]]
-            txo.is_change = row[6] == 1
-            txo.is_my_account = row[7] in my_accounts
+            row_accounts = json.loads(row[8])
+            account_match = set(row_accounts) & my_accounts
+            if account_match:
+                txo.is_my_account = True
+                txo.is_change = row_accounts[account_match.pop()] == 1
+            else:
+                txo.is_change = txo.is_my_account = False
             txos.append(txo)
         return txos
 
     async def get_txo_count(self, **constraints):
+        constraints.pop('wallet', None)
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
@@ -580,41 +586,56 @@ class BaseDatabase(SQLiteMixin):
         self.constrain_utxo(constraints)
         return self.get_txo_count(**constraints)
 
-    async def get_balance(self, **constraints):
+    async def get_balance(self, wallet=None, accounts=None, **constraints):
+        assert wallet or accounts, \
+            "'wallet' or 'accounts' constraints required to calculate balance"
+        constraints['accounts'] = accounts or wallet.accounts
         self.constrain_utxo(constraints)
         balance = await self.select_txos('SUM(amount)', **constraints)
         return balance[0][0] or 0
 
     async def select_addresses(self, cols, **constraints):
         return await self.db.execute_fetchall(*query(
-            "SELECT {} FROM pubkey_address".format(cols), **constraints
+            "SELECT {} FROM pubkey_address JOIN account_address USING (address)".format(cols),
+            **constraints
         ))
 
-    async def get_addresses(self, cols=('address', 'account', 'chain', 'position', 'used_times'),
-                            **constraints):
-        addresses = await self.select_addresses(', '.join(cols), **constraints)
-        return rows_to_dict(addresses, cols)
+    async def get_addresses(self, **constraints):
+        cols = (
+            'address', 'account', 'chain', 'history', 'used_times',
+            'pubkey', 'chain_code', 'n', 'depth'
+        )
+        addresses = rows_to_dict(await self.select_addresses(', '.join(cols), **constraints), cols)
+        for address in addresses:
+            address['pubkey'] = PubKey(
+                self.ledger, address.pop('pubkey'), address.pop('chain_code'),
+                address.pop('n'), address.pop('depth')
+            )
+        return addresses
 
     async def get_address_count(self, **constraints):
         count = await self.select_addresses('count(*)', **constraints)
         return count[0][0]
 
     async def get_address(self, **constraints):
-        addresses = await self.get_addresses(
-            cols=('address', 'account', 'chain', 'position', 'pubkey', 'history', 'used_times'),
-            limit=1, **constraints
-        )
+        addresses = await self.get_addresses(limit=1, **constraints)
         if addresses:
             return addresses[0]
 
-    async def add_keys(self, account, chain, keys):
+    async def add_keys(self, account, chain, pubkeys):
         await self.db.executemany(
-            "insert into pubkey_address (address, account, chain, position, pubkey) values (?, ?, ?, ?, ?)",
-            (
-                (pubkey.address, account.public_key.address, chain, position,
-                 sqlite3.Binary(pubkey.pubkey_bytes))
-                for position, pubkey in keys
-            )
+            "insert or ignore into account_address "
+            "(account, address, chain, pubkey, chain_code, n, depth) values "
+            "(?, ?, ?, ?, ?, ?, ?)", ((
+                account.id, k.address, chain,
+                sqlite3.Binary(k.pubkey_bytes),
+                sqlite3.Binary(k.chain_code),
+                k.n, k.depth
+            ) for k in pubkeys)
+        )
+        await self.db.executemany(
+            "insert or ignore into pubkey_address (address) values (?)",
+            ((pubkey.address,) for pubkey in pubkeys)
         )
 
     async def _set_address_history(self, address, history):

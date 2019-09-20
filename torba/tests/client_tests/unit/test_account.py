@@ -60,7 +60,7 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
             await account.receiving._generate_keys(8, 11)
         records = await account.receiving.get_address_records()
         self.assertEqual(
-            [r['position'] for r in records],
+            [r['pubkey'].n for r in records],
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         )
 
@@ -69,7 +69,7 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         self.assertEqual(len(new_keys), 8)
         records = await account.receiving.get_address_records()
         self.assertEqual(
-            [r['position'] for r in records],
+            [r['pubkey'].n for r in records],
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
         )
 
@@ -125,14 +125,18 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         address = await account.receiving.ensure_address_gap()
         self.assertEqual(address[0], '1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J')
 
-        private_key = await self.ledger.get_private_key_for_address('1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J')
+        private_key = await self.ledger.get_private_key_for_address(
+            account.wallet, '1CDLuMfwmPqJiNk5C2Bvew6tpgjAGgUk8J'
+        )
         self.assertEqual(
             private_key.extended_key_string(),
             'xprv9xV7rhbg6M4yWrdTeLorz3Q1GrQb4aQzzGWboP3du7W7UUztzNTUrEYTnDfz7o'
             'ptBygDxXYRppyiuenJpoBTgYP2C26E1Ah5FEALM24CsWi'
         )
 
-        invalid_key = await self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        invalid_key = await self.ledger.get_private_key_for_address(
+            account.wallet, 'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'
+        )
         self.assertIsNone(invalid_key)
 
         self.assertEqual(
@@ -275,12 +279,18 @@ class TestSingleKeyAccount(AsyncioTestCase):
         self.assertEqual(len(new_keys), 1)
         self.assertEqual(new_keys[0], account.public_key.address)
         records = await account.receiving.get_address_records()
+        pubkey = records[0].pop('pubkey')
         self.assertEqual(records, [{
-            'position': 0, 'chain': 0,
+            'chain': 0,
             'account': account.public_key.address,
             'address': account.public_key.address,
+            'history': None,
             'used_times': 0
         }])
+        self.assertEqual(
+            pubkey.extended_key_string(),
+            account.public_key.extended_key_string()
+        )
 
         # case #1: no new addresses needed
         empty = await account.receiving.ensure_address_gap()
@@ -333,14 +343,18 @@ class TestSingleKeyAccount(AsyncioTestCase):
         address = await account.receiving.ensure_address_gap()
         self.assertEqual(address[0], account.public_key.address)
 
-        private_key = await self.ledger.get_private_key_for_address(address[0])
+        private_key = await self.ledger.get_private_key_for_address(
+            account.wallet, address[0]
+        )
         self.assertEqual(
             private_key.extended_key_string(),
             'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
             '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
         )
 
-        invalid_key = await self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        invalid_key = await self.ledger.get_private_key_for_address(
+            account.wallet, 'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'
+        )
         self.assertIsNone(invalid_key)
 
         self.assertEqual(

@@ -61,13 +61,17 @@ class TestAccount(AsyncioTestCase):
         address = await account.receiving.ensure_address_gap()
         self.assertEqual(address[0], 'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
 
-        private_key = await self.ledger.get_private_key_for_address('bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
+        private_key = await self.ledger.get_private_key_for_address(
+            account.wallet, 'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx'
+        )
         self.assertEqual(
             private_key.extended_key_string(),
             'xprv9vwXVierUTT4hmoe3dtTeBfbNv1ph2mm8RWXARU6HsZjBaAoFaS2FRQu4fptR'
             'AyJWhJW42dmsEaC1nKnVKKTMhq3TVEHsNj1ca3ciZMKktT'
         )
-        private_key = await self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        private_key = await self.ledger.get_private_key_for_address(
+            account.wallet, 'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'
+        )
         self.assertIsNone(private_key)
 
     def test_load_and_save_account(self):
