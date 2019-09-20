@@ -85,7 +85,7 @@ class AccountManagement(CommandTestCase):
         stream_list = self.daemon.jsonrpc_stream_list
         support_list = self.daemon.jsonrpc_support_list
         utxo_list = self.daemon.jsonrpc_utxo_list
-        default_account = self.daemon.default_account
+        default_account = self.wallet.default_account
         second_account = await self.daemon.jsonrpc_account_create('second account')
 
         tx = await self.daemon.jsonrpc_account_send(
