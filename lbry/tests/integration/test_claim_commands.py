@@ -1081,7 +1081,7 @@ class StreamCommands(ClaimTestCase):
 class SupportCommands(CommandTestCase):
 
     async def test_regular_supports_and_tip_supports(self):
-        wallet2 = await self.daemon.jsonrpc_wallet_add('wallet2', create_wallet=True, create_account=True)
+        wallet2 = await self.daemon.jsonrpc_wallet_create('wallet2', create_account=True)
         account2 = wallet2.accounts[0]
 
         # send account2 5 LBC out of the 10 LBC in account1
