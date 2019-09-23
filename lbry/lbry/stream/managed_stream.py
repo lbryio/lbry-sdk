@@ -3,6 +3,7 @@ import asyncio
 import typing
 import logging
 import binascii
+import re
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 from lbry.utils import generate_id
 from lbry.error import DownloadSDTimeout
@@ -37,6 +38,11 @@ def _get_next_available_file_name(download_directory: str, file_name: str) -> st
 
 async def get_next_available_file_name(loop: asyncio.AbstractEventLoop, download_directory: str, file_name: str) -> str:
     return await loop.run_in_executor(None, _get_next_available_file_name, download_directory, file_name)
+
+
+def sanitize_file_name(file_name):
+    file_name = str(file_name).strip().replace(' ', '_')
+    return re.sub(r'(?u)[^-\w.]', '', file_name)
 
 
 class ManagedStream:
@@ -115,7 +121,12 @@ class ManagedStream:
 
     @property
     def file_name(self) -> typing.Optional[str]:
-        return self._file_name or (self.descriptor.suggested_file_name if self.descriptor else None)
+        return self._file_name or \
+            (sanitize_file_name(self.descriptor.suggested_file_name) if self.descriptor else None)
+
+    @file_name.setter
+    def file_name(self, value):
+        self._file_name = sanitize_file_name(value)
 
     @property
     def status(self) -> str:
@@ -250,7 +261,7 @@ class ManagedStream:
         self.delayed_stop_task = self.loop.create_task(self._delayed_stop())
         if not await self.blob_manager.storage.file_exists(self.sd_hash):
             if save_now:
-                file_name, download_dir = self._file_name, self.download_directory
+                file_name, download_dir = self.file_name, self.download_directory
             else:
                 file_name, download_dir = None, None
             self.rowid = await self.blob_manager.storage.save_downloaded_file(
@@ -360,7 +371,7 @@ class ManagedStream:
                 await self.blob_manager.storage.change_file_download_dir_and_file_name(
                     self.stream_hash, None, None
                 )
-                self._file_name, self.download_directory = None, None
+                self.file_name, self.download_directory = None, None
                 await self.blob_manager.storage.clear_saved_file(self.stream_hash)
                 await self.update_status(self.STATUS_STOPPED)
                 return
@@ -379,12 +390,12 @@ class ManagedStream:
         self.download_directory = download_directory or self.download_directory or self.config.download_dir
         if not self.download_directory:
             raise ValueError("no directory to download to")
-        if not (file_name or self._file_name or self.descriptor.suggested_file_name):
+        if not (file_name or self.file_name):
             raise ValueError("no file name to download to")
         if not os.path.isdir(self.download_directory):
             log.warning("download directory '%s' does not exist, attempting to make it", self.download_directory)
             os.mkdir(self.download_directory)
-        self._file_name = await get_next_available_file_name(
+        self.file_name = await get_next_available_file_name(
             self.loop, self.download_directory,
             file_name or self.descriptor.suggested_file_name
         )

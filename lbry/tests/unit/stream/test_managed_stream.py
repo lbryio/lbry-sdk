@@ -39,6 +39,14 @@ class TestManagedStream(BlobExchangeTestBase):
             self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir
         )
 
+    async def test_file_saves_with_valid_file_name(self):
+        await self._test_transfer_stream(10, file_name="Bitcoin can't be shut down or regulated?.mov")
+        self.assertTrue(self.stream.output_file_exists)
+        self.assertTrue(self.stream.completed)
+        self.assertEqual(self.stream.file_name, "Bitcoin_cant_be_shut_down_or_regulated.mov")
+        self.assertEqual(self.stream.full_path, os.path.join(self.stream.download_directory, self.stream.file_name))
+        self.assertTrue(os.path.isfile(self.stream.full_path))
+
     async def test_status_file_completed(self):
         await self._test_transfer_stream(10)
         self.assertTrue(self.stream.output_file_exists)
@@ -48,7 +56,8 @@ class TestManagedStream(BlobExchangeTestBase):
         self.assertTrue(self.stream.output_file_exists)
         self.assertFalse(self.stream.completed)
 
-    async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None, stop_when_done=True):
+    async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None, stop_when_done=True,
+                                    file_name=None):
         await self.setup_stream(blob_count)
         mock_node = mock.Mock(spec=Node)
 
@@ -59,7 +68,7 @@ class TestManagedStream(BlobExchangeTestBase):
             return q2, self.loop.create_task(_task())
 
         mock_node.accumulate_peers = mock_accumulate_peers or _mock_accumulate_peers
-        await self.stream.save_file(node=mock_node)
+        await self.stream.save_file(node=mock_node, file_name=file_name)
         await self.stream.finished_write_attempt.wait()
         self.assertTrue(os.path.isfile(self.stream.full_path))
         if stop_when_done:
