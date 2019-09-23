@@ -485,6 +485,10 @@ class Config(CLIConfig):
         "Directory containing a 'wallets' subdirectory with 'default_wallet' file.",
         previous_names=['lbryum_wallet_dir'], metavar='DIR'
     )
+    wallets = Strings(
+        "Wallet files in 'wallet_dir' to load at startup.",
+        ['default_wallet']
+    )
 
     # network
     use_upnp = Toggle(

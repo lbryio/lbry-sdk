@@ -1064,50 +1064,65 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.wallet_manager.wallets
 
     @requires("wallet")
-    async def jsonrpc_wallet_balance(self, wallet_id=None):
+    async def jsonrpc_wallet_create(
+            self, wallet_id, skip_on_startup=False, create_account=False, single_key=False):
         """
-        Return the balance of an entire wallet
+        Create a new wallet.
 
         Usage:
-            wallet_balance [<wallet_id> | --wallet_id=<wallet_id>]
-
-        Options:
-            --wallet_id=<wallet_id>  : (str) balance for specific wallet
-
-        Returns:
-            (decimal) amount of lbry credits in wallet
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        balance = 0
-        for account in wallet.accounts:
-            balance += await account.get_balance()
-        return dewies_to_lbc(balance)
-
-    @requires("wallet")
-    async def jsonrpc_wallet_add(self, wallet_id, create_wallet=False, create_account=False):
-        """
-        Add wallet.
-
-        Usage:
-            wallet_add (<wallet_id> | --wallet_id=<wallet_id>) [--create_wallet] [--create_account]
+            wallet_create (<wallet_id> | --wallet_id=<wallet_id>) [--skip_on_startup]
+                          [--create_account] [--single_key_account]
 
         Options:
             --wallet_id=<wallet_id>  : (str) wallet file name
-            --create_wallet          : (bool) create wallet if file doesn't exist
-            --create_account         : (bool) generate default account if wallet is empty
+            --skip_on_startup        : (bool) don't add wallet to daemon_settings.yml
+            --create_account         : (bool) generates the default account
+            --single_key             : (bool) used with --create_account, creates single-key account
 
         Returns: {Wallet}
         """
         wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
-        if not os.path.exists(wallet_path) and not create_wallet:
-            raise Exception(f"Wallet at path '{wallet_path}' does not exist and '--create_wallet' not passed.")
+        for wallet in self.wallet_manager.wallets:
+            if wallet.id == wallet_id:
+                raise Exception(f"Wallet at path '{wallet_path}' already exists and is loaded.")
+        if os.path.exists(wallet_path):
+            raise Exception(f"Wallet at path '{wallet_path}' already exists, use 'wallet_add' to load wallet.")
+
         wallet = self.wallet_manager.import_wallet(wallet_path)
         if not wallet.accounts and create_account:
-            account = wallet.generate_account(self.ledger)
+            account = LBCAccount.generate(
+                self.ledger, wallet, address_generator={
+                    'name': SingleKey.name if single_key else HierarchicalDeterministic.name
+                }
+            )
             if self.ledger.network.is_connected:
                 await self.ledger.subscribe_account(account)
         wallet.save()
+        if not skip_on_startup:
+            with self.conf.update_config() as c:
+                c.wallets += [wallet_id]
         return wallet
+
+    @requires("wallet")
+    async def jsonrpc_wallet_add(self, wallet_id):
+        """
+        Add existing wallet.
+
+        Usage:
+            wallet_add (<wallet_id> | --wallet_id=<wallet_id>)
+
+        Options:
+            --wallet_id=<wallet_id>  : (str) wallet file name
+
+        Returns: {Wallet}
+        """
+        wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
+        for wallet in self.wallet_manager.wallets:
+            if wallet.id == wallet_id:
+                raise Exception(f"Wallet at path '{wallet_path}' is already loaded.")
+        if not os.path.exists(wallet_path):
+            raise Exception(f"Wallet at path '{wallet_path}' was not found.")
+        return self.wallet_manager.import_wallet(wallet_path)
 
     @requires("wallet")
     def jsonrpc_wallet_remove(self, wallet_id):
