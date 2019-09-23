@@ -558,7 +558,7 @@ class BaseDatabase(SQLiteMixin):
             account_match = set(row_accounts) & my_accounts
             if account_match:
                 txo.is_my_account = True
-                txo.is_change = row_accounts[account_match.pop()] == 1
+                txo.is_change = row_accounts[account_match.pop()] == '1'
             else:
                 txo.is_change = txo.is_my_account = False
             txos.append(txo)

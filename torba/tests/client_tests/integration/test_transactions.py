@@ -88,7 +88,7 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.assertBalance(account1, '0.0')
         await self.assertBalance(account2, '0.0')
 
-        addresses = await self.account.receiving.get_addresses()
+        addresses = await account1.receiving.get_addresses()
         txids = await asyncio.gather(*(
             self.blockchain.send_to_address(address, 1.1) for address in addresses[:5]
         ))
