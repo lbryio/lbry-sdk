@@ -1071,7 +1071,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             wallet_create (<wallet_id> | --wallet_id=<wallet_id>) [--skip_on_startup]
-                          [--create_account] [--single_key_account]
+                          [--create_account] [--single_key]
 
         Options:
             --wallet_id=<wallet_id>  : (str) wallet file name
