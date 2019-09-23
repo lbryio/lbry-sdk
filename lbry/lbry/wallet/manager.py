@@ -138,20 +138,23 @@ class LbryWalletManager(BaseWalletManager):
         if not os.path.exists(wallets_directory):
             os.mkdir(wallets_directory)
 
-        wallet_file_path = os.path.join(wallets_directory, 'default_wallet')
-
-        receiving_addresses, change_addresses = cls.migrate_lbryum_to_torba(wallet_file_path)
+        receiving_addresses, change_addresses = cls.migrate_lbryum_to_torba(
+            os.path.join(wallets_directory, 'default_wallet')
+        )
 
         manager = cls.from_config({
             'ledgers': {ledger_id: ledger_config},
-            'wallets': [wallet_file_path]
+            'wallets': [
+                os.path.join(wallets_directory, wallet_file) for wallet_file in settings.wallets
+            ]
         })
         ledger = manager.get_or_create_ledger(ledger_id)
         ledger.coin_selection_strategy = settings.coin_selection_strategy
-        if manager.default_account is None:
-            log.info('Wallet at %s is empty, generating a default account.', wallet_file_path)
-            manager.default_wallet.generate_account(ledger)
-            manager.default_wallet.save()
+        default_wallet = manager.default_wallet
+        if default_wallet.default_account is None:
+            log.info('Wallet at %s is empty, generating a default account.', default_wallet.id)
+            default_wallet.generate_account(ledger)
+            default_wallet.save()
         if receiving_addresses or change_addresses:
             if not os.path.exists(ledger.path):
                 os.mkdir(ledger.path)
