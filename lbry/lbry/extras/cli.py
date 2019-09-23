@@ -189,7 +189,7 @@ def get_argument_parser():
     )
     start.add_argument(
         '--verbose', nargs="*",
-        help=('Enable debug output. Optionally specify loggers for which debug output '
+        help=('Enable debug output for lbry logger and event loop. Optionally specify loggers for which debug output '
               'should selectively be applied.')
     )
     Config.contribute_to_argparse(start)
@@ -242,11 +242,11 @@ def run_daemon(args: list, conf: Config):
 
     loop = asyncio.get_event_loop()
 
-    if args.verbose:
-        log.setLevel(logging.DEBUG)
+    log.setLevel(logging.DEBUG if args.verbose == [] else logging.INFO)
+    for module in args.verbose or []:
+        logging.getLogger(module).setLevel(logging.DEBUG)
+    if isinstance(args.verbose, list):
         loop.set_debug(True)
-    else:
-        log.setLevel(logging.INFO)
 
     if conf.share_usage_data:
         loggly_handler = get_loggly_handler()
