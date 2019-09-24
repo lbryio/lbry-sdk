@@ -2,6 +2,7 @@ import time
 import struct
 import sqlite3
 import logging
+from operator import itemgetter
 from typing import Tuple, List, Dict, Union, Type, Optional
 from binascii import unhexlify
 from decimal import Decimal
@@ -336,7 +337,7 @@ def search(constraints) -> Tuple[List, List, int, int]:
     if 'order_by' not in constraints:
         constraints['order_by'] = ["claim_hash"]
     txo_rows = _search(**constraints)
-    channel_hashes = set(txo['channel_hash'] for txo in txo_rows if txo['channel_hash'])
+    channel_hashes = set(filter(None, map(itemgetter('channel_hash'), txo_rows)))
     extra_txo_rows = []
     if channel_hashes:
         extra_txo_rows = _search(

@@ -125,10 +125,9 @@ def do_migration(conf):
         name_metadata_cursor.execute("select txid, n, sd_hash from name_metadata").fetchall()
     }
 
-    sd_hash_to_stream_hash = {
-        sd_hash: stream_hash for (sd_hash, stream_hash) in
+    sd_hash_to_stream_hash = dict(
         lbryfile_cursor.execute("select sd_blob_hash, stream_hash from lbry_file_descriptors").fetchall()
-    }
+    )
 
     stream_hash_to_stream_blobs = {}
 

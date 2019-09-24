@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 
 log = logging.getLogger(__name__)
@@ -51,7 +52,6 @@ def migrate_db(conf, start, end):
 
 
 def run_migration_script():
-    import sys
     log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
     logging.basicConfig(level=logging.DEBUG, format=log_format, filename="migrator.log")
     sys.stdout = open("migrator.out.log", 'w')

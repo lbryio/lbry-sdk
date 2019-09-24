@@ -475,8 +475,7 @@ class SQLiteStorage(SQLiteMixin):
                         os.path.join(binascii.unhexlify(download_directory).decode(),
                                      binascii.unhexlify(file_name).decode())):
                     continue
-                else:
-                    removed.append((stream_hash,))
+                removed.append((stream_hash,))
             if removed:
                 transaction.executemany(
                     "update file set file_name=null, download_directory=null, saved_file=0 where stream_hash=?",
