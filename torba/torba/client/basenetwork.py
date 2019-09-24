@@ -185,6 +185,9 @@ class BaseNetwork:
     async def start(self):
         self.running = True
         self._switch_task = asyncio.ensure_future(self.switch_forever())
+        # this may become unnecessary when there are no more bugs found,
+        # but for now it helps understanding log reports
+        self._switch_task.add_done_callback(lambda _: log.info("Wallet client switching task stopped."))
         self.session_pool.start(self.config['default_servers'])
         self.on_header.listen(self._update_remote_height)
 
@@ -284,7 +287,7 @@ class SessionPool:
             return None
         return min(
             [((session.response_time + session.connection_latency) * (session.pending_amount + 1), session)
-             for session in self.available_sessions],
+             for session in self.available_sessions] or [(0, None)],
             key=itemgetter(0)
         )[1]
 

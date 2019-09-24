@@ -115,6 +115,13 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
 
+    async def test_online_but_still_unavailable(self):
+        # Edge case. See issue #2445 for context
+        self.assertIsNotNone(self.ledger.network.session_pool.fastest_session)
+        for session in self.ledger.network.session_pool.sessions:
+            session.response_time = None
+        self.assertIsNone(self.ledger.network.session_pool.fastest_session)
+
 
 class ServerPickingTestCase(AsyncioTestCase):
 
