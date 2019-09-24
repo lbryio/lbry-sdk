@@ -102,20 +102,20 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
         if not key:
             sql.append(constraint)
             continue
-        elif key.startswith('$'):
+        if key.startswith('$'):
             values[key] = constraint
             continue
-        elif key.endswith('__not'):
+        if key.endswith('__not'):
             col, op = col[:-len('__not')], '!='
         elif key.endswith('__is_null'):
             col = col[:-len('__is_null')]
             sql.append(f'{col} IS NULL')
             continue
-        elif key.endswith('__is_not_null'):
+        if key.endswith('__is_not_null'):
             col = col[:-len('__is_not_null')]
             sql.append(f'{col} IS NOT NULL')
             continue
-        elif key.endswith('__lt'):
+        if key.endswith('__lt'):
             col, op = col[:-len('__lt')], '<'
         elif key.endswith('__lte'):
             col, op = col[:-len('__lte')], '<='
@@ -149,7 +149,7 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
             sql.append(f'({where})')
             values.update(subvalues)
             continue
-        elif key.endswith('__and'):
+        if key.endswith('__and'):
             where, subvalues = constraints_to_sql(constraint, ' AND ', key+tag+'_')
             sql.append(f'({where})')
             values.update(subvalues)
@@ -554,7 +554,7 @@ class BaseDatabase(SQLiteMixin):
                         row[1], height=row[2], position=row[3], is_verified=row[4]
                     )
                 txo = txs[row[0]].outputs[row[5]]
-            row_accounts = {k: v for k, v in (a.split('|') for a in row[8].split(','))}
+            row_accounts = dict(a.split('|') for a in row[8].split(','))
             account_match = set(row_accounts) & my_accounts
             if account_match:
                 txo.is_my_account = True

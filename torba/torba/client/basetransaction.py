@@ -507,18 +507,17 @@ class BaseTransaction:
 
                 if tx._outputs:
                     break
-                else:
-                    # this condition and the outer range(5) loop cover an edge case
-                    # whereby a single input is just enough to cover the fee and
-                    # has some change left over, but the change left over is less
-                    # than the cost_of_change: thus the input is completely
-                    # consumed and no output is added, which is an invalid tx.
-                    # to be able to spend this input we must increase the cost
-                    # of the TX and run through the balance algorithm a second time
-                    # adding an extra input and change output, making tx valid.
-                    # we do this 5 times in case the other UTXOs added are also
-                    # less than the fee, after 5 attempts we give up and go home
-                    cost += cost_of_change + 1
+                # this condition and the outer range(5) loop cover an edge case
+                # whereby a single input is just enough to cover the fee and
+                # has some change left over, but the change left over is less
+                # than the cost_of_change: thus the input is completely
+                # consumed and no output is added, which is an invalid tx.
+                # to be able to spend this input we must increase the cost
+                # of the TX and run through the balance algorithm a second time
+                # adding an extra input and change output, making tx valid.
+                # we do this 5 times in case the other UTXOs added are also
+                # less than the fee, after 5 attempts we give up and go home
+                cost += cost_of_change + 1
 
             if sign:
                 await tx.sign(funding_accounts)

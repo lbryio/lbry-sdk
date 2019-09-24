@@ -14,11 +14,11 @@ from torba.client.baseheader import BaseHeaders, ArithUint256
 
 
 class MainHeaders(BaseHeaders):
-    header_size = 80
-    chunk_size = 2016
-    max_target = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+    header_size: int = 80
+    chunk_size: int = 2016
+    max_target: int = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     genesis_hash: Optional[bytes] = b'000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
-    target_timespan = 14 * 24 * 60 * 60
+    target_timespan: int = 14 * 24 * 60 * 60
 
     @staticmethod
     def serialize(header: dict) -> bytes:
