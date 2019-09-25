@@ -3,15 +3,21 @@ import tempfile
 import shutil
 import contextlib
 import logging
+import os
+import stat
+import shutil
 from io import StringIO
 from unittest import TestCase
 from types import SimpleNamespace
 from contextlib import asynccontextmanager
+from unittest.mock import Mock
+from tempfile import TemporaryDirectory
 
 import docopt
 from torba.testcase import AsyncioTestCase
 
-from lbry.extras.cli import normalize_value, main, setup_logging
+from lbry.extras.cli import (normalize_value, main, prepare_directory, setup_logging,
+                             change_to_default_if_inaccessible)
 from lbry.extras.system_info import get_platform
 from lbry.extras.daemon.Daemon import Daemon
 from lbry.extras.daemon.loggly_handler import HTTPSLogglyHandler
@@ -192,6 +198,57 @@ class CLITest(AsyncioTestCase):
             "channel_new is deprecated, using channel_create.\n"
             "Could not connect to daemon. Are you sure it's running?"
         )
+
+
+class PrepareDirectoryTests(TestCase):
+
+    def setUp(self):
+        self._dir_names = ('tmp', 'first_dir', 'second_dir')
+        self._root_path = os.path.join(*self._dir_names[:2])
+        self.dir_path = os.path.join(*self._dir_names)
+
+    def tearDown(self):
+        if os.path.exists(self._root_path):
+            shutil.rmtree(self._root_path)
+
+    def test_structure_created_empty(self):
+        self.assertFalse(os.path.exists(self.dir_path))
+        prepare_directory(self.dir_path)
+        self.assertTrue(os.path.isdir(self.dir_path))
+        self.assertEqual(len(os.listdir(self.dir_path)), 0)
+
+    def test_lacking_permissions(self):
+        os.makedirs(self.dir_path, mode=stat.S_IRUSR | stat.S_IEXEC)
+        with self.assertRaises(PermissionError):
+            prepare_directory(self.dir_path)
+
+
+class ChangeToDefaultIfInaccessibleTests(TestCase):
+
+    def setUp(self):
+        self.path_obj = Mock()
+        self.path_obj.metavar = 'DIR'
+
+        self.parsed_dir = TemporaryDirectory()
+        self.default_dir = TemporaryDirectory()
+        self.path_obj.default = self.default_dir.name
+
+    def tearDown(self):
+        self.parsed_dir.cleanup()
+        self.default_dir.cleanup()
+
+    def parsed_dir_not_writeable_default_is(self):
+        os.makedirs(self.parsed_dir.name, stat.S_IRUSR | stat.S_IEXEC)
+        self.assertEqual(
+            change_to_default_if_inaccessible(self.parsed_dir.name, path_obj),
+            self.default_dir.name
+        )
+
+    def neither_dir_writeable(self):
+        os.chmod(self.parsed_dir.name, stat.S_IRUSR | stat.S_IEXEC)
+        os.chmod(self.default_dir.name, stat.S_IRUSR | stat.S_IEXEC)
+        with self.assertRaises(PermissionError):
+            change_to_default_if_inaccessible(self.parsed_dir.name, self.path_obj)
 
 
 class DaemonDocsTests(TestCase):

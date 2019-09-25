@@ -312,7 +312,7 @@ def main(argv=None):
     conf.data_dir = change_to_default_if_inaccessible(conf.data_dir, Config.data_dir)
     conf.config = change_to_default_if_inaccessible(conf.config, Config.config)
     conf.download_dir = change_to_default_if_inaccessible(conf.download_dir, Config.download_dir)
-    conf.wallet_dit = change_to_default_if_inaccessible(conf.wallet_dir, Config.wallet_dir)
+    conf.wallet_dir = change_to_default_if_inaccessible(conf.wallet_dir, Config.wallet_dir)
 
     if args.cli_version:
         print(f"lbrynet {lbrynet_version}")
