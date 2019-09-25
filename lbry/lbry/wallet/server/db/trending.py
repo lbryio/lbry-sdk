@@ -1,6 +1,6 @@
 from math import sqrt
 
-TRENDING_WINDOW = 650  # number of blocks, ~24hr period
+TRENDING_WINDOW = 134  # number of blocks in ~6hr period (21600 seconds / 161 seconds per block)
 TRENDING_DATA_POINTS = 7  # WINDOW * DATA_POINTS = ~1 week worth of trending data
 
 CREATE_TREND_TABLE = """
