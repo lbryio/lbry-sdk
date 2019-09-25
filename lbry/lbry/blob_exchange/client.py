@@ -83,8 +83,6 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         if len(data) > (self.blob.get_length() - self._blob_bytes_received):
             data = data[:(self.blob.get_length() - self._blob_bytes_received)]
             log.warning("got more than asked from %s:%d, probable sendfile bug", self.peer_address, self.peer_port)
-        else:
-            data = data
         self._blob_bytes_received += len(data)
         try:
             self.writer.write(data)

@@ -65,10 +65,10 @@ def remove_brackets(key):
 def set_kwargs(parsed_args):
     kwargs = {}
     for key, arg in parsed_args.items():
-        k = None
         if arg is None:
             continue
-        elif key.startswith("--") and remove_brackets(key[2:]) not in kwargs:
+        k = None
+        if key.startswith("--") and remove_brackets(key[2:]) not in kwargs:
             k = remove_brackets(key[2:])
         elif remove_brackets(key) not in kwargs:
             k = remove_brackets(key)

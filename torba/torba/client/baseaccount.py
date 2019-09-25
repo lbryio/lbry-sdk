@@ -85,7 +85,7 @@ class AddressManager:
 class HierarchicalDeterministic(AddressManager):
     """ Implements simple version of Bitcoin Hierarchical Deterministic key management. """
 
-    name = "deterministic-chain"
+    name: str = "deterministic-chain"
 
     __slots__ = 'gap', 'maximum_uses_per_address'
 
@@ -164,7 +164,7 @@ class HierarchicalDeterministic(AddressManager):
 class SingleKey(AddressManager):
     """ Single Key address manager always returns the same address for all operations. """
 
-    name = "single-address"
+    name: str = "single-address"
 
     __slots__ = ()
 
