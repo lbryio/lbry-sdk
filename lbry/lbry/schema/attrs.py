@@ -13,6 +13,7 @@ from torba.client.constants import COIN
 
 from lbry.schema.mime_types import guess_media_type
 from lbry.schema.base import Metadata, BaseMessageList
+from lbry.schema.tags import clean_tags, normalize_tag
 from lbry.schema.types.v2.claim_pb2 import (
     Fee as FeeMessage,
     Location as LocationMessage,
@@ -533,3 +534,22 @@ class LocationList(BaseMessageList[Location]):
 
     def append(self, value):
         self.add().from_value(value)
+
+
+class TagList(BaseMessageList[str]):
+    __slots__ = ()
+    item_class = str
+
+    def __init__(self, message):
+        message[:] = clean_tags(message)
+        self.message = message
+
+    def append(self, tag: str):
+        tag = normalize_tag(tag)
+        if tag not in self.message:
+            self.message.append(tag)
+
+    def extend(self, tags: List[str]):
+        tags = clean_tags(tags)
+        tags = list(set(tags).difference(set(self.message)))
+        self.message.extend(tags)

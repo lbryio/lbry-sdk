@@ -523,6 +523,19 @@ class ChannelCommands(CommandTestCase):
         self.assertEqual(result[0]['amount'], '3.0')
         await self.channel_abandon(self.get_claim_id(channel))
 
+    async def test_tag_normalization(self):
+        tx1 = await self.channel_create('@abc', '1.0', tags=['aBc', ' ABC ', 'xYZ ', 'xyz'])
+        claim_id = self.get_claim_id(tx1)
+        self.assertCountEqual(tx1['outputs'][0]['value']['tags'], ['abc', 'xyz'])
+
+        tx2 = await self.channel_update(claim_id, tags=[' pqr', 'PQr '])
+        self.assertCountEqual(tx2['outputs'][0]['value']['tags'], ['abc', 'xyz', 'pqr'])
+
+        tx3 = await self.channel_update(claim_id, tags=' pqr')
+        self.assertCountEqual(tx3['outputs'][0]['value']['tags'], ['abc', 'xyz', 'pqr'])
+
+        tx4 = await self.channel_update(claim_id, tags=[' pqr', 'PQr '], clear_tags=True)
+        self.assertEqual(tx4['outputs'][0]['value']['tags'], ['pqr'])
 
 class StreamCommands(ClaimTestCase):
 
@@ -1101,13 +1114,14 @@ class StreamCommands(ClaimTestCase):
         )
 
         # publishing again clears channel
-        tx4 = await self.publish('foo', languages='uk-UA')
+        tx4 = await self.publish('foo', languages='uk-UA', tags=['Anime', 'anime '])
         self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
         r = await self.resolve('lbry://foo')
         claim = r['lbry://foo']
         self.assertEqual(claim['txid'], tx4['outputs'][0]['txid'])
         self.assertNotIn('signing_channel', claim)
         self.assertEqual(claim['value']['languages'], ['uk-UA'])
+        self.assertEqual(claim['value']['tags'], ['anime'])
 
 
 class SupportCommands(CommandTestCase):
