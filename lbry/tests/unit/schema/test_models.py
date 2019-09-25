@@ -97,6 +97,27 @@ class TestLanguages(TestCase):
             stream.languages.append('en-Zzz-US')
 
 
+class TestTags(TestCase):
+
+    def test_normalize_tags(self):
+        claim = Claim()
+
+        claim.channel.update(tags=['Anime', 'anime', ' aNiMe', 'maNGA '])
+        self.assertCountEqual(claim.channel.tags, ['anime', 'manga'])
+
+        claim.channel.update(tags=['Juri', 'juRi'])
+        self.assertCountEqual(claim.channel.tags, ['anime', 'manga', 'juri'])
+
+        claim.channel.update(tags='Anime')
+        self.assertCountEqual(claim.channel.tags, ['anime', 'manga', 'juri'])
+
+        claim.channel.update(clear_tags=True)
+        self.assertEqual(len(claim.channel.tags), 0)
+
+        claim.channel.update(tags='Anime')
+        self.assertEqual(claim.channel.tags, ['anime'])
+
+
 class TestLocations(TestCase):
 
     def test_location_successful_parsing(self):

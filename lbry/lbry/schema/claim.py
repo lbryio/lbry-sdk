@@ -13,7 +13,7 @@ from lbry.schema.base import Signable
 from lbry.schema.mime_types import guess_media_type, guess_stream_type
 from lbry.schema.attrs import (
     Source, Playable, Dimmensional, Fee, Image, Video, Audio,
-    LanguageList, LocationList, ClaimList, ClaimReference
+    LanguageList, LocationList, ClaimList, ClaimReference, TagList
 )
 from lbry.schema.types.v2.claim_pb2 import Claim as ClaimMessage
 
@@ -164,8 +164,8 @@ class BaseClaim:
         return Source(self.claim.message.thumbnail)
 
     @property
-    def tags(self) -> List:
-        return self.claim.message.tags
+    def tags(self) -> List[str]:
+        return TagList(self.claim.message.tags)
 
     @property
     def languages(self) -> LanguageList:

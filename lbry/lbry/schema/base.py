@@ -119,3 +119,6 @@ class BaseMessageList(Metadata, Generic[I]):
 
     def __delitem__(self, key):
         del self._message[key]
+
+    def __eq__(self, values: List[str]) -> bool:
+        return self._message == values
