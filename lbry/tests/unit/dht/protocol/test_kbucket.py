@@ -2,7 +2,7 @@ import struct
 import asyncio
 from lbry.utils import generate_id
 from lbry.dht.protocol.routing_table import KBucket
-from lbry.dht.peer import PeerManager, KademliaPeer
+from lbry.dht.peer import PeerManager, KademliaPeer, get_kademlia_peer
 from lbry.dht import constants
 from torba.testcase import AsyncioTestCase
 
@@ -29,8 +29,8 @@ class TestKBucket(AsyncioTestCase):
         self.kbucket = KBucket(self.peer_manager, 0, 2**constants.hash_bits, generate_id())
 
     def test_add_peer(self):
-        peer = KademliaPeer(None, '1.2.3.4', constants.generate_id(2), udp_port=4444)
-        peer_update2 = KademliaPeer(None, '1.2.3.4', constants.generate_id(2), udp_port=4445)
+        peer = get_kademlia_peer(constants.generate_id(2), "1.2.3.4", udp_port=4444)
+        peer_update2 = get_kademlia_peer(constants.generate_id(2), "1.2.3.4", udp_port=4445)
 
         self.assertListEqual([], self.kbucket.peers)
 

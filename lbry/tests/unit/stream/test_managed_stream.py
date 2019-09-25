@@ -7,8 +7,7 @@ from lbry.blob.blob_file import MAX_BLOB_SIZE
 from lbry.blob_exchange.serialization import BlobResponse
 from lbry.blob_exchange.server import BlobServerProtocol
 from lbry.dht.node import Node
-from lbry.dht.peer import KademliaPeer
-from lbry.extras.daemon.storage import StoredStreamClaim
+from lbry.dht.peer import get_kademlia_peer
 from lbry.stream.managed_stream import ManagedStream
 from lbry.stream.descriptor import StreamDescriptor
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
@@ -95,7 +94,7 @@ class TestManagedStream(BlobExchangeTestBase):
         mock_node = mock.Mock(spec=Node)
         q = asyncio.Queue()
 
-        bad_peer = KademliaPeer(self.loop, "127.0.0.1", b'2' * 48, tcp_port=3334)
+        bad_peer = get_kademlia_peer(b'2' * 48, "127.0.0.1", tcp_port=3334)
 
         def _mock_accumulate_peers(q1, q2):
             async def _task():

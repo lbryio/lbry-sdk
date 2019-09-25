@@ -3,12 +3,23 @@ import asyncio
 import logging
 import ipaddress
 from binascii import hexlify
-from functools import lru_cache
 
+import pylru
 from lbry.dht import constants
 from lbry.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
 
 log = logging.getLogger(__name__)
+peer_cache = pylru.lrucache(size=512)
+
+
+def get_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional[str],
+                      udp_port: typing.Optional[int],
+                      tcp_port: typing.Optional[int] = None) -> 'KademliaPeer':
+    node = peer_cache.get(address, None) if address else None
+    if not node:
+        node = KademliaPeer(address, node_id, udp_port, tcp_port=tcp_port)
+        peer_cache.setdefault(address, node)
+    return node
 
 
 def is_valid_ipv4(address):
@@ -81,10 +92,6 @@ class PeerManager:
         self._node_id_mapping[(address, udp_port)] = node_id
         self._node_id_reverse_mapping[node_id] = (address, udp_port)
 
-    @lru_cache(maxsize=400)
-    def get_kademlia_peer(self, node_id: bytes, address: str, udp_port: int) -> 'KademliaPeer':
-        return KademliaPeer(self._loop, address, node_id, udp_port)
-
     def prune(self):  # TODO: periodically call this
         now = self._loop.time()
         to_pop = []
@@ -135,7 +142,7 @@ class PeerManager:
 
     def decode_tcp_peer_from_compact_address(self, compact_address: bytes) -> 'KademliaPeer':
         node_id, address, tcp_port = decode_compact_address(compact_address)
-        return KademliaPeer(self._loop, address, node_id, tcp_port=tcp_port)
+        return get_kademlia_peer(node_id, address, udp_port=None, tcp_port=tcp_port)
 
 
 class KademliaPeer:
@@ -148,7 +155,7 @@ class KademliaPeer:
         'protocol_version',
     ]
 
-    def __init__(self, loop: asyncio.AbstractEventLoop, address: str, node_id: typing.Optional[bytes] = None,
+    def __init__(self, address: str, node_id: typing.Optional[bytes] = None,
                  udp_port: typing.Optional[int] = None, tcp_port: typing.Optional[int] = None):
         if node_id is not None:
             if not len(node_id) == constants.hash_length:
@@ -159,7 +166,6 @@ class KademliaPeer:
             raise ValueError("invalid tcp port")
         if not is_valid_ipv4(address):
             raise ValueError("invalid ip address")
-        self.loop = loop
         self._node_id = node_id
         self.address = address
         self.udp_port = udp_port

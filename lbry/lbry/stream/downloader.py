@@ -2,11 +2,12 @@ import asyncio
 import typing
 import logging
 import binascii
+
+from lbry.dht.peer import get_kademlia_peer
 from lbry.error import DownloadSDTimeout
 from lbry.utils import resolve_host, lru_cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.blob_exchange.downloader import BlobDownloader
-from lbry.dht.peer import KademliaPeer
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.dht.node import Node
@@ -50,7 +51,7 @@ class StreamDownloader:
         def _delayed_add_fixed_peers():
             self.added_fixed_peers = True
             self.peer_queue.put_nowait([
-                KademliaPeer(self.loop, address=address, tcp_port=port + 1)
+                get_kademlia_peer(None, address, None, tcp_port=port + 1)
                 for address, port in addresses
             ])
 
