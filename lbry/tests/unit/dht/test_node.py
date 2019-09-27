@@ -4,7 +4,7 @@ from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbry.dht import constants
 from lbry.dht.node import Node
-from lbry.dht.peer import PeerManager
+from lbry.dht.peer import PeerManager, get_kademlia_peer
 
 
 class TestNodePingQueueDiscover(AsyncioTestCase):
@@ -42,7 +42,7 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
             for i in range(1, len(peer_addresses)):
                 node = nodes[i]
                 assert node.protocol.node_id != node_1.protocol.node_id
-                peer = node_1.protocol.peer_manager.get_kademlia_peer(
+                peer = get_kademlia_peer(
                     node.protocol.node_id, node.protocol.external_ip, udp_port=node.protocol.udp_port
                 )
                 futs.append(node_1.protocol.get_rpc_peer(peer).ping())

@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 from lbry.utils import generate_id
-from lbry.dht.peer import PeerManager
+from lbry.dht.peer import PeerManager, get_kademlia_peer
 from torba.testcase import AsyncioTestCase
 
 
@@ -10,20 +10,20 @@ class PeerTest(AsyncioTestCase):
         self.loop = asyncio.get_event_loop()
         self.peer_manager = PeerManager(self.loop)
         self.node_ids = [generate_id(), generate_id(), generate_id()]
-        self.first_contact = self.peer_manager.get_kademlia_peer(self.node_ids[1], '127.0.0.1', udp_port=1000)
-        self.second_contact = self.peer_manager.get_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
+        self.first_contact = get_kademlia_peer(self.node_ids[1], '127.0.0.1', udp_port=1000)
+        self.second_contact = get_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
 
     def test_make_contact_error_cases(self):
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, self.node_ids[1], '192.168.1.20', 100000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, self.node_ids[1], '192.168.1.20.1', 1000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, self.node_ids[1], 'this is not an ip', 1000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer,  self.node_ids[1], '192.168.1.20', -1000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, b'not valid node id', '192.168.1.20', 1000)
+        self.assertRaises(ValueError, get_kademlia_peer, self.node_ids[1], '192.168.1.20', 100000)
+        self.assertRaises(ValueError, get_kademlia_peer, self.node_ids[1], '192.168.1.20.1', 1000)
+        self.assertRaises(ValueError, get_kademlia_peer, self.node_ids[1], 'this is not an ip', 1000)
+        self.assertRaises(ValueError, get_kademlia_peer,  self.node_ids[1], '192.168.1.20', -1000)
+        self.assertRaises(ValueError, get_kademlia_peer, b'not valid node id', '192.168.1.20', 1000)
 
     def test_boolean(self):
         self.assertNotEqual(self.first_contact, self.second_contact)
         self.assertEqual(
-            self.second_contact, self.peer_manager.get_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
+            self.second_contact, get_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
         )
 
     def test_compact_ip(self):

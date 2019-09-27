@@ -1,7 +1,7 @@
 import asyncio
 from unittest import mock, TestCase
 from lbry.dht.protocol.data_store import DictDataStore
-from lbry.dht.peer import PeerManager
+from lbry.dht.peer import PeerManager, get_kademlia_peer
 
 
 class DataStoreTests(TestCase):
@@ -13,7 +13,7 @@ class DataStoreTests(TestCase):
 
     def _test_add_peer_to_blob(self, blob=b'2' * 48, node_id=b'1' * 48, address='1.2.3.4', tcp_port=3333,
                                udp_port=4444):
-        peer = self.peer_manager.get_kademlia_peer(node_id, address, udp_port)
+        peer = get_kademlia_peer(node_id, address, udp_port)
         peer.update_tcp_port(tcp_port)
         before = self.data_store.get_peers_for_blob(blob)
         self.data_store.add_peer_to_blob(peer, blob)

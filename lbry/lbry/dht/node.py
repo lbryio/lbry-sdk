@@ -4,12 +4,13 @@ import typing
 import binascii
 from lbry.utils import resolve_host
 from lbry.dht import constants
+from lbry.dht.peer import get_kademlia_peer
 from lbry.dht.protocol.distance import Distance
 from lbry.dht.protocol.iterative_find import IterativeNodeFinder, IterativeValueFinder
 from lbry.dht.protocol.protocol import KademliaProtocol
 
 if typing.TYPE_CHECKING:
-    from lbry.dht.peer import PeerManager, get_kademlia_peer
+    from lbry.dht.peer import PeerManager
     from lbry.dht.peer import KademliaPeer
 
 log = logging.getLogger(__name__)

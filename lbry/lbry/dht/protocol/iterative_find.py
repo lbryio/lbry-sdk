@@ -7,6 +7,7 @@ import logging
 from lbry.dht import constants
 from lbry.dht.error import RemoteException, TransportNotConnected
 from lbry.dht.protocol.distance import Distance
+from lbry.dht.peer import get_kademlia_peer
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -150,7 +151,7 @@ class IterativeFinder:
         self._add_active(peer)
         for contact_triple in response.get_close_triples():
             node_id, address, udp_port = contact_triple
-            self._add_active(self.peer_manager.get_kademlia_peer(node_id, address, udp_port))
+            self._add_active(get_kademlia_peer(node_id, address, udp_port))
         self.check_result_ready(response)
 
     async def _send_probe(self, peer: 'KademliaPeer'):
