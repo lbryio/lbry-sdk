@@ -9,7 +9,6 @@ from lbry.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WAL
 from lbry.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT
 from lbry.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbry.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbry.extras.daemon.Components import HEADERS_COMPONENT
 from lbry.extras.daemon.Daemon import Daemon as LBRYDaemon
 from lbry.wallet import LbryWalletManager
 from torba.client.wallet import Wallet
@@ -31,7 +30,7 @@ def get_test_daemon(conf: Config, with_fee=False):
         conf, skip_components=[
             DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, UPNP_COMPONENT,
             PEER_PROTOCOL_SERVER_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-            EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, HEADERS_COMPONENT,
+            EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
             RATE_LIMITER_COMPONENT],
         file_manager=FakeFileManager
     )

@@ -1,10 +1,7 @@
 import asyncio
-import os
 
 import lbry.wallet
 from lbry import __version__ as sdk_version
-from lbry.testcase import CommandTestCase
-from lbry.extras.daemon.Components import HeadersComponent
 from torba.client.basenetwork import ClientSession
 from torba.testcase import IntegrationTestCase
 
@@ -45,22 +42,3 @@ class TestSegwitServer(IntegrationTestCase):
 
     async def test_at_least_it_starts(self):
         await asyncio.wait_for(self.ledger.network.get_headers(0, 1), 1.0)
-
-
-class TestHeadersComponent(CommandTestCase):
-
-    LEDGER = lbry.wallet
-
-    async def asyncSetUp(self):
-        await super().asyncSetUp()
-        self.component_manager = self.daemon.component_manager
-        self.component_manager.conf.blockchain_name = 'lbrycrd_main'
-        self.headers_component = HeadersComponent(self.component_manager)
-
-    async def test_cant_reach_host(self):
-        HeadersComponent.HEADERS_URL = 'notthere/'
-        os.unlink(self.headers_component.headers.path)
-        # test is that this doesn't raise
-        await self.headers_component.start()
-        self.assertTrue(self.component_manager.get_components_status()['blockchain_headers'])
-        self.assertEqual(await self.headers_component.get_status(), {})
