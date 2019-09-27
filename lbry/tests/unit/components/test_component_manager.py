@@ -6,7 +6,6 @@ from lbry.extras.daemon.ComponentManager import ComponentManager
 from lbry.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
 from lbry.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, UPNP_COMPONENT
 from lbry.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbry.extras.daemon.Components import HEADERS_COMPONENT
 from lbry.extras.daemon import Components
 
 
@@ -15,7 +14,6 @@ class TestComponentManager(AsyncioTestCase):
     def setUp(self):
         self.default_components_sort = [
             [
-                Components.HeadersComponent,
                 Components.DatabaseComponent,
                 Components.ExchangeRateManagerComponent,
                 Components.UPnPComponent
@@ -152,7 +150,7 @@ class TestComponentManagerProperStart(AdvanceTimeTestCase):
             skip_components=[
                 DATABASE_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT,
                 PEER_PROTOCOL_SERVER_COMPONENT, UPNP_COMPONENT,
-                HEADERS_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT],
+                EXCHANGE_RATE_MANAGER_COMPONENT],
             wallet=FakeDelayedWallet,
             stream_manager=FakeDelayedStreamManager,
             blob_manager=FakeDelayedBlobManager
