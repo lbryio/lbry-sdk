@@ -173,9 +173,9 @@ class BaseNetwork:
                 continue
             self.client = await self.session_pool.wait_for_fastest_session()
             log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
-            self._on_connected_controller.add(True)
             try:
                 self._update_remote_height((await self.subscribe_headers(),))
+                self._on_connected_controller.add(True)
                 log.info("Subscribed to headers: %s:%d", *self.client.server)
             except (asyncio.TimeoutError, ConnectionError):
                 log.info("Switching to %s:%d timed out, closing and retrying.", *self.client.server)
@@ -240,7 +240,8 @@ class BaseNetwork:
         return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted)
 
     def get_headers(self, height, count=10000):
-        return self.rpc('blockchain.block.headers', [height, count])
+        restricted = height >= self.remote_height - 100
+        return self.rpc('blockchain.block.headers', [height, count], restricted)
 
     #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
     def get_history(self, address):

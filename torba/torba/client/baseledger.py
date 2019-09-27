@@ -285,6 +285,8 @@ class BaseLedger(metaclass=LedgerRegistry):
         first_connection = self.network.on_connected.first
         asyncio.ensure_future(self.network.start())
         await first_connection
+        async with self._header_processing_lock:
+            await self.initial_headers_sync()
         await self.join_network()
         self.network.on_connected.listen(self.join_network)
 
@@ -302,6 +304,18 @@ class BaseLedger(metaclass=LedgerRegistry):
         await self.network.stop()
         await self.db.close()
         await self.headers.close()
+
+    async def initial_headers_sync(self):
+        target = self.network.remote_height
+        current = len(self.headers)
+        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=2000)
+        chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 2000)]
+        for chunk in chunks:
+            headers = await chunk
+            if not headers:
+                continue
+            headers = headers['hex']
+            await self.update_headers(height=len(self.headers), headers=headers, subscription_update=True)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
