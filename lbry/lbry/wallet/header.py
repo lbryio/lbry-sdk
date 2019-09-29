@@ -15,6 +15,7 @@ class Headers(BaseHeaders):
     max_target = 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     genesis_hash = b'9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
     target_timespan = 150
+    checkpoint = (600_000, b'100b33ca3d0b86a48f0d6d6f30458a130ecb89d5affefe4afccb134d5a40f4c2')
 
     @property
     def claim_trie_root(self):

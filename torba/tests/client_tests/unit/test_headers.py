@@ -1,8 +1,9 @@
 import asyncio
 import os
 import tempfile
-from urllib.request import Request, urlopen
+from binascii import hexlify
 
+from torba.client.hash import sha256
 from torba.testcase import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainHeaders
@@ -124,6 +125,21 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
         self.assertEqual(headers.height, 1499)
         await headers.connect(len(headers), self.get_bytes(block_bytes(3001 - 1500), after=block_bytes(1500)))
         self.assertEqual(headers.height, 3000)
+
+    async def test_checkpointed_writer(self):
+        headers = MainHeaders(':memory:')
+        headers.checkpoint = 100, hexlify(sha256(self.get_bytes(block_bytes(100))))
+        genblocks = lambda start, end: self.get_bytes(block_bytes(end - start), block_bytes(start))
+        async with headers.checkpointed_connector() as connector:
+            connector.connect(0, genblocks(0, 10))
+        self.assertEqual(len(headers), 10)
+        async with headers.checkpointed_connector() as connector:
+            connector.connect(10, genblocks(10, 100))
+        self.assertEqual(len(headers), 100)
+        headers = MainHeaders(':memory:')
+        async with headers.checkpointed_connector() as connector:
+            connector.connect(0, genblocks(0, 300))
+        self.assertEqual(len(headers), 300)
 
     async def test_concurrency(self):
         BLOCKS = 30
