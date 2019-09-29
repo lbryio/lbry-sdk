@@ -1,5 +1,8 @@
+import asyncio
+import hashlib
 import os
 import logging
+from contextlib import asynccontextmanager
 from io import BytesIO
 from typing import Optional, Iterator, Tuple
 from binascii import hexlify
@@ -28,6 +31,7 @@ class BaseHeaders:
     target_timespan: int
 
     validate_difficulty: bool = True
+    checkpoint = None
 
     def __init__(self, path) -> None:
         if path == ':memory:':
@@ -98,6 +102,37 @@ class BaseHeaders:
         if header is None:
             return b'0' * 64
         return hexlify(double_sha256(header)[::-1])
+
+    @asynccontextmanager
+    async def checkpointed_connector(self):
+        buf = BytesIO()
+        buf.connect = lambda _, headers: buf.write(headers)
+        try:
+            yield buf
+        finally:
+            await asyncio.sleep(0)
+            final_height = len(self) + buf.tell() // self.header_size
+            verifiable_bytes = (self.checkpoint[0] - len(self)) * self.header_size if self.checkpoint else 0
+            if verifiable_bytes and final_height >= self.checkpoint[0]:
+                buf.seek(0)
+                self.io.seek(0)
+                h = hashlib.sha256()
+                h.update(self.io.read())
+                h.update(buf.read(verifiable_bytes))
+                if h.hexdigest().encode() == self.checkpoint[1]:
+                    buf.seek(0)
+                    self.io.seek(self.bytes_size, os.SEEK_SET)
+                    self.io.write(buf.read(verifiable_bytes))
+                    self.io.flush()
+                    self._size = None
+                    remaining = buf.read()
+                    buf.seek(0)
+                    buf.write(remaining)
+                    buf.truncate()
+                else:
+                    log.warning("Checkpoing mismatch, connecting headers through slow method.")
+            if buf.tell() > 0:
+                await self.connect(len(self), buf.getvalue())
 
     async def connect(self, start: int, headers: bytes) -> int:
         added = 0

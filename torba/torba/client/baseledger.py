@@ -310,12 +310,11 @@ class BaseLedger(metaclass=LedgerRegistry):
         current = len(self.headers)
         get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=2000)
         chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 2000)]
-        for chunk in chunks:
-            headers = await chunk
-            if not headers:
-                continue
-            headers = headers['hex']
-            await self.update_headers(height=len(self.headers), headers=headers, subscription_update=True)
+        async with self.headers.checkpointed_connector() as connector:
+            for chunk in chunks:
+                headers = await chunk
+                connector.connect(len(self.headers), unhexlify(headers['hex']))
+                log.info("Headers sync: %s / %s", connector.tell() // self.headers.header_size, target)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
