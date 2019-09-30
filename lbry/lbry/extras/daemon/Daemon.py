@@ -1138,7 +1138,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Wallet}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return self.wallet_manager.wallets.pop(wallet)
+        self.wallet_manager.wallets.remove(wallet)
+        return wallet
 
     ACCOUNT_DOC = """
     Create, modify and inspect wallet accounts.
