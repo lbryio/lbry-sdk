@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 @lru_cache(1024)
 def get_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional[str],
-                      udp_port: typing.Optional[int],
+                      udp_port: typing.Optional[int] = None,
                       tcp_port: typing.Optional[int] = None) -> 'KademliaPeer':
     return KademliaPeer(address, node_id, udp_port, tcp_port=tcp_port)
 
