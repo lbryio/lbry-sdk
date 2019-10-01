@@ -13,6 +13,16 @@ class PeerTest(AsyncioTestCase):
         self.first_contact = make_kademlia_peer(self.node_ids[1], '127.0.0.1', udp_port=1000)
         self.second_contact = make_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
 
+    def test_peer_is_good_unknown_peer(self):
+        # Scenario: peer replied, but caller doesn't know the node_id.
+        # Outcome: We can't say it's good or bad.
+        # (yes, we COULD tell the node id, but not here. It would be
+        # a side effect and the caller is responsible to discover it)
+        peer = make_kademlia_peer(None, '1.2.3.4', 4444)
+        self.peer_manager.report_last_requested('1.2.3.4', 4444)
+        self.peer_manager.report_last_replied('1.2.3.4', 4444)
+        self.assertIsNone(self.peer_manager.peer_is_good(peer))
+
     def test_make_contact_error_cases(self):
         self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.168.1.20', 100000)
         self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.168.1.20.1', 1000)

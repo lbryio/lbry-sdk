@@ -120,6 +120,8 @@ class PeerManager:
         previous_failure, most_recent_failure = self._rpc_failures.get((address, udp_port), (None, None))
         last_requested = self._last_requested.get((address, udp_port))
         last_replied = self._last_replied.get((address, udp_port))
+        if node_id is None:
+            return None
         if most_recent_failure and last_replied:
             if delay < last_replied > most_recent_failure:
                 return True
