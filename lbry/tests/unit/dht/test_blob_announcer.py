@@ -8,7 +8,7 @@ from tests import dht_mocks
 from lbry.conf import Config
 from lbry.dht import constants
 from lbry.dht.node import Node
-from lbry.dht.peer import PeerManager, get_kademlia_peer
+from lbry.dht.peer import PeerManager, make_kademlia_peer
 from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.extras.daemon.storage import SQLiteStorage
 
@@ -35,7 +35,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
         self.nodes.update({len(self.nodes): n})
         if add_to_routing_table:
             self.node.protocol.add_peer(
-                get_kademlia_peer(
+                make_kademlia_peer(
                     n.protocol.node_id, n.protocol.external_ip, n.protocol.udp_port
                 )
             )
@@ -67,7 +67,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
         await self.add_peer(node_id, address, False)
         last_node = self.nodes[len(self.nodes) - 1]
         peer = last_node.protocol.get_rpc_peer(
-            get_kademlia_peer(
+            make_kademlia_peer(
                 previous_last_node.protocol.node_id, previous_last_node.protocol.external_ip,
                 previous_last_node.protocol.udp_port
             )
@@ -129,12 +129,12 @@ class TestBlobAnnouncer(AsyncioTestCase):
             announced_to = self.nodes[0]
             for i in range(1, peer_count):
                 node = self.nodes[i]
-                kad_peer = get_kademlia_peer(
+                kad_peer = make_kademlia_peer(
                     node.protocol.node_id, node.protocol.external_ip, node.protocol.udp_port
                 )
                 await announced_to.protocol._add_peer(kad_peer)
                 peer = node.protocol.get_rpc_peer(
-                    get_kademlia_peer(
+                    make_kademlia_peer(
                         announced_to.protocol.node_id,
                         announced_to.protocol.external_ip,
                         announced_to.protocol.udp_port

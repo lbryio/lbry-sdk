@@ -13,9 +13,9 @@ log = logging.getLogger(__name__)
 
 
 @lru_cache(1024)
-def get_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional[str],
-                      udp_port: typing.Optional[int] = None,
-                      tcp_port: typing.Optional[int] = None) -> 'KademliaPeer':
+def make_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional[str],
+                       udp_port: typing.Optional[int] = None,
+                       tcp_port: typing.Optional[int] = None) -> 'KademliaPeer':
     return KademliaPeer(address, node_id, udp_port, tcp_port=tcp_port)
 
 
@@ -139,7 +139,7 @@ class PeerManager:
 
     def decode_tcp_peer_from_compact_address(self, compact_address: bytes) -> 'KademliaPeer':
         node_id, address, tcp_port = decode_compact_address(compact_address)
-        return get_kademlia_peer(node_id, address, udp_port=None, tcp_port=tcp_port)
+        return make_kademlia_peer(node_id, address, udp_port=None, tcp_port=tcp_port)
 
 
 @dataclass(unsafe_hash=True)

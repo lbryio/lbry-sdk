@@ -3,7 +3,7 @@ from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbry.dht import constants
 from lbry.dht.node import Node
-from lbry.dht.peer import PeerManager, get_kademlia_peer
+from lbry.dht.peer import PeerManager, make_kademlia_peer
 
 expected_ranges = [
     (
@@ -52,7 +52,7 @@ class TestRouting(AsyncioTestCase):
             for i in range(1, len(peer_addresses)):
                 self.assertEqual(len(node_1.protocol.routing_table.get_peers()), contact_cnt)
                 node = nodes[i]
-                peer = get_kademlia_peer(
+                peer = make_kademlia_peer(
                     node.protocol.node_id, node.protocol.external_ip,
                     udp_port=node.protocol.udp_port
                 )
@@ -80,7 +80,7 @@ class TestRouting(AsyncioTestCase):
             node_1 = nodes[0]
             for i in range(1, len(peer_addresses)):
                 node = nodes[i]
-                peer = get_kademlia_peer(
+                peer = make_kademlia_peer(
                     node.protocol.node_id, node.protocol.external_ip,
                     udp_port=node.protocol.udp_port
                 )

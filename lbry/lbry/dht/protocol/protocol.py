@@ -15,7 +15,7 @@ from lbry.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE, PAGE_KEY
 from lbry.dht.error import RemoteException, TransportNotConnected
 from lbry.dht.protocol.routing_table import TreeRoutingTable
 from lbry.dht.protocol.data_store import DictDataStore
-from lbry.dht.peer import get_kademlia_peer
+from lbry.dht.peer import make_kademlia_peer
 
 if typing.TYPE_CHECKING:
     from lbry.dht.peer import PeerManager, KademliaPeer
@@ -448,7 +448,7 @@ class KademliaProtocol(DatagramProtocol):
         try:
             peer = self.routing_table.get_peer(request_datagram.node_id)
         except IndexError:
-            peer = get_kademlia_peer(request_datagram.node_id, address[0], address[1])
+            peer = make_kademlia_peer(request_datagram.node_id, address[0], address[1])
         try:
             self._handle_rpc(peer, request_datagram)
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it

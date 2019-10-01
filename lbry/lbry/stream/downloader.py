@@ -3,7 +3,7 @@ import typing
 import logging
 import binascii
 
-from lbry.dht.peer import get_kademlia_peer
+from lbry.dht.peer import make_kademlia_peer
 from lbry.error import DownloadSDTimeout
 from lbry.utils import resolve_host, lru_cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
@@ -51,7 +51,7 @@ class StreamDownloader:
         def _delayed_add_fixed_peers():
             self.added_fixed_peers = True
             self.peer_queue.put_nowait([
-                get_kademlia_peer(None, address, None, tcp_port=port + 1)
+                make_kademlia_peer(None, address, None, tcp_port=port + 1)
                 for address, port in addresses
             ])
 

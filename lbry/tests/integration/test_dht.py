@@ -3,7 +3,7 @@ from binascii import hexlify
 
 from lbry.dht import constants
 from lbry.dht.node import Node
-from lbry.dht.peer import PeerManager, get_kademlia_peer
+from lbry.dht.peer import PeerManager, make_kademlia_peer
 from torba.testcase import AsyncioTestCase
 
 
@@ -39,7 +39,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         bad_peers = []
         for candidate in self.nodes[1:10]:
             address, port, node_id = candidate.protocol.external_ip, candidate.protocol.udp_port, candidate.protocol.node_id
-            peer = get_kademlia_peer(node_id, address, udp_port=port)
+            peer = make_kademlia_peer(node_id, address, udp_port=port)
             bad_peers.append(peer)
             node.protocol.add_peer(peer)
             candidate.stop()
@@ -102,7 +102,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         node2.stop()
         # forcefully make it a bad peer but don't remove it from routing table
         address, port, node_id = node2.protocol.external_ip, node2.protocol.udp_port, node2.protocol.node_id
-        peer = get_kademlia_peer(node_id, address, udp_port=port)
+        peer = make_kademlia_peer(node_id, address, udp_port=port)
         self.assertTrue(node1.protocol.peer_manager.peer_is_good(peer))
         node1.protocol.peer_manager.report_failure(node2.protocol.external_ip, node2.protocol.udp_port)
         node1.protocol.peer_manager.report_failure(node2.protocol.external_ip, node2.protocol.udp_port)

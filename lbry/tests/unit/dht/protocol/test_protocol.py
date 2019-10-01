@@ -5,7 +5,7 @@ from tests import dht_mocks
 from lbry.dht.serialization.bencoding import bencode, bdecode
 from lbry.dht import constants
 from lbry.dht.protocol.protocol import KademliaProtocol
-from lbry.dht.peer import PeerManager, get_kademlia_peer
+from lbry.dht.peer import PeerManager, make_kademlia_peer
 
 
 class TestProtocol(AsyncioTestCase):
@@ -22,7 +22,7 @@ class TestProtocol(AsyncioTestCase):
             await loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
             await loop.create_datagram_endpoint(lambda: peer2, ('1.2.3.5', 4444))
 
-            peer = get_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
+            peer = make_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
             result = await peer2.get_rpc_peer(peer).ping()
             self.assertEqual(result, b'pong')
             peer1.stop()
@@ -43,7 +43,7 @@ class TestProtocol(AsyncioTestCase):
             await loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
             await loop.create_datagram_endpoint(lambda: peer2, ('1.2.3.5', 4444))
 
-            peer = get_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
+            peer = make_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
             self.assertEqual(None, peer2.peer_manager.get_node_token(peer.node_id))
             await peer2.get_rpc_peer(peer).find_value(b'1' * 48)
             self.assertNotEqual(None, peer2.peer_manager.get_node_token(peer.node_id))
@@ -65,12 +65,12 @@ class TestProtocol(AsyncioTestCase):
             await loop.create_datagram_endpoint(lambda: peer1, ('1.2.3.4', 4444))
             await loop.create_datagram_endpoint(lambda: peer2, ('1.2.3.5', 4444))
 
-            peer = get_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
-            peer2_from_peer1 = get_kademlia_peer(
+            peer = make_kademlia_peer(node_id1, '1.2.3.4', udp_port=4444)
+            peer2_from_peer1 = make_kademlia_peer(
                 peer2.node_id, peer2.external_ip, udp_port=peer2.udp_port
             )
             peer2_from_peer1.update_tcp_port(3333)
-            peer3 = get_kademlia_peer(
+            peer3 = make_kademlia_peer(
                 constants.generate_id(), '1.2.3.6', udp_port=4444
             )
             store_result = await peer2.store_to_peer(b'2' * 48, peer)
@@ -103,7 +103,7 @@ class TestProtocol(AsyncioTestCase):
         )
         await self.loop.create_datagram_endpoint(lambda: proto, (address, 4444))
         proto.start()
-        return proto, get_kademlia_peer(node_id, address, udp_port=udp_port)
+        return proto, make_kademlia_peer(node_id, address, udp_port=udp_port)
 
     async def test_add_peer_after_handle_request(self):
         with dht_mocks.mock_network_loop(self.loop):
@@ -129,7 +129,7 @@ class TestProtocol(AsyncioTestCase):
             peer1.routing_table.remove_peer(peer_2_from_peer_1)
 
             # peers not known by be good/bad should be enqueued to maybe-ping
-            peer1_from_peer3 = peer3.get_rpc_peer(get_kademlia_peer(node_id1, '1.2.3.4', 4444))
+            peer1_from_peer3 = peer3.get_rpc_peer(make_kademlia_peer(node_id1, '1.2.3.4', 4444))
             self.assertEqual(0, len(peer1.ping_queue._pending_contacts))
             pong = await peer1_from_peer3.ping()
             self.assertEqual(b'pong', pong)
@@ -137,7 +137,7 @@ class TestProtocol(AsyncioTestCase):
             peer1.ping_queue._pending_contacts.clear()
 
             # peers who are already good should be added
-            peer1_from_peer4 = peer4.get_rpc_peer(get_kademlia_peer(node_id1, '1.2.3.4', 4444))
+            peer1_from_peer4 = peer4.get_rpc_peer(make_kademlia_peer(node_id1, '1.2.3.4', 4444))
             peer1.peer_manager.update_contact_triple(node_id4,'1.2.3.7', 4444)
             peer1.peer_manager.report_last_replied('1.2.3.7', 4444)
             self.assertEqual(0, len(peer1.ping_queue._pending_contacts))
@@ -149,7 +149,7 @@ class TestProtocol(AsyncioTestCase):
             peer1.routing_table.buckets[0].peers.clear()
 
             # peers who are known to be bad recently should not be added or maybe-pinged
-            peer1_from_peer4 = peer4.get_rpc_peer(get_kademlia_peer(node_id1, '1.2.3.4', 4444))
+            peer1_from_peer4 = peer4.get_rpc_peer(make_kademlia_peer(node_id1, '1.2.3.4', 4444))
             peer1.peer_manager.update_contact_triple(node_id4,'1.2.3.7', 4444)
             peer1.peer_manager.report_failure('1.2.3.7', 4444)
             peer1.peer_manager.report_failure('1.2.3.7', 4444)

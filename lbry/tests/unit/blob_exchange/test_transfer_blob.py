@@ -12,7 +12,7 @@ from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob_exchange.server import BlobServer, BlobServerProtocol
 from lbry.blob_exchange.client import request_blob
-from lbry.dht.peer import PeerManager, get_kademlia_peer
+from lbry.dht.peer import PeerManager, make_kademlia_peer
 
 
 # import logging
@@ -44,7 +44,7 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobManager(self.loop, self.client_dir, self.client_storage, self.client_config)
         self.client_peer_manager = PeerManager(self.loop)
-        self.server_from_client = get_kademlia_peer(b'1' * 48, "127.0.0.1", tcp_port=33333)
+        self.server_from_client = make_kademlia_peer(b'1' * 48, "127.0.0.1", tcp_port=33333)
 
         await self.client_storage.open()
         await self.server_storage.open()
@@ -103,7 +103,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         second_client_blob_manager = BlobManager(
             self.loop, second_client_dir, second_client_storage, second_client_conf
         )
-        server_from_second_client = get_kademlia_peer(b'1' * 48, "127.0.0.1", tcp_port=33333)
+        server_from_second_client = make_kademlia_peer(b'1' * 48, "127.0.0.1", tcp_port=33333)
 
         await second_client_storage.open()
         await second_client_blob_manager.setup()
@@ -194,7 +194,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         second_client_blob_manager = BlobManager(
             self.loop, second_client_dir, second_client_storage, second_client_conf
         )
-        server_from_second_client = get_kademlia_peer(b'1' * 48, "127.0.0.1", tcp_port=33333)
+        server_from_second_client = make_kademlia_peer(b'1' * 48, "127.0.0.1", tcp_port=33333)
 
         await second_client_storage.open()
         await second_client_blob_manager.setup()

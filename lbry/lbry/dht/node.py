@@ -4,7 +4,7 @@ import typing
 import binascii
 from lbry.utils import resolve_host
 from lbry.dht import constants
-from lbry.dht.peer import get_kademlia_peer
+from lbry.dht.peer import make_kademlia_peer
 from lbry.dht.protocol.distance import Distance
 from lbry.dht.protocol.iterative_find import IterativeNodeFinder, IterativeValueFinder
 from lbry.dht.protocol.protocol import KademliaProtocol
@@ -142,7 +142,7 @@ class Node:
 
         if known_node_addresses:
             peers = [
-                get_kademlia_peer(None, address, port)
+                make_kademlia_peer(None, address, port)
                 for (address, port) in known_node_addresses
             ]
             while True:
