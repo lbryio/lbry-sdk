@@ -323,6 +323,9 @@ class KademliaProtocol(DatagramProtocol):
         return args, {}
 
     async def _add_peer(self, peer: 'KademliaPeer'):
+        if not peer.node_id:
+            log.warning("Tried adding a peer with no node id!")
+            return False
         for p in self.routing_table.get_peers():
             if (p.address, p.udp_port) == (peer.address, peer.udp_port) and p.node_id != peer.node_id:
                 self.routing_table.remove_peer(p)
