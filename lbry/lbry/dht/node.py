@@ -233,7 +233,7 @@ class Node:
                         if not peer.udp_port:
                             udp_port_to_try = peer.tcp_port
                     if not peer.udp_port:
-                        peer.update_udp_port(udp_port_to_try)
+                        peer = make_kademlia_peer(peer.node_id, peer.address, udp_port_to_try, peer.tcp_port)
                     self.loop.create_task(ping(peer))
                 else:
                     log.debug("skip bad peer %s:%i for %s", peer.address, peer.tcp_port, blob_hash)

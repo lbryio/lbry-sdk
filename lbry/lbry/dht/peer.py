@@ -147,8 +147,8 @@ class KademliaPeer:
     address: str = field(hash=True)
     _node_id: typing.Optional[bytes] = field(hash=True)
     udp_port: typing.Optional[int] = field(hash=True)
-    tcp_port: typing.Optional[int] = field(compare=False)
-    protocol_version: typing.Optional[int] = field(default=1, compare=False)
+    tcp_port: typing.Optional[int] = field(compare=False, hash=False)
+    protocol_version: typing.Optional[int] = field(default=1, compare=False, hash=False)
 
     def __post_init__(self):
         if self._node_id is not None:
@@ -163,13 +163,6 @@ class KademliaPeer:
 
     def update_tcp_port(self, tcp_port: int):
         self.tcp_port = tcp_port
-
-    def update_udp_port(self, udp_port: int):
-        self.udp_port = udp_port
-
-    def set_id(self, node_id):
-        if not self._node_id:
-            self._node_id = node_id
 
     @property
     def node_id(self) -> bytes:

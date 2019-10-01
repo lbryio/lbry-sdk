@@ -495,8 +495,7 @@ class KademliaProtocol(DatagramProtocol):
             elif response_datagram.node_id == self.node_id:
                 df.set_exception(RemoteException("incoming message is from our node id"))
                 return
-            peer.set_id(response_datagram.node_id)
-            peer.update_udp_port(address[1])
+            peer = make_kademlia_peer(response_datagram.node_id, address[0], address[1])
             self.peer_manager.report_last_replied(address[0], address[1])
             self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():
