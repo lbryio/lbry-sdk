@@ -7,6 +7,7 @@ import asyncio
 import argparse
 import logging
 import logging.handlers
+import typing
 from docopt import docopt
 
 import aiohttp
@@ -19,6 +20,23 @@ from lbry.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger('lbry')
 log.addHandler(logging.NullHandler())
+
+
+async def _task_decorator(coro: typing.Coroutine):
+    try:
+        return await coro
+    except asyncio.CancelledError:
+        raise
+    except BaseException as e:
+        log.exception('unhandled error in task')
+        raise e
+
+
+def task_factory(loop: asyncio.AbstractEventLoop, coro: typing.Coroutine):
+    task = asyncio.tasks.Task(_task_decorator(coro), loop=loop)
+    if task._source_traceback:
+        del task._source_traceback[-1]
+    return task
 
 
 def display(data):
@@ -241,6 +259,7 @@ def run_daemon(args: list, conf: Config):
     logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 
     loop = asyncio.get_event_loop()
+    loop.set_task_factory(task_factory)
 
     if args.verbose:
         log.setLevel(logging.DEBUG)
