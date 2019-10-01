@@ -672,14 +672,14 @@ class StreamCommands(ClaimTestCase):
         tx = await self.out(self.stream_create(title='created'))
         txo = tx['outputs'][0]
         claim_id, expected = txo['claim_id'], txo['value']
-        files = self.sout(self.daemon.jsonrpc_file_list())
+        files = self.sout(self.daemon.jsonrpc_file_list()).get('items')
         self.assertEqual(1, len(files))
         self.assertEqual(tx['txid'], files[0]['txid'])
         self.assertEqual(expected, files[0]['metadata'])
 
         # update with metadata-only changes
         tx = await self.out(self.stream_update(claim_id, title='update 1'))
-        files = self.sout(self.daemon.jsonrpc_file_list())
+        files = self.sout(self.daemon.jsonrpc_file_list()).get('items')
         expected['title'] = 'update 1'
         self.assertEqual(1, len(files))
         self.assertEqual(tx['txid'], files[0]['txid'])
@@ -688,7 +688,7 @@ class StreamCommands(ClaimTestCase):
         # update with new data
         tx = await self.out(self.stream_update(claim_id, title='update 2', data=b'updated data'))
         expected = tx['outputs'][0]['value']
-        files = self.sout(self.daemon.jsonrpc_file_list())
+        files = self.sout(self.daemon.jsonrpc_file_list()).get('items')
         self.assertEqual(1, len(files))
         self.assertEqual(tx['txid'], files[0]['txid'])
         self.assertEqual(expected, files[0]['metadata'])
@@ -1055,10 +1055,10 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.020107')
         await self.assertBalance(self.account, '7.479893')
-        self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
+        self.assertEqual(1, self.daemon.jsonrpc_file_list().get('total_items'))
 
         await self.daemon.jsonrpc_file_delete(delete_all=True)
-        self.assertEqual(0, len(self.daemon.jsonrpc_file_list()))
+        self.assertEqual(0, self.daemon.jsonrpc_file_list().get('total_items'))
 
         await self.stream_update(claim_id, bid='1.0')  # updates previous claim
         txs = (await self.out(self.daemon.jsonrpc_transaction_list()))['items']
@@ -1100,12 +1100,12 @@ class StreamCommands(ClaimTestCase):
             file.flush()
             tx1 = await self.publish('foo', bid='1.0', file_path=file.name)
 
-        self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
+        self.assertEqual(1, self.daemon.jsonrpc_file_list().get('total_items'))
 
         # doesn't error on missing arguments when doing an update stream
         tx2 = await self.publish('foo', tags='updated')
 
-        self.assertEqual(1, len(self.daemon.jsonrpc_file_list()))
+        self.assertEqual(1, self.daemon.jsonrpc_file_list().get('total_items'))
         self.assertEqual(self.get_claim_id(tx1), self.get_claim_id(tx2))
 
         # update conflict with two claims of the same name
@@ -1113,14 +1113,14 @@ class StreamCommands(ClaimTestCase):
         with self.assertRaisesRegex(Exception, "There are 2 claims for 'foo'"):
             await self.daemon.jsonrpc_publish('foo')
 
-        self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
+        self.assertEqual(2, self.daemon.jsonrpc_file_list().get('total_items'))
         # abandon duplicate stream
         await self.stream_abandon(self.get_claim_id(tx3))
 
         # publish to a channel
         await self.channel_create('@abc')
         tx3 = await self.publish('foo', channel_name='@abc')
-        self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
+        self.assertEqual(2, self.daemon.jsonrpc_file_list().get('total_items'))
         r = await self.resolve('lbry://@abc/foo')
         self.assertEqual(
             r['lbry://@abc/foo']['claim_id'],
@@ -1129,7 +1129,7 @@ class StreamCommands(ClaimTestCase):
 
         # publishing again clears channel
         tx4 = await self.publish('foo', languages='uk-UA', tags=['Anime', 'anime '])
-        self.assertEqual(2, len(self.daemon.jsonrpc_file_list()))
+        self.assertEqual(2, self.daemon.jsonrpc_file_list().get('total_items'))
         r = await self.resolve('lbry://foo')
         claim = r['lbry://foo']
         self.assertEqual(claim['txid'], tx4['outputs'][0]['txid'])

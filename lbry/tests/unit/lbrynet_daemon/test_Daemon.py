@@ -135,32 +135,32 @@ class TestFileListSorting(unittest.TestCase):
 
     def test_sort_by_points_paid_no_direction_specified(self):
         sort_options = ['points_paid']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(self.test_points_paid, [f['points_paid'] for f in file_list])
 
     def test_sort_by_points_paid_ascending(self):
         sort_options = ['points_paid,asc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(self.test_points_paid, [f['points_paid'] for f in file_list])
 
     def test_sort_by_points_paid_descending(self):
         sort_options = ['points_paid, desc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(list(reversed(self.test_points_paid)), [f['points_paid'] for f in file_list])
 
     def test_sort_by_file_name_no_direction_specified(self):
         sort_options = ['file_name']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(self.test_file_names, [f['file_name'] for f in file_list])
 
     def test_sort_by_file_name_ascending(self):
         sort_options = ['file_name,\nasc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(self.test_file_names, [f['file_name'] for f in file_list])
 
     def test_sort_by_file_name_descending(self):
         sort_options = ['\tfile_name,\n\tdesc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(list(reversed(self.test_file_names)), [f['file_name'] for f in file_list])
 
     def test_sort_by_multiple_criteria(self):
@@ -179,48 +179,48 @@ class TestFileListSorting(unittest.TestCase):
         format_result = lambda f: f"file_name={f['file_name']}, points_paid={f['points_paid']}"
 
         sort_options = ['file_name,asc', 'points_paid,desc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when sorted only by file_name.
         sort_options = ['file_name,asc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when sorted only by points_paid.
         sort_options = ['points_paid,desc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when not sorted at all.
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list())
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list().get('items'))
         self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
     def test_sort_by_nested_field(self):
         extract_authors = lambda file_list: [f['metadata']['author'] for f in file_list]
 
         sort_options = ['metadata.author']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(self.test_authors, extract_authors(file_list))
 
         # Check that the list matches the expected in reverse when sorting in descending order.
         sort_options = ['metadata.author,desc']
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         self.assertEqual(list(reversed(self.test_authors)), extract_authors(file_list))
 
         # Check that the list is not sorted as expected when not sorted at all.
-        file_list = yield f2d(self.test_daemon.jsonrpc_file_list())
+        file_list = yield f2d(self.test_daemon.jsonrpc_file_list().get('items'))
         self.assertNotEqual(self.test_authors, extract_authors(file_list))
 
     def test_invalid_sort_produces_meaningful_errors(self):
         sort_options = ['meta.author']
         expected_message = "Failed to get 'meta.author', key 'meta' was not found."
         with self.assertRaisesRegex(Exception, expected_message):
-            yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+            yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
         sort_options = ['metadata.foo.bar']
         expected_message = "Failed to get 'metadata.foo.bar', key 'foo' was not found."
         with self.assertRaisesRegex(Exception, expected_message):
-            yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))
+            yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options).get('items'))
 
     @staticmethod
     def _get_fake_lbry_files():
