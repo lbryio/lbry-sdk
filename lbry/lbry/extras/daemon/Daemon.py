@@ -1805,20 +1805,17 @@ class Daemon(metaclass=JSONRPCServerType):
             sort, reverse, comparison, **kwargs
         )
 
-        if page is not None or page_size is not None:
-            page = page or 1
-            page_size = page_size or 10
-            total_items = len(file_list)
-            offset = page_size * (page-1)
-            return {
-                'total_items': total_items,
-                'total_pages': int((total_items + (page_size-1)) / page_size),
-                'page': page,
-                'page_size': page_size,
-                'items': file_list[offset:offset+page_size]
-            }
-
-        return file_list
+        page = page or 1
+        page_size = page_size or 10
+        total_items = len(file_list)
+        offset = page_size * (page-1)
+        return {
+            'total_items': total_items,
+            'total_pages': int((total_items + (page_size-1)) / page_size),
+            'page': page,
+            'page_size': page_size,
+            'items': file_list[offset:offset+page_size]
+        }
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
