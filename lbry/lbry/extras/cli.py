@@ -242,11 +242,14 @@ def run_daemon(args: list, conf: Config):
 
     loop = asyncio.get_event_loop()
 
-    log.setLevel(logging.DEBUG if args.verbose == [] else logging.INFO)
-    for module in args.verbose or []:
-        logging.getLogger(module).setLevel(logging.DEBUG)
-    if isinstance(args.verbose, list):
+    log.setLevel(logging.INFO)
+    if args.verbose is not None:
         loop.set_debug(True)
+        if len(args.verbose) > 0:
+            for module in args.verbose:
+                logging.getLogger(module).setLevel(logging.DEBUG)
+        else:
+            log.setLevel(logging.DEBUG)
 
     if conf.share_usage_data:
         loggly_handler = get_loggly_handler()
