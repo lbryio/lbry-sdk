@@ -64,7 +64,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         writer.write(blob_bytes)
         await server_blob.verified.wait()
         self.assertTrue(os.path.isfile(server_blob.file_path))
-        self.assertEqual(server_blob.get_is_verified(), True)
+        self.assertTrue(server_blob.get_is_verified())
         self.assertTrue(writer.closed())
 
     async def _test_transfer_blob(self, blob_hash: str):
@@ -76,7 +76,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         self.assertIsNotNone(transport)
         self.addCleanup(transport.close)
         await client_blob.verified.wait()
-        self.assertEqual(client_blob.get_is_verified(), True)
+        self.assertTrue(client_blob.get_is_verified())
         self.assertTrue(downloaded)
         client_blob.close()
 
@@ -121,7 +121,7 @@ class TestBlobExchange(BlobExchangeTestBase):
             self._test_transfer_blob(blob_hash)
         )
         await second_client_blob.verified.wait()
-        self.assertEqual(second_client_blob.get_is_verified(), True)
+        self.assertTrue(second_client_blob.get_is_verified())
 
     async def test_blob_writers_concurrency(self):
         blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
@@ -212,7 +212,7 @@ class TestBlobExchange(BlobExchangeTestBase):
             self._test_transfer_blob(sd_hash),
             second_client_blob.verified.wait()
         )
-        self.assertEqual(second_client_blob.get_is_verified(), True)
+        self.assertTrue(second_client_blob.get_is_verified())
 
     async def test_server_chunked_request(self):
         blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
@@ -225,7 +225,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         for byte in blob_request:
             server_protocol.data_received(bytes([byte]))
         await asyncio.sleep(0.1)  # yield execution
-        self.assertTrue(len(received_data.getvalue()) > 0)
+        self.assertGreater(len(received_data.getvalue()), 0)
 
     async def test_idle_timeout(self):
         self.server.idle_timeout = 1
@@ -252,7 +252,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         downloaded, protocol2 = await request_blob(self.loop, client_blob, self.server_from_client.address,
                                                    self.server_from_client.tcp_port, 2, 3,
                                                     connected_protocol=protocol)
-        self.assertTrue(protocol is protocol2)
+        self.assertIs(protocol, protocol2)
         self.assertFalse(protocol.transport.is_closing())
         await client_blob.verified.wait()
         self.assertTrue(client_blob.get_is_verified())

@@ -19,5 +19,5 @@ class TestBCDataStream(unittest.TestCase):
         self.assertEqual(s.read_string(), b'b'*254)
         self.assertEqual(s.read_string(), b'c'*(0xFFFF + 1))
         # self.assertEqual(s.read_string(), b'd'*(0xFFFFFFFF + 1))
-        self.assertEqual(s.read_boolean(), True)
-        self.assertEqual(s.read_boolean(), False)
+        self.assertTrue(s.read_boolean())
+        self.assertFalse(s.read_boolean())

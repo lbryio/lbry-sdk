@@ -357,14 +357,14 @@ class TestQueries(AsyncioTestCase):
 
         tx = await self.ledger.db.get_transaction(txid=tx2.id)
         self.assertEqual(tx.id, tx2.id)
-        self.assertEqual(tx.inputs[0].is_my_account, False)
-        self.assertEqual(tx.outputs[0].is_my_account, False)
+        self.assertFalse(tx.inputs[0].is_my_account)
+        self.assertFalse(tx.outputs[0].is_my_account)
         tx = await self.ledger.db.get_transaction(wallet=wallet1, txid=tx2.id)
-        self.assertEqual(tx.inputs[0].is_my_account, True)
-        self.assertEqual(tx.outputs[0].is_my_account, False)
+        self.assertTrue(tx.inputs[0].is_my_account)
+        self.assertFalse(tx.outputs[0].is_my_account)
         tx = await self.ledger.db.get_transaction(wallet=wallet2, txid=tx2.id)
-        self.assertEqual(tx.inputs[0].is_my_account, False)
-        self.assertEqual(tx.outputs[0].is_my_account, True)
+        self.assertFalse(tx.inputs[0].is_my_account)
+        self.assertTrue(tx.outputs[0].is_my_account)
 
         # height 0 sorted to the top with the rest in descending order
         tx4 = await self.create_tx_from_nothing(account1, 0)

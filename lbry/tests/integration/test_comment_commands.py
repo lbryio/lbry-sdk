@@ -323,7 +323,7 @@ class CommentCommands(CommandTestCase):
         self.assertIn('has_hidden_comments', comments)
         self.assertTrue(comments['has_hidden_comments'])
         hidden_cmts1 = list(filter(lambda c: c['is_hidden'], comments['items']))
-        self.assertTrue(len(hidden_cmts1) == 1)
+        self.assertEqual(len(hidden_cmts1), 1)
         hidden_comment = hidden_cmts1[0]
         self.assertEqual(hidden_comment['comment_id'], hidden[0])
 

@@ -74,7 +74,7 @@ class TestSynchronization(LedgerTestCase):
         account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
         address = await account.receiving.get_or_create_usable_address()
         address_details = await self.ledger.db.get_address(address=address)
-        self.assertEqual(address_details['history'], None)
+        self.assertIsNone(address_details['history'])
 
         self.add_header(block_height=0, merkle_root=b'abcd04')
         self.add_header(block_height=1, merkle_root=b'abcd04')

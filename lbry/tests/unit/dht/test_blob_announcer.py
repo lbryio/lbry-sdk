@@ -144,7 +144,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
                 self.assertEqual(response, b'OK')
                 peers_for_blob = await peer.find_value(blob_hash, 0)
                 if i == 1:
-                    self.assertTrue(blob_hash not in peers_for_blob)
+                    self.assertNotIn(blob_hash, peers_for_blob)
                     self.assertEqual(peers_for_blob[b'p'], 0)
                 else:
                     self.assertEqual(len(peers_for_blob[blob_hash]), min(i - 1, constants.k))
@@ -161,7 +161,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
                         self.assertNotIn(b'contacts', page_x)
                         page_x_set = set(page_x[blob_hash])
                         self.assertEqual(len(page_x[blob_hash]), len(page_x_set))
-                        self.assertTrue(len(page_x_set) > 0)
+                        self.assertGreater(len(page_x_set), 0)
                         self.assertSetEqual(seen.intersection(page_x_set), set())
                         seen.intersection_update(page_x_set)
                         total_seen.update(page_x_set)

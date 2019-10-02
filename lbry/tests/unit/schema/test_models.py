@@ -75,7 +75,7 @@ class TestLanguages(TestCase):
         stream.languages.append('es-419')
         self.assertEqual(stream.languages[3].langtag, 'es-419')
         self.assertEqual(stream.languages[3].language, 'es')
-        self.assertEqual(stream.languages[3].script, None)
+        self.assertIsNone(stream.languages[3].script)
         self.assertEqual(stream.languages[3].region, '419')
         self.assertEqual(stream.langtags, ['en', 'en-US', 'en-Latn-US', 'es-419'])
 
@@ -139,17 +139,17 @@ class TestLocations(TestCase):
         # from partial string
         stream = Stream()
         stream.locations.append('::Manchester:03101:')
-        self.assertEqual(stream.locations[0].country, None)
+        self.assertIsNone(stream.locations[0].country)
         self.assertEqual(stream.locations[0].state, '')
         self.assertEqual(stream.locations[0].city, 'Manchester')
         self.assertEqual(stream.locations[0].code, '03101')
-        self.assertEqual(stream.locations[0].latitude, None)
-        self.assertEqual(stream.locations[0].longitude, None)
+        self.assertIsNone(stream.locations[0].latitude)
+        self.assertIsNone(stream.locations[0].longitude)
 
         # from partial string lat/long
         stream = Stream()
         stream.locations.append('::::42.990605:-71.460989')
-        self.assertEqual(stream.locations[0].country, None)
+        self.assertIsNone(stream.locations[0].country)
         self.assertEqual(stream.locations[0].state, '')
         self.assertEqual(stream.locations[0].city, '')
         self.assertEqual(stream.locations[0].code, '')
@@ -159,7 +159,7 @@ class TestLocations(TestCase):
         # from short circuit lat/long
         stream = Stream()
         stream.locations.append('42.990605:-71.460989')
-        self.assertEqual(stream.locations[0].country, None)
+        self.assertIsNone(stream.locations[0].country)
         self.assertEqual(stream.locations[0].state, '')
         self.assertEqual(stream.locations[0].city, '')
         self.assertEqual(stream.locations[0].code, '')
