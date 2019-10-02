@@ -133,7 +133,7 @@ class TestStreamManager(BlobExchangeTestBase):
             sd_blob_duration = event['properties']['sd_blob_duration']
             self.assertFalse(event['properties']['added_fixed_peers'])
             self.assertEqual(event['properties']['wallet_server'], "fakespv.lbry.com:50001")
-            self.assertTrue(total_duration >= resolve_duration + head_blob_duration + sd_blob_duration)
+            self.assertGreaterEqual(total_duration, resolve_duration + head_blob_duration + sd_blob_duration)
 
         await self._test_time_to_first_bytes(check_post)
 
@@ -156,8 +156,8 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertEqual(event['properties']['tried_peers_count'], 1)
             self.assertEqual(event['properties']['active_peer_count'], 1)
             self.assertEqual(event['properties']['connection_failures_count'], 0)
-            self.assertEqual(event['properties']['use_fixed_peers'], True)
-            self.assertEqual(event['properties']['added_fixed_peers'], True)
+            self.assertTrue(event['properties']['use_fixed_peers'])
+            self.assertTrue(event['properties']['added_fixed_peers'])
             self.assertEqual(event['properties']['fixed_peer_delay'], self.client_config.fixed_peer_delay)
             self.assertGreaterEqual(total_duration, resolve_duration + head_blob_duration + sd_blob_duration)
 
@@ -196,14 +196,14 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertEqual(event['event'], 'Time To First Bytes')
             self.assertEqual(event['properties']['tried_peers_count'], 1)
             self.assertEqual(event['properties']['active_peer_count'], 1)
-            self.assertEqual(event['properties']['use_fixed_peers'], True)
-            self.assertEqual(event['properties']['added_fixed_peers'], True)
+            self.assertTrue(event['properties']['use_fixed_peers'])
+            self.assertTrue(event['properties']['added_fixed_peers'])
             self.assertEqual(event['properties']['fixed_peer_delay'], 0.0)
             self.assertGreaterEqual(total_duration, resolve_duration + head_blob_duration + sd_blob_duration)
 
         start = self.loop.time()
         await self._test_time_to_first_bytes(check_post)
-        self.assertTrue(self.loop.time() - start < 3)
+        self.assertLess(self.loop.time() - start, 3)
 
     async def test_no_peers_timeout(self):
         # FIXME: the download should ideally fail right away if there are no peers
@@ -216,9 +216,9 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertEqual(event['properties']['error'], 'DownloadSDTimeout')
             self.assertEqual(event['properties']['tried_peers_count'], 0)
             self.assertEqual(event['properties']['active_peer_count'], 0)
-            self.assertEqual(event['properties']['use_fixed_peers'], False)
-            self.assertEqual(event['properties']['added_fixed_peers'], False)
-            self.assertEqual(event['properties']['fixed_peer_delay'], None)
+            self.assertFalse(event['properties']['use_fixed_peers'])
+            self.assertFalse(event['properties']['added_fixed_peers'])
+            self.assertIsNone(event['properties']['fixed_peer_delay'])
             self.assertEqual(
                 event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout'
             )
@@ -277,7 +277,7 @@ class TestStreamManager(BlobExchangeTestBase):
         stored_status = await self.client_storage.run_and_return_one_or_none(
             "select status from file where stream_hash=?", stream_hash
         )
-        self.assertEqual(stored_status, None)
+        self.assertIsNone(stored_status)
         self.assertListEqual(expected_events, received)
 
     async def _test_download_error_on_start(self, expected_error, timeout=None):

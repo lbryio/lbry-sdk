@@ -173,7 +173,7 @@ class TestManagedStream(BlobExchangeTestBase):
             decrypted = f.read()
         self.assertEqual(decrypted, self.stream_bytes)
 
-        self.assertEqual(True, self.client_blob_manager.get_blob(self.sd_hash).get_is_verified())
+        self.assertTrue(self.client_blob_manager.get_blob(self.sd_hash).get_is_verified())
         self.assertEqual(
             True, self.client_blob_manager.get_blob(self.stream.descriptor.blobs[0].blob_hash).get_is_verified()
         )

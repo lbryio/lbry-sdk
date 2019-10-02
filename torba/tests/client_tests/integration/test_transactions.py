@@ -130,8 +130,8 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(satoshis_to_coins(tx.inputs[1].amount), '1.1')
         self.assertEqual(satoshis_to_coins(tx.outputs[0].amount), '2.0')
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address2)
-        self.assertEqual(tx.outputs[0].is_change, False)
-        self.assertEqual(tx.outputs[1].is_change, True)
+        self.assertFalse(tx.outputs[0].is_change)
+        self.assertTrue(tx.outputs[1].is_change)
 
     async def test_history_edge_cases(self):
         await self.assertBalance(self.account, '0.0')

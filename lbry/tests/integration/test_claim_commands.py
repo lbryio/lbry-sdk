@@ -1177,7 +1177,7 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(len(txs[0]['support_info']), 1)
         self.assertEqual(txs[0]['support_info'][0]['balance_delta'], '1.0')
         self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim_id)
-        self.assertEqual(txs[0]['support_info'][0]['is_tip'], True)
+        self.assertTrue(txs[0]['support_info'][0]['is_tip'])
         self.assertEqual(txs[0]['value'], '1.0')
         self.assertEqual(txs[0]['fee'], '0.0')
 
@@ -1188,7 +1188,7 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(len(txs2[0]['support_info']), 1)
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)
-        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], True)
+        self.assertTrue(txs2[0]['support_info'][0]['is_tip'])
         self.assertEqual(txs2[0]['value'], '-1.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
 
@@ -1208,6 +1208,6 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(len(txs2[0]['support_info']), 1)
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)
-        self.assertEqual(txs2[0]['support_info'][0]['is_tip'], False)
+        self.assertFalse(txs2[0]['support_info'][0]['is_tip'])
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')

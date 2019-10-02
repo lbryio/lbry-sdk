@@ -58,7 +58,7 @@ class TestRouting(AsyncioTestCase):
                     udp_port=node.protocol.udp_port
                 )
                 added = await node_1.protocol._add_peer(peer)
-                self.assertEqual(True, added)
+                self.assertTrue(added)
                 contact_cnt += 1
 
             self.assertEqual(len(node_1.protocol.routing_table.get_peers()), 8)

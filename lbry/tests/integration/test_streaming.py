@@ -31,7 +31,7 @@ class RangeRequests(CommandTestCase):
         self.data = data
         await self.stream_create('foo', '0.01', data=self.data, file_size=file_size)
         if save_blobs:
-            self.assertTrue(len(os.listdir(self.daemon.blob_manager.blob_dir)) > 1)
+            self.assertGreater(len(os.listdir(self.daemon.blob_manager.blob_dir)), 1)
         await self.daemon.jsonrpc_file_list()['items'][0].fully_reflected.wait()
         await self.daemon.jsonrpc_file_delete(delete_from_download_dir=True, claim_name='foo')
         self.assertEqual(0, len(os.listdir(self.daemon.blob_manager.blob_dir)))
