@@ -1518,7 +1518,12 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = wallet.get_account_or_default(account_id)
+        if account_id:
+            account = wallet.get_account_or_error(account_id)
+            accounts = [account]
+        else:
+            account = wallet.default_account
+            accounts = wallet.accounts
 
         amount = self.get_dewies_or_error("amount", amount)
         if not amount:
@@ -1539,14 +1544,14 @@ class Daemon(metaclass=JSONRPCServerType):
             )
 
         tx = await Transaction.create(
-            [], outputs, [account], account
+            [], outputs, accounts, account
         )
 
         if not preview:
             await self.ledger.broadcast(tx)
             await self.analytics_manager.send_credits_sent()
         else:
-            await account.ledger.release_tx(tx)
+            await self.ledger.release_tx(tx)
 
         return tx
 
