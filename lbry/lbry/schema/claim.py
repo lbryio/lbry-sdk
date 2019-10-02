@@ -167,6 +167,10 @@ class BaseClaim:
     def tags(self) -> List[str]:
         return TagList(self.claim.message.tags)
 
+    @tags.setter
+    def tags(self, tags: List[str]):
+        self.claim.message.tags = TagList.create_normalized(tags)
+
     @property
     def languages(self) -> LanguageList:
         return LanguageList(self.claim.message.languages)
