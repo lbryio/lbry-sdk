@@ -329,6 +329,7 @@ class Examples(CommandTestCase):
             'List local files',
             'file', 'list'
         )
+        file_list_result = file_list_result.get('items')
         file_uri = f"{file_list_result[0]['claim_name']}#{file_list_result[0]['claim_id']}"
         await r(
             'Resolve a claim',
