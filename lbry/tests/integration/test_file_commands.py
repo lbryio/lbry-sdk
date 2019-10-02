@@ -98,7 +98,7 @@ class FileCommands(CommandTestCase):
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
         self.assertEqual('Failed to download data blobs for sd hash %s within timeout' % sd_hash, resp['error'])
-        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'), "data timeout didnt create a file")
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'), "data timeout didn't create a file")
         await self.server.blob_manager.delete_blobs([sd_hash])
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
@@ -118,7 +118,7 @@ class FileCommands(CommandTestCase):
             handle.write(b'some other stuff was there instead')
         self.daemon.stream_manager.stop()
         await self.daemon.stream_manager.start()
-        await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didnt get set completed
+        await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didn't get set completed
         # check that internal state got through up to the file list API
         stream = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash'])
         file_info = self.sout(self.daemon.jsonrpc_file_list()[0])

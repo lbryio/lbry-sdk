@@ -55,7 +55,7 @@ class TestHeadersComponent(CommandTestCase):
     async def test_cant_reach_host(self):
         HeadersComponent.HEADERS_URL = 'notthere/'
         os.unlink(self.headers_component.headers.path)
-        # test is that this doesnt raise
+        # test is that this doesn't raise
         await self.headers_component.start()
         self.assertTrue(self.component_manager.get_components_status()['blockchain_headers'])
         self.assertEqual(await self.headers_component.get_status(), {})

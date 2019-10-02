@@ -413,7 +413,7 @@ class RangeRequestsLRUCache(CommandTestCase):
         self.server.stop_server()
 
         # running with cache size 0 gets through without errors without
-        # this since the server doesnt stop immediately
+        # this since the server doesn't stop immediately
         await asyncio.sleep(1, loop=self.loop)
 
         await self._request_stream()

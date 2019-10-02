@@ -513,7 +513,7 @@ class JSONRPCv2(JSONRPC):
 
 
 class JSONRPCLoose(JSONRPC):
-    """A relaxed versin of JSON RPC."""
+    """A relaxed version of JSON RPC."""
 
     # Don't be so loose we accept any old message ID
     _message_id = JSONRPCv2._message_id

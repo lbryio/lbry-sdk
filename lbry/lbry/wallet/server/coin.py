@@ -79,7 +79,7 @@ class LBC(Coin):
 
     @classmethod
     def address_from_script(cls, script):
-        '''Given a pk_script, return the adddress it pays to, or None.'''
+        '''Given a pk_script, return the address it pays to, or None.'''
         return ScriptPubKey.pay_to(cls.address_handlers, script)
 
     @classmethod

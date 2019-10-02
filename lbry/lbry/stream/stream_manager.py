@@ -442,7 +442,7 @@ class StreamManager:
         except asyncio.TimeoutError:
             error = DownloadDataTimeout(stream.sd_hash)
             raise error
-        except Exception as err:  # forgive data timeout, dont delete stream
+        except Exception as err:  # forgive data timeout, don't delete stream
             error = err
             raise
         finally:

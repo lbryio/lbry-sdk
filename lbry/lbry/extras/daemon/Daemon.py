@@ -1726,7 +1726,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
             --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
             --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
-            --comparison=<comparison>              : (str) logical comparision, (eq | ne | g | ge | l | le)
+            --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le)
 
         Returns: {List[File]}
         """
@@ -1975,7 +1975,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     a release time the publish time is used instead
                                                     (supports equality constraints)
             --amount=<amount>               : (int) limit by claim value (supports equality constraints)
-            --support_amount=<support_amount>: (int) limit by supports and tips recieved (supports
+            --support_amount=<support_amount>: (int) limit by supports and tips received (supports
                                                     equality constraints)
             --effective_amount=<effective_amount>: (int) limit by total value (initial claim value plus
                                                      all tips and supports received), this amount is
@@ -3695,7 +3695,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --is_channel_signature_valid    : (bool) Only include comments with valid signatures.
                                               [Warning: Paginated total size will not change, even
                                                if list reduces]
-            --visible                       : (bool) Select only Visisble Comments
+            --visible                       : (bool) Select only Visible Comments
             --hidden                        : (bool) Select only Hidden Comments
 
         Returns:

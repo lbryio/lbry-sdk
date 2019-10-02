@@ -36,7 +36,7 @@ class Node:
             total_peers: typing.List['KademliaPeer'] = []
             # add all peers in the routing table
             total_peers.extend(self.protocol.routing_table.get_peers())
-            # add all the peers who have announed blobs to us
+            # add all the peers who have announced blobs to us
             total_peers.extend(self.protocol.data_store.get_storing_contacts())
 
             # get ids falling in the midpoint of each bucket that hasn't been recently updated

@@ -117,7 +117,7 @@ class Daemon:
     async def _send(self, payload, processor):
         """Send a payload to be converted to JSON.
 
-        Handles temporary connection issues.  Daemon reponse errors
+        Handles temporary connection issues.  Daemon response errors
         are raise through DaemonError.
         """
         def log_error(error):

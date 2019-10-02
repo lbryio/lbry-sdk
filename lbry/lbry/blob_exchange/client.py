@@ -67,7 +67,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 self.blob.set_length(blob_response.length)
             elif blob_response and not blob_response.error and self.blob.blob_hash != blob_response.blob_hash:
                 # the server started sending a blob we didn't request
-                log.warning("%s started sending blob we didnt request %s instead of %s", self.peer_address,
+                log.warning("%s started sending blob we didn't request %s instead of %s", self.peer_address,
                             blob_response.blob_hash, self.blob.blob_hash)
                 return
         if response.responses:
@@ -139,7 +139,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 log.warning("data rate rejected by %s:%i", self.peer_address, self.peer_port)
                 return self._blob_bytes_received, self.close()
             if not blob_response or blob_response.error:
-                log.warning("blob cant be downloaded from %s:%i", self.peer_address, self.peer_port)
+                log.warning("blob can't be downloaded from %s:%i", self.peer_address, self.peer_port)
                 return self._blob_bytes_received, self.close()
             if not blob_response.error and blob_response.blob_hash != self.blob.blob_hash:
                 log.warning("incoming blob hash mismatch from %s:%i", self.peer_address, self.peer_port)

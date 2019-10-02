@@ -1694,7 +1694,7 @@
                     {
                         "name": "support_amount",
                         "type": "int",
-                        "description": "limit by supports and tips recieved (supports equality constraints)",
+                        "description": "limit by supports and tips received (supports equality constraints)",
                         "is_required": false
                     },
                     {
@@ -1992,7 +1992,7 @@
                     {
                         "name": "visible",
                         "type": "bool",
-                        "description": "Select only Visisble Comments",
+                        "description": "Select only Visible Comments",
                         "is_required": false
                     },
                     {
@@ -2189,7 +2189,7 @@
                     {
                         "name": "comparison",
                         "type": "str",
-                        "description": "logical comparision, (eq | ne | g | ge | l | le)",
+                        "description": "logical comparison, (eq | ne | g | ge | l | le)",
                         "is_required": false
                     }
                 ],

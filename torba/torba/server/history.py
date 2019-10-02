@@ -228,7 +228,7 @@ class History:
 
     def _compact_hashX(self, hashX, hist_map, hist_list,
                        write_items, keys_to_delete):
-        """Compres history for a hashX.  hist_list is an ordered list of
+        """Compress history for a hashX.  hist_list is an ordered list of
         the histories to be compressed."""
         # History entries (tx numbers) are 4 bytes each.  Distribute
         # over rows of up to 50KB in size.  A fixed row size means
