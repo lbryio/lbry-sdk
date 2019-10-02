@@ -385,7 +385,7 @@ class SessionManager:
         return "peer '{}' added".format(real_name)
 
     async def rpc_disconnect(self, session_ids):
-        """Disconnect sesssions.
+        """Disconnect sessions.
 
         session_ids: array of session IDs
         """
@@ -397,7 +397,7 @@ class SessionManager:
         return await self._for_each_session(session_ids, close)
 
     async def rpc_log(self, session_ids):
-        """Toggle logging of sesssions.
+        """Toggle logging of sessions.
 
         session_ids: array of session IDs
         """
@@ -414,7 +414,7 @@ class SessionManager:
         try:
             self.daemon.set_url(daemon_url)
         except Exception as e:
-            raise RPCError(BAD_REQUEST, f'an error occured: {e!r}')
+            raise RPCError(BAD_REQUEST, f'an error occurred: {e!r}')
         return f'now using daemon at {self.daemon.logged_url()}'
 
     async def rpc_stop(self):

@@ -73,7 +73,7 @@ class ClientSession(BaseClientSession):
             return reply
         except (RPCError, ProtocolError) as e:
             if str(e).find('.*no such .*transaction.*'):
-                # shouldnt the server return none instead?
+                # shouldn't the server return none instead?
                 return None
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)
@@ -256,7 +256,7 @@ class BaseNetwork:
         try:
             return await self.rpc('blockchain.address.subscribe', [address], True)
         except asyncio.TimeoutError:
-            # abort and cancel, we cant lose a subscription, it will happen again on reconnect
+            # abort and cancel, we can't lose a subscription, it will happen again on reconnect
             if self.client:
                 self.client.abort()
             raise asyncio.CancelledError()

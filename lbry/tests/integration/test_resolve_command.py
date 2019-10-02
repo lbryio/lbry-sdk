@@ -178,7 +178,7 @@ class ResolveCommand(BaseResolveTestCase):
         channel = (await self.channel_create('@abc', '1.0'))['outputs'][0]
         orphan_claim_id = self.get_claim_id(orphan_claim)
 
-        # Original channel doesnt exists anymore, so the signature is invalid. For invalid signatures, resolution is
+        # Original channel doesn't exists anymore, so the signature is invalid. For invalid signatures, resolution is
         # only possible outside a channel
         response = await self.resolve('lbry://@abc/on-channel-claim')
         self.assertEqual(response, {

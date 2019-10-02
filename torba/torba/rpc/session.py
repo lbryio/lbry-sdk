@@ -93,7 +93,7 @@ class SessionBase(asyncio.Protocol):
         # Set when a connection is made
         self._address = None
         self._proxy_address = None
-        # For logger.debug messsages
+        # For logger.debug messages
         self.verbosity = 0
         # Cleared when the send socket is full
         self._can_send = Event()

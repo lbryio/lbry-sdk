@@ -70,7 +70,7 @@ class DHTIntegrationTest(AsyncioTestCase):
             await asyncio.sleep(.1)
             timeout -= 1
             if not timeout:
-                self.fail("node didnt join back after 2 seconds")
+                self.fail("node didn't join back after 2 seconds")
 
     async def test_announce_no_peers(self):
         await self.setup_network(1)
@@ -100,7 +100,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         await self.setup_network(2, seed_nodes=2)
         node1, node2 = self.nodes
         node2.stop()
-        # forcefully make it a bad peer but dont remove it from routing table
+        # forcefully make it a bad peer but don't remove it from routing table
         address, port, node_id = node2.protocol.external_ip, node2.protocol.udp_port, node2.protocol.node_id
         peer = KademliaPeer(self.loop, address, node_id, port)
         self.assertTrue(node1.protocol.peer_manager.peer_is_good(peer))

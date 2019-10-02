@@ -544,7 +544,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         return None
 
     def broadcast(self, tx):
-        # broadcast cant be a retriable call yet
+        # broadcast can't be a retriable call yet
         return self.network.broadcast(hexlify(tx.raw).decode())
 
     async def wait(self, tx: basetransaction.BaseTransaction, height=-1, timeout=None):

@@ -100,7 +100,7 @@ class ReconnectTests(IntegrationTestCase):
         # * goes to pick some water outside... * time passes by and another donation comes in
         sendtxid = await self.blockchain.send_to_address(address1, 42)
         await self.blockchain.generate(1)
-        # (this is just so the test doesnt hang forever if it doesnt reconnect)
+        # (this is just so the test doesn't hang forever if it doesn't reconnect)
         if not self.ledger.network.is_connected:
             await asyncio.wait_for(self.ledger.network.on_connected.first, timeout=1.0)
         # omg, the burned cable still works! torba is fire proof!

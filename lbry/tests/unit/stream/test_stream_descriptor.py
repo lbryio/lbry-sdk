@@ -126,5 +126,5 @@ class TestRecoverOldStreamDescriptors(AsyncioTestCase):
                 loop, tmp_dir, blob
             )
         self.assertFalse(blob.file_exists)
-        # fixme: this is an emergency PR, plase move this to blob_file tests later
+        # fixme: this is an emergency PR, please move this to blob_file tests later
         self.assertIsNone(blob.length)

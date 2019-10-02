@@ -37,7 +37,7 @@ class FramerBase(object):
     """Abstract base class for a framer.
 
     A framer breaks an incoming byte stream into protocol messages,
-    buffering if necesary.  It also frames outgoing messages into
+    buffering if necessary.  It also frames outgoing messages into
     a byte stream.
     """
 

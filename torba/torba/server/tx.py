@@ -457,7 +457,7 @@ class TxInputTokenPay(TxInput):
                 self.script[1] == self.OP_ANON_MARKER)
 
     def is_generation(self):
-        # Transactions comming in from stealth addresses are seen by
+        # Transactions coming in from stealth addresses are seen by
         # the blockchain as newly minted coins. The reverse, where coins
         # are sent TO a stealth address, are seen by the blockchain as
         # a coin burn.
