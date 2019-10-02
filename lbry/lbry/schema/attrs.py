@@ -540,16 +540,17 @@ class TagList(BaseMessageList[str]):
     __slots__ = ()
     item_class = str
 
-    def __init__(self, message):
+    @classmethod
+    def create_normalized(cls, message):
         message[:] = clean_tags(message)
-        self.message = message
+        return cls(message)
 
     def append(self, tag: str):
         tag = normalize_tag(tag)
-        if tag not in self.message:
-            self.message.append(tag)
+        if tag not in self._message:
+            self._message.append(tag)
 
     def extend(self, tags: List[str]):
         tags = clean_tags(tags)
-        tags = list(set(tags).difference(set(self.message)))
-        self.message.extend(tags)
+        tags = list(set(tags).difference(set(self._message)))
+        self._message.extend(tags)
