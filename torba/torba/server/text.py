@@ -15,12 +15,12 @@ def sessions_lines(data):
     for (id_, flags, peer, client, proto, reqs, txs_sent, subs,
          recv_count, recv_size, send_count, send_size, time) in data:
         yield fmt.format(id_, flags, client, proto,
-                         '{:,d}'.format(reqs),
-                         '{:,d}'.format(txs_sent),
-                         '{:,d}'.format(subs),
-                         '{:,d}'.format(recv_count),
+                         f'{reqs:,d}',
+                         f'{txs_sent:,d}',
+                         f'{subs:,d}',
+                         f'{recv_count:,d}',
                          '{:,d}'.format(recv_size // 1024),
-                         '{:,d}'.format(send_count),
+                         f'{send_count:,d}',
                          '{:,d}'.format(send_size // 1024),
                          util.formatted_time(time, sep=''), peer)
 
@@ -37,14 +37,14 @@ def groups_lines(data):
     for (id_, session_count, bandwidth, reqs, txs_sent, subs,
          recv_count, recv_size, send_count, send_size) in data:
         yield fmt.format(id_,
-                         '{:,d}'.format(session_count),
+                         f'{session_count:,d}',
                          '{:,d}'.format(bandwidth // 1024),
-                         '{:,d}'.format(reqs),
-                         '{:,d}'.format(txs_sent),
-                         '{:,d}'.format(subs),
-                         '{:,d}'.format(recv_count),
+                         f'{reqs:,d}',
+                         f'{txs_sent:,d}',
+                         f'{subs:,d}',
+                         f'{recv_count:,d}',
                          '{:,d}'.format(recv_size // 1024),
-                         '{:,d}'.format(send_count),
+                         f'{send_count:,d}',
                          '{:,d}'.format(send_size // 1024))
 
 

@@ -66,11 +66,11 @@ def normalize_text(seed):
     seed = unicodedata.normalize('NFKD', seed)
     seed = seed.lower()
     # remove accents
-    seed = u''.join([c for c in seed if not unicodedata.combining(c)])
+    seed = ''.join([c for c in seed if not unicodedata.combining(c)])
     # normalize whitespaces
-    seed = u' '.join(seed.split())
+    seed = ' '.join(seed.split())
     # remove whitespaces between CJK
-    seed = u''.join([
+    seed = ''.join([
         seed[i] for i in range(len(seed))
         if not (seed[i] in string.whitespace and is_cjk(seed[i-1]) and is_cjk(seed[i+1]))
     ])
@@ -105,7 +105,7 @@ class Mnemonic:
         self.words = load_words(language_name)
 
     @staticmethod
-    def mnemonic_to_seed(mnemonic, passphrase=u''):
+    def mnemonic_to_seed(mnemonic, passphrase=''):
         pbkdf2_rounds = 2048
         mnemonic = normalize_text(mnemonic)
         passphrase = normalize_text(passphrase)

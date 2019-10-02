@@ -446,7 +446,7 @@ class BaseDatabase(SQLiteMixin):
                 SELECT txi.txid FROM txi JOIN account_address USING (address) {where}
             """
         return await self.db.execute_fetchall(
-            *query("SELECT {} FROM tx".format(cols), **constraints)
+            *query(f"SELECT {cols} FROM tx", **constraints)
         )
 
     async def get_transactions(self, wallet=None, **constraints):
@@ -523,7 +523,7 @@ class BaseDatabase(SQLiteMixin):
         return await self.db.execute_fetchall(*query(sql.format(cols), **constraints))
 
     async def get_txos(self, wallet=None, no_tx=False, **constraints):
-        my_accounts = set(a.public_key.address for a in wallet.accounts) if wallet else set()
+        my_accounts = {a.public_key.address for a in wallet.accounts} if wallet else set()
         if 'order_by' not in constraints:
             constraints['order_by'] = [
                 "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"
@@ -595,7 +595,7 @@ class BaseDatabase(SQLiteMixin):
 
     async def select_addresses(self, cols, **constraints):
         return await self.db.execute_fetchall(*query(
-            "SELECT {} FROM pubkey_address JOIN account_address USING (address)".format(cols),
+            f"SELECT {cols} FROM pubkey_address JOIN account_address USING (address)",
             **constraints
         ))
 

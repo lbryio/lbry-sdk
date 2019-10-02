@@ -94,8 +94,7 @@ def _batched_select(transaction, query, parameters, batch_size=900):
     for start_index in range(0, len(parameters), batch_size):
         current_batch = parameters[start_index:start_index+batch_size]
         bind = "({})".format(','.join(['?'] * len(current_batch)))
-        for result in transaction.execute(query.format(bind), current_batch):
-            yield result
+        yield from transaction.execute(query.format(bind), current_batch)
 
 
 def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Dict]:

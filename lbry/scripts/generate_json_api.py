@@ -408,9 +408,9 @@ def get_examples():
 
 
 SECTIONS = re.compile("(.*?)Usage:(.*?)Options:(.*?)Returns:(.*)", re.DOTALL)
-REQUIRED_OPTIONS = re.compile("\(<(.*?)>.*?\)")
+REQUIRED_OPTIONS = re.compile(r"\(<(.*?)>.*?\)")
 ARGUMENT_NAME = re.compile("--([^=]+)")
-ARGUMENT_TYPE = re.compile("\s*\((.*?)\)(.*)")
+ARGUMENT_TYPE = re.compile(r"\s*\((.*?)\)(.*)")
 
 
 def get_return_def(returns):

@@ -42,7 +42,7 @@ from asyncio import Queue, Event, CancelledError
 from .util import signature_info
 
 
-class SingleRequest(object):
+class SingleRequest:
     __slots__ = ('method', 'args')
 
     def __init__(self, method, args):
@@ -98,7 +98,7 @@ class Batch:
         return f'Batch({len(self.items)} items)'
 
 
-class Response(object):
+class Response:
     __slots__ = ('result', )
 
     def __init__(self, result):
@@ -157,7 +157,7 @@ class ProtocolError(CodeMessageError):
         self.response_msg_id = id
 
 
-class JSONRPC(object):
+class JSONRPC:
     """Abstract base class that interprets and constructs JSON RPC messages."""
 
     # Error codes.  See http://www.jsonrpc.org/specification
@@ -569,7 +569,7 @@ class JSONRPCAutoDetect(JSONRPCv2):
             return JSONRPCLoose
 
         if isinstance(main, list):
-            parts = set(protocol_for_payload(payload) for payload in main)
+            parts = {protocol_for_payload(payload) for payload in main}
             # If all same protocol, return it
             if len(parts) == 1:
                 return parts.pop()
@@ -584,7 +584,7 @@ class JSONRPCAutoDetect(JSONRPCv2):
         return protocol_for_payload(main)
 
 
-class JSONRPCConnection(object):
+class JSONRPCConnection:
     """Maintains state of a JSON RPC connection, in particular
     encapsulating the handling of request IDs.
 

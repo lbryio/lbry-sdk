@@ -319,7 +319,7 @@ class SQLDB:
             for table in ('claim', 'support', 'claimtrie'):
                 self.execute(*self._delete_sql(table, {'claim_hash__in': binary_claim_hashes}))
             self._clear_claim_metadata(binary_claim_hashes)
-            return set(r['channel_hash'] for r in affected_channels)
+            return {r['channel_hash'] for r in affected_channels}
         return set()
 
     def _clear_claim_metadata(self, binary_claim_hashes: List[sqlite3.Binary]):

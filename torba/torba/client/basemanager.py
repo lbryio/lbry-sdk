@@ -54,8 +54,7 @@ class BaseWalletManager:
     @property
     def accounts(self):
         for wallet in self.wallets:
-            for account in wallet.accounts:
-                yield account
+            yield from wallet.accounts
 
     async def start(self):
         self.running = True

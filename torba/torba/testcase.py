@@ -43,7 +43,7 @@ class ColorHandler(logging.StreamHandler):
             color_name = self.level_color.get(record.levelno, "black")
             color_code = self.color_code[color_name]
             stream = self.stream
-            stream.write('\x1b[%sm%s\x1b[0m' % (color_code, msg))
+            stream.write(f'\x1b[{color_code}m{msg}\x1b[0m')
             stream.write(self.terminator)
             self.flush()
         except Exception:

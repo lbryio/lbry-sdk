@@ -137,9 +137,9 @@ class LbryWalletManager(BaseWalletManager):
 
     async def _migrate_addresses(self, receiving_addresses: set, change_addresses: set):
         async with self.default_account.receiving.address_generator_lock:
-            migrated_receiving = set((await self.default_account.receiving._generate_keys(0, len(receiving_addresses))))
+            migrated_receiving = set(await self.default_account.receiving._generate_keys(0, len(receiving_addresses)))
         async with self.default_account.change.address_generator_lock:
-            migrated_change = set((await self.default_account.change._generate_keys(0, len(change_addresses))))
+            migrated_change = set(await self.default_account.change._generate_keys(0, len(change_addresses)))
         receiving_addresses = set(map(self.default_account.ledger.public_key_to_address, receiving_addresses))
         change_addresses = set(map(self.default_account.ledger.public_key_to_address, change_addresses))
         if not any(change_addresses.difference(migrated_change)):

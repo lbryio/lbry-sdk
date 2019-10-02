@@ -58,7 +58,7 @@ class NeedData(Exception):
     pass
 
 
-class SOCKSBase(object):
+class SOCKSBase:
 
     @classmethod
     def name(cls):
@@ -266,7 +266,7 @@ class SOCKS5(SOCKSBase):
         return None
 
 
-class SOCKSProxy(object):
+class SOCKSProxy:
 
     def __init__(self, address, protocol, auth):
         """A SOCKS proxy at an address following a SOCKS protocol.  auth is an
@@ -342,7 +342,7 @@ class SOCKSProxy(object):
                 return sock, address
             exceptions.append(sock)
 
-        strings = set(f'{exc!r}' for exc in exceptions)
+        strings = {f'{exc!r}' for exc in exceptions}
         raise (exceptions[0] if len(strings) == 1 else
                OSError(f'multiple exceptions: {", ".join(strings)}'))
 

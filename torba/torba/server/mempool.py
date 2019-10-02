@@ -206,7 +206,7 @@ class MemPool:
             hex_hashes = await self.api.mempool_hashes()
             if height != await self.api.height():
                 continue
-            hashes = set(hex_str_to_hash(hh) for hh in hex_hashes)
+            hashes = {hex_str_to_hash(hh) for hh in hex_hashes}
             async with self.lock:
                 touched = await self._process_mempool(hashes)
             synchronized_event.set()
@@ -223,7 +223,7 @@ class MemPool:
         # First handle txs that have disappeared
         for tx_hash in set(txs).difference(all_hashes):
             tx = txs.pop(tx_hash)
-            tx_hashXs = set(hashX for hashX, value in tx.in_pairs)
+            tx_hashXs = {hashX for hashX, value in tx.in_pairs}
             tx_hashXs.update(hashX for hashX, value in tx.out_pairs)
             for hashX in tx_hashXs:
                 hashXs[hashX].remove(tx_hash)

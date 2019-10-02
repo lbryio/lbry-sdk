@@ -277,7 +277,7 @@ class WalletStorage:
         if self.path is None:
             return json_data
 
-        temp_path = "%s.tmp.%s" % (self.path, os.getpid())
+        temp_path = "{}.tmp.{}".format(self.path, os.getpid())
         with open(temp_path, "w") as f:
             f.write(json_data)
             f.flush()

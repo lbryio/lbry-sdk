@@ -14,7 +14,7 @@ from torba.client.coinselection import STRATEGIES
 log = logging.getLogger(__name__)
 
 
-NOT_SET = type(str('NOT_SET'), (object,), {})
+NOT_SET = type('NOT_SET', (object,), {})
 T = typing.TypeVar('T')
 
 CURRENCIES = {
@@ -659,9 +659,9 @@ def get_linux_directories() -> typing.Tuple[str, str, str]:
     try:
         with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
             down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-        down_dir = re.sub('\$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir)
+        down_dir = re.sub(r'\$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir)
         download_dir = re.sub('\"', '', down_dir)
-    except EnvironmentError:
+    except OSError:
         download_dir = os.getenv('XDG_DOWNLOAD_DIR')
     if not download_dir:
         download_dir = os.path.expanduser('~/Downloads')

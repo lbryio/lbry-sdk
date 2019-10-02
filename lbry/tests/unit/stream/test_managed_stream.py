@@ -24,7 +24,7 @@ class TestManagedStream(BlobExchangeTestBase):
     async def create_stream(self, blob_count: int = 10, file_name='test_file'):
         self.stream_bytes = b''
         for _ in range(blob_count):
-            self.stream_bytes += os.urandom((MAX_BLOB_SIZE - 1))
+            self.stream_bytes += os.urandom(MAX_BLOB_SIZE - 1)
         # create the stream
         file_path = os.path.join(self.server_dir, file_name)
         with open(file_path, 'wb') as f:

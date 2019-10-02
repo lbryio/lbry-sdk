@@ -263,7 +263,7 @@ class StreamDescriptor:
         return descriptor
 
     def lower_bound_decrypted_length(self) -> int:
-        length = sum((blob.length - 1 for blob in self.blobs[:-2]))
+        length = sum(blob.length - 1 for blob in self.blobs[:-2])
         return length + self.blobs[-2].length - (AES.block_size // 8)
 
     def upper_bound_decrypted_length(self) -> int:

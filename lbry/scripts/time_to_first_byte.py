@@ -24,14 +24,14 @@ async def report_to_slack(output, webhook):
 
 def confidence(times, z, plus_err=True):
     mean = sum(times) / len(times)
-    standard_dev = (sum(((t - sum(times) / len(times)) ** 2.0 for t in times)) / len(times)) ** 0.5
+    standard_dev = (sum((t - sum(times) / len(times)) ** 2.0 for t in times) / len(times)) ** 0.5
     err = (z * standard_dev) / (len(times) ** 0.5)
     return f"{round((mean + err) if plus_err else (mean - err), 3)}"
 
 
 def variance(times):
     mean = sum(times) / len(times)
-    return round(sum(((i - mean) ** 2.0 for i in times)) / (len(times) - 1), 3)
+    return round(sum((i - mean) ** 2.0 for i in times) / (len(times) - 1), 3)
 
 
 async def wait_for_done(conf, claim_name, timeout):
