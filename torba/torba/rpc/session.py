@@ -343,7 +343,7 @@ class BatchError(Exception):
         self.request = request   # BatchRequest object
 
 
-class BatchRequest(object):
+class BatchRequest:
     """Used to build a batch request to send to the server.  Stores
     the
 
@@ -512,7 +512,7 @@ class RPCSession(SessionBase):
         return BatchRequest(self, raise_errors)
 
 
-class Server(object):
+class Server:
     """A simple wrapper around an asyncio.Server object."""
 
     def __init__(self, session_factory, host=None, port=None, *,

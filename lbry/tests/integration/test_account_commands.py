@@ -7,7 +7,7 @@ from lbry.wallet.account import Account
 
 
 def extract(d, keys):
-    return dict((k, d[k]) for k in keys)
+    return {k: d[k] for k in keys}
 
 
 class AccountManagement(CommandTestCase):

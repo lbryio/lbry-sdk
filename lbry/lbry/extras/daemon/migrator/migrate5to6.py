@@ -286,7 +286,7 @@ def do_migration(conf):
                     _add_recovered_blobs(blobs, damaged_sd, sd_length)  # pylint: disable=no-value-for-parameter
                     _import_file(*file_args[damaged_sd])
                     damaged_stream_sds.remove(damaged_sd)
-                except (OSError, ValueError, TypeError, IOError, AssertionError, sqlite3.IntegrityError):
+                except (OSError, ValueError, TypeError, AssertionError, sqlite3.IntegrityError):
                     continue
 
         log.info("migrated %i files", new_db.execute("select count(*) from file").fetchone()[0])

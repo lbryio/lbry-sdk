@@ -177,7 +177,7 @@ class Base58Error(Exception):
 class Base58:
     """ Class providing base 58 functionality. """
 
-    chars = u'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
     assert len(chars) == 58
     char_map = {c: n for n, c in enumerate(chars)}
 
@@ -212,7 +212,7 @@ class Base58:
         # Prepend leading zero bytes if necessary
         count = 0
         for c in txt:
-            if c != u'1':
+            if c != '1':
                 break
             count += 1
         if count:
@@ -225,7 +225,7 @@ class Base58:
         """Converts a big-endian bytearray into a base58 string."""
         value = bytes_to_int(be_bytes)
 
-        txt = u''
+        txt = ''
         while value:
             value, mod = divmod(value, 58)
             txt += cls.chars[mod]
@@ -233,7 +233,7 @@ class Base58:
         for byte in be_bytes:
             if byte != 0:
                 break
-            txt += u'1'
+            txt += '1'
 
         return txt[::-1]
 

@@ -75,10 +75,10 @@ class BlobDownloader:
 
     def clearbanned(self):
         now = self.loop.time()
-        self.ignored = dict((
-            (peer, when) for (peer, when) in self.ignored.items()
+        self.ignored = {
+            peer: when for (peer, when) in self.ignored.items()
             if (now - when) < min(30.0, (self.failures.get(peer, 0) ** self.BAN_FACTOR))
-        ))
+        }
 
     @cache_concurrent
     async def download_blob(self, blob_hash: str, length: typing.Optional[int] = None,

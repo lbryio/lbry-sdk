@@ -463,8 +463,8 @@ class PeerManager:
         onion_peers = []
 
         # Always report ourselves if valid (even if not public)
-        peers = set(myself for myself in self.myselves
-                    if myself.last_good > cutoff)
+        peers = {myself for myself in self.myselves
+                    if myself.last_good > cutoff}
 
         # Bucket the clearnet peers and select up to two from each
         buckets = defaultdict(list)

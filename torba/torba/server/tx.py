@@ -462,7 +462,7 @@ class TxInputTokenPay(TxInput):
         # a coin burn.
         if self._is_anon_input():
             return True
-        return super(TxInputTokenPay, self).is_generation()
+        return super().is_generation()
 
 
 class TxInputTokenPayStealth(

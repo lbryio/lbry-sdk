@@ -7,7 +7,7 @@ from torba.client.mnemonic import Mnemonic
 class TestMnemonic(unittest.TestCase):
 
     def test_mnemonic_to_seed(self):
-        seed = Mnemonic.mnemonic_to_seed(mnemonic=u'foobar', passphrase=u'torba')
+        seed = Mnemonic.mnemonic_to_seed(mnemonic='foobar', passphrase='torba')
         self.assertEqual(
             hexlify(seed),
             b'475a419db4e991cab14f08bde2d357e52b3e7241f72c6d8a2f92782367feeee9f403dc6a37c26a3f02ab9'

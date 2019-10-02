@@ -37,7 +37,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
         if self.incoming.is_set():
             try:
                 self.writer.write(data)
-            except IOError as err:
+            except OSError as err:
                 log.error("error receiving blob: %s", err)
                 self.transport.close()
             return

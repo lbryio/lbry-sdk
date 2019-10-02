@@ -33,7 +33,7 @@ from struct import Struct
 from asyncio import Queue
 
 
-class FramerBase(object):
+class FramerBase:
     """Abstract base class for a framer.
 
     A framer breaks an incoming byte stream into protocol messages,
@@ -104,7 +104,7 @@ class NewlineFramer(FramerBase):
                 return b''.join(parts)
 
 
-class ByteQueue(object):
+class ByteQueue:
     """A producer-comsumer queue.  Incoming network data is put as it
     arrives, and the consumer calls an async method waiting for data of
     a specific length."""
@@ -126,7 +126,7 @@ class ByteQueue(object):
         return whole[:size]
 
 
-class BinaryFramer(object):
+class BinaryFramer:
     """A framer for binary messaging protocols."""
 
     def __init__(self):

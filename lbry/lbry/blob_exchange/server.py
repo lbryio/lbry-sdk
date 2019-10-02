@@ -81,10 +81,10 @@ class BlobServerProtocol(asyncio.Protocol):
             responses.append(BlobPaymentAddressResponse(lbrycrd_address=self.lbrycrd_address))
         availability_request = request.get_availability_request()
         if availability_request:
-            responses.append(BlobAvailabilityResponse(available_blobs=list(set((
+            responses.append(BlobAvailabilityResponse(available_blobs=list(set(
                 filter(lambda blob_hash: blob_hash in self.blob_manager.completed_blob_hashes,
                        availability_request.requested_blobs)
-            )))))
+            ))))
         price_request = request.get_price_request()
         if price_request:
             responses.append(BlobPriceResponse(blob_data_payment_rate='RATE_ACCEPTED'))

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import unittest
 import asyncio
 from lbry import utils
@@ -119,7 +118,7 @@ class CacheConcurrentDecoratorTests(AsyncioTestCase):
         # test that the task is run fresh, it should not error
         self.counter = 0
         t3 = self.loop.create_task(self.foo(1))
-        self.assertTrue((await t3))
+        self.assertTrue(await t3)
         self.assertEqual(1, self.counter)
 
         # the previously failed call should still raise if awaited

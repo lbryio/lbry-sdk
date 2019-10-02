@@ -14,9 +14,9 @@ def get_build_type(travis_tag=None):
     if not travis_tag:
         return "qa"
     log.debug("getting build type for tag: \"%s\"", travis_tag)
-    if re.match('v\d+\.\d+\.\d+rc\d+$', travis_tag):
+    if re.match(r'v\d+\.\d+\.\d+rc\d+$', travis_tag):
         return 'rc'
-    elif re.match('v\d+\.\d+\.\d+$', travis_tag):
+    elif re.match(r'v\d+\.\d+\.\d+$', travis_tag):
         return 'release'
     return 'qa'
 

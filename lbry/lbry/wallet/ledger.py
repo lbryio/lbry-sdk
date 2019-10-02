@@ -99,8 +99,8 @@ class MainNetLedger(BaseLedger):
                              "%d channels, %d certificates and %d claims",
                              account.id, balance, channel_count, len(account.channel_keys), claim_count)
                 else:
-                    total_receiving = len((await account.receiving.get_addresses()))
-                    total_change = len((await account.change.get_addresses()))
+                    total_receiving = len(await account.receiving.get_addresses())
+                    total_change = len(await account.change.get_addresses())
                     log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
                              "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
                              account.id, balance, total_receiving, account.receiving.gap, total_change,

@@ -68,7 +68,7 @@ def signature_info(func):
     return SignatureInfo(min_args, max_args, required_names, other_names)
 
 
-class Concurrency(object):
+class Concurrency:
 
     def __init__(self, max_concurrent):
         self._require_non_negative(max_concurrent)

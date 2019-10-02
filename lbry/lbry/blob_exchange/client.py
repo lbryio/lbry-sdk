@@ -86,7 +86,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self._blob_bytes_received += len(data)
         try:
             self.writer.write(data)
-        except IOError as err:
+        except OSError as err:
             log.error("error downloading blob from %s:%i: %s", self.peer_address, self.peer_port, err)
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
