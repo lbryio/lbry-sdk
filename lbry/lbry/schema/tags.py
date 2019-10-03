@@ -10,4 +10,9 @@ def normalize_tag(tag: str):
 
 
 def clean_tags(tags: List[str]):
-    return [tag for tag in set(normalize_tag(tag) for tag in tags) if tag]
+    clean = []
+    for ind, tag in enumerate(tags):
+        norm_tag = normalize_tag(tag)
+        if norm_tag and norm_tag not in clean[:ind]:
+            clean.append(norm_tag)
+    return clean
