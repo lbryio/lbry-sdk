@@ -19,8 +19,6 @@ class ConnectionManager:
         self.outgoing_connected: typing.Set[str] = set()
         self.outgoing: typing.DefaultDict[str, int] = collections.defaultdict(int)
         self._status = {}
-        self._total_sent = 0
-        self._total_received = 0
         self._running = False
         self._task: typing.Optional[asyncio.Task] = None
 
@@ -58,8 +56,8 @@ class ConnectionManager:
             'outgoing_bps': {},
             'total_incoming_mbs': 0.0,
             'total_outgoing_mbs': 0.0,
-            'total_sent': self._total_sent,
-            'total_received': self._total_received,
+            'total_sent': 0,
+            'total_received': 0,
             'time': self.loop.time()
         }
 
@@ -79,8 +77,8 @@ class ConnectionManager:
                                                    ) / (now - last)) / 1000000.0
             self._status['total_incoming_mbs'] = int(sum(list(self._status['incoming_bps'].values())
                                                        ) / (now - last)) / 1000000.0
-            self._total_sent += sum(list(self._status['outgoing_bps'].values()))
-            self._total_received += sum(list(self._status['incoming_bps'].values()))
+            self._status['total_sent'] += sum(list(self._status['outgoing_bps'].values()))
+            self._status['total_received'] += sum(list(self._status['incoming_bps'].values()))
 
             self._status['time'] = now
 
