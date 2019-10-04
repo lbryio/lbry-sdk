@@ -671,21 +671,3 @@ class KademliaProtocol(DatagramProtocol):
                 log.exception("Unexpected error while storing blob_hash")
         return peer.node_id, False
 
-    def _write(self, data: bytes, address: typing.Tuple[str, int]):
-        if self.transport:
-            try:
-                self.transport.sendto(data, address)
-            except OSError as err:
-                if err.errno == socket.EWOULDBLOCK:
-                    # i'm scared this may swallow important errors, but i get a million of these
-                    # on Linux and it doesn't seem to affect anything  -grin
-                    log.warning("Can't send data to dht: EWOULDBLOCK")
-                # elif err.errno == socket.ENETUNREACH:
-                #     # this should probably try to retransmit when the network connection is back
-                #     log.error("Network is unreachable")
-                else:
-                    log.error("DHT socket error sending %i bytes to %s:%i - %s (code %i)",
-                              len(data), address[0], address[1], str(err), err.errno)
-                    raise err
-        else:
-            raise TransportNotConnected()
