@@ -507,6 +507,22 @@ class ChannelCommands(CommandTestCase):
         # second wallet should be able to update now
         await daemon2.jsonrpc_channel_update(claim_id, bid='0.5')
 
+    async def test_channel_update_across_accounts(self):
+        account2 = await self.daemon.jsonrpc_account_create('second account')
+        channel = await self.out(self.channel_create('@spam', '1.0', account_id=account2.id))
+        # channel not in account1
+        with self.assertRaisesRegex(Exception, "Can't find the channel"):
+            await self.channel_update(self.get_claim_id(channel), bid='2.0', account_id=self.account.id)
+        # channel is in account2
+        await self.channel_update(self.get_claim_id(channel), bid='2.0', account_id=account2.id)
+        result = await self.out(self.daemon.jsonrpc_channel_list())
+        self.assertEqual(result[0]['amount'], '2.0')
+        # check all accounts for channel
+        await self.channel_update(self.get_claim_id(channel), bid='3.0')
+        result = await self.out(self.daemon.jsonrpc_channel_list())
+        self.assertEqual(result[0]['amount'], '3.0')
+        await self.channel_abandon(self.get_claim_id(channel))
+
 
 class StreamCommands(ClaimTestCase):
 
@@ -563,6 +579,22 @@ class StreamCommands(ClaimTestCase):
         await self.assertBalance(self.account, '0.0')
         self.assertEqual(len(tx['outputs']), 1)  # no change
         self.assertEqual(len(await self.daemon.jsonrpc_claim_list()), 2)
+
+    async def test_stream_update_and_abandon_across_accounts(self):
+        account2 = await self.daemon.jsonrpc_account_create('second account')
+        stream = await self.out(self.stream_create('spam', '1.0', account_id=account2.id))
+        # stream not in account1
+        with self.assertRaisesRegex(Exception, "Can't find the stream"):
+            await self.stream_update(self.get_claim_id(stream), bid='2.0', account_id=self.account.id)
+        # stream is in account2
+        await self.stream_update(self.get_claim_id(stream), bid='2.0', account_id=account2.id)
+        result = await self.out(self.daemon.jsonrpc_stream_list())
+        self.assertEqual(result[0]['amount'], '2.0')
+        # check all accounts for stream
+        await self.stream_update(self.get_claim_id(stream), bid='3.0')
+        result = await self.out(self.daemon.jsonrpc_stream_list())
+        self.assertEqual(result[0]['amount'], '3.0')
+        await self.stream_abandon(self.get_claim_id(stream))
 
     async def test_publishing_checks_all_accounts_for_channel(self):
         account1_id, account1 = self.account.id, self.account
