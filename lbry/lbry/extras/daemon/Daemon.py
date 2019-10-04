@@ -591,7 +591,9 @@ class Daemon(metaclass=JSONRPCServerType):
         except Exception as e:  # pylint: disable=broad-except
             log.exception("error handling api request")
             return JSONRPCError(
-                str(e), JSONRPCError.CODE_APPLICATION_ERROR, format_exc()
+                f"Error calling {function_name} with args {args}\n" + str(e),
+                JSONRPCError.CODE_APPLICATION_ERROR,
+                format_exc()
             )
 
     def _verify_method_is_callable(self, function_path):
