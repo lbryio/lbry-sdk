@@ -1,4 +1,7 @@
-class BaseKademliaException(Exception):
+from lbry.error import ErrorCodeException
+
+
+class BaseKademliaException(ErrorCodeException):
     pass
 
 
@@ -9,7 +12,7 @@ class DecodeError(BaseKademliaException):
     """
 
 
-class BucketFull(BaseKademliaException):
+class BucketFullError(BaseKademliaException):
     """
     Raised when the bucket is full
     """
@@ -19,5 +22,5 @@ class RemoteException(BaseKademliaException):
     pass
 
 
-class TransportNotConnected(BaseKademliaException):
+class TransportNotConnectedError(BaseKademliaException):
     pass

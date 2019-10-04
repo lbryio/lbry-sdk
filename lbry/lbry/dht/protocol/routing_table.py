@@ -35,7 +35,7 @@ class KBucket:
         """ Add contact to _contact list in the right order. This will move the
         contact to the end of the k-bucket if it is already present.
 
-        @raise kademlia.kbucket.BucketFull: Raised when the bucket is full and
+        @raise kademlia.kbucket.BucketFullError: Raised when the bucket is full and
                                             the contact isn't in the bucket
                                             already
 
@@ -61,7 +61,7 @@ class KBucket:
             return True
         else:
             return False
-            # raise BucketFull("No space in bucket to insert contact")
+            # raise BucketFullError("No space in bucket to insert contact")
 
     def get_peer(self, node_id: bytes) -> 'KademliaPeer':
         for peer in self.peers:

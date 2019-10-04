@@ -12,7 +12,7 @@ from asyncio.transports import DatagramTransport
 from lbry.dht import constants
 from lbry.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
 from lbry.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE, PAGE_KEY
-from lbry.dht.error import RemoteException, TransportNotConnected
+from lbry.dht.error import RemoteException, TransportNotConnectedError
 from lbry.dht.protocol.routing_table import TreeRoutingTable
 from lbry.dht.protocol.data_store import DictDataStore
 from lbry.dht.peer import make_kademlia_peer
@@ -586,7 +586,7 @@ class KademliaProtocol(DatagramProtocol):
 
     def _send(self, peer: 'KademliaPeer', message: typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram]):
         if not self.transport or self.transport.is_closing():
-            raise TransportNotConnected()
+            raise TransportNotConnectedError()
 
         data = message.bencode()
         if len(data) > constants.msg_size_limit:

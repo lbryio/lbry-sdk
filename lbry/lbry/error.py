@@ -1,52 +1,60 @@
-class RPCError(Exception):
+class ErrorCodeException(Exception):
+    pass
+
+
+class UnknownAPIMethodError(ErrorCodeException):
+    pass
+
+
+class RPCError(ErrorCodeException):
     code = 0
 
 
-class PriceDisagreementError(Exception):
+class PriceDisagreementError(ErrorCodeException):
     pass
 
 
-class DuplicateStreamHashError(Exception):
+class DuplicateStreamHashError(ErrorCodeException):
     pass
 
 
-class DownloadCancelledError(Exception):
+class DownloadCancelledError(ErrorCodeException):
     pass
 
 
-class DownloadSDTimeout(Exception):
+class DownloadSDTimeout(ErrorCodeException):
     def __init__(self, download):
         super().__init__(f'Failed to download sd blob {download} within timeout')
         self.download = download
 
 
-class DownloadTimeoutError(Exception):
+class DownloadTimeoutError(ErrorCodeException):
     def __init__(self, download):
         super().__init__(f'Failed to download {download} within timeout')
         self.download = download
 
 
-class DownloadDataTimeout(Exception):
+class DownloadDataTimeout(ErrorCodeException):
     def __init__(self, download):
         super().__init__(f'Failed to download data blobs for sd hash {download} within timeout')
         self.download = download
 
 
-class ResolveTimeout(Exception):
+class ResolveTimeout(ErrorCodeException):
     def __init__(self, uri):
         super().__init__(f'Failed to resolve "{uri}" within the timeout')
         self.uri = uri
 
 
-class RequestCanceledError(Exception):
+class RequestCanceledError(ErrorCodeException):
     pass
 
 
-class NegativeFundsError(Exception):
+class NegativeFundsError(ErrorCodeException):
     pass
 
 
-class NullFundsError(Exception):
+class NullFundsError(ErrorCodeException):
     pass
 
 
@@ -54,60 +62,60 @@ class InsufficientFundsError(RPCError):
     code = -310
 
 
-class CurrencyConversionError(Exception):
+class CurrencyConversionError(ErrorCodeException):
     pass
 
 
-class FileOpenError(ValueError):
+class FileOpenError(ErrorCodeException):
     # this extends ValueError because it is replacing a ValueError in EncryptedFileDownloader
     # and I don't know where it might get caught upstream
     pass
 
 
-class ResolveError(Exception):
+class ResolveError(ErrorCodeException):
     pass
 
 
-class ConnectionClosedBeforeResponseError(Exception):
+class ConnectionClosedBeforeResponseError(ErrorCodeException):
     pass
 
 
-class KeyFeeAboveMaxAllowed(Exception):
+class KeyFeeAboveMaxAllowed(ErrorCodeException):
     pass
 
 
-class InvalidExchangeRateResponse(Exception):
+class InvalidExchangeRateResponse(ErrorCodeException):
     def __init__(self, source, reason):
         super().__init__(f'Failed to get exchange rate from {source}:{reason}')
         self.source = source
         self.reason = reason
 
 
-class UnknownNameError(Exception):
+class UnknownNameError(ErrorCodeException):
     def __init__(self, name):
         super().__init__(f'Name {name} is unknown')
         self.name = name
 
 
-class UnknownClaimID(Exception):
+class UnknownClaimID(ErrorCodeException):
     def __init__(self, claim_id):
         super().__init__(f'Claim {claim_id} is unknown')
         self.claim_id = claim_id
 
 
-class UnknownURI(Exception):
+class UnknownURI(ErrorCodeException):
     def __init__(self, uri):
         super().__init__(f'URI {uri} cannot be resolved')
         self.name = uri
 
 
-class UnknownOutpoint(Exception):
+class UnknownOutpoint(ErrorCodeException):
     def __init__(self, outpoint):
         super().__init__(f'Outpoint {outpoint} cannot be resolved')
         self.outpoint = outpoint
 
 
-class InvalidName(Exception):
+class InvalidName(ErrorCodeException):
     def __init__(self, name, invalid_characters):
         self.name = name
         self.invalid_characters = invalid_characters
@@ -115,7 +123,7 @@ class InvalidName(Exception):
             'URI contains invalid characters: {}'.format(','.join(invalid_characters)))
 
 
-class UnknownStreamTypeError(Exception):
+class UnknownStreamTypeError(ErrorCodeException):
     def __init__(self, stream_type):
         self.stream_type = stream_type
 
@@ -123,11 +131,11 @@ class UnknownStreamTypeError(Exception):
         return repr(self.stream_type)
 
 
-class InvalidStreamDescriptorError(Exception):
+class InvalidStreamDescriptorError(ErrorCodeException):
     pass
 
 
-class InvalidStreamInfoError(Exception):
+class InvalidStreamInfoError(ErrorCodeException):
     def __init__(self, name, stream_info):
         msg = f'{name} has claim with invalid stream info: {stream_info}'
         super().__init__(msg)
@@ -135,7 +143,7 @@ class InvalidStreamInfoError(Exception):
         self.stream_info = stream_info
 
 
-class MisbehavingPeerError(Exception):
+class MisbehavingPeerError(ErrorCodeException):
     pass
 
 
@@ -151,52 +159,52 @@ class InvalidResponseError(MisbehavingPeerError):
     pass
 
 
-class NoSuchBlobError(Exception):
+class NoSuchBlobError(ErrorCodeException):
     pass
 
 
-class NoSuchStreamHash(Exception):
+class NoSuchStreamHash(ErrorCodeException):
     pass
 
 
-class NoSuchSDHash(Exception):
+class NoSuchSDHash(ErrorCodeException):
     """
     Raised if sd hash is not known
     """
 
 
-class InvalidBlobHashError(Exception):
+class InvalidBlobHashError(ErrorCodeException):
     pass
 
 
-class InvalidHeaderError(Exception):
+class InvalidHeaderError(ErrorCodeException):
     pass
 
 
-class InvalidAuthenticationToken(Exception):
+class InvalidAuthenticationToken(ErrorCodeException):
     pass
 
 
-class NegotiationError(Exception):
+class NegotiationError(ErrorCodeException):
     pass
 
 
-class InvalidCurrencyError(Exception):
+class InvalidCurrencyError(ErrorCodeException):
     def __init__(self, currency):
         self.currency = currency
         super().__init__(
             f'Invalid currency: {currency} is not a supported currency.')
 
 
-class NoSuchDirectoryError(Exception):
+class NoSuchDirectoryError(ErrorCodeException):
     def __init__(self, directory):
         self.directory = directory
         super().__init__(f'No such directory {directory}')
 
 
-class ComponentStartConditionNotMet(Exception):
+class ComponentStartConditionNotMet(ErrorCodeException):
     pass
 
 
-class ComponentsNotStarted(Exception):
+class ComponentsNotStarted(ErrorCodeException):
     pass

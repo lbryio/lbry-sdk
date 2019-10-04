@@ -24,17 +24,14 @@ from lbry.conf import Config, Setting
 from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
-from lbry.error import DownloadSDTimeout, ComponentsNotStarted
-from lbry.error import NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
+from lbry.error import ErrorCodeException, UnknownAPIMethodError, DownloadSDTimeout, ComponentsNotStarted, \
+    NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
 from lbry.extras import system_info
-from lbry.extras.daemon import analytics
-from lbry.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbry.extras.daemon.Components import STREAM_MANAGER_COMPONENT
-from lbry.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
-from lbry.extras.daemon.ComponentManager import RequiredCondition
-from lbry.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon import analytics, comment_client
+from lbry.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, \
+    STREAM_MANAGER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
+from lbry.extras.daemon.ComponentManager import RequiredCondition, ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.wallet.account import Account as LBCAccount
@@ -168,6 +165,8 @@ class WalletIsUnlocked(RequiredCondition):
         return not component.check_locked()
 
 
+# TODO: marry JSONRPCError with ErrorCodeException.
+#  We don't have to conform to JSONRPC error spec if it doesn't fit our needs
 class JSONRPCError:
     # http://www.jsonrpc.org/specification#error_object
     CODE_PARSE_ERROR = -32700  # Invalid JSON. Error while parsing the JSON text.
@@ -224,10 +223,6 @@ class JSONRPCError:
     @classmethod
     def create_from_exception(cls, message, code=CODE_APPLICATION_ERROR, traceback=None):
         return cls(message, code=code, traceback=traceback)
-
-
-class UnknownAPIMethodError(Exception):
-    pass
 
 
 def jsonrpc_dumps_pretty(obj, **kwargs):
