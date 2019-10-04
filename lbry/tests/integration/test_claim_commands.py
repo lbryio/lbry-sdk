@@ -49,6 +49,24 @@ class ClaimTestCase(CommandTestCase):
             await self.on_transaction_dict(tx)
         return tx
 
+    async def update_stream_to_image_type(self, claim_id, confirm=True):
+        with tempfile.NamedTemporaryFile(suffix='.png') as file:
+            file.write(unhexlify(
+                b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
+                b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
+                b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
+                b'9454e44ae426082'
+            ))
+            file.flush()
+            tx = await self.out(self.daemon.jsonrpc_stream_update(
+                claim_id, file_path=file.name
+            ))
+        if confirm:
+            await self.on_transaction_dict(tx)
+            await self.generate(1)
+            await self.on_transaction_dict(tx)
+        return tx
+
     async def video_stream_create(self, name='chrome', bid='1.0', confirm=True):
         tx = await self.out(
             self.daemon.jsonrpc_stream_create(
@@ -988,6 +1006,30 @@ class StreamCommands(ClaimTestCase):
                 }
             }
         )
+
+    async def test_update_file_type(self):
+        video_txo = (await self.video_stream_create())['outputs'][0]
+        claim_id = video_txo['claim_id']
+        self.assertEqual(video_txo['value']['stream_type'], 'video')
+        self.assertEqual(video_txo['value']['source']['media_type'], 'video/mp4')
+        self.assertEqual(
+            video_txo['value']['video'], {
+                'duration': 15,
+                'height': 720,
+                'width': 1280
+            }
+        )
+
+        image_txo = (await self.update_stream_to_image_type(claim_id))['outputs'][0]
+        self.assertEqual(image_txo['value']['stream_type'], 'image')
+        self.assertEqual(image_txo['value']['source']['media_type'], 'image/png')
+        self.assertEqual(
+            image_txo['value']['image'], {
+                'height': 7,
+                'width': 5
+            }
+        )
+        self.assertFalse('video' in image_txo['value'])
 
     async def test_replace_mode_preserves_source_and_type(self):
         expected = {
