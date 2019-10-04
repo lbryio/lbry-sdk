@@ -1110,7 +1110,7 @@
                 
                 <h1 id="lbry-json-rpc-api-documentation">LBRY JSON-RPC API Documentation</h1>
 <h2 id="blob_announce">blob_announce</h2>
-<pre><code class="text">Announce blobs to the DHT
+<pre><code class="text">Announce blobs to the DHT.
 
 Usage:
     blob_announce [&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;]
@@ -1129,7 +1129,7 @@ Returns:
 </code></pre>
 
 <h2 id="blob_availability">blob_availability</h2>
-<pre><code class="text">Get blob availability
+<pre><code class="text">Get blob availability.
 
 Usage:
     blob_availability (&lt;blob_hash&gt;) [&lt;search_timeout&gt; | --search_timeout=&lt;search_timeout&gt;]
@@ -1151,7 +1151,7 @@ Returns:
 </code></pre>
 
 <h2 id="blob_delete">blob_delete</h2>
-<pre><code class="text">Delete a blob
+<pre><code class="text">Delete a blob.
 
 Usage:
     blob_delete (&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash)
@@ -1165,7 +1165,7 @@ Returns:
 </code></pre>
 
 <h2 id="blob_get">blob_get</h2>
-<pre><code class="text">Download and return a blob
+<pre><code class="text">Download and return a blob.
 
 Usage:
     blob_get (&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;) [--timeout=&lt;timeout&gt;]
@@ -1189,7 +1189,7 @@ Returns:
 </code></pre>
 
 <h2 id="blob_list">blob_list</h2>
-<pre><code class="text">Returns blob hashes. If not given filters, returns all blobs known by the blob manager
+<pre><code class="text">Returns blob hashes. If not given filters, returns all blobs known by the blob manager.
 
 Usage:
     blob_list [--needed] [--finished] [&lt;uri&gt; | --uri=&lt;uri&gt;]
@@ -1213,7 +1213,7 @@ Returns:
 </code></pre>
 
 <h2 id="blob_reflect">blob_reflect</h2>
-<pre><code class="text">Reflects specified blobs
+<pre><code class="text">Reflects specified blobs.
 
 Usage:
     blob_reflect (&lt;blob_hashes&gt;...) [--reflector_server=&lt;reflector_server&gt;]
@@ -1227,7 +1227,7 @@ Returns:
 </code></pre>
 
 <h2 id="blob_reflect_all">blob_reflect_all</h2>
-<pre><code class="text">Reflects all saved blobs
+<pre><code class="text">Reflects all saved blobs.
 
 Usage:
     blob_reflect_all
@@ -1241,7 +1241,7 @@ Returns:
 </code></pre>
 
 <h2 id="block_show">block_show</h2>
-<pre><code class="text">Get contents of a block
+<pre><code class="text">Get contents of a block.
 
 Usage:
     block_show (&lt;blockhash&gt; | --blockhash=&lt;blockhash&gt;) | (&lt;height&gt; | --height=&lt;height&gt;)
@@ -1256,7 +1256,7 @@ Returns:
 </code></pre>
 
 <h2 id="channel_export">channel_export</h2>
-<pre><code class="text">Export serialized channel signing information for a given certificate claim id
+<pre><code class="text">Export serialized channel signing information for a given certificate claim id.
 
 Usage:
     channel_export (&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;)
@@ -1270,7 +1270,7 @@ Returns:
 </code></pre>
 
 <h2 id="channel_import">channel_import</h2>
-<pre><code class="text">Import serialized channel signing information (to allow signing new claims to the channel)
+<pre><code class="text">Import serialized channel signing information (to allow signing new claims to the channel).
 
 Usage:
     channel_import (&lt;serialized_certificate_info&gt; | --serialized_certificate_info=&lt;serialized_certificate_info&gt;)
@@ -1284,7 +1284,7 @@ Returns:
 </code></pre>
 
 <h2 id="channel_list">channel_list</h2>
-<pre><code class="text">Get certificate claim infos for channels that can be published to
+<pre><code class="text">Get certificate claim infos for channels that can be published to.
 
 Usage:
     channel_list
@@ -1299,7 +1299,7 @@ Returns:
 </code></pre>
 
 <h2 id="channel_new">channel_new</h2>
-<pre><code class="text">Generate a publisher key and create a new '@' prefixed certificate claim
+<pre><code class="text">Generate a publisher key and create a new '@' prefixed certificate claim.
 
 Usage:
     channel_new (&lt;channel_name&gt; | --channel_name=&lt;channel_name&gt;)
@@ -1322,7 +1322,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_abandon">claim_abandon</h2>
-<pre><code class="text">Abandon a name and reclaim credits from the claim
+<pre><code class="text">Abandon a name and reclaim credits from the claim.
 
 Usage:
     claim_abandon [&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;]
@@ -1343,7 +1343,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_list">claim_list</h2>
-<pre><code class="text">List current claims and information about them for a given name
+<pre><code class="text">List current claims and information about them for a given name.
 
 Usage:
     claim_list (&lt;name&gt; | --name=&lt;name&gt;)
@@ -1376,7 +1376,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_list_by_channel">claim_list_by_channel</h2>
-<pre><code class="text">Get paginated claims in a channel specified by a channel uri
+<pre><code class="text">Get paginated claims in a channel specified by a channel uri.
 
 Usage:
     claim_list_by_channel (&lt;uri&gt; | --uri=&lt;uri&gt;) [&lt;uris&gt;...] [--page=&lt;page&gt;]
@@ -1429,7 +1429,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_list_mine">claim_list_mine</h2>
-<pre><code class="text">List my name claims
+<pre><code class="text">List my name claims.
 
 Usage:
     claim_list_mine
@@ -1462,7 +1462,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_new_support">claim_new_support</h2>
-<pre><code class="text">Support a name claim
+<pre><code class="text">Support a name claim.
 
 Usage:
     claim_new_support (&lt;name&gt; | --name=&lt;name&gt;) (&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;)
@@ -1484,7 +1484,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_renew">claim_renew</h2>
-<pre><code class="text">Renew claim(s) or support(s)
+<pre><code class="text">Renew claim(s) or support(s).
 
 Usage:
     claim_renew (&lt;outpoint&gt; | --outpoint=&lt;outpoint&gt;) | (&lt;height&gt; | --height=&lt;height&gt;)
@@ -1510,7 +1510,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_send_to_address">claim_send_to_address</h2>
-<pre><code class="text">Send a name claim to an address
+<pre><code class="text">Send a name claim to an address.
 
 Usage:
     claim_send_to_address (&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;)
@@ -1536,7 +1536,7 @@ Returns:
 </code></pre>
 
 <h2 id="claim_show">claim_show</h2>
-<pre><code class="text">Resolve claim info from txid/nout or with claim ID
+<pre><code class="text">Resolve claim info from txid/nout or with claim ID.
 
 Usage:
     claim_show [&lt;txid&gt; | --txid=&lt;txid&gt;] [&lt;nout&gt; | --nout=&lt;nout&gt;]
@@ -1571,7 +1571,8 @@ Returns:
 </code></pre>
 
 <h2 id="cli_test_command">cli_test_command</h2>
-<pre><code class="text">This command is only for testing the CLI argument parsing
+<pre><code class="text">This command is only for testing the CLI argument parsing.
+
 Usage:
     cli_test_command [--a_arg] [--b_arg] (&lt;pos_arg&gt; | --pos_arg=&lt;pos_arg&gt;)
                      [&lt;pos_args&gt;...] [--pos_arg2=&lt;pos_arg2&gt;]
@@ -1591,7 +1592,7 @@ Returns:
 </code></pre>
 
 <h2 id="commands">commands</h2>
-<pre><code class="text">Return a list of available commands
+<pre><code class="text">Return a list of available commands.
 
 Usage:
     commands
@@ -1605,7 +1606,7 @@ Returns:
 </code></pre>
 
 <h2 id="daemon_stop">daemon_stop</h2>
-<pre><code class="text">Stop lbrynet-daemon
+<pre><code class="text">Stop lbrynet-daemon.
 
 Usage:
     daemon_stop
@@ -1619,7 +1620,7 @@ Returns:
 </code></pre>
 
 <h2 id="file_delete">file_delete</h2>
-<pre><code class="text">Delete a LBRY file
+<pre><code class="text">Delete a LBRY file.
 
 Usage:
     file_delete [--delete_from_download_dir] [--delete_all] [--sd_hash=&lt;sd_hash&gt;] [--file_name=&lt;file_name&gt;]
@@ -1650,7 +1651,7 @@ Returns:
 </code></pre>
 
 <h2 id="file_list">file_list</h2>
-<pre><code class="text">List files limited by optional filters
+<pre><code class="text">List files limited by optional filters.
 
 Usage:
     file_list [--sd_hash=&lt;sd_hash&gt;] [--file_name=&lt;file_name&gt;] [--stream_hash=&lt;stream_hash&gt;]
@@ -1713,7 +1714,7 @@ Returns:
 </code></pre>
 
 <h2 id="file_reflect">file_reflect</h2>
-<pre><code class="text">Reflect all the blobs in a file matching the filter criteria
+<pre><code class="text">Reflect all the blobs in a file matching the filter criteria.
 
 Usage:
     file_reflect [--sd_hash=&lt;sd_hash&gt;] [--file_name=&lt;file_name&gt;]
@@ -1735,7 +1736,7 @@ Returns:
 </code></pre>
 
 <h2 id="file_set_status">file_set_status</h2>
-<pre><code class="text">Start or stop downloading a file
+<pre><code class="text">Start or stop downloading a file.
 
 Usage:
     file_set_status (&lt;status&gt; | --status=&lt;status&gt;) [--sd_hash=&lt;sd_hash&gt;]
@@ -1799,7 +1800,7 @@ Returns:
 </code></pre>
 
 <h2 id="help">help</h2>
-<pre><code class="text">Return a useful message for an API command
+<pre><code class="text">Return a useful message for an API command.
 
 Usage:
     help [&lt;command&gt; | --command=&lt;command&gt;]
@@ -1813,7 +1814,7 @@ Returns:
 </code></pre>
 
 <h2 id="peer_list">peer_list</h2>
-<pre><code class="text">Get peers for blob hash
+<pre><code class="text">Get peers for blob hash.
 
 Usage:
     peer_list (&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;) [&lt;timeout&gt; | --timeout=&lt;timeout&gt;]
@@ -1917,7 +1918,7 @@ Returns:
 </code></pre>
 
 <h2 id="report_bug">report_bug</h2>
-<pre><code class="text">Report a bug to slack
+<pre><code class="text">Report a bug to slack.
 
 Usage:
     report_bug (&lt;message&gt; | --message=&lt;message&gt;)
@@ -1931,7 +1932,7 @@ Returns:
 </code></pre>
 
 <h2 id="resolve">resolve</h2>
-<pre><code class="text">Resolve given LBRY URIs
+<pre><code class="text">Resolve given LBRY URIs.
 
 Usage:
     resolve [--force] (&lt;uri&gt; | --uri=&lt;uri&gt;) [&lt;uris&gt;...]
@@ -1997,7 +1998,7 @@ Returns:
 </code></pre>
 
 <h2 id="resolve_name">resolve_name</h2>
-<pre><code class="text">Resolve stream info from a LBRY name
+<pre><code class="text">Resolve stream info from a LBRY name.
 
 Usage:
     resolve_name (&lt;name&gt; | --name=&lt;name&gt;) [--force]
@@ -2013,7 +2014,7 @@ Returns:
 </code></pre>
 
 <h2 id="routing_table_get">routing_table_get</h2>
-<pre><code class="text">Get DHT routing information
+<pre><code class="text">Get DHT routing information.
 
 Usage:
     routing_table_get
@@ -2042,7 +2043,7 @@ Returns:
 </code></pre>
 
 <h2 id="settings_get">settings_get</h2>
-<pre><code class="text">Get daemon settings
+<pre><code class="text">Get daemon settings.
 
 Usage:
     settings_get
@@ -2057,7 +2058,7 @@ Returns:
 </code></pre>
 
 <h2 id="settings_set">settings_set</h2>
-<pre><code class="text">Set daemon settings
+<pre><code class="text">Set daemon settings.
 
 Usage:
     settings_set [--download_directory=&lt;download_directory&gt;]
@@ -2107,7 +2108,7 @@ Returns:
 </code></pre>
 
 <h2 id="status">status</h2>
-<pre><code class="text">Get daemon status
+<pre><code class="text">Get daemon status.
 
 Usage:
     status
@@ -2170,7 +2171,7 @@ Returns:
 </code></pre>
 
 <h2 id="stream_availability">stream_availability</h2>
-<pre><code class="text">Get stream availability for lbry uri
+<pre><code class="text">Get stream availability for lbry uri.
 
 Usage:
     stream_availability (&lt;uri&gt; | --uri=&lt;uri&gt;)
@@ -2202,7 +2203,7 @@ Returns:
 </code></pre>
 
 <h2 id="stream_cost_estimate">stream_cost_estimate</h2>
-<pre><code class="text">Get estimated cost for a lbry stream
+<pre><code class="text">Get estimated cost for a lbry stream.
 
 Usage:
     stream_cost_estimate (&lt;uri&gt; | --uri=&lt;uri&gt;) [&lt;size&gt; | --size=&lt;size&gt;]
@@ -2219,7 +2220,7 @@ Returns:
 </code></pre>
 
 <h2 id="transaction_list">transaction_list</h2>
-<pre><code class="text">List transactions belonging to wallet
+<pre><code class="text">List transactions belonging to wallet.
 
 Usage:
     transaction_list
@@ -2275,7 +2276,7 @@ Returns:
 </code></pre>
 
 <h2 id="transaction_show">transaction_show</h2>
-<pre><code class="text">Get a decoded transaction from a txid
+<pre><code class="text">Get a decoded transaction from a txid.
 
 Usage:
     transaction_show (&lt;txid&gt; | --txid=&lt;txid&gt;)
@@ -2289,7 +2290,7 @@ Returns:
 </code></pre>
 
 <h2 id="utxo_list">utxo_list</h2>
-<pre><code class="text">List unspent transaction outputs
+<pre><code class="text">List unspent transaction outputs.
 
 Usage:
     utxo_list
@@ -2317,7 +2318,7 @@ Returns:
 </code></pre>
 
 <h2 id="version">version</h2>
-<pre><code class="text">Get lbry version information
+<pre><code class="text">Get lbry version information.
 
 Usage:
     version
@@ -2343,7 +2344,7 @@ Returns:
 </code></pre>
 
 <h2 id="wallet_balance">wallet_balance</h2>
-<pre><code class="text">Return the balance of the wallet
+<pre><code class="text">Return the balance of the wallet.
 
 Usage:
     wallet_balance [&lt;address&gt; | --address=&lt;address&gt;] [--include_unconfirmed]
@@ -2359,7 +2360,7 @@ Returns:
 </code></pre>
 
 <h2 id="wallet_decrypt">wallet_decrypt</h2>
-<pre><code class="text">Decrypt an encrypted wallet, this will remove the wallet password
+<pre><code class="text">Decrypt an encrypted wallet, this will remove the wallet password.
 
 Usage:
     wallet_decrypt
@@ -2374,7 +2375,7 @@ Returns:
 
 <h2 id="wallet_encrypt">wallet_encrypt</h2>
 <pre><code class="text">Encrypt a wallet with a password, if the wallet is already encrypted this will update
-the password
+the password.
 
 Usage:
     wallet_encrypt (&lt;new_password&gt; | --new_password=&lt;new_password&gt;)
@@ -2402,7 +2403,7 @@ Returns:
 </code></pre>
 
 <h2 id="wallet_list">wallet_list</h2>
-<pre><code class="text">List wallet addresses
+<pre><code class="text">List wallet addresses.
 
 Usage:
     wallet_list
@@ -2416,7 +2417,7 @@ Returns:
 </code></pre>
 
 <h2 id="wallet_new_address">wallet_new_address</h2>
-<pre><code class="text">Generate a new wallet address
+<pre><code class="text">Generate a new wallet address.
 
 Usage:
     wallet_new_address
@@ -2430,7 +2431,7 @@ Returns:
 </code></pre>
 
 <h2 id="wallet_prefill_addresses">wallet_prefill_addresses</h2>
-<pre><code class="text">Create new addresses, each containing `amount` credits
+<pre><code class="text">Create new addresses, each containing `amount` credits.
 
 Usage:
     wallet_prefill_addresses [--no_broadcast]
@@ -2448,7 +2449,7 @@ Returns:
 </code></pre>
 
 <h2 id="wallet_public_key">wallet_public_key</h2>
-<pre><code class="text">Get public key from wallet address
+<pre><code class="text">Get public key from wallet address.
 
 Usage:
     wallet_public_key (&lt;address&gt; | --address=&lt;address&gt;)
@@ -2491,7 +2492,7 @@ Returns:
 </code></pre>
 
 <h2 id="wallet_unlock">wallet_unlock</h2>
-<pre><code class="text">Unlock an encrypted wallet
+<pre><code class="text">Unlock an encrypted wallet.
 
 Usage:
     wallet_unlock (&lt;password&gt; | --password=&lt;password&gt;)
