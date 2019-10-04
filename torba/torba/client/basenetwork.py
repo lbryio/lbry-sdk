@@ -239,9 +239,9 @@ class BaseNetwork:
         restricted = 0 > height > self.remote_height - 10
         return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted)
 
-    def get_headers(self, height, count=10000):
+    def get_headers(self, height, count=10000, b64=False):
         restricted = height >= self.remote_height - 100
-        return self.rpc('blockchain.block.headers', [height, count], restricted)
+        return self.rpc('blockchain.block.headers', [height, count, 0, b64], restricted)
 
     #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
     def get_history(self, address):
