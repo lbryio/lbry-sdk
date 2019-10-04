@@ -112,10 +112,10 @@ class PeerManager:
         delay = self._loop.time() - constants.check_refresh_interval
 
         # fixme: find a way to re-enable that without breaking other parts
-        #if node_id not in self._node_id_reverse_mapping or (address, udp_port) not in self._node_id_mapping:
+        # if node_id not in self._node_id_reverse_mapping or (address, udp_port) not in self._node_id_mapping:
         #    return
-        #addr_tup = (address, udp_port)
-        #if self._node_id_reverse_mapping[node_id] != addr_tup or self._node_id_mapping[addr_tup] != node_id:
+        # addr_tup = (address, udp_port)
+        # if self._node_id_reverse_mapping[node_id] != addr_tup or self._node_id_mapping[addr_tup] != node_id:
         #    return
         previous_failure, most_recent_failure = self._rpc_failures.get((address, udp_port), (None, None))
         last_requested = self._last_requested.get((address, udp_port))

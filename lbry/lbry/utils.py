@@ -19,7 +19,6 @@ import collections
 from lbry.schema.claim import Claim
 from lbry.cryptoutils import get_lbry_hash_obj
 
-
 log = logging.getLogger(__name__)
 
 
