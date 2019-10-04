@@ -41,7 +41,6 @@ from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
 
-
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
     from lbry.dht.node import Node
@@ -72,7 +71,9 @@ def requires(*components, **conditions):
                 raise ComponentsNotStarted("the following required components have not yet started: "
                                            "%s" % json.dumps(components))
             return fn(*args, **kwargs)
+
         return _inner
+
     return _wrap
 
 
@@ -81,6 +82,7 @@ def deprecated(new_command=None):
         f.new_command = new_command
         f._deprecated = True
         return f
+
     return _deprecated_wrapper
 
 
@@ -124,13 +126,13 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
                          page: Optional[int], page_size: Optional[int], **constraints):
     if None not in (page, page_size):
         constraints.update({
-            "offset": page_size * (page-1),
+            "offset": page_size * (page - 1),
             "limit": page_size
         })
         total_items = await get_record_count(**constraints)
         return {
             "items": await get_records(**constraints),
-            "total_pages": int((total_items + (page_size-1)) / page_size),
+            "total_pages": int((total_items + (page_size - 1)) / page_size),
             "total_items": total_items,
             "page": page, "page_size": page_size
         }
@@ -208,7 +210,7 @@ class JSONRPCError:
             for i, t in enumerate(trace_lines):
                 if "--- <exception caught here> ---" in t:
                     if len(trace_lines) > i + 1:
-                        self.traceback = [j for j in trace_lines[i+1:] if j]
+                        self.traceback = [j for j in trace_lines[i + 1:] if j]
                         break
 
     def to_dict(self):
@@ -338,7 +340,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     name, = name_parts
                 elif len(name_parts) == 2:
                     group, name = name_parts
-                    assert group in api['groups'],\
+                    assert group in api['groups'], \
                         f"Group {group} does not have doc string for command {full_name}."
                 else:
                     raise NameError(f'Could not parse method name: {jsonrpc_method}')
@@ -621,7 +623,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         missing_required_params = [
             required_param
-            for required_param in argspec.args[len(args_tup)+1:-num_optional_params]
+            for required_param in argspec.args[len(args_tup) + 1:-num_optional_params]
             if required_param not in args_dict
         ]
         if len(missing_required_params):
@@ -912,7 +914,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri] if resolved[resolved_uri] is not None else \
-                                    {"error": f"{resolved_uri} did not resolve to a claim"}
+                {"error": f"{resolved_uri} did not resolve to a claim"}
 
         return results
 
@@ -2032,11 +2034,11 @@ class Daemon(metaclass=JSONRPCServerType):
         if kwargs.pop('invalid_channel_signature', False):
             kwargs['signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
-        kwargs.update({'offset': page_size * (page_num-1), 'limit': page_size})
+        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
         txos, offset, total = await self.ledger.claim_search(**kwargs)
         result = {"items": txos, "page": page_num, "page_size": page_size}
         if not kwargs.pop('no_totals', False):
-            result['total_pages'] = int((total + (page_size-1)) / page_size)
+            result['total_pages'] = int((total + (page_size - 1)) / page_size)
             result['total_items'] = total
         return result
 
@@ -2717,7 +2719,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 )
 
         claim = Claim()
-        claim.stream.update(file_path=file_path, sd_hash='0'*96, **kwargs)
+        claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
