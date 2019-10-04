@@ -179,6 +179,9 @@ class BaseClaim:
     def locations(self) -> LocationList:
         return LocationList(self.claim.message.locations)
 
+    def __delitem__(self, key):
+        self.message.ClearField(key)
+
 
 class Stream(BaseClaim):
 
@@ -214,6 +217,12 @@ class Stream(BaseClaim):
                 kwargs.pop('fee_amount', None)
             )
 
+        source_stream_type = None
+        if self.source.name:
+            _, source_stream_type = guess_media_type(self.source.name)
+        elif self.source.media_type:
+            source_stream_type = guess_stream_type(self.source.media_type)
+
         if 'sd_hash' in kwargs:
             self.source.sd_hash = kwargs.pop('sd_hash')
         if 'file_name' in kwargs:
@@ -231,6 +240,9 @@ class Stream(BaseClaim):
 
         if 'file_size' in kwargs:
             self.source.size = kwargs.pop('file_size')
+
+        if source_stream_type in ('image', 'video', 'audio') and stream_type != source_stream_type:
+            del self[source_stream_type]
 
         if stream_type in ('image', 'video', 'audio'):
             media = getattr(self, stream_type)
