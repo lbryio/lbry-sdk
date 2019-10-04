@@ -63,20 +63,20 @@ class ConnectionManager:
 
         while True:
             last = self.loop.time()
-            await asyncio.sleep(1, loop=self.loop)
+            await asyncio.sleep(5, loop=self.loop)
             self._status['incoming_bps'].clear()
             self._status['outgoing_bps'].clear()
+            now = self.loop.time()
             while self.outgoing:
                 k, v = self.outgoing.popitem()
-                self._status['outgoing_bps'][k] = v
+                self._status['outgoing_bps'][k] = v / (now - last)
             while self.incoming:
                 k, v = self.incoming.popitem()
-                self._status['incoming_bps'][k] = v
-            now = self.loop.time()
+                self._status['incoming_bps'][k] = v / (now - last)
             self._status['total_outgoing_mbs'] = int(sum(list(self._status['outgoing_bps'].values())
-                                                   ) / (now - last)) / 1000000.0
+                                                         )) / 1000000.0
             self._status['total_incoming_mbs'] = int(sum(list(self._status['incoming_bps'].values())
-                                                       ) / (now - last)) / 1000000.0
+                                                         )) / 1000000.0
             self._status['total_sent'] += sum(list(self._status['outgoing_bps'].values()))
             self._status['total_received'] += sum(list(self._status['incoming_bps'].values()))
 
