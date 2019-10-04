@@ -1,3 +1,4 @@
+import base64
 import os
 import asyncio
 import logging
@@ -308,12 +309,12 @@ class BaseLedger(metaclass=LedgerRegistry):
     async def initial_headers_sync(self):
         target = self.network.remote_height
         current = len(self.headers)
-        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=2000)
-        chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 2000)]
+        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=2016, b64=True)
+        chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 2016)]
         async with self.headers.checkpointed_connector() as connector:
             for chunk in chunks:
                 headers = await chunk
-                connector.connect(len(self.headers), unhexlify(headers['hex']))
+                connector.connect(len(self.headers), base64.b64decode(headers['base64']))
                 log.info("Headers sync: %s / %s", connector.tell() // self.headers.header_size, target)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):

@@ -6,6 +6,7 @@
 # and warranty status of this software.
 
 """Classes for local RPC server and remote client TCP/SSL servers."""
+import base64
 import collections
 import asyncio
 import codecs
@@ -1007,7 +1008,7 @@ class ElectrumX(SessionBase):
         height: the header's height"""
         return await self.block_header(height)
 
-    async def block_headers(self, start_height, count, cp_height=0):
+    async def block_headers(self, start_height, count, cp_height=0, b64=False):
         """Return count concatenated block headers as hex for the main chain;
         starting at start_height.
 
@@ -1021,14 +1022,15 @@ class ElectrumX(SessionBase):
         max_size = self.MAX_CHUNK_SIZE
         count = min(count, max_size)
         headers, count = await self.db.read_headers(start_height, count)
-        result = {'hex': headers.hex(), 'count': count, 'max': max_size}
+        result = {
+            'base64' if b64 else 'hex': base64.b64encode(headers).decode() if b64 else headers.hex(),
+            'count': count,
+            'max': max_size
+        }
         if count and cp_height:
             last_height = start_height + count - 1
             result.update(await self._merkle_proof(cp_height, last_height))
         return result
-
-    async def block_headers_12(self, start_height, count):
-        return await self.block_headers(start_height, count)
 
     async def block_get_chunk(self, index):
         """Return a chunk of block headers as a hexadecimal string.
@@ -1270,7 +1272,7 @@ class ElectrumX(SessionBase):
             handlers.update({
                 'mempool.get_fee_histogram':
                 self.mempool.compact_fee_histogram,
-                'blockchain.block.headers': self.block_headers_12,
+                'blockchain.block.headers': self.block_headers,
                 'server.ping': self.ping,
             })
 
