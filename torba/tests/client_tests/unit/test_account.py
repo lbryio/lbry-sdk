@@ -47,7 +47,7 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         async with self.account.receiving.address_generator_lock:
             await self.account.receiving._generate_keys(0, 200)
         records = await self.account.receiving.get_address_records()
-        self.assertEqual(201, len(records))
+        self.assertEqual(len(records), 201)
 
     async def test_ensure_address_gap(self):
         account = self.account
@@ -59,7 +59,7 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
             await account.receiving._generate_keys(0, 3)
             await account.receiving._generate_keys(8, 11)
         records = await account.receiving.get_address_records()
-        self.assertEqual(
+        self.assertListEqual(
             [r['pubkey'].n for r in records],
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         )
@@ -68,7 +68,7 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         new_keys = await account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 8)
         records = await account.receiving.get_address_records()
-        self.assertEqual(
+        self.assertListEqual(
             [r['pubkey'].n for r in records],
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
         )
@@ -272,7 +272,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
 
         self.assertIsInstance(account.receiving, SingleKey)
         addresses = await account.receiving.get_addresses()
-        self.assertEqual(addresses, [])
+        self.assertListEqual(addresses, [])
 
         # we have 12, but default gap is 20
         new_keys = await account.receiving.ensure_address_gap()
@@ -280,7 +280,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
         self.assertEqual(new_keys[0], account.public_key.address)
         records = await account.receiving.get_address_records()
         pubkey = records[0].pop('pubkey')
-        self.assertEqual(records, [{
+        self.assertListEqual(records, [{
             'chain': 0,
             'account': account.public_key.address,
             'address': account.public_key.address,

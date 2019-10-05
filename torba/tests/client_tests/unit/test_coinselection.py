@@ -37,13 +37,13 @@ class BaseSelectionTestCase(AsyncioTestCase):
 class TestCoinSelectionTests(BaseSelectionTestCase):
 
     def test_empty_coins(self):
-        self.assertEqual(CoinSelector(0, 0).select([]), [])
+        self.assertListEqual(CoinSelector(0, 0).select([]), [])
 
     def test_skip_binary_search_if_total_not_enough(self):
         fee = utxo(CENT).get_estimator(self.ledger).fee
         big_pool = self.estimates(utxo(CENT+fee) for _ in range(100))
         selector = CoinSelector(101 * CENT, 0)
-        self.assertEqual(selector.select(big_pool), [])
+        self.assertListEqual(selector.select(big_pool), [])
         self.assertEqual(selector.tries, 0)  # Never tried.
         # check happy path
         selector = CoinSelector(100 * CENT, 0)
@@ -59,7 +59,7 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         )
         selector = CoinSelector(CENT, 0)
         match = selector.select(utxo_pool)
-        self.assertEqual([CENT + fee], [c.txo.amount for c in match])
+        self.assertListEqual([CENT + fee], [c.txo.amount for c in match])
         self.assertTrue(selector.exact_match)
 
     def test_random_draw(self):
@@ -70,20 +70,20 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         )
         selector = CoinSelector(CENT, 0, '\x00')
         match = selector.select(utxo_pool)
-        self.assertEqual([2 * CENT], [c.txo.amount for c in match])
+        self.assertListEqual([2 * CENT], [c.txo.amount for c in match])
         self.assertFalse(selector.exact_match)
 
     def test_pick(self):
         utxo_pool = self.estimates(
-            utxo(1*CENT),
-            utxo(1*CENT),
-            utxo(3*CENT),
-            utxo(5*CENT),
-            utxo(10*CENT),
+            utxo(1 * CENT),
+            utxo(1 * CENT),
+            utxo(3 * CENT),
+            utxo(5 * CENT),
+            utxo(10 * CENT),
         )
-        selector = CoinSelector(3*CENT, 0)
+        selector = CoinSelector(3 * CENT, 0)
         match = selector.select(utxo_pool)
-        self.assertEqual([5*CENT], [c.txo.amount for c in match])
+        self.assertListEqual([5 * CENT], [c.txo.amount for c in match])
 
     def test_confirmed_strategies(self):
         utxo_pool = self.estimates(
@@ -93,15 +93,15 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
             utxo(11*CENT, height=5),
         )
 
-        match = CoinSelector(20*CENT, 0).select(utxo_pool, "only_confirmed")
-        self.assertEqual([5, 5], [c.txo.tx_ref.height for c in match])
-        match = CoinSelector(25*CENT, 0).select(utxo_pool, "only_confirmed")
-        self.assertEqual([], [c.txo.tx_ref.height for c in match])
+        match = CoinSelector(20 * CENT, 0).select(utxo_pool, "only_confirmed")
+        self.assertListEqual([5, 5], [c.txo.tx_ref.height for c in match])
+        match = CoinSelector(25 * CENT, 0).select(utxo_pool, "only_confirmed")
+        self.assertListEqual([], [c.txo.tx_ref.height for c in match])
 
-        match = CoinSelector(20*CENT, 0).select(utxo_pool, "prefer_confirmed")
-        self.assertEqual([5, 5], [c.txo.tx_ref.height for c in match])
-        match = CoinSelector(25*CENT, 0, '\x00').select(utxo_pool, "prefer_confirmed")
-        self.assertEqual([5, 0, -2], [c.txo.tx_ref.height for c in match])
+        match = CoinSelector(20 * CENT, 0).select(utxo_pool, "prefer_confirmed")
+        self.assertListEqual([5, 5], [c.txo.tx_ref.height for c in match])
+        match = CoinSelector(25 * CENT, 0, '\x00').select(utxo_pool, "prefer_confirmed")
+        self.assertListEqual([5, 0, -2], [c.txo.tx_ref.height for c in match])
 
 
 class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
@@ -136,20 +136,20 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         )
 
         # Select 1 Cent
-        self.assertEqual([1 * CENT], search(utxo_pool, 1 * CENT, 0.5 * CENT))
+        self.assertListEqual([1 * CENT], search(utxo_pool, 1 * CENT, 0.5 * CENT))
 
         # Select 2 Cent
-        self.assertEqual([2 * CENT], search(utxo_pool, 2 * CENT, 0.5 * CENT))
+        self.assertListEqual([2 * CENT], search(utxo_pool, 2 * CENT, 0.5 * CENT))
 
         # Select 5 Cent
-        self.assertEqual([3 * CENT, 2 * CENT], search(utxo_pool, 5 * CENT, 0.5 * CENT))
+        self.assertListEqual([3 * CENT, 2 * CENT], search(utxo_pool, 5 * CENT, 0.5 * CENT))
 
         # Select 11 Cent, not possible
-        self.assertEqual([], search(utxo_pool, 11 * CENT, 0.5 * CENT))
+        self.assertListEqual([], search(utxo_pool, 11 * CENT, 0.5 * CENT))
 
         # Select 10 Cent
         utxo_pool += self.estimates(utxo(5 * CENT))
-        self.assertEqual(
+        self.assertListEqual(
             [4 * CENT, 3 * CENT, 2 * CENT, 1 * CENT],
             search(utxo_pool, 10 * CENT, 0.5 * CENT)
         )
@@ -157,18 +157,18 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         # Negative effective value
         # Select 10 Cent but have 1 Cent not be possible because too small
         # TODO: bitcoin has [5, 3, 2]
-        self.assertEqual(
+        self.assertListEqual(
             [4 * CENT, 3 * CENT, 2 * CENT, 1 * CENT],
             search(utxo_pool, 10 * CENT, 5000)
         )
 
         # Select 0.25 Cent, not possible
-        self.assertEqual(search(utxo_pool, 0.25 * CENT, 0.5 * CENT), [])
+        self.assertListEqual(search(utxo_pool, 0.25 * CENT, 0.5 * CENT), [])
 
         # Iteration exhaustion test
         utxo_pool, target = self.make_hard_case(17)
         selector = CoinSelector(target, 0)
-        self.assertEqual(selector.select(utxo_pool, 'branch_and_bound'), [])
+        self.assertListEqual(selector.select(utxo_pool, 'branch_and_bound'), [])
         self.assertEqual(selector.tries, MAXIMUM_TRIES)  # Should exhaust
         utxo_pool, target = self.make_hard_case(14)
         self.assertIsNotNone(search(utxo_pool, target, 0))  # Should not exhaust
@@ -181,7 +181,7 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
             utxo(7 * CENT),
             utxo(2 * CENT)
         ] + [utxo(5 * CENT)]*50000)
-        self.assertEqual(
+        self.assertListEqual(
             [7 * CENT, 7 * CENT, 7 * CENT, 7 * CENT, 2 * CENT],
             search(utxo_pool, 30 * CENT, 5000)
         )
@@ -189,4 +189,4 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         # Select 1 Cent with pool of only greater than 5 Cent
         utxo_pool = self.estimates(utxo(i * CENT) for i in range(5, 21))
         for _ in range(100):
-            self.assertEqual(search(utxo_pool, 1 * CENT, 2 * CENT), [])
+            self.assertListEqual(search(utxo_pool, 1 * CENT, 2 * CENT), [])

@@ -20,7 +20,7 @@ class TestWalletCreation(AsyncioTestCase):
     def test_create_wallet_and_accounts(self):
         wallet = Wallet()
         self.assertEqual(wallet.name, 'Wallet')
-        self.assertEqual(wallet.accounts, [])
+        self.assertListEqual(wallet.accounts, [])
 
         account1 = wallet.generate_account(self.btc_ledger)
         wallet.generate_account(self.btc_ledger)

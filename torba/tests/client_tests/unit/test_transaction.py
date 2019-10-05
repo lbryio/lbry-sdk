@@ -294,9 +294,9 @@ class TransactionIOBalancing(AsyncioTestCase):
             [self.txo(3)]  # outputs
         )
         # best UTXO match is 5 (as UTXO 3 will be short 0.02 to cover fees)
-        self.assertEqual(self.inputs(tx), [5])
+        self.assertListEqual(self.inputs(tx), [5])
         # a change of 1.98 is added to reach balance
-        self.assertEqual(self.outputs(tx), [3, 1.98])
+        self.assertListEqual(self.outputs(tx), [3, 1.98])
 
         await self.ledger.release_outputs(utxos)
 
@@ -306,8 +306,8 @@ class TransactionIOBalancing(AsyncioTestCase):
             [self.txo(2.98)]  # outputs
         )
         # best UTXO match is 3 and no change is needed
-        self.assertEqual(self.inputs(tx), [3])
-        self.assertEqual(self.outputs(tx), [2.98])
+        self.assertListEqual(self.inputs(tx), [3])
+        self.assertListEqual(self.outputs(tx), [2.98])
 
         await self.ledger.release_outputs(utxos)
 
@@ -317,9 +317,9 @@ class TransactionIOBalancing(AsyncioTestCase):
             [self.txo(11)]             # outputs
         )
         # additional input is chosen (UTXO 3)
-        self.assertEqual([10, 3], self.inputs(tx))
+        self.assertListEqual([10, 3], self.inputs(tx))
         # change is now needed to consume extra input
-        self.assertEqual([11, 1.96], self.outputs(tx))
+        self.assertListEqual([11, 1.96], self.outputs(tx))
 
         await self.ledger.release_outputs(utxos)
 
@@ -328,9 +328,9 @@ class TransactionIOBalancing(AsyncioTestCase):
             [self.txi(self.txo(10))],  # inputs
             []                         # outputs
         )
-        self.assertEqual([10], self.inputs(tx))
+        self.assertListEqual([10], self.inputs(tx))
         # missing change added to consume the amount
-        self.assertEqual([9.98], self.outputs(tx))
+        self.assertListEqual([9.98], self.outputs(tx))
 
         await self.ledger.release_outputs(utxos)
 
@@ -340,6 +340,6 @@ class TransactionIOBalancing(AsyncioTestCase):
             []                           # outputs
         )
         # UTXO 1 is added to cover some of the fee
-        self.assertEqual([0.01, 1], self.inputs(tx))
+        self.assertListEqual([0.01, 1], self.inputs(tx))
         # change is now needed to consume extra input
-        self.assertEqual([0.97], self.outputs(tx))
+        self.assertListEqual([0.97], self.outputs(tx))

@@ -9,7 +9,7 @@ class StreamControllerTestCase(AsyncioTestCase):
         controller.stream.listen(on_data=events.append)
         controller.add("yo")
         controller.add("yo")
-        self.assertEqual(events, ["yo", "yo"])
+        self.assertListEqual(events, ["yo", "yo"])
 
     def test_unique_events(self):
         events = []
@@ -17,4 +17,4 @@ class StreamControllerTestCase(AsyncioTestCase):
         controller.stream.listen(on_data=events.append)
         controller.add("yo")
         controller.add("yo")
-        self.assertEqual(events, ["yo"])
+        self.assertListEqual(events, ["yo"])

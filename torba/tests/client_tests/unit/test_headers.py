@@ -35,7 +35,7 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
 
     async def test_serialization(self):
         h = await self.get_headers()
-        self.assertEqual(h[0], {
+        self.assertDictEqual(h[0], {
             'bits': 486604799,
             'block_height': 0,
             'merkle_root': b'4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
@@ -44,7 +44,7 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
             'timestamp': 1231006505,
             'version': 1
         })
-        self.assertEqual(h[self.RETARGET_BLOCK-1], {
+        self.assertDictEqual(h[self.RETARGET_BLOCK-1], {
             'bits': 486604799,
             'block_height': 32255,
             'merkle_root': b'89b4f223789e40b5b475af6483bb05bceda54059e17d2053334b358f6bb310ac',
@@ -53,7 +53,7 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
             'timestamp': 1262152739,
             'version': 1
         })
-        self.assertEqual(h[self.RETARGET_BLOCK], {
+        self.assertDictEqual(h[self.RETARGET_BLOCK], {
             'bits': 486594666,
             'block_height': 32256,
             'merkle_root': b'64b5e5f5a262f47af443a0120609206a3305877693edfe03e994f20a024ab627',
@@ -62,7 +62,7 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
             'timestamp': 1262153464,
             'version': 1
         })
-        self.assertEqual(h[self.RETARGET_BLOCK+1], {
+        self.assertDictEqual(h[self.RETARGET_BLOCK+1], {
             'bits': 486594666,
             'block_height': 32257,
             'merkle_root': b'4d1488981f08b3037878193297dbac701a2054e0f803d4424fe6a4d763d62334',

@@ -23,7 +23,7 @@ class TestAESEncryptDecrypt(TestCase):
            'ZmZmZmZmZmZmZmZmZmZmZjlrKptoKD+MFwDxcg3XtCD9qz8UWhEhq/TVJT5+Mtp2a8sE'
            'CaO6WQj7fYsWGu2Hvbc0qYqxdN0HeTsiO+cZRo3eJISgr3F+rXFYi5oSBlD2'
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             aes_decrypt(self.password, self.expected),
             (self.message, b'f' * 16)
         )
