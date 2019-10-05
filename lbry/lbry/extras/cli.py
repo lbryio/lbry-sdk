@@ -221,7 +221,7 @@ def ensure_directory_exists(path: str):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def run_daemon(args: list, conf: Config):
+def setup_logging(args: argparse.Namespace, conf: Config, loop: asyncio.AbstractEventLoop):
     default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
     file_handler = logging.handlers.RotatingFileHandler(
         conf.log_file_path, maxBytes=2097152, backupCount=5
@@ -240,8 +240,6 @@ def run_daemon(args: list, conf: Config):
     logging.getLogger('aioupnp').setLevel(logging.WARNING)
     logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 
-    loop = asyncio.get_event_loop()
-
     log.setLevel(logging.INFO)
     if args.verbose is not None:
         loop.set_debug(True)
@@ -256,6 +254,10 @@ def run_daemon(args: list, conf: Config):
         loggly_handler.setLevel(logging.ERROR)
         log.addHandler(loggly_handler)
 
+
+def run_daemon(args: argparse.Namespace, conf: Config):
+    loop = asyncio.get_event_loop()
+    setup_logging(args, conf, loop)
     daemon = Daemon(conf)
 
     def __exit():
