@@ -90,8 +90,8 @@ class TestSynchronization(LedgerTestCase):
             'abcd03': hexlify(get_transaction(get_output(3)).raw),
         })
         await self.ledger.update_history(address, '')
-        self.assertEqual(self.ledger.network.get_history_called, [address])
-        self.assertEqual(self.ledger.network.get_transaction_called, ['abcd01', 'abcd02', 'abcd03'])
+        self.assertListEqual(self.ledger.network.get_history_called, [address])
+        self.assertListEqual(self.ledger.network.get_transaction_called, ['abcd01', 'abcd02', 'abcd03'])
 
         address_details = await self.ledger.db.get_address(address=address)
         self.assertEqual(
@@ -104,16 +104,16 @@ class TestSynchronization(LedgerTestCase):
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
         await self.ledger.update_history(address, '')
-        self.assertEqual(self.ledger.network.get_history_called, [address])
-        self.assertEqual(self.ledger.network.get_transaction_called, [])
+        self.assertListEqual(self.ledger.network.get_history_called, [address])
+        self.assertListEqual(self.ledger.network.get_transaction_called, [])
 
         self.ledger.network.history.append({'tx_hash': 'abcd04', 'height': 3})
         self.ledger.network.transaction['abcd04'] = hexlify(get_transaction(get_output(4)).raw)
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
         await self.ledger.update_history(address, '')
-        self.assertEqual(self.ledger.network.get_history_called, [address])
-        self.assertEqual(self.ledger.network.get_transaction_called, ['abcd04'])
+        self.assertListEqual(self.ledger.network.get_history_called, [address])
+        self.assertListEqual(self.ledger.network.get_transaction_called, ['abcd04'])
         address_details = await self.ledger.db.get_address(address=address)
         self.assertEqual(
             address_details['history'],

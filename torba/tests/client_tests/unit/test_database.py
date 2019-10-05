@@ -60,17 +60,17 @@ class TestAIOSQLite(AsyncioTestCase):
 class TestQueryBuilder(unittest.TestCase):
 
     def test_dot(self):
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.position': 18}),
             ('txo.position = :txo_position0', {'txo_position0': 18})
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.position#6': 18}),
             ('txo.position = :txo_position6', {'txo_position6': 18})
         )
 
     def test_any(self):
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({
                 'ages__any': {
                     'txo.age__gt': 18,
@@ -84,41 +84,41 @@ class TestQueryBuilder(unittest.TestCase):
         )
 
     def test_in(self):
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.age__in#2': [18, 38]}),
             ('txo.age IN (:txo_age__in2_0, :txo_age__in2_1)', {
                 'txo_age__in2_0': 18,
                 'txo_age__in2_1': 38
             })
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.name__in': ('abc123', 'def456')}),
             ('txo.name IN (:txo_name__in0_0, :txo_name__in0_1)', {
                 'txo_name__in0_0': 'abc123',
                 'txo_name__in0_1': 'def456'
             })
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.age__in': 'SELECT age from ages_table'}),
             ('txo.age IN (SELECT age from ages_table)', {})
         )
 
     def test_not_in(self):
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.age__not_in': [18, 38]}),
             ('txo.age NOT IN (:txo_age__not_in0_0, :txo_age__not_in0_1)', {
                 'txo_age__not_in0_0': 18,
                 'txo_age__not_in0_1': 38
             })
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.name__not_in': ('abc123', 'def456')}),
             ('txo.name NOT IN (:txo_name__not_in0_0, :txo_name__not_in0_1)', {
                 'txo_name__not_in0_0': 'abc123',
                 'txo_name__not_in0_1': 'def456'
             })
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             constraints_to_sql({'txo.age__not_in': 'SELECT age from ages_table'}),
             ('txo.age NOT IN (SELECT age from ages_table)', {})
         )
@@ -128,11 +128,11 @@ class TestQueryBuilder(unittest.TestCase):
             constraints_to_sql({'ages__in': 9})
 
     def test_query(self):
-        self.assertEqual(
+        self.assertTupleEqual(
             query("select * from foo"),
             ("select * from foo", {})
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             query(
                 "select * from foo",
                 a__not='b', b__in='select * from blah where c=:$c',
@@ -146,11 +146,11 @@ class TestQueryBuilder(unittest.TestCase):
         )
 
     def test_query_order_by(self):
-        self.assertEqual(
+        self.assertTupleEqual(
             query("select * from foo", order_by='foo'),
             ("select * from foo ORDER BY foo", {})
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             query("select * from foo", order_by=['foo', 'bar']),
             ("select * from foo ORDER BY foo, bar", {})
         )
@@ -158,15 +158,15 @@ class TestQueryBuilder(unittest.TestCase):
             query("select * from foo", order_by={'foo': 'bar'})
 
     def test_query_limit_offset(self):
-        self.assertEqual(
+        self.assertTupleEqual(
             query("select * from foo", limit=10),
             ("select * from foo LIMIT 10", {})
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             query("select * from foo", offset=10),
             ("select * from foo OFFSET 10", {})
         )
-        self.assertEqual(
+        self.assertTupleEqual(
             query("select * from foo", limit=20, offset=10),
             ("select * from foo LIMIT 20 OFFSET 10", {})
         )
@@ -188,7 +188,7 @@ class TestQueryBuilder(unittest.TestCase):
             "(one LIKE 'o' OR two = 2) AND "
             "a0 = 3 AND a00 = 1 AND a00a = 2 AND a00aa = 4 "
             "AND ahash = X'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9' "
-            "ORDER BY b LIMIT 10",
+            "ORDER BY b LIMIT 10"
         )
 
 
@@ -264,7 +264,7 @@ class TestQueries(AsyncioTestCase):
         for height in range(1, 1200):
             tx = await self.create_tx_from_txo(tx.outputs[0], account, height=height)
         variable_limit = self.ledger.db.MAX_QUERY_VARIABLES
-        for limit in range(variable_limit-2, variable_limit+2):
+        for limit in range(variable_limit - 2, variable_limit + 2):
             txs = await self.ledger.get_transactions(
                 accounts=self.wallet.accounts, limit=limit, order_by='height asc')
             self.assertEqual(len(txs), limit)
@@ -286,7 +286,7 @@ class TestQueries(AsyncioTestCase):
 
         self.assertEqual(0, await self.ledger.db.get_transaction_count(accounts=[account1, account2, account3]))
         self.assertEqual(0, await self.ledger.db.get_utxo_count())
-        self.assertEqual([], await self.ledger.db.get_utxos())
+        self.assertListEqual([], await self.ledger.db.get_utxos())
         self.assertEqual(0, await self.ledger.db.get_txo_count())
         self.assertEqual(0, await self.ledger.db.get_balance(wallet=wallet1))
         self.assertEqual(0, await self.ledger.db.get_balance(wallet=wallet2))
@@ -337,18 +337,18 @@ class TestQueries(AsyncioTestCase):
         self.assertEqual(10**8, await self.ledger.db.get_balance(accounts=[account3]))
 
         txs = await self.ledger.db.get_transactions(accounts=[account1, account2])
-        self.assertEqual([tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
-        self.assertEqual([3, 2, 1], [tx.height for tx in txs])
+        self.assertListEqual([tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
+        self.assertListEqual([3, 2, 1], [tx.height for tx in txs])
 
         txs = await self.ledger.db.get_transactions(wallet=wallet1, accounts=wallet1.accounts)
-        self.assertEqual([tx2.id, tx1.id], [tx.id for tx in txs])
+        self.assertListEqual([tx2.id, tx1.id], [tx.id for tx in txs])
         self.assertEqual(txs[0].inputs[0].is_my_account, True)
         self.assertEqual(txs[0].outputs[0].is_my_account, False)
         self.assertEqual(txs[1].inputs[0].is_my_account, False)
         self.assertEqual(txs[1].outputs[0].is_my_account, True)
 
         txs = await self.ledger.db.get_transactions(wallet=wallet2, accounts=[account2])
-        self.assertEqual([tx3.id, tx2.id], [tx.id for tx in txs])
+        self.assertListEqual([tx3.id, tx2.id], [tx.id for tx in txs])
         self.assertEqual(txs[0].inputs[0].is_my_account, True)
         self.assertEqual(txs[0].outputs[0].is_my_account, False)
         self.assertEqual(txs[1].inputs[0].is_my_account, False)
@@ -369,11 +369,11 @@ class TestQueries(AsyncioTestCase):
         # height 0 sorted to the top with the rest in descending order
         tx4 = await self.create_tx_from_nothing(account1, 0)
         txos = await self.ledger.db.get_txos()
-        self.assertEqual([0, 2, 2, 1], [txo.tx_ref.height for txo in txos])
-        self.assertEqual([tx4.id, tx2.id, tx2b.id, tx1.id], [txo.tx_ref.id for txo in txos])
+        self.assertListEqual([0, 2, 2, 1], [txo.tx_ref.height for txo in txos])
+        self.assertListEqual([tx4.id, tx2.id, tx2b.id, tx1.id], [txo.tx_ref.id for txo in txos])
         txs = await self.ledger.db.get_transactions(accounts=[account1, account2])
-        self.assertEqual([0, 3, 2, 1], [tx.height for tx in txs])
-        self.assertEqual([tx4.id, tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
+        self.assertListEqual([0, 3, 2, 1], [tx.height for tx in txs])
+        self.assertListEqual([tx4.id, tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
 
 
 class TestUpgrade(AsyncioTestCase):
@@ -415,10 +415,10 @@ class TestUpgrade(AsyncioTestCase):
 
         # initial open, pre-version enabled db
         self.ledger.db.SCHEMA_VERSION = None
-        self.assertEqual(self.get_tables(), [])
+        self.assertListEqual(self.get_tables(), [])
         await self.ledger.db.open()
         self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo'])
-        self.assertEqual(self.get_addresses(), [])
+        self.assertListEqual(self.get_addresses(), [])
         self.add_address('address1')
         await self.ledger.db.close()
 
@@ -426,18 +426,18 @@ class TestUpgrade(AsyncioTestCase):
         self.ledger.db.SCHEMA_VERSION = '1.0'
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.0')
-        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
-        self.assertEqual(self.get_addresses(), [])  # address1 deleted during version upgrade
+        self.assertListEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_addresses(), [])  # address1 deleted during version upgrade
         self.add_address('address2')
         await self.ledger.db.close()
 
         # nothing changes
         self.assertEqual(self.get_version(), '1.0')
-        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.0')
-        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
-        self.assertEqual(self.get_addresses(), ['address2'])
+        self.assertListEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_addresses(), ['address2'])
         await self.ledger.db.close()
 
         # upgrade version, database reset
@@ -447,8 +447,8 @@ class TestUpgrade(AsyncioTestCase):
         """
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.1')
-        self.assertEqual(self.get_tables(), ['account_address', 'foo', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
-        self.assertEqual(self.get_addresses(), [])  # all tables got reset
+        self.assertListEqual(self.get_tables(), ['account_address', 'foo', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_addresses(), [])  # all tables got reset
         await self.ledger.db.close()
 
 

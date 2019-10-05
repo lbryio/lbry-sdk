@@ -24,14 +24,14 @@ def parse(opcodes, source):
 class TestScriptTemplates(unittest.TestCase):
 
     def test_push_data(self):
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (PUSH_SINGLE('script_hash'),),
                 (b'abcdef',)
             ), {
                 'script_hash': b'abcdef'
             }
         )
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (PUSH_SINGLE('first'), PUSH_INTEGER('rating')),
                 (b'Satoshi', (1000).to_bytes(2, 'little'))
             ), {
@@ -39,7 +39,7 @@ class TestScriptTemplates(unittest.TestCase):
                 'rating': 1000,
             }
         )
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (OP_HASH160, PUSH_SINGLE('script_hash'), OP_EQUAL),
                 (OP_HASH160, b'abcdef', OP_EQUAL)
             ), {
@@ -48,21 +48,21 @@ class TestScriptTemplates(unittest.TestCase):
         )
 
     def test_push_data_many(self):
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (PUSH_MANY('names'),),
                 (b'amit',)
             ), {
                 'names': [b'amit']
             }
         )
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (PUSH_MANY('names'),),
                 (b'jeremy', b'amit', b'victor')
             ), {
                 'names': [b'jeremy', b'amit', b'victor']
             }
         )
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (OP_HASH160, PUSH_MANY('names'), OP_EQUAL),
                 (OP_HASH160, b'grin', b'jack', OP_EQUAL)
             ), {
@@ -71,7 +71,7 @@ class TestScriptTemplates(unittest.TestCase):
         )
 
     def test_push_data_mixed(self):
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (PUSH_SINGLE('CEO'), PUSH_MANY('Devs'), PUSH_SINGLE('CTO'), PUSH_SINGLE('State')),
                 (b'jeremy', b'lex', b'amit', b'victor', b'jack', b'grin', b'NH')
             ), {
@@ -83,7 +83,7 @@ class TestScriptTemplates(unittest.TestCase):
         )
 
     def test_push_data_many_separated(self):
-        self.assertEqual(parse(
+        self.assertDictEqual(parse(
                 (PUSH_MANY('Chiefs'), OP_HASH160, PUSH_MANY('Devs')),
                 (b'jeremy', b'grin', OP_HASH160, b'lex', b'jack')
             ), {
@@ -135,16 +135,16 @@ class TestRedeemScriptHash(unittest.TestCase):
         )
         subscript1 = src1.values['script']
         self.assertEqual(src1.template.name, 'script_hash')
-        self.assertEqual([hexlify(v) for v in src1.values['signatures']], sigs)
-        self.assertEqual([hexlify(p) for p in subscript1.values['pubkeys']], pubkeys)
+        self.assertListEqual([hexlify(v) for v in src1.values['signatures']], sigs)
+        self.assertListEqual([hexlify(p) for p in subscript1.values['pubkeys']], pubkeys)
         self.assertEqual(subscript1.values['signatures_count'], len(sigs))
         self.assertEqual(subscript1.values['pubkeys_count'], len(pubkeys))
         # now we test that it will round trip
         src2 = BaseInputScript(src1.source)
         subscript2 = src2.values['script']
         self.assertEqual(src2.template.name, 'script_hash')
-        self.assertEqual([hexlify(v) for v in src2.values['signatures']], sigs)
-        self.assertEqual([hexlify(p) for p in subscript2.values['pubkeys']], pubkeys)
+        self.assertListEqual([hexlify(v) for v in src2.values['signatures']], sigs)
+        self.assertListEqual([hexlify(p) for p in subscript2.values['pubkeys']], pubkeys)
         self.assertEqual(subscript2.values['signatures_count'], len(sigs))
         self.assertEqual(subscript2.values['pubkeys_count'], len(pubkeys))
         return hexlify(src1.source)
