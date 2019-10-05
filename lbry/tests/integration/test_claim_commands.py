@@ -29,7 +29,7 @@ class ClaimTestCase(CommandTestCase):
                     open(self.video_file_name, 'wb') as video_file:
                 video_file.write(response.read())
 
-    async def image_stream_create(self, name='blank-image', bid='1.0', confirm=True):
+    async def _image_stream_operation(self, func, *args, **kwargs):
         with tempfile.NamedTemporaryFile(suffix='.png') as file:
             file.write(unhexlify(
                 b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
@@ -38,33 +38,23 @@ class ClaimTestCase(CommandTestCase):
                 b'9454e44ae426082'
             ))
             file.flush()
-            tx = await self.out(
-                self.daemon.jsonrpc_stream_create(
-                    name, bid, file_path=file.name
-                )
-            )
+            return await self.out(func(*args, file_path=file.name, **kwargs))
+
+    async def _confirm_tx(self, tx):
+        await self.on_transaction_dict(tx)
+        await self.generate(1)
+        await self.on_transaction_dict(tx)
+
+    async def image_stream_create(self, name='blank-image', bid='1.0', confirm=True):
+        tx = await self._image_stream_operation(self.daemon.jsonrpc_stream_create, name, bid)
         if confirm:
-            await self.on_transaction_dict(tx)
-            await self.generate(1)
-            await self.on_transaction_dict(tx)
+            await self._confirm_tx(tx)
         return tx
 
     async def update_stream_to_image_type(self, claim_id, confirm=True):
-        with tempfile.NamedTemporaryFile(suffix='.png') as file:
-            file.write(unhexlify(
-                b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
-                b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
-                b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
-                b'9454e44ae426082'
-            ))
-            file.flush()
-            tx = await self.out(self.daemon.jsonrpc_stream_update(
-                claim_id, file_path=file.name
-            ))
+        tx = await self._image_stream_operation(self.daemon.jsonrpc_stream_update, claim_id)
         if confirm:
-            await self.on_transaction_dict(tx)
-            await self.generate(1)
-            await self.on_transaction_dict(tx)
+            await self._confirm_tx(tx)
         return tx
 
     async def video_stream_create(self, name='chrome', bid='1.0', confirm=True):
@@ -74,11 +64,8 @@ class ClaimTestCase(CommandTestCase):
             )
         )
         if confirm:
-            await self.on_transaction_dict(tx)
-            await self.generate(1)
-            await self.on_transaction_dict(tx)
+            await self._confirm_tx(tx)
         return tx
-
 
 class ClaimSearchCommand(ClaimTestCase):
 

@@ -179,8 +179,8 @@ class BaseClaim:
     def locations(self) -> LocationList:
         return LocationList(self.claim.message.locations)
 
-    def __delitem__(self, key):
-        self.message.ClearField(key)
+    def clear_field_by_name(self, field_name: str):
+        self.message.ClearField(field_name)
 
 
 class Stream(BaseClaim):
@@ -242,7 +242,7 @@ class Stream(BaseClaim):
             self.source.size = kwargs.pop('file_size')
 
         if source_stream_type in ('image', 'video', 'audio') and stream_type != source_stream_type:
-            del self[source_stream_type]
+            self.clear_field_by_name(source_stream_type)
 
         if stream_type in ('image', 'video', 'audio'):
             media = getattr(self, stream_type)
