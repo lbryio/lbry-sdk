@@ -12,6 +12,8 @@ from lbry.dht import constants
 from torba.client.coinselection import STRATEGIES
 
 log = logging.getLogger(__name__)
+log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
+logging.basicConfig(format=log_format)
 
 
 NOT_SET = type('NOT_SET', (object,), {})
@@ -311,6 +313,8 @@ class ConfigFileAccess:
         self.data = {}
         if self.exists:
             self.load()
+        else:
+            log.warning('Config file Not Found at %s, continuing with default settings', self.path)
 
     @property
     def exists(self):
@@ -320,6 +324,8 @@ class ConfigFileAccess:
         cls = type(self.configuration)
         with open(self.path, 'r') as config_file:
             raw = config_file.read()
+            if not raw:
+                log.warning('Config file at %s Empty or Unreadable, continuing with default settings', self.path)
         serialized = yaml.load(raw) or {}
         for key, value in serialized.items():
             attr = getattr(cls, key, None)
