@@ -2,6 +2,7 @@ import base64
 import os
 import asyncio
 import logging
+import zlib
 from functools import partial
 from binascii import hexlify, unhexlify
 from io import StringIO
@@ -309,13 +310,21 @@ class BaseLedger(metaclass=LedgerRegistry):
     async def initial_headers_sync(self):
         target = self.network.remote_height
         current = len(self.headers)
-        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=2016, b64=True)
-        chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 2016)]
+        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=4096, b64=True)
+        chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 4096)]
+        import time
+        start = time.time()
+        total = 0
         async with self.headers.checkpointed_connector() as connector:
             for chunk in chunks:
                 headers = await chunk
-                connector.connect(len(self.headers), base64.b64decode(headers['base64']))
-                log.info("Headers sync: %s / %s", connector.tell() // self.headers.header_size, target)
+                total += len(headers['base64'])
+                try:
+                    connector.connect(len(self.headers), zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000))
+                except BaseException:
+                    log.exception("ops")
+                log.info("Headers sync: %s / %s -- %s", connector.tell() // self.headers.header_size, target, total)
+        print(time.time() - start)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0

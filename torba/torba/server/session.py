@@ -14,6 +14,8 @@ import datetime
 import itertools
 import json
 import os
+import zlib
+
 import pylru
 import ssl
 import time
@@ -616,7 +618,7 @@ class SessionBase(RPCSession):
     sessions.
     """
 
-    MAX_CHUNK_SIZE = 2016
+    MAX_CHUNK_SIZE = 40960
     session_counter = itertools.count()
     request_handlers: typing.Dict[str, typing.Callable] = {}
     version = '0.5.7'
@@ -1022,8 +1024,10 @@ class ElectrumX(SessionBase):
         max_size = self.MAX_CHUNK_SIZE
         count = min(count, max_size)
         headers, count = await self.db.read_headers(start_height, count)
+        compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
+        headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode() if b64 else headers.hex()
         result = {
-            'base64' if b64 else 'hex': base64.b64encode(headers).decode() if b64 else headers.hex(),
+            'base64' if b64 else 'hex': headers,
             'count': count,
             'max': max_size
         }
