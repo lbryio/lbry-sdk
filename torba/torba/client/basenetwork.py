@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import zlib
 from operator import itemgetter
 from typing import Dict, Optional, Tuple
 from time import perf_counter
