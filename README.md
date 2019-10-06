@@ -17,7 +17,16 @@ Our [releases page](https://github.com/lbryio/lbry-sdk/releases) contains pre-bu
 
 ## Usage
 
-Run `lbrynet start` to launch the API server.
+#### For systems running Windows:
+
+Check into the folder where the binary is extracted and run `lbrynet start` to launch the API server.
+
+#### For systems running Linux:
+
+Check into the folder where the binary is extracted and run `./lbrynet start` to launch the API server.
+
+&nbsp;
+&nbsp;
 
 By default, `lbrynet` will provide a JSON-RPC server at `http://localhost:5279`. It is easy to interact with via cURL or sane programming languages.
 
