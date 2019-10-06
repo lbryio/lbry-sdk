@@ -8,7 +8,7 @@ async def listen(slack_client, url):
             ws = await session.ws_connect(url)
         except (aiohttp.ClientConnectorError, asyncio.TimeoutError):
             print(f"failed to connect to {url}")
-            return
+            return None
         print(f"connected to {url}")
 
         async for msg in ws:
@@ -30,7 +30,7 @@ async def listen(slack_client, url):
                 )
                 if not response["ok"]:
                     print("SLACK ERROR:\n", response)
-                print()
+                print("")
 
 
 async def main():
@@ -38,7 +38,7 @@ async def main():
         slack_client = slack.WebClient(token=os.environ['SLACK_TOKEN'], run_async=True)
     except KeyError:
         print("Error: SLACK_TOKEN env var required")
-        return
+        return None
 
     num_servers = 5
     tasks = []
