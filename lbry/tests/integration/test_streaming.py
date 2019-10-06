@@ -23,7 +23,7 @@ class RangeRequests(CommandTestCase):
     async def _restart_stream_manager(self):
         self.daemon.stream_manager.stop()
         await self.daemon.stream_manager.start()
-        return
+        return None
 
     async def _setup_stream(self, data: bytes, save_blobs: bool = True, save_files: bool = False, file_size=0):
         self.daemon.conf.save_blobs = save_blobs
