@@ -1,6 +1,6 @@
 # Installing LBRY
 
-If only the JSON-RPC API server is needed, the recommended way to install LBRY is to use a pre-built binary. We provide binaries for all major operating systems. See the [README](README.md).
+If only the JSON-RPC API server is needed, the recommended way to install LBRY is to use a pre-built binary. We provide binaries for all major operating systems. See the [README](README.md)!
 
 These instructions are for installing LBRY from source, which is recommended if you are interested in doing development work or LBRY is not available on your operating system (godspeed, TempleOS users).
 
@@ -9,7 +9,7 @@ Here's a video walkthrough of this setup, which is itself hosted by the LBRY net
 
 ## Prerequisites
 
-Running `lbrynet` from source requires Python 3.7 or higher. Get the installer for your OS [here](https://www.python.org/downloads/release/python-370/)
+Running `lbrynet` from source requires Python 3.7 or higher. Get the installer for your OS [here](https://www.python.org/downloads/release/python-370/).
 
 After installing python 3, you'll need to install some additional libraries depending on your operating system.
 
@@ -17,7 +17,7 @@ After installing python 3, you'll need to install some additional libraries depe
 
 macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
 
-These environment variables also need to be set
+These environment variables also need to be set:
 1. PYTHONUNBUFFERED=1
 2. EVENT_NOKQUEUE=1
 
@@ -27,7 +27,7 @@ Remaining dependencies can then be installed by running:
 brew install python protobuf
 ```
 
-Assistance installing Python3: https://docs.python-guide.org/starting/install3/osx/
+Assistance installing Python3: https://docs.python-guide.org/starting/install3/osx/.
 
 ### Linux
 
