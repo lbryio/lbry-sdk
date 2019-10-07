@@ -23,6 +23,7 @@ from lbry import utils
 from lbry.conf import Config, Setting
 from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
+from lbry.dht.peer import make_kademlia_peer
 from lbry.error import DownloadSDTimeout, ComponentsNotStarted
 from lbry.error import NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
 from lbry.extras import system_info
@@ -3655,8 +3656,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         peer = None
         if node_id and address and port:
-            peer = self.component_manager.peer_manager.get_kademlia_peer(unhexlify(node_id), address,
-                                                                         udp_port=int(port))
+            peer = make_kademlia_peer(unhexlify(node_id), address, udp_port=int(port))
             try:
                 return await self.dht_node.protocol.get_rpc_peer(peer).ping()
             except asyncio.TimeoutError:

@@ -3,8 +3,7 @@ from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbry.dht import constants
 from lbry.dht.node import Node
-from lbry.dht.peer import PeerManager
-
+from lbry.dht.peer import PeerManager, make_kademlia_peer
 
 expected_ranges = [
     (
@@ -28,6 +27,7 @@ expected_ranges = [
         39402006196394479212279040100143613805079739270465446667948293404245721771497210611414266254884915640806627990306816
     )
 ]
+
 
 class TestRouting(AsyncioTestCase):
     async def test_fill_one_bucket(self):
@@ -53,7 +53,7 @@ class TestRouting(AsyncioTestCase):
             for i in range(1, len(peer_addresses)):
                 self.assertEqual(len(node_1.protocol.routing_table.get_peers()), contact_cnt)
                 node = nodes[i]
-                peer = node_1.protocol.peer_manager.get_kademlia_peer(
+                peer = make_kademlia_peer(
                     node.protocol.node_id, node.protocol.external_ip,
                     udp_port=node.protocol.udp_port
                 )
@@ -65,6 +65,16 @@ class TestRouting(AsyncioTestCase):
             self.assertEqual(node_1.protocol.routing_table.buckets_with_contacts(), 1)
             for node in nodes.values():
                 node.protocol.stop()
+
+    async def test_cant_add_peer_without_a_node_id_gracefully(self):
+        loop = asyncio.get_event_loop()
+        node = Node(loop, PeerManager(loop), constants.generate_id(), 4444, 4444, 3333, '1.2.3.4')
+        bad_peer = make_kademlia_peer(None, '1.2.3.4', 5555)
+        with self.assertLogs(level='WARNING') as logged:
+            self.assertFalse(await node.protocol._add_peer(bad_peer))
+            self.assertEqual(1, len(logged.output))
+            self.assertTrue(logged.output[0].endswith('Tried adding a peer with no node id!'))
+
 
     async def test_split_buckets(self):
         loop = asyncio.get_event_loop()
@@ -81,7 +91,7 @@ class TestRouting(AsyncioTestCase):
             node_1 = nodes[0]
             for i in range(1, len(peer_addresses)):
                 node = nodes[i]
-                peer = node_1.protocol.peer_manager.get_kademlia_peer(
+                peer = make_kademlia_peer(
                     node.protocol.node_id, node.protocol.external_ip,
                     udp_port=node.protocol.udp_port
                 )

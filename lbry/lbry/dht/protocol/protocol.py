@@ -15,6 +15,7 @@ from lbry.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE, PAGE_KEY
 from lbry.dht.error import RemoteException, TransportNotConnected
 from lbry.dht.protocol.routing_table import TreeRoutingTable
 from lbry.dht.protocol.data_store import DictDataStore
+from lbry.dht.peer import make_kademlia_peer
 
 if typing.TYPE_CHECKING:
     from lbry.dht.peer import PeerManager, KademliaPeer
@@ -322,6 +323,9 @@ class KademliaProtocol(DatagramProtocol):
         return args, {}
 
     async def _add_peer(self, peer: 'KademliaPeer'):
+        if not peer.node_id:
+            log.warning("Tried adding a peer with no node id!")
+            return False
         for p in self.routing_table.get_peers():
             if (p.address, p.udp_port) == (peer.address, peer.udp_port) and p.node_id != peer.node_id:
                 self.routing_table.remove_peer(p)
@@ -447,7 +451,7 @@ class KademliaProtocol(DatagramProtocol):
         try:
             peer = self.routing_table.get_peer(request_datagram.node_id)
         except IndexError:
-            peer = self.peer_manager.get_kademlia_peer(request_datagram.node_id, address[0], address[1])
+            peer = make_kademlia_peer(request_datagram.node_id, address[0], address[1])
         try:
             self._handle_rpc(peer, request_datagram)
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
@@ -494,8 +498,7 @@ class KademliaProtocol(DatagramProtocol):
             elif response_datagram.node_id == self.node_id:
                 df.set_exception(RemoteException("incoming message is from our node id"))
                 return
-            peer.set_id(response_datagram.node_id)
-            peer.update_udp_port(address[1])
+            peer = make_kademlia_peer(response_datagram.node_id, address[0], address[1])
             self.peer_manager.report_last_replied(address[0], address[1])
             self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():

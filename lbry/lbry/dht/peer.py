@@ -3,12 +3,20 @@ import asyncio
 import logging
 import ipaddress
 from binascii import hexlify
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from lbry.dht import constants
 from lbry.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
 
 log = logging.getLogger(__name__)
+
+
+@lru_cache(1024)
+def make_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional[str],
+                       udp_port: typing.Optional[int] = None,
+                       tcp_port: typing.Optional[int] = None) -> 'KademliaPeer':
+    return KademliaPeer(address, node_id, udp_port, tcp_port=tcp_port)
 
 
 def is_valid_ipv4(address):
@@ -81,10 +89,6 @@ class PeerManager:
         self._node_id_mapping[(address, udp_port)] = node_id
         self._node_id_reverse_mapping[node_id] = (address, udp_port)
 
-    @lru_cache(maxsize=400)
-    def get_kademlia_peer(self, node_id: bytes, address: str, udp_port: int) -> 'KademliaPeer':
-        return KademliaPeer(self._loop, address, node_id, udp_port)
-
     def prune(self):  # TODO: periodically call this
         now = self._loop.time()
         to_pop = []
@@ -116,6 +120,8 @@ class PeerManager:
         previous_failure, most_recent_failure = self._rpc_failures.get((address, udp_port), (None, None))
         last_requested = self._last_requested.get((address, udp_port))
         last_replied = self._last_replied.get((address, udp_port))
+        if node_id is None:
+            return None
         if most_recent_failure and last_replied:
             if delay < last_replied > most_recent_failure:
                 return True
@@ -135,46 +141,30 @@ class PeerManager:
 
     def decode_tcp_peer_from_compact_address(self, compact_address: bytes) -> 'KademliaPeer':
         node_id, address, tcp_port = decode_compact_address(compact_address)
-        return KademliaPeer(self._loop, address, node_id, tcp_port=tcp_port)
+        return make_kademlia_peer(node_id, address, udp_port=None, tcp_port=tcp_port)
 
 
+@dataclass(unsafe_hash=True)
 class KademliaPeer:
-    __slots__ = [
-        'loop',
-        '_node_id',
-        'address',
-        'udp_port',
-        'tcp_port',
-        'protocol_version',
-    ]
+    address: str = field(hash=True)
+    _node_id: typing.Optional[bytes] = field(hash=True)
+    udp_port: typing.Optional[int] = field(hash=True)
+    tcp_port: typing.Optional[int] = field(compare=False, hash=False)
+    protocol_version: typing.Optional[int] = field(default=1, compare=False, hash=False)
 
-    def __init__(self, loop: asyncio.AbstractEventLoop, address: str, node_id: typing.Optional[bytes] = None,
-                 udp_port: typing.Optional[int] = None, tcp_port: typing.Optional[int] = None):
-        if node_id is not None:
-            if not len(node_id) == constants.hash_length:
-                raise ValueError("invalid node_id: {}".format(hexlify(node_id).decode()))
-        if udp_port is not None and not 0 <= udp_port <= 65536:
+    def __post_init__(self):
+        if self._node_id is not None:
+            if not len(self._node_id) == constants.hash_length:
+                raise ValueError("invalid node_id: {}".format(hexlify(self._node_id).decode()))
+        if self.udp_port is not None and not 1 <= self.udp_port <= 65535:
             raise ValueError("invalid udp port")
-        if tcp_port and not 0 <= tcp_port <= 65536:
+        if self.tcp_port is not None and not 1 <= self.tcp_port <= 65535:
             raise ValueError("invalid tcp port")
-        if not is_valid_ipv4(address):
+        if not is_valid_ipv4(self.address):
             raise ValueError("invalid ip address")
-        self.loop = loop
-        self._node_id = node_id
-        self.address = address
-        self.udp_port = udp_port
-        self.tcp_port = tcp_port
-        self.protocol_version = 1
 
     def update_tcp_port(self, tcp_port: int):
         self.tcp_port = tcp_port
-
-    def update_udp_port(self, udp_port: int):
-        self.udp_port = udp_port
-
-    def set_id(self, node_id):
-        if not self._node_id:
-            self._node_id = node_id
 
     @property
     def node_id(self) -> bytes:
@@ -188,11 +178,3 @@ class KademliaPeer:
 
     def compact_ip(self):
         return make_compact_ip(self.address)
-
-    def __eq__(self, other):
-        if not isinstance(other, KademliaPeer):
-            raise TypeError("invalid type to compare with Peer: %s" % str(type(other)))
-        return (self.node_id, self.address, self.udp_port) == (other.node_id, other.address, other.udp_port)
-
-    def __hash__(self):
-        return hash((self.node_id, self.address, self.udp_port))
