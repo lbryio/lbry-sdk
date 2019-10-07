@@ -11,7 +11,7 @@ LBRY SDK for Python is currently the most fully featured implementation of the L
  * Wallet implementation for the LBRY blockchain ([lbry.wallet](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/wallet)).
  * Daemon with a JSON-RPC API to ease building end user applications in any language and for automating various tasks ([lbry.extras.daemon](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/extras/daemon)). 
 
-## Installation
+## Installation Guide
 
 Our [releases page](https://github.com/lbryio/lbry-sdk/releases) contains pre-built binaries of the latest release, pre-releases, and past releases for macOS, Debian-based Linux, and Windows. [Automated travis builds](http://build.lbry.io/daemon/) are also available for testing.
 
