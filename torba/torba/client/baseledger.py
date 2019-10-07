@@ -312,19 +312,17 @@ class BaseLedger(metaclass=LedgerRegistry):
         current = len(self.headers)
         get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=4096, b64=True)
         chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 4096)]
-        import time
-        start = time.time()
         total = 0
         async with self.headers.checkpointed_connector() as connector:
             for chunk in chunks:
                 headers = await chunk
                 total += len(headers['base64'])
-                try:
-                    connector.connect(len(self.headers), zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000))
-                except BaseException:
-                    log.exception("ops")
-                log.info("Headers sync: %s / %s -- %s", connector.tell() // self.headers.header_size, target, total)
-        print(time.time() - start)
+                connector.connect(
+                    len(self.headers),
+                    zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
+                )
+                progress = connector.tell() // self.headers.header_size
+                log.info("Headers sync: %s / %s -- %s", progress, target, total)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
