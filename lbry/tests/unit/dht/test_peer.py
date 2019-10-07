@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 from lbry.utils import generate_id
-from lbry.dht.peer import PeerManager
+from lbry.dht.peer import PeerManager, make_kademlia_peer
 from torba.testcase import AsyncioTestCase
 
 
@@ -10,20 +10,30 @@ class PeerTest(AsyncioTestCase):
         self.loop = asyncio.get_event_loop()
         self.peer_manager = PeerManager(self.loop)
         self.node_ids = [generate_id(), generate_id(), generate_id()]
-        self.first_contact = self.peer_manager.get_kademlia_peer(self.node_ids[1], '127.0.0.1', udp_port=1000)
-        self.second_contact = self.peer_manager.get_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
+        self.first_contact = make_kademlia_peer(self.node_ids[1], '127.0.0.1', udp_port=1000)
+        self.second_contact = make_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
+
+    def test_peer_is_good_unknown_peer(self):
+        # Scenario: peer replied, but caller doesn't know the node_id.
+        # Outcome: We can't say it's good or bad.
+        # (yes, we COULD tell the node id, but not here. It would be
+        # a side effect and the caller is responsible to discover it)
+        peer = make_kademlia_peer(None, '1.2.3.4', 4444)
+        self.peer_manager.report_last_requested('1.2.3.4', 4444)
+        self.peer_manager.report_last_replied('1.2.3.4', 4444)
+        self.assertIsNone(self.peer_manager.peer_is_good(peer))
 
     def test_make_contact_error_cases(self):
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, self.node_ids[1], '192.168.1.20', 100000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, self.node_ids[1], '192.168.1.20.1', 1000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, self.node_ids[1], 'this is not an ip', 1000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer,  self.node_ids[1], '192.168.1.20', -1000)
-        self.assertRaises(ValueError, self.peer_manager.get_kademlia_peer, b'not valid node id', '192.168.1.20', 1000)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.168.1.20', 100000)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.168.1.20.1', 1000)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], 'this is not an ip', 1000)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.168.1.20', -1000)
+        self.assertRaises(ValueError, make_kademlia_peer, b'not valid node id', '192.168.1.20', 1000)
 
     def test_boolean(self):
         self.assertNotEqual(self.first_contact, self.second_contact)
         self.assertEqual(
-            self.second_contact, self.peer_manager.get_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
+            self.second_contact, make_kademlia_peer(self.node_ids[0], '192.168.0.1', udp_port=1000)
         )
 
     def test_compact_ip(self):

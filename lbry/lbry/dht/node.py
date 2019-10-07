@@ -4,13 +4,14 @@ import typing
 import binascii
 from lbry.utils import resolve_host
 from lbry.dht import constants
+from lbry.dht.peer import make_kademlia_peer
 from lbry.dht.protocol.distance import Distance
 from lbry.dht.protocol.iterative_find import IterativeNodeFinder, IterativeValueFinder
 from lbry.dht.protocol.protocol import KademliaProtocol
-from lbry.dht.peer import KademliaPeer
 
 if typing.TYPE_CHECKING:
     from lbry.dht.peer import PeerManager
+    from lbry.dht.peer import KademliaPeer
 
 log = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ class Node:
 
         if known_node_addresses:
             peers = [
-                KademliaPeer(self.loop, address, udp_port=port)
+                make_kademlia_peer(None, address, port)
                 for (address, port) in known_node_addresses
             ]
             while True:
@@ -232,7 +233,7 @@ class Node:
                         if not peer.udp_port:
                             udp_port_to_try = peer.tcp_port
                     if not peer.udp_port:
-                        peer.update_udp_port(udp_port_to_try)
+                        peer = make_kademlia_peer(peer.node_id, peer.address, udp_port_to_try, peer.tcp_port)
                     self.loop.create_task(ping(peer))
                 else:
                     log.debug("skip bad peer %s:%i for %s", peer.address, peer.tcp_port, blob_hash)

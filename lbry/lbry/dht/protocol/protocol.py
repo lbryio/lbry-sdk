@@ -15,6 +15,7 @@ from lbry.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE, PAGE_KEY
 from lbry.dht.error import RemoteException, TransportNotConnected
 from lbry.dht.protocol.routing_table import TreeRoutingTable
 from lbry.dht.protocol.data_store import DictDataStore
+from lbry.dht.peer import make_kademlia_peer
 
 if typing.TYPE_CHECKING:
     from lbry.dht.peer import PeerManager, KademliaPeer
@@ -322,6 +323,9 @@ class KademliaProtocol(DatagramProtocol):
         return args, {}
 
     async def _add_peer(self, peer: 'KademliaPeer'):
+        if not peer.node_id:
+            log.warning("Tried adding a peer with no node id!")
+            return False
         for p in self.routing_table.get_peers():
             if (p.address, p.udp_port) == (peer.address, peer.udp_port) and p.node_id != peer.node_id:
                 self.routing_table.remove_peer(p)
@@ -447,7 +451,7 @@ class KademliaProtocol(DatagramProtocol):
         try:
             peer = self.routing_table.get_peer(request_datagram.node_id)
         except IndexError:
-            peer = self.peer_manager.get_kademlia_peer(request_datagram.node_id, address[0], address[1])
+            peer = make_kademlia_peer(request_datagram.node_id, address[0], address[1])
         try:
             self._handle_rpc(peer, request_datagram)
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
@@ -494,8 +498,7 @@ class KademliaProtocol(DatagramProtocol):
             elif response_datagram.node_id == self.node_id:
                 df.set_exception(RemoteException("incoming message is from our node id"))
                 return
-            peer.set_id(response_datagram.node_id)
-            peer.update_udp_port(address[1])
+            peer = make_kademlia_peer(response_datagram.node_id, address[0], address[1])
             self.peer_manager.report_last_replied(address[0], address[1])
             self.peer_manager.update_contact_triple(peer.node_id, address[0], address[1])
             if not df.cancelled():
@@ -529,7 +532,7 @@ class KademliaProtocol(DatagramProtocol):
             elif error_datagram.response not in old_protocol_errors:
                 log.warning(error_msg)
             else:
-                log.warning("known dht protocol backwards compatibility error with %s:%i (lbrynet v%s)",
+                log.debug("known dht protocol backwards compatibility error with %s:%i (lbrynet v%s)",
                             peer.address, peer.udp_port, old_protocol_errors[error_datagram.response])
             df.set_exception(remote_exception)
             return
@@ -539,7 +542,7 @@ class KademliaProtocol(DatagramProtocol):
                     f"pending request: {str(remote_exception)}"
                 log.warning(msg)
             else:
-                log.warning("known dht protocol backwards compatibility error with %s:%i (lbrynet v%s)",
+                log.debug("known dht protocol backwards compatibility error with %s:%i (lbrynet v%s)",
                             address[0], address[1], old_protocol_errors[error_datagram.response])
 
     def datagram_received(self, datagram: bytes, address: typing.Tuple[str, int]) -> None:
@@ -643,7 +646,8 @@ class KademliaProtocol(DatagramProtocol):
                 return False
         return True
 
-    async def store_to_peer(self, hash_value: bytes, peer: 'KademliaPeer') -> typing.Tuple[bytes, bool]:
+    async def store_to_peer(self, hash_value: bytes, peer: 'KademliaPeer',
+                            retry: bool = True) -> typing.Tuple[bytes, bool]:
         async def __store():
             res = await self.get_rpc_peer(peer).store(hash_value)
             if res != b"OK":
@@ -655,34 +659,15 @@ class KademliaProtocol(DatagramProtocol):
             return await __store()
         except asyncio.TimeoutError:
             log.debug("Timeout while storing blob_hash %s at %s", binascii.hexlify(hash_value).decode()[:8], peer)
+            return peer.node_id, False
         except ValueError as err:
             log.error("Unexpected response: %s" % err)
+            return peer.node_id, False
         except RemoteException as err:
-            if 'Invalid token' in str(err):
-                self.peer_manager.clear_token(peer.node_id)
-                try:
-                    return await __store()
-                except (ValueError, asyncio.TimeoutError, RemoteException):
-                    return peer.node_id, False
-            else:
+            if 'Invalid token' not in str(err):
                 log.exception("Unexpected error while storing blob_hash")
-        return peer.node_id, False
-
-    def _write(self, data: bytes, address: typing.Tuple[str, int]):
-        if self.transport:
-            try:
-                self.transport.sendto(data, address)
-            except OSError as err:
-                if err.errno == socket.EWOULDBLOCK:
-                    # i'm scared this may swallow important errors, but i get a million of these
-                    # on Linux and it doesn't seem to affect anything  -grin
-                    log.warning("Can't send data to dht: EWOULDBLOCK")
-                # elif err.errno == socket.ENETUNREACH:
-                #     # this should probably try to retransmit when the network connection is back
-                #     log.error("Network is unreachable")
-                else:
-                    log.error("DHT socket error sending %i bytes to %s:%i - %s (code %i)",
-                              len(data), address[0], address[1], str(err), err.errno)
-                    raise err
-        else:
-            raise TransportNotConnected()
+                return peer.node_id, False
+        self.peer_manager.clear_token(peer.node_id)
+        if not retry:
+            return peer.node_id, False
+        return await self.store_to_peer(hash_value, peer, retry=False)
