@@ -1,4 +1,4 @@
-# <img src="https://raw.githubusercontent.com/lbryio/lbry-sdk/master/lbry/lbry.png" alt="LBRY" width="48" height="36" /> LBRY SDK [![Build Status](https://travis-ci.org/lbryio/lbry-sdk.svg?branch=master)](https://travis-ci.org/lbryio/lbry-sdk) [![Test Coverage](https://codecov.io/gh/lbryio/lbry-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry-sdk)
+# <img src="https://raw.githubusercontent.com/lbryio/lbry-sdk/master/lbry/lbry.png" alt="LBRY" width="48" height="36" /> LBRY SDK [![Build Status](https://travis-ci.org/lbryio/lbry-sdk.svg?branch=master)](https://travis-ci.org/lbryio/lbry-sdk) [![Test Coverage](https://codecov.io/gh/lbryio/lbry-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry-sdk) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://lbry.tech/contribute) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/lbryio/lbry-sdk/blob/master/LICENSE) 
 
 LBRY is a decentralized peer-to-peer protocol for publishing and accessing digital content. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, rights and access rules. LBRY also provides a data network that consists of peers (seeders) uploading and downloading data from other peers, possibly in exchange for payments, as well as a distributed hash table used by peers to discover other peers.
 
@@ -10,12 +10,23 @@ LBRY SDK for Python is currently the most full featured implementation of the LB
  * Protobuf schema for encoding and decoding metadata stored on the blockchain ([lbry.schema](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/schema)).
  * Wallet implementation for the LBRY blockchain ([lbry.wallet](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/wallet)).
  * Daemon with a JSON-RPC API to ease building end user applications in any language and for automating various tasks ([lbry.extras.daemon](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/extras/daemon)). 
+ 
+ ## Table of Contents
+1. [Installation](#installation)
+2. [Usage](#usage)
+3. [Running from source](#running-from-source)
+4. [Contributing](#contributing)
+5. [License](#license)
+6. [Security](#security)
+7. [Contact](#contact)
+8. [Additional information and links](#additional-information-and-links)
 
-## Installation
+
+<h2 align="left">Installation</h2>
 
 Our [releases page](https://github.com/lbryio/lbry-sdk/releases) contains pre-built binaries of the latest release, pre-releases, and past releases for macOS, Debian-based Linux, and Windows. [Automated travis builds](http://build.lbry.io/daemon/) are also available for testing.
 
-## Usage
+<h2 align="left">Usage</h2>
 
 Run `lbrynet start` to launch the API server.
 
@@ -27,27 +38,27 @@ With the daemon running, `lbrynet commands` will show you a list of commands.
 
 The full API is documented [here](https://lbry.tech/api/sdk).
 
-## Running from source
+<h2 align="left">Running from source</h2>
 
 Installing from source is also relatively painless. Full instructions are in [INSTALL.md](INSTALL.md)
 
-## Contributing
+<h2 align="left">Contributing</h2>
 
 Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.tech/contribute) link.
 
-## License
+<h2 align="left">License</h2>
 
 This project is MIT licensed. For the full license, see [LICENSE](LICENSE).
 
-## Security
+<h2 align="left">Security</h2>
 
 We take security seriously. Please contact security@lbry.com regarding any security issues. [Our GPG key is here](https://lbry.com/faq/gpg-key) if you need it.
 
-## Contact
+<h2 align="left">Contact</h2>
 
 The primary contact for this project is [@eukreign](mailto:lex@lbry.com).
 
-## Additional information and links
+<h2 align="left">Additional information and links</h2>
 
 The documentation for the API can be found [here](https://lbry.tech/api/sdk).
 
