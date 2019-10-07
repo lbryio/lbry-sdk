@@ -3,6 +3,7 @@ from aiohttp.client_exceptions import ClientError
 import json
 import logging.handlers
 import traceback
+import aiohttp
 from lbry import utils, __version__
 
 
@@ -42,6 +43,8 @@ class HTTPSLogglyHandler(logging.Handler):
         self.url = "https://logs-01.loggly.com/inputs/{token}/tag/{tag}".format(
             token=utils.deobfuscate(loggly_token), tag='lbrynet-' + __version__
         )
+        self._loop = asyncio.get_event_loop()
+        self._session = aiohttp.ClientSession()
 
     def get_full_message(self, record):
         if record.exc_info:
@@ -49,13 +52,17 @@ class HTTPSLogglyHandler(logging.Handler):
         else:
             return record.getMessage()
 
-    async def _emit(self, record):
+    async def _emit(self, record, retry=True):
+        data = self.format(record).encode()
         try:
-            async with utils.aiohttp_request('post', self.url, data=self.format(record).encode(),
-                                             cookies=self.cookies) as response:
+            async with self._session.post(self.url, data=data,
+                                          cookies=self.cookies) as response:
                 self.cookies.update(response.cookies)
         except ClientError:
-            pass
+            if self._loop.is_running() and retry:
+                await self._session.close()
+                self._session = aiohttp.ClientSession()
+                return await self._emit(record, retry=False)
 
     def emit(self, record):
         asyncio.ensure_future(self._emit(record))
