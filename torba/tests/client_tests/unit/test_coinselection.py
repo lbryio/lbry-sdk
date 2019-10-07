@@ -75,15 +75,15 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
 
     def test_pick(self):
         utxo_pool = self.estimates(
-            utxo(1 * CENT),
-            utxo(1 * CENT),
-            utxo(3 * CENT),
-            utxo(5 * CENT),
-            utxo(10 * CENT),
+            utxo(1*CENT),
+            utxo(1*CENT),
+            utxo(3*CENT),
+            utxo(5*CENT),
+            utxo(10*CENT),
         )
-        selector = CoinSelector(3 * CENT, 0)
+        selector = CoinSelector(3*CENT, 0)
         match = selector.select(utxo_pool)
-        self.assertListEqual([5 * CENT], [c.txo.amount for c in match])
+        self.assertListEqual([5*CENT], [c.txo.amount for c in match])
 
     def test_confirmed_strategies(self):
         utxo_pool = self.estimates(
@@ -93,14 +93,14 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
             utxo(11*CENT, height=5),
         )
 
-        match = CoinSelector(20 * CENT, 0).select(utxo_pool, "only_confirmed")
+        match = CoinSelector(20*CENT, 0).select(utxo_pool, "only_confirmed")
         self.assertListEqual([5, 5], [c.txo.tx_ref.height for c in match])
-        match = CoinSelector(25 * CENT, 0).select(utxo_pool, "only_confirmed")
+        match = CoinSelector(25*CENT, 0).select(utxo_pool, "only_confirmed")
         self.assertListEqual([], [c.txo.tx_ref.height for c in match])
 
-        match = CoinSelector(20 * CENT, 0).select(utxo_pool, "prefer_confirmed")
+        match = CoinSelector(20*CENT, 0).select(utxo_pool, "prefer_confirmed")
         self.assertListEqual([5, 5], [c.txo.tx_ref.height for c in match])
-        match = CoinSelector(25 * CENT, 0, '\x00').select(utxo_pool, "prefer_confirmed")
+        match = CoinSelector(25*CENT, 0, '\x00').select(utxo_pool, "prefer_confirmed")
         self.assertListEqual([5, 0, -2], [c.txo.tx_ref.height for c in match])
 
 
