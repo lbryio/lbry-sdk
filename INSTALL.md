@@ -9,21 +9,23 @@ Here's a video walkthrough of this setup, which is itself hosted by the LBRY net
 
 ## Prerequisites
 
-Running `lbrynet` from source requires Python 3.7 or higher. Get the installer for your OS [here](https://www.python.org/downloads/release/python-370/).
+Running `lbrynet` from source requires Python 3.7 or higher. Get the installer for your OS [here](https://www.python.org/downloads/).
 
 After installing python 3, you'll need to install some additional libraries depending on your operating system.
 
 ### macOS
 
-macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
+macOS users will need to [install xcode command line tools](https://www.embarcadero.com/starthere/xe5/mobdevsetup/ios/en/installing_the_commandline_tools.html) and [homebrew](http://brew.sh/).
 
 These environment variables also need to be set:
-1. PYTHONUNBUFFERED=1
-2. EVENT_NOKQUEUE=1
+```sh
+PYTHONUNBUFFERED=1
+EVENT_NOKQUEUE=1
+```
 
 Remaining dependencies can then be installed by running:
 
-```
+```sh
 brew install python protobuf
 ```
 
@@ -33,7 +35,7 @@ Assistance installing Python3: https://docs.python-guide.org/starting/install3/o
 
 On Ubuntu (16.04 minimum, we recommend 18.04), install the following:
 
-```
+```sh
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt-get update
 sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv libssl-dev python-protobuf
@@ -49,26 +51,34 @@ If you're running another Linux distro, install the equivalent of the above pack
 
 To install on Linux/Mac:
 
- ```
  Clone the repository:
+ ```sh
  $ git clone https://github.com/lbryio/lbry-sdk.git
  $ cd lbry-sdk
-
- Create a Python virtual environment for lbry-sdk:
+```
+Create a Python virtual environment for lbry-sdk:
+```sh
  $ python3.7 -m venv lbry-venv
- 
+``` 
  Activating lbry-sdk virtual environment:
+```sh 
  $ source lbry-venv/bin/activate
- 
+```
+
  Make sure you're on Python 3.7+ (as the default Python in virtual environment):
+```sh
  $ python --version
+```
 
  Install packages:
+```sh
  $ make install
+```
 
  If you are on Linux and using PyCharm, generates initial configs:
+```sh
  $ make idea
- ```
+```
 
 To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `python3.7 -m venv lbry-venv` command.
 
@@ -76,18 +86,24 @@ To verify your installation, `which lbrynet` should return a path inside of the 
 
 To install on Windows:
 
- ```
- Clone the repository:
+Clone the repository:
+ ```sh
  > git clone https://github.com/lbryio/lbry-sdk.git
  > cd lbry-sdk
+```
 
  Create a Python virtual environment for lbry-sdk:
+```sh
  > python -m venv lbry-venv
+```
 
  Activating lbry-sdk virtual environment:
+```sh
  > lbry-venv\Scripts\activate
+```
 
  Install packages:
+```sh
  > cd torba
  > pip install -e .
  > cd ../lbry
@@ -98,7 +114,7 @@ To install on Windows:
 
 To run the unit tests from the repo directory:
 
- ```
+ ```sh
  python -m unittest discover -s lbry tests.unit
  ```
 
