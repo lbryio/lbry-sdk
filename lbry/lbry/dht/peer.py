@@ -161,7 +161,7 @@ class KademliaPeer:
         if self.tcp_port is not None and not 1 <= self.tcp_port <= 65535:
             raise ValueError("invalid tcp port")
         if not is_valid_ipv4(self.address):
-            raise ValueError("invalid ip address")
+            raise ValueError(f"invalid ip address: '{self.address}'")
 
     def update_tcp_port(self, tcp_port: int):
         self.tcp_port = tcp_port
