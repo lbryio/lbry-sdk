@@ -21,12 +21,12 @@ def get_mock_node(loop):
 
 
 class TestManagedStream(BlobExchangeTestBase):
-    async def create_stream(self, blob_count: int = 10):
+    async def create_stream(self, blob_count: int = 10, file_name='test_file'):
         self.stream_bytes = b''
         for _ in range(blob_count):
             self.stream_bytes += os.urandom((MAX_BLOB_SIZE - 1))
         # create the stream
-        file_path = os.path.join(self.server_dir, "test_file")
+        file_path = os.path.join(self.server_dir, file_name)
         with open(file_path, 'wb') as f:
             f.write(self.stream_bytes)
         descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager.blob_dir, file_path)
@@ -39,13 +39,20 @@ class TestManagedStream(BlobExchangeTestBase):
             self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir
         )
 
-    async def test_file_saves_with_valid_file_name(self):
-        await self._test_transfer_stream(10, file_name="Bitcoin can't be shut down or regulated?.mov")
-        self.assertTrue(self.stream.output_file_exists)
+    async def test_client_sanitizes_file_name(self):
+        illegal_name = 't<?t_f:|<'
+        descriptor = await self.create_stream(file_name=illegal_name)
+        descriptor.suggested_file_name = illegal_name
+        self.stream = ManagedStream(
+            self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir
+        )
+        await self._test_transfer_stream(1, skip_setup=True)
         self.assertTrue(self.stream.completed)
-        self.assertEqual(self.stream.file_name, "Bitcoin_cant_be_shut_down_or_regulated.mov")
-        self.assertEqual(self.stream.full_path, os.path.join(self.stream.download_directory, self.stream.file_name))
+        self.assertEqual(self.stream.file_name, 'tt_f')
+        self.assertTrue(self.stream.output_file_exists)
         self.assertTrue(os.path.isfile(self.stream.full_path))
+        self.assertEqual(self.stream.full_path, os.path.join(self.client_dir, 'tt_f'))
+        self.assertTrue(os.path.isfile(os.path.join(self.client_dir, 'tt_f')))
 
     async def test_status_file_completed(self):
         await self._test_transfer_stream(10)
@@ -57,8 +64,9 @@ class TestManagedStream(BlobExchangeTestBase):
         self.assertFalse(self.stream.completed)
 
     async def _test_transfer_stream(self, blob_count: int, mock_accumulate_peers=None, stop_when_done=True,
-                                    file_name=None):
-        await self.setup_stream(blob_count)
+                                    skip_setup=False):
+        if not skip_setup:
+            await self.setup_stream(blob_count)
         mock_node = mock.Mock(spec=Node)
 
         def _mock_accumulate_peers(q1, q2):
@@ -68,7 +76,7 @@ class TestManagedStream(BlobExchangeTestBase):
             return q2, self.loop.create_task(_task())
 
         mock_node.accumulate_peers = mock_accumulate_peers or _mock_accumulate_peers
-        await self.stream.save_file(node=mock_node, file_name=file_name)
+        await self.stream.save_file(node=mock_node)
         await self.stream.finished_write_attempt.wait()
         self.assertTrue(os.path.isfile(self.stream.full_path))
         if stop_when_done:

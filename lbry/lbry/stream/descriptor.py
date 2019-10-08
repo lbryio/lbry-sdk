@@ -4,6 +4,7 @@ import binascii
 import logging
 import typing
 import asyncio
+import re
 from collections import OrderedDict
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbry.blob import MAX_BLOB_SIZE
@@ -46,6 +47,29 @@ def file_reader(file_path: str):
             offset += bytes_to_read
 
 
+def sanitize_file_name(dirty_name: str):
+    RE_IL_CHARS = re.compile(r'[<>:"/\\\|\?\*]')
+    RE_DOTS_AT_END = re.compile(r'[ \t]*(\.)+[ \t]$')
+    RE_LEAD_TRAIL_SPACE = re.compile(r'(^[ \t]+|[ \t]+$)')
+    res_il_names = \
+        [re.compile(regex) for regex in (r'^CON$', r'^PRN$', r'^AUX$', r'^NUL$', r'^COM[1-9]$', r'^LPT[1-9]$')]
+
+    file_name = re.sub(RE_IL_CHARS, '', dirty_name)
+    file_name, ext = os.path.splitext(file_name)
+    file_name = re.sub(RE_LEAD_TRAIL_SPACE, '', file_name)
+    file_name = re.sub(RE_DOTS_AT_END, '', file_name)
+    ext = re.sub(RE_LEAD_TRAIL_SPACE, '', ext)
+    if any((REGEX.match(file_name) for REGEX in res_il_names)):
+        file_name = ''
+    elif file_name and len(ext) > 1:
+        file_name += ext
+
+    if len(file_name) == 0:
+        log.warning('Unable to suggest a file name for %s', dirty_name)
+
+    return file_name
+
+
 class StreamDescriptor:
     __slots__ = [
         'loop',
@@ -65,7 +89,7 @@ class StreamDescriptor:
         self.blob_dir = blob_dir
         self.stream_name = stream_name
         self.key = key
-        self.suggested_file_name = suggested_file_name
+        self.suggested_file_name = sanitize_file_name(suggested_file_name)
         self.blobs = blobs
         self.stream_hash = stream_hash or self.get_stream_hash()
         self.sd_hash = sd_hash

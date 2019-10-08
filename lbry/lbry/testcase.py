@@ -197,8 +197,9 @@ class CommandTestCase(IntegrationTestCase):
         """ Synchronous version of `out` method. """
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
-    async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True, **kwargs):
-        file = tempfile.NamedTemporaryFile()
+    async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True,
+                            prefix=None, suffix=None, **kwargs):
+        file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix)
 
         def cleanup():
             try:

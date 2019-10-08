@@ -10,7 +10,7 @@ from lbry.conf import Config
 from lbry.error import InvalidStreamDescriptorError
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
-from lbry.stream.descriptor import StreamDescriptor
+from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
 
 
 class TestStreamDescriptor(AsyncioTestCase):
@@ -78,6 +78,11 @@ class TestStreamDescriptor(AsyncioTestCase):
         self.sd_dict['blobs'][-2]['length'] = 0
         await self._test_invalid_sd()
 
+    async def test_sanitize_file_name(self):
+        test_cases = [' t/-?t|.g.ext ', 'end_me .', '', '.file', 'test name.ext', 'COM8', 'LPT2']
+        expected = ['t-t.g.ext', 'end_me', '', '.file', 'test name.ext', '', '']
+        actual = [sanitize_file_name(tc) for tc in test_cases]
+        self.assertListEqual(actual, expected)
 
 class TestRecoverOldStreamDescriptors(AsyncioTestCase):
     async def test_old_key_sort_sd_blob(self):
