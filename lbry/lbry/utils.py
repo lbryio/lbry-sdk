@@ -192,7 +192,8 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
     return (await loop.getaddrinfo(
         url, port,
         proto=socket.IPPROTO_TCP if proto == 'tcp' else socket.IPPROTO_UDP,
-        type=socket.SOCK_STREAM if proto == 'tcp' else socket.SOCK_DGRAM
+        type=socket.SOCK_STREAM if proto == 'tcp' else socket.SOCK_DGRAM,
+        family=socket.AF_INET
     ))[0][4][0]
 
 
