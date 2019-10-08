@@ -4117,7 +4117,7 @@ def get_loggly_query_string(installation_id):
     now = utils.now()
     yesterday = now - utils.timedelta(days=1)
     params = {
-        'terms': 'json.installation_id:{}*'.format(installation_id[:SHORT_ID_LEN]),
+        'terms': f'json.installation_id:{installation_id[:SHORT_ID_LEN]}*',
         'from': loggly_time_string(yesterday),
         'to': loggly_time_string(now)
     }

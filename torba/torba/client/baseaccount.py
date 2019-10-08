@@ -278,7 +278,7 @@ class BaseAccount:
         seed, private_key, public_key = cls.keys_from_dict(ledger, d)
         name = d.get('name')
         if not name:
-            name = 'Account #{}'.format(public_key.address)
+            name = f'Account #{public_key.address}'
         return cls(
             ledger=ledger,
             wallet=wallet,

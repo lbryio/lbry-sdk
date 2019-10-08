@@ -382,7 +382,7 @@ class SessionManager:
         real_name: "bch.electrumx.cash t50001 s50002" for example
         """
         await self.peer_mgr.add_localRPC_peer(real_name)
-        return "peer '{}' added".format(real_name)
+        return f"peer '{real_name}' added"
 
     async def rpc_disconnect(self, session_ids):
         """Disconnect sessions.
@@ -511,17 +511,12 @@ class SessionManager:
             self.logger.info(f'max session count: {self.env.max_sessions:,d}')
             self.logger.info(f'session timeout: '
                              f'{self.env.session_timeout:,d} seconds')
-            self.logger.info('session bandwidth limit {:,d} bytes'
-                             .format(self.env.bandwidth_limit))
-            self.logger.info('max response size {:,d} bytes'
-                             .format(self.env.max_send))
-            self.logger.info('max subscriptions across all sessions: {:,d}'
-                             .format(self.max_subs))
-            self.logger.info('max subscriptions per session: {:,d}'
-                             .format(self.env.max_session_subs))
+            self.logger.info(f'session bandwidth limit {self.env.bandwidth_limit:,d} bytes')
+            self.logger.info(f'max response size {self.env.max_send:,d} bytes')
+            self.logger.info(f'max subscriptions across all sessions: {self.max_subs:,d}')
+            self.logger.info(f'max subscriptions per session: {self.env.max_session_subs:,d}')
             if self.env.drop_client is not None:
-                self.logger.info('drop clients matching: {}'
-                                 .format(self.env.drop_client.pattern))
+                self.logger.info(f'drop clients matching: {self.env.drop_client.pattern}')
             # Start notifications; initialize hsub_results
             await notifications.start(self.db.db_height, self._notify_sessions)
             await self.start_other()
@@ -1079,7 +1074,7 @@ class ElectrumX(SessionBase):
         major, minor = divmod(ni_version, 1000000)
         minor, revision = divmod(minor, 10000)
         revision //= 100
-        daemon_version = '{:d}.{:d}.{:d}'.format(major, minor, revision)
+        daemon_version = f'{major:d}.{minor:d}.{revision:d}'
         for pair in [
                 ('$SERVER_VERSION', torba.__version__),
                 ('$DAEMON_VERSION', daemon_version),

@@ -189,7 +189,7 @@ class SQLDB:
                     constraints: Union[list, tuple]) -> Tuple[str, list]:
         columns, values = [], []
         for column, value in data.items():
-            columns.append("{} = ?".format(column))
+            columns.append(f"{column} = ?")
             values.append(value)
         values.extend(constraints)
         return f"UPDATE {table} SET {', '.join(columns)} WHERE {where}", values

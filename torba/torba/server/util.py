@@ -94,7 +94,7 @@ def formatted_time(t, sep=' '):
             parts.append(fmt.format(val))
         t %= n
     if len(parts) < 3:
-        parts.append('{:02d}s'.format(t))
+        parts.append(f'{t:02d}s')
     return sep.join(parts)
 
 
@@ -182,7 +182,7 @@ class LogicalFile:
     """A logical binary file split across several separate files on disk."""
 
     def __init__(self, prefix, digits, file_size):
-        digit_fmt = '{' + ':0{:d}d'.format(digits) + '}'
+        digit_fmt = f'{{:0{digits:d}d}}'
         self.filename_fmt = prefix + digit_fmt
         self.file_size = file_size
 

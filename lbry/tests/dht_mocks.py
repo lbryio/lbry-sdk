@@ -23,7 +23,7 @@ def get_time_accelerator(loop: asyncio.AbstractEventLoop,
     async def accelerate_time(seconds: float) -> None:
         nonlocal _time
         if seconds < 0:
-            raise ValueError('Cannot go back in time ({} seconds)'.format(seconds))
+            raise ValueError(f'Cannot go back in time ({seconds} seconds)')
         _time += seconds
         await past_events()
         await asyncio.sleep(0)

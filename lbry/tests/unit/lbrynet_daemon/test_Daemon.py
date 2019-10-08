@@ -176,7 +176,7 @@ class TestFileListSorting(unittest.TestCase):
             'file_name=remember.mp3, points_paid=4.8',
             'file_name=day.tiff, points_paid=2.5'
         ]
-        format_result = lambda f: 'file_name={}, points_paid={}'.format(f['file_name'], f['points_paid'])
+        format_result = lambda f: f"file_name={f['file_name']}, points_paid={f['points_paid']}"
 
         sort_options = ['file_name,asc', 'points_paid,desc']
         file_list = yield f2d(self.test_daemon.jsonrpc_file_list(sort=sort_options))

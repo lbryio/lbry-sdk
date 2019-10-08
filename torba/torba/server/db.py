@@ -422,8 +422,7 @@ class DB:
     async def fs_block_hashes(self, height, count):
         headers_concat, headers_count = await self.read_headers(height, count)
         if headers_count != count:
-            raise self.DBError('only got {:,d} headers starting at {:,d}, not '
-                               '{:,d}'.format(headers_count, height, count))
+            raise self.DBError(f'only got {headers_count:,d} headers starting at {height:,d}, not {count:,d}')
         offset = 0
         headers = []
         for n in range(count):
@@ -543,17 +542,15 @@ class DB:
                 raise self.DBError('failed reading state from DB')
             self.db_version = state['db_version']
             if self.db_version not in self.DB_VERSIONS:
-                raise self.DBError('your UTXO DB version is {} but this '
-                                   'software only handles versions {}'
-                                   .format(self.db_version, self.DB_VERSIONS))
+                raise self.DBError(f'your UTXO DB version is {self.db_version} but this '
+                                   f'software only handles versions {self.DB_VERSIONS}')
             # backwards compat
             genesis_hash = state['genesis']
             if isinstance(genesis_hash, bytes):
                 genesis_hash = genesis_hash.decode()
             if genesis_hash != self.coin.GENESIS_HASH:
-                raise self.DBError('DB genesis hash {} does not match coin {}'
-                                   .format(genesis_hash,
-                                           self.coin.GENESIS_HASH))
+                raise self.DBError(f'DB genesis hash {genesis_hash} does not '
+                                   f'match coin {self.coin.GENESIS_HASH}')
             self.db_height = state['height']
             self.db_tx_count = state['tx_count']
             self.db_tip = state['tip']
@@ -567,17 +564,16 @@ class DB:
         self.last_flush_tx_count = self.fs_tx_count
 
         # Log some stats
-        self.logger.info('DB version: {:d}'.format(self.db_version))
-        self.logger.info('coin: {}'.format(self.coin.NAME))
-        self.logger.info('network: {}'.format(self.coin.NET))
-        self.logger.info('height: {:,d}'.format(self.db_height))
-        self.logger.info('tip: {}'.format(hash_to_hex_str(self.db_tip)))
-        self.logger.info('tx count: {:,d}'.format(self.db_tx_count))
+        self.logger.info(f'DB version: {self.db_version:d}')
+        self.logger.info(f'coin: {self.coin.NAME}')
+        self.logger.info(f'network: {self.coin.NET}')
+        self.logger.info(f'height: {self.db_height:,d}')
+        self.logger.info(f'tip: {hash_to_hex_str(self.db_tip)}')
+        self.logger.info(f'tx count: {self.db_tx_count:,d}')
         if self.utxo_db.for_sync:
             self.logger.info(f'flushing DB cache at {self.env.cache_MB:,d} MB')
         if self.first_sync:
-            self.logger.info('sync time so far: {}'
-                             .format(util.formatted_time(self.wall_time)))
+            self.logger.info(f'sync time so far: {util.formatted_time(self.wall_time)}')
 
     def write_utxo_state(self, batch):
         """Write (UTXO) state to the batch."""

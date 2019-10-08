@@ -185,7 +185,7 @@ class Base58:
     def char_value(cls, c):
         val = cls.char_map.get(c)
         if val is None:
-            raise Base58Error('invalid base 58 character "{}"'.format(c))
+            raise Base58Error(f'invalid base 58 character "{c}"')
         return val
 
     @classmethod
@@ -243,7 +243,7 @@ class Base58:
         be_bytes = cls.decode(txt)
         result, check = be_bytes[:-4], be_bytes[-4:]
         if check != hash_fn(result)[:4]:
-            raise Base58Error('invalid base 58 checksum for {}'.format(txt))
+            raise Base58Error(f'invalid base 58 checksum for {txt}')
         return result
 
     @classmethod

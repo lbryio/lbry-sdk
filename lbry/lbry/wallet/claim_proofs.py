@@ -50,12 +50,12 @@ def verify_proof(proof, root_hash, name):
                 raise InvalidProofError("did not find the alleged child")
         if i == 0 and 'txhash' in proof and 'nOut' in proof and 'last takeover height' in proof:
             if len(proof['txhash']) != 64:
-                raise InvalidProofError("txhash was invalid: {}".format(proof['txhash']))
+                raise InvalidProofError(f"txhash was invalid: {proof['txhash']}")
             if not isinstance(proof['nOut'], int):
-                raise InvalidProofError("nOut was invalid: {}".format(proof['nOut']))
+                raise InvalidProofError(f"nOut was invalid: {proof['nOut']}")
             if not isinstance(proof['last takeover height'], int):
                 raise InvalidProofError(
-                    'last takeover height was invalid: {}'.format(proof['last takeover height']))
+                    f"last takeover height was invalid: {proof['last takeover height']}")
             to_hash += get_hash_for_outpoint(
                 binascii.unhexlify(proof['txhash'])[::-1],
                 proof['nOut'],

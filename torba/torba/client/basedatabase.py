@@ -184,10 +184,10 @@ def query(select, **constraints) -> Tuple[str, Dict[str, Any]]:
             raise ValueError("order_by must be string or list")
 
     if limit is not None:
-        sql.append('LIMIT {}'.format(limit))
+        sql.append(f'LIMIT {limit}')
 
     if offset is not None:
-        sql.append('OFFSET {}'.format(offset))
+        sql.append(f'OFFSET {offset}')
 
     return ' '.join(sql), values
 
@@ -273,7 +273,7 @@ class SQLiteMixin:
                     constraints: Union[list, tuple]) -> Tuple[str, list]:
         columns, values = [], []
         for column, value in data.items():
-            columns.append("{} = ?".format(column))
+            columns.append(f"{column} = ?")
             values.append(value)
         values.extend(constraints)
         sql = "UPDATE {} SET {} WHERE {}".format(

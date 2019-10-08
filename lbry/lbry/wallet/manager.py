@@ -77,7 +77,7 @@ class LbryWalletManager(BaseWalletManager):
         while os.path.isfile(backup_path_template % i):
             i += 1
         os.rename(path, backup_path_template % i)
-        temp_path = "{}.tmp.{}".format(path, os.getpid())
+        temp_path = f"{path}.tmp.{os.getpid()}"
         with open(temp_path, "w") as f:
             f.write(migrated_json)
             f.flush()

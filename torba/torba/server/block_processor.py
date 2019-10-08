@@ -78,12 +78,10 @@ class Prefetcher:
         daemon_height = await self.daemon.height()
         behind = daemon_height - height
         if behind > 0:
-            self.logger.info('catching up to daemon height {:,d} '
-                             '({:,d} blocks behind)'
-                             .format(daemon_height, behind))
+            self.logger.info(f'catching up to daemon height {daemon_height:,d} '
+                             f'({behind:,d} blocks behind)')
         else:
-            self.logger.info('caught up to daemon height {:,d}'
-                             .format(daemon_height))
+            self.logger.info(f'caught up to daemon height {daemon_height:,d}')
 
     async def _prefetch_blocks(self):
         """Prefetch some blocks and put them on the queue.
@@ -116,8 +114,7 @@ class Prefetcher:
                 # Special handling for genesis block
                 if first == 0:
                     blocks[0] = self.coin.genesis_block(blocks[0])
-                    self.logger.info('verified genesis block with hash {}'
-                                     .format(hex_hashes[0]))
+                    self.logger.info(f'verified genesis block with hash {hex_hashes[0]}')
 
                 # Update our recent average block size estimate
                 size = sum(len(block) for block in blocks)
@@ -461,15 +458,14 @@ class BlockProcessor:
             self.height -= 1
             self.db.tx_counts.pop()
 
-        self.logger.info('backed up to height {:,d}'.format(self.height))
+        self.logger.info(f'backed up to height {self.height:,d}')
 
     def backup_txs(self, txs):
         # Prevout values, in order down the block (coinbase first if present)
         # undo_info is in reverse block order
         undo_info = self.db.read_undo_info(self.height)
         if undo_info is None:
-            raise ChainError('no undo information found for height {:,d}'
-                             .format(self.height))
+            raise ChainError(f'no undo information found for height {self.height:,d}')
         n = len(undo_info)
 
         # Use local vars for speed in the loops

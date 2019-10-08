@@ -104,7 +104,7 @@ class Env:
     def required(cls, envvar):
         value = environ.get(envvar)
         if value is None:
-            raise cls.Error('required envvar {} not set'.format(envvar))
+            raise cls.Error(f'required envvar {envvar} not set')
         return value
 
     @classmethod
@@ -115,8 +115,7 @@ class Env:
         try:
             return int(value)
         except Exception:
-            raise cls.Error('cannot convert envvar {} value {} to an integer'
-                            .format(envvar, value))
+            raise cls.Error(f'cannot convert envvar {envvar} value {value} to an integer')
 
     @classmethod
     def custom(cls, envvar, default, parse):
@@ -126,15 +125,13 @@ class Env:
         try:
             return parse(value)
         except Exception as e:
-            raise cls.Error('cannot parse envvar {} value {}'
-                            .format(envvar, value)) from e
+            raise cls.Error(f'cannot parse envvar {envvar} value {value}') from e
 
     @classmethod
     def obsolete(cls, envvars):
         bad = [envvar for envvar in envvars if environ.get(envvar)]
         if bad:
-            raise cls.Error('remove obsolete environment variables {}'
-                            .format(bad))
+            raise cls.Error(f'remove obsolete environment variables {bad}')
 
     def set_event_loop_policy(self):
         policy_name = self.default('EVENT_LOOP_POLICY', None)
@@ -147,7 +144,7 @@ class Env:
             loop_policy = uvloop.EventLoopPolicy()
             asyncio.set_event_loop_policy(loop_policy)
             return loop_policy
-        raise self.Error('unknown event loop policy "{}"'.format(policy_name))
+        raise self.Error(f'unknown event loop policy "{policy_name}"')
 
     def cs_host(self, *, for_rpc):
         """Returns the 'host' argument to pass to asyncio's create_server
@@ -180,9 +177,8 @@ class Env:
         # We give the DB 250 files; allow ElectrumX 100 for itself
         value = max(0, min(env_value, nofile_limit - 350))
         if value < env_value:
-            self.logger.warning('lowered maximum sessions from {:,d} to {:,d} '
-                                'because your open file limit is {:,d}'
-                                .format(env_value, value, nofile_limit))
+            self.logger.warning(f'lowered maximum sessions from {env_value:,d} to {value:,d} '
+                                f'because your open file limit is {nofile_limit:,d}')
         return value
 
     def clearnet_identity(self):
@@ -198,12 +194,12 @@ class Env:
             bad = (ip.is_multicast or ip.is_unspecified
                    or (ip.is_private and self.peer_announce))
         if bad:
-            raise self.Error('"{}" is not a valid REPORT_HOST'.format(host))
+            raise self.Error(f'"{host}" is not a valid REPORT_HOST')
         tcp_port = self.integer('REPORT_TCP_PORT', self.tcp_port) or None
         ssl_port = self.integer('REPORT_SSL_PORT', self.ssl_port) or None
         if tcp_port == ssl_port:
             raise self.Error('REPORT_TCP_PORT and REPORT_SSL_PORT '
-                             'both resolve to {}'.format(tcp_port))
+                             f'both resolve to {tcp_port}')
         return NetIdentity(
             host,
             tcp_port,
@@ -216,8 +212,7 @@ class Env:
         if host is None:
             return None
         if not host.endswith('.onion'):
-            raise self.Error('tor host "{}" must end with ".onion"'
-                             .format(host))
+            raise self.Error(f'tor host "{host}" must end with ".onion"')
 
         def port(port_kind):
             """Returns the clearnet identity port, if any and not zero,
@@ -233,7 +228,7 @@ class Env:
                                 port('ssl_port')) or None
         if tcp_port == ssl_port:
             raise self.Error('REPORT_TCP_PORT_TOR and REPORT_SSL_PORT_TOR '
-                             'both resolve to {}'.format(tcp_port))
+                             f'both resolve to {tcp_port}')
 
         return NetIdentity(
             host,

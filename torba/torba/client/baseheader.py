@@ -144,9 +144,8 @@ class BaseHeaders:
         if previous_hash is None:
             if self.genesis_hash is not None and self.genesis_hash != current_hash:
                 raise InvalidHeader(
-                    height, "genesis header doesn't match: {} vs expected {}".format(
-                        current_hash.decode(), self.genesis_hash.decode())
-                )
+                    height, f"genesis header doesn't match: {current_hash.decode()} "
+                            f"vs expected {self.genesis_hash.decode()}")
             return
 
         if header['prev_block_hash'] != previous_hash:
@@ -166,8 +165,7 @@ class BaseHeaders:
             proof_of_work = self.get_proof_of_work(current_hash)
             if proof_of_work > target:
                 raise InvalidHeader(
-                    height, "insufficient proof of work: {} vs target {}".format(
-                        proof_of_work.value, target.value)
+                    height, f"insufficient proof of work: {proof_of_work.value} vs target {target.value}"
                 )
 
     async def repair(self):

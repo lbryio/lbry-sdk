@@ -29,7 +29,7 @@ def main():
     build_type = get_build_type(os.environ.get('TRAVIS_TAG', None))
     log.debug("setting build type=%s, build commit=%s", build_type, travis_commit)
     with open(build_type_path, 'w') as f:
-        f.write("BUILD = \"{}\"\nBUILD_COMMIT = \"{}\"\n".format(build_type, travis_commit))
+        f.write(f"BUILD = \"{build_type}\"\nBUILD_COMMIT = \"{travis_commit}\"\n")
 
 
 if __name__ == '__main__':
