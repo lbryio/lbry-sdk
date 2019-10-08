@@ -100,11 +100,9 @@ class Coin:
                 missing = [attr for attr in coin_req_attrs
                            if not hasattr(coin, attr)]
                 if missing:
-                    raise CoinError('coin {} missing {} attributes'
-                                    .format(name, missing))
+                    raise CoinError(f'coin {name} missing {missing} attributes')
                 return coin
-        raise CoinError('unknown coin {} and network {} combination'
-                        .format(name, net))
+        raise CoinError(f'unknown coin {name} and network {net} combination')
 
     @classmethod
     def sanitize_url(cls, url):
@@ -112,9 +110,9 @@ class Coin:
         url = url.strip().rstrip('/')
         match = cls.RPC_URL_REGEX.match(url)
         if not match:
-            raise CoinError('invalid daemon URL: "{}"'.format(url))
+            raise CoinError(f'invalid daemon URL: "{url}"')
         if match.groups()[1] is None:
-            url += ':{:d}'.format(cls.RPC_PORT)
+            url += f':{cls.RPC_PORT:d}'
         if not url.startswith('http://') and not url.startswith('https://'):
             url = 'http://' + url
         return url + '/'
@@ -128,8 +126,7 @@ class Coin:
         header = cls.block_header(block, 0)
         header_hex_hash = hash_to_hex_str(cls.header_hash(header))
         if header_hex_hash != cls.GENESIS_HASH:
-            raise CoinError('genesis block has hash {} expected {}'
-                            .format(header_hex_hash, cls.GENESIS_HASH))
+            raise CoinError(f'genesis block has hash {header_hex_hash} expected {cls.GENESIS_HASH}')
 
         return header + bytes(1)
 
@@ -202,7 +199,7 @@ class Coin:
         if verbyte in cls.P2SH_VERBYTES:
             return ScriptPubKey.P2SH_script(hash160)
 
-        raise CoinError('invalid address: {}'.format(address))
+        raise CoinError(f'invalid address: {address}')
 
     @classmethod
     def privkey_WIF(cls, privkey_bytes, compressed):

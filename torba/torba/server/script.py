@@ -51,13 +51,13 @@ class Enumeration:
             if isinstance(x, tuple):
                 x, i = x
             if not isinstance(x, str):
-                raise EnumError("enum name {} not a string".format(x))
+                raise EnumError(f"enum name {x} not a string")
             if not isinstance(i, int):
-                raise EnumError("enum value {} not an integer".format(i))
+                raise EnumError(f"enum value {i} not an integer")
             if x in uniqueNames:
-                raise EnumError("enum name {} not unique".format(x))
+                raise EnumError(f"enum name {x} not unique")
             if i in uniqueValues:
-                raise EnumError("enum value {} not unique".format(x))
+                raise EnumError(f"enum value {i} not unique")
             uniqueNames.add(x)
             uniqueValues.add(i)
             lookup[x] = i
@@ -69,7 +69,7 @@ class Enumeration:
     def __getattr__(self, attr):
         result = self.lookup.get(attr)
         if result is None:
-            raise AttributeError('enumeration has no member {}'.format(attr))
+            raise AttributeError(f'enumeration has no member {attr}')
         return result
 
     def whatis(self, value):
@@ -194,7 +194,7 @@ class ScriptPubKey:
                 if not req_compressed:
                     return
                 raise PubKeyError('uncompressed pubkeys are invalid')
-        raise PubKeyError('invalid pubkey {}'.format(pubkey))
+        raise PubKeyError(f'invalid pubkey {pubkey}')
 
     @classmethod
     def pubkey_script(cls, pubkey):
@@ -206,8 +206,7 @@ class ScriptPubKey:
         """Returns the script for a pay-to-multisig transaction."""
         n = len(pubkeys)
         if not 1 <= m <= n <= 15:
-            raise ScriptError('{:d} of {:d} multisig script not possible'
-                              .format(m, n))
+            raise ScriptError(f'{m:d} of {n:d} multisig script not possible')
         for pubkey in pubkeys:
             cls.validate_pubkey(pubkey, req_compressed=True)
         # See https://bitcoin.org/en/developer-guide
@@ -273,11 +272,11 @@ class Script:
     @classmethod
     def opcode_name(cls, opcode):
         if OpCodes.OP_0 < opcode < OpCodes.OP_PUSHDATA1:
-            return 'OP_{:d}'.format(opcode)
+            return f'OP_{opcode:d}'
         try:
             return OpCodes.whatis(opcode)
         except KeyError:
-            return 'OP_UNKNOWN:{:d}'.format(opcode)
+            return f'OP_UNKNOWN:{opcode:d}'
 
     @classmethod
     def dump(cls, script):
@@ -287,5 +286,4 @@ class Script:
             if data is None:
                 print(name)
             else:
-                print('{} {} ({:d} bytes)'
-                      .format(name, data.hex(), len(data)))
+                print(f'{name} {data.hex()} ({len(data):d} bytes)')

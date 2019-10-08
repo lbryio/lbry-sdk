@@ -26,8 +26,7 @@ class ExchangeRate:
         self.ts = ts
 
     def __repr__(self):
-        out = "Currency pair:{}, spot:{}, ts:{}".format(
-            self.currency_pair, self.spot, self.ts)
+        out = f"Currency pair:{self.currency_pair}, spot:{self.spot}, ts:{self.ts}"
         return out
 
     def as_dict(self):

@@ -60,8 +60,7 @@ class TxInput(namedtuple("TxInput", "prev_hash prev_idx script sequence")):
     def __str__(self):
         script = self.script.hex()
         prev_hash = hash_to_hex_str(self.prev_hash)
-        return ("Input({}, {:d}, script={}, sequence={:d})"
-                .format(prev_hash, self.prev_idx, script, self.sequence))
+        return (f"Input({prev_hash}, {self.prev_idx:d}, script={script}, sequence={self.sequence:d})")
 
     def is_generation(self):
         """Test if an input is generation/coinbase like"""
@@ -473,8 +472,7 @@ class TxInputTokenPayStealth(
     def __str__(self):
         script = self.script.hex()
         keyimage = bytes(self.keyimage).hex()
-        return ("Input({}, {:d}, script={}, sequence={:d})"
-                .format(keyimage, self.ringsize[1], script, self.sequence))
+        return (f"Input({keyimage}, {self.ringsize[1]:d}, script={script}, sequence={self.sequence:d})")
 
     def is_generation(self):
         return True
@@ -518,8 +516,7 @@ class TxInputDcr(namedtuple("TxInput", "prev_hash prev_idx tree sequence")):
 
     def __str__(self):
         prev_hash = hash_to_hex_str(self.prev_hash)
-        return ("Input({}, {:d}, tree={}, sequence={:d})"
-                .format(prev_hash, self.prev_idx, self.tree, self.sequence))
+        return (f"Input({prev_hash}, {self.prev_idx:d}, tree={self.tree}, sequence={self.sequence:d})")
 
     def is_generation(self):
         """Test if an input is generation/coinbase like"""

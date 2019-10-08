@@ -261,7 +261,7 @@ class Peer:
 
         parts = [self.host, 'v' + self.protocol_max]
         if self.pruning:
-            parts.append('p{:d}'.format(self.pruning))
+            parts.append(f'p{self.pruning:d}')
         for letter, port in (('s', self.ssl_port), ('t', self.tcp_port)):
             if port:
                 parts.append(port_text(letter, port))

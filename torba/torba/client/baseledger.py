@@ -35,7 +35,7 @@ class LedgerRegistry(type):
         if not (name == 'BaseLedger' and not bases):
             ledger_id = cls.get_id()
             assert ledger_id not in mcs.ledgers,\
-                'Ledger with id "{}" already registered.'.format(ledger_id)
+                f'Ledger with id "{ledger_id}" already registered.'
             mcs.ledgers[ledger_id] = cls
         return cls
 
@@ -346,7 +346,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 )
 
             else:
-                raise IndexError("headers.connect() returned negative number ({})".format(added))
+                raise IndexError(f"headers.connect() returned negative number ({added})")
 
             if height < 0:
                 raise IndexError(

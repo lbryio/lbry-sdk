@@ -56,7 +56,7 @@ class TXORef:
 
     @property
     def id(self):
-        return '{}:{}'.format(self.tx_ref.id, self.position)
+        return f'{self.tx_ref.id}:{self.position}'
 
     @property
     def hash(self):

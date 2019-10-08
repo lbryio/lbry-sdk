@@ -30,7 +30,7 @@ def migrate_db(conf, start, end):
         elif current == 10:
             from .migrate10to11 import do_migration
         else:
-            raise Exception("DB migration of version {} to {} is not available".format(current, current+1))
+            raise Exception(f"DB migration of version {current} to {current+1} is not available")
         try:
             do_migration(conf)
         except Exception as err:

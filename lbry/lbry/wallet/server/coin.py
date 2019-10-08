@@ -48,8 +48,7 @@ class LBC(Coin):
         header = cls.block_header(block, 0)
         header_hex_hash = hash_to_hex_str(cls.header_hash(header))
         if header_hex_hash != cls.GENESIS_HASH:
-            raise CoinError('genesis block has hash {} expected {}'
-                            .format(header_hex_hash, cls.GENESIS_HASH))
+            raise CoinError(f'genesis block has hash {header_hex_hash} expected {cls.GENESIS_HASH}')
 
         return block
 

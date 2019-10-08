@@ -111,14 +111,14 @@ class DataToken(Token):
     __slots__ = ()
 
     def __repr__(self):
-        return '"{}"'.format(hexlify(self.value))
+        return f'"{hexlify(self.value)}"'
 
 
 class SmallIntegerToken(Token):
     __slots__ = ()
 
     def __repr__(self):
-        return 'SmallIntegerToken({})'.format(self.value)
+        return f'SmallIntegerToken({self.value})'
 
 
 def token_producer(source):
@@ -166,16 +166,16 @@ class Parser:
                 elif isinstance(opcode, PUSH_MANY):
                     self.consume_many_non_greedy()
                 else:
-                    raise ParseError("DataToken found but opcode was '{}'.".format(opcode))
+                    raise ParseError(f"DataToken found but opcode was '{opcode}'.")
             elif isinstance(token, SmallIntegerToken):
                 if isinstance(opcode, SMALL_INTEGER):
                     self.values[opcode.name] = token.value
                 else:
-                    raise ParseError("SmallIntegerToken found but opcode was '{}'.".format(opcode))
+                    raise ParseError(f"SmallIntegerToken found but opcode was '{opcode}'.")
             elif token.value == opcode:
                 pass
             else:
-                raise ParseError("Token is '{}' and opcode is '{}'.".format(token.value, opcode))
+                raise ParseError(f"Token is '{token.value}' and opcode is '{opcode}'.")
             self.token_index += 1
             self.opcode_index += 1
 
@@ -243,7 +243,7 @@ class Parser:
         elif isinstance(opcode, PUSH_SUBSCRIPT):
             self.values[opcode.name] = Script.from_source_with_template(value, opcode.template)
         else:
-            raise ParseError("Not a push single or subscript: {}".format(opcode))
+            raise ParseError(f"Not a push single or subscript: {opcode}")
 
 
 class Template:
@@ -331,7 +331,7 @@ class Script:
                 return
             except ParseError:
                 continue
-        raise ValueError('No matching templates for source: {}'.format(hexlify(self.source)))
+        raise ValueError(f'No matching templates for source: {hexlify(self.source)}')
 
     def generate(self):
         self.source = self.template.generate(self._values)

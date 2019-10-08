@@ -71,7 +71,7 @@ class StreamReflectorClient(asyncio.Protocol):
             raise ValueError("Need protocol version number!")
         server_version = int(response_dict['version'])
         if server_version != REFLECTOR_V2:
-            raise ValueError("I can't handle protocol version {}!".format(server_version))
+            raise ValueError(f"I can't handle protocol version {server_version}!")
         return
 
     async def send_descriptor(self) -> typing.Tuple[bool, typing.List[str]]:  # returns a list of needed blob hashes
