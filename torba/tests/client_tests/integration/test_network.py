@@ -18,7 +18,7 @@ class NetworkTests(IntegrationTestCase):
         self.assertEqual(self.ledger.network.remote_height, initial_height + 1)
 
     async def test_server_features(self):
-        self.assertEqual({
+        self.assertDictEqual({
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
@@ -37,7 +37,7 @@ class NetworkTests(IntegrationTestCase):
             'DAILY_FEE': '42'})
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
         await self.ledger.network.on_connected.first
-        self.assertEqual({
+        self.assertDictEqual({
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
@@ -162,7 +162,7 @@ class ServerPickingTestCase(AsyncioTestCase):
         asyncio.ensure_future(network.start())
         await asyncio.wait_for(network.on_connected.first, timeout=1)
         self.assertTrue(network.is_connected)
-        self.assertEqual(network.client.server, ('127.0.0.1', 1337))
+        self.assertTupleEqual(network.client.server, ('127.0.0.1', 1337))
         self.assertTrue(all([not session.is_closing() for session in network.session_pool.available_sessions]))
         # ensure we are connected to all of them after a while
         await asyncio.sleep(1)
