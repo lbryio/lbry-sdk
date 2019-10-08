@@ -289,8 +289,8 @@ class ManagedStream:
         await response.prepare(request)
         self.streaming_responses.append((request, response))
         self.streaming.set()
+        wrote = 0
         try:
-            wrote = 0
             async for blob_info, decrypted in self._aiter_read_stream(skip_blobs, connection_id=self.STREAMING_ID):
                 if not wrote:
                     decrypted = decrypted[first_blob_start_offset:]
@@ -308,6 +308,9 @@ class ManagedStream:
                 if response._eof_sent:
                     break
             return response
+        except ConnectionResetError:
+            log.warning("connection was reset after sending browser %i blob bytes", wrote)
+            raise asyncio.CancelledError("range request transport was reset")
         finally:
             response.force_close()
             if (request, response) in self.streaming_responses:
