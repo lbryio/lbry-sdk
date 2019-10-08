@@ -148,7 +148,7 @@ class BasicTransactionTests(IntegrationTestCase):
             return summary
         self.conductor.spv_node.server.mempool.transaction_summaries = random_summary
         # 10 unconfirmed txs, all from blockchain wallet
-        sends = list(self.blockchain.send_to_address(address, 10) for _ in range(10))
+        sends = [self.blockchain.send_to_address(address, 10) for _ in range(10)]
         # use batching to reduce issues with send_to_address on cli
         for batch in range(0, len(sends), 10):
             txids = await asyncio.gather(*sends[batch:batch + 10])
