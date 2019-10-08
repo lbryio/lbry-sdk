@@ -48,24 +48,24 @@ def file_reader(file_path: str):
 
 
 def sanitize_file_name(dirty_name: str):
-    RE_IL_CHARS = re.compile(r'[<>:"/\\\|\?\*]')
-    RE_DOTS_AT_END = re.compile(r'[ \t]*(\.)+[ \t]$')
-    RE_LEAD_TRAIL_SPACE = re.compile(r'(^[ \t]+|[ \t]+$)')
-    res_il_names = \
-        [re.compile(regex) for regex in (r'^CON$', r'^PRN$', r'^AUX$', r'^NUL$', r'^COM[1-9]$', r'^LPT[1-9]$')]
+    exprs = [
+        '[<>:"/\\\|\?\*]+',                         # Illegal characters
+        '[\\x00-\\x1F]+',                           # All characters in range 0-31
+        '[ \t]*(\.)+[ \t]*$',                       # Dots at the end
+        '(^[ \t]+|[ \t]+$)',                        # Leading and trailing whitespace
+        '^CON$', '^PRN$', '^AUX$',                  # Illegal names
+        '^NUL$', '^COM[1-9]$', '^LPT[1-9]$']
 
-    file_name = re.sub(RE_IL_CHARS, '', dirty_name)
-    file_name, ext = os.path.splitext(file_name)
-    file_name = re.sub(RE_LEAD_TRAIL_SPACE, '', file_name)
-    file_name = re.sub(RE_DOTS_AT_END, '', file_name)
-    ext = re.sub(RE_LEAD_TRAIL_SPACE, '', ext)
-    if any((REGEX.match(file_name) for REGEX in res_il_names)):
-        file_name = ''
-    elif file_name and len(ext) > 1:
-        file_name += ext
+    RES = re.compile('(' + '|'.join((expr for expr in exprs)) + ')')
 
-    if len(file_name) == 0:
+    file_name, ext = os.path.splitext(dirty_name)
+    file_name = re.sub(RES, '', file_name)
+    ext = re.sub(RES, '', ext)
+
+    if not file_name:
         log.warning('Unable to suggest a file name for %s', dirty_name)
+    elif len(ext) > 1:
+        file_name += ext
 
     return file_name
 

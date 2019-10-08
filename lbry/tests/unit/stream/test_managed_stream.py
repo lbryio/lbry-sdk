@@ -46,7 +46,7 @@ class TestManagedStream(BlobExchangeTestBase):
         self.stream = ManagedStream(
             self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir
         )
-        await self._test_transfer_stream(1, skip_setup=True)
+        await self._test_transfer_stream(10, skip_setup=True)
         self.assertTrue(self.stream.completed)
         self.assertEqual(self.stream.file_name, 'tt_f')
         self.assertTrue(self.stream.output_file_exists)
