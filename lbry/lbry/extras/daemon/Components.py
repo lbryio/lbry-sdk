@@ -107,7 +107,7 @@ class WalletComponent(Component):
 
     async def get_status(self):
         if self.wallet_manager and self.wallet_manager.ledger.network.remote_height:
-            local_height = self.wallet_manager.ledger.headers.height
+            local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
             remote_height = self.wallet_manager.ledger.network.remote_height
             best_hash = self.wallet_manager.get_best_blockhash()
             return {

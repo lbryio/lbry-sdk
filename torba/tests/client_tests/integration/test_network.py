@@ -76,19 +76,18 @@ class ReconnectTests(IntegrationTestCase):
 
     async def test_direct_sync(self):
         await self.ledger.stop()
-        initial_height = self.ledger.headers.height
+        initial_height = self.ledger.local_height_including_downloaded_height
         await self.blockchain.generate(100)
-        while self.conductor.spv_node.server.bp.height < initial_height + 100:
-            print(self.conductor.spv_node.server.bp.height)
+        while self.conductor.spv_node.server.bp.height < initial_height + 99:  # off by 1
             await asyncio.sleep(0.1)
-        self.assertEqual(initial_height, self.ledger.headers.height)
+        self.assertEqual(initial_height, self.ledger.local_height_including_downloaded_height)
         # locks header processing so we make sure we are the only ones modifying it
         async with self.ledger._header_processing_lock:
             await self.ledger.headers.open()
             await self.ledger.network.start()
             await self.ledger.network.on_connected.first
             await self.ledger.initial_headers_sync()
-            self.assertEqual(initial_height + 100, self.ledger.headers.height)
+            self.assertEqual(initial_height + 99, self.ledger.local_height_including_downloaded_height)
 
     async def test_connection_drop_still_receives_events_after_reconnected(self):
         address1 = await self.account.receiving.get_or_create_usable_address()
