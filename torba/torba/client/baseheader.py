@@ -113,7 +113,7 @@ class BaseHeaders:
             await asyncio.sleep(0)
             final_height = len(self) + buf.tell() // self.header_size
             verifiable_bytes = (self.checkpoint[0] - len(self)) * self.header_size if self.checkpoint else 0
-            if verifiable_bytes and final_height >= self.checkpoint[0]:
+            if verifiable_bytes > 0 and final_height >= self.checkpoint[0]:
                 buf.seek(0)
                 self.io.seek(0)
                 h = hashlib.sha256()
