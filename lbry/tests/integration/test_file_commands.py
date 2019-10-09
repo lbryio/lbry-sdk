@@ -51,11 +51,11 @@ class FileCommands(CommandTestCase):
         suffix = '.ext.'
         san_prefix = 'antz m'
         san_suffix = '.ext'
-        claim = await self.stream_create('foo', '0.01', prefix=prefix, suffix=suffix)
+        tx = await self.stream_create('foo', '0.01', prefix=prefix, suffix=suffix)
         stream = self.daemon.jsonrpc_file_list()[0]
 
-        # Check that file list and source contains the local unsanitized name, but suggested name is sanitized
-        source_file_name = claim['outputs'][0]['value']['source']['name']
+        # Assert that file list and source contains the local unsanitized name, but suggested name is sanitized
+        source_file_name = tx['outputs'][0]['value']['source']['name']
         file_list_name = stream.file_name
         suggested_file_name = stream.descriptor.suggested_file_name
         self.assertTrue(source_file_name.startswith(prefix))
@@ -64,15 +64,16 @@ class FileCommands(CommandTestCase):
         self.assertTrue(suggested_file_name.startswith(san_prefix))
         self.assertTrue(suggested_file_name.endswith(san_suffix))
 
-        # Delete the file, re-download and check that the file name is sanitized
+        # Delete the file, re-download and assert that the file name is sanitized
         self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
         full_path = (await self.daemon.jsonrpc_get('lbry://foo', save_file=True)).full_path
         file_name = os.path.basename(full_path)
         self.assertTrue(os.path.isfile(full_path))
         self.assertTrue(file_name.startswith(san_prefix))
         self.assertTrue(file_name.endswith(san_suffix))
 
-        # Check that the downloaded file name is not sanitized when user provides custom file name
+        # Assert that the downloaded file name is not sanitized when user provides custom file name
         self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
         file_name = 'my <u?|*m.name'
         full_path = (await self.daemon.jsonrpc_get('lbry://foo', file_name=file_name, save_file=True)).full_path

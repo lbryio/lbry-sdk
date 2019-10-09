@@ -8,7 +8,7 @@ from lbry.utils import generate_id
 from lbry.error import DownloadSDTimeout
 from lbry.schema.mime_types import guess_media_type
 from lbry.stream.downloader import StreamDownloader
-from lbry.stream.descriptor import StreamDescriptor
+from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
 from lbry.stream.reflector.client import StreamReflectorClient
 from lbry.extras.daemon.storage import StoredStreamClaim
 from lbry.blob import MAX_BLOB_SIZE
@@ -386,7 +386,7 @@ class ManagedStream:
             os.mkdir(self.download_directory)
         self._file_name = await get_next_available_file_name(
             self.loop, self.download_directory,
-            file_name or self.file_name
+            file_name or self._file_name or sanitize_file_name(self.descriptor.suggested_file_name)
         )
         await self.blob_manager.storage.change_file_download_dir_and_file_name(
             self.stream_hash, self.download_directory, self.file_name
