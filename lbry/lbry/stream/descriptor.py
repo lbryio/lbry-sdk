@@ -89,7 +89,7 @@ class StreamDescriptor:
         self.blob_dir = blob_dir
         self.stream_name = stream_name
         self.key = key
-        self.suggested_file_name = sanitize_file_name(suggested_file_name)
+        self.suggested_file_name = suggested_file_name
         self.blobs = blobs
         self.stream_hash = stream_hash or self.get_stream_hash()
         self.sd_hash = sd_hash
@@ -251,9 +251,10 @@ class StreamDescriptor:
             blobs.append(blob_info)
         blobs.append(
             BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode()))  # add the stream terminator
+        file_name = os.path.basename(file_path)
+        suggested_file_name = sanitize_file_name(file_name)
         descriptor = cls(
-            loop, blob_dir, os.path.basename(file_path), binascii.hexlify(key).decode(), os.path.basename(file_path),
-            blobs
+            loop, blob_dir, file_name, binascii.hexlify(key).decode(), suggested_file_name, blobs
         )
         sd_blob = await descriptor.make_sd_blob(old_sort=old_sort, blob_completed_callback=blob_completed_callback)
         descriptor.sd_hash = sd_blob.blob_hash
