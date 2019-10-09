@@ -138,6 +138,7 @@ class BaseLedger(metaclass=LedgerRegistry):
                 self.get_id(), change, self.headers.height
             )
         )
+        self._download_height = 0
 
         self._on_ready_controller = StreamController()
         self.on_ready = self._on_ready_controller.stream
@@ -307,6 +308,10 @@ class BaseLedger(metaclass=LedgerRegistry):
         await self.db.close()
         await self.headers.close()
 
+    @property
+    def local_height_including_downloaded_height(self):
+        return max(self.headers.height, self._download_height)
+
     async def initial_headers_sync(self):
         target = self.network.remote_height
         current = len(self.headers)
@@ -321,8 +326,8 @@ class BaseLedger(metaclass=LedgerRegistry):
                     len(self.headers),
                     zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
                 )
-                progress = connector.tell() // self.headers.header_size
-                log.info("Headers sync: %s / %s -- %s", progress, target, total)
+                self._download_height = len(self.headers) + connector.tell() // self.headers.header_size
+                log.info("Headers sync: %s / %s", self._download_height, target)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
