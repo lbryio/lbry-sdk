@@ -74,6 +74,22 @@ class ReconnectTests(IntegrationTestCase):
         with self.assertRaises(asyncio.TimeoutError):
             await asyncio.wait_for(switch_event, timeout=1)
 
+    async def test_direct_sync(self):
+        await self.ledger.stop()
+        initial_height = self.ledger.headers.height
+        await self.blockchain.generate(100)
+        while self.conductor.spv_node.server.bp.height < initial_height + 100:
+            print(self.conductor.spv_node.server.bp.height)
+            await asyncio.sleep(0.1)
+        self.assertEqual(initial_height, self.ledger.headers.height)
+        # locks header processing so we make sure we are the only ones modifying it
+        async with self.ledger._header_processing_lock:
+            await self.ledger.headers.open()
+            await self.ledger.network.start()
+            await self.ledger.network.on_connected.first
+            await self.ledger.initial_headers_sync()
+            self.assertEqual(initial_height + 100, self.ledger.headers.height)
+
     async def test_connection_drop_still_receives_events_after_reconnected(self):
         address1 = await self.account.receiving.get_or_create_usable_address()
         # disconnect and send a new tx, should reconnect and get it
