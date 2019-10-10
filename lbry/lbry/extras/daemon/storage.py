@@ -103,8 +103,8 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
     stream_hashes = tuple(
         stream_hash for (stream_hash,) in transaction.execute("select stream_hash from file").fetchall()
     )
-    for (rowid, stream_hash, file_name, download_dir, data_rate, status, saved_file, raw_content_fee, _,
-         sd_hash, stream_key, stream_name, suggested_file_name, *claim_args) in _batched_select(
+    for (rowid, stream_hash, file_name, download_dir, data_rate, status, saved_file, raw_content_fee, added_at,
+         _, sd_hash, stream_key, stream_name, suggested_file_name, *claim_args) in _batched_select(
             transaction, "select file.rowid, file.*, stream.*, c.* "
                          "from file inner join stream on file.stream_hash=stream.stream_hash "
                          "inner join content_claim cc on file.stream_hash=cc.stream_hash "
@@ -119,6 +119,7 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
         files.append(
             {
                 "rowid": rowid,
+                "added_at": added_at,
                 "stream_hash": stream_hash,
                 "file_name": file_name,                      # hex
                 "download_directory": download_dir,          # hex
@@ -180,17 +181,20 @@ def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor
 
 def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typing.Optional[str],
                download_directory: typing.Optional[str], data_payment_rate: float, status: str,
-               content_fee: typing.Optional[Transaction]) -> int:
+               content_fee: typing.Optional[Transaction], added_at: typing.Optional[int] = None) -> int:
     if not file_name and not download_directory:
         encoded_file_name, encoded_download_dir = None, None
     else:
         encoded_file_name = binascii.hexlify(file_name.encode()).decode()
         encoded_download_dir = binascii.hexlify(download_directory.encode()).decode()
+    time_added = added_at or int(time.time())
     transaction.execute(
-        "insert or replace into file values (?, ?, ?, ?, ?, ?, ?)",
+        "insert or replace into file values (?, ?, ?, ?, ?, ?, ?, ?)",
         (stream_hash, encoded_file_name, encoded_download_dir, data_payment_rate, status,
          1 if (file_name and download_directory and os.path.isfile(os.path.join(download_directory, file_name))) else 0,
-         None if not content_fee else binascii.hexlify(content_fee.raw).decode())
+         None if not content_fee else binascii.hexlify(content_fee.raw).decode(),
+         time_added
+         )
     ).fetchall()
 
     return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
@@ -246,7 +250,8 @@ class SQLiteStorage(SQLiteMixin):
                 blob_data_rate real not null,
                 status text not null,
                 saved_file integer not null,
-                content_fee text
+                content_fee text,
+                added_at integer not null
             );
 
             create table if not exists content_claim (
@@ -448,18 +453,20 @@ class SQLiteStorage(SQLiteMixin):
 
     def save_downloaded_file(self, stream_hash: str, file_name: typing.Optional[str],
                              download_directory: typing.Optional[str], data_payment_rate: float,
-                             content_fee: typing.Optional[Transaction] = None) -> typing.Awaitable[int]:
+                             content_fee: typing.Optional[Transaction] = None,
+                             added_at: typing.Optional[int] = None) -> typing.Awaitable[int]:
         return self.save_published_file(
             stream_hash, file_name, download_directory, data_payment_rate, status="running",
-            content_fee=content_fee
+            content_fee=content_fee, added_at=added_at
         )
 
     def save_published_file(self, stream_hash: str, file_name: typing.Optional[str],
                             download_directory: typing.Optional[str], data_payment_rate: float,
                             status: str = "finished",
-                            content_fee: typing.Optional[Transaction] = None) -> typing.Awaitable[int]:
+                            content_fee: typing.Optional[Transaction] = None,
+                            added_at: typing.Optional[int] = None) -> typing.Awaitable[int]:
         return self.db.run(store_file, stream_hash, file_name, download_directory, data_payment_rate, status,
-                           content_fee)
+                           content_fee, added_at)
 
     async def update_manually_removed_files_since_last_run(self):
         """

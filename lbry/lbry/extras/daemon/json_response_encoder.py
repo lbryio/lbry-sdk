@@ -273,6 +273,7 @@ class JSONResponseEncoder(JSONEncoder):
             'channel_name': managed_stream.channel_name,
             'claim_name': managed_stream.claim_name,
             'content_fee': managed_stream.content_fee,
+            'added_at': managed_stream.added_at,
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None

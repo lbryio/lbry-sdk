@@ -31,6 +31,7 @@ filter_fields = [
     'rowid',
     'status',
     'file_name',
+    'added_at',
     'sd_hash',
     'stream_hash',
     'claim_name',
@@ -115,7 +116,8 @@ class StreamManager:
 
     async def add_stream(self, rowid: int, sd_hash: str, file_name: typing.Optional[str],
                          download_directory: typing.Optional[str], status: str,
-                         claim: typing.Optional['StoredStreamClaim'], content_fee: typing.Optional['Transaction']):
+                         claim: typing.Optional['StoredStreamClaim'], content_fee: typing.Optional['Transaction'],
+                         added_at: typing.Optional[int]):
         try:
             descriptor = await self.blob_manager.get_stream_descriptor(sd_hash)
         except InvalidStreamDescriptorError as err:
@@ -124,7 +126,7 @@ class StreamManager:
         stream = ManagedStream(
             self.loop, self.config, self.blob_manager, descriptor.sd_hash, download_directory, file_name, status,
             claim, content_fee=content_fee, rowid=rowid, descriptor=descriptor,
-            analytics_manager=self.analytics_manager
+            analytics_manager=self.analytics_manager, added_at=added_at
         )
         self.streams[sd_hash] = stream
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
@@ -156,7 +158,8 @@ class StreamManager:
             add_stream_tasks.append(self.loop.create_task(self.add_stream(
                 file_info['rowid'], file_info['sd_hash'], file_name,
                 download_directory, file_info['status'],
-                file_info['claim'], file_info['content_fee']
+                file_info['claim'], file_info['content_fee'],
+                file_info['added_at']
             )))
         if add_stream_tasks:
             await asyncio.gather(*add_stream_tasks, loop=self.loop)
