@@ -1801,20 +1801,28 @@ class Daemon(metaclass=JSONRPCServerType):
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
 
-        file_list = self.stream_manager.get_filtered_streams(
+        items = self.stream_manager.get_filtered_streams(
             sort, reverse, comparison, **kwargs
         )
 
+        total_items = len(items)
+        total_pages = 1
         page = page or 1
-        page_size = page_size or 10
-        total_items = len(file_list)
-        offset = page_size * (page-1)
+
+        if page_size:
+            offset = page_size * (page-1)
+            items = items[offset:offset+page_size]
+            total_pages = int((len(items) + (page_size-1)) / page_size)
+
+        else:
+            page_size = len(items)
+
         return {
             'total_items': total_items,
-            'total_pages': int((total_items + (page_size-1)) / page_size),
+            'total_pages': total_pages,
             'page': page,
             'page_size': page_size,
-            'items': file_list[offset:offset+page_size]
+            'items': items
         }
 
     @requires(STREAM_MANAGER_COMPONENT)
