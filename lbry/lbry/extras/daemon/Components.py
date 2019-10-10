@@ -52,7 +52,7 @@ class DatabaseComponent(Component):
 
     @staticmethod
     def get_current_db_revision():
-        return 11
+        return 12
 
     @property
     def revision_filename(self):
