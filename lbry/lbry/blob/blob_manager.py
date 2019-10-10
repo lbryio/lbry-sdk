@@ -37,18 +37,14 @@ class BlobManager:
         self.connection_manager = ConnectionManager(loop)
 
     def _get_blob(self, blob_hash: str, length: typing.Optional[int] = None):
-        if self.config.save_blobs:
+        if self.config.save_blobs or (
+                is_valid_blobhash(blob_hash) and os.path.isfile(os.path.join(self.blob_dir, blob_hash))):
             return BlobFile(
                 self.loop, blob_hash, length, self.blob_completed, self.blob_dir
             )
-        else:
-            if is_valid_blobhash(blob_hash) and os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
-                return BlobFile(
-                    self.loop, blob_hash, length, self.blob_completed, self.blob_dir
-                )
-            return BlobBuffer(
-                self.loop, blob_hash, length, self.blob_completed, self.blob_dir
-            )
+        return BlobBuffer(
+            self.loop, blob_hash, length, self.blob_completed, self.blob_dir
+        )
 
     def get_blob(self, blob_hash, length: typing.Optional[int] = None):
         if blob_hash in self.blobs:
@@ -82,6 +78,7 @@ class BlobManager:
             return {
                 item.name for item in os.scandir(self.blob_dir) if is_valid_blobhash(item.name)
             }
+
         in_blobfiles_dir = await self.loop.run_in_executor(None, get_files_in_blob_dir)
         to_add = await self.storage.sync_missing_blobs(in_blobfiles_dir)
         if to_add:

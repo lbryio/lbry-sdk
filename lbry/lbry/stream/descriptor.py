@@ -71,7 +71,7 @@ class StreamDescriptor:
         self.sd_hash = sd_hash
 
     @property
-    def length(self):
+    def length(self) -> int:
         return len(self.as_json())
 
     def get_stream_hash(self) -> str:
@@ -114,7 +114,7 @@ class StreamDescriptor:
             ])
         ).encode()
 
-    def calculate_old_sort_sd_hash(self):
+    def calculate_old_sort_sd_hash(self) -> str:
         h = get_lbry_hash_obj()
         h.update(self.old_sort_json())
         return h.hexdigest()
