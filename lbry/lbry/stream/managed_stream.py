@@ -11,6 +11,8 @@ from lbry.stream.downloader import StreamDownloader
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.stream.reflector.client import StreamReflectorClient
 from lbry.extras.daemon.storage import StoredStreamClaim
+from lbry.blob import MAX_BLOB_SIZE
+
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.schema.claim import Claim
@@ -215,6 +217,9 @@ class ManagedStream:
     async def create(cls, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
                      file_path: str, key: typing.Optional[bytes] = None,
                      iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> 'ManagedStream':
+        """
+        Generate a stream from a file and save it to the db
+        """
         descriptor = await StreamDescriptor.create_stream(
             loop, blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator,
             blob_completed_callback=blob_manager.blob_completed
@@ -289,13 +294,13 @@ class ManagedStream:
         await response.prepare(request)
         self.streaming_responses.append((request, response))
         self.streaming.set()
+        wrote = 0
         try:
-            wrote = 0
             async for blob_info, decrypted in self._aiter_read_stream(skip_blobs, connection_id=self.STREAMING_ID):
                 if not wrote:
                     decrypted = decrypted[first_blob_start_offset:]
                 if (blob_info.blob_num == len(self.descriptor.blobs) - 2) or (len(decrypted) + wrote >= size):
-                    decrypted += (b'\x00' * (size - len(decrypted) - wrote - (skip_blobs * 2097151)))
+                    decrypted += (b'\x00' * (size - len(decrypted) - wrote - (skip_blobs * (MAX_BLOB_SIZE - 1))))
                     log.debug("sending browser final blob (%i/%i)", blob_info.blob_num + 1,
                               len(self.descriptor.blobs) - 1)
                     await response.write_eof(decrypted)
@@ -308,6 +313,9 @@ class ManagedStream:
                 if response._eof_sent:
                     break
             return response
+        except ConnectionResetError:
+            log.warning("connection was reset after sending browser %i blob bytes", wrote)
+            raise asyncio.CancelledError("range request transport was reset")
         finally:
             response.force_close()
             if (request, response) in self.streaming_responses:
@@ -483,8 +491,8 @@ class ManagedStream:
         if end >= size:
             raise HTTPRequestRangeNotSatisfiable()
 
-        skip_blobs = start // 2097150
-        skip = skip_blobs * 2097151
+        skip_blobs = start // (MAX_BLOB_SIZE - 2)  # -2 because ... dont remember
+        skip = skip_blobs * (MAX_BLOB_SIZE - 1)  # -1 because
         skip_first_blob = start - skip
         start = skip_first_blob + skip
         final_size = end - start + 1
