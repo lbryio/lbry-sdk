@@ -197,9 +197,9 @@ class CommandTestCase(IntegrationTestCase):
         """ Synchronous version of `out` method. """
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
-    def create_tempfile(self, data=None, prefix=None, suffix=None, dir=None):
-        dir = dir or self.daemon.conf.download_dir
-        file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, dir=dir)
+    def create_tempfile(self, data=None, prefix=None, suffix=None, dir_path=None):
+        dir_path = dir_path or self.daemon.conf.download_dir
+        file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, dir=dir_path)
         file.write(data)
         file.flush()
 
