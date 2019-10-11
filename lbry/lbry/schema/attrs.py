@@ -544,7 +544,3 @@ class TagList(BaseMessageList[str]):
         tag = normalize_tag(tag)
         if tag and tag not in self.message:
             self.message.append(tag)
-
-    def extend(self, tags: List[str]):
-        for tag in tags:
-            self.append(tag)
