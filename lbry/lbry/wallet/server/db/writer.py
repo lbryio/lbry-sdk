@@ -699,7 +699,7 @@ class SQLDB:
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
-        r(calculate_trending, self.db, height, self.main.first_sync, daemon_height)
+        r(calculate_trending, self.db, height, daemon_height)
 
 
 class LBRYDB(DB):
