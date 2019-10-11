@@ -1,7 +1,11 @@
 from math import sqrt
 
-TRENDING_WINDOW = 134  # number of blocks in ~6hr period (21600 seconds / 161 seconds per block)
-TRENDING_DATA_POINTS = 7  # WINDOW * DATA_POINTS = ~1 week worth of trending data
+# TRENDING_WINDOW is the number of blocks in ~6hr period (21600 seconds / 161 seconds per block)
+TRENDING_WINDOW = 134
+
+# TRENDING_DATA_POINTS says how many samples to use for the trending algorithm
+# i.e. only consider claims from the most recent (TRENDING_WINDOW * TRENDING_DATA_POINTS) blocks
+TRENDING_DATA_POINTS = 7
 
 CREATE_TREND_TABLE = """
     create table if not exists trend (
@@ -26,7 +30,7 @@ class ZScore:
         if self.last is not None:
             self.count += 1
             self.total += self.last
-            self.power += self.last**2
+            self.power += self.last ** 2
         self.last = value
 
     @property
@@ -35,7 +39,7 @@ class ZScore:
 
     @property
     def standard_deviation(self):
-        return sqrt((self.power / self.count) - self.mean**2)
+        return sqrt((self.power / self.count) - self.mean ** 2)
 
     def finalize(self):
         if self.count == 0:
@@ -47,19 +51,19 @@ def register_trending_functions(connection):
     connection.create_aggregate("zscore", 1, ZScore)
 
 
-def calculate_trending(db, height, is_first_sync, final_height):
+def calculate_trending(db, height, final_height):
     # don't start tracking until we're at the end of initial sync
-    if is_first_sync and height < (final_height - (TRENDING_WINDOW*TRENDING_DATA_POINTS)):
+    if height < (final_height - (TRENDING_WINDOW * TRENDING_DATA_POINTS)):
         return
 
     if height % TRENDING_WINDOW != 0:
         return
 
     db.execute(f"""
-    DELETE FROM trend WHERE height < {height-(TRENDING_WINDOW*TRENDING_DATA_POINTS)}
+    DELETE FROM trend WHERE height < {height - (TRENDING_WINDOW * TRENDING_DATA_POINTS)}
     """)
 
-    start = (height-TRENDING_WINDOW)+1
+    start = (height - TRENDING_WINDOW) + 1
     db.execute(f"""
     INSERT OR IGNORE INTO trend (claim_hash, height, amount)
     SELECT claim_hash, {start}, COALESCE(
