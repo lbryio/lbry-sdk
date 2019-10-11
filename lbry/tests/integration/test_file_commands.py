@@ -45,40 +45,79 @@ class FileCommands(CommandTestCase):
             {stream.sd_hash, stream.descriptor.blobs[0].blob_hash}
         )
 
+    async def _purge_file(self, claim_name, full_path):
+        self.assertTrue(
+            await self.daemon.jsonrpc_file_delete(claim_name=claim_name, delete_from_download_dir=True)
+        )
+        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
+        self.assertFalse(os.path.isfile(full_path))
+
     async def test_publish_with_illegal_chars(self):
+        def check_prefix_suffix(name, prefix, suffix):
+            self.assertTrue(name.startswith(prefix))
+            self.assertTrue(name.endswith(suffix))
+
         # Stream a file with file name containing invalid chars
-        prefix = '?an|t:z< m<'
-        suffix = '.ext.'
-        san_prefix = 'antz m'
-        san_suffix = '.ext'
-        tx = await self.stream_create('foo', '0.01', prefix=prefix, suffix=suffix)
+        claim_name = 'lolwindows'
+        prefix, suffix = 'derp?', '.ext.'
+        san_prefix, san_suffix = 'derp', '.ext'
+        tx = await self.stream_create(claim_name, '0.01', prefix=prefix, suffix=suffix)
         stream = self.daemon.jsonrpc_file_list()[0]
+        claim_id = self.get_claim_id(tx)
 
         # Assert that file list and source contains the local unsanitized name, but suggested name is sanitized
+        full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name)).full_path
+        stream_file_name = os.path.basename(full_path)
         source_file_name = tx['outputs'][0]['value']['source']['name']
         file_list_name = stream.file_name
         suggested_file_name = stream.descriptor.suggested_file_name
-        self.assertTrue(source_file_name.startswith(prefix))
-        self.assertTrue(source_file_name.endswith(suffix))
-        self.assertEqual(file_list_name, source_file_name)
-        self.assertTrue(suggested_file_name.startswith(san_prefix))
-        self.assertTrue(suggested_file_name.endswith(san_suffix))
 
-        # Delete the file, re-download and assert that the file name is sanitized
-        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
-        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
-        full_path = (await self.daemon.jsonrpc_get('lbry://foo', save_file=True)).full_path
-        file_name = os.path.basename(full_path)
         self.assertTrue(os.path.isfile(full_path))
-        self.assertTrue(file_name.startswith(san_prefix))
-        self.assertTrue(file_name.endswith(san_suffix))
+        check_prefix_suffix(stream_file_name, prefix, suffix)
+        self.assertEqual(stream_file_name, source_file_name)
+        self.assertEqual(stream_file_name, file_list_name)
+        check_prefix_suffix(suggested_file_name, san_prefix, san_suffix)
+        await self._purge_file(claim_name, full_path)
+
+        # Re-download deleted file and assert that the file name is sanitized
+        full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name, save_file=True)).full_path
+        stream_file_name = os.path.basename(full_path)
+        stream = self.daemon.jsonrpc_file_list()[0]
+        file_list_name = stream.file_name
+        suggested_file_name = stream.descriptor.suggested_file_name
+
+        self.assertTrue(os.path.isfile(full_path))
+        check_prefix_suffix(stream_file_name, san_prefix, san_suffix)
+        self.assertEqual(stream_file_name, file_list_name)
+        self.assertEqual(stream_file_name, suggested_file_name)
+        await self._purge_file(claim_name, full_path)
 
         # Assert that the downloaded file name is not sanitized when user provides custom file name
-        self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'))
-        file_name = 'my <u?|*m.name'
-        full_path = (await self.daemon.jsonrpc_get('lbry://foo', file_name=file_name, save_file=True)).full_path
+        custom_name = 'cust*m_name'
+        full_path = (await self.daemon.jsonrpc_get(
+            'lbry://' + claim_name, file_name=custom_name, save_file=True)).full_path
+        file_name_on_disk = os.path.basename(full_path)
         self.assertTrue(os.path.isfile(full_path))
-        self.assertEqual(file_name, os.path.basename(full_path))
+        self.assertEqual(custom_name, file_name_on_disk)
+
+        # Update the stream and assert the file name is not sanitized, but the suggested file name is
+        prefix, suffix = 'derpyderp?', '.ext.'
+        san_prefix, san_suffix = 'derpyderp', '.ext'
+        new_file_name = os.path.basename(self.create_tempfile(data=b'amazing content', prefix=prefix, suffix=suffix))
+        tx = await self.stream_update(claim_id, file_name=new_file_name)
+        full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name, save_file=True)).full_path
+        updated_stream = self.daemon.jsonrpc_file_list()[0]
+
+        stream_file_name = os.path.basename(full_path)
+        source_file_name = tx['outputs'][0]['value']['source']['name']
+        file_list_name = updated_stream.file_name
+        suggested_file_name = updated_stream.descriptor.suggested_file_name
+
+        self.assertTrue(os.path.isfile(full_path))
+        check_prefix_suffix(stream_file_name, prefix, suffix)
+        self.assertEqual(stream_file_name, source_file_name)
+        self.assertEqual(stream_file_name, file_list_name)
+        check_prefix_suffix(suggested_file_name, san_prefix, san_suffix)
 
     async def test_file_list_fields(self):
         await self.stream_create('foo', '0.01')
