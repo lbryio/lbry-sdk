@@ -2810,7 +2810,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_update(
-            self, claim_id, bid=None, file_path=None, file_name=None,
+            self, claim_id, bid=None, file_path=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
             preview=False, blocking=False, replace=False, **kwargs):
@@ -2979,7 +2979,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim.stream.update(file_path=file_path, **kwargs)
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
-            claim.stream.update(file_path=file_path, file_name=file_name, **kwargs)
+            claim.stream.update(file_path=file_path, **kwargs)
         tx = await Transaction.claim_update(
             old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
@@ -2988,13 +2988,10 @@ class Daemon(metaclass=JSONRPCServerType):
         stream_hash = None
         if not preview:
             old_stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
-            old_stream = self.stream_manager.get_stream_by_stream_hash(old_stream_hash)
-            if not file_path and file_name and old_stream:
-                old_path, _ = os.path.split(old_stream.full_path)
-                file_path = os.path.join(old_path, file_name)
-            if file_path:
-                if old_stream:
-                    await self.stream_manager.delete_stream(old_stream, delete_file=False)
+            if file_path is not None:
+                if old_stream_hash:
+                    stream_to_delete = self.stream_manager.get_stream_by_stream_hash(old_stream_hash)
+                    await self.stream_manager.delete_stream(stream_to_delete, delete_file=False)
                 file_stream = await self.stream_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()

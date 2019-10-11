@@ -78,7 +78,7 @@ class TestStreamDescriptor(AsyncioTestCase):
         self.sd_dict['blobs'][-2]['length'] = 0
         await self._test_invalid_sd()
 
-    async def test_sanitize_file_name(self):
+    def test_sanitize_file_name(self):
         test_cases = [' t/-?t|.g.ext ', 'end_dot .', '.file\0\0', 'test n\16ame.ext', 'COM8', 'LPT2', '']
         expected = ['t-t.g.ext', 'end_dot', '.file', 'test name.ext', '', '', '']
         actual = [sanitize_file_name(tc) for tc in test_cases]

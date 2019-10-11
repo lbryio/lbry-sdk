@@ -103,8 +103,8 @@ class FileCommands(CommandTestCase):
         # Update the stream and assert the file name is not sanitized, but the suggested file name is
         prefix, suffix = 'derpyderp?', '.ext.'
         san_prefix, san_suffix = 'derpyderp', '.ext'
-        new_file_name = os.path.basename(self.create_tempfile(data=b'amazing content', prefix=prefix, suffix=suffix))
-        tx = await self.stream_update(claim_id, file_name=new_file_name)
+        new_file_path = self.create_tempfile(data=b'amazing content', prefix=prefix, suffix=suffix)
+        tx = await self.stream_update(claim_id, file_path=new_file_path)
         full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name, save_file=True)).full_path
         updated_stream = self.daemon.jsonrpc_file_list()[0]
 
