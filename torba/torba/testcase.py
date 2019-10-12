@@ -183,6 +183,7 @@ class AdvanceTimeTestCase(AsyncioTestCase):
 
 class IntegrationTestCase(AsyncioTestCase):
 
+    SEED = None
     LEDGER = None
     MANAGER = None
     ENABLE_SEGWIT = False
@@ -201,7 +202,7 @@ class IntegrationTestCase(AsyncioTestCase):
     async def asyncSetUp(self):
         self.conductor = Conductor(
             ledger_module=self.LEDGER, manager_module=self.MANAGER, verbosity=self.VERBOSITY,
-            enable_segwit=self.ENABLE_SEGWIT
+            enable_segwit=self.ENABLE_SEGWIT, seed=self.SEED
         )
         await self.conductor.start_blockchain()
         self.addCleanup(self.conductor.stop_blockchain)

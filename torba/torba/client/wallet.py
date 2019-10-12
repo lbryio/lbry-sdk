@@ -1,8 +1,10 @@
 import os
+import time
 import stat
 import json
 import zlib
 import typing
+from collections import UserDict
 from typing import List, Sequence, MutableSequence, Optional
 from hashlib import sha256
 from operator import attrgetter
@@ -12,6 +14,36 @@ if typing.TYPE_CHECKING:
     from torba.client import basemanager, baseaccount, baseledger
 
 
+class TimestampedPreferences(UserDict):
+
+    def __getitem__(self, key):
+        return self.data[key]['value']
+
+    def __setitem__(self, key, value):
+        self.data[key] = {
+            'value': value,
+            'ts': time.time()
+        }
+
+    def __repr__(self):
+        return repr(self.to_dict_without_ts())
+
+    def to_dict_without_ts(self):
+        return {
+            key: value['value'] for key, value in self.data.items()
+        }
+
+    @property
+    def hash(self):
+        return sha256(json.dumps(self.data).encode()).digest()
+
+    def merge(self, other: dict):
+        for key, value in other.items():
+            if key in self.data and value['ts'] < self.data[key]['ts']:
+                continue
+            self.data[key] = value
+
+
 class Wallet:
     """ The primary role of Wallet is to encapsulate a collection
         of accounts (seed/private keys) and the spending rules / settings
@@ -19,11 +51,14 @@ class Wallet:
         by physical files on the filesystem.
     """
 
+    preferences: TimestampedPreferences
+
     def __init__(self, name: str = 'Wallet', accounts: MutableSequence['baseaccount.BaseAccount'] = None,
-                 storage: 'WalletStorage' = None) -> None:
+                 storage: 'WalletStorage' = None, preferences: dict = None) -> None:
         self.name = name
         self.accounts = accounts or []
         self.storage = storage or WalletStorage()
+        self.preferences = TimestampedPreferences(preferences or {})
 
     @property
     def id(self):
@@ -75,6 +110,7 @@ class Wallet:
         json_dict = storage.read()
         wallet = cls(
             name=json_dict.get('name', 'Wallet'),
+            preferences=json_dict.get('preferences', {}),
             storage=storage
         )
         account_dicts: Sequence[dict] = json_dict.get('accounts', [])
@@ -87,6 +123,7 @@ class Wallet:
         return {
             'version': WalletStorage.LATEST_VERSION,
             'name': self.name,
+            'preferences': self.preferences.data,
             'accounts': [a.to_dict() for a in self.accounts]
         }
 
@@ -96,6 +133,7 @@ class Wallet:
     @property
     def hash(self) -> bytes:
         h = sha256()
+        h.update(self.preferences.hash)
         for account in sorted(self.accounts, key=attrgetter('id')):
             h.update(account.hash)
         return h.digest()
@@ -111,6 +149,27 @@ class Wallet:
         decompressed = zlib.decompress(decrypted)
         return json.loads(decompressed)
 
+    def merge(self, manager: 'basemanager.BaseWalletManager',
+              password: str, data: str) -> List['baseaccount.BaseAccount']:
+        added_accounts = []
+        decrypted_data = self.unpack(password, data)
+        self.preferences.merge(decrypted_data.get('preferences', {}))
+        for account_dict in decrypted_data['accounts']:
+            ledger = manager.get_or_create_ledger(account_dict['ledger'])
+            _, _, pubkey = ledger.account_class.keys_from_dict(ledger, account_dict)
+            account_id = pubkey.address
+            local_match = None
+            for local_account in self.accounts:
+                if account_id == local_account.id:
+                    local_match = local_account
+                    break
+            if local_match is not None:
+                local_match.merge(account_dict)
+            else:
+                new_account = ledger.account_class.from_dict(ledger, self, account_dict)
+                added_accounts.append(new_account)
+        return added_accounts
+
 
 class WalletStorage:
 
@@ -121,6 +180,7 @@ class WalletStorage:
         self._default = default or {
             'version': self.LATEST_VERSION,
             'name': 'My Wallet',
+            'preferences': {},
             'accounts': []
         }
 

@@ -999,7 +999,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Preferences management.
     """
 
-    def jsonrpc_preference_get(self, key=None, account_id=None, wallet_id=None):
+    def jsonrpc_preference_get(self, key=None, wallet_id=None):
         """
         Get preference value for key or all values if not key is passed in.
 
@@ -1008,21 +1008,19 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --key=<key> : (str) key associated with value
-            --account_id=<account_id> : (str) id of the account containing value
             --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
 
         Returns:
             (dict) Dictionary of preference(s)
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = wallet.get_account_or_default(account_id)
         if key:
-            if key in account.preferences:
-                return {key: account.preferences[key]}
+            if key in wallet.preferences:
+                return {key: wallet.preferences[key]}
             return
-        return account.preferences
+        return wallet.preferences.to_dict_without_ts()
 
-    def jsonrpc_preference_set(self, key, value, account_id=None, wallet_id=None):
+    def jsonrpc_preference_set(self, key, value, wallet_id=None):
         """
         Set preferences
 
@@ -1032,18 +1030,15 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --key=<key> : (str) key associated with value
             --value=<key> : (str) key associated with value
-            --account_id=<account_id> : (str) id of the account containing value
             --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
 
         Returns:
             (dict) Dictionary with key/value of new preference
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = wallet.get_account_or_default(account_id)
         if value and isinstance(value, str) and value[0] in ('[', '{'):
             value = json.loads(value)
-        account.preferences[key] = value
-        account.modified_on = time.time()
+        wallet.preferences[key] = value
         wallet.save()
         return {key: value}
 
@@ -1342,7 +1337,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account.name = new_name
             change_made = True
 
-        if default:
+        if default and wallet.default_account != account:
             wallet.accounts.remove(account)
             wallet.accounts.insert(0, account)
             change_made = True
@@ -1578,14 +1573,14 @@ class Daemon(metaclass=JSONRPCServerType):
         return hexlify(wallet.hash).decode()
 
     @requires("wallet")
-    def jsonrpc_sync_apply(self, password, data=None, encrypt_password=None, wallet_id=None):
+    async def jsonrpc_sync_apply(self, password, data=None, encrypt_password=None, wallet_id=None, blocking=False):
         """
         Apply incoming synchronization data, if provided, and then produce a sync hash and
         an encrypted wallet.
 
         Usage:
             sync_apply <password> [--data=<data>] [--encrypt-password=<encrypt_password>]
-                       [--wallet_id=<wallet_id>]
+                       [--wallet_id=<wallet_id>] [--blocking]
 
         Options:
             --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
@@ -1593,6 +1588,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --encrypt-password=<encrypt_password> : (str) password to encrypt outgoing data if different
                                                     from the decrypt password, used during password changes
             --wallet_id=<wallet_id>       : (str) wallet being sync'ed
+            --blocking                    : (bool) wait until any new accounts have sync'ed
 
         Returns:
             (map) sync hash and data
@@ -1600,23 +1596,16 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if data is not None:
-            decrypted_data = Wallet.unpack(password, data)
-            for account_data in decrypted_data['accounts']:
-                _, _, pubkey = LBCAccount.keys_from_dict(self.ledger, account_data)
-                account_id = pubkey.address
-                local_match = None
-                for local_account in wallet.accounts:
-                    if account_id == local_account.id:
-                        local_match = local_account
-                        break
-                if local_match is not None:
-                    local_match.apply(account_data)
+            added_accounts = wallet.merge(self.wallet_manager, password, data)
+            if added_accounts and self.ledger.network.is_connected:
+                if blocking:
+                    await asyncio.wait([
+                        a.ledger.subscribe_account(a) for a in added_accounts
+                    ])
                 else:
-                    new_account = LBCAccount.from_dict(self.ledger, wallet, account_data)
-                    if self.ledger.network.is_connected:
+                    for new_account in added_accounts:
                         asyncio.create_task(self.ledger.subscribe_account(new_account))
             wallet.save()
-
         encrypted = wallet.pack(encrypt_password or password)
         return {
             'hash': self.jsonrpc_sync_hash(wallet_id),

@@ -42,7 +42,7 @@ class AddressManager:
             d['change'] = change_dict
         return d
 
-    def apply(self, d: dict):
+    def merge(self, d: dict):
         pass
 
     def to_dict_instance(self) -> Optional[dict]:
@@ -101,7 +101,7 @@ class HierarchicalDeterministic(AddressManager):
             cls(account, 1, **d.get('change', {'gap': 6, 'maximum_uses_per_address': 1}))
         )
 
-    def apply(self, d: dict):
+    def merge(self, d: dict):
         self.gap = d.get('gap', self.gap)
         self.maximum_uses_per_address = d.get('maximum_uses_per_address', self.maximum_uses_per_address)
 
@@ -310,7 +310,7 @@ class BaseAccount:
             'modified_on': self.modified_on
         }
 
-    def apply(self, d: dict):
+    def merge(self, d: dict):
         if d.get('modified_on', 0) > self.modified_on:
             self.name = d['name']
             self.modified_on = d.get('modified_on', time.time())
@@ -318,7 +318,7 @@ class BaseAccount:
             for chain_name in ('change', 'receiving'):
                 if chain_name in d['address_generator']:
                     chain_object = getattr(self, chain_name)
-                    chain_object.apply(d['address_generator'][chain_name])
+                    chain_object.merge(d['address_generator'][chain_name])
 
     @property
     def hash(self) -> bytes:
