@@ -1,4 +1,4 @@
-# <img src="https://raw.githubusercontent.com/lbryio/lbry-sdk/master/lbry/lbry.png" alt="LBRY" width="48" height="36" /> LBRY SDK [![Build Status](https://travis-ci.org/lbryio/lbry-sdk.svg?branch=master)](https://travis-ci.org/lbryio/lbry-sdk) [![Test Coverage](https://codecov.io/gh/lbryio/lbry-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry-sdk)
+# <img src="https://raw.githubusercontent.com/lbryio/lbry-sdk/master/lbry/lbry.png" alt="LBRY" width="48" height="36" /> LBRY SDK [![Build Status](https://travis-ci.org/lbryio/lbry-sdk.svg?branch=master)](https://travis-ci.org/lbryio/lbry-sdk) [![Test Coverage](https://codecov.io/gh/lbryio/lbry-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/lbryio/lbry-sdk) [![GNU license](https://img.shields.io/github/license/lbryio/lbry-sdk)](https://github.com/lbryio/lbry-sdk/blob/master/LICENSE)
 
 LBRY is a decentralized peer-to-peer protocol for publishing and accessing digital content. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, rights and access rules. LBRY also provides a data network that consists of peers (seeders) uploading and downloading data from other peers, possibly in exchange for payments, as well as a distributed hash table used by peers to discover other peers.
 
@@ -10,6 +10,18 @@ LBRY SDK for Python is currently the most fully featured implementation of the L
  * Protobuf schema for encoding and decoding metadata stored on the blockchain ([lbry.schema](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/schema)).
  * Wallet implementation for the LBRY blockchain ([lbry.wallet](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/wallet)).
  * Daemon with a JSON-RPC API to ease building end user applications in any language and for automating various tasks ([lbry.extras.daemon](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/extras/daemon)). 
+
+## Table of Contents
+
+1. [Install](#installation)
+2. [Usage](#usage)
+3. [Running from Source](#running-from-source)
+4. [Contributing](#contributing)
+5. [License](#license)
+6. [Security](#security)
+7. [Contact](#contact)
+8. [Additional information and links](#additional-information-and-links)
+
 
 ## Installation
 
