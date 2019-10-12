@@ -4,8 +4,8 @@ import stat
 import json
 import zlib
 import typing
-from collections import UserDict
 from typing import List, Sequence, MutableSequence, Optional
+from collections import UserDict
 from hashlib import sha256
 from operator import attrgetter
 from torba.client.hash import better_aes_encrypt, better_aes_decrypt
