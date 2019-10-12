@@ -68,7 +68,7 @@ def set_logging(ledger_module, level, handler=None):
 class Conductor:
 
     def __init__(self, ledger_module=None, manager_module=None, verbosity=logging.WARNING,
-                 enable_segwit=False):
+                 enable_segwit=False, seed=None):
         self.ledger_module = ledger_module or get_ledger_from_environment()
         self.manager_module = manager_module or get_manager_from_environment()
         self.spv_module = get_spvserver_from_ledger(self.ledger_module)
@@ -76,7 +76,9 @@ class Conductor:
         self.blockchain_node = get_blockchain_node_from_ledger(self.ledger_module)
         self.blockchain_node.segwit_enabled = enable_segwit
         self.spv_node = SPVNode(self.spv_module)
-        self.wallet_node = WalletNode(self.manager_module, self.ledger_module.RegTestLedger)
+        self.wallet_node = WalletNode(
+            self.manager_module, self.ledger_module.RegTestLedger, default_seed=seed
+        )
 
         set_logging(self.ledger_module, verbosity)
 
@@ -138,7 +140,7 @@ class Conductor:
 class WalletNode:
 
     def __init__(self, manager_class: Type[BaseWalletManager], ledger_class: Type[BaseLedger],
-                 verbose: bool = False, port: int = 5280) -> None:
+                 verbose: bool = False, port: int = 5280, default_seed: str = None) -> None:
         self.manager_class = manager_class
         self.ledger_class = ledger_class
         self.verbose = verbose
@@ -148,6 +150,7 @@ class WalletNode:
         self.account: Optional[BaseAccount] = None
         self.data_path: Optional[str] = None
         self.port = port
+        self.default_seed = default_seed
 
     async def start(self, spv_node: 'SPVNode', seed=None, connect=True):
         self.data_path = tempfile.mkdtemp()
@@ -168,12 +171,12 @@ class WalletNode:
         })
         self.ledger = self.manager.ledgers[self.ledger_class]
         self.wallet = self.manager.default_wallet
-        if seed is None and self.wallet is not None:
-            self.wallet.generate_account(self.ledger)
-        elif self.wallet is not None:
+        if seed or self.default_seed:
             self.ledger.account_class.from_dict(
-                self.ledger, self.wallet, {'seed': seed}
+                self.ledger, self.wallet, {'seed': seed or self.default_seed}
             )
+        elif self.wallet is not None:
+            self.wallet.generate_account(self.ledger)
         else:
             raise ValueError('Wallet is required.')
         self.account = self.wallet.default_account

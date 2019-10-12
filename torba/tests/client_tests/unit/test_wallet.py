@@ -1,12 +1,13 @@
 import tempfile
 from binascii import hexlify
 
+from unittest import TestCase, mock
 from torba.testcase import AsyncioTestCase
 
 from torba.coin.bitcoinsegwit import MainNetLedger as BTCLedger
 from torba.coin.bitcoincash import MainNetLedger as BCHLedger
 from torba.client.basemanager import BaseWalletManager
-from torba.client.wallet import Wallet, WalletStorage
+from torba.client.wallet import Wallet, WalletStorage, TimestampedPreferences
 
 
 class TestWalletCreation(AsyncioTestCase):
@@ -32,6 +33,7 @@ class TestWalletCreation(AsyncioTestCase):
         wallet_dict = {
             'version': 1,
             'name': 'Main Wallet',
+            'preferences': {},
             'accounts': [
                 {
                     'name': 'An Account',
@@ -60,7 +62,7 @@ class TestWalletCreation(AsyncioTestCase):
         wallet = Wallet.from_storage(storage, self.manager)
         self.assertEqual(wallet.name, 'Main Wallet')
         self.assertEqual(
-            hexlify(wallet.hash), b'9f462b8dd802eb8c913e54f09a09827ebc14abbc13f33baa90d8aec5ae920fc7'
+            hexlify(wallet.hash), b'1bd61fbe18875cb7828c466022af576104ed861c8a1fdb1dadf5e39417a68483'
         )
         self.assertEqual(len(wallet.accounts), 1)
         account = wallet.default_account
@@ -91,3 +93,56 @@ class TestWalletCreation(AsyncioTestCase):
             wallet = Wallet.from_storage(wallet_storage, manager)
 
             self.assertEqual(account.public_key.address, wallet.default_account.public_key.address)
+
+    def test_merge(self):
+        wallet1 = Wallet()
+        wallet1.preferences['one'] = 1
+        wallet1.preferences['conflict'] = 1
+        wallet1.generate_account(self.btc_ledger)
+        wallet2 = Wallet()
+        wallet2.preferences['two'] = 2
+        wallet2.preferences['conflict'] = 2  # will be more recent
+        wallet2.generate_account(self.btc_ledger)
+
+        self.assertEqual(len(wallet1.accounts), 1)
+        self.assertEqual(wallet1.preferences, {'one': 1, 'conflict': 1})
+
+        added = wallet1.merge(self.manager, 'password', wallet2.pack('password'))
+        self.assertEqual(added[0].id, wallet2.default_account.id)
+        self.assertEqual(len(wallet1.accounts), 2)
+        self.assertEqual(wallet1.accounts[1].id, wallet2.default_account.id)
+        self.assertEqual(wallet1.preferences, {'one': 1, 'two': 2, 'conflict': 2})
+
+
+class TestTimestampedPreferences(TestCase):
+
+    def test_hash(self):
+        p = TimestampedPreferences()
+        self.assertEqual(
+            hexlify(p.hash), b'44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a'
+        )
+        with mock.patch('time.time', mock.Mock(return_value=12345)):
+            p['one'] = 1
+        self.assertEqual(
+            hexlify(p.hash), b'c9e82bf4cb099dd0125f78fa381b21a8131af601917eb531e1f5f980f8f3da66'
+        )
+
+    def test_merge(self):
+        p1 = TimestampedPreferences()
+        p2 = TimestampedPreferences()
+        with mock.patch('time.time', mock.Mock(return_value=10)):
+            p1['one'] = 1
+            p1['conflict'] = 1
+        with mock.patch('time.time', mock.Mock(return_value=20)):
+            p2['two'] = 2
+            p2['conflict'] = 2
+
+        # conflict in p2 overrides conflict in p1
+        p1.merge(p2.data)
+        self.assertEqual(p1, {'one': 1, 'two': 2, 'conflict': 2})
+
+        # have a newer conflict in p1 so it is not overridden this time
+        with mock.patch('time.time', mock.Mock(return_value=21)):
+            p1['conflict'] = 1
+        p1.merge(p2.data)
+        self.assertEqual(p1, {'one': 1, 'two': 2, 'conflict': 1})

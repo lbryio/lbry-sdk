@@ -151,11 +151,11 @@ class CommandTestCase(IntegrationTestCase):
         wallet_node.manager.old_db = daemon.storage
         return daemon
 
-    async def confirm_tx(self, txid):
+    async def confirm_tx(self, txid, ledger=None):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
-        await self.on_transaction_id(txid)
+        await self.on_transaction_id(txid, ledger)
         await self.generate(1)
-        await self.on_transaction_id(txid)
+        await self.on_transaction_id(txid, ledger)
         return txid
 
     async def on_transaction_dict(self, tx):

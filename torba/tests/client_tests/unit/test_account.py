@@ -178,7 +178,7 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         account_data['ledger'] = 'btc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())
 
-    def test_apply_diff(self):
+    def test_merge_diff(self):
         account_data = {
             'name': 'My Account',
             'modified_on': 123.456,
@@ -213,13 +213,13 @@ class TestHierarchicalDeterministicAccount(AsyncioTestCase):
         account_data['address_generator']['receiving']['gap'] = 8
         account_data['address_generator']['receiving']['maximum_uses_per_address'] = 9
 
-        account.apply(account_data)
+        account.merge(account_data)
         # no change because modified_on is not newer
         self.assertEqual(account.name, 'My Account')
 
         account_data['modified_on'] = 200.00
 
-        account.apply(account_data)
+        account.merge(account_data)
         self.assertEqual(account.name, 'Changed Name')
         self.assertEqual(account.change.gap, 6)
         self.assertEqual(account.change.maximum_uses_per_address, 7)
