@@ -124,7 +124,12 @@ class BaseClaim:
             for field in self.object_fields:
                 if key.startswith(f'{field}_'):
                     attr = getattr(self, field)
-                    setattr(attr, key[len(f'{field}_'):], kwargs.pop(key))
+
+                    attr_value = kwargs.pop(key)
+                    if attr_value is None:
+                        raise ValueError(f"Error updating claim - Null value provided for attribute {field}")
+                    
+                    setattr(attr, key[len(f'{field}_'):], attr_value)
                     continue
 
         for l in self.repeat_fields:
