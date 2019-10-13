@@ -5,7 +5,6 @@ from hashlib import sha256
 from string import hexdigits
 
 import ecdsa
-from lbry.wallet.dewies import dewies_to_lbc
 from lbry.wallet.constants import TXO_TYPES
 
 from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
@@ -78,7 +77,7 @@ class Account(BaseAccount):
             constraints.update({'txo_type': 0})
         return super().get_balance(confirmations, **constraints)
 
-    async def get_granular_balances(self, confirmations=0, reserved_subtotals=False):
+    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False):
         tips_balance, supports_balance, claims_balance = 0, 0, 0
         get_total_balance = partial(self.get_balance, confirmations=confirmations, include_claims=True)
         total = await get_total_balance()
@@ -98,13 +97,13 @@ class Account(BaseAccount):
                 confirmations=confirmations, include_claims=True, txo_type__gt=0
             )
         return {
-            'total': dewies_to_lbc(total),
-            'available': dewies_to_lbc(total - reserved),
-            'reserved': dewies_to_lbc(reserved),
+            'total': total,
+            'available': total - reserved,
+            'reserved': reserved,
             'reserved_subtotals': {
-                'claims': dewies_to_lbc(claims_balance),
-                'supports': dewies_to_lbc(supports_balance),
-                'tips': dewies_to_lbc(tips_balance)
+                'claims': claims_balance,
+                'supports': supports_balance,
+                'tips': tips_balance
             } if reserved_subtotals else None
         }
 

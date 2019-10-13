@@ -38,7 +38,7 @@ from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.wallet.account import Account as LBCAccount
-from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
+from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
 
@@ -1141,6 +1141,31 @@ class Daemon(metaclass=JSONRPCServerType):
         self.wallet_manager.wallets.remove(wallet)
         return wallet
 
+    @requires("wallet")
+    async def jsonrpc_wallet_balance(self, wallet_id=None, confirmations=0, reserved_subtotals=False):
+        """
+        Return the balance of a wallet
+
+        Usage:
+            wallet_balance [--wallet_id=<wallet_id>] [--confirmations=<confirmations>] [--reserved_subtotals]
+
+        Options:
+            --wallet_id=<wallet_id>         : (str) balance for specific wallet
+            --confirmations=<confirmations> : (int) Only include transactions with this many
+                                              confirmed blocks.
+            --reserved_subtotals            : (bool) Include detailed reserved balances on
+                                              claims, tips and supports.
+
+        Returns:
+            (decimal) amount of lbry credits in wallet
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        balance = await self.ledger.get_detailed_balance(
+            accounts=wallet.accounts, confirmations=confirmations,
+            reserved_subtotals=reserved_subtotals
+        )
+        return dict_values_to_lbc(balance)
+
     ACCOUNT_DOC = """
     Create, modify and inspect wallet accounts.
     """
@@ -1200,7 +1225,10 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
-        return await account.get_granular_balances(confirmations=confirmations, reserved_subtotals=reserved_subtotals)
+        balance = await account.get_detailed_balance(
+            confirmations=confirmations, reserved_subtotals=reserved_subtotals
+        )
+        return dict_values_to_lbc(balance)
 
     @requires("wallet")
     async def jsonrpc_account_add(

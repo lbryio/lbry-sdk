@@ -244,6 +244,23 @@ class MainNetLedger(BaseLedger):
     def get_transaction_history_count(self, **constraints):
         return self.db.get_transaction_count(**constraints)
 
+    @staticmethod
+    async def get_detailed_balance(accounts, confirmations=0, reserved_subtotals=False):
+        result = {}
+        for account in accounts:
+            balance = await account.get_detailed_balance(confirmations, reserved_subtotals)
+            if result:
+                for key, value in balance.items():
+                    if key == 'reserved_subtotals':
+                        if value is not None:
+                            for subkey, subvalue in value.items():
+                                result['reserved_subtotals'][subkey] += subvalue
+                    else:
+                        result[key] += value
+            else:
+                result = balance
+        return result
+
 
 class TestNetLedger(MainNetLedger):
     network_name = 'testnet'
