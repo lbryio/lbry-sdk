@@ -31,3 +31,12 @@ def lbc_to_dewies(lbc: str) -> int:
 
 def dewies_to_lbc(dewies) -> str:
     return satoshis_to_coins(dewies)
+
+
+def dict_values_to_lbc(d):
+    for key, value in d.items():
+        if isinstance(value, int):
+            d[key] = dewies_to_lbc(value)
+        elif isinstance(value, dict):
+            dict_values_to_lbc(value)
+    return d
