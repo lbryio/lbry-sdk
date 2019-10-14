@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # Form implementation generated from reading ui file 'output_dock.ui',
 # licensing of 'output_dock.ui' applies.
 #
@@ -8,7 +10,7 @@
 
 from PySide2 import QtCore, QtGui, QtWidgets
 
-class Ui_OutputDock:
+class Ui_OutputDock(object):
     def setupUi(self, OutputDock):
         OutputDock.setObjectName("OutputDock")
         OutputDock.resize(700, 397)
