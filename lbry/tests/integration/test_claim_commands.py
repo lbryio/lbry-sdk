@@ -714,6 +714,24 @@ class StreamCommands(ClaimTestCase):
         signed = await self.out(self.stream_create('bar', '1.0', channel_name='@spam', preview=True, confirm=False))
         self.assertTrue(signed['outputs'][0]['is_channel_signature_valid'])
 
+    async def test_repost(self):
+        await self.out(self.channel_create('@goodies', '1.0'))
+        tx = await self.out(self.stream_create('newstuff', '1.1', channel_name='@goodies'))
+        claim_id = tx['outputs'][0]['claim_id']
+        await self.stream_repost(claim_id, 'newstuff-again', '1.1')
+        claim_list = await self.out(self.daemon.jsonrpc_claim_list())
+        reposts_on_claim_list = [claim for claim in claim_list if claim['value_type'] == 'repost']
+        self.assertEqual(len(reposts_on_claim_list), 1)
+        await self.out(self.channel_create('@reposting-goodies', '1.0'))
+        await self.stream_repost(claim_id, 'repost-on-channel', '1.1', channel_name='@reposting-goodies')
+        claim_list = await self.out(self.daemon.jsonrpc_claim_list())
+        reposts_on_claim_list = [claim for claim in claim_list if claim['value_type'] == 'repost']
+        self.assertEqual(len(reposts_on_claim_list), 2)
+        signed_reposts = [repost for repost in reposts_on_claim_list if repost.get('is_channel_signature_valid')]
+        self.assertEqual(len(signed_reposts), 1)
+        search_results = await self.claim_search(name='newstuff-again')
+        self.assertEqual(len(search_results), 1)
+
     async def test_publish_updates_file_list(self):
         tx = await self.out(self.stream_create(title='created'))
         txo = tx['outputs'][0]
