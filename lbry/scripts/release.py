@@ -141,9 +141,9 @@ def release(args):
         type_label = get_label(pr, 'type')
         if area_labels and type_label:
             for area_name in area_labels:
-                for incompat in get_backwards_incompatible(pr.body):
+                for incompat in get_backwards_incompatible(pr.body or ""):
                     incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
-                for release_text in get_release_text(pr.body):
+                for release_text in get_release_text(pr.body or ""):
                     release_texts.append(f'{release_text.strip()} ({pr.html_url})')
                 if type_label != 'fixup':
                     area = areas.setdefault(area_name, [])
