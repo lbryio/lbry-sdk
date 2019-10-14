@@ -185,6 +185,7 @@ class Wallet:
     def lock(self):
         for account in self.accounts:
             if not account.encrypted:
+                assert account.password is not None, "account was never encrypted"
                 account.encrypt(account.password)
 
     @property
@@ -201,7 +202,7 @@ class Wallet:
 
     def encrypt(self, password):
         for account in self.accounts:
-            if not self.encrypted:
+            if not account.encrypted:
                 account.encrypt(password)
             account.serialize_encrypted = True
         self.save()
