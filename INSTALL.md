@@ -36,6 +36,7 @@ On Ubuntu (16.04 minimum, we recommend 18.04), install the following:
 ```
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt-get update
+sudo apt update
 sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv libssl-dev python-protobuf
 ```
 
