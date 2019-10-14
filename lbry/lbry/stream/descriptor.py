@@ -15,16 +15,16 @@ from lbry.error import InvalidStreamDescriptorError
 
 log = logging.getLogger(__name__)
 
-_exprs = [
-    '[<>:"/\\\|\?\*]+',  # Illegal characters
-    '[\\x00-\\x1F]+',  # All characters in range 0-31
-    '[ \t]*(\.)+[ \t]*$',  # Dots at the end
-    '(^[ \t]+|[ \t]+$)',  # Leading and trailing whitespace
-    '^CON$', '^PRN$', '^AUX$',  # Illegal names
-    '^NUL$', '^COM[1-9]$', '^LPT[1-9]$'
-]
-
-RES = re.compile('(' + '|'.join((expr for expr in _exprs)) + ')')
+RE_ILLEGAL_FILENAME_CHARS = re.compile(
+    '('
+    '[<>:"/\\\|\?\*]+|'               # Illegal characters
+    '[\\x00-\\x1F]+|'                 # All characters in range 0-31
+    '[ \t]*(\.)+[ \t]*$|'             # Dots at the end
+    '(^[ \t]+|[ \t]+$)|'              # Leading and trailing whitespace
+    '^CON$|^PRN$|^AUX$|'              # Illegal names
+    '^NUL$|^COM[1-9]$|^LPT[1-9]$'     # ...
+    ')'
+)
 
 
 def format_sd_info(stream_name: str, key: str, suggested_file_name: str, stream_hash: str,
@@ -60,8 +60,8 @@ def file_reader(file_path: str):
 
 def sanitize_file_name(dirty_name: str):
     file_name, ext = os.path.splitext(dirty_name)
-    file_name = re.sub(RES, '', file_name)
-    ext = re.sub(RES, '', ext)
+    file_name = re.sub(RE_ILLEGAL_FILENAME_CHARS, '', file_name)
+    ext = re.sub(RE_ILLEGAL_FILENAME_CHARS, '', ext)
 
     if not file_name:
         log.warning('Unable to suggest a file name for %s', dirty_name)
