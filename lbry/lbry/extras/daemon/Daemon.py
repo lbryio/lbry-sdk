@@ -3375,7 +3375,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return maybe_paginate(utxos, utxo_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_utxo_release(self, account_id=None, wallet_id=None):
+    async def jsonrpc_utxo_release(self, account_id=None, wallet_id=None):
         """
         When spending a UTXO it is locally locked to prevent double spends;
         occasionally this can result in a UTXO being locked which ultimately
@@ -3395,10 +3395,10 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id is not None:
-            wallet.get_account_or_error(account_id).release_all_outputs()
+            await wallet.get_account_or_error(account_id).release_all_outputs()
         else:
             for account in wallet.accounts:
-                account.release_all_outputs()
+                await account.release_all_outputs()
 
     BLOB_DOC = """
     Blob management.
