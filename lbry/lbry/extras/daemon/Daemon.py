@@ -3394,7 +3394,11 @@ class Daemon(metaclass=JSONRPCServerType):
             None
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return wallet.get_account_or_default(account_id).release_all_outputs()
+        if account_id is not None:
+            wallet.get_account_or_error(account_id).release_all_outputs()
+        else:
+            for account in wallet.accounts:
+                account.release_all_outputs()
 
     BLOB_DOC = """
     Blob management.
