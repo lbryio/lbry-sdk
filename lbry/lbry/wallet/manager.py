@@ -26,42 +26,8 @@ class LbryWalletManager(BaseWalletManager):
     def db(self) -> WalletDatabase:
         return self.ledger.db
 
-    @property
-    def use_encryption(self):
-        return self.default_account.serialize_encrypted
-
-    @property
-    def is_wallet_unlocked(self):
-        return not self.default_account.encrypted
-
     def check_locked(self):
-        return self.default_account.encrypted
-
-    def decrypt_account(self, account):
-        assert account.password is not None, "account is not unlocked"
-        assert not account.encrypted, "account is not unlocked"
-        account.serialize_encrypted = False
-        self.save()
-        return not account.encrypted and not account.serialize_encrypted
-
-    def encrypt_account(self, password, account):
-        assert not account.encrypted, "account is already encrypted"
-        account.encrypt(password)
-        account.serialize_encrypted = True
-        self.save()
-        self.unlock_account(password, account)
-        return account.serialize_encrypted
-
-    def unlock_account(self, password, account):
-        assert account.encrypted, "account is not locked"
-        account.decrypt(password)
-        return not account.encrypted
-
-    def lock_account(self, account):
-        assert account.password is not None, "account is already locked"
-        assert not account.encrypted and account.serialize_encrypted, "account is not encrypted"
-        account.encrypt(account.password)
-        return account.encrypted
+        return self.default_wallet.is_locked
 
     @staticmethod
     def migrate_lbryum_to_torba(path):
@@ -210,7 +176,3 @@ class LbryWalletManager(BaseWalletManager):
             tx = self.ledger.transaction_class(unhexlify(raw))
             await self.ledger.maybe_verify_transaction(tx, height)
         return tx
-
-    def save(self):
-        for wallet in self.wallets:
-            wallet.save()

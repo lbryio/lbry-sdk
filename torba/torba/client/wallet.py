@@ -170,6 +170,43 @@ class Wallet:
                 added_accounts.append(new_account)
         return added_accounts
 
+    @property
+    def is_locked(self) -> bool:
+        for account in self.accounts:
+            if account.encrypted:
+                return True
+        return False
+
+    def unlock(self, password):
+        for account in self.accounts:
+            if account.encrypted:
+                account.decrypt(password)
+
+    def lock(self):
+        for account in self.accounts:
+            if not account.encrypted:
+                account.encrypt(account.password)
+
+    @property
+    def is_encrypted(self) -> bool:
+        for account in self.accounts:
+            if account.serialize_encrypted:
+                return True
+        return False
+
+    def decrypt(self):
+        for account in self.accounts:
+            account.serialize_encrypted = False
+        self.save()
+
+    def encrypt(self, password):
+        for account in self.accounts:
+            if not self.encrypted:
+                account.encrypt(password)
+            account.serialize_encrypted = True
+        self.save()
+        self.unlock(password)
+
 
 class WalletStorage:
 
