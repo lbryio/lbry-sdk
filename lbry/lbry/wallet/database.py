@@ -28,19 +28,16 @@ class WalletDatabase(BaseDatabase):
     """
 
     CREATE_TABLES_QUERY = (
-        BaseDatabase.PRAGMAS +
-        BaseDatabase.CREATE_ACCOUNT_TABLE +
-        BaseDatabase.CREATE_PUBKEY_ADDRESS_TABLE +
-        BaseDatabase.CREATE_TX_TABLE +
-        CREATE_TXO_TABLE +
-        BaseDatabase.CREATE_TXI_TABLE
-    )
+        BaseDatabase.PRAGMAS + BaseDatabase.CREATE_ACCOUNT_TABLE +
+        BaseDatabase.CREATE_PUBKEY_ADDRESS_TABLE + BaseDatabase.CREATE_TX_TABLE
+        + CREATE_TXO_TABLE + BaseDatabase.CREATE_TXI_TABLE)
 
     def txo_to_row(self, tx, address, txo):
         row = super().txo_to_row(tx, address, txo)
         if txo.is_claim:
             if txo.can_decode_claim:
-                row['txo_type'] = TXO_TYPES.get(txo.claim.claim_type, TXO_TYPES['stream'])
+                row['txo_type'] = TXO_TYPES.get(txo.claim.claim_type,
+                                                TXO_TYPES['stream'])
             else:
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
@@ -50,8 +47,10 @@ class WalletDatabase(BaseDatabase):
             row['claim_name'] = txo.claim_name
         return row
 
-    async def get_txos(self, wallet=None, no_tx=False, **constraints) -> List[Output]:
-        txos = await super().get_txos(wallet=wallet, no_tx=no_tx, **constraints)
+    async def get_txos(self, wallet=None, no_tx=False,
+                       **constraints) -> List[Output]:
+        txos = await super().get_txos(
+            wallet=wallet, no_tx=no_tx, **constraints)
 
         channel_ids = set()
         for txo in txos:
@@ -61,23 +60,21 @@ class WalletDatabase(BaseDatabase):
                 if txo.claim.is_channel and wallet:
                     for account in wallet.accounts:
                         private_key = account.get_channel_private_key(
-                            txo.claim.channel.public_key_bytes
-                        )
+                            txo.claim.channel.public_key_bytes)
                         if private_key:
                             txo.private_key = private_key
                             break
 
         if channel_ids:
             channels = {
-                txo.claim_id: txo for txo in
-                (await self.get_claims(
-                    wallet=wallet,
-                    claim_id__in=channel_ids
-                ))
+                txo.claim_id: txo
+                for txo in (await self.get_claims(
+                    wallet=wallet, claim_id__in=channel_ids))
             }
             for txo in txos:
                 if txo.is_claim and txo.can_decode_claim:
-                    txo.channel = channels.get(txo.claim.signing_channel_id, None)
+                    txo.channel = channels.get(txo.claim.signing_channel_id,
+                                               None)
 
         return txos
 
@@ -136,11 +133,11 @@ class WalletDatabase(BaseDatabase):
             "UPDATE txo SET is_reserved = 0 WHERE"
             "  is_reserved = 1 AND txo.address IN ("
             "    SELECT address from account_address WHERE account = ?"
-            "  )", (account.public_key.address, )
-        )
+            "  )", (account.public_key.address, ))
 
     def get_supports_summary(self, account_id):
-        return self.db.execute_fetchall(f"""
+        return self.db.execute_fetchall(
+            f"""
             select txo.amount, exists(select * from txi where txi.txoid=txo.txoid) as spent,
                 (txo.txid in
                 (select txi.txid from txi join account_address a on txi.address = a.address

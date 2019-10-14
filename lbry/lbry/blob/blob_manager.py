@@ -16,7 +16,11 @@ log = logging.getLogger(__name__)
 
 
 class BlobManager:
-    def __init__(self, loop: asyncio.AbstractEventLoop, blob_dir: str, storage: 'SQLiteStorage', config: 'Config',
+    def __init__(self,
+                 loop: asyncio.AbstractEventLoop,
+                 blob_dir: str,
+                 storage: 'SQLiteStorage',
+                 config: 'Config',
                  node_data_store: typing.Optional['DictDataStore'] = None):
         """
         This class stores blobs on the hard disk
@@ -38,17 +42,17 @@ class BlobManager:
 
     def _get_blob(self, blob_hash: str, length: typing.Optional[int] = None):
         if self.config.save_blobs or (
-                is_valid_blobhash(blob_hash) and os.path.isfile(os.path.join(self.blob_dir, blob_hash))):
-            return BlobFile(
-                self.loop, blob_hash, length, self.blob_completed, self.blob_dir
-            )
-        return BlobBuffer(
-            self.loop, blob_hash, length, self.blob_completed, self.blob_dir
-        )
+                is_valid_blobhash(blob_hash)
+                and os.path.isfile(os.path.join(self.blob_dir, blob_hash))):
+            return BlobFile(self.loop, blob_hash, length, self.blob_completed,
+                            self.blob_dir)
+        return BlobBuffer(self.loop, blob_hash, length, self.blob_completed,
+                          self.blob_dir)
 
     def get_blob(self, blob_hash, length: typing.Optional[int] = None):
         if blob_hash in self.blobs:
-            if self.config.save_blobs and isinstance(self.blobs[blob_hash], BlobBuffer):
+            if self.config.save_blobs and isinstance(self.blobs[blob_hash],
+                                                     BlobBuffer):
                 buffer = self.blobs.pop(blob_hash)
                 if blob_hash in self.completed_blob_hashes:
                     self.completed_blob_hashes.remove(blob_hash)
@@ -62,7 +66,9 @@ class BlobManager:
             self.blobs[blob_hash] = self._get_blob(blob_hash, length)
         return self.blobs[blob_hash]
 
-    def is_blob_verified(self, blob_hash: str, length: typing.Optional[int] = None) -> bool:
+    def is_blob_verified(self,
+                         blob_hash: str,
+                         length: typing.Optional[int] = None) -> bool:
         if not is_valid_blobhash(blob_hash):
             raise ValueError(blob_hash)
         if not os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
@@ -76,10 +82,13 @@ class BlobManager:
             if not self.blob_dir:
                 return set()
             return {
-                item.name for item in os.scandir(self.blob_dir) if is_valid_blobhash(item.name)
+                item.name
+                for item in os.scandir(self.blob_dir)
+                if is_valid_blobhash(item.name)
             }
 
-        in_blobfiles_dir = await self.loop.run_in_executor(None, get_files_in_blob_dir)
+        in_blobfiles_dir = await self.loop.run_in_executor(
+            None, get_files_in_blob_dir)
         to_add = await self.storage.sync_missing_blobs(in_blobfiles_dir)
         if to_add:
             self.completed_blob_hashes.update(to_add)
@@ -95,7 +104,8 @@ class BlobManager:
         self.completed_blob_hashes.clear()
 
     def get_stream_descriptor(self, sd_hash):
-        return StreamDescriptor.from_stream_descriptor_blob(self.loop, self.blob_dir, self.get_blob(sd_hash))
+        return StreamDescriptor.from_stream_descriptor_blob(
+            self.loop, self.blob_dir, self.get_blob(sd_hash))
 
     def blob_completed(self, blob: AbstractBlob) -> asyncio.Task:
         if blob.blob_hash is None:
@@ -105,27 +115,38 @@ class BlobManager:
         if isinstance(blob, BlobFile):
             if blob.blob_hash not in self.completed_blob_hashes:
                 self.completed_blob_hashes.add(blob.blob_hash)
-            return self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=True))
+            return self.loop.create_task(
+                self.storage.add_blobs((blob.blob_hash, blob.length),
+                                       finished=True))
         else:
-            return self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=False))
+            return self.loop.create_task(
+                self.storage.add_blobs((blob.blob_hash, blob.length),
+                                       finished=False))
 
-    def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
+    def check_completed_blobs(
+            self, blob_hashes: typing.List[str]) -> typing.List[str]:
         """Returns of the blobhashes_to_check, which are valid"""
-        return [blob_hash for blob_hash in blob_hashes if self.is_blob_verified(blob_hash)]
+        return [
+            blob_hash for blob_hash in blob_hashes
+            if self.is_blob_verified(blob_hash)
+        ]
 
     def delete_blob(self, blob_hash: str):
         if not is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash to delete")
 
         if blob_hash not in self.blobs:
-            if self.blob_dir and os.path.isfile(os.path.join(self.blob_dir, blob_hash)):
+            if self.blob_dir and os.path.isfile(
+                    os.path.join(self.blob_dir, blob_hash)):
                 os.remove(os.path.join(self.blob_dir, blob_hash))
         else:
             self.blobs.pop(blob_hash).delete()
             if blob_hash in self.completed_blob_hashes:
                 self.completed_blob_hashes.remove(blob_hash)
 
-    async def delete_blobs(self, blob_hashes: typing.List[str], delete_from_db: typing.Optional[bool] = True):
+    async def delete_blobs(self,
+                           blob_hashes: typing.List[str],
+                           delete_from_db: typing.Optional[bool] = True):
         for blob_hash in blob_hashes:
             self.delete_blob(blob_hash)
 

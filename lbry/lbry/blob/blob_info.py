@@ -9,7 +9,11 @@ class BlobInfo:
         'iv',
     ]
 
-    def __init__(self, blob_num: int, length: int, iv: str, blob_hash: typing.Optional[str] = None):
+    def __init__(self,
+                 blob_num: int,
+                 length: int,
+                 iv: str,
+                 blob_hash: typing.Optional[str] = None):
         self.blob_hash = blob_hash
         self.blob_num = blob_num
         self.length = length

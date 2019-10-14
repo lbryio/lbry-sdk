@@ -9,10 +9,8 @@ class InvalidProofError(Exception):
 
 def get_hash_for_outpoint(txhash, nout, height_of_last_takeover):
     return double_sha256(
-        double_sha256(txhash) +
-        double_sha256(str(nout).encode()) +
-        double_sha256(struct.pack('>Q', height_of_last_takeover))
-    )
+        double_sha256(txhash) + double_sha256(str(nout).encode()) +
+        double_sha256(struct.pack('>Q', height_of_last_takeover)))
 
 
 # noinspection PyPep8
@@ -26,12 +24,13 @@ def verify_proof(proof, root_hash, name):
         previous_child_character = None
         for child in node['children']:
             if child['character'] < 0 or child['character'] > 255:
-                raise InvalidProofError("child character not int between 0 and 255")
+                raise InvalidProofError(
+                    "child character not int between 0 and 255")
             if previous_child_character:
                 if previous_child_character >= child['character']:
                     raise InvalidProofError("children not in increasing order")
             previous_child_character = child['character']
-            to_hash += bytes((child['character'],))
+            to_hash += bytes((child['character'], ))
             if 'nodeHash' in child:
                 if len(child['nodeHash']) != 64:
                     raise InvalidProofError("invalid child nodeHash")
@@ -40,7 +39,8 @@ def verify_proof(proof, root_hash, name):
                 if previous_computed_hash is None:
                     raise InvalidProofError("previous computed hash is None")
                 if found_child_in_chain is True:
-                    raise InvalidProofError("already found the next child in the chain")
+                    raise InvalidProofError(
+                        "already found the next child in the chain")
                 found_child_in_chain = True
                 reverse_computed_name += chr(child['character'])
                 to_hash += previous_computed_hash
@@ -50,17 +50,18 @@ def verify_proof(proof, root_hash, name):
                 raise InvalidProofError("did not find the alleged child")
         if i == 0 and 'txhash' in proof and 'nOut' in proof and 'last takeover height' in proof:
             if len(proof['txhash']) != 64:
-                raise InvalidProofError("txhash was invalid: {}".format(proof['txhash']))
+                raise InvalidProofError("txhash was invalid: {}".format(
+                    proof['txhash']))
             if not isinstance(proof['nOut'], int):
-                raise InvalidProofError("nOut was invalid: {}".format(proof['nOut']))
+                raise InvalidProofError("nOut was invalid: {}".format(
+                    proof['nOut']))
             if not isinstance(proof['last takeover height'], int):
                 raise InvalidProofError(
-                    'last takeover height was invalid: {}'.format(proof['last takeover height']))
+                    'last takeover height was invalid: {}'.format(
+                        proof['last takeover height']))
             to_hash += get_hash_for_outpoint(
-                binascii.unhexlify(proof['txhash'])[::-1],
-                proof['nOut'],
-                proof['last takeover height']
-            )
+                binascii.unhexlify(proof['txhash'])[::-1], proof['nOut'],
+                proof['last takeover height'])
             verified_value = True
         elif 'valueHash' in node:
             if len(node['valueHash']) != 64:

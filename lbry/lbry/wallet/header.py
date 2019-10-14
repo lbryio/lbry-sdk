@@ -27,7 +27,8 @@ class Headers(BaseHeaders):
             unhexlify(header['prev_block_hash'])[::-1],
             unhexlify(header['merkle_root'])[::-1],
             unhexlify(header['claim_trie_root'])[::-1],
-            struct.pack('<III', header['timestamp'], header['bits'], header['nonce'])
+            struct.pack('<III', header['timestamp'], header['bits'],
+                        header['nonce'])
         ])
 
     @staticmethod
@@ -45,7 +46,8 @@ class Headers(BaseHeaders):
             'block_height': height,
         }
 
-    def get_next_block_target(self, max_target: ArithUint256, previous: Optional[dict],
+    def get_next_block_target(self, max_target: ArithUint256,
+                              previous: Optional[dict],
                               current: Optional[dict]) -> ArithUint256:
         # https://github.com/lbryio/lbrycrd/blob/master/src/lbry.cpp
         if previous is None and current is None:
@@ -53,28 +55,30 @@ class Headers(BaseHeaders):
         if previous is None:
             previous = current
         actual_timespan = current['timestamp'] - previous['timestamp']
-        modulated_timespan = self.target_timespan + int((actual_timespan - self.target_timespan) / 8)
-        minimum_timespan = self.target_timespan - int(self.target_timespan / 8)  # 150 - 18 = 132
-        maximum_timespan = self.target_timespan + int(self.target_timespan / 2)  # 150 + 75 = 225
-        clamped_timespan = max(minimum_timespan, min(modulated_timespan, maximum_timespan))
+        modulated_timespan = self.target_timespan + int(
+            (actual_timespan - self.target_timespan) / 8)
+        minimum_timespan = self.target_timespan - int(
+            self.target_timespan / 8)  # 150 - 18 = 132
+        maximum_timespan = self.target_timespan + int(
+            self.target_timespan / 2)  # 150 + 75 = 225
+        clamped_timespan = max(minimum_timespan,
+                               min(modulated_timespan, maximum_timespan))
         target = ArithUint256.from_compact(current['bits'])
-        new_target = min(max_target, (target * clamped_timespan) / self.target_timespan)
+        new_target = min(max_target,
+                         (target * clamped_timespan) / self.target_timespan)
         return new_target
 
     @classmethod
     def get_proof_of_work(cls, header_hash: bytes):
         return super().get_proof_of_work(
-            cls.header_hash_to_pow_hash(header_hash)
-        )
+            cls.header_hash_to_pow_hash(header_hash))
 
     @staticmethod
     def header_hash_to_pow_hash(header_hash: bytes):
         header_hash_bytes = unhexlify(header_hash)[::-1]
         h = sha512(header_hash_bytes)
         pow_hash = double_sha256(
-            ripemd160(h[:len(h) // 2]) +
-            ripemd160(h[len(h) // 2:])
-        )
+            ripemd160(h[:len(h) // 2]) + ripemd160(h[len(h) // 2:]))
         return hexlify(pow_hash[::-1])
 
 

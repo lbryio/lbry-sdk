@@ -9,7 +9,6 @@ from lbry.wallet.constants import TXO_TYPES
 
 from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
 
-
 log = logging.getLogger(__name__)
 
 
@@ -23,7 +22,6 @@ def validate_claim_id(claim_id):
 
 
 class Account(BaseAccount):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.channel_keys = {}
@@ -41,11 +39,13 @@ class Account(BaseAccount):
 
     def add_channel_private_key(self, private_key):
         public_key_bytes = private_key.get_verifying_key().to_der()
-        channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
+        channel_pubkey_hash = self.ledger.public_key_to_address(
+            public_key_bytes)
         self.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
 
     def get_channel_private_key(self, public_key_bytes):
-        channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
+        channel_pubkey_hash = self.ledger.public_key_to_address(
+            public_key_bytes)
         private_key_pem = self.channel_keys.get(channel_pubkey_hash)
         if private_key_pem:
             return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
@@ -59,9 +59,11 @@ class Account(BaseAccount):
                 continue
             if "-----BEGIN EC PRIVATE KEY-----" not in private_key_pem:
                 continue
-            private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
+            private_key = ecdsa.SigningKey.from_pem(
+                private_key_pem, hashfunc=sha256)
             public_key_der = private_key.get_verifying_key().to_der()
-            channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
+            channel_keys[self.ledger.public_key_to_address(
+                public_key_der)] = private_key_pem
         self.channel_keys = channel_keys
         self.wallet.save()
 
@@ -72,19 +74,26 @@ class Account(BaseAccount):
             self.change.gap = max(6, gap['max_change_gap'] + 1)
             self.wallet.save()
 
-    def get_balance(self, confirmations=0, include_claims=False, **constraints):
+    def get_balance(self, confirmations=0, include_claims=False,
+                    **constraints):
         if not include_claims:
             constraints.update({'txo_type': 0})
         return super().get_balance(confirmations, **constraints)
 
-    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False):
+    async def get_detailed_balance(self,
+                                   confirmations=0,
+                                   reserved_subtotals=False):
         tips_balance, supports_balance, claims_balance = 0, 0, 0
-        get_total_balance = partial(self.get_balance, confirmations=confirmations, include_claims=True)
+        get_total_balance = partial(
+            self.get_balance, confirmations=confirmations, include_claims=True)
         total = await get_total_balance()
         if reserved_subtotals:
-            claims_balance = await get_total_balance(txo_type__in=[TXO_TYPES['stream'], TXO_TYPES['channel']])
-            for amount, spent, from_me, to_me, height in await self.get_support_summary():
-                if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
+            claims_balance = await get_total_balance(
+                txo_type__in=[TXO_TYPES['stream'], TXO_TYPES['channel']])
+            for amount, spent, from_me, to_me, height in await self.get_support_summary(
+            ):
+                if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (
+                        confirmations - 1):
                     continue
                 if not spent and to_me:
                     if from_me:
@@ -94,8 +103,9 @@ class Account(BaseAccount):
             reserved = claims_balance + supports_balance + tips_balance
         else:
             reserved = await self.get_balance(
-                confirmations=confirmations, include_claims=True, txo_type__gt=0
-            )
+                confirmations=confirmations,
+                include_claims=True,
+                txo_type__gt=0)
         return {
             'total': total,
             'available': total - reserved,
@@ -109,9 +119,8 @@ class Account(BaseAccount):
 
     @classmethod
     def get_private_key_from_seed(cls, ledger, seed: str, password: str):
-        return super().get_private_key_from_seed(
-            ledger, seed, password or 'lbryum'
-        )
+        return super().get_private_key_from_seed(ledger, seed, password
+                                                 or 'lbryum')
 
     @classmethod
     def from_dict(cls, ledger, wallet, d: dict) -> 'Account':
@@ -131,34 +140,44 @@ class Account(BaseAccount):
         return details
 
     def get_transaction_history(self, **constraints):
-        return self.ledger.get_transaction_history(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_transaction_history(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_transaction_history_count(self, **constraints):
-        return self.ledger.get_transaction_history_count(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_transaction_history_count(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_claims(self, **constraints):
-        return self.ledger.get_claims(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_claims(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_claim_count(self, **constraints):
-        return self.ledger.get_claim_count(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_claim_count(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_streams(self, **constraints):
-        return self.ledger.get_streams(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_streams(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_stream_count(self, **constraints):
-        return self.ledger.get_stream_count(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_stream_count(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_channels(self, **constraints):
-        return self.ledger.get_channels(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_channels(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_channel_count(self, **constraints):
-        return self.ledger.get_channel_count(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_channel_count(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_supports(self, **constraints):
-        return self.ledger.get_supports(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_supports(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_support_count(self, **constraints):
-        return self.ledger.get_support_count(wallet=self.wallet, accounts=[self], **constraints)
+        return self.ledger.get_support_count(
+            wallet=self.wallet, accounts=[self], **constraints)
 
     def get_support_summary(self):
         return self.ledger.db.get_supports_summary(account_id=self.id)

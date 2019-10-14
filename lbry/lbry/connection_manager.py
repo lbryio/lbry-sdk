@@ -5,7 +5,6 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
 CONNECTED_EVENT = "connected"
 DISCONNECTED_EVENT = "disconnected"
 TRANSFERRED_EVENT = "transferred"
@@ -15,9 +14,11 @@ class ConnectionManager:
     def __init__(self, loop: asyncio.AbstractEventLoop):
         self.loop = loop
         self.incoming_connected: typing.Set[str] = set()
-        self.incoming: typing.DefaultDict[str, int] = collections.defaultdict(int)
+        self.incoming: typing.DefaultDict[str, int] = collections.defaultdict(
+            int)
         self.outgoing_connected: typing.Set[str] = set()
-        self.outgoing: typing.DefaultDict[str, int] = collections.defaultdict(int)
+        self.outgoing: typing.DefaultDict[str, int] = collections.defaultdict(
+            int)
         self._status = {}
         self._running = False
         self._task: typing.Optional[asyncio.Task] = None
@@ -73,12 +74,14 @@ class ConnectionManager:
             while self.incoming:
                 k, v = self.incoming.popitem()
                 self._status['incoming_bps'][k] = v / (now - last)
-            self._status['total_outgoing_mbs'] = int(sum(list(self._status['outgoing_bps'].values())
-                                                         )) / 1000000.0
-            self._status['total_incoming_mbs'] = int(sum(list(self._status['incoming_bps'].values())
-                                                         )) / 1000000.0
-            self._status['total_sent'] += sum(list(self._status['outgoing_bps'].values()))
-            self._status['total_received'] += sum(list(self._status['incoming_bps'].values()))
+            self._status['total_outgoing_mbs'] = int(
+                sum(list(self._status['outgoing_bps'].values()))) / 1000000.0
+            self._status['total_incoming_mbs'] = int(
+                sum(list(self._status['incoming_bps'].values()))) / 1000000.0
+            self._status['total_sent'] += sum(
+                list(self._status['outgoing_bps'].values()))
+            self._status['total_received'] += sum(
+                list(self._status['incoming_bps'].values()))
 
             self._status['time'] = now
 

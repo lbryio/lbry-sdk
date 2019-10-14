@@ -19,15 +19,21 @@ log = logging.getLogger(__name__)
 
 
 class StreamDownloader:
-    def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager', sd_hash: str,
+    def __init__(self,
+                 loop: asyncio.AbstractEventLoop,
+                 config: 'Config',
+                 blob_manager: 'BlobManager',
+                 sd_hash: str,
                  descriptor: typing.Optional[StreamDescriptor] = None):
         self.loop = loop
         self.config = config
         self.blob_manager = blob_manager
         self.sd_hash = sd_hash
-        self.search_queue = asyncio.Queue(loop=loop)     # blob hashes to feed into the iterative finder
-        self.peer_queue = asyncio.Queue(loop=loop)       # new peers to try
-        self.blob_downloader = BlobDownloader(self.loop, self.config, self.blob_manager, self.peer_queue)
+        self.search_queue = asyncio.Queue(
+            loop=loop)  # blob hashes to feed into the iterative finder
+        self.peer_queue = asyncio.Queue(loop=loop)  # new peers to try
+        self.blob_downloader = BlobDownloader(
+            self.loop, self.config, self.blob_manager, self.peer_queue)
         self.descriptor: typing.Optional[StreamDescriptor] = descriptor
         self.node: typing.Optional['Node'] = None
         self.accumulate_task: typing.Optional[asyncio.Task] = None
@@ -41,9 +47,9 @@ class StreamDownloader:
             return await self.read_blob(blob_info, 2)
 
         if self.blob_manager.decrypted_blob_lru_cache:
-            cached_read_blob = lru_cache_concurrent(override_lru_cache=self.blob_manager.decrypted_blob_lru_cache)(
-                cached_read_blob
-            )
+            cached_read_blob = lru_cache_concurrent(
+                override_lru_cache=self.blob_manager.decrypted_blob_lru_cache)(
+                    cached_read_blob)
 
         self.cached_read_blob = cached_read_blob
 
@@ -57,17 +63,16 @@ class StreamDownloader:
 
         if not self.config.reflector_servers:
             return
-        addresses = [
-            (await resolve_host(url, port + 1, proto='tcp'), port)
-            for url, port in self.config.reflector_servers
-        ]
+        addresses = [(await resolve_host(url, port + 1, proto='tcp'), port)
+                     for url, port in self.config.reflector_servers]
         if 'dht' in self.config.components_to_skip or not self.node or not \
                 len(self.node.protocol.routing_table.get_peers()):
             self.fixed_peers_delay = 0.0
         else:
             self.fixed_peers_delay = self.config.fixed_peer_delay
 
-        self.fixed_peers_handle = self.loop.call_later(self.fixed_peers_delay, _delayed_add_fixed_peers)
+        self.fixed_peers_handle = self.loop.call_later(
+            self.fixed_peers_delay, _delayed_add_fixed_peers)
 
     async def load_descriptor(self, connection_id: int = 0):
         # download or get the sd blob
@@ -76,9 +81,10 @@ class StreamDownloader:
             try:
                 now = self.loop.time()
                 sd_blob = await asyncio.wait_for(
-                    self.blob_downloader.download_blob(self.sd_hash, connection_id),
-                    self.config.blob_download_timeout, loop=self.loop
-                )
+                    self.blob_downloader.download_blob(self.sd_hash,
+                                                       connection_id),
+                    self.config.blob_download_timeout,
+                    loop=self.loop)
                 log.info("downloaded sd blob %s", self.sd_hash)
                 self.time_to_descriptor = self.loop.time() - now
             except asyncio.TimeoutError:
@@ -86,17 +92,19 @@ class StreamDownloader:
 
         # parse the descriptor
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(
-            self.loop, self.blob_manager.blob_dir, sd_blob
-        )
+            self.loop, self.blob_manager.blob_dir, sd_blob)
         log.info("loaded stream manifest %s", self.sd_hash)
 
-    async def start(self, node: typing.Optional['Node'] = None, connection_id: int = 0):
+    async def start(self,
+                    node: typing.Optional['Node'] = None,
+                    connection_id: int = 0):
         # set up peer accumulation
         if node:
             self.node = node
             if self.accumulate_task and not self.accumulate_task.done():
                 self.accumulate_task.cancel()
-            _, self.accumulate_task = self.node.accumulate_peers(self.search_queue, self.peer_queue)
+            _, self.accumulate_task = self.node.accumulate_peers(
+                self.search_queue, self.peer_queue)
         await self.add_fixed_peers()
         # start searching for peers for the sd hash
         self.search_queue.put_nowait(self.sd_hash)
@@ -111,24 +119,33 @@ class StreamDownloader:
 
         if not await self.blob_manager.storage.stream_exists(self.sd_hash):
             await self.blob_manager.storage.store_stream(
-                self.blob_manager.get_blob(self.sd_hash, length=self.descriptor.length), self.descriptor
-            )
+                self.blob_manager.get_blob(
+                    self.sd_hash, length=self.descriptor.length),
+                self.descriptor)
 
-    async def download_stream_blob(self, blob_info: 'BlobInfo', connection_id: int = 0) -> 'AbstractBlob':
-        if not filter(lambda b: b.blob_hash == blob_info.blob_hash, self.descriptor.blobs[:-1]):
-            raise ValueError(f"blob {blob_info.blob_hash} is not part of stream with sd hash {self.sd_hash}")
+    async def download_stream_blob(self,
+                                   blob_info: 'BlobInfo',
+                                   connection_id: int = 0) -> 'AbstractBlob':
+        if not filter(lambda b: b.blob_hash == blob_info.blob_hash,
+                      self.descriptor.blobs[:-1]):
+            raise ValueError(
+                f"blob {blob_info.blob_hash} is not part of stream with sd hash {self.sd_hash}"
+            )
         blob = await asyncio.wait_for(
-            self.blob_downloader.download_blob(blob_info.blob_hash, blob_info.length, connection_id),
-            self.config.blob_download_timeout * 10, loop=self.loop
-        )
+            self.blob_downloader.download_blob(
+                blob_info.blob_hash, blob_info.length, connection_id),
+            self.config.blob_download_timeout * 10,
+            loop=self.loop)
         return blob
 
-    def decrypt_blob(self, blob_info: 'BlobInfo', blob: 'AbstractBlob') -> bytes:
+    def decrypt_blob(self, blob_info: 'BlobInfo',
+                     blob: 'AbstractBlob') -> bytes:
         return blob.decrypt(
-            binascii.unhexlify(self.descriptor.key.encode()), binascii.unhexlify(blob_info.iv.encode())
-        )
+            binascii.unhexlify(self.descriptor.key.encode()),
+            binascii.unhexlify(blob_info.iv.encode()))
 
-    async def read_blob(self, blob_info: 'BlobInfo', connection_id: int = 0) -> bytes:
+    async def read_blob(self, blob_info: 'BlobInfo',
+                        connection_id: int = 0) -> bytes:
         start = None
         if self.time_to_first_bytes is None:
             start = self.loop.time()

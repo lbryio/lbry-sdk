@@ -13,20 +13,26 @@ from torba.client.coinselection import STRATEGIES
 
 log = logging.getLogger(__name__)
 
-
-NOT_SET = type(str('NOT_SET'), (object,), {})
+NOT_SET = type(str('NOT_SET'), (object, ), {})
 T = typing.TypeVar('T')
 
 CURRENCIES = {
-    'BTC': {'type': 'crypto'},
-    'LBC': {'type': 'crypto'},
-    'USD': {'type': 'fiat'},
+    'BTC': {
+        'type': 'crypto'
+    },
+    'LBC': {
+        'type': 'crypto'
+    },
+    'USD': {
+        'type': 'fiat'
+    },
 }
 
 
 class Setting(typing.Generic[T]):
-
-    def __init__(self, doc: str, default: typing.Optional[T] = None,
+    def __init__(self,
+                 doc: str,
+                 default: typing.Optional[T] = None,
                  previous_names: typing.Optional[typing.List[str]] = None,
                  metavar: typing.Optional[str] = None):
         self.doc = doc
@@ -77,8 +83,7 @@ class Setting(typing.Generic[T]):
             self.cli_name,
             help=self.doc,
             metavar=self.metavar,
-            default=NOT_SET
-        )
+            default=NOT_SET)
 
 
 class String(Setting[str]):
@@ -112,18 +117,13 @@ class Toggle(Setting[bool]):
 
     def contribute_to_argparse(self, parser: ArgumentParser):
         parser.add_argument(
-            self.cli_name,
-            help=self.doc,
-            action="store_true",
-            default=NOT_SET
-        )
+            self.cli_name, help=self.doc, action="store_true", default=NOT_SET)
         parser.add_argument(
             self.no_cli_name,
             help=f"Opposite of {self.cli_name}",
             dest=self.name,
             action="store_false",
-            default=NOT_SET
-        )
+            default=NOT_SET)
 
 
 class Path(String):
@@ -138,7 +138,6 @@ class Path(String):
 
 
 class MaxKeyFee(Setting[dict]):
-
     def validate(self, value):
         if value is not None:
             assert isinstance(value, dict) and set(value) == {'currency', 'amount'}, \
@@ -150,14 +149,13 @@ class MaxKeyFee(Setting[dict]):
     def _parse_list(l):
         if l == ['null']:
             return None
-        assert len(l) == 2, (
-            'Max key fee is made up of either two values: '
-            '"AMOUNT CURRENCY", or "null" (to set no limit)'
-        )
+        assert len(l) == 2, ('Max key fee is made up of either two values: '
+                             '"AMOUNT CURRENCY", or "null" (to set no limit)')
         try:
             amount = float(l[0])
         except ValueError:
-            raise AssertionError('First value in max key fee is a decimal: "AMOUNT CURRENCY"')
+            raise AssertionError(
+                'First value in max key fee is a decimal: "AMOUNT CURRENCY"')
         currency = str(l[1]).upper()
         if currency not in CURRENCIES:
             raise InvalidCurrencyError(currency)
@@ -183,49 +181,45 @@ class MaxKeyFee(Setting[dict]):
             help=self.doc,
             nargs='+',
             metavar=('AMOUNT', 'CURRENCY'),
-            default=NOT_SET
-        )
+            default=NOT_SET)
         parser.add_argument(
             self.no_cli_name,
             help=f"Disable maximum key fee check.",
             dest=self.name,
             const=None,
             action="store_const",
-            default=NOT_SET
-        )
+            default=NOT_SET)
 
 
 class StringChoice(String):
-    def __init__(self, doc: str, valid_values: typing.List[str], default: str, *args, **kwargs):
+    def __init__(self, doc: str, valid_values: typing.List[str], default: str,
+                 *args, **kwargs):
         super().__init__(doc, default, *args, **kwargs)
         if not valid_values:
             raise ValueError("No valid values provided")
         if default not in valid_values:
-            raise ValueError(f"Default value must be one of: {', '.join(valid_values)}")
+            raise ValueError(
+                f"Default value must be one of: {', '.join(valid_values)}")
         self.valid_values = valid_values
 
     def validate(self, val):
         super().validate(val)
         if val not in self.valid_values:
-            raise ValueError(f"Setting '{self.name}' value must be one of: {', '.join(self.valid_values)}")
+            raise ValueError(
+                f"Setting '{self.name}' value must be one of: {', '.join(self.valid_values)}"
+            )
 
 
 class ListSetting(Setting[list]):
-
     def validate(self, val):
         assert isinstance(val, (tuple, list)), \
             f"Setting '{self.name}' must be a tuple or list."
 
     def contribute_to_argparse(self, parser: ArgumentParser):
-        parser.add_argument(
-            self.cli_name,
-            help=self.doc,
-            action='append'
-        )
+        parser.add_argument(self.cli_name, help=self.doc, action='append')
 
 
 class Servers(ListSetting):
-
     def validate(self, val):
         assert isinstance(val, (tuple, list)), \
             f"Setting '{self.name}' must be a tuple or list of servers."
@@ -259,7 +253,6 @@ class Servers(ListSetting):
 
 
 class Strings(ListSetting):
-
     def validate(self, val):
         assert isinstance(val, (tuple, list)), \
             f"Setting '{self.name}' must be a tuple or list of strings."
@@ -283,7 +276,6 @@ class EnvironmentAccess:
 
 
 class ArgumentAccess:
-
     def __init__(self, config: 'BaseConfig', args: dict):
         self.configuration = config
         self.args = {}
@@ -293,7 +285,8 @@ class ArgumentAccess:
     def load(self, args):
         for setting in self.configuration.get_settings():
             value = getattr(args, setting.name, NOT_SET)
-            if value != NOT_SET and not (isinstance(setting, ListSetting) and value is None):
+            if value != NOT_SET and not (isinstance(setting, ListSetting)
+                                         and value is None):
                 self.args[setting.name] = setting.deserialize(value)
 
     def __contains__(self, item: str):
@@ -304,7 +297,6 @@ class ArgumentAccess:
 
 
 class ConfigFileAccess:
-
     def __init__(self, config: 'BaseConfig', path: str):
         self.configuration = config
         self.path = path
@@ -338,7 +330,8 @@ class ConfigFileAccess:
             attr = getattr(cls, key)
             serialized[key] = attr.serialize(value)
         with open(self.path, 'w') as config_file:
-            config_file.write(yaml.safe_dump(serialized, default_flow_style=False))
+            config_file.write(
+                yaml.safe_dump(serialized, default_flow_style=False))
 
     def upgrade(self) -> bool:
         upgraded = False
@@ -372,10 +365,10 @@ class BaseConfig:
     config = Path("Path to configuration file.", metavar='FILE')
 
     def __init__(self, **kwargs):
-        self.runtime = {}      # set internally or by various API calls
-        self.arguments = {}    # from command line arguments
+        self.runtime = {}  # set internally or by various API calls
+        self.arguments = {}  # from command line arguments
         self.environment = {}  # from environment variables
-        self.persisted = {}    # from config file
+        self.persisted = {}  # from config file
         self._updating_config = False
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -397,12 +390,7 @@ class BaseConfig:
 
     @property
     def search_order(self):
-        return [
-            self.runtime,
-            self.arguments,
-            self.environment,
-            self.persisted
-        ]
+        return [self.runtime, self.arguments, self.environment, self.persisted]
 
     @classmethod
     def get_settings(cls):
@@ -418,7 +406,8 @@ class BaseConfig:
     @property
     def settings_dict(self):
         return {
-            setting.name: getattr(self, setting.name) for setting in self.settings
+            setting.name: getattr(self, setting.name)
+            for setting in self.settings
         }
 
     @classmethod
@@ -459,7 +448,10 @@ class BaseConfig:
 
 class CLIConfig(BaseConfig):
 
-    api = String('Host name and port for lbrynet daemon API.', 'localhost:5279', metavar='HOST:PORT')
+    api = String(
+        'Host name and port for lbrynet daemon API.',
+        'localhost:5279',
+        metavar='HOST:PORT')
 
     @property
     def api_connection_url(self) -> str:
@@ -479,80 +471,89 @@ class Config(CLIConfig):
     data_dir = Path("Directory path to store blobs.", metavar='DIR')
     download_dir = Path(
         "Directory path to place assembled files downloaded from LBRY.",
-        previous_names=['download_directory'], metavar='DIR'
-    )
+        previous_names=['download_directory'],
+        metavar='DIR')
     wallet_dir = Path(
         "Directory containing a 'wallets' subdirectory with 'default_wallet' file.",
-        previous_names=['lbryum_wallet_dir'], metavar='DIR'
-    )
-    wallets = Strings(
-        "Wallet files in 'wallet_dir' to load at startup.",
-        ['default_wallet']
-    )
+        previous_names=['lbryum_wallet_dir'],
+        metavar='DIR')
+    wallets = Strings("Wallet files in 'wallet_dir' to load at startup.",
+                      ['default_wallet'])
 
     # network
     use_upnp = Toggle(
         "Use UPnP to setup temporary port redirects for the DHT and the hosting of blobs. If you manually forward"
-        "ports or have firewall rules you likely want to disable this.", True
-    )
-    udp_port = Integer("UDP port for communicating on the LBRY DHT", 4444, previous_names=['dht_node_port'])
-    tcp_port = Integer("TCP port to listen for incoming blob requests", 3333, previous_names=['peer_port'])
-    network_interface = String("Interface to use for the DHT and blob exchange", '0.0.0.0')
+        "ports or have firewall rules you likely want to disable this.", True)
+    udp_port = Integer(
+        "UDP port for communicating on the LBRY DHT",
+        4444,
+        previous_names=['dht_node_port'])
+    tcp_port = Integer(
+        "TCP port to listen for incoming blob requests",
+        3333,
+        previous_names=['peer_port'])
+    network_interface = String(
+        "Interface to use for the DHT and blob exchange", '0.0.0.0')
 
     # routing table
     split_buckets_under_index = Integer(
         "Routing table bucket index below which we always split the bucket if given a new key to add to it and "
         "the bucket is full. As this value is raised the depth of the routing table (and number of peers in it) "
         "will increase. This setting is used by seed nodes, you probably don't want to change it during normal "
-        "use.", 1
-    )
+        "use.", 1)
 
     # protocol timeouts
-    download_timeout = Float("Cumulative timeout for a stream to begin downloading before giving up", 30.0)
-    blob_download_timeout = Float("Timeout to download a blob from a peer", 30.0)
-    peer_connect_timeout = Float("Timeout to establish a TCP connection to a peer", 3.0)
-    node_rpc_timeout = Float("Timeout when making a DHT request", constants.rpc_timeout)
+    download_timeout = Float(
+        "Cumulative timeout for a stream to begin downloading before giving up",
+        30.0)
+    blob_download_timeout = Float("Timeout to download a blob from a peer",
+                                  30.0)
+    peer_connect_timeout = Float(
+        "Timeout to establish a TCP connection to a peer", 3.0)
+    node_rpc_timeout = Float("Timeout when making a DHT request",
+                             constants.rpc_timeout)
 
     # blob announcement and download
-    save_blobs = Toggle("Save encrypted blob files for hosting, otherwise download blobs to memory only.", True)
+    save_blobs = Toggle(
+        "Save encrypted blob files for hosting, otherwise download blobs to memory only.",
+        True)
     blob_lru_cache_size = Integer(
         "LRU cache size for decrypted downloaded blobs used to minimize re-downloading the same blobs when "
-        "replying to a range request. Set to 0 to disable.", 32
-    )
+        "replying to a range request. Set to 0 to disable.", 32)
     announce_head_and_sd_only = Toggle(
-        "Announce only the descriptor and first (rather than all) data blob for a stream to the DHT", True,
-        previous_names=['announce_head_blobs_only']
-    )
+        "Announce only the descriptor and first (rather than all) data blob for a stream to the DHT",
+        True,
+        previous_names=['announce_head_blobs_only'])
     concurrent_blob_announcers = Integer(
-        "Number of blobs to iteratively announce at once, set to 0 to disable", 10,
-        previous_names=['concurrent_announcers']
-    )
+        "Number of blobs to iteratively announce at once, set to 0 to disable",
+        10,
+        previous_names=['concurrent_announcers'])
     max_connections_per_download = Integer(
-        "Maximum number of peers to connect to while downloading a blob", 4,
-        previous_names=['max_connections_per_stream']
-    )
+        "Maximum number of peers to connect to while downloading a blob",
+        4,
+        previous_names=['max_connections_per_stream'])
     fixed_peer_delay = Float(
         "Amount of seconds before adding the reflector servers as potential peers to download from in case dht"
-        "peers are not found or are slow", 2.0
-    )
+        "peers are not found or are slow", 2.0)
     max_key_fee = MaxKeyFee(
         "Don't download streams with fees exceeding this amount. When set to "
-        "null, the amount is unbounded.", {'currency': 'USD', 'amount': 50.0}
-    )
+        "null, the amount is unbounded.", {
+            'currency': 'USD',
+            'amount': 50.0
+        })
 
     # reflector settings
     reflect_streams = Toggle(
-        "Upload completed streams (published and downloaded) reflector in order to re-host them", True,
-        previous_names=['reflect_uploads']
-    )
+        "Upload completed streams (published and downloaded) reflector in order to re-host them",
+        True,
+        previous_names=['reflect_uploads'])
     concurrent_reflector_uploads = Integer(
-        "Maximum number of streams to upload to a reflector server at a time", 10
-    )
+        "Maximum number of streams to upload to a reflector server at a time",
+        10)
 
     # servers
-    reflector_servers = Servers("Reflector re-hosting servers", [
-        ('reflector.lbry.com', 5566)
-    ])
+    reflector_servers = Servers("Reflector re-hosting servers",
+                                [('reflector.lbry.com', 5566)])
     lbryum_servers = Servers("SPV wallet servers", [
         ('spv1.lbry.com', 50001),
         ('spv2.lbry.com', 50001),
@@ -564,38 +565,51 @@ class Config(CLIConfig):
         ('spv8.lbry.com', 50001),
         ('spv9.lbry.com', 50001),
     ])
-    known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
-        ('lbrynet1.lbry.com', 4444),  # US EAST
-        ('lbrynet2.lbry.com', 4444),  # US WEST
-        ('lbrynet3.lbry.com', 4444),  # EU
-        ('lbrynet4.lbry.com', 4444)  # ASIA
-    ])
+    known_dht_nodes = Servers(
+        "Known nodes for bootstrapping connection to the DHT",
+        [
+            ('lbrynet1.lbry.com', 4444),  # US EAST
+            ('lbrynet2.lbry.com', 4444),  # US WEST
+            ('lbrynet3.lbry.com', 4444),  # EU
+            ('lbrynet4.lbry.com', 4444)  # ASIA
+        ])
 
-    comment_server = String("Comment server API URL", "https://comments.lbry.com/api")
+    comment_server = String("Comment server API URL",
+                            "https://comments.lbry.com/api")
 
     # blockchain
-    blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
-    s3_headers_depth = Integer("download headers from s3 when the local height is more than 10 chunks behind", 96 * 10)
-    cache_time = Integer("Time to cache resolved claims", 150)  # TODO: use this
+    blockchain_name = String(
+        "Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet",
+        'lbrycrd_main')
+    s3_headers_depth = Integer(
+        "download headers from s3 when the local height is more than 10 chunks behind",
+        96 * 10)
+    cache_time = Integer("Time to cache resolved claims",
+                         150)  # TODO: use this
 
     # daemon
-    save_files = Toggle("Save downloaded files when calling `get` by default", True)
-    components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
+    save_files = Toggle("Save downloaded files when calling `get` by default",
+                        True)
+    components_to_skip = Strings(
+        "components which will be skipped during start-up of daemon", [])
     share_usage_data = Toggle(
-        "Whether to share usage stats and diagnostic info with LBRY.", True,
-        previous_names=['upload_log', 'upload_log', 'share_debug_info']
-    )
+        "Whether to share usage stats and diagnostic info with LBRY.",
+        True,
+        previous_names=['upload_log', 'upload_log', 'share_debug_info'])
     track_bandwidth = Toggle("Track bandwidth usage", True)
 
     # media server
-    streaming_server = String('Host name and port to serve streaming media over range requests',
-                              'localhost:5280', metavar='HOST:PORT')
-    streaming_get = Toggle("Enable the /get endpoint for the streaming media server. "
-                           "Disable to prevent new streams from being added.", True)
+    streaming_server = String(
+        'Host name and port to serve streaming media over range requests',
+        'localhost:5280',
+        metavar='HOST:PORT')
+    streaming_get = Toggle(
+        "Enable the /get endpoint for the streaming media server. "
+        "Disable to prevent new streams from being added.", True)
 
     coin_selection_strategy = StringChoice(
-        "Strategy to use when selecting UTXOs for a transaction",
-        STRATEGIES, "standard")
+        "Strategy to use when selecting UTXOs for a transaction", STRATEGIES,
+        "standard")
 
     @property
     def streaming_host(self):
@@ -619,10 +633,9 @@ class Config(CLIConfig):
         else:
             return
         cls = type(self)
-        cls.data_dir.default, cls.wallet_dir.default, cls.download_dir.default = get_directories()
-        cls.config.default = os.path.join(
-            self.data_dir, 'daemon_settings.yml'
+        cls.data_dir.default, cls.wallet_dir.default, cls.download_dir.default = get_directories(
         )
+        cls.config.default = os.path.join(self.data_dir, 'daemon_settings.yml')
 
     @property
     def log_file_path(self):
@@ -657,9 +670,12 @@ def get_darwin_directories() -> typing.Tuple[str, str, str]:
 
 def get_linux_directories() -> typing.Tuple[str, str, str]:
     try:
-        with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
+        with open(os.path.join(user_config_dir(), 'user-dirs.dirs'),
+                  'r') as xdg:
             down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-        down_dir = re.sub('\$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir)
+        down_dir = re.sub('\$HOME',
+                          os.getenv('HOME') or os.path.expanduser("~/"),
+                          down_dir)
         download_dir = re.sub('\"', '', down_dir)
     except EnvironmentError:
         download_dir = os.getenv('XDG_DOWNLOAD_DIR')
@@ -673,4 +689,5 @@ def get_linux_directories() -> typing.Tuple[str, str, str]:
         return data_dir, lbryum_dir, download_dir
 
     # new
-    return user_data_dir('lbry/lbrynet'), user_data_dir('lbry/lbryum'), download_dir
+    return user_data_dir('lbry/lbrynet'), user_data_dir(
+        'lbry/lbryum'), download_dir

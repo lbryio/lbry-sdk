@@ -9,7 +9,8 @@ log = logging.getLogger(__name__)
 
 
 class BlobAnnouncer:
-    def __init__(self, loop: asyncio.AbstractEventLoop, node: 'Node', storage: 'SQLiteStorage'):
+    def __init__(self, loop: asyncio.AbstractEventLoop, node: 'Node',
+                 storage: 'SQLiteStorage'):
         self.loop = loop
         self.node = node
         self.storage = storage
@@ -22,7 +23,9 @@ class BlobAnnouncer:
             if peers > 4:
                 return blob_hash
             else:
-                log.debug("failed to announce %s, could only find %d peers, retrying soon.", blob_hash[:8], peers)
+                log.debug(
+                    "failed to announce %s, could only find %d peers, retrying soon.",
+                    blob_hash[:8], peers)
         except Exception as err:
             if isinstance(err, asyncio.CancelledError):
                 raise err
@@ -36,21 +39,26 @@ class BlobAnnouncer:
             if not self.node.protocol.routing_table.get_peers():
                 log.warning("No peers in DHT, announce round skipped")
                 continue
-            self.announce_queue.extend(await self.storage.get_blobs_to_announce())
-            log.debug("announcer task wake up, %d blobs to announce", len(self.announce_queue))
+            self.announce_queue.extend(await
+                                       self.storage.get_blobs_to_announce())
+            log.debug("announcer task wake up, %d blobs to announce",
+                      len(self.announce_queue))
             while len(self.announce_queue):
                 log.info("%i blobs to announce", len(self.announce_queue))
-                announced = await asyncio.gather(*[
-                    self._submit_announcement(
-                        self.announce_queue.pop()) for _ in range(batch_size) if self.announce_queue
-                ], loop=self.loop)
+                announced = await asyncio.gather(
+                    *[
+                        self._submit_announcement(self.announce_queue.pop())
+                        for _ in range(batch_size) if self.announce_queue
+                    ],
+                    loop=self.loop)
                 announced = list(filter(None, announced))
                 if announced:
                     await self.storage.update_last_announced_blobs(announced)
                     log.info("announced %i blobs", len(announced))
 
     def start(self, batch_size: typing.Optional[int] = 10):
-        assert not self.announce_task or self.announce_task.done(), "already running"
+        assert not self.announce_task or self.announce_task.done(
+        ), "already running"
         self.announce_task = self.loop.create_task(self._announce(batch_size))
 
     def stop(self):

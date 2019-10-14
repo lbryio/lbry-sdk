@@ -19,9 +19,7 @@ class BlobPriceRequest(BlobMessage):
         self.blob_data_payment_rate = blob_data_payment_rate
 
     def to_dict(self) -> typing.Dict:
-        return {
-            self.key: self.blob_data_payment_rate
-        }
+        return {self.key: self.blob_data_payment_rate}
 
 
 class BlobPriceResponse(BlobMessage):
@@ -31,20 +29,21 @@ class BlobPriceResponse(BlobMessage):
     rate_unset = 'RATE_UNSET'
 
     def __init__(self, blob_data_payment_rate: str, **kwargs) -> None:
-        if blob_data_payment_rate not in (self.rate_accepted, self.rate_too_low, self.rate_unset):
+        if blob_data_payment_rate not in (self.rate_accepted,
+                                          self.rate_too_low, self.rate_unset):
             raise ValueError(blob_data_payment_rate)
         self.blob_data_payment_rate = blob_data_payment_rate
 
     def to_dict(self) -> typing.Dict:
-        return {
-            self.key: self.blob_data_payment_rate
-        }
+        return {self.key: self.blob_data_payment_rate}
 
 
 class BlobAvailabilityRequest(BlobMessage):
     key = 'requested_blobs'
 
-    def __init__(self, requested_blobs: typing.List[str], lbrycrd_address: typing.Optional[bool] = True,
+    def __init__(self,
+                 requested_blobs: typing.List[str],
+                 lbrycrd_address: typing.Optional[bool] = True,
                  **kwargs) -> None:
         assert len(requested_blobs)
         self.requested_blobs = requested_blobs
@@ -60,15 +59,15 @@ class BlobAvailabilityRequest(BlobMessage):
 class BlobAvailabilityResponse(BlobMessage):
     key = 'available_blobs'
 
-    def __init__(self, available_blobs: typing.List[str], lbrycrd_address: typing.Optional[str] = True,
+    def __init__(self,
+                 available_blobs: typing.List[str],
+                 lbrycrd_address: typing.Optional[str] = True,
                  **kwargs) -> None:
         self.available_blobs = available_blobs
         self.lbrycrd_address = lbrycrd_address
 
     def to_dict(self) -> typing.Dict:
-        d = {
-            self.key: self.available_blobs
-        }
+        d = {self.key: self.available_blobs}
         if self.lbrycrd_address:
             d['lbrycrd_address'] = self.lbrycrd_address
         return d
@@ -81,9 +80,7 @@ class BlobDownloadRequest(BlobMessage):
         self.requested_blob = requested_blob
 
     def to_dict(self) -> typing.Dict:
-        return {
-            self.key: self.requested_blob
-        }
+        return {self.key: self.requested_blob}
 
 
 class BlobDownloadResponse(BlobMessage):
@@ -96,13 +93,19 @@ class BlobDownloadResponse(BlobMessage):
         if 'error' in incoming_blob:
             self.error = incoming_blob['error']
         else:
-            self.incoming_blob = {'blob_hash': incoming_blob['blob_hash'], 'length': incoming_blob['length']}
-        self.length = None if not self.incoming_blob else self.incoming_blob['length']
-        self.blob_hash = None if not self.incoming_blob else self.incoming_blob['blob_hash']
+            self.incoming_blob = {
+                'blob_hash': incoming_blob['blob_hash'],
+                'length': incoming_blob['length']
+            }
+        self.length = None if not self.incoming_blob else self.incoming_blob[
+            'length']
+        self.blob_hash = None if not self.incoming_blob else self.incoming_blob[
+            'blob_hash']
 
     def to_dict(self) -> typing.Dict:
         return {
-            self.key if not self.error else 'error': self.incoming_blob or self.error,
+            self.key if not self.error else 'error':
+            self.incoming_blob or self.error,
         }
 
 
@@ -113,9 +116,7 @@ class BlobPaymentAddressRequest(BlobMessage):
         self.lbrycrd_address = lbrycrd_address
 
     def to_dict(self) -> typing.Dict:
-        return {
-            self.key: self.lbrycrd_address
-        }
+        return {self.key: self.lbrycrd_address}
 
 
 class BlobPaymentAddressResponse(BlobPaymentAddressRequest):
@@ -129,18 +130,20 @@ class BlobErrorResponse(BlobMessage):
         self.error = error
 
     def to_dict(self) -> typing.Dict:
-        return {
-            self.key: self.error
-        }
+        return {self.key: self.error}
 
 
-blob_request_types = typing.Union[BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest,
+blob_request_types = typing.Union[BlobPriceRequest, BlobAvailabilityRequest,
+                                  BlobDownloadRequest,
                                   BlobPaymentAddressRequest]
-blob_response_types = typing.Union[BlobPriceResponse, BlobAvailabilityResponse, BlobDownloadResponse,
-                                   BlobErrorResponse, BlobPaymentAddressResponse]
+blob_response_types = typing.Union[BlobPriceResponse, BlobAvailabilityResponse,
+                                   BlobDownloadResponse, BlobErrorResponse,
+                                   BlobPaymentAddressResponse]
 
 
-def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[typing.Dict], bytes]:
+def _parse_blob_response(
+        response_msg: bytes
+) -> typing.Tuple[typing.Optional[typing.Dict], bytes]:
     # scenarios:
     #   <json>
     #   <blob bytes>
@@ -157,10 +160,8 @@ def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[ty
         except ValueError:
             continue
         possible_response_keys = {
-                    BlobPaymentAddressResponse.key,
-                    BlobAvailabilityResponse.key,
-                    BlobPriceResponse.key,
-                    BlobDownloadResponse.key
+            BlobPaymentAddressResponse.key, BlobAvailabilityResponse.key,
+            BlobPriceResponse.key, BlobDownloadResponse.key
         }
         if isinstance(response, dict) and response.keys():
             if set(response.keys()).issubset(possible_response_keys):
@@ -179,11 +180,13 @@ class BlobRequest:
         return d
 
     def _get_request(self, request_type: blob_request_types):
-        request = tuple(filter(lambda r: type(r) == request_type, self.requests))
+        request = tuple(
+            filter(lambda r: type(r) == request_type, self.requests))
         if request:
             return request[0]
 
-    def get_availability_request(self) -> typing.Optional[BlobAvailabilityRequest]:
+    def get_availability_request(
+            self) -> typing.Optional[BlobAvailabilityRequest]:
         response = self._get_request(BlobAvailabilityRequest)
         if response:
             return response
@@ -198,7 +201,8 @@ class BlobRequest:
         if response:
             return response
 
-    def get_address_request(self) -> typing.Optional[BlobPaymentAddressRequest]:
+    def get_address_request(
+            self) -> typing.Optional[BlobPaymentAddressRequest]:
         response = self._get_request(BlobPaymentAddressRequest)
         if response:
             return response
@@ -211,20 +215,25 @@ class BlobRequest:
         request = json.loads(data)
         return cls([
             request_type(**request)
-            for request_type in (BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest,
+            for request_type in (BlobPriceRequest, BlobAvailabilityRequest,
+                                 BlobDownloadRequest,
                                  BlobPaymentAddressRequest)
             if request_type.key in request
         ])
 
     @classmethod
     def make_request_for_blob_hash(cls, blob_hash: str) -> 'BlobRequest':
-        return cls(
-            [BlobAvailabilityRequest([blob_hash]), BlobPriceRequest(0.0), BlobDownloadRequest(blob_hash)]
-        )
+        return cls([
+            BlobAvailabilityRequest([blob_hash]),
+            BlobPriceRequest(0.0),
+            BlobDownloadRequest(blob_hash)
+        ])
 
 
 class BlobResponse:
-    def __init__(self, responses: typing.List[blob_response_types], blob_data: typing.Optional[bytes] = None) -> None:
+    def __init__(self,
+                 responses: typing.List[blob_response_types],
+                 blob_data: typing.Optional[bytes] = None) -> None:
         self.responses = responses
         self.blob_data = blob_data
 
@@ -235,7 +244,8 @@ class BlobResponse:
         return d
 
     def _get_response(self, response_type: blob_response_types):
-        response = tuple(filter(lambda r: type(r) == response_type, self.responses))
+        response = tuple(
+            filter(lambda r: type(r) == response_type, self.responses))
         if response:
             return response[0]
 
@@ -245,7 +255,8 @@ class BlobResponse:
             log.error(error)
             return error
 
-    def get_availability_response(self) -> typing.Optional[BlobAvailabilityResponse]:
+    def get_availability_response(
+            self) -> typing.Optional[BlobAvailabilityResponse]:
         response = self._get_response(BlobAvailabilityResponse)
         if response:
             return response
@@ -260,7 +271,8 @@ class BlobResponse:
         if response:
             return response
 
-    def get_address_response(self) -> typing.Optional[BlobPaymentAddressResponse]:
+    def get_address_response(
+            self) -> typing.Optional[BlobPaymentAddressResponse]:
         response = self._get_response(BlobPaymentAddressResponse)
         if response:
             return response
@@ -275,9 +287,10 @@ class BlobResponse:
         if response:
             requests.extend([
                 response_type(**response)
-                for response_type in (BlobPriceResponse, BlobAvailabilityResponse, BlobDownloadResponse,
-                                      BlobErrorResponse, BlobPaymentAddressResponse)
+                for response_type in (BlobPriceResponse,
+                                      BlobAvailabilityResponse,
+                                      BlobDownloadResponse, BlobErrorResponse,
+                                      BlobPaymentAddressResponse)
                 if response_type.key in response
             ])
         return cls(requests, extra)
-

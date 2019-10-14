@@ -15,8 +15,7 @@ from lbry.wallet.account import Account
 from lbry.extras.daemon.Components import Component, WalletComponent
 from lbry.extras.daemon.Components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
-    UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-)
+    UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT)
 from lbry.extras.daemon.ComponentManager import ComponentManager
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
@@ -25,7 +24,6 @@ from lbry.blob_exchange.server import BlobServer
 
 
 class ExchangeRateManager:
-
     def start(self):
         pass
 
@@ -79,7 +77,8 @@ class CommandTestCase(IntegrationTestCase):
         self.daemon = await self.add_daemon(self.wallet_node)
 
         await self.account.ensure_address_gap()
-        address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
+        address = (await self.account.receiving.get_addresses(
+            limit=1, only_usable=True))[0]
         sendtxid = await self.blockchain.send_to_address(address, 10)
         await self.confirm_tx(sendtxid)
         await self.generate(5)
@@ -90,8 +89,10 @@ class CommandTestCase(IntegrationTestCase):
         self.server_storage = SQLiteStorage(self.server_config, ':memory:')
         await self.server_storage.open()
 
-        self.server_blob_manager = BlobManager(self.loop, server_tmp_dir, self.server_storage, self.server_config)
-        self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
+        self.server_blob_manager = BlobManager(
+            self.loop, server_tmp_dir, self.server_storage, self.server_config)
+        self.server = BlobServer(self.loop, self.server_blob_manager,
+                                 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
         self.server.start_server(5567, '127.0.0.1')
         await self.server.started_listening.wait()
 
@@ -113,8 +114,7 @@ class CommandTestCase(IntegrationTestCase):
             wallet_node = WalletNode(
                 self.wallet_node.manager_class,
                 self.wallet_node.ledger_class,
-                port=self.extra_wallet_node_port
-            )
+                port=self.extra_wallet_node_port)
             self.extra_wallet_node_port += 1
             await wallet_node.start(self.conductor.spv_node, seed=seed)
             self.extra_wallet_nodes.append(wallet_node)
@@ -142,10 +142,13 @@ class CommandTestCase(IntegrationTestCase):
             wallet_component._running = True
             return wallet_component
 
-        daemon = Daemon(conf, ComponentManager(
-            conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
-            exchange_rate_manager=ExchangeRateManagerComponent
-        ))
+        daemon = Daemon(
+            conf,
+            ComponentManager(
+                conf,
+                skip_components=conf.components_to_skip,
+                wallet=wallet_maker,
+                exchange_rate_manager=ExchangeRateManagerComponent))
         await daemon.initialize()
         self.daemons.append(daemon)
         wallet_node.manager.old_db = daemon.storage
@@ -160,8 +163,7 @@ class CommandTestCase(IntegrationTestCase):
 
     async def on_transaction_dict(self, tx):
         await self.ledger.wait(
-            self.ledger.transaction_class(unhexlify(tx['hex']))
-        )
+            self.ledger.transaction_class(unhexlify(tx['hex'])))
 
     @staticmethod
     def get_all_addresses(tx):
@@ -177,27 +179,45 @@ class CommandTestCase(IntegrationTestCase):
         await self.blockchain.generate(blocks)
         await self.ledger.on_header.where(self.blockchain.is_expected_block)
 
-    async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
-        txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)
+    async def blockchain_claim_name(self,
+                                    name: str,
+                                    value: str,
+                                    amount: str,
+                                    confirm=True):
+        txid = await self.blockchain._cli_cmnd('claimname', name, value,
+                                               amount)
         if confirm:
             await self.generate(1)
         return txid
 
-    async def blockchain_update_name(self, txid: str, value: str, amount: str, confirm=True):
-        txid = await self.blockchain._cli_cmnd('updateclaim', txid, value, amount)
+    async def blockchain_update_name(self,
+                                     txid: str,
+                                     value: str,
+                                     amount: str,
+                                     confirm=True):
+        txid = await self.blockchain._cli_cmnd('updateclaim', txid, value,
+                                               amount)
         if confirm:
             await self.generate(1)
         return txid
 
     async def out(self, awaitable):
         """ Serializes lbrynet API results to JSON then loads and returns it as dictionary. """
-        return json.loads(jsonrpc_dumps_pretty(await awaitable, ledger=self.ledger))['result']
+        return json.loads(
+            jsonrpc_dumps_pretty(await awaitable,
+                                 ledger=self.ledger))['result']
 
     def sout(self, value):
         """ Synchronous version of `out` method. """
-        return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
+        return json.loads(jsonrpc_dumps_pretty(value,
+                                               ledger=self.ledger))['result']
 
-    async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True, **kwargs):
+    async def stream_create(self,
+                            name='hovercraft',
+                            bid='1.0',
+                            data=b'hi!',
+                            confirm=True,
+                            **kwargs):
         file = tempfile.NamedTemporaryFile()
 
         def cleanup():
@@ -210,8 +230,8 @@ class CommandTestCase(IntegrationTestCase):
         file.write(data)
         file.flush()
         claim = await self.out(
-            self.daemon.jsonrpc_stream_create(name, bid, file_path=file.name, **kwargs)
-        )
+            self.daemon.jsonrpc_stream_create(
+                name, bid, file_path=file.name, **kwargs))
         self.assertEqual(claim['outputs'][0]['name'], name)
         if confirm:
             await self.on_transaction_dict(claim)
@@ -233,10 +253,11 @@ class CommandTestCase(IntegrationTestCase):
 
             self.addCleanup(cleanup)
             claim = await self.out(
-                self.daemon.jsonrpc_stream_update(claim_id, file_path=file.name, **kwargs)
-            )
+                self.daemon.jsonrpc_stream_update(
+                    claim_id, file_path=file.name, **kwargs))
         else:
-            claim = await self.out(self.daemon.jsonrpc_stream_update(claim_id, **kwargs))
+            claim = await self.out(
+                self.daemon.jsonrpc_stream_update(claim_id, **kwargs))
         self.assertIsNotNone(claim['outputs'][0]['name'])
         if confirm:
             await self.on_transaction_dict(claim)
@@ -247,7 +268,8 @@ class CommandTestCase(IntegrationTestCase):
     async def stream_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
-        tx = await self.out(self.daemon.jsonrpc_stream_abandon(*args, **kwargs))
+        tx = await self.out(
+            self.daemon.jsonrpc_stream_abandon(*args, **kwargs))
         if confirm:
             await self.on_transaction_dict(tx)
             await self.generate(1)
@@ -255,7 +277,8 @@ class CommandTestCase(IntegrationTestCase):
         return tx
 
     async def publish(self, name, *args, confirm=True, **kwargs):
-        claim = await self.out(self.daemon.jsonrpc_publish(name, *args, **kwargs))
+        claim = await self.out(
+            self.daemon.jsonrpc_publish(name, *args, **kwargs))
         self.assertEqual(claim['outputs'][0]['name'], name)
         if confirm:
             await self.on_transaction_dict(claim)
@@ -263,8 +286,13 @@ class CommandTestCase(IntegrationTestCase):
             await self.on_transaction_dict(claim)
         return claim
 
-    async def channel_create(self, name='@arena', bid='1.0', confirm=True, **kwargs):
-        channel = await self.out(self.daemon.jsonrpc_channel_create(name, bid, **kwargs))
+    async def channel_create(self,
+                             name='@arena',
+                             bid='1.0',
+                             confirm=True,
+                             **kwargs):
+        channel = await self.out(
+            self.daemon.jsonrpc_channel_create(name, bid, **kwargs))
         self.assertEqual(channel['outputs'][0]['name'], name)
         if confirm:
             await self.on_transaction_dict(channel)
@@ -273,7 +301,8 @@ class CommandTestCase(IntegrationTestCase):
         return channel
 
     async def channel_update(self, claim_id, confirm=True, **kwargs):
-        channel = await self.out(self.daemon.jsonrpc_channel_update(claim_id, **kwargs))
+        channel = await self.out(
+            self.daemon.jsonrpc_channel_update(claim_id, **kwargs))
         self.assertTrue(channel['outputs'][0]['name'].startswith('@'))
         if confirm:
             await self.on_transaction_dict(channel)
@@ -284,15 +313,18 @@ class CommandTestCase(IntegrationTestCase):
     async def channel_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
-        tx = await self.out(self.daemon.jsonrpc_channel_abandon(*args, **kwargs))
+        tx = await self.out(
+            self.daemon.jsonrpc_channel_abandon(*args, **kwargs))
         if confirm:
             await self.on_transaction_dict(tx)
             await self.generate(1)
             await self.on_transaction_dict(tx)
         return tx
 
-    async def support_create(self, claim_id, bid='1.0', confirm=True, **kwargs):
-        tx = await self.out(self.daemon.jsonrpc_support_create(claim_id, bid, **kwargs))
+    async def support_create(self, claim_id, bid='1.0', confirm=True,
+                             **kwargs):
+        tx = await self.out(
+            self.daemon.jsonrpc_support_create(claim_id, bid, **kwargs))
         if confirm:
             await self.on_transaction_dict(tx)
             await self.generate(1)
@@ -303,7 +335,8 @@ class CommandTestCase(IntegrationTestCase):
         return await self.out(self.daemon.jsonrpc_resolve(uri))
 
     async def claim_search(self, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
+        return (await
+                self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
 
     @staticmethod
     def get_claim_id(tx):

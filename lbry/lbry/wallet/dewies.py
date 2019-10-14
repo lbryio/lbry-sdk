@@ -6,8 +6,8 @@ def lbc_to_dewies(lbc: str) -> int:
     try:
         return coins_to_satoshis(lbc)
     except ValueError:
-        raise ValueError(textwrap.dedent(
-            """
+        raise ValueError(
+            textwrap.dedent("""
             Decimal inputs require a value in the ones place and in the tenths place
             separated by a period. The value provided, '{}', is not of the correct
             format.
@@ -25,8 +25,7 @@ def lbc_to_dewies(lbc: str) -> int:
             83
             .456
             123.
-            """.format(lbc)
-        ))
+            """.format(lbc)))
 
 
 def dewies_to_lbc(dewies) -> str:

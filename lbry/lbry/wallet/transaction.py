@@ -30,8 +30,11 @@ class Output(BaseOutput):
 
     __slots__ = 'channel', 'private_key', 'meta'
 
-    def __init__(self, *args, channel: Optional['Output'] = None,
-                 private_key: Optional[str] = None, **kwargs) -> None:
+    def __init__(self,
+                 *args,
+                 channel: Optional['Output'] = None,
+                 private_key: Optional[str] = None,
+                 **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.channel = channel
         self.private_key = private_key
@@ -45,7 +48,8 @@ class Output(BaseOutput):
     def get_fee(self, ledger):
         name_fee = 0
         if self.script.is_claim_name:
-            name_fee = len(self.script.values['claim_name']) * ledger.fee_per_name_char
+            name_fee = len(
+                self.script.values['claim_name']) * ledger.fee_per_name_char
         return max(name_fee, super().get_fee(ledger))
 
     @property
@@ -83,9 +87,11 @@ class Output(BaseOutput):
     def claim(self) -> Claim:
         if self.is_claim:
             if not isinstance(self.script.values['claim'], Claim):
-                self.script.values['claim'] = Claim.from_bytes(self.script.values['claim'])
+                self.script.values['claim'] = Claim.from_bytes(
+                    self.script.values['claim'])
             return self.script.values['claim']
-        raise ValueError('Only claim name and claim update have the claim payload.')
+        raise ValueError(
+            'Only claim name and claim update have the claim payload.')
 
     @property
     def can_decode_claim(self):
@@ -121,26 +127,27 @@ class Output(BaseOutput):
 
     def get_encoded_signature(self):
         signature = hexlify(self.claim.signature)
-        r = int(signature[:int(len(signature)/2)], 16)
-        s = int(signature[int(len(signature)/2):], 16)
-        return ecdsa.util.sigencode_der(r, s, len(signature)*4)
+        r = int(signature[:int(len(signature) / 2)], 16)
+        s = int(signature[int(len(signature) / 2):], 16)
+        return ecdsa.util.sigencode_der(r, s, len(signature) * 4)
 
     @staticmethod
-    def is_signature_valid(encoded_signature, signature_digest, public_key_bytes):
+    def is_signature_valid(encoded_signature, signature_digest,
+                           public_key_bytes):
         try:
-            public_key = load_der_public_key(public_key_bytes, default_backend())
-            public_key.verify(encoded_signature, signature_digest, ec.ECDSA(Prehashed(hashes.SHA256())))
+            public_key = load_der_public_key(public_key_bytes,
+                                             default_backend())
+            public_key.verify(encoded_signature, signature_digest,
+                              ec.ECDSA(Prehashed(hashes.SHA256())))
             return True
         except (ValueError, InvalidSignature):
             pass
         return False
 
     def is_signed_by(self, channel: 'Output', ledger=None):
-        return self.is_signature_valid(
-            self.get_encoded_signature(),
-            self.get_signature_digest(ledger),
-            channel.claim.channel.public_key_bytes
-        )
+        return self.is_signature_valid(self.get_encoded_signature(),
+                                       self.get_signature_digest(ledger),
+                                       channel.claim.channel.public_key_bytes)
 
     def sign(self, channel: 'Output', first_input_id=None):
         self.channel = channel
@@ -150,7 +157,8 @@ class Output(BaseOutput):
             self.claim.signing_channel_hash,
             self.claim.to_message_bytes()
         ]))
-        self.claim.signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        self.claim.signature = channel.private_key.sign_digest_deterministic(
+            digest, hashfunc=hashlib.sha256)
         self.script.generate()
 
     def clear_signature(self):
@@ -158,38 +166,49 @@ class Output(BaseOutput):
         self.claim.clear_signature()
 
     def generate_channel_private_key(self):
-        self.private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
-        self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
+        self.private_key = ecdsa.SigningKey.generate(
+            curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+        self.claim.channel.public_key_bytes = self.private_key.get_verifying_key(
+        ).to_der()
         self.script.generate()
         return self.private_key
 
     def is_channel_private_key(self, private_key):
-        return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()
+        return self.claim.channel.public_key_bytes == private_key.get_verifying_key(
+        ).to_der()
 
     @classmethod
-    def pay_claim_name_pubkey_hash(
-            cls, amount: int, claim_name: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
+    def pay_claim_name_pubkey_hash(cls, amount: int, claim_name: str,
+                                   claim: Claim,
+                                   pubkey_hash: bytes) -> 'Output':
         script = cls.script_class.pay_claim_name_pubkey_hash(
             claim_name.encode(), claim, pubkey_hash)
         txo = cls(amount, script)
         return txo
 
     @classmethod
-    def pay_update_claim_pubkey_hash(
-            cls, amount: int, claim_name: str, claim_id: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
+    def pay_update_claim_pubkey_hash(cls, amount: int, claim_name: str,
+                                     claim_id: str, claim: Claim,
+                                     pubkey_hash: bytes) -> 'Output':
         script = cls.script_class.pay_update_claim_pubkey_hash(
-            claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
+            claim_name.encode(),
+            unhexlify(claim_id)[::-1], claim, pubkey_hash)
         txo = cls(amount, script)
         return txo
 
     @classmethod
-    def pay_support_pubkey_hash(cls, amount: int, claim_name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_support_pubkey_hash(claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash)
+    def pay_support_pubkey_hash(cls, amount: int, claim_name: str,
+                                claim_id: str, pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.pay_support_pubkey_hash(
+            claim_name.encode(),
+            unhexlify(claim_id)[::-1], pubkey_hash)
         return cls(amount, script)
 
     @classmethod
-    def purchase_claim_pubkey_hash(cls, amount: int, claim_id: str, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.purchase_claim_pubkey_hash(unhexlify(claim_id)[::-1], pubkey_hash)
+    def purchase_claim_pubkey_hash(cls, amount: int, claim_id: str,
+                                   pubkey_hash: bytes) -> 'Output':
+        script = cls.script_class.purchase_claim_pubkey_hash(
+            unhexlify(claim_id)[::-1], pubkey_hash)
         return cls(amount, script)
 
 
@@ -202,56 +221,77 @@ class Transaction(BaseTransaction):
     inputs: ReadOnlyList[Input]
 
     @classmethod
-    def pay(cls, amount: int, address: bytes, funding_accounts: List[Account], change_account: Account):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
+    def pay(cls, amount: int, address: bytes, funding_accounts: List[Account],
+            change_account: Account):
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(
+            funding_accounts, change_account)
+        output = Output.pay_pubkey_hash(amount,
+                                        ledger.address_to_hash160(address))
         return cls.create([], [output], funding_accounts, change_account)
 
     @classmethod
-    def claim_create(
-            cls, name: str, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+    def claim_create(cls,
+                     name: str,
+                     claim: Claim,
+                     amount: int,
+                     holding_address: str,
+                     funding_accounts: List[Account],
+                     change_account: Account,
+                     signing_channel: Output = None):
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(
+            funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
-            amount, name, claim, ledger.address_to_hash160(holding_address)
-        )
+            amount, name, claim, ledger.address_to_hash160(holding_address))
         if signing_channel is not None:
             claim_output.sign(signing_channel, b'placeholder txid:nout')
-        return cls.create([], [claim_output], funding_accounts, change_account, sign=False)
+        return cls.create([], [claim_output],
+                          funding_accounts,
+                          change_account,
+                          sign=False)
 
     @classmethod
-    def claim_update(
-            cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+    def claim_update(cls,
+                     previous_claim: Output,
+                     claim: Claim,
+                     amount: int,
+                     holding_address: str,
+                     funding_accounts: List[Account],
+                     change_account: Account,
+                     signing_channel: Output = None):
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(
+            funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
-            amount, previous_claim.claim_name, previous_claim.claim_id,
-            claim, ledger.address_to_hash160(holding_address)
-        )
+            amount, previous_claim.claim_name, previous_claim.claim_id, claim,
+            ledger.address_to_hash160(holding_address))
         if signing_channel is not None:
             updated_claim.sign(signing_channel, b'placeholder txid:nout')
         else:
             updated_claim.clear_signature()
-        return cls.create(
-            [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account, sign=False
-        )
+        return cls.create([Input.spend(previous_claim)], [updated_claim],
+                          funding_accounts,
+                          change_account,
+                          sign=False)
 
     @classmethod
-    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List[Account], change_account: Account):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+    def support(cls, claim_name: str, claim_id: str, amount: int,
+                holding_address: str, funding_accounts: List[Account],
+                change_account: Account):
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(
+            funding_accounts, change_account)
         support_output = Output.pay_support_pubkey_hash(
-            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
-        )
-        return cls.create([], [support_output], funding_accounts, change_account)
+            amount, claim_name, claim_id,
+            ledger.address_to_hash160(holding_address))
+        return cls.create([], [support_output], funding_accounts,
+                          change_account)
 
     @classmethod
     def purchase(cls, claim: Output, amount: int, merchant_address: bytes,
                  funding_accounts: List[Account], change_account: Account):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(
+            funding_accounts, change_account)
         claim_output = Output.purchase_claim_pubkey_hash(
-            amount, claim.claim_id, ledger.address_to_hash160(merchant_address)
-        )
+            amount, claim.claim_id,
+            ledger.address_to_hash160(merchant_address))
         return cls.create([], [claim_output], funding_accounts, change_account)
 
     @property

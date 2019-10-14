@@ -82,8 +82,9 @@ def check_connection(server="lbry.com", port=80, timeout=5) -> bool:
         socket.create_connection((server, port), timeout).close()
         return True
     except (socket.gaierror, socket.herror) as ex:
-        log.debug("Failed to connect to %s:%s. Unable to resolve domain. Trying to bypass DNS",
-                  server, port)
+        log.debug(
+            "Failed to connect to %s:%s. Unable to resolve domain. Trying to bypass DNS",
+            server, port)
         try:
             server = "8.8.8.8"
             port = 53
@@ -95,8 +96,10 @@ def check_connection(server="lbry.com", port=80, timeout=5) -> bool:
         return False
 
 
-async def async_check_connection(server="lbry.com", port=80, timeout=1) -> bool:
-    return await asyncio.get_event_loop().run_in_executor(None, check_connection, server, port, timeout)
+async def async_check_connection(server="lbry.com", port=80,
+                                 timeout=1) -> bool:
+    return await asyncio.get_event_loop().run_in_executor(
+        None, check_connection, server, port, timeout)
 
 
 def random_string(length=10, chars=string.ascii_lowercase):
@@ -123,7 +126,8 @@ def get_sd_hash(stream_info):
 
 
 def json_dumps_pretty(obj, **kwargs):
-    return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
+    return json.dumps(
+        obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
 
 
 def cancel_task(task: typing.Optional[asyncio.Task]):
@@ -143,8 +147,7 @@ def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
 
 def async_timed_cache(duration: int):
     def wrapper(fn):
-        cache: typing.Dict[typing.Tuple,
-                           typing.Tuple[typing.Any, float]] = {}
+        cache: typing.Dict[typing.Tuple, typing.Tuple[typing.Any, float]] = {}
 
         @functools.wraps(fn)
         async def _inner(*args, **kwargs) -> typing.Any:
@@ -156,7 +159,9 @@ def async_timed_cache(duration: int):
             to_cache = await fn(*args, **kwargs)
             cache[key] = to_cache, now
             return to_cache
+
         return _inner
+
     return wrapper
 
 
@@ -169,7 +174,8 @@ def cache_concurrent(async_fn):
     @functools.wraps(async_fn)
     async def wrapper(*args, **kwargs):
         key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
-        cache[key] = cache.get(key) or asyncio.create_task(async_fn(*args, **kwargs))
+        cache[key] = cache.get(key) or asyncio.create_task(
+            async_fn(*args, **kwargs))
         try:
             return await cache[key]
         finally:
@@ -189,18 +195,15 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
         pass
     loop = asyncio.get_running_loop()
     return (await loop.getaddrinfo(
-        url, port,
+        url,
+        port,
         proto=socket.IPPROTO_TCP if proto == 'tcp' else socket.IPPROTO_UDP,
         type=socket.SOCK_STREAM if proto == 'tcp' else socket.SOCK_DGRAM,
-        family=socket.AF_INET
-    ))[0][4][0]
+        family=socket.AF_INET))[0][4][0]
 
 
 class LRUCache:
-    __slots__ = [
-        'capacity',
-        'cache'
-    ]
+    __slots__ = ['capacity', 'cache']
 
     def __init__(self, capacity):
         self.capacity = capacity
@@ -231,14 +234,14 @@ def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
     lru_cache = override_lru_cache or LRUCache(cache_size)
 
     def wrapper(async_fn):
-
         @functools.wraps(async_fn)
         async def _inner(*args, **kwargs):
             key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
             if key in lru_cache:
                 return lru_cache.get(key)
 
-            concurrent_cache[key] = concurrent_cache.get(key) or asyncio.create_task(async_fn(*args, **kwargs))
+            concurrent_cache[key] = concurrent_cache.get(
+                key) or asyncio.create_task(async_fn(*args, **kwargs))
 
             try:
                 result = await concurrent_cache[key]
@@ -246,24 +249,29 @@ def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
                 return result
             finally:
                 concurrent_cache.pop(key, None)
+
         return _inner
+
     return wrapper
 
 
 def get_ssl_context() -> ssl.SSLContext:
     return ssl.create_default_context(
-        purpose=ssl.Purpose.CLIENT_AUTH, capath=certifi.where()
-    )
+        purpose=ssl.Purpose.CLIENT_AUTH, capath=certifi.where())
 
 
 @contextlib.asynccontextmanager
-async def aiohttp_request(method, url, **kwargs) -> typing.AsyncContextManager[aiohttp.ClientResponse]:
+async def aiohttp_request(
+        method, url,
+        **kwargs) -> typing.AsyncContextManager[aiohttp.ClientResponse]:
     async with aiohttp.ClientSession() as session:
-        async with session.request(method, url, ssl=get_ssl_context(), **kwargs) as response:
+        async with session.request(
+                method, url, ssl=get_ssl_context(), **kwargs) as response:
             yield response
 
 
-async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled or non-functioning
+async def get_external_ip(
+) -> typing.Optional[str]:  # used if upnp is disabled or non-functioning
     try:
         async with aiohttp_request("get", "https://api.lbry.com/ip") as resp:
             response = await resp.json()

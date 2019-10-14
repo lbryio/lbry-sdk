@@ -16,7 +16,6 @@ from lbry.wallet.database import WalletDatabase
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.header import Headers, UnvalidatedHeaders
 
-
 log = logging.getLogger(__name__)
 
 
@@ -35,9 +34,9 @@ class MainNetLedger(BaseLedger):
 
     db: WalletDatabase
 
-    secret_prefix = bytes((0x1c,))
-    pubkey_address_prefix = bytes((0x55,))
-    script_address_prefix = bytes((0x7a,))
+    secret_prefix = bytes((0x1c, ))
+    pubkey_address_prefix = bytes((0x55, ))
+    script_address_prefix = bytes((0x7a, ))
     extended_public_key_prefix = unhexlify('0488b21e')
     extended_private_key_prefix = unhexlify('0488ade4')
 
@@ -51,19 +50,23 @@ class MainNetLedger(BaseLedger):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
+        self.fee_per_name_char = self.config.get(
+            'fee_per_name_char', self.default_fee_per_name_char)
 
     async def _inflate_outputs(self, query):
         outputs = Outputs.from_base64(await query)
         txs = []
         if len(outputs.txs) > 0:
-            txs = await asyncio.gather(*(self.cache_transaction(*tx) for tx in outputs.txs))
+            txs = await asyncio.gather(*(self.cache_transaction(*tx)
+                                         for tx in outputs.txs))
         return outputs.inflate(txs), outputs.offset, outputs.total
 
     async def resolve(self, urls):
         resolve = partial(self.network.retriable_call, self.network.resolve)
         txos = (await self._inflate_outputs(resolve(urls)))[0]
-        assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
+        assert len(urls) == len(
+            txos
+        ), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
             if txo and URL.parse(url).has_stream_in_channel:
@@ -84,7 +87,8 @@ class MainNetLedger(BaseLedger):
 
     async def start(self):
         await super().start()
-        await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
+        await asyncio.gather(*(a.maybe_migrate_certificates()
+                               for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
         await self._report_state()
 
@@ -95,16 +99,22 @@ class MainNetLedger(BaseLedger):
                 channel_count = await account.get_channel_count()
                 claim_count = await account.get_claim_count()
                 if isinstance(account.receiving, SingleKey):
-                    log.info("Loaded single key account %s with %s LBC. "
-                             "%d channels, %d certificates and %d claims",
-                             account.id, balance, channel_count, len(account.channel_keys), claim_count)
+                    log.info(
+                        "Loaded single key account %s with %s LBC. "
+                        "%d channels, %d certificates and %d claims",
+                        account.id, balance, channel_count,
+                        len(account.channel_keys), claim_count)
                 else:
-                    total_receiving = len((await account.receiving.get_addresses()))
+                    total_receiving = len((await
+                                           account.receiving.get_addresses()))
                     total_change = len((await account.change.get_addresses()))
-                    log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
-                             "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
-                             account.id, balance, total_receiving, account.receiving.gap, total_change,
-                             account.change.gap, channel_count, len(account.channel_keys), claim_count)
+                    log.info(
+                        "Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
+                        "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
+                        account.id, balance, total_receiving,
+                        account.receiving.gap, total_change,
+                        account.change.gap, channel_count,
+                        len(account.channel_keys), claim_count)
         except:
             log.exception(
                 'Failed to display wallet state, please file issue '
@@ -153,10 +163,15 @@ class MainNetLedger(BaseLedger):
         for tx in txs:
             ts = headers[tx.height]['timestamp'] if tx.height > 0 else None
             item = {
-                'txid': tx.id,
-                'timestamp': ts,
-                'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-                'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
+                'txid':
+                tx.id,
+                'timestamp':
+                ts,
+                'date':
+                datetime.fromtimestamp(ts).isoformat(' ')[:-3]
+                if tx.height > 0 else None,
+                'confirmations':
+                (headers.height + 1) - tx.height if tx.height > 0 else 0,
                 'claim_info': [],
                 'update_info': [],
                 'support_info': [],
@@ -165,7 +180,7 @@ class MainNetLedger(BaseLedger):
             is_my_inputs = all([txi.is_my_account for txi in tx.inputs])
             if is_my_inputs:
                 # fees only matter if we are the ones paying them
-                item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)
+                item['value'] = dewies_to_lbc(tx.net_account_balance + tx.fee)
                 item['fee'] = dewies_to_lbc(-tx.fee)
             else:
                 # someone else paid the fees
@@ -173,12 +188,18 @@ class MainNetLedger(BaseLedger):
                 item['fee'] = '0.0'
             for txo in tx.my_claim_outputs:
                 item['claim_info'].append({
-                    'address': txo.get_address(self),
-                    'balance_delta': dewies_to_lbc(-txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
+                    'address':
+                    txo.get_address(self),
+                    'balance_delta':
+                    dewies_to_lbc(-txo.amount),
+                    'amount':
+                    dewies_to_lbc(txo.amount),
+                    'claim_id':
+                    txo.claim_id,
+                    'claim_name':
+                    txo.claim_name,
+                    'nout':
+                    txo.position
                 })
             for txo in tx.my_update_outputs:
                 if is_my_inputs:  # updating my own claim
@@ -192,51 +213,84 @@ class MainNetLedger(BaseLedger):
                                 break
                     if previous is not None:
                         item['update_info'].append({
-                            'address': txo.get_address(self),
-                            'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
-                            'amount': dewies_to_lbc(txo.amount),
-                            'claim_id': txo.claim_id,
-                            'claim_name': txo.claim_name,
-                            'nout': txo.position
+                            'address':
+                            txo.get_address(self),
+                            'balance_delta':
+                            dewies_to_lbc(previous.amount - txo.amount),
+                            'amount':
+                            dewies_to_lbc(txo.amount),
+                            'claim_id':
+                            txo.claim_id,
+                            'claim_name':
+                            txo.claim_name,
+                            'nout':
+                            txo.position
                         })
                 else:  # someone sent us their claim
                     item['update_info'].append({
-                        'address': txo.get_address(self),
-                        'balance_delta': dewies_to_lbc(0),
-                        'amount': dewies_to_lbc(txo.amount),
-                        'claim_id': txo.claim_id,
-                        'claim_name': txo.claim_name,
-                        'nout': txo.position
+                        'address':
+                        txo.get_address(self),
+                        'balance_delta':
+                        dewies_to_lbc(0),
+                        'amount':
+                        dewies_to_lbc(txo.amount),
+                        'claim_id':
+                        txo.claim_id,
+                        'claim_name':
+                        txo.claim_name,
+                        'nout':
+                        txo.position
                     })
             for txo in tx.my_support_outputs:
                 item['support_info'].append({
-                    'address': txo.get_address(self),
-                    'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'is_tip': not is_my_inputs,
-                    'nout': txo.position
+                    'address':
+                    txo.get_address(self),
+                    'balance_delta':
+                    dewies_to_lbc(
+                        txo.amount if not is_my_inputs else -txo.amount),
+                    'amount':
+                    dewies_to_lbc(txo.amount),
+                    'claim_id':
+                    txo.claim_id,
+                    'claim_name':
+                    txo.claim_name,
+                    'is_tip':
+                    not is_my_inputs,
+                    'nout':
+                    txo.position
                 })
             if is_my_inputs:
                 for txo in tx.other_support_outputs:
                     item['support_info'].append({
-                        'address': txo.get_address(self),
-                        'balance_delta': dewies_to_lbc(-txo.amount),
-                        'amount': dewies_to_lbc(txo.amount),
-                        'claim_id': txo.claim_id,
-                        'claim_name': txo.claim_name,
-                        'is_tip': is_my_inputs,
-                        'nout': txo.position
+                        'address':
+                        txo.get_address(self),
+                        'balance_delta':
+                        dewies_to_lbc(-txo.amount),
+                        'amount':
+                        dewies_to_lbc(txo.amount),
+                        'claim_id':
+                        txo.claim_id,
+                        'claim_name':
+                        txo.claim_name,
+                        'is_tip':
+                        is_my_inputs,
+                        'nout':
+                        txo.position
                     })
             for txo in tx.my_abandon_outputs:
                 item['abandon_info'].append({
-                    'address': txo.get_address(self),
-                    'balance_delta': dewies_to_lbc(txo.amount),
-                    'amount': dewies_to_lbc(txo.amount),
-                    'claim_id': txo.claim_id,
-                    'claim_name': txo.claim_name,
-                    'nout': txo.position
+                    'address':
+                    txo.get_address(self),
+                    'balance_delta':
+                    dewies_to_lbc(txo.amount),
+                    'amount':
+                    dewies_to_lbc(txo.amount),
+                    'claim_id':
+                    txo.claim_id,
+                    'claim_name':
+                    txo.claim_name,
+                    'nout':
+                    txo.position
                 })
             history.append(item)
         return history
@@ -245,16 +299,20 @@ class MainNetLedger(BaseLedger):
         return self.db.get_transaction_count(**constraints)
 
     @staticmethod
-    async def get_detailed_balance(accounts, confirmations=0, reserved_subtotals=False):
+    async def get_detailed_balance(accounts,
+                                   confirmations=0,
+                                   reserved_subtotals=False):
         result = {}
         for account in accounts:
-            balance = await account.get_detailed_balance(confirmations, reserved_subtotals)
+            balance = await account.get_detailed_balance(
+                confirmations, reserved_subtotals)
             if result:
                 for key, value in balance.items():
                     if key == 'reserved_subtotals':
                         if value is not None:
                             for subkey, subvalue in value.items():
-                                result['reserved_subtotals'][subkey] += subvalue
+                                result['reserved_subtotals'][
+                                    subkey] += subvalue
                     else:
                         result[key] += value
             else:
@@ -264,8 +322,8 @@ class MainNetLedger(BaseLedger):
 
 class TestNetLedger(MainNetLedger):
     network_name = 'testnet'
-    pubkey_address_prefix = bytes((111,))
-    script_address_prefix = bytes((196,))
+    pubkey_address_prefix = bytes((111, ))
+    script_address_prefix = bytes((196, ))
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
 
@@ -273,8 +331,8 @@ class TestNetLedger(MainNetLedger):
 class RegTestLedger(MainNetLedger):
     network_name = 'regtest'
     headers_class = UnvalidatedHeaders
-    pubkey_address_prefix = bytes((111,))
-    script_address_prefix = bytes((196,))
+    pubkey_address_prefix = bytes((111, ))
+    script_address_prefix = bytes((196, ))
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
 

@@ -9,7 +9,8 @@ log = logging.getLogger(__name__)
 
 
 class HashBlobWriter:
-    def __init__(self, expected_blob_hash: str, get_length: typing.Callable[[], int],
+    def __init__(self, expected_blob_hash: str,
+                 get_length: typing.Callable[[], int],
                  finished: asyncio.Future):
         self.expected_blob_hash = expected_blob_hash
         self.get_length = get_length
@@ -21,7 +22,8 @@ class HashBlobWriter:
 
     def __del__(self):
         if self.buffer is not None:
-            log.warning("Garbage collection was called, but writer was not closed yet")
+            log.warning(
+                "Garbage collection was called, but writer was not closed yet")
             self.close_handle()
 
     def calculate_blob_hash(self) -> str:
@@ -44,19 +46,22 @@ class HashBlobWriter:
         self._hashsum.update(data)
         self.len_so_far += len(data)
         if self.len_so_far > expected_length:
-            self.finished.set_exception(InvalidDataError(
-                f'Length so far is greater than the expected length. {self.len_so_far} to {expected_length}'
-            ))
+            self.finished.set_exception(
+                InvalidDataError(
+                    f'Length so far is greater than the expected length. {self.len_so_far} to {expected_length}'
+                ))
             self.close_handle()
             return
         self.buffer.write(data)
         if self.len_so_far == expected_length:
             blob_hash = self.calculate_blob_hash()
             if blob_hash != self.expected_blob_hash:
-                self.finished.set_exception(InvalidBlobHashError(
-                    f"blob hash is {blob_hash} vs expected {self.expected_blob_hash}"
-                ))
-            elif self.finished and not (self.finished.done() or self.finished.cancelled()):
+                self.finished.set_exception(
+                    InvalidBlobHashError(
+                        f"blob hash is {blob_hash} vs expected {self.expected_blob_hash}"
+                    ))
+            elif self.finished and not (self.finished.done()
+                                        or self.finished.cancelled()):
                 self.finished.set_result(self.buffer.getvalue())
             self.close_handle()
 

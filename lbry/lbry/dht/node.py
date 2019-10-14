@@ -17,13 +17,22 @@ log = logging.getLogger(__name__)
 
 
 class Node:
-    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
-                 internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.rpc_timeout,
-                 split_buckets_under_index: int = constants.split_buckets_under_index):
+    def __init__(self,
+                 loop: asyncio.AbstractEventLoop,
+                 peer_manager: 'PeerManager',
+                 node_id: bytes,
+                 udp_port: int,
+                 internal_udp_port: int,
+                 peer_port: int,
+                 external_ip: str,
+                 rpc_timeout: float = constants.rpc_timeout,
+                 split_buckets_under_index: int = constants.
+                 split_buckets_under_index):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
-        self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout,
-                                         split_buckets_under_index)
+        self.protocol = KademliaProtocol(
+            loop, peer_manager, node_id, external_ip, udp_port, peer_port,
+            rpc_timeout, split_buckets_under_index)
         self.listening_port: asyncio.DatagramTransport = None
         self.joined = asyncio.Event(loop=self.loop)
         self._join_task: asyncio.Task = None
@@ -44,11 +53,16 @@ class Node:
             node_ids = self.protocol.routing_table.get_refresh_list(0, True)
             # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
             # populate/split the buckets further
-            buckets_with_contacts = self.protocol.routing_table.buckets_with_contacts()
+            buckets_with_contacts = self.protocol.routing_table.buckets_with_contacts(
+            )
             if buckets_with_contacts <= 3:
                 for i in range(buckets_with_contacts):
-                    node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
-                    node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
+                    node_ids.append(
+                        self.protocol.routing_table.random_id_in_bucket_range(
+                            i))
+                    node_ids.append(
+                        self.protocol.routing_table.random_id_in_bucket_range(
+                            i))
 
             if self.protocol.routing_table.get_peers():
                 # if we have node ids to look up, perform the iterative search until we have k results
@@ -59,19 +73,24 @@ class Node:
                 if force_once:
                     break
                 fut = asyncio.Future(loop=self.loop)
-                self.loop.call_later(constants.refresh_interval // 4, fut.set_result, None)
+                self.loop.call_later(constants.refresh_interval // 4,
+                                     fut.set_result, None)
                 await fut
                 continue
 
             # ping the set of peers; upon success/failure the routing able and last replied/failed time will be updated
-            to_ping = [peer for peer in set(total_peers) if self.protocol.peer_manager.peer_is_good(peer) is not True]
+            to_ping = [
+                peer for peer in set(total_peers)
+                if self.protocol.peer_manager.peer_is_good(peer) is not True
+            ]
             if to_ping:
                 self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
             if force_once:
                 break
 
             fut = asyncio.Future(loop=self.loop)
-            self.loop.call_later(constants.refresh_interval, fut.set_result, None)
+            self.loop.call_later(constants.refresh_interval, fut.set_result,
+                                 None)
             await fut
 
     async def announce_blob(self, blob_hash: str) -> typing.List[bytes]:
@@ -83,14 +102,18 @@ class Node:
             raise Exception("Cannot determine external IP")
         log.debug("Store to %i peers", len(peers))
         for peer in peers:
-            log.debug("store to %s %s %s", peer.address, peer.udp_port, peer.tcp_port)
+            log.debug("store to %s %s %s", peer.address, peer.udp_port,
+                      peer.tcp_port)
         stored_to_tup = await asyncio.gather(
-            *(self.protocol.store_to_peer(hash_value, peer) for peer in peers), loop=self.loop
-        )
-        stored_to = [node_id for node_id, contacted in stored_to_tup if contacted]
+            *(self.protocol.store_to_peer(hash_value, peer) for peer in peers),
+            loop=self.loop)
+        stored_to = [
+            node_id for node_id, contacted in stored_to_tup if contacted
+        ]
         if stored_to:
-            log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
-                     len(stored_to), len(peers))
+            log.debug("Stored %s to %i of %i attempted peers",
+                      binascii.hexlify(hash_value).decode()[:8],
+                      len(stored_to), len(peers))
         else:
             log.debug("Failed announcing %s, stored to 0 peers", blob_hash[:8])
         return stored_to
@@ -100,7 +123,8 @@ class Node:
             self.joined.clear()
         if self._join_task:
             self._join_task.cancel()
-        if self._refresh_task and not (self._refresh_task.done() or self._refresh_task.cancelled()):
+        if self._refresh_task and not (self._refresh_task.done()
+                                       or self._refresh_task.cancelled()):
             self._refresh_task.cancel()
         if self.protocol and self.protocol.ping_queue.running:
             self.protocol.ping_queue.stop()
@@ -114,15 +138,17 @@ class Node:
     async def start_listening(self, interface: str = '') -> None:
         if not self.listening_port:
             self.listening_port, _ = await self.loop.create_datagram_endpoint(
-                lambda: self.protocol, (interface, self.internal_udp_port)
-            )
-            log.info("DHT node listening on UDP %s:%i", interface, self.internal_udp_port)
+                lambda: self.protocol, (interface, self.internal_udp_port))
+            log.info("DHT node listening on UDP %s:%i", interface,
+                     self.internal_udp_port)
             self.protocol.start()
         else:
             log.warning("Already bound to port %s", self.listening_port)
 
-    async def join_network(self, interface: typing.Optional[str] = '',
-                           known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
+    async def join_network(self,
+                           interface: typing.Optional[str] = '',
+                           known_node_urls: typing.Optional[typing.List[
+                               typing.Tuple[str, int]]] = None):
         if not self.listening_port:
             await self.start_listening(interface)
         self.protocol.ping_queue.start()
@@ -150,48 +176,68 @@ class Node:
                     if self.joined.is_set():
                         self.joined.clear()
                     self.protocol.peer_manager.reset()
-                    self.protocol.ping_queue.enqueue_maybe_ping(*peers, delay=0.0)
-                    peers.extend(await self.peer_search(self.protocol.node_id, shortlist=peers, count=32))
+                    self.protocol.ping_queue.enqueue_maybe_ping(
+                        *peers, delay=0.0)
+                    peers.extend(await self.peer_search(
+                        self.protocol.node_id, shortlist=peers, count=32))
                     if self.protocol.routing_table.get_peers():
                         self.joined.set()
                         log.info(
-                            "Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
-                            self.protocol.routing_table.buckets_with_contacts())
+                            "Joined DHT, %i peers known in %i buckets",
+                            len(self.protocol.routing_table.get_peers()),
+                            self.protocol.routing_table.buckets_with_contacts(
+                            ))
                     else:
                         continue
                 await asyncio.sleep(1, loop=self.loop)
 
-        log.info("Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
+        log.info("Joined DHT, %i peers known in %i buckets",
+                 len(self.protocol.routing_table.get_peers()),
                  self.protocol.routing_table.buckets_with_contacts())
         self.joined.set()
 
-    def start(self, interface: str, known_node_urls: typing.List[typing.Tuple[str, int]]):
+    def start(self, interface: str,
+              known_node_urls: typing.List[typing.Tuple[str, int]]):
         self._join_task = self.loop.create_task(
             self.join_network(
-                interface=interface, known_node_urls=known_node_urls
-            )
-        )
+                interface=interface, known_node_urls=known_node_urls))
 
-    def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
-                                  bottom_out_limit: int = constants.bottom_out_limit,
-                                  max_results: int = constants.k) -> IterativeNodeFinder:
+    def get_iterative_node_finder(
+            self,
+            key: bytes,
+            shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
+            bottom_out_limit: int = constants.bottom_out_limit,
+            max_results: int = constants.k) -> IterativeNodeFinder:
 
-        return IterativeNodeFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                   key, bottom_out_limit, max_results, None, shortlist)
+        return IterativeNodeFinder(
+            self.loop, self.protocol.peer_manager, self.protocol.routing_table,
+            self.protocol, key, bottom_out_limit, max_results, None, shortlist)
 
-    def get_iterative_value_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
-                                   bottom_out_limit: int = 40,
-                                   max_results: int = -1) -> IterativeValueFinder:
+    def get_iterative_value_finder(
+            self,
+            key: bytes,
+            shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
+            bottom_out_limit: int = 40,
+            max_results: int = -1) -> IterativeValueFinder:
 
-        return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                    key, bottom_out_limit, max_results, None, shortlist)
+        return IterativeValueFinder(
+            self.loop, self.protocol.peer_manager, self.protocol.routing_table,
+            self.protocol, key, bottom_out_limit, max_results, None, shortlist)
 
-    async def peer_search(self, node_id: bytes, count=constants.k, max_results=constants.k*2,
-                          bottom_out_limit=20, shortlist: typing.Optional[typing.List['KademliaPeer']] = None
-                          ) -> typing.List['KademliaPeer']:
+    async def peer_search(
+            self,
+            node_id: bytes,
+            count=constants.k,
+            max_results=constants.k * 2,
+            bottom_out_limit=20,
+            shortlist: typing.Optional[typing.List['KademliaPeer']] = None
+    ) -> typing.List['KademliaPeer']:
         peers = []
         async for iteration_peers in self.get_iterative_node_finder(
-                node_id, shortlist=shortlist, bottom_out_limit=bottom_out_limit, max_results=max_results):
+                node_id,
+                shortlist=shortlist,
+                bottom_out_limit=bottom_out_limit,
+                max_results=max_results):
             peers.extend(iteration_peers)
         distance = Distance(node_id)
         peers.sort(key=lambda peer: distance(peer.node_id))
@@ -203,12 +249,15 @@ class Node:
         try:
             while True:
                 blob_hash = await search_queue.get()
-                tasks.append(self.loop.create_task(self._value_producer(blob_hash, result_queue)))
+                tasks.append(
+                    self.loop.create_task(
+                        self._value_producer(blob_hash, result_queue)))
         finally:
             for task in tasks:
                 task.cancel()
 
-    async def _value_producer(self, blob_hash: str, result_queue: asyncio.Queue):
+    async def _value_producer(self, blob_hash: str,
+                              result_queue: asyncio.Queue):
         async def ping(_peer):
             try:
                 await self.protocol.get_rpc_peer(_peer).ping()
@@ -216,7 +265,8 @@ class Node:
             except asyncio.TimeoutError:
                 pass
 
-        async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
+        async for results in self.get_iterative_value_finder(
+                binascii.unhexlify(blob_hash.encode())):
             to_put = []
             for peer in results:
                 if peer.address == self.protocol.external_ip and self.protocol.peer_port == peer.tcp_port:
@@ -233,15 +283,20 @@ class Node:
                         if not peer.udp_port:
                             udp_port_to_try = peer.tcp_port
                     if not peer.udp_port:
-                        peer = make_kademlia_peer(peer.node_id, peer.address, udp_port_to_try, peer.tcp_port)
+                        peer = make_kademlia_peer(peer.node_id, peer.address,
+                                                  udp_port_to_try,
+                                                  peer.tcp_port)
                     self.loop.create_task(ping(peer))
                 else:
-                    log.debug("skip bad peer %s:%i for %s", peer.address, peer.tcp_port, blob_hash)
+                    log.debug("skip bad peer %s:%i for %s", peer.address,
+                              peer.tcp_port, blob_hash)
             if to_put:
                 result_queue.put_nowait(to_put)
 
-    def accumulate_peers(self, search_queue: asyncio.Queue,
-                         peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[
-                         asyncio.Queue, asyncio.Task]:
+    def accumulate_peers(self,
+                         search_queue: asyncio.Queue,
+                         peer_queue: typing.Optional[asyncio.Queue] = None
+                         ) -> typing.Tuple[asyncio.Queue, asyncio.Task]:
         q = peer_queue or asyncio.Queue(loop=self.loop)
-        return q, self.loop.create_task(self._accumulate_search_junction(search_queue, q))
+        return q, self.loop.create_task(
+            self._accumulate_search_junction(search_queue, q))

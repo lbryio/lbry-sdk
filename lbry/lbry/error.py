@@ -16,7 +16,8 @@ class DownloadCancelledError(Exception):
 
 class DownloadSDTimeout(Exception):
     def __init__(self, download):
-        super().__init__(f'Failed to download sd blob {download} within timeout')
+        super().__init__(
+            f'Failed to download sd blob {download} within timeout')
         self.download = download
 
 
@@ -28,7 +29,9 @@ class DownloadTimeoutError(Exception):
 
 class DownloadDataTimeout(Exception):
     def __init__(self, download):
-        super().__init__(f'Failed to download data blobs for sd hash {download} within timeout')
+        super().__init__(
+            f'Failed to download data blobs for sd hash {download} within timeout'
+        )
         self.download = download
 
 
@@ -111,8 +114,8 @@ class InvalidName(Exception):
     def __init__(self, name, invalid_characters):
         self.name = name
         self.invalid_characters = invalid_characters
-        super().__init__(
-            'URI contains invalid characters: {}'.format(','.join(invalid_characters)))
+        super().__init__('URI contains invalid characters: {}'.format(
+            ','.join(invalid_characters)))
 
 
 class UnknownStreamTypeError(Exception):
