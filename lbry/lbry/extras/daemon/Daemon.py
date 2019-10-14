@@ -1656,6 +1656,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     for new_account in added_accounts:
                         asyncio.create_task(self.ledger.subscribe_account(new_account))
             wallet.save()
+            wallet.unlock(password)
         encrypted = wallet.pack(encrypt_password or password)
         return {
             'hash': self.jsonrpc_sync_hash(wallet_id),

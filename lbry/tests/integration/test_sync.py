@@ -34,6 +34,12 @@ class WalletSynchronization(CommandTestCase):
 
         self.assertEqual(len((await daemon.jsonrpc_account_list())['lbc_regtest']), 1)
 
+        daemon2.jsonrpc_wallet_encrypt('password')
+        daemon2.jsonrpc_wallet_lock()
+        with self.assertRaises(AssertionError):
+            await daemon2.jsonrpc_sync_apply('password')
+
+        daemon2.jsonrpc_wallet_unlock('password')
         data = await daemon2.jsonrpc_sync_apply('password')
         await daemon.jsonrpc_sync_apply('password', data=data['data'], blocking=True)
 
