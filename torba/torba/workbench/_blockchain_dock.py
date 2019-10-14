@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # Form implementation generated from reading ui file 'blockchain_dock.ui',
 # licensing of 'blockchain_dock.ui' applies.
 #
@@ -8,7 +10,7 @@
 
 from PySide2 import QtCore, QtGui, QtWidgets
 
-class Ui_BlockchainDock:
+class Ui_BlockchainDock(object):
     def setupUi(self, BlockchainDock):
         BlockchainDock.setObjectName("BlockchainDock")
         BlockchainDock.resize(416, 167)
