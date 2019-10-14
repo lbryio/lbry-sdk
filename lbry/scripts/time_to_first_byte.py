@@ -58,7 +58,7 @@ async def main(cmd_args=None):
             start = time.perf_counter()
             kwargs = {
                 'page': page,
-                # 'claim_type': 'stream',
+                'claim_type': 'stream',
                 'order_by': ['trending_global', 'trending_mixed'],
                 'no_totals': True
             }
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--allow_fees", action='store_true')
     parser.add_argument("--exit_on_error", action='store_true')
-    parser.add_argument("--stall_download_timeout", default=0, type=int)
+    parser.add_argument("--stall_download_timeout", default=5, type=int)
     parser.add_argument("--keep_files", action='store_true')
     parser.add_argument("--head_blob_only", action='store_true')
     parser.add_argument("--download_pages", type=int, default=10)
