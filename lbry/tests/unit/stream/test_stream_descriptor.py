@@ -79,10 +79,14 @@ class TestStreamDescriptor(AsyncioTestCase):
         await self._test_invalid_sd()
 
     def test_sanitize_file_name(self):
-        test_cases = [' t/-?t|.g.ext ', 'end_dot .', '.file\0\0', 'test n\16ame.ext', 'COM8', 'LPT2', '']
-        expected = ['t-t.g.ext', 'end_dot', '.file', 'test name.ext', '', '', '']
-        actual = [sanitize_file_name(tc) for tc in test_cases]
-        self.assertListEqual(actual, expected)
+        self.assertEqual(sanitize_file_name(' t/-?t|.g.ext '), 't-t.g.ext')
+        self.assertEqual(sanitize_file_name('end_dot .'), 'end_dot')
+        self.assertEqual(sanitize_file_name('.file\0\0'), '.file')
+        self.assertEqual(sanitize_file_name('test n\16ame.ext'), 'test name.ext')
+        self.assertEqual(sanitize_file_name('COM8'), '')
+        self.assertEqual(sanitize_file_name('LPT2'), '')
+        self.assertEqual(sanitize_file_name(''), '')
+
 
 class TestRecoverOldStreamDescriptors(AsyncioTestCase):
     async def test_old_key_sort_sd_blob(self):
