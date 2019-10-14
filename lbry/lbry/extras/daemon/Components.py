@@ -252,8 +252,6 @@ class WalletComponent(Component):
                 'blocks': max(local_height, 0),
                 'blocks_behind': max(remote_height - local_height, 0),
                 'best_blockhash': best_hash,
-                'is_encrypted': self.wallet_manager.use_encryption,
-                'is_locked': not self.wallet_manager.is_wallet_unlocked,
             }
 
     async def start(self):

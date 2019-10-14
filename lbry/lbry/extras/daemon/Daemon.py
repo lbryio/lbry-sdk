@@ -1166,6 +1166,22 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         return dict_values_to_lbc(balance)
 
+    def jsonrpc_wallet_status(self, wallet_id=None):
+        """
+        Status of wallet including encryption/lock state.
+
+        Usage:
+            wallet_status [<wallet_id> | --wallet_id=<wallet_id>]
+
+        Options:
+            --wallet_id=<wallet_id>    : (str) status of specific wallet
+
+        Returns:
+            Dictionary of wallet status information.
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return {'is_encrypted': wallet.is_encrypted, 'is_locked': wallet.is_locked}
+
     @requires(WALLET_COMPONENT)
     def jsonrpc_wallet_unlock(self, password, wallet_id=None):
         """
@@ -1501,98 +1517,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return account
 
-    @deprecated('wallet_unlock')
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_account_unlock(self, password, account_id=None, wallet_id=None):
-        """
-        Unlock an encrypted account
-
-        Usage:
-            account_unlock (<password> | --password=<password>)
-                           [<account_id> | --account_id=<account_id>]
-                           [--wallet_id=<wallet_id>]
-
-        Options:
-            --password=<password>      : (str) password to use for unlocking
-            --account_id=<account_id>  : (str) id for the account to unlock, unlocks default account
-                                               if not provided
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if account is unlocked, otherwise false
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return self.wallet_manager.unlock_account(
-            password, wallet.get_account_or_default(account_id)
-        )
-
-    @deprecated('wallet_lock')
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_account_lock(self, account_id=None, wallet_id=None):
-        """
-        Lock an unlocked account
-
-        Usage:
-            account_lock [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-
-        Options:
-            --account_id=<account_id>  : (str) id for the account to lock
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if account is locked, otherwise false
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return self.wallet_manager.lock_account(
-            wallet.get_account_or_default(account_id)
-        )
-
-    @deprecated('wallet_decrypt')
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_account_decrypt(self, account_id=None, wallet_id=None):
-        """
-        Decrypt an encrypted account, this will remove the wallet password. The account must be unlocked to decrypt it
-
-        Usage:
-            account_decrypt [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-
-        Options:
-            --account_id=<account_id>  : (str) id for the account to decrypt
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if wallet is decrypted, otherwise false
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return self.wallet_manager.decrypt_account(
-            wallet.get_account_or_default(account_id)
-        )
-
-    @deprecated('wallet_encrypt')
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
-    def jsonrpc_account_encrypt(self, new_password, account_id=None, wallet_id=None):
-        """
-        Encrypt an unencrypted account with a password
-
-        Usage:
-            account_encrypt (<new_password> | --new_password=<new_password>)
-                            [<account_id> | --account_id=<account_id>]
-                            [--wallet_id=<wallet_id>]
-
-        Options:
-            --new_password=<new_password>  : (str) password to encrypt account
-            --account_id=<account_id>      : (str) id for the account to encrypt, encrypts
-                                                   default account if not provided
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if wallet is decrypted, otherwise false
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return self.wallet_manager.encrypt_account(
-            new_password, wallet.get_account_or_default(account_id)
-        )
-
     @requires("wallet")
     def jsonrpc_account_max_address_gap(self, account_id, wallet_id=None):
         """
@@ -1720,6 +1644,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot sync apply on a locked wallet."
         if data is not None:
             added_accounts = wallet.merge(self.wallet_manager, password, data)
             if added_accounts and self.ledger.network.is_connected:
