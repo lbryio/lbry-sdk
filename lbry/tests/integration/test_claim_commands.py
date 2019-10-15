@@ -745,7 +745,10 @@ class StreamCommands(ClaimTestCase):
         # complex case, reverse search (reposts for claim id)
         reposts = await self.claim_search(reposted_claim_id=claim_id)
         self.assertEqual(len(reposts), 2)
-        self.assertEqual(reposts, reposts_on_claim_list)
+        self.assertSetEqual(
+            {repost['claim_id'] for repost in reposts},
+            {claim['claim_id'] for claim in reposts_on_claim_list}
+        )
         # check that it resolves fine too
         # todo: should resolve show the repost information?
         resolved_reposts = await self.resolve(['@reposting-goodies/repost-on-channel', 'newstuff-again'])

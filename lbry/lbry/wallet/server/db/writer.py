@@ -62,6 +62,9 @@ class SQLDB:
             fee_amount integer default 0,
             fee_currency text,
 
+            -- reposts
+            reposted_claim_hash bytes,
+
             -- claims which are channels
             public_key_bytes bytes,
             public_key_hash bytes,
@@ -248,6 +251,7 @@ class SQLDB:
                 'release_time': None,
                 'fee_currency': None,
                 'fee_amount': 0,
+                'reposted_claim_hash': None
             }
             claims.append(claim_record)
 
@@ -272,6 +276,8 @@ class SQLDB:
                         claim_record['fee_currency'] = fee.currency.lower()
                     if isinstance(fee.amount, Decimal):
                         claim_record['fee_amount'] = int(fee.amount*1000)
+            elif claim.is_repost:
+                claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
@@ -295,12 +301,12 @@ class SQLDB:
                 INSERT OR IGNORE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
                     claim_type, media_type, stream_type, timestamp, creation_timestamp,
-                    fee_currency, fee_amount, title, description, author, height,
+                    fee_currency, fee_amount, title, description, author, height, reposted_claim_hash,
                     creation_height, release_time, activation_height, expiration_height, short_url)
                 VALUES (
                     :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position, :amount,
                     :claim_type, :media_type, :stream_type, :timestamp, :timestamp,
-                    :fee_currency, :fee_amount, :title, :description, :author, :height, :height,
+                    :fee_currency, :fee_amount, :title, :description, :author, :height, :reposted_claim_hash, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
                     CASE WHEN :height >= 137181 THEN :height+2102400 ELSE :height+262974 END,
@@ -318,7 +324,7 @@ class SQLDB:
                     txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
                     claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
                     timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency,
-                    title=:title, description=:description, author=:author,
+                    title=:title, description=:description, author=:author, reposted_claim_hash=:reposted_claim_hash,
                     release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;
                 """, claims)
