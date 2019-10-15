@@ -1,22 +1,24 @@
 import asyncio
-from aiohttp.client_exceptions import ClientError
 import json
+import codecs
+import base64
 import logging.handlers
-import traceback
 import aiohttp
-from lbry import utils, __version__
+from aiohttp.client_exceptions import ClientError
 
 
-LOGGLY_TOKEN = 'BQEzZmMzLJHgAGxkBF00LGD0YGuyATVgAmqxAQEuAQZ2BQH4'
+def deobfuscate(obfustacated):
+    return base64.b64decode(codecs.encode(obfustacated, 'rot_13')(obfustacated)).decode()
 
 
 class JsonFormatter(logging.Formatter):
     """Format log records using json serialization"""
 
     def __init__(self, **kwargs):
+        super().__init__()
         self.attributes = kwargs
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord):
         data = {
             'loggerName': record.name,
             'asciTime': self.formatTime(record),
@@ -34,23 +36,15 @@ class JsonFormatter(logging.Formatter):
 
 
 class HTTPSLogglyHandler(logging.Handler):
-    def __init__(self, loggly_token: str, fqdn=False, localname=None, facility=None, cookies=None):
+    def __init__(self, loggly_token: str, tag: str, fqdn=False, localname=None, facility=None, cookies=None):
         super().__init__()
         self.fqdn = fqdn
         self.localname = localname
         self.facility = facility
         self.cookies = cookies or {}
-        self.url = "https://logs-01.loggly.com/inputs/{token}/tag/{tag}".format(
-            token=utils.deobfuscate(loggly_token), tag='lbrynet-' + __version__
-        )
+        self.url = f"https://logs-01.loggly.com/inputs/{deobfuscate(loggly_token)}/tag/{tag}"
         self._loop = asyncio.get_event_loop()
-        self._session = aiohttp.ClientSession()
-
-    def get_full_message(self, record):
-        if record.exc_info:
-            return '\n'.join(traceback.format_exception(*record.exc_info))
-        else:
-            return record.getMessage()
+        self._session = aiohttp.ClientSession(loop=self._loop)
 
     async def _emit(self, record, retry=True):
         data = self.format(record).encode()
@@ -76,7 +70,8 @@ class HTTPSLogglyHandler(logging.Handler):
             pass
 
 
-def get_loggly_handler():
-    handler = HTTPSLogglyHandler(LOGGLY_TOKEN)
+def get_loggly_handler(tag: str, token: str, level=logging.ERROR) -> HTTPSLogglyHandler:
+    handler = HTTPSLogglyHandler(token, tag)
     handler.setFormatter(JsonFormatter())
+    handler.setLevel(level)
     return handler

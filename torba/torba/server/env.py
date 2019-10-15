@@ -29,6 +29,7 @@ class Env:
         pass
 
     def __init__(self, coin=None):
+        self.loggly_token = self.default('LOGGLY_TOKEN', '')
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.allow_root = self.boolean('ALLOW_ROOT', False)
         self.host = self.default('HOST', 'localhost')

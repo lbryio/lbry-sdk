@@ -4,6 +4,7 @@ import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 
 import torba
+from torba.loggly_handler import get_loggly_handler
 from torba.server.mempool import MemPool, MemPoolAPI
 
 
@@ -67,6 +68,8 @@ class Server:
     def __init__(self, env):
         self.env = env
         self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
+        if self.env.loggly_token:
+            self.log.addHandler(get_loggly_handler('wallet-server', self.env.loggly_token))
         self.shutdown_event = asyncio.Event()
         self.cancellable_tasks = []
 
