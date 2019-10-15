@@ -7,6 +7,7 @@ from io import StringIO
 from unittest import TestCase
 from types import SimpleNamespace
 from contextlib import asynccontextmanager
+from unittest.mock import patch
 
 import docopt
 from torba.testcase import AsyncioTestCase
@@ -192,6 +193,15 @@ class CLITest(AsyncioTestCase):
             "channel_new is deprecated, using channel_create.\n"
             "Could not connect to daemon. Are you sure it's running?"
         )
+
+    @patch.object(Daemon, 'start', spec=Daemon, wraps=Daemon.start)
+    def test_keyboard_interrupt_handling(self, mock_daemon_start):
+        def side_effect():
+            raise KeyboardInterrupt
+
+        mock_daemon_start.side_effect = side_effect
+        self.shell(["start"])
+        mock_daemon_start.assert_called_once()
 
 
 class DaemonDocsTests(TestCase):

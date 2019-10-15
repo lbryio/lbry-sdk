@@ -474,6 +474,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 self.component_startup_task.cancel()
         log.info("stopped api components")
         if shutdown_runner:
+            self.rpc_runner.app.on_shutdown.freeze()
+            self.streaming_runner.app.on_shutdown.freeze()
             await self.rpc_runner.shutdown()
             await self.streaming_runner.shutdown()
         await self.rpc_runner.cleanup()
