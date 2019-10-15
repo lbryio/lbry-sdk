@@ -11,6 +11,12 @@ class FileCommands(CommandTestCase):
 
     VERBOSITY = logging.WARN
 
+    async def create_streams_in_range(self, *args, **kwargs):
+        self.stream_claim_ids = []
+        for i in range(*args, **kwargs):
+            t = await self.stream_create(f'Stream_{i}', '0.00001', b'This is a stream')
+            self.stream_claim_ids.append(t['outputs'][0]['claim_id'])
+
     async def test_file_management(self):
         await self.stream_create('foo', '0.01')
         await self.stream_create('foo2', '0.01')
@@ -161,53 +167,36 @@ class FileCommands(CommandTestCase):
         self.assertEqual(file_list[0].stream_claim_info.claim.stream.description, claim.stream.description)
 
     async def test_file_list_paginated_output(self):
-        # Make sure that without both page params, file_list returns a normal list
-        file_list = self.daemon.jsonrpc_file_list()['items']
-        self.assertIsInstance(file_list, list)
+        await self.create_streams_in_range(0, 20)
 
-        # Should paginate
-        file_list = self.daemon.jsonrpc_file_list(page=1)
-        self.assertIsInstance(file_list, dict)
+        page = self.file_list(page_size=20)
+        page_claim_ids = [item['claim_id'] for item in page]
+        self.assertListEqual(page_claim_ids, self.stream_claim_ids)
 
-        # Also should paginate
-        file_list = self.daemon.jsonrpc_file_list(page_size=212312)
-        self.assertIsInstance(file_list, dict)
+        page = self.file_list(page_size=6)
+        page_claim_ids = [item['claim_id'] for item in page]
+        self.assertListEqual(page_claim_ids, self.stream_claim_ids[:6])
 
-        # Definitely should paginate
-        file_list = self.daemon.jsonrpc_file_list(page=1, page_size=50)
-        self.assertIsInstance(file_list, dict)
+        page = self.file_list(page_size=6, page=2)
+        page_claim_ids = [item['claim_id'] for item in page]
+        self.assertListEqual(page_claim_ids, self.stream_claim_ids[6:12])
 
-        # Test to make sure the paginated output exists when using page, page_size
-        self.assertIn('items', file_list)
-        self.assertIn('page', file_list)
-        self.assertIn('page_size', file_list)
-        self.assertIn('total_items', file_list)
-        self.assertIn('total_pages', file_list)
+        out_of_bounds = self.file_list(page=5, page_size=6)
+        self.assertEqual(out_of_bounds, [])
 
-        # The list should be inside the paginated output
-        self.assertIsInstance(file_list['items'], list)
-        self.assertLessEqual(len(file_list['items']), 50)
+        complete = self.daemon.jsonrpc_file_list()
+        self.assertEqual(complete['total_pages'], 1)
+        self.assertEqual(complete['total_items'], 20)
 
-        # Create 5 files to list
-        stream1 = await self.stream_create('file1', '0.01', b'house up on a hill')
-        stream2 = await self.stream_create('file2', '0.01', b'moon is lying still')
-        stream3 = await self.stream_create('file3', '0.01', b'shadows of the trees')
-        stream4 = await self.stream_create('file4', '0.01', b'witnessing the wild breeze')
-        stream5 = await self.stream_create('file5', '0.01', b'come on baby run with me')
+        page = self.daemon.jsonrpc_file_list(page_size=10, page=1)
+        self.assertEqual(page['total_pages'], 2)
+        self.assertEqual(page['total_items'], 20)
+        self.assertEqual(page['page'], 1)
 
-        # Without page parameters, this should be a paginated list with default page & length
-        file_list = self.daemon.jsonrpc_file_list()
-        self.assertIsInstance(file_list, dict)
-        self.assertIs(file_list['total_items'], 5)
-
-        # relist a subset of the file list
-        file_list_page = self.daemon.jsonrpc_file_list(page=1, page_size=3)
-        self.assertEqual(file_list_page['total_items'], len(file_list))
-        self.assertEqual(len(file_list_page['items']), 3)
-
-        # Make sure the second page contains the other 2 files
-        file_list_page = self.daemon.jsonrpc_file_list(page=2, page_size=3)
-        self.assertEqual(len(file_list_page['items']), 2)
+        full = self.sout(self.daemon.jsonrpc_file_list(page_size=20, page=1))
+        page1 = self.file_list(page=1, page_size=10)
+        page2 = self.file_list(page=2, page_size=10)
+        self.assertEqual(page1 + page2, full['items'])
 
     async def test_download_different_timeouts(self):
         tx = await self.stream_create('foo', '0.01')

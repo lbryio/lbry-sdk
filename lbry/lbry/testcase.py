@@ -278,6 +278,9 @@ class CommandTestCase(IntegrationTestCase):
     async def claim_search(self, **kwargs):
         return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
 
+    def file_list(self, *args, **kwargs):
+        return self.sout(self.daemon.jsonrpc_file_list(*args, **kwargs))['items']
+
     @staticmethod
     def get_claim_id(tx):
         return tx['outputs'][0]['claim_id']
