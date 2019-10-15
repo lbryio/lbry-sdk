@@ -1,6 +1,7 @@
 import contextlib
 from io import StringIO
 from unittest import TestCase
+from unittest import mock
 
 import docopt
 from torba.testcase import AsyncioTestCase
@@ -100,6 +101,11 @@ class CLITest(AsyncioTestCase):
             "channel_new is deprecated, using channel_create.\n"
             "Could not connect to daemon. Are you sure it's running?"
         )
+
+    def test_keyboard_interrupt(self):
+        with mock.patch.object(self.sys, "exit") as mock_exit:
+            self.shell("start")
+        assert mock_exit.call_args[0][0] == 42
 
 
 class DaemonDocsTests(TestCase):
