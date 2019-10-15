@@ -199,18 +199,10 @@ class CommandTestCase(IntegrationTestCase):
 
     def create_tempfile(self, data=None, prefix=None, suffix=None, dir_path=None):
         dir_path = dir_path or self.daemon.conf.download_dir
-        file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, dir=dir_path)
-        file.write(data)
-        file.flush()
-
-        def cleanup():
-            try:
-                file.close()
-            except FileNotFoundError:
-                pass
-
-        self.addCleanup(cleanup)
-        return file.name
+        self.file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, dir=dir_path)
+        self.file.write(data)
+        self.file.flush()
+        return self.file.name
 
     async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True,
                             prefix=None, suffix=None, **kwargs):
