@@ -729,8 +729,30 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(len(reposts_on_claim_list), 2)
         signed_reposts = [repost for repost in reposts_on_claim_list if repost.get('is_channel_signature_valid')]
         self.assertEqual(len(signed_reposts), 1)
+        # check that its directly searchable (simplest case, by name)
+        search_results = await self.claim_search(name='repost-on-channel')
+        self.assertEqual(len(search_results), 1)
+        self.assertTrue(
+            any(claim['claim_id'] for claim in reposts_on_claim_list
+                if claim['name'] == 'repost-on-channel' and claim['claim_id'] == search_results[0]['claim_id'])
+        )
         search_results = await self.claim_search(name='newstuff-again')
         self.assertEqual(len(search_results), 1)
+        self.assertTrue(
+            any(claim['claim_id'] for claim in reposts_on_claim_list
+                if claim['name'] == 'newstuff-again' and claim['claim_id'] == search_results[0]['claim_id'])
+        )
+        # complex case, reverse search (reposts for claim id)
+        reposts = await self.claim_search(reposted_claim_id=claim_id)
+        self.assertEqual(len(reposts), 2)
+        self.assertEqual(reposts, reposts_on_claim_list)
+        # check that it resolves fine too
+        # todo: should resolve show the repost information?
+        resolved_reposts = await self.resolve(['@reposting-goodies/repost-on-channel', 'newstuff-again'])
+        self.assertEqual(
+            [resolution['claim_id'] for resolution in resolved_reposts.values()],
+            [claim['claim_id'] for claim in reposts_on_claim_list]
+        )
 
     async def test_publish_updates_file_list(self):
         tx = await self.out(self.stream_create(title='created'))
