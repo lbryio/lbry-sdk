@@ -1,3 +1,4 @@
+import math
 import os
 import asyncio
 import logging
@@ -1806,20 +1807,14 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         total_items = len(items)
-        total_pages = 1
         page = page or 1
-
-        if page_size:
-            offset = page_size * (page-1)
-            items = items[offset:offset+page_size]
-            total_pages = int((len(items) + (page_size-1)) / page_size)
-
-        else:
-            page_size = len(items)
+        page_size = page_size if page_size else len(items) or 1
+        offset = page_size * (page-1)
+        items = items[offset:offset+page_size]
 
         return {
             'total_items': total_items,
-            'total_pages': total_pages,
+            'total_pages': math.ceil(total_items / page_size),
             'page': page,
             'page_size': page_size,
             'items': items
