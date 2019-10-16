@@ -178,8 +178,6 @@ class Wallet:
         added_accounts = []
         decrypted_data = self.unpack(password, data)
         self.preferences.merge(decrypted_data.get('preferences', {}))
-        if self.preferences.get(ENCRYPT_ON_DISK, False):
-            self.encryption_password = password
         for account_dict in decrypted_data['accounts']:
             ledger = manager.get_or_create_ledger(account_dict['ledger'])
             _, _, pubkey = ledger.account_class.keys_from_dict(ledger, account_dict)
