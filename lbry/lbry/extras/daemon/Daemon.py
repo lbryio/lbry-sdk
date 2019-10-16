@@ -16,7 +16,7 @@ from traceback import format_exc
 from aiohttp import web
 from functools import wraps, partial
 from google.protobuf.message import DecodeError
-from torba.client.wallet import Wallet
+from torba.client.wallet import Wallet, ENCRYPT_ON_DISK
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbry import utils
@@ -1642,6 +1642,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet_changed = False
         if data is not None:
             added_accounts = wallet.merge(self.wallet_manager, password, data)
             if added_accounts and self.ledger.network.is_connected:
@@ -1652,6 +1653,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 else:
                     for new_account in added_accounts:
                         asyncio.create_task(self.ledger.subscribe_account(new_account))
+            wallet_changed = True
+        if wallet.preferences.get(ENCRYPT_ON_DISK, False) and password != wallet.encryption_password:
+            wallet.encryption_password = password
+            wallet_changed = True
+        if wallet_changed:
             wallet.save()
         encrypted = wallet.pack(password)
         return {
