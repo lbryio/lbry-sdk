@@ -110,7 +110,7 @@ jobs:
         - OS=windows
         - PATH=/c/Python37:/c/Python37/Scripts:/C/Windows/System32/downlevel:$PATH
       before_install:
-        - choco install python --x86
+        - choco install python --version=3.7.4 --x86
         - python -m pip install --upgrade pip
         - pip install pywin32
       script:
