@@ -197,20 +197,11 @@ class CommandTestCase(IntegrationTestCase):
         """ Synchronous version of `out` method. """
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
-    def create_tempfile(self, data=None, prefix=None, suffix=None, dir_path=None):
-        dir_path = dir_path or self.daemon.conf.download_dir
-        file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, dir=dir_path)
-        file.write(data)
-        file.flush()
-
-        def cleanup():
-            try:
-                file.close()
-            except FileNotFoundError:
-                pass
-
-        self.addCleanup(cleanup)
-        return file.name
+    def create_tempfile(self, data=None, prefix=None, suffix=None):
+        self._file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix)
+        self._file.write(data)
+        self._file.flush()
+        return self._file.name
 
     async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True,
                             prefix=None, suffix=None, **kwargs):
