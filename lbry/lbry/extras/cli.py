@@ -7,10 +7,10 @@ import asyncio
 import argparse
 import logging
 import logging.handlers
-from docopt import docopt
 
 import aiohttp
 from aiohttp.web import GracefulExit
+from docopt import docopt
 
 from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.loggly_handler import get_loggly_handler
@@ -142,7 +142,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def error(self, message):
         self.print_help(argparse._sys.stderr)
-        self.exit(2, '\n'+message+'\n')
+        self.exit(2, f"\n{message}\n")
 
 
 class HelpFormatter(argparse.HelpFormatter):
@@ -223,11 +223,9 @@ def ensure_directory_exists(path: str):
 LOG_MODULES = ('lbry', 'torba', 'aioupnp')
 
 
-def setup_logging(args: argparse.Namespace, conf: Config, logger: logging.Logger):
+def setup_logging(logger: logging.Logger, args: argparse.Namespace, conf: Config):
     default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
-    file_handler = logging.handlers.RotatingFileHandler(
-        conf.log_file_path, maxBytes=2097152, backupCount=5
-    )
+    file_handler = logging.handlers.RotatingFileHandler(conf.log_file_path, maxBytes=2097152, backupCount=5)
     file_handler.setFormatter(default_formatter)
     for module_name in LOG_MODULES:
         logger.getChild(module_name).addHandler(file_handler)
@@ -259,7 +257,7 @@ def run_daemon(args: argparse.Namespace, conf: Config):
     loop = asyncio.get_event_loop()
     if args.verbose is not None:
         loop.set_debug(True)
-    setup_logging(args, conf, logging.getLogger())
+    setup_logging(logging.getLogger(), args, conf)
     daemon = Daemon(conf)
 
     def __exit():

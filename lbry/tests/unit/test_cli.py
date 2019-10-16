@@ -1,7 +1,12 @@
+import os
+import tempfile
+import shutil
 import contextlib
 import logging
 from io import StringIO
 from unittest import TestCase
+from types import SimpleNamespace
+from contextlib import asynccontextmanager
 
 import docopt
 from torba.testcase import AsyncioTestCase
@@ -9,39 +14,92 @@ from torba.testcase import AsyncioTestCase
 from lbry.extras.cli import normalize_value, main, setup_logging
 from lbry.extras.system_info import get_platform
 from lbry.extras.daemon.Daemon import Daemon
+from lbry.extras.daemon.loggly_handler import HTTPSLogglyHandler
 from lbry.conf import Config
 from lbry.extras import cli
 
 
+@asynccontextmanager
+async def get_logger(argv, **conf_options):
+    # loggly requires loop, so we do this in async function
+
+    logger = logging.getLogger('test-root-logger')
+    temp_dir = tempfile.mkdtemp()
+    temp_config = os.path.join(temp_dir, 'settings.yml')
+
+    try:
+        # create a config (to be loaded on startup)
+        _conf = Config.create_from_arguments(SimpleNamespace(config=temp_config))
+        with _conf.update_config():
+            for opt_name, opt_value in conf_options.items():
+                setattr(_conf, opt_name, opt_value)
+
+        # do what happens on startup
+        argv.extend(['--data-dir', temp_dir])
+        argv.extend(['--wallet-dir', temp_dir])
+        argv.extend(['--config', temp_config])
+        parser = cli.get_argument_parser()
+        args, command_args = parser.parse_known_args(argv)
+        conf: Config = Config.create_from_arguments(args)
+        setup_logging(logger, args, conf)
+        yield logger
+
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        for mod in cli.LOG_MODULES:
+            log = logger.getChild(mod)
+            log.setLevel(logging.NOTSET)
+            while log.handlers:
+                h = log.handlers[0]
+                log.removeHandler(log.handlers[0])
+                h.close()
+
+
 class CLILoggingTest(AsyncioTestCase):
 
-    async def test_setup_logging(self):
-        # test needs to be async to avoid warnings from loggly
+    async def test_verbose_logging(self):
+        async with get_logger(["start", "--quiet"], share_usage_data=False) as log:
+            log = log.getChild("lbry")
+            self.assertTrue(log.isEnabledFor(logging.INFO))
+            self.assertFalse(log.isEnabledFor(logging.DEBUG))
+            self.assertFalse(log.isEnabledFor(logging.DEBUG))
+            self.assertEqual(len(log.handlers), 1)
+            self.assertIsInstance(log.handlers[0], logging.handlers.RotatingFileHandler)
 
-        def setup(argv):
-            parser = cli.get_argument_parser()
-            args, command_args = parser.parse_known_args(argv)
-            conf = Config.create_from_arguments(args)
-            conf.data_dir = '/tmp'
-            setup_logging(args, conf, logger)
+        async with get_logger(["start", "--verbose"]) as log:
+            self.assertTrue(log.getChild("lbry").isEnabledFor(logging.DEBUG))
+            self.assertTrue(log.getChild("lbry").isEnabledFor(logging.INFO))
+            self.assertFalse(log.getChild("torba").isEnabledFor(logging.DEBUG))
 
-        logger = logging.getLogger('test_logger')
+        async with get_logger(["start", "--verbose", "lbry.extras", "lbry.wallet", "torba.client"]) as log:
+            self.assertTrue(log.getChild("lbry.extras").isEnabledFor(logging.DEBUG))
+            self.assertTrue(log.getChild("lbry.wallet").isEnabledFor(logging.DEBUG))
+            self.assertTrue(log.getChild("torba.client").isEnabledFor(logging.DEBUG))
+            self.assertFalse(log.getChild("lbry").isEnabledFor(logging.DEBUG))
+            self.assertFalse(log.getChild("torba").isEnabledFor(logging.DEBUG))
 
-        setup(["start"])
-        self.assertTrue(logger.getChild("lbry").isEnabledFor(logging.INFO))
-        self.assertFalse(logger.getChild("lbry").isEnabledFor(logging.DEBUG))
+    async def test_loggly(self):
+        async with get_logger(["start"], share_usage_data=False) as log:
+            self.assertEqual(len(log.getChild("lbry").handlers), 2)  # file and console
+        async with get_logger(["start"]) as log:  # default share_usage_data=True
+            log = log.getChild("lbry")
+            self.assertEqual(len(log.handlers), 3)
+            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
+        async with get_logger(["start"], share_usage_data=True) as log:  # explicit share_usage_data=True
+            log = log.getChild("lbry")
+            self.assertEqual(len(log.handlers), 3)
+            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
 
-        setup(["start", "--verbose"])
-        self.assertTrue(logger.getChild("lbry").isEnabledFor(logging.DEBUG))
-        self.assertTrue(logger.getChild("lbry").isEnabledFor(logging.INFO))
-        self.assertFalse(logger.getChild("torba").isEnabledFor(logging.DEBUG))
-
-        setup(["start", "--verbose", "lbry.extras", "lbry.wallet", "torba.client"])
-        self.assertTrue(logger.getChild("lbry.extras").isEnabledFor(logging.DEBUG))
-        self.assertTrue(logger.getChild("lbry.wallet").isEnabledFor(logging.DEBUG))
-        self.assertTrue(logger.getChild("torba.client").isEnabledFor(logging.DEBUG))
-        self.assertFalse(logger.getChild("lbry").isEnabledFor(logging.DEBUG))
-        self.assertFalse(logger.getChild("torba").isEnabledFor(logging.DEBUG))
+    async def test_quiet(self):
+        async with get_logger(["start"]) as log:  # default is loud
+            log = log.getChild("lbry")
+            self.assertEqual(len(log.handlers), 3)
+            self.assertIs(type(log.handlers[1]), logging.StreamHandler)
+        async with get_logger(["start", "--quiet"]) as log:
+            log = log.getChild("lbry")
+            self.assertEqual(len(log.handlers), 2)
+            self.assertIsNot(type(log.handlers[0]), logging.StreamHandler)
+            self.assertIsNot(type(log.handlers[1]), logging.StreamHandler)
 
 
 class CLITest(AsyncioTestCase):
