@@ -1,6 +1,5 @@
 import asyncio
 import json
-from lbry import error
 from lbry.testcase import CommandTestCase
 from torba.client.wallet import ENCRYPT_ON_DISK
 
@@ -33,18 +32,21 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertFalse(daemon.jsonrpc_preference_get())
         self.assertFalse(daemon2.jsonrpc_preference_get())
 
+        daemon.jsonrpc_preference_set("fruit", '["peach", "apricot"]')
         daemon.jsonrpc_preference_set("one", "1")
         daemon.jsonrpc_preference_set("conflict", "1")
-        daemon.jsonrpc_preference_set("fruit", '["peach", "apricot"]')
+        daemon2.jsonrpc_preference_set("another", "A")
         await asyncio.sleep(1)
+        # these preferences will win after merge since they are "newer"
         daemon2.jsonrpc_preference_set("two", "2")
         daemon2.jsonrpc_preference_set("conflict", "2")
+        daemon.jsonrpc_preference_set("another", "B")
 
         self.assertDictEqual(daemon.jsonrpc_preference_get(), {
-            "one": "1", "conflict": "1", "fruit": ["peach", "apricot"]
+            "one": "1", "conflict": "1", "another": "B", "fruit": ["peach", "apricot"]
         })
         self.assertDictEqual(daemon2.jsonrpc_preference_get(), {
-            "two": "2", "conflict": "2"
+            "two": "2", "conflict": "2", "another": "A"
         })
 
         self.assertEqual(len((await daemon.jsonrpc_account_list())['lbc_regtest']), 1)
@@ -56,7 +58,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertDictEqual(
             # "two" key added and "conflict" value changed to "2"
             daemon.jsonrpc_preference_get(),
-            {"one": "1", "two": "2", "conflict": "2", "fruit": ["peach", "apricot"]}
+            {"one": "1", "two": "2", "conflict": "2", "another": "B", "fruit": ["peach", "apricot"]}
         )
 
         # Channel Certificate
