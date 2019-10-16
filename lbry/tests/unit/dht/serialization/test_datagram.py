@@ -127,6 +127,18 @@ class TestDatagram(unittest.TestCase):
         self.assertRaises(ValueError, decode_datagram, serialized)
         self.assertRaises(DecodeError, decode_datagram, _bencode([1, 2, 3, 4]))
 
+    def test_optional_field_backwards_compatible(self):
+        datagram = decode_datagram(_bencode({
+            0: 0,
+            1: b'\n\xbc\xb5&\x9dl\xfc\x1e\x87\xa0\x8e\x92\x0b\xf3\x9f\xe9\xdf\x8e\x92\xfc',
+            2: b'111111111111111111111111111111111111111111111111',
+            3: b'ping',
+            4: [{b'protocolVersion': 1}],
+            5: b'should not error'
+        }))
+        self.assertEqual(datagram.packet_type, REQUEST_TYPE)
+        self.assertEqual(b'ping', datagram.method)
+
 
 class TestCompactAddress(unittest.TestCase):
     def test_encode_decode(self, address='1.2.3.4', port=4444, node_id=b'1' * 48):
