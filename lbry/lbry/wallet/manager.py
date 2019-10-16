@@ -5,6 +5,7 @@ from binascii import unhexlify
 
 
 from torba.client.basemanager import BaseWalletManager
+from torba.client.wallet import ENCRYPT_ON_DISK
 from torba.rpc.jsonrpc import CodeMessageError
 
 from lbry.wallet.ledger import MainNetLedger
@@ -120,6 +121,9 @@ class LbryWalletManager(BaseWalletManager):
         if default_wallet.default_account is None:
             log.info('Wallet at %s is empty, generating a default account.', default_wallet.id)
             default_wallet.generate_account(ledger)
+            default_wallet.save()
+        if default_wallet.is_locked and default_wallet.preferences.get(ENCRYPT_ON_DISK) is None:
+            default_wallet.preferences[ENCRYPT_ON_DISK] = True
             default_wallet.save()
         if receiving_addresses or change_addresses:
             if not os.path.exists(ledger.path):
