@@ -8,6 +8,7 @@ import argparse
 import logging
 import logging.handlers
 from docopt import docopt
+from types import ModuleType
 
 import aiohttp
 from aiohttp.web import GracefulExit
@@ -18,7 +19,6 @@ from lbry.conf import Config, CLIConfig
 from lbry.extras.daemon.Daemon import Daemon
 
 log = logging.getLogger('lbry')
-log.addHandler(logging.NullHandler())
 
 
 def display(data):
@@ -221,38 +221,40 @@ def ensure_directory_exists(path: str):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def setup_logging(args: argparse.Namespace, conf: Config, loop: asyncio.AbstractEventLoop):
+def setup_logging(args: argparse.Namespace, conf: Config, loop: asyncio.AbstractEventLoop,
+                  logging: ModuleType = logging):
     default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
     file_handler = logging.handlers.RotatingFileHandler(
         conf.log_file_path, maxBytes=2097152, backupCount=5
     )
     file_handler.setFormatter(default_formatter)
-    log.addHandler(file_handler)
+    logging.getLogger('lbry').addHandler(file_handler)
+    logging.getLogger('lbry').addHandler(logging.NullHandler())
     logging.getLogger('torba').addHandler(file_handler)
 
     if not args.quiet:
         handler = logging.StreamHandler()
         handler.setFormatter(default_formatter)
-        log.addHandler(handler)
+        logging.getLogger('lbry').addHandler(handler)
         logging.getLogger('torba').addHandler(handler)
         logging.getLogger('torba').setLevel(logging.INFO)
 
     logging.getLogger('aioupnp').setLevel(logging.WARNING)
     logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 
-    log.setLevel(logging.INFO)
+    logging.getLogger('lbry').setLevel(logging.INFO)
     if args.verbose is not None:
         loop.set_debug(True)
         if len(args.verbose) > 0:
             for module in args.verbose:
                 logging.getLogger(module).setLevel(logging.DEBUG)
         else:
-            log.setLevel(logging.DEBUG)
+            logging.getLogger('lbry').setLevel(logging.DEBUG)
 
     if conf.share_usage_data:
         loggly_handler = get_loggly_handler()
         loggly_handler.setLevel(logging.ERROR)
-        log.addHandler(loggly_handler)
+        logging.getLogger('lbry').addHandler(loggly_handler)
 
 
 def run_daemon(args: argparse.Namespace, conf: Config):
