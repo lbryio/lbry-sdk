@@ -155,6 +155,10 @@ class Wallet:
     @property
     def hash(self) -> bytes:
         h = sha256()
+        if self.preferences.get(ENCRYPT_ON_DISK, False):
+            assert self.encryption_password, \
+                "Encryption is enabled but no password is available, cannot generate hash."
+            h.update(self.encryption_password.encode())
         h.update(self.preferences.hash)
         for account in sorted(self.accounts, key=attrgetter('id')):
             h.update(account.hash)
