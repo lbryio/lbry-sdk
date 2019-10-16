@@ -1,13 +1,58 @@
 import contextlib
+import asyncio
+import importlib
 from io import StringIO
 from unittest import TestCase
 
 import docopt
 from torba.testcase import AsyncioTestCase
 
-from lbry.extras.cli import normalize_value, main
+from lbry.extras.cli import normalize_value, main, setup_logging
 from lbry.extras.system_info import get_platform
 from lbry.extras.daemon.Daemon import Daemon
+from lbry.conf import Config
+from lbry.extras import cli
+
+
+class CLILoggingTest(AsyncioTestCase):
+
+    async def asyncSetUp(self):
+        def import_module(name):
+            spec = importlib.util.find_spec(name)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+        
+        self.test_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.test_loop)
+
+        self.logging = import_module('logging')
+        handlers = import_module('logging.handlers')
+        self.logging.handlers = handlers
+
+    def test_setup_logging(self):
+        def setup(argv):
+            parser = cli.get_argument_parser()
+            args, command_args = parser.parse_known_args(argv)
+            conf = Config.create_from_arguments(args)
+            conf.data_dir = '/tmp'
+            setup_logging(args, conf, self.test_loop, self.logging)
+
+        setup(["start"])
+        self.assertTrue(self.logging.getLogger("lbry").isEnabledFor(self.logging.INFO))
+        self.assertFalse(self.logging.getLogger("lbry").isEnabledFor(self.logging.DEBUG))
+
+        setup(["start", "--verbose"])
+        self.assertTrue(self.logging.getLogger("lbry").isEnabledFor(self.logging.DEBUG))
+        self.assertTrue(self.logging.getLogger("lbry").isEnabledFor(self.logging.INFO))
+        self.assertFalse(self.logging.getLogger("torba").isEnabledFor(self.logging.DEBUG))
+
+        setup(["start", "--verbose", "lbry.extras", "lbry.wallet", "torba.client"])
+        self.assertTrue(self.logging.getLogger("lbry.extras").isEnabledFor(self.logging.DEBUG))
+        self.assertTrue(self.logging.getLogger("lbry.wallet").isEnabledFor(self.logging.DEBUG))
+        self.assertTrue(self.logging.getLogger("torba.client").isEnabledFor(self.logging.DEBUG))
+        self.assertFalse(self.logging.getLogger("lbry").isEnabledFor(self.logging.DEBUG))
+        self.assertFalse(self.logging.getLogger("torba").isEnabledFor(self.logging.DEBUG))
 
 
 class CLITest(AsyncioTestCase):
