@@ -1,3 +1,4 @@
+import math
 import os
 import asyncio
 import logging
@@ -110,6 +111,7 @@ class WalletComponent(Component):
             local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
             remote_height = self.wallet_manager.ledger.network.remote_height
             best_hash = self.wallet_manager.get_best_blockhash()
+            progress = min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
             return {
                 'connected_servers': [
                     {
@@ -119,6 +121,7 @@ class WalletComponent(Component):
                     } for session in self.wallet_manager.ledger.network.session_pool.sessions
                     if session and session.available
                 ],
+                'headers_synchronization_progress': progress,
                 'blocks': max(local_height, 0),
                 'blocks_behind': max(remote_height - local_height, 0),
                 'best_blockhash': best_hash,
