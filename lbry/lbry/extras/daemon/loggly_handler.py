@@ -67,6 +67,10 @@ class HTTPSLogglyHandler(logging.Handler):
     def emit(self, record):
         asyncio.ensure_future(self._emit(record))
 
+    def close(self):
+        super().close()
+        asyncio.create_task(self._session.close())
+
 
 def get_loggly_handler():
     handler = HTTPSLogglyHandler(LOGGLY_TOKEN)
