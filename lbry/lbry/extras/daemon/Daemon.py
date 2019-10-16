@@ -1197,8 +1197,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is unlocked, otherwise false
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return wallet.unlock(password)
+        return self.wallet_manager.get_wallet_or_default(wallet_id).unlock(password)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_wallet_lock(self, wallet_id=None):
@@ -1214,8 +1213,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is locked, otherwise false
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return wallet.lock()
+        return self.wallet_manager.get_wallet_or_default(wallet_id).lock()
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_wallet_decrypt(self, wallet_id=None):
@@ -1231,8 +1229,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return wallet.decrypt()
+        return self.wallet_manager.get_wallet_or_default(wallet_id).decrypt()
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_wallet_encrypt(self, new_password, wallet_id=None):
@@ -1250,8 +1247,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return wallet.encrypt(new_password)
+        return self.wallet_manager.get_wallet_or_default(wallet_id).encrypt(new_password)
 
     @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_wallet_send(
@@ -1604,7 +1600,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Wallet synchronization.
     """
 
-    @requires("wallet")
+    @requires("wallet", conditions=[WALLET_IS_UNLOCKED])
     def jsonrpc_sync_hash(self, wallet_id=None):
         """
         Deterministic hash of the wallet.
@@ -1621,21 +1617,18 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return hexlify(wallet.hash).decode()
 
-    @requires("wallet")
+    @requires("wallet", conditions=[WALLET_IS_UNLOCKED])
     async def jsonrpc_sync_apply(self, password, data=None, encrypt_password=None, wallet_id=None, blocking=False):
         """
         Apply incoming synchronization data, if provided, and then produce a sync hash and
         an encrypted wallet.
 
         Usage:
-            sync_apply <password> [--data=<data>] [--encrypt-password=<encrypt_password>]
-                       [--wallet_id=<wallet_id>] [--blocking]
+            sync_apply <password> [--data=<data>] [--wallet_id=<wallet_id>] [--blocking]
 
         Options:
             --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
             --data=<data>                 : (str) incoming sync data, if any
-            --encrypt-password=<encrypt_password> : (str) password to encrypt outgoing data if different
-                                                    from the decrypt password, used during password changes
             --wallet_id=<wallet_id>       : (str) wallet being sync'ed
             --blocking                    : (bool) wait until any new accounts have sync'ed
 
@@ -1644,7 +1637,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot sync apply on a locked wallet."
         if data is not None:
             added_accounts = wallet.merge(self.wallet_manager, password, data)
             if added_accounts and self.ledger.network.is_connected:
@@ -1656,8 +1648,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     for new_account in added_accounts:
                         asyncio.create_task(self.ledger.subscribe_account(new_account))
             wallet.save()
-            wallet.unlock(password)
-        encrypted = wallet.pack(encrypt_password or password)
+        encrypted = wallet.pack(password)
         return {
             'hash': self.jsonrpc_sync_hash(wallet_id),
             'data': encrypted.decode()
