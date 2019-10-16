@@ -1618,10 +1618,15 @@ class Daemon(metaclass=JSONRPCServerType):
         return hexlify(wallet.hash).decode()
 
     @requires("wallet", conditions=[WALLET_IS_UNLOCKED])
-    async def jsonrpc_sync_apply(self, password, data=None, encrypt_password=None, wallet_id=None, blocking=False):
+    async def jsonrpc_sync_apply(self, password, data=None, wallet_id=None, blocking=False):
         """
-        Apply incoming synchronization data, if provided, and then produce a sync hash and
-        an encrypted wallet.
+        Apply incoming synchronization data, if provided, and return a sync hash and update wallet data.
+
+        Wallet must be unlocked to perform this operation.
+
+        If "encrypt-on-disk" preference is True and supplied password is different from local password,
+        or there is no local password (because local wallet was not encrypted), then the supplied password
+        will be used for local encryption (overwriting previous local encryption password).
 
         Usage:
             sync_apply <password> [--data=<data>] [--wallet_id=<wallet_id>] [--blocking]
