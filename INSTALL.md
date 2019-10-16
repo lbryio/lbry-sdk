@@ -27,11 +27,11 @@ Remaining dependencies can then be installed by running:
 brew install python protobuf
 ```
 
-Assistance installing Python3: https://docs.python-guide.org/starting/install3/osx/.
+For any Assistance in installing Python3 visit : https://docs.python-guide.org/starting/install3/osx/.
 
 ### Linux
 
-On Ubuntu (16.04 minimum, we recommend 18.04), install the following:
+On Ubuntu (16.04 minimum, we recommend 18.04), run the following commands in the terminal:
 
 ```
 sudo add-apt-repository ppa:deadsnakes/ppa
