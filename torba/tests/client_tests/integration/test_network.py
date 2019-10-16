@@ -87,7 +87,7 @@ class ReconnectTests(IntegrationTestCase):
             await self.ledger.network.start()
             await self.ledger.network.on_connected.first
             await self.ledger.initial_headers_sync()
-            self.assertEqual(initial_height + 99, self.ledger.local_height_including_downloaded_height)
+            self.assertEqual(initial_height + 100, self.ledger.local_height_including_downloaded_height)
 
     async def test_connection_drop_still_receives_events_after_reconnected(self):
         address1 = await self.account.receiving.get_or_create_usable_address()
