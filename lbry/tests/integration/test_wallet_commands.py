@@ -102,7 +102,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': True, 'is_encrypted': True})
 
         # can't sign transactions with locked wallet
-        with self.assertRaises(error.ComponentStartConditionNotMet):
+        with self.assertRaises(AssertionError):
             await daemon.jsonrpc_channel_create('@foo', '1.0')
         daemon.jsonrpc_wallet_unlock('password')
         self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True})
