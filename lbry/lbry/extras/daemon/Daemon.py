@@ -145,7 +145,6 @@ def sort_claim_results(claims):
 
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
-WALLET_IS_UNLOCKED = "wallet_is_unlocked"
 
 
 class DHTHasContacts(RequiredCondition):
@@ -156,16 +155,6 @@ class DHTHasContacts(RequiredCondition):
     @staticmethod
     def evaluate(component):
         return len(component.contacts) > 0
-
-
-class WalletIsUnlocked(RequiredCondition):
-    name = WALLET_IS_UNLOCKED
-    component = WALLET_COMPONENT
-    message = "your wallet is locked"
-
-    @staticmethod
-    def evaluate(component):
-        return not component.check_locked()
 
 
 class JSONRPCError:
@@ -922,8 +911,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return results
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
-              STREAM_MANAGER_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
+              STREAM_MANAGER_COMPONENT)
     async def jsonrpc_get(self, uri, file_name=None, download_directory=None, timeout=None, save_file=None):
         """
         Download stream from a LBRY name.
@@ -1215,7 +1203,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_wallet_or_default(wallet_id).lock()
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     def jsonrpc_wallet_decrypt(self, wallet_id=None):
         """
         Decrypt an encrypted wallet, this will remove the wallet password. The wallet must be unlocked to decrypt it
@@ -1231,7 +1219,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_wallet_or_default(wallet_id).decrypt()
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     def jsonrpc_wallet_encrypt(self, new_password, wallet_id=None):
         """
         Encrypt an unencrypted wallet with a password
@@ -1249,7 +1237,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_wallet_or_default(wallet_id).encrypt(new_password)
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_wallet_send(
             self, amount, addresses, wallet_id=None,
             change_account_id=None, funding_account_ids=None, preview=False):
@@ -1270,6 +1258,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         account = wallet.get_account_or_default(change_account_id)
         accounts = wallet.get_accounts_or_all(funding_account_ids)
 
@@ -1575,7 +1564,7 @@ class Daemon(metaclass=JSONRPCServerType):
             outputs=outputs, broadcast=broadcast
         )
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     def jsonrpc_account_send(self, amount, addresses, account_id=None, wallet_id=None, preview=False):
         """
         Send the same number of credits to multiple addresses from a specific account (or default account).
@@ -1600,7 +1589,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Wallet synchronization.
     """
 
-    @requires("wallet", conditions=[WALLET_IS_UNLOCKED])
+    @requires("wallet")
     def jsonrpc_sync_hash(self, wallet_id=None):
         """
         Deterministic hash of the wallet.
@@ -1617,7 +1606,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return hexlify(wallet.hash).decode()
 
-    @requires("wallet", conditions=[WALLET_IS_UNLOCKED])
+    @requires("wallet")
     async def jsonrpc_sync_apply(self, password, data=None, wallet_id=None, blocking=False):
         """
         Apply incoming synchronization data, if provided, and return a sync hash and update wallet data.
@@ -2100,7 +2089,7 @@ class Daemon(metaclass=JSONRPCServerType):
     def jsonrpc_channel_new(self):
         """ deprecated """
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_create(
             self, name, bid, allow_duplicate_name=False, account_id=None, wallet_id=None,
             claim_address=None, funding_account_ids=None, preview=False, blocking=False, **kwargs):
@@ -2180,6 +2169,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.valid_channel_name_or_error(name)
@@ -2216,7 +2206,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return tx
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_update(
             self, claim_id, bid=None, account_id=None, wallet_id=None, claim_address=None,
             funding_account_ids=None, new_signing_key=False, preview=False,
@@ -2306,6 +2296,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         if account_id:
             account = wallet.get_account_or_error(account_id)
@@ -2370,7 +2361,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return tx
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_abandon(
             self, claim_id=None, txid=None, nout=None, account_id=None, wallet_id=None,
             preview=False, blocking=True):
@@ -2395,6 +2386,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         if account_id:
             account = wallet.get_account_or_error(account_id)
             accounts = [account]
@@ -2552,8 +2544,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Create, update, abandon, list and inspect your stream claims.
     """
 
-    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_publish(self, name, **kwargs):
         """
         Create or replace a stream claim at a given name (use 'stream create/update' for more control).
@@ -2665,8 +2656,7 @@ class Daemon(metaclass=JSONRPCServerType):
             f"to update a specific stream claim."
         )
 
-    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_create(
             self, name, bid, file_path, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
@@ -2767,6 +2757,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         self.valid_stream_name_or_error(name)
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
@@ -2812,8 +2803,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return tx
 
-    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_update(
             self, claim_id, bid=None, file_path=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
@@ -2927,6 +2917,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         if account_id:
             account = wallet.get_account_or_error(account_id)
@@ -3020,7 +3011,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return tx
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_stream_abandon(
             self, claim_id=None, txid=None, nout=None, account_id=None, wallet_id=None,
             preview=False, blocking=False):
@@ -3045,6 +3036,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         if account_id:
             account = wallet.get_account_or_error(account_id)
             accounts = [account]
@@ -3106,8 +3098,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return maybe_paginate(streams, stream_count, page, page_size)
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
-              DHT_COMPONENT, DATABASE_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
+              DHT_COMPONENT, DATABASE_COMPONENT)
     def jsonrpc_stream_cost_estimate(self, uri):
         """
         Get estimated cost for a lbry stream
@@ -3128,7 +3119,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Create, list and abandon all types of supports.
     """
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_support_create(
             self, claim_id, amount, tip=False, account_id=None, wallet_id=None, funding_account_ids=None,
             preview=False, blocking=False):
@@ -3153,6 +3144,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Transaction}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         amount = self.get_dewies_or_error("amount", amount)
         claim = await self.ledger.get_claim_by_claim_id(claim_id)
@@ -3208,7 +3200,7 @@ class Daemon(metaclass=JSONRPCServerType):
             support_count = partial(self.ledger.get_support_count, wallet=wallet, accounts=wallet.accounts)
         return maybe_paginate(supports, support_count, page, page_size)
 
-    @requires(WALLET_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT)
     async def jsonrpc_support_abandon(
             self, claim_id=None, txid=None, nout=None, keep=None,
             account_id=None, wallet_id=None, preview=False, blocking=False):
@@ -3233,18 +3225,23 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         if account_id:
-            account = self.get_account_or_error(account_id)
-            funding_accounts = [account]
-            get_supports = account.get_supports
+            account = wallet.get_account_or_error(account_id)
+            accounts = [account]
         else:
-            funding_accounts = self.ledger.accounts
-            get_supports = self.ledger.get_supports
+            account = wallet.default_account
+            accounts = wallet.accounts
 
         if txid is not None and nout is not None:
-            supports = await get_supports(**{'txo.txid': txid, 'txo.position': nout})
+            supports = await self.ledger.get_supports(
+                wallet=wallet, accounts=accounts, **{'txo.txid': txid, 'txo.position': nout}
+            )
         elif claim_id is not None:
-            supports = await get_supports(claim_id=claim_id)
+            supports = await self.ledger.get_supports(
+                wallet=wallet, accounts=accounts, claim_id=claim_id
+            )
         else:
             raise Exception('Must specify claim_id, or txid and nout')
 
@@ -3265,7 +3262,7 @@ class Daemon(metaclass=JSONRPCServerType):
             ]
 
         tx = await Transaction.create(
-            [Input.spend(txo) for txo in supports], outputs, funding_accounts, funding_accounts[0]
+            [Input.spend(txo) for txo in supports], outputs, accounts, account
         )
 
         if not preview:
@@ -3429,8 +3426,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Blob management.
     """
 
-    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT,
-              conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT)
     async def jsonrpc_blob_get(self, blob_hash, timeout=None, read=False):
         """
         Download and return a blob
