@@ -30,7 +30,7 @@ class Account(BaseAccount):
 
     @property
     def hash(self) -> bytes:
-        h = sha256(json.dumps(self.to_dict(False)).encode())
+        h = sha256(json.dumps(self.to_dict(include_channel_keys=False)).encode())
         for cert in sorted(self.channel_keys.keys()):
             h.update(cert.encode())
         return h.digest()
@@ -119,8 +119,8 @@ class Account(BaseAccount):
         account.channel_keys = d.get('certificates', {})
         return account
 
-    def to_dict(self, include_channel_keys=True):
-        d = super().to_dict()
+    def to_dict(self, encrypt_password: str = None, include_channel_keys: bool = True):
+        d = super().to_dict(encrypt_password)
         if include_channel_keys:
             d['certificates'] = self.channel_keys
         return d

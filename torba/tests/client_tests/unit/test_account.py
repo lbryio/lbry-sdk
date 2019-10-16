@@ -435,14 +435,14 @@ class AccountEncryptionTests(AsyncioTestCase):
 
     def test_encrypt_wallet(self):
         account = self.ledger.account_class.from_dict(self.ledger, Wallet(), self.unencrypted_account)
-        account.private_key_encryption_init_vector = self.init_vector
-        account.seed_encryption_init_vector = self.init_vector
+        account.init_vectors = {
+            'seed': self.init_vector,
+            'private_key': self.init_vector
+        }
 
-        self.assertFalse(account.serialize_encrypted)
         self.assertFalse(account.encrypted)
         self.assertIsNotNone(account.private_key)
         account.encrypt(self.password)
-        self.assertFalse(account.serialize_encrypted)
         self.assertTrue(account.encrypted)
         self.assertEqual(account.seed, self.encrypted_account['seed'])
         self.assertEqual(account.private_key_string, self.encrypted_account['private_key'])
@@ -451,42 +451,32 @@ class AccountEncryptionTests(AsyncioTestCase):
         self.assertEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
         self.assertEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
 
-        account.serialize_encrypted = True
         account.decrypt(self.password)
-        self.assertEqual(account.private_key_encryption_init_vector, self.init_vector)
-        self.assertEqual(account.seed_encryption_init_vector, self.init_vector)
+        self.assertEqual(account.init_vectors['private_key'], self.init_vector)
+        self.assertEqual(account.init_vectors['seed'], self.init_vector)
 
         self.assertEqual(account.seed, self.unencrypted_account['seed'])
         self.assertEqual(account.private_key.extended_key_string(), self.unencrypted_account['private_key'])
 
-        self.assertEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
-        self.assertEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
+        self.assertEqual(account.to_dict(encrypt_password=self.password)['seed'], self.encrypted_account['seed'])
+        self.assertEqual(account.to_dict(encrypt_password=self.password)['private_key'], self.encrypted_account['private_key'])
 
         self.assertFalse(account.encrypted)
-        self.assertTrue(account.serialize_encrypted)
-
-        account.serialize_encrypted = False
-        self.assertEqual(account.to_dict()['seed'], self.unencrypted_account['seed'])
-        self.assertEqual(account.to_dict()['private_key'], self.unencrypted_account['private_key'])
 
     def test_decrypt_wallet(self):
         account = self.ledger.account_class.from_dict(self.ledger, Wallet(), self.encrypted_account)
 
         self.assertTrue(account.encrypted)
-        self.assertTrue(account.serialize_encrypted)
         account.decrypt(self.password)
-        self.assertEqual(account.private_key_encryption_init_vector, self.init_vector)
-        self.assertEqual(account.seed_encryption_init_vector, self.init_vector)
+        self.assertEqual(account.init_vectors['private_key'], self.init_vector)
+        self.assertEqual(account.init_vectors['seed'], self.init_vector)
 
         self.assertFalse(account.encrypted)
-        self.assertTrue(account.serialize_encrypted)
 
         self.assertEqual(account.seed, self.unencrypted_account['seed'])
         self.assertEqual(account.private_key.extended_key_string(), self.unencrypted_account['private_key'])
 
-        self.assertEqual(account.to_dict()['seed'], self.encrypted_account['seed'])
-        self.assertEqual(account.to_dict()['private_key'], self.encrypted_account['private_key'])
-
-        account.serialize_encrypted = False
+        self.assertEqual(account.to_dict(encrypt_password=self.password)['seed'], self.encrypted_account['seed'])
+        self.assertEqual(account.to_dict(encrypt_password=self.password)['private_key'], self.encrypted_account['private_key'])
         self.assertEqual(account.to_dict()['seed'], self.unencrypted_account['seed'])
         self.assertEqual(account.to_dict()['private_key'], self.unencrypted_account['private_key'])

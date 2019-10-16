@@ -116,6 +116,12 @@ class TestWalletCreation(AsyncioTestCase):
 
 class TestTimestampedPreferences(TestCase):
 
+    def test_init(self):
+        p = TimestampedPreferences()
+        p['one'] = 1
+        p2 = TimestampedPreferences(p.data)
+        self.assertEqual(p2['one'], 1)
+
     def test_hash(self):
         p = TimestampedPreferences()
         self.assertEqual(

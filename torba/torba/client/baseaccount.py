@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import asyncio
@@ -221,12 +222,8 @@ class BaseAccount:
         self.seed = seed
         self.modified_on = modified_on
         self.private_key_string = private_key_string
-        self.password: Optional[str] = None
-        self.private_key_encryption_init_vector: Optional[bytes] = None
-        self.seed_encryption_init_vector: Optional[bytes] = None
-
+        self.init_vectors: Dict[str, bytes] = {}
         self.encrypted = encrypted
-        self.serialize_encrypted = encrypted
         self.private_key = private_key
         self.public_key = public_key
         generator_name = address_generator.get('name', HierarchicalDeterministic.name)
@@ -235,6 +232,12 @@ class BaseAccount:
         self.address_managers = {am.chain_number: am for am in {self.receiving, self.change}}
         ledger.add_account(self)
         wallet.add_account(self)
+
+    def get_init_vector(self, key) -> Optional[bytes]:
+        init_vector = self.init_vectors.get(key, None)
+        if init_vector is None:
+            init_vector = self.init_vectors[key] = os.urandom(16)
+        return init_vector
 
     @classmethod
     def generate(cls, ledger: 'baseledger.BaseLedger', wallet: 'basewallet.Wallet',
@@ -289,21 +292,20 @@ class BaseAccount:
             modified_on=d.get('modified_on', time.time())
         )
 
-    def to_dict(self):
+    def to_dict(self, encrypt_password: str = None):
         private_key_string, seed = self.private_key_string, self.seed
         if not self.encrypted and self.private_key:
             private_key_string = self.private_key.extended_key_string()
-        if not self.encrypted and self.serialize_encrypted:
-            assert None not in [self.seed_encryption_init_vector, self.private_key_encryption_init_vector]
+        if not self.encrypted and encrypt_password:
             private_key_string = aes_encrypt(
-                self.password, private_key_string, self.private_key_encryption_init_vector
+                encrypt_password, private_key_string, self.get_init_vector('private_key')
             )
-            seed = aes_encrypt(self.password, self.seed, self.seed_encryption_init_vector)
+            seed = aes_encrypt(encrypt_password, self.seed, self.get_init_vector('seed'))
         return {
             'ledger': self.ledger.get_id(),
             'name': self.name,
             'seed': seed,
-            'encrypted': self.serialize_encrypted,
+            'encrypted': bool(self.encrypted or encrypt_password),
             'private_key': private_key_string,
             'public_key': self.public_key.extended_key_string(),
             'address_generator': self.address_generator.to_dict(self.receiving, self.change),
@@ -322,6 +324,7 @@ class BaseAccount:
 
     @property
     def hash(self) -> bytes:
+        assert not self.encrypted, "Cannot hash an encrypted account."
         return sha256(json.dumps(self.to_dict()).encode())
 
     async def get_details(self, show_seed=False, **kwargs):
@@ -339,42 +342,41 @@ class BaseAccount:
             details['seed'] = self.seed
         return details
 
-    def decrypt(self, password: str) -> None:
+    def decrypt(self, password: str) -> bool:
         assert self.encrypted, "Key is not encrypted."
         try:
             seed, seed_iv = aes_decrypt(password, self.seed)
             pk_string, pk_iv = aes_decrypt(password, self.private_key_string)
         except ValueError:  # failed to remove padding, password is wrong
-            return
+            return False
         try:
             Mnemonic().mnemonic_decode(seed)
         except IndexError:  # failed to decode the seed, this either means it decrypted and is invalid
                             # or that we hit an edge case where an incorrect password gave valid padding
-            return
+            return False
         try:
             private_key = from_extended_key_string(
                 self.ledger, pk_string
             )
         except (TypeError, ValueError):
-            return
+            return False
         self.seed = seed
-        self.seed_encryption_init_vector = seed_iv
         self.private_key = private_key
-        self.private_key_encryption_init_vector = pk_iv
-        self.password = password
+        self.init_vectors['seed'] = seed_iv
+        self.init_vectors['private_key'] = pk_iv
         self.encrypted = False
+        return True
 
-    def encrypt(self, password: str) -> None:
+    def encrypt(self, password: str) -> bool:
         assert not self.encrypted, "Key is already encrypted."
         assert isinstance(self.private_key, PrivateKey)
-
-        self.seed = aes_encrypt(password, self.seed, self.seed_encryption_init_vector)
+        self.seed = aes_encrypt(password, self.seed, self.get_init_vector('seed'))
         self.private_key_string = aes_encrypt(
-            password, self.private_key.extended_key_string(), self.private_key_encryption_init_vector
+            password, self.private_key.extended_key_string(), self.get_init_vector('private_key')
         )
         self.private_key = None
-        self.password = None
         self.encrypted = True
+        return True
 
     async def ensure_address_gap(self):
         addresses = []
