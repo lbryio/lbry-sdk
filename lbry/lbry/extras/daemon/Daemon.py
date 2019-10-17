@@ -2640,8 +2640,13 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("publishing: name: %s params: %s", name, kwargs)
         self.valid_stream_name_or_error(name)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.get('wallet_id'))
-        account = wallet.get_account_or_default(kwargs.get('account_id'))
-        claims = await account.get_claims(claim_name=name)
+        if kwargs.get('account_id'):
+            accounts = [wallet.get_account_or_error(kwargs.get('account_id'))]
+        else:
+            accounts = wallet.accounts
+        claims = await self.ledger.get_claims(
+            wallet=wallet, accounts=accounts, claim_name=name
+        )
         if len(claims) == 0:
             if 'bid' not in kwargs:
                 raise Exception("'bid' is a required argument for new publishes.")
