@@ -111,6 +111,7 @@ CONNECTION_MESSAGES = {
 
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
+DEFAULT_PAGE_SIZE = 50
 
 
 def encode_pagination_doc(items):
@@ -124,20 +125,31 @@ def encode_pagination_doc(items):
 
 
 async def maybe_paginate(get_records: Callable, get_record_count: Callable,
-                         page: Optional[int], page_size: Optional[int], **constraints):
-    if None not in (page, page_size):
-        constraints.update({
-            "offset": page_size * (page - 1),
-            "limit": page_size
-        })
+                         page: Optional[int], page_size: Optional[int],
+                         no_totals: Optional[bool] = None, **constraints):
+    if page is None and page_size is None:
+        return await get_records(**constraints)
+    if no_totals is not None:
+        constraints["no_totals"] = no_totals
+    if page is None:
+        page = 1
+    if page_size is None or page_size > DEFAULT_PAGE_SIZE:
+        page_size = DEFAULT_PAGE_SIZE
+    constraints.update({
+        "offset": page_size * (page - 1),
+        "limit": page_size
+    })
+    result = {
+        "items": await get_records(**constraints),
+        "page": page, "page_size": page_size
+    }
+    if not no_totals:
         total_items = await get_record_count(**constraints)
-        return {
-            "items": await get_records(**constraints),
-            "total_pages": int((total_items + (page_size - 1)) / page_size),
+        result.update({
+            "total_pages": (total_items + (page_size - 1)) // page_size,
             "total_items": total_items,
-            "page": page, "page_size": page_size
-        }
-    return await get_records(**constraints)
+        })
+    return result
 
 
 def sort_claim_results(claims):
@@ -1943,7 +1955,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return maybe_paginate(claims, claim_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_claim_search(self, **kwargs):
+    def jsonrpc_claim_search(self, page=None, page_size=None, no_totals=None, **kwargs):
         """
         Search for stream and channel claims on the blockchain.
 
@@ -2068,18 +2080,19 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
+        async def claims(**kwargs):
+            return (await self.ledger.claim_search(**kwargs))[0]
+        async def claim_count(**kwargs):
+            return (await self.ledger.claim_search(**kwargs))[2]
+
         if kwargs.pop('valid_channel_signature', False):
             kwargs['signature_valid'] = 1
         if kwargs.pop('invalid_channel_signature', False):
             kwargs['signature_valid'] = 0
-        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', 10)), 50)
-        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, offset, total = await self.ledger.claim_search(**kwargs)
-        result = {"items": txos, "page": page_num, "page_size": page_size}
-        if not kwargs.pop('no_totals', False):
-            result['total_pages'] = int((total + (page_size - 1)) / page_size)
-            result['total_items'] = total
-        return result
+        return maybe_paginate(
+            claims, claim_count,
+            page, page_size, no_totals, **kwargs
+        )
 
     CHANNEL_DOC = """
     Create, update, abandon and list your channel claims.

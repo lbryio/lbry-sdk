@@ -276,7 +276,7 @@ class CommandTestCase(IntegrationTestCase):
         return await self.out(self.daemon.jsonrpc_resolve(uri))
 
     async def claim_search(self, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
+        return await self.out(self.daemon.jsonrpc_claim_search(**kwargs))
 
     @staticmethod
     def get_claim_id(tx):
