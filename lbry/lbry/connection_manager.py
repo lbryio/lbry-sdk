@@ -1,3 +1,4 @@
+import time
 import asyncio
 import typing
 import collections
@@ -18,6 +19,8 @@ class ConnectionManager:
         self.incoming: typing.DefaultDict[str, int] = collections.defaultdict(int)
         self.outgoing_connected: typing.Set[str] = set()
         self.outgoing: typing.DefaultDict[str, int] = collections.defaultdict(int)
+        self._max_incoming_mbs = 0.0
+        self._max_outgoing_mbs = 0.0
         self._status = {}
         self._running = False
         self._task: typing.Optional[asyncio.Task] = None
@@ -58,29 +61,32 @@ class ConnectionManager:
             'total_outgoing_mbs': 0.0,
             'total_sent': 0,
             'total_received': 0,
-            'time': self.loop.time()
+            'max_incoming_mbs': 0.0,
+            'max_outgoing_mbs': 0.0
         }
 
         while True:
-            last = self.loop.time()
-            await asyncio.sleep(5, loop=self.loop)
+            last = time.perf_counter()
+            await asyncio.sleep(0.1, loop=self.loop)
             self._status['incoming_bps'].clear()
             self._status['outgoing_bps'].clear()
-            now = self.loop.time()
+            now = time.perf_counter()
             while self.outgoing:
                 k, v = self.outgoing.popitem()
+                self._status['total_sent'] += v
                 self._status['outgoing_bps'][k] = v / (now - last)
             while self.incoming:
                 k, v = self.incoming.popitem()
+                self._status['total_received'] += v
                 self._status['incoming_bps'][k] = v / (now - last)
             self._status['total_outgoing_mbs'] = int(sum(list(self._status['outgoing_bps'].values())
                                                          )) / 1000000.0
             self._status['total_incoming_mbs'] = int(sum(list(self._status['incoming_bps'].values())
                                                          )) / 1000000.0
-            self._status['total_sent'] += sum(list(self._status['outgoing_bps'].values()))
-            self._status['total_received'] += sum(list(self._status['incoming_bps'].values()))
-
-            self._status['time'] = now
+            self._max_incoming_mbs = max(self._max_incoming_mbs, self._status['total_incoming_mbs'])
+            self._max_outgoing_mbs = max(self._max_outgoing_mbs, self._status['total_outgoing_mbs'])
+            self._status['max_incoming_mbs'] = self._max_incoming_mbs
+            self._status['max_outgoing_mbs'] = self._max_outgoing_mbs
 
     def stop(self):
         if self._task:
