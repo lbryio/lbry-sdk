@@ -7,6 +7,7 @@ from urllib.request import urlopen
 
 from torba.client.errors import InsufficientFundsError
 
+from lbry.extras.daemon.Daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction
 
@@ -42,20 +43,20 @@ class ClaimSearchCommand(ClaimTestCase):
         self.channel = await self.channel_create('@abc', '1.0')
         self.channel_id = self.get_claim_id(self.channel)
 
-    async def create_lots_of_streams(self):
+    async def create_lots_of_streams(self, claims=4, blocks=3):
         tx = await self.daemon.jsonrpc_account_fund(None, None, '0.001', outputs=100, broadcast=True)
         await self.confirm_tx(tx.id)
-        # 4 claims per block, 3 blocks. Sorted by height (descending) then claim name (ascending).
+        # 4 claims per block, 3 blocks (by default). Sorted by height (descending) then claim name (ascending).
         self.streams = []
-        for j in range(3):
+        for j in range(blocks):
             same_height_claims = []
-            for k in range(3):
+            for k in range(claims - 1):
                 claim_tx = await self.stream_create(
                     f'c{j}-{k}', '0.000001', channel_id=self.channel_id, confirm=False)
                 same_height_claims.append(claim_tx['outputs'][0]['name'])
                 await self.on_transaction_dict(claim_tx)
             claim_tx = await self.stream_create(
-                f'c{j}-4', '0.000001', channel_id=self.channel_id, confirm=True)
+                f'c{j}-{claims - 1}', '0.000001', channel_id=self.channel_id, confirm=True)
             same_height_claims.append(claim_tx['outputs'][0]['name'])
             self.streams = same_height_claims + self.streams
 
@@ -138,28 +139,37 @@ class ClaimSearchCommand(ClaimTestCase):
 
     async def test_pagination(self):
         await self.create_channel()
-        await self.create_lots_of_streams()
+        await self.create_lots_of_streams(10, 10)
 
         page = await self.claim_search(page_size=20, channel='@abc', order_by=['height', '^name'])
-        page_claim_ids = [item['name'] for item in page]
-        self.assertEqual(page_claim_ids, self.streams)
+        page_claim_ids = [item['name'] for item in page['items']]
+        self.assertEqual(page_claim_ids, self.streams[:20])
 
         page = await self.claim_search(page_size=6, channel='@abc', order_by=['height', '^name'])
-        page_claim_ids = [item['name'] for item in page]
+        page_claim_ids = [item['name'] for item in page['items']]
         self.assertEqual(page_claim_ids, self.streams[:6])
 
         page = await self.claim_search(page=2, page_size=6, channel='@abc', order_by=['height', '^name'])
-        page_claim_ids = [item['name'] for item in page]
-        self.assertEqual(page_claim_ids, self.streams[6:])
+        page_claim_ids = [item['name'] for item in page['items']]
+        self.assertEqual(page_claim_ids, self.streams[6:(2 * 6)])
 
-        out_of_bounds = await self.claim_search(page=2, page_size=20, channel='@abc')
-        self.assertEqual(out_of_bounds, [])
+        page = await self.claim_search(page=1, channel='@abc', order_by=['height', '^name'])
+        page_claim_ids = [item['name'] for item in page['items']]
+        self.assertEqual(page_claim_ids, self.streams[:DEFAULT_PAGE_SIZE])
 
-        results = await self.daemon.jsonrpc_claim_search()
-        self.assertEqual(results['total_pages'], 2)
-        self.assertEqual(results['total_items'], 13)
+        page = await self.claim_search(page=2, channel='@abc', order_by=['height', '^name'])
+        page_claim_ids = [item['name'] for item in page['items']]
+        self.assertEqual(page_claim_ids, self.streams[DEFAULT_PAGE_SIZE:(2 * DEFAULT_PAGE_SIZE)])
 
-        results = await self.daemon.jsonrpc_claim_search(no_totals=True)
+        out_of_bounds = await self.claim_search(page=20, page_size=20, channel='@abc')
+        self.assertEqual(out_of_bounds['items'], [])
+
+        total_claims = 10 * 10 + 1
+        results = await self.claim_search(page=1)
+        self.assertEqual(results['total_pages'], (total_claims + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE)
+        self.assertEqual(results['total_items'], total_claims)
+
+        results = await self.claim_search(page=1, no_totals=True)
         self.assertNotIn('total_pages', results)
         self.assertNotIn('total_items', results)
 
