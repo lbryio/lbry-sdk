@@ -32,7 +32,7 @@ async def main(blob_hash: str, url: str):
         host = host_info[0][4][0]
 
     storage = SQLiteStorage(conf, os.path.join(conf.data_dir, "lbrynet.sqlite"))
-    blob_manager = BlobManager(loop, os.path.join(conf.data_dir, "blobfiles"), storage)
+    blob_manager = BlobManager(loop, os.path.join(conf.data_dir, "blobfiles"), storage, conf)
     await storage.open()
     await blob_manager.setup()
 
