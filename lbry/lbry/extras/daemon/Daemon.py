@@ -2884,9 +2884,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            #await self.storage.save_claims([self._old_get_temp_claim_info(
-            #    tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
-            #)])
             # await self.analytics_manager.send_claim_action('publish') todo: what to send?
         else:
             await account.ledger.release_tx(tx)
