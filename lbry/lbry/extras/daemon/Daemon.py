@@ -124,11 +124,11 @@ def encode_pagination_doc(items):
     }
 
 
-async def maybe_paginate(get_records_with_count: Callable[[Dict], Tuple[List, int]],
+async def maybe_paginate(get_records_with_count: Callable[[bool, Dict], Tuple[List, int]],
                          page: Optional[int], page_size: Optional[int],
                          no_totals: Optional[bool] = None, **constraints):
     if page is None and page_size is None:
-        return (await get_records_with_count(**constraints))[0]
+        return (await get_records_with_count(fetch_count=False, **constraints))[0]
     if no_totals is not None:
         constraints["no_totals"] = no_totals
     if page is None:
@@ -139,7 +139,8 @@ async def maybe_paginate(get_records_with_count: Callable[[Dict], Tuple[List, in
         "offset": page_size * (page - 1),
         "limit": page_size
     })
-    items, total_items = await get_records_with_count(**constraints)
+    fetch_count = not no_totals
+    items, total_items = await get_records_with_count(fetch_count, **constraints)
     result = {
         "items": items,
         "page": page, "page_size": page_size
@@ -2082,7 +2083,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        async def get_claims_with_count(**kwargs):
+        async def get_claims_with_count(fetch_count, **kwargs):
             claims, offset, count = await self.ledger.claim_search(**kwargs)
             return (claims, count)
 
@@ -4154,5 +4155,7 @@ def get_loggly_query_string(installation_id):
     return base_loggly_search_url + data
 
 
-async def get_records_with_count(get_records, get_record_count, **kwargs):
-    return (await get_records(**kwargs), await get_record_count(**kwargs))
+async def get_records_with_count(get_records, get_record_count, fetch_count, **kwargs):
+    records = await get_records(**kwargs)
+    record_count = await get_record_count(**kwargs) if fetch_count else 0
+    return (records, record_count)
