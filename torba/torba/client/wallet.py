@@ -238,8 +238,7 @@ class Wallet:
 
     def encrypt(self, password):
         assert not self.is_locked, "Cannot re-encrypt a locked wallet, unlock first."
-        if not password:
-            raise ValueError("Cannot encrypt with blank password.")
+        assert password, "Cannot encrypt with blank password."
         self.encryption_password = password
         self.preferences[ENCRYPT_ON_DISK] = True
         self.save()
