@@ -363,6 +363,7 @@ class BaseAccount:
             # failed to remove padding, password is wrong
             return False
         if not private_key_string:
+            self.private_key_string = ""
             self.private_key = None
             return True
         try:
