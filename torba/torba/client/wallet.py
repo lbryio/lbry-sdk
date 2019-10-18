@@ -206,11 +206,17 @@ class Wallet:
         return False
 
     def unlock(self, password):
-        self.encryption_password = password
         for account in self.accounts:
             if account.encrypted:
                 if not account.decrypt(password):
                     return False
+        if password == "":
+            # for backwards compatiblity:
+            # some accounts were encrypted with blank password, this allows
+            # those accounts to be unlocked but then not encrypted anymore
+            self.decrypt()
+        else:
+            self.encryption_password = password
         return True
 
     def lock(self):
@@ -232,6 +238,8 @@ class Wallet:
 
     def encrypt(self, password):
         assert not self.is_locked, "Cannot re-encrypt a locked wallet, unlock first."
+        if not password:
+            raise ValueError("Cannot encrypt with blank password.")
         self.encryption_password = password
         self.preferences[ENCRYPT_ON_DISK] = True
         self.save()
