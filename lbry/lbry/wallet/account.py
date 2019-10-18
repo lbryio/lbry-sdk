@@ -62,8 +62,9 @@ class Account(BaseAccount):
             private_key = ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
             public_key_der = private_key.get_verifying_key().to_der()
             channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
-        self.channel_keys = channel_keys
-        self.wallet.save()
+        if self.channel_keys != channel_keys:
+            self.channel_keys = channel_keys
+            self.wallet.save()
 
     async def save_max_gap(self):
         if issubclass(self.address_generator, HierarchicalDeterministic):
