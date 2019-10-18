@@ -480,3 +480,14 @@ class AccountEncryptionTests(AsyncioTestCase):
         self.assertEqual(account.to_dict(encrypt_password=self.password)['private_key'], self.encrypted_account['private_key'])
         self.assertEqual(account.to_dict()['seed'], self.unencrypted_account['seed'])
         self.assertEqual(account.to_dict()['private_key'], self.unencrypted_account['private_key'])
+
+    def test_encrypt_decrypt_read_only_account(self):
+        account_data = self.unencrypted_account.copy()
+        del account_data['seed']
+        del account_data['private_key']
+        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
+        encrypted = account.to_dict('password')
+        self.assertFalse(encrypted['seed'])
+        self.assertFalse(encrypted['private_key'])
+        account.encrypt('password')
+        account.decrypt('password')

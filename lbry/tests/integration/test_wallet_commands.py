@@ -115,6 +115,16 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertEqual(daemon.jsonrpc_preference_get(ENCRYPT_ON_DISK), {'encrypt-on-disk': False})
         self.assertWalletEncrypted(wallet.storage.path, False)
 
+    async def test_encryption_with_imported_channel(self):
+        daemon, daemon2 = self.daemon, self.daemon2
+        channel = await self.channel_create()
+        exported = await daemon.jsonrpc_channel_export(self.get_claim_id(channel))
+        await daemon2.jsonrpc_channel_import(exported)
+        self.assertTrue(daemon2.jsonrpc_wallet_encrypt('password'))
+        self.assertTrue(daemon2.jsonrpc_wallet_lock())
+        self.assertTrue(daemon2.jsonrpc_wallet_unlock("password"))
+        self.assertEqual(daemon2.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True})
+
     async def test_sync_with_encryption_and_password_change(self):
         daemon, daemon2 = self.daemon, self.daemon2
         wallet, wallet2 = daemon.wallet_manager.default_wallet, daemon2.wallet_manager.default_wallet
