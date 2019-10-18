@@ -97,7 +97,7 @@ jobs:
       before_install:
         - brew upgrade python || true
         - pip3 install --user --upgrade pip virtualenv
-        - /Users/travis/Library/Python/3.7/bin/virtualenv $HOME/venv
+        - /Users/travis/Library/Python/3.7/bin/virtualenv --clear $HOME/venv
         - source $HOME/venv/bin/activate
       before_cache:
         - brew cleanup
