@@ -141,16 +141,15 @@ class Wallet:
         }
 
     def save(self):
-        if not self.is_locked and self.preferences.get(ENCRYPT_ON_DISK, False):
+        if self.preferences.get(ENCRYPT_ON_DISK, False):
             if self.encryption_password:
-                self.storage.write(self.to_dict(encrypt_password=self.encryption_password))
-                return
-            else:
+                return self.storage.write(self.to_dict(encrypt_password=self.encryption_password))
+            elif not self.is_locked:
                 log.warning(
                     "Disk encryption requested but no password available for encryption. "
                     "Saving wallet in an unencrypted state."
                 )
-        self.storage.write(self.to_dict())
+        return self.storage.write(self.to_dict())
 
     @property
     def hash(self) -> bytes:
