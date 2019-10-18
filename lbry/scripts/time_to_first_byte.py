@@ -59,12 +59,26 @@ async def main(cmd_args=None):
             kwargs = {
                 'page': page,
                 'claim_type': 'stream',
+                'any_tags': [
+                  'art',
+                  'automotive',
+                  'blockchain',
+                  'comedy',
+                  'economics',
+                  'education',
+                  'gaming',
+                  'music',
+                  'news',
+                  'science',
+                  'sports',
+                  'technology',
+                ],
                 'order_by': ['trending_global', 'trending_mixed'],
                 'no_totals': True
             }
 
-            # if not cmd_args.allow_fees:
-            #     kwargs['fee_amount'] = 0
+            if not cmd_args.allow_fees:
+                kwargs['fee_amount'] = 0
 
             response = await daemon_rpc(
                 conf, 'claim_search', **kwargs
