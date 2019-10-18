@@ -220,46 +220,46 @@ def ensure_directory_exists(path: str):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def setup_logging(args: argparse.Namespace, conf: Config, loop: asyncio.AbstractEventLoop,
-                  root_logger: logging.Logger):
+LOG_MODULES = ('lbry', 'torba', 'aioupnp')
+
+
+def setup_logging(args: argparse.Namespace, conf: Config, logger: logging.Logger):
     default_formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
     file_handler = logging.handlers.RotatingFileHandler(
         conf.log_file_path, maxBytes=2097152, backupCount=5
     )
     file_handler.setFormatter(default_formatter)
-    root_logger.getChild('lbry').addHandler(file_handler)
-    root_logger.getChild('lbry').addHandler(logging.NullHandler())
-    root_logger.getChild('torba').addHandler(file_handler)
-
+    for module_name in LOG_MODULES:
+        logger.getChild(module_name).addHandler(file_handler)
     if not args.quiet:
         handler = logging.StreamHandler()
         handler.setFormatter(default_formatter)
-        root_logger.getChild('lbry').addHandler(handler)
-        root_logger.getChild('torba').addHandler(handler)
-        root_logger.getChild('torba').setLevel(logging.INFO)
+        for module_name in LOG_MODULES:
+            logger.getChild(module_name).addHandler(handler)
 
-    root_logger.getChild('aioupnp').setLevel(logging.WARNING)
-    root_logger.getChild('aiohttp').setLevel(logging.CRITICAL)
+    logger.getChild('lbry').setLevel(logging.INFO)
+    logger.getChild('torba').setLevel(logging.INFO)
+    logger.getChild('aioupnp').setLevel(logging.WARNING)
+    logger.getChild('aiohttp').setLevel(logging.CRITICAL)
 
-    root_logger.getChild('lbry').setLevel(logging.INFO)
     if args.verbose is not None:
-        loop.set_debug(True)
         if len(args.verbose) > 0:
             for module in args.verbose:
-                root_logger.getChild(module).setLevel(logging.DEBUG)
+                logger.getChild(module).setLevel(logging.DEBUG)
         else:
-            root_logger.getChild('lbry').setLevel(logging.DEBUG)
+            logger.getChild('lbry').setLevel(logging.DEBUG)
 
     if conf.share_usage_data:
         loggly_handler = get_loggly_handler()
         loggly_handler.setLevel(logging.ERROR)
-        root_logger.getChild('lbry').addHandler(loggly_handler)
+        logger.getChild('lbry').addHandler(loggly_handler)
 
 
 def run_daemon(args: argparse.Namespace, conf: Config):
     loop = asyncio.get_event_loop()
-    root_logger = logging.getLogger()
-    setup_logging(args, conf, loop, root_logger)
+    if args.verbose is not None:
+        loop.set_debug(True)
+    setup_logging(args, conf, logging.getLogger())
     daemon = Daemon(conf)
 
     def __exit():
