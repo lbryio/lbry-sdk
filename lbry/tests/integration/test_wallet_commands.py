@@ -83,6 +83,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
     async def test_encryption_and_locking(self):
         daemon = self.daemon
         wallet = daemon.wallet_manager.default_wallet
+        wallet.save()
 
         self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': False})
         self.assertIsNone(daemon.jsonrpc_preference_get(ENCRYPT_ON_DISK))
