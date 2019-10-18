@@ -1,18 +1,19 @@
 import struct
+from hashlib import sha256
 
-from lbry.wallet.script import OutputScript
 from torba.server.script import ScriptPubKey, OpCodes
 from torba.server.util import cachedproperty
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
-from hashlib import sha256
 from torba.server.coins import Coin, CoinError
+
+from lbry.wallet.script import OutputScript
+from .session import LBRYElectrumX, LBRYSessionManager
+from .block_processor import LBRYBlockProcessor
+from .daemon import LBCDaemon
+from .db.writer import LBRYDB
 
 
 class LBC(Coin):
-    from .session import LBRYElectrumX, LBRYSessionManager
-    from .block_processor import LBRYBlockProcessor
-    from .daemon import LBCDaemon
-    from .db.writer import LBRYDB
     DAEMON = LBCDaemon
     SESSIONCLS = LBRYElectrumX
     BLOCK_PROCESSOR = LBRYBlockProcessor

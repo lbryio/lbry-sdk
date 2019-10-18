@@ -630,7 +630,7 @@ class Config(CLIConfig):
 
 
 def get_windows_directories() -> typing.Tuple[str, str, str]:
-    from lbry.winpaths import get_path, FOLDERID, UserHandle
+    from lbry.winpaths import get_path, FOLDERID, UserHandle  # pylint: disable=import-outside-toplevel
 
     download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
 
