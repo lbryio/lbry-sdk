@@ -346,51 +346,43 @@ class BaseAccount:
 
     def decrypt(self, password: str) -> bool:
         assert self.encrypted, "Key is not encrypted."
-        success = (
-            self._decrypt_seed(password) and
-            self._decrypt_private_key_string(password)
-        )
-        if success:
-            self.encrypted = False
-        return success
-
-    def _decrypt_private_key_string(self, password: str) -> bool:
-        if not self.private_key_string:
-            return True
         try:
-            private_key_string, pk_iv = aes_decrypt(password, self.private_key_string)
+            seed = self._decrypt_seed(password)
         except ValueError:
-            # failed to remove padding, password is wrong
             return False
-        if not private_key_string:
-            self.private_key_string = ""
-            self.private_key = None
-            return True
         try:
-            self.private_key = from_extended_key_string(
-                self.ledger, private_key_string
-            )
+            private_key = self._decrypt_private_key_string(password)
         except (TypeError, ValueError):
             return False
-        self.init_vectors['private_key'] = pk_iv
+        self.seed = seed
+        self.private_key = private_key
+        self.private_key_string = ""
         self.encrypted = False
         return True
 
-    def _decrypt_seed(self, password: str) -> bool:
+    def _decrypt_private_key_string(self, password: str) -> Optional[PrivateKey]:
+        if not self.private_key_string:
+            return None
+        private_key_string, self.init_vectors['private_key'] = aes_decrypt(password, self.private_key_string)
+        if not private_key_string:
+            return None
+        return from_extended_key_string(
+            self.ledger, private_key_string
+        )
+
+    def _decrypt_seed(self, password: str) -> str:
         if not self.seed:
-            return True
-        try:
-            seed, seed_iv = aes_decrypt(password, self.seed)
-        except ValueError:  # failed to remove padding, password is wrong
-            return False
+            return ""
+        seed, self.init_vectors['seed'] = aes_decrypt(password, self.seed)
+        if not seed:
+            return ""
         try:
             Mnemonic().mnemonic_decode(seed)
-        except IndexError:  # failed to decode the seed, this either means it decrypted and is invalid
+        except IndexError:
+            # failed to decode the seed, this either means it decrypted and is invalid
             # or that we hit an edge case where an incorrect password gave valid padding
-            return False
-        self.seed = seed
-        self.init_vectors['seed'] = seed_iv
-        return True
+            raise ValueError("Failed to decode seed.")
+        return seed
 
     def encrypt(self, password: str) -> bool:
         assert not self.encrypted, "Key is already encrypted."
