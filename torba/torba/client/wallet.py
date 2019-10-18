@@ -141,7 +141,7 @@ class Wallet:
         }
 
     def save(self):
-        if self.preferences.get(ENCRYPT_ON_DISK, False):
+        if not self.is_locked and self.preferences.get(ENCRYPT_ON_DISK, False):
             if self.encryption_password:
                 self.storage.write(self.to_dict(encrypt_password=self.encryption_password))
                 return
