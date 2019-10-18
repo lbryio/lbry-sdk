@@ -69,9 +69,17 @@ class Account(BaseAccount):
     async def save_max_gap(self):
         if issubclass(self.address_generator, HierarchicalDeterministic):
             gap = await self.get_max_gap()
-            self.receiving.gap = max(20, gap['max_receiving_gap'] + 1)
-            self.change.gap = max(6, gap['max_change_gap'] + 1)
-            self.wallet.save()
+            gap_changed = False
+            new_receiving_gap = max(20, gap['max_receiving_gap'] + 1)
+            if self.receiving.gap != new_receiving_gap:
+                self.receiving.gap = new_receiving_gap
+                gap_changed = True
+            new_change_gap = max(6, gap['max_change_gap'] + 1)
+            if self.change.gap != new_change_gap:
+                self.change.gap = new_change_gap
+                gap_changed = True
+            if gap_changed:
+                self.wallet.save()
 
     def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
