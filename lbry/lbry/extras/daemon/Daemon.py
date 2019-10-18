@@ -10,7 +10,7 @@ import random
 import ecdsa
 import hashlib
 from urllib.parse import urlencode, quote
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, Dict, Tuple
 from binascii import hexlify, unhexlify
 from traceback import format_exc
 from aiohttp import web
@@ -124,11 +124,11 @@ def encode_pagination_doc(items):
     }
 
 
-async def maybe_paginate(get_records: Callable, get_record_count: Callable,
+async def maybe_paginate(get_records_with_count: Callable[[Dict], Tuple[List, int]],
                          page: Optional[int], page_size: Optional[int],
                          no_totals: Optional[bool] = None, **constraints):
     if page is None and page_size is None:
-        return await get_records(**constraints)
+        return (await get_records_with_count(**constraints))[0]
     if no_totals is not None:
         constraints["no_totals"] = no_totals
     if page is None:
@@ -139,12 +139,12 @@ async def maybe_paginate(get_records: Callable, get_record_count: Callable,
         "offset": page_size * (page - 1),
         "limit": page_size
     })
+    items, total_items = await get_records_with_count(**constraints)
     result = {
-        "items": await get_records(**constraints),
+        "items": items,
         "page": page, "page_size": page_size
     }
     if not no_totals:
-        total_items = await get_record_count(**constraints)
         result.update({
             "total_pages": (total_items + (page_size - 1)) // page_size,
             "total_items": total_items,
@@ -1723,8 +1723,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             constraints['accounts'] = wallet.accounts
         return maybe_paginate(
-            self.ledger.get_addresses,
-            self.ledger.get_address_count,
+            partial(get_records_with_count, self.ledger.get_addresses, self.ledger.get_address_count),
             page, page_size, **constraints
         )
 
@@ -1952,7 +1951,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claims = partial(self.ledger.get_claims, wallet=wallet, accounts=wallet.accounts)
             claim_count = partial(self.ledger.get_claim_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(claims, claim_count, page, page_size)
+        return maybe_paginate(
+            partial(get_records_with_count, claims, claim_count),
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_claim_search(self, page=None, page_size=None, no_totals=None, **kwargs):
@@ -2080,17 +2082,16 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        async def claims(**kwargs):
-            return (await self.ledger.claim_search(**kwargs))[0]
-        async def claim_count(**kwargs):
-            return (await self.ledger.claim_search(**kwargs))[2]
+        async def get_claims_with_count(**kwargs):
+            claims, offset, count = await self.ledger.claim_search(**kwargs)
+            return (claims, count)
 
         if kwargs.pop('valid_channel_signature', False):
             kwargs['signature_valid'] = 1
         if kwargs.pop('invalid_channel_signature', False):
             kwargs['signature_valid'] = 0
         return maybe_paginate(
-            claims, claim_count,
+            get_claims_with_count,
             page, page_size, no_totals, **kwargs
         )
 
@@ -2458,7 +2459,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             channels = partial(self.ledger.get_channels, wallet=wallet, accounts=wallet.accounts)
             channel_count = partial(self.ledger.get_channel_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(channels, channel_count, page, page_size)
+        return maybe_paginate(
+            partial(get_records_with_count, channels, channel_count),
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_export(self, channel_id=None, channel_name=None, account_id=None, wallet_id=None):
@@ -3113,7 +3117,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             streams = partial(self.ledger.get_streams, wallet=wallet, accounts=wallet.accounts)
             stream_count = partial(self.ledger.get_stream_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(streams, stream_count, page, page_size)
+        return maybe_paginate(
+            partial(get_records_with_count, streams, stream_count),
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, DATABASE_COMPONENT)
@@ -3216,7 +3223,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             supports = partial(self.ledger.get_supports, wallet=wallet, accounts=wallet.accounts)
             support_count = partial(self.ledger.get_support_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(supports, support_count, page, page_size)
+        return maybe_paginate(
+            partial(get_records_with_count, supports, support_count),
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_support_abandon(
@@ -3366,7 +3376,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 self.ledger.get_transaction_history, wallet=wallet, accounts=wallet.accounts)
             transaction_count = partial(
                 self.ledger.get_transaction_history_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(transactions, transaction_count, page, page_size)
+        return maybe_paginate(
+            partial(get_records_with_count, transactions, transaction_count),
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -3412,7 +3425,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             utxos = partial(self.ledger.get_utxos, wallet=wallet, accounts=wallet.accounts)
             utxo_count = partial(self.ledger.get_utxo_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(utxos, utxo_count, page, page_size)
+        return maybe_paginate(
+            partial(get_records_with_count, utxos, utxo_count),
+            page, page_size
+        )
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_utxo_release(self, account_id=None, wallet_id=None):
@@ -4136,3 +4152,7 @@ def get_loggly_query_string(installation_id):
     }
     data = urlencode(params)
     return base_loggly_search_url + data
+
+
+async def get_records_with_count(get_records, get_record_count, **kwargs):
+    return (await get_records(**kwargs), await get_record_count(**kwargs))
