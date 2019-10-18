@@ -79,7 +79,7 @@ class DatabaseComponent(Component):
                             'Your database is revision %i, expected %i' %
                             (old_revision, self.get_current_db_revision()))
         if old_revision < self.get_current_db_revision():
-            from lbry.extras.daemon.migrator import dbmigrator
+            from lbry.extras.daemon.migrator import dbmigrator  # pylint: disable=import-outside-toplevel
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
             await asyncio.get_event_loop().run_in_executor(
                 None, dbmigrator.migrate_db, self.conf, old_revision, self.get_current_db_revision()
