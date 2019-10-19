@@ -58,14 +58,15 @@ def file_reader(file_path: str):
             offset += bytes_to_read
 
 
-def sanitize_file_name(dirty_name: str):
+def sanitize_file_name(dirty_name: str, default_file_name: str = 'lbry_download'):
     file_name, ext = os.path.splitext(dirty_name)
     file_name = re.sub(RE_ILLEGAL_FILENAME_CHARS, '', file_name)
     ext = re.sub(RE_ILLEGAL_FILENAME_CHARS, '', ext)
 
     if not file_name:
-        log.warning('Unable to suggest a file name for %s', dirty_name)
-    elif len(ext) > 1:
+        log.warning('Unable to sanitize file name for %s, returning default value %s', dirty_name, default_file_name)
+        file_name = default_file_name
+    if len(ext) > 1:
         file_name += ext
 
     return file_name

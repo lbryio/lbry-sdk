@@ -83,9 +83,9 @@ class TestStreamDescriptor(AsyncioTestCase):
         self.assertEqual(sanitize_file_name('end_dot .'), 'end_dot')
         self.assertEqual(sanitize_file_name('.file\0\0'), '.file')
         self.assertEqual(sanitize_file_name('test n\16ame.ext'), 'test name.ext')
-        self.assertEqual(sanitize_file_name('COM8'), '')
-        self.assertEqual(sanitize_file_name('LPT2'), '')
-        self.assertEqual(sanitize_file_name(''), '')
+        self.assertEqual(sanitize_file_name('COM8.ext', default_file_name='default1'), 'default1.ext')
+        self.assertEqual(sanitize_file_name('LPT2', default_file_name='default2'), 'default2')
+        self.assertEqual(sanitize_file_name('', default_file_name=''), '')
 
 
 class TestRecoverOldStreamDescriptors(AsyncioTestCase):
