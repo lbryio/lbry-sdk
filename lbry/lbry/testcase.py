@@ -198,10 +198,19 @@ class CommandTestCase(IntegrationTestCase):
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
     def create_tempfile(self, data=None, prefix=None, suffix=None):
-        self._file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix)
-        self._file.write(data)
-        self._file.flush()
-        return self._file.name
+        file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix)
+
+        # tempfile throws FileNotFoundError when file is deleted before it's closed
+        def cleanup():
+            try:
+                file.close()
+            except FileNotFoundError:
+                pass
+
+        self.addCleanup(cleanup)
+        file.write(data)
+        file.flush()
+        return file.name
 
     async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True,
                             prefix=None, suffix=None, **kwargs):
