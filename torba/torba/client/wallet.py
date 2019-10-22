@@ -142,7 +142,7 @@ class Wallet:
 
     def save(self):
         if self.preferences.get(ENCRYPT_ON_DISK, False):
-            if self.encryption_password:
+            if self.encryption_password is not None:
                 return self.storage.write(self.to_dict(encrypt_password=self.encryption_password))
             elif not self.is_locked:
                 log.warning(
@@ -155,7 +155,7 @@ class Wallet:
     def hash(self) -> bytes:
         h = sha256()
         if self.preferences.get(ENCRYPT_ON_DISK, False):
-            assert self.encryption_password, \
+            assert self.encryption_password is not None, \
                 "Encryption is enabled but no password is available, cannot generate hash."
             h.update(self.encryption_password.encode())
         h.update(self.preferences.hash)
@@ -209,13 +209,7 @@ class Wallet:
             if account.encrypted:
                 if not account.decrypt(password):
                     return False
-        if password == "":
-            # for backwards compatiblity:
-            # some accounts were encrypted with blank password, this allows
-            # those accounts to be unlocked but then not encrypted anymore
-            self.decrypt()
-        else:
-            self.encryption_password = password
+        self.encryption_password = password
         return True
 
     def lock(self):
