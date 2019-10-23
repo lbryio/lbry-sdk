@@ -472,11 +472,11 @@ class SQLDB:
                     channel_hash=:channel_hash, signature=:signature, signature_digest=:signature_digest,
                     signature_valid=:signature_valid,
                     channel_join=CASE
-                        WHEN signature_valid=1 AND :signature_valid=1 THEN channel_join
+                        WHEN signature_valid=1 AND :signature_valid=1 AND channel_hash=:channel_hash THEN channel_join
                         WHEN :signature_valid=1 THEN {height}
                     END,
                     canonical_url=CASE
-                        WHEN signature_valid=1 AND :signature_valid=1 THEN canonical_url
+                        WHEN signature_valid=1 AND :signature_valid=1 AND channel_hash=:channel_hash THEN canonical_url
                         WHEN :signature_valid=1 THEN
                             (SELECT short_url FROM claim WHERE claim_hash=:channel_hash)||'/'||
                             claim_name||COALESCE(
