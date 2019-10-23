@@ -91,7 +91,8 @@ class TestSQLDB(unittest.TestCase):
             result[0].tx._reset()
         return result
 
-    def get_stream_update(self, stream, amount, channel=None):
+    def get_stream_update(self, tx, amount, channel=None):
+        stream = Transaction(tx[0].serialize()).outputs[0]
         result = self._make_tx(
             Output.pay_update_claim_pubkey_hash(
                 amount, stream.claim_name, stream.claim_id, stream.claim, b'abc'
@@ -405,7 +406,7 @@ class TestClaimtrie(TestSQLDB):
 
         # change channel of stream
         self.assertEqual("@foo#a/foo#ab", reader._search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
-        tx_ab2 = self.get_stream_update(ab2_claim, COIN, txo_chan_ab)
+        tx_ab2 = self.get_stream_update(tx_ab2, COIN, txo_chan_ab)
         advance(10, [tx_ab2])
         self.assertEqual("@foo#ab/foo#a", reader._search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
         # TODO: currently there is a bug where stream leaving a channel does not update that channels claims count
