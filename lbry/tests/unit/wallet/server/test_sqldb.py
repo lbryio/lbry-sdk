@@ -343,6 +343,7 @@ class TestClaimtrie(TestSQLDB):
         tx_chan_a = self.get_channel_with_claim_id_prefix('a', 1, key=b'c')
         tx_chan_ab = self.get_channel_with_claim_id_prefix('ab', 72, key=b'c')
         txo_chan_a = tx_chan_a[0].tx.outputs[0]
+        txo_chan_ab = tx_chan_ab[0].tx.outputs[0]
         advance(1, [tx_chan_a])
         advance(2, [tx_chan_ab])
         r_ab, r_a = reader._search(order_by=['creation_height'], limit=2)
@@ -379,6 +380,12 @@ class TestClaimtrie(TestSQLDB):
         self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
         self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
 
+        # pick correct claim in case of claims with conflicting claim id segments
+        # make sure that activation_height is used instead of height (issue #2448)
+        # after updating chan "a" check this again
+        self.assertEqual(reader.resolve_url("@foo#a")['claim_hash'], txo_chan_a.claim_hash)
+        self.assertEqual(reader.resolve_url("@foo#ab")['claim_hash'], txo_chan_ab.claim_hash)
+
         # change channel public key, invaliding stream claim signatures
         advance(8, [self.get_channel_update(txo_chan_a, COIN, key=b'a')])
         r_ab2, r_a2 = reader._search(order_by=['creation_height'], limit=2)
@@ -397,6 +404,10 @@ class TestClaimtrie(TestSQLDB):
         self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
         self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
         self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+
+        # check chan "a" is still resolved (issue #2448)
+        self.assertEqual(reader.resolve_url("@foo#a")['claim_hash'], txo_chan_a.claim_hash)
+        self.assertEqual(reader.resolve_url("@foo#ab")['claim_hash'], txo_chan_ab.claim_hash)
 
         # claim abandon updates claims_in_channel
         advance(10, [self.get_abandon(tx_ab2)])

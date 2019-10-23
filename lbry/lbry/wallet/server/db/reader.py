@@ -397,7 +397,7 @@ def resolve_url(raw_url):
         if set(query) == {'name'}:
             query['is_controlling'] = True
         else:
-            query['order_by'] = ['^height']
+            query['order_by'] = ['^creation_height']
         matches = _search(**query, limit=1)
         if matches:
             channel = matches[0]
