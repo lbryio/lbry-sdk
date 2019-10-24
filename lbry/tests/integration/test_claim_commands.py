@@ -537,6 +537,7 @@ class ChannelCommands(CommandTestCase):
         tx4 = await self.channel_update(claim_id, tags=[' pqr', 'PQr '], clear_tags=True)
         self.assertEqual(tx4['outputs'][0]['value']['tags'], ['pqr'])
 
+
 class StreamCommands(ClaimTestCase):
 
     async def test_create_stream_names(self):
