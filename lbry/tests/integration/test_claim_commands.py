@@ -19,6 +19,12 @@ class ClaimTestCase(CommandTestCase):
     files_directory = os.path.join(os.path.dirname(__file__), 'files')
     video_file_url = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4'
     video_file_name = os.path.join(files_directory, 'ForBiggerEscapes.mp4')
+    image_data = unhexlify(
+        b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
+        b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
+        b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
+        b'9454e44ae426082'
+    )
 
     def setUp(self):
         if not os.path.exists(self.video_file_name):
@@ -29,43 +35,15 @@ class ClaimTestCase(CommandTestCase):
                     open(self.video_file_name, 'wb') as video_file:
                 video_file.write(response.read())
 
-    async def _image_stream_operation(self, func, *args, **kwargs):
-        with tempfile.NamedTemporaryFile(suffix='.png') as file:
-            file.write(unhexlify(
-                b'89504e470d0a1a0a0000000d49484452000000050000000708020000004fc'
-                b'510b9000000097048597300000b1300000b1301009a9c1800000015494441'
-                b'5408d763fcffff3f031260624005d4e603004c45030b5286e9ea000000004'
-                b'9454e44ae426082'
-            ))
-            file.flush()
-            return await self.out(func(*args, file_path=file.name, **kwargs))
+    async def image_stream_create(self, name='blank-image', bid='1.0', confirm=True, **kwargs):
+        return await self.stream_create(name, bid, confirm=confirm, data=self.image_data, suffix='.png', **kwargs)
 
-    async def _confirm_tx(self, tx):
-        await self.on_transaction_dict(tx)
-        await self.generate(1)
-        await self.on_transaction_dict(tx)
+    async def image_stream_update(self, claim_id, confirm=True, **kwargs):
+        return await self.stream_update(claim_id, confirm=confirm, data=self.image_data, suffix='.png', **kwargs)
 
-    async def image_stream_create(self, name='blank-image', bid='1.0', confirm=True):
-        tx = await self._image_stream_operation(self.daemon.jsonrpc_stream_create, name, bid)
-        if confirm:
-            await self._confirm_tx(tx)
-        return tx
+    async def video_stream_create(self, name='chrome', bid='1.0', confirm=True, **kwargs):
+        return await self.stream_create(name, bid, confirm=confirm, file_path=self.video_file_name, **kwargs)
 
-    async def update_stream_to_image_type(self, claim_id, confirm=True):
-        tx = await self._image_stream_operation(self.daemon.jsonrpc_stream_update, claim_id)
-        if confirm:
-            await self._confirm_tx(tx)
-        return tx
-
-    async def video_stream_create(self, name='chrome', bid='1.0', confirm=True):
-        tx = await self.out(
-            self.daemon.jsonrpc_stream_create(
-                name, bid, file_path=self.video_file_name
-            )
-        )
-        if confirm:
-            await self._confirm_tx(tx)
-        return tx
 
 class ClaimSearchCommand(ClaimTestCase):
 
@@ -1007,7 +985,7 @@ class StreamCommands(ClaimTestCase):
             }
         )
 
-        image_txo = (await self.update_stream_to_image_type(claim_id))['outputs'][0]
+        image_txo = (await self.image_stream_update(claim_id))['outputs'][0]
         self.assertEqual(image_txo['value']['stream_type'], 'image')
         self.assertEqual(image_txo['value']['source']['media_type'], 'image/png')
         self.assertEqual(
