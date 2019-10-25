@@ -211,8 +211,8 @@ class CommandTestCase(IntegrationTestCase):
             await self.ledger.wait(tx)
         return self.sout(tx)
 
-    def create_upload_file(self, data, suffix=""):
-        file_path = tempfile.mktemp(prefix="tmp", suffix=suffix or "", dir=self.daemon.conf.upload_dir)
+    def create_upload_file(self, data, prefix=None, suffix=None):
+        file_path = tempfile.mktemp(prefix=prefix or "tmp", suffix=suffix or "", dir=self.daemon.conf.upload_dir)
         with open(file_path, 'w+b') as file:
             file.write(data)
             file.flush()
@@ -220,16 +220,17 @@ class CommandTestCase(IntegrationTestCase):
 
     async def stream_create(
             self, name='hovercraft', bid='1.0', file_path=None,
-            data=b'hi!', confirm=True, suffix=None, **kwargs):
+            data=b'hi!', confirm=True, prefix=None, suffix=None, **kwargs):
         if file_path is None:
-            file_path = self.create_upload_file(data=data, suffix=suffix)
+            file_path = self.create_upload_file(data=data, prefix=prefix, suffix=suffix)
         return await self.confirm_and_render(
             self.daemon.jsonrpc_stream_create(name, bid, file_path=file_path, **kwargs), confirm
         )
 
-    async def stream_update(self, claim_id, data=None, suffix=None, confirm=True, **kwargs):
+    async def stream_update(
+            self, claim_id, data=None, prefix=None, suffix=None, confirm=True, **kwargs):
         if data is not None:
-            file_path = self.create_upload_file(data=data, suffix=suffix)
+            file_path = self.create_upload_file(data=data, prefix=prefix, suffix=suffix)
             return await self.confirm_and_render(
                 self.daemon.jsonrpc_stream_update(claim_id, file_path=file_path, **kwargs), confirm
             )
