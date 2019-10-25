@@ -1,3 +1,4 @@
+import os
 import json
 import shutil
 import tempfile
@@ -12,6 +13,7 @@ from lbry.conf import Config
 from lbry.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.wallet import LbryWalletManager
 from lbry.wallet.account import Account
+from lbry.wallet.transaction import Transaction
 from lbry.extras.daemon.Components import Component, WalletComponent
 from lbry.extras.daemon.Components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
@@ -119,10 +121,14 @@ class CommandTestCase(IntegrationTestCase):
             await wallet_node.start(self.conductor.spv_node, seed=seed)
             self.extra_wallet_nodes.append(wallet_node)
 
+        upload_dir = os.path.join(wallet_node.data_path, 'uploads')
+        os.mkdir(upload_dir)
+
         conf = Config()
         conf.data_dir = wallet_node.data_path
         conf.wallet_dir = wallet_node.data_path
         conf.download_dir = wallet_node.data_path
+        conf.upload_dir = upload_dir  # not a real conf setting
         conf.share_usage_data = False
         conf.use_upnp = False
         conf.reflect_streams = True
@@ -197,103 +203,73 @@ class CommandTestCase(IntegrationTestCase):
         """ Synchronous version of `out` method. """
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
-    def create_tempfile(self, data=None, prefix=None, suffix=None):
-        file = tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix)
+    async def confirm_and_render(self, awaitable, confirm) -> Transaction:
+        tx = await awaitable
+        if confirm:
+            await self.ledger.wait(tx)
+            await self.generate(1)
+            await self.ledger.wait(tx)
+        return self.sout(tx)
 
-        # tempfile throws FileNotFoundError when file is deleted before it's closed
-        def cleanup():
-            try:
-                file.close()
-            except FileNotFoundError:
-                pass
+    def create_upload_file(self, data, suffix=""):
+        file_path = tempfile.mktemp(prefix="tmp", suffix=suffix or "", dir=self.daemon.conf.upload_dir)
+        with open(file_path, 'w+b') as file:
+            file.write(data)
+            file.flush()
+            return file.name
 
-        self.addCleanup(cleanup)
-        file.write(data)
-        file.flush()
-        return file.name
-
-    async def stream_create(self, name='hovercraft', bid='1.0', data=b'hi!', confirm=True,
-                            prefix=None, suffix=None, **kwargs):
-        file_path = self.create_tempfile(data=data, prefix=prefix, suffix=suffix)
-        claim = await self.out(
-            self.daemon.jsonrpc_stream_create(name, bid, file_path=file_path, **kwargs)
+    async def stream_create(
+            self, name='hovercraft', bid='1.0', file_path=None,
+            data=b'hi!', confirm=True, suffix=None, **kwargs):
+        if file_path is None:
+            file_path = self.create_upload_file(data=data, suffix=suffix)
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_stream_create(name, bid, file_path=file_path, **kwargs), confirm
         )
-        self.assertEqual(claim['outputs'][0]['name'], name)
-        if confirm:
-            await self.on_transaction_dict(claim)
-            await self.generate(1)
-            await self.on_transaction_dict(claim)
-        return claim
 
-    async def stream_update(self, claim_id, data=None, confirm=True, **kwargs):
-        if data:
-            file_path = self.create_tempfile(data)
-            claim = await self.out(
-                self.daemon.jsonrpc_stream_update(claim_id, file_path=file_path, **kwargs)
+    async def stream_update(self, claim_id, data=None, suffix=None, confirm=True, **kwargs):
+        if data is not None:
+            file_path = self.create_upload_file(data=data, suffix=suffix)
+            return await self.confirm_and_render(
+                self.daemon.jsonrpc_stream_update(claim_id, file_path=file_path, **kwargs), confirm
             )
-        else:
-            claim = await self.out(self.daemon.jsonrpc_stream_update(claim_id, **kwargs))
-        self.assertIsNotNone(claim['outputs'][0]['name'])
-        if confirm:
-            await self.on_transaction_dict(claim)
-            await self.generate(1)
-            await self.on_transaction_dict(claim)
-        return claim
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_stream_update(claim_id, **kwargs), confirm
+        )
 
     async def stream_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
-        tx = await self.out(self.daemon.jsonrpc_stream_abandon(*args, **kwargs))
-        if confirm:
-            await self.on_transaction_dict(tx)
-            await self.generate(1)
-            await self.on_transaction_dict(tx)
-        return tx
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_stream_abandon(*args, **kwargs), confirm
+        )
 
     async def publish(self, name, *args, confirm=True, **kwargs):
-        claim = await self.out(self.daemon.jsonrpc_publish(name, *args, **kwargs))
-        self.assertEqual(claim['outputs'][0]['name'], name)
-        if confirm:
-            await self.on_transaction_dict(claim)
-            await self.generate(1)
-            await self.on_transaction_dict(claim)
-        return claim
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_publish(name, *args, **kwargs), confirm
+        )
 
     async def channel_create(self, name='@arena', bid='1.0', confirm=True, **kwargs):
-        channel = await self.out(self.daemon.jsonrpc_channel_create(name, bid, **kwargs))
-        self.assertEqual(channel['outputs'][0]['name'], name)
-        if confirm:
-            await self.on_transaction_dict(channel)
-            await self.generate(1)
-            await self.on_transaction_dict(channel)
-        return channel
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_channel_create(name, bid, **kwargs), confirm
+        )
 
     async def channel_update(self, claim_id, confirm=True, **kwargs):
-        channel = await self.out(self.daemon.jsonrpc_channel_update(claim_id, **kwargs))
-        self.assertTrue(channel['outputs'][0]['name'].startswith('@'))
-        if confirm:
-            await self.on_transaction_dict(channel)
-            await self.generate(1)
-            await self.on_transaction_dict(channel)
-        return channel
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_channel_update(claim_id, **kwargs), confirm
+        )
 
     async def channel_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
-        tx = await self.out(self.daemon.jsonrpc_channel_abandon(*args, **kwargs))
-        if confirm:
-            await self.on_transaction_dict(tx)
-            await self.generate(1)
-            await self.on_transaction_dict(tx)
-        return tx
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_channel_abandon(*args, **kwargs), confirm
+        )
 
     async def support_create(self, claim_id, bid='1.0', confirm=True, **kwargs):
-        tx = await self.out(self.daemon.jsonrpc_support_create(claim_id, bid, **kwargs))
-        if confirm:
-            await self.on_transaction_dict(tx)
-            await self.generate(1)
-            await self.on_transaction_dict(tx)
-        return tx
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_support_create(claim_id, bid, **kwargs), confirm
+        )
 
     async def resolve(self, uri):
         return await self.out(self.daemon.jsonrpc_resolve(uri))
