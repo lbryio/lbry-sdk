@@ -35,15 +35,6 @@ class ClaimTestCase(CommandTestCase):
                     open(self.video_file_name, 'wb') as video_file:
                 video_file.write(response.read())
 
-    async def image_stream_create(self, name='blank-image', bid='1.0', confirm=True, **kwargs):
-        return await self.stream_create(name, bid, confirm=confirm, data=self.image_data, suffix='.png', **kwargs)
-
-    async def image_stream_update(self, claim_id, confirm=True, **kwargs):
-        return await self.stream_update(claim_id, confirm=confirm, data=self.image_data, suffix='.png', **kwargs)
-
-    async def video_stream_create(self, name='chrome', bid='1.0', confirm=True, **kwargs):
-        return await self.stream_create(name, bid, confirm=confirm, file_path=self.video_file_name, **kwargs)
-
 
 class ClaimSearchCommand(ClaimTestCase):
 
@@ -302,8 +293,8 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.confirm_tx(tx.id)
 
         octet = await self.stream_create()
-        video = await self.video_stream_create()
-        image = await self.image_stream_create()
+        video = await self.stream_create('chrome', file_path=self.video_file_name)
+        image = await self.stream_create('blank-image', data=self.image_data, suffix='.png')
         channel = await self.channel_create()
         unknown = self.sout(tx)
 
@@ -909,7 +900,7 @@ class StreamCommands(ClaimTestCase):
             await self.stream_update(claim_id, fee_address=fee_address, replace=True)
 
     async def test_automatic_type_and_metadata_detection_for_image(self):
-        txo = (await self.image_stream_create())['outputs'][0]
+        txo = (await self.stream_create('blank-image', data=self.image_data, suffix='.png'))['outputs'][0]
         self.assertEqual(
             txo['value'], {
                 'source': {
@@ -928,7 +919,7 @@ class StreamCommands(ClaimTestCase):
         )
 
     async def test_automatic_type_and_metadata_detection_for_video(self):
-        txo = (await self.video_stream_create())['outputs'][0]
+        txo = (await self.stream_create('chrome', file_path=self.video_file_name))['outputs'][0]
         self.assertEqual(
             txo['value'], {
                 'source': {
@@ -973,8 +964,8 @@ class StreamCommands(ClaimTestCase):
         )
 
     async def test_update_file_type(self):
-        video_txo = (await self.video_stream_create())['outputs'][0]
-        claim_id = video_txo['claim_id']
+        video_txo = (await self.stream_create('chrome', file_path=self.video_file_name))['outputs'][0]
+        self.assertSetEqual(set(video_txo['value']), {'source', 'stream_type', 'video'})
         self.assertEqual(video_txo['value']['stream_type'], 'video')
         self.assertEqual(video_txo['value']['source']['media_type'], 'video/mp4')
         self.assertEqual(
@@ -984,17 +975,18 @@ class StreamCommands(ClaimTestCase):
                 'width': 1280
             }
         )
+        claim_id = video_txo['claim_id']
 
-        image_txo = (await self.image_stream_update(claim_id))['outputs'][0]
+        binary_txo = (await self.stream_update(claim_id, data=b'hi!'))['outputs'][0]
+        self.assertEqual(binary_txo['value']['stream_type'], 'binary')
+        self.assertEqual(binary_txo['value']['source']['media_type'], 'application/octet-stream')
+        self.assertSetEqual(set(binary_txo['value']), {'source', 'stream_type'})
+
+        image_txo = (await self.stream_update(claim_id, data=self.image_data, suffix='.png'))['outputs'][0]
+        self.assertSetEqual(set(image_txo['value']), {'source', 'stream_type', 'image'})
         self.assertEqual(image_txo['value']['stream_type'], 'image')
         self.assertEqual(image_txo['value']['source']['media_type'], 'image/png')
-        self.assertEqual(
-            image_txo['value']['image'], {
-                'height': 7,
-                'width': 5
-            }
-        )
-        self.assertFalse('video' in image_txo['value'])
+        self.assertEqual(image_txo['value']['image'], {'height': 7, 'width': 5})
 
     async def test_replace_mode_preserves_source_and_type(self):
         expected = {
