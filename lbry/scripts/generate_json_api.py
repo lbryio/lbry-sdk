@@ -325,11 +325,10 @@ class Examples(CommandTestCase):
 
         # files
 
-        file_list_result = await r(
+        file_list_result = (await r(
             'List local files',
             'file', 'list'
-        )
-        file_list_result = file_list_result.get('items')
+        ))['items']
         file_uri = f"{file_list_result[0]['claim_name']}#{file_list_result[0]['claim_id']}"
         await r(
             'Resolve a claim',
