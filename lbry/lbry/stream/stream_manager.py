@@ -165,7 +165,7 @@ class StreamManager:
             await asyncio.gather(*add_stream_tasks, loop=self.loop)
         log.info("Started stream manager with %i files", len(self.streams))
         if not self.node:
-            log.warning("no DHT node given, resuming downloads trusting that we can contact reflector")
+            log.info("no DHT node given, resuming downloads trusting that we can contact reflector")
         if to_resume_saving:
             self.resume_saving_task = self.loop.create_task(self.resume(to_resume_saving))
 

@@ -94,6 +94,7 @@ jobs:
       language: shell
       env: OS=mac
       before_install:
+        - brew uninstall mercurial
         - brew upgrade python || true
         - pip3 install --user --upgrade pip virtualenv
         - /Users/travis/Library/Python/3.7/bin/virtualenv --clear $HOME/venv

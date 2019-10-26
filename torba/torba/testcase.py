@@ -61,6 +61,8 @@ class AsyncioTestCase(unittest.TestCase):
     # Implementation inspired by discussion:
     #  https://bugs.python.org/issue32972
 
+    LOOP_SLOW_CALLBACK_DURATION = 0.2
+
     maxDiff = None
 
     async def asyncSetUp(self):  # pylint: disable=C0103
@@ -100,6 +102,7 @@ class AsyncioTestCase(unittest.TestCase):
         self.loop = asyncio.new_event_loop()  # pylint: disable=W0201
         asyncio.set_event_loop(self.loop)
         self.loop.set_debug(True)
+        self.loop.slow_callback_duration = self.LOOP_SLOW_CALLBACK_DURATION
 
         try:
             self._outcome = outcome

@@ -67,7 +67,7 @@ class DatabaseComponent(Component):
         log.info("Loading databases")
 
         if not os.path.exists(self.revision_filename):
-            log.warning("db_revision file not found. Creating it")
+            log.info("db_revision file not found. Creating it")
             self._write_db_revision_file(self.get_current_db_revision())
 
         # check the db migration and run any needed migrations
