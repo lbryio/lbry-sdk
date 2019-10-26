@@ -17,7 +17,8 @@ class TaskGroup:
 
     def _remove(self, task):
         self._tasks.remove(task)
-        len(self._tasks) < 1 and self.done.set()
+        if len(self._tasks) < 1:
+            self.done.set()
 
     def cancel(self):
         for task in self._tasks:
