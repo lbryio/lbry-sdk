@@ -23,8 +23,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # Do we have it locally?
         channels = await self.out(self.daemon.jsonrpc_channel_list())
-        self.assertEqual(len(channels), 1)
-        self.assertEqual(channels[0]['name'], '@spam')
+        self.assertItemCount(channels, 1)
+        self.assertEqual(channels['items'][0]['name'], '@spam')
 
         # As the new channel claim travels through the intertubes and makes its
         # way into the mempool and then a block and then into the claimtrie,

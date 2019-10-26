@@ -276,8 +276,11 @@ class CommandTestCase(IntegrationTestCase):
         return await self.out(self.daemon.jsonrpc_resolve(uri))
 
     async def claim_search(self, **kwargs):
-        return await self.out(self.daemon.jsonrpc_claim_search(**kwargs))
+        return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
 
     @staticmethod
     def get_claim_id(tx):
         return tx['outputs'][0]['claim_id']
+
+    def assertItemCount(self, result, count):
+        self.assertEqual(result['total_items'], count)
