@@ -364,7 +364,7 @@ class Examples(CommandTestCase):
 
         await r(
             'Delete a blob',
-            'blob', 'delete', f"{bloblist[0]}"
+            'blob', 'delete', f"{bloblist['items'][0]}"
         )
 
         # abandon all the things
