@@ -55,7 +55,7 @@ class ManagedStream:
         'sd_hash',
         'download_directory',
         '_file_name',
-        '_added_at',
+        '_added_on',
         '_status',
         'stream_claim_info',
         'download_id',
@@ -82,7 +82,7 @@ class ManagedStream:
                  descriptor: typing.Optional[StreamDescriptor] = None,
                  content_fee: typing.Optional['Transaction'] = None,
                  analytics_manager: typing.Optional['AnalyticsManager'] = None,
-                 added_at: typing.Optional[int] = None):
+                 added_on: typing.Optional[int] = None):
         self.loop = loop
         self.config = config
         self.blob_manager = blob_manager
@@ -94,7 +94,7 @@ class ManagedStream:
         self.download_id = download_id or binascii.hexlify(generate_id()).decode()
         self.rowid = rowid
         self.content_fee = content_fee
-        self._added_at = added_at
+        self._added_on = added_on
         self.downloader = StreamDownloader(self.loop, self.config, self.blob_manager, sd_hash, descriptor)
         self.analytics_manager = analytics_manager
 
@@ -122,8 +122,8 @@ class ManagedStream:
         return self._file_name or (self.descriptor.suggested_file_name if self.descriptor else None)
 
     @property
-    def added_at(self) -> typing.Optional[int]:
-        return self._added_at
+    def added_on(self) -> typing.Optional[int]:
+        return self._added_on
 
     @property
     def status(self) -> str:
@@ -261,9 +261,9 @@ class ManagedStream:
                 file_name, download_dir = self._file_name, self.download_directory
             else:
                 file_name, download_dir = None, None
-            self._added_at = int(time.time())
+            self._added_on = int(time.time())
             self.rowid = await self.blob_manager.storage.save_downloaded_file(
-                self.stream_hash, file_name, download_dir, 0.0, added_at=self._added_at
+                self.stream_hash, file_name, download_dir, 0.0, added_on=self._added_on
             )
         if self.status != self.STATUS_RUNNING:
             await self.update_status(self.STATUS_RUNNING)

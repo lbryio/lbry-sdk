@@ -1769,7 +1769,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
-                      [--rowid=<rowid>] [--added_at=<added_at>] [--claim_id=<claim_id>]
+                      [--rowid=<rowid>] [--added_on=<added_on>] [--claim_id=<claim_id>]
                       [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
@@ -1783,7 +1783,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      downloads folder
             --stream_hash=<stream_hash>            : (str) get file with matching stream hash
             --rowid=<rowid>                        : (int) get file with matching row id
-            --added_at=<added_at>                  : (int) get file with matching time of insertion
+            --added_on=<added_on>                  : (int) get file with matching time of insertion
             --claim_id=<claim_id>                  : (str) get file with matching claim id
             --outpoint=<outpoint>                  : (str) get file with matching claim outpoint
             --txid=<txid>                          : (str) get file with matching claim txid
