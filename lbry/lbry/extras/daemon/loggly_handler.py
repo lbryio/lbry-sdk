@@ -69,7 +69,11 @@ class HTTPSLogglyHandler(logging.Handler):
 
     def close(self):
         super().close()
-        asyncio.create_task(self._session.close())
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(self._session.close())
+        except RuntimeError:
+            pass
 
 
 def get_loggly_handler():
