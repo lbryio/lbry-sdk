@@ -9,12 +9,10 @@ from lbry.blob_exchange.downloader import BlobDownloader
 
 class FileCommands(CommandTestCase):
 
-    VERBOSITY = logging.WARN
-
     async def create_streams_in_range(self, *args, **kwargs):
         self.stream_claim_ids = []
         for i in range(*args, **kwargs):
-            t = await self.stream_create(f'Stream_{i}', '0.00001', b'This is a stream')
+            t = await self.stream_create(f'Stream_{i}', '0.00001')
             self.stream_claim_ids.append(t['outputs'][0]['claim_id'])
 
     async def test_file_management(self):
@@ -55,7 +53,7 @@ class FileCommands(CommandTestCase):
         self.assertTrue(
             await self.daemon.jsonrpc_file_delete(claim_name=claim_name, delete_from_download_dir=True)
         )
-        self.assertEqual(len(self.daemon.jsonrpc_file_list()), 0)
+        self.assertItemCount(self.daemon.jsonrpc_file_list(), 0)
         self.assertFalse(os.path.isfile(full_path))
 
     async def test_publish_with_illegal_chars(self):
@@ -68,7 +66,7 @@ class FileCommands(CommandTestCase):
         prefix, suffix = 'derp?', '.ext.'
         san_prefix, san_suffix = 'derp', '.ext'
         tx = await self.stream_create(claim_name, '0.01', prefix=prefix, suffix=suffix)
-        stream = self.daemon.jsonrpc_file_list()[0]
+        stream = self.daemon.jsonrpc_file_list()['items'][0]
         claim_id = self.get_claim_id(tx)
 
         # Assert that file list and source contains the local unsanitized name, but suggested name is sanitized
@@ -88,7 +86,7 @@ class FileCommands(CommandTestCase):
         # Re-download deleted file and assert that the file name is sanitized
         full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name, save_file=True)).full_path
         stream_file_name = os.path.basename(full_path)
-        stream = self.daemon.jsonrpc_file_list()[0]
+        stream = self.daemon.jsonrpc_file_list()['items'][0]
         file_list_name = stream.file_name
         suggested_file_name = stream.descriptor.suggested_file_name
 
@@ -111,7 +109,7 @@ class FileCommands(CommandTestCase):
         san_prefix, san_suffix = 'derpyderp', '.ext'
         tx = await self.stream_update(claim_id, data=b'amazing content', prefix=prefix, suffix=suffix)
         full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name, save_file=True)).full_path
-        updated_stream = self.daemon.jsonrpc_file_list()[0]
+        updated_stream = self.daemon.jsonrpc_file_list()['items'][0]
 
         stream_file_name = os.path.basename(full_path)
         source_file_name = tx['outputs'][0]['value']['source']['name']
