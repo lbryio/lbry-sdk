@@ -137,6 +137,9 @@ class BaseLedger(metaclass=LedgerRegistry):
             )
         )
 
+        self._on_ready_controller = StreamController()
+        self.on_ready = self._on_ready_controller.stream
+
         self._tx_cache = pylru.lrucache(100000)
         self._update_tasks = TaskGroup()
         self._utxo_reservation_lock = asyncio.Lock()
@@ -291,6 +294,7 @@ class BaseLedger(metaclass=LedgerRegistry):
             await self.update_headers()
         await self.subscribe_accounts()
         await self._update_tasks.done.wait()
+        self._on_ready_controller.add(True)
 
     async def stop(self):
         self._update_tasks.cancel()

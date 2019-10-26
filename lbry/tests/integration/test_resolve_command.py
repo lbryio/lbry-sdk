@@ -90,6 +90,7 @@ class ResolveCommand(BaseResolveTestCase):
         await self.conductor.spv_node.stop()
         resolving_future = asyncio.ensure_future(self.resolve('foo'))
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.ledger.on_ready.first
         self.assertIsNotNone((await resolving_future)['foo']['claim_id'])
 
     async def test_winning_by_effective_amount(self):
