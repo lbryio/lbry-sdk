@@ -276,6 +276,7 @@ def run_daemon(args: argparse.Namespace, conf: Config):
         pass
     finally:
         loop.run_until_complete(daemon.stop())
+        logging.shutdown()
 
     if hasattr(loop, 'shutdown_asyncgens'):
         loop.run_until_complete(loop.shutdown_asyncgens())

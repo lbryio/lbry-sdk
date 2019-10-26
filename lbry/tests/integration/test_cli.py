@@ -11,6 +11,7 @@ from lbry.extras.daemon.Components import (
 )
 from lbry.extras.daemon.Daemon import Daemon
 
+
 class CLIIntegrationTest(AsyncioTestCase):
 
     async def asyncSetUp(self):
@@ -26,9 +27,7 @@ class CLIIntegrationTest(AsyncioTestCase):
         Daemon.component_attributes = {}
         self.daemon = Daemon(conf)
         await self.daemon.start()
-
-    async def asyncTearDown(self):
-        await self.daemon.stop(shutdown_runner=False)
+        self.addCleanup(self.daemon.stop)
 
     def test_cli_status_command_with_auth(self):
         actual_output = StringIO()
