@@ -1,4 +1,3 @@
-import math
 import os
 import asyncio
 import logging
@@ -150,7 +149,7 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
     offset = page_size * (page - 1)
     subitems = []
     if offset <= total_items:
-        subitems = items[offset:page_size]
+        subitems = items[offset:offset+page_size]
     return {
         "items": subitems,
         "total_pages": int((total_items + (page_size - 1)) / page_size),
@@ -1775,7 +1774,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
                       [--blobs_remaining=<blobs_remaining>] [--sort=<sort_by>]
                       [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
-                      [--page=<page> --page_size=<page_size>]
+                      [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1797,28 +1796,13 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>                          : (int) page to return during paginating
             --page_size=<page_size>                : (int) number of items on page during pagination
 
-        Returns: {Paginated[Output]}
+        Returns: {Paginated[File]}
         """
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
-
-        items = self.stream_manager.get_filtered_streams(
-            sort, reverse, comparison, **kwargs
+        return paginate_list(
+            self.stream_manager.get_filtered_streams(sort, reverse, comparison, **kwargs), page, page_size
         )
-
-        total_items = len(items)
-        page = page or 1
-        page_size = page_size if page_size else len(items) or 1
-        offset = page_size * (page-1)
-        items = items[offset:offset+page_size]
-
-        return {
-            'total_items': total_items,
-            'total_pages': math.ceil(total_items / page_size),
-            'page': page,
-            'page_size': page_size,
-            'items': items
-        }
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
