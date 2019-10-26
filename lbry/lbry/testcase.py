@@ -108,7 +108,7 @@ class CommandTestCase(IntegrationTestCase):
             await wallet_node.stop(cleanup=True)
         for daemon in self.daemons:
             daemon.component_manager.get_component('wallet')._running = False
-            await daemon.stop(shutdown_runner=False)
+            await daemon.stop()
 
     async def add_daemon(self, wallet_node=None, seed=None):
         if wallet_node is None:
