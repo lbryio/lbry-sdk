@@ -13,55 +13,55 @@ def extract(d, keys):
 class AccountManagement(CommandTestCase):
     async def test_account_list_set_create_remove_add(self):
         # check initial account
-        response = await self.daemon.jsonrpc_account_list()
-        self.assertEqual(len(response['lbc_regtest']), 1)
+        accounts = await self.daemon.jsonrpc_account_list()
+        self.assertItemCount(accounts, 1)
 
         # change account name and gap
-        account_id = response['lbc_regtest'][0]['id']
+        account_id = accounts['items'][0]['id']
         self.daemon.jsonrpc_account_set(
             account_id=account_id, new_name='test account',
             receiving_gap=95, receiving_max_uses=96,
             change_gap=97, change_max_uses=98
         )
-        response = (await self.daemon.jsonrpc_account_list())['lbc_regtest'][0]
-        self.assertEqual(response['name'], 'test account')
+        accounts = (await self.daemon.jsonrpc_account_list())['items'][0]
+        self.assertEqual(accounts['name'], 'test account')
         self.assertEqual(
-            response['address_generator']['receiving'],
+            accounts['address_generator']['receiving'],
             {'gap': 95, 'maximum_uses_per_address': 96}
         )
         self.assertEqual(
-            response['address_generator']['change'],
+            accounts['address_generator']['change'],
             {'gap': 97, 'maximum_uses_per_address': 98}
         )
 
         # create another account
         await self.daemon.jsonrpc_account_create('second account')
-        response = await self.daemon.jsonrpc_account_list()
-        self.assertEqual(len(response['lbc_regtest']), 2)
-        self.assertEqual(response['lbc_regtest'][1]['name'], 'second account')
-        account_id2 = response['lbc_regtest'][1]['id']
+        accounts = await self.daemon.jsonrpc_account_list()
+        self.assertItemCount(accounts, 2)
+        self.assertEqual(accounts['items'][1]['name'], 'second account')
+        account_id2 = accounts['items'][1]['id']
 
         # make new account the default
         self.daemon.jsonrpc_account_set(account_id=account_id2, default=True)
-        response = await self.daemon.jsonrpc_account_list(show_seed=True)
-        self.assertEqual(response['lbc_regtest'][0]['name'], 'second account')
+        accounts = await self.daemon.jsonrpc_account_list(show_seed=True)
+        self.assertEqual(accounts['items'][0]['name'], 'second account')
 
-        account_seed = response['lbc_regtest'][1]['seed']
+        account_seed = accounts['items'][1]['seed']
 
         # remove account
-        self.daemon.jsonrpc_account_remove(response['lbc_regtest'][1]['id'])
-        response = await self.daemon.jsonrpc_account_list()
-        self.assertEqual(len(response['lbc_regtest']), 1)
+        self.daemon.jsonrpc_account_remove(accounts['items'][1]['id'])
+        accounts = await self.daemon.jsonrpc_account_list()
+        self.assertItemCount(accounts, 1)
 
         # add account
         await self.daemon.jsonrpc_account_add('recreated account', seed=account_seed)
-        response = await self.daemon.jsonrpc_account_list()
-        self.assertEqual(len(response['lbc_regtest']), 2)
-        self.assertEqual(response['lbc_regtest'][1]['name'], 'recreated account')
+        accounts = await self.daemon.jsonrpc_account_list()
+        self.assertItemCount(accounts, 2)
+        self.assertEqual(accounts['items'][1]['name'], 'recreated account')
 
         # list specific account
-        response = await self.daemon.jsonrpc_account_list(account_id, include_claims=True)
-        self.assertEqual(response['name'], 'recreated account')
+        accounts = await self.daemon.jsonrpc_account_list(account_id, include_claims=True)
+        self.assertEqual(accounts['items'][0]['name'], 'recreated account')
 
     async def test_wallet_migration(self):
         # null certificates should get deleted
@@ -75,10 +75,10 @@ class AccountManagement(CommandTestCase):
         self.assertEqual(list(self.account.channel_keys.keys()), [keys[2]])
 
     async def assertFindsClaims(self, claim_names, awaitable):
-        self.assertEqual(claim_names, [txo.claim_name for txo in await awaitable])
+        self.assertEqual(claim_names, [txo.claim_name for txo in (await awaitable)['items']])
 
     async def assertOutputAmount(self, amounts, awaitable):
-        self.assertEqual(amounts, [dewies_to_lbc(txo.amount) for txo in await awaitable])
+        self.assertEqual(amounts, [dewies_to_lbc(txo.amount) for txo in (await awaitable)['items']])
 
     async def test_commands_across_accounts(self):
         channel_list = self.daemon.jsonrpc_channel_list
@@ -131,12 +131,13 @@ class AccountManagement(CommandTestCase):
         support2 = await self.support_create(
             self.get_claim_id(stream2), '0.01', account_id=second_account.id, funding_account_ids=[default_account.id]
         )
-        self.assertEqual([support2['txid'], support1['txid']], [txo.tx_ref.id for txo in await support_list()])
-        self.assertEqual([support1['txid']], [txo.tx_ref.id for txo in await support_list(account_id=default_account.id)])
-        self.assertEqual([support2['txid']], [txo.tx_ref.id for txo in await support_list(account_id=second_account.id)])
+        self.assertEqual([support2['txid'], support1['txid']], [txo.tx_ref.id for txo in (await support_list())['items']])
+        self.assertEqual([support1['txid']], [txo.tx_ref.id for txo in (await support_list(account_id=default_account.id))['items']])
+        self.assertEqual([support2['txid']], [txo.tx_ref.id for txo in (await support_list(account_id=second_account.id))['items']])
 
         history = await self.daemon.jsonrpc_transaction_list()
-        self.assertEqual(len(history), 8)
+        self.assertItemCount(history, 8)
+        history = history['items']
         self.assertEqual(extract(history[0]['support_info'][0], ['claim_name', 'is_tip', 'amount', 'balance_delta']), {
             'claim_name': 'stream-in-account2',
             'is_tip': False,

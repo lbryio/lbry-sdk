@@ -49,12 +49,12 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
             "two": "2", "conflict": "2", "another": "A"
         })
 
-        self.assertEqual(len((await daemon.jsonrpc_account_list())['lbc_regtest']), 1)
+        self.assertItemCount(await daemon.jsonrpc_account_list(), 1)
 
         data = await daemon2.jsonrpc_sync_apply('password')
         await daemon.jsonrpc_sync_apply('password', data=data['data'], blocking=True)
 
-        self.assertEqual(len((await daemon.jsonrpc_account_list())['lbc_regtest']), 2)
+        self.assertItemCount(await daemon.jsonrpc_account_list(), 2)
         self.assertDictEqual(
             # "two" key added and "conflict" value changed to "2"
             daemon.jsonrpc_preference_get(),
@@ -66,9 +66,9 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         await self.confirm_tx(channel.id, self.daemon2.ledger)
 
         # both daemons will have the channel but only one has the cert so far
-        self.assertEqual(len(await daemon.jsonrpc_channel_list()), 1)
+        self.assertItemCount(await daemon.jsonrpc_channel_list(), 1)
         self.assertEqual(len(daemon.wallet_manager.default_wallet.accounts[1].channel_keys), 0)
-        self.assertEqual(len(await daemon2.jsonrpc_channel_list()), 1)
+        self.assertItemCount(await daemon2.jsonrpc_channel_list(), 1)
         self.assertEqual(len(daemon2.wallet_manager.default_account.channel_keys), 1)
 
         data = await daemon2.jsonrpc_sync_apply('password')

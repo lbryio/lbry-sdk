@@ -109,14 +109,12 @@ class Wallet:
         ] if account_ids else self.accounts
 
     async def get_detailed_accounts(self, **kwargs):
-        ledgers = {}
+        accounts = []
         for i, account in enumerate(self.accounts):
             details = await account.get_details(**kwargs)
             details['is_default'] = i == 0
-            ledger_id = account.ledger.get_id()
-            ledgers.setdefault(ledger_id, [])
-            ledgers[ledger_id].append(details)
-        return ledgers
+            accounts.append(details)
+        return accounts
 
     @classmethod
     def from_storage(cls, storage: 'WalletStorage', manager: 'basemanager.BaseWalletManager') -> 'Wallet':

@@ -334,6 +334,7 @@ class BaseAccount:
         details = {
             'id': self.id,
             'name': self.name,
+            'ledger': self.ledger.get_id(),
             'coins': round(satoshis/COIN, 2),
             'satoshis': satoshis,
             'encrypted': self.encrypted,

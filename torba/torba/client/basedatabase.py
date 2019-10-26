@@ -612,7 +612,7 @@ class BaseDatabase(SQLiteMixin):
             )
         return addresses
 
-    async def get_address_count(self, **constraints):
+    async def get_address_count(self, cols=None, **constraints):
         count = await self.select_addresses('count(*)', **constraints)
         return count[0][0]
 

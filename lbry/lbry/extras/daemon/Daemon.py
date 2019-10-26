@@ -10,7 +10,7 @@ import random
 import ecdsa
 import hashlib
 from urllib.parse import urlencode, quote
-from typing import Callable, Optional, List, Dict, Tuple
+from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
 from traceback import format_exc
 from aiohttp import web
@@ -111,7 +111,7 @@ CONNECTION_MESSAGES = {
 
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
-DEFAULT_PAGE_SIZE = 50
+DEFAULT_PAGE_SIZE = 20
 
 
 def encode_pagination_doc(items):
@@ -124,33 +124,38 @@ def encode_pagination_doc(items):
     }
 
 
-async def maybe_paginate(get_records_with_count: Callable[[bool, Dict], Tuple[List, int]],
-                         page: Optional[int], page_size: Optional[int],
-                         no_totals: Optional[bool] = None, **constraints):
-    if page is None and page_size is None:
-        return (await get_records_with_count(fetch_count=False, **constraints))[0]
-    if no_totals is not None:
-        constraints["no_totals"] = no_totals
-    if page is None:
-        page = 1
-    if page_size is None or page_size > DEFAULT_PAGE_SIZE:
-        page_size = DEFAULT_PAGE_SIZE
+async def paginate_rows(get_records: Callable, get_record_count: Callable,
+                        page: Optional[int], page_size: Optional[int], **constraints):
+    page = max(1, page or 1)
+    page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
     constraints.update({
         "offset": page_size * (page - 1),
         "limit": page_size
     })
-    fetch_count = not no_totals
-    items, total_items = await get_records_with_count(fetch_count, **constraints)
-    result = {
+    items = await get_records(**constraints)
+    total_items = await get_record_count(**constraints)
+    return {
         "items": items,
+        "total_pages": int((total_items + (page_size - 1)) / page_size),
+        "total_items": total_items,
         "page": page, "page_size": page_size
     }
-    if not no_totals:
-        result.update({
-            "total_pages": (total_items + (page_size - 1)) // page_size,
-            "total_items": total_items,
-        })
-    return result
+
+
+def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
+    page = max(1, page or 1)
+    page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
+    total_items = len(items)
+    offset = page_size * (page - 1)
+    subitems = []
+    if offset <= total_items:
+        subitems = items[offset:page_size]
+    return {
+        "items": subitems,
+        "total_pages": int((total_items + (page_size - 1)) / page_size),
+        "total_items": total_items,
+        "page": page, "page_size": page_size
+    }
 
 
 def sort_claim_results(claims):
@@ -1048,21 +1053,23 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires("wallet")
-    def jsonrpc_wallet_list(self, wallet_id=None):
+    def jsonrpc_wallet_list(self, wallet_id=None, page=None, page_size=None):
         """
         List wallets.
 
         Usage:
-            wallet_list [--wallet_id=<wallet_id>]
+            wallet_list [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --wallet_id=<wallet_id>  : (str) show specific wallet only
+            --page=<page>            : (int) page to return during paginating
+            --page_size=<page_size>  : (int) number of items on page during pagination
 
-        Returns: {List[Wallet]}
+        Returns: {Paginated[Wallet]}
         """
         if wallet_id:
-            return [self.wallet_manager.get_wallet_or_error(wallet_id)]
-        return self.wallet_manager.wallets
+            return paginate_list([self.wallet_manager.get_wallet_or_error(wallet_id)], 1, 1)
+        return paginate_list(self.wallet_manager.wallets, page, page_size)
 
     @requires("wallet")
     async def jsonrpc_wallet_create(
@@ -1310,8 +1317,9 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires("wallet")
-    def jsonrpc_account_list(self, account_id=None, wallet_id=None, confirmations=0,
-                             include_claims=False, show_seed=False):
+    async def jsonrpc_account_list(
+            self, account_id=None, wallet_id=None, confirmations=0,
+            include_claims=False, show_seed=False, page=None, page_size=None):
         """
         List details of all of the accounts or a specific account.
 
@@ -1319,6 +1327,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account_list [<account_id>] [--wallet_id=<wallet_id>]
                          [--confirmations=<confirmations>]
                          [--include_claims] [--show_seed]
+                         [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --account_id=<account_id>       : (str) If provided only the balance for this
@@ -1328,8 +1337,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --include_claims                : (bool) include claims, requires than a
                                                      LBC account is specified (default: false)
             --show_seed                     : (bool) show the seed for the account
+            --page=<page>                   : (int) page to return during paginating
+            --page_size=<page_size>         : (int) number of items on page during pagination
 
-        Returns: {List[Account]}
+        Returns: {Paginated[Account]}
         """
         kwargs = {
             'confirmations': confirmations,
@@ -1337,9 +1348,9 @@ class Daemon(metaclass=JSONRPCServerType):
         }
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
-            return wallet.get_account_or_error(account_id).get_details(**kwargs)
+            return paginate_list([await wallet.get_account_or_error(account_id).get_details(**kwargs)], 1, 1)
         else:
-            return wallet.get_detailed_accounts(**kwargs)
+            return paginate_list(await wallet.get_detailed_accounts(**kwargs), page, page_size)
 
     @requires("wallet")
     async def jsonrpc_account_balance(self, account_id=None, wallet_id=None, confirmations=0, reserved_subtotals=False):
@@ -1723,8 +1734,9 @@ class Daemon(metaclass=JSONRPCServerType):
             constraints['accounts'] = [wallet.get_account_or_error(account_id)]
         else:
             constraints['accounts'] = wallet.accounts
-        return maybe_paginate(
-            partial(get_records_with_count, self.ledger.get_addresses, self.ledger.get_address_count),
+        return paginate_rows(
+            self.ledger.get_addresses,
+            self.ledger.get_address_count,
             page, page_size, **constraints
         )
 
@@ -1952,13 +1964,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claims = partial(self.ledger.get_claims, wallet=wallet, accounts=wallet.accounts)
             claim_count = partial(self.ledger.get_claim_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(
-            partial(get_records_with_count, claims, claim_count),
-            page, page_size
-        )
+        return paginate_rows(claims, claim_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_claim_search(self, page=None, page_size=None, no_totals=None, **kwargs):
+    async def jsonrpc_claim_search(self, **kwargs):
         """
         Search for stream and channel claims on the blockchain.
 
@@ -2083,18 +2092,18 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        async def get_claims_with_count(fetch_count, **kwargs):
-            claims, offset, count = await self.ledger.claim_search(**kwargs)
-            return (claims, count)
-
         if kwargs.pop('valid_channel_signature', False):
             kwargs['signature_valid'] = 1
         if kwargs.pop('invalid_channel_signature', False):
             kwargs['signature_valid'] = 0
-        return maybe_paginate(
-            get_claims_with_count,
-            page, page_size, no_totals, **kwargs
-        )
+        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
+        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
+        txos, offset, total = await self.ledger.claim_search(**kwargs)
+        result = {"items": txos, "page": page_num, "page_size": page_size}
+        if not kwargs.pop('no_totals', False):
+            result['total_pages'] = int((total + (page_size - 1)) / page_size)
+            result['total_items'] = total
+        return result
 
     CHANNEL_DOC = """
     Create, update, abandon and list your channel claims.
@@ -2460,10 +2469,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             channels = partial(self.ledger.get_channels, wallet=wallet, accounts=wallet.accounts)
             channel_count = partial(self.ledger.get_channel_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(
-            partial(get_records_with_count, channels, channel_count),
-            page, page_size
-        )
+        return paginate_rows(channels, channel_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_export(self, channel_id=None, channel_name=None, account_id=None, wallet_id=None):
@@ -3118,10 +3124,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             streams = partial(self.ledger.get_streams, wallet=wallet, accounts=wallet.accounts)
             stream_count = partial(self.ledger.get_stream_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(
-            partial(get_records_with_count, streams, stream_count),
-            page, page_size
-        )
+        return paginate_rows(streams, stream_count, page, page_size)
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, DATABASE_COMPONENT)
@@ -3224,10 +3227,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             supports = partial(self.ledger.get_supports, wallet=wallet, accounts=wallet.accounts)
             support_count = partial(self.ledger.get_support_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(
-            partial(get_records_with_count, supports, support_count),
-            page, page_size
-        )
+        return paginate_rows(supports, support_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_support_abandon(
@@ -3377,10 +3377,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 self.ledger.get_transaction_history, wallet=wallet, accounts=wallet.accounts)
             transaction_count = partial(
                 self.ledger.get_transaction_history_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(
-            partial(get_records_with_count, transactions, transaction_count),
-            page, page_size
-        )
+        return paginate_rows(transactions, transaction_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -3426,10 +3423,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             utxos = partial(self.ledger.get_utxos, wallet=wallet, accounts=wallet.accounts)
             utxo_count = partial(self.ledger.get_utxo_count, wallet=wallet, accounts=wallet.accounts)
-        return maybe_paginate(
-            partial(get_records_with_count, utxos, utxo_count),
-            page, page_size
-        )
+        return paginate_rows(utxos, utxo_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_utxo_release(self, account_id=None, wallet_id=None):
@@ -3514,19 +3508,22 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(DHT_COMPONENT)
-    async def jsonrpc_peer_list(self, blob_hash, search_bottom_out_limit=None):
+    async def jsonrpc_peer_list(self, blob_hash, search_bottom_out_limit=None, page=None, page_size=None):
         """
         Get peers for blob hash
 
         Usage:
             peer_list (<blob_hash> | --blob_hash=<blob_hash>)
-            [<search_bottom_out_limit> | --search_bottom_out_limit=<search_bottom_out_limit>]
+                [<search_bottom_out_limit> | --search_bottom_out_limit=<search_bottom_out_limit>]
+                [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --blob_hash=<blob_hash>                                  : (str) find available peers for this blob hash
             --search_bottom_out_limit=<search_bottom_out_limit>      : (int) the number of search probes in a row
                                                                              that don't find any new peers
                                                                              before giving up and returning
+            --page=<page>                                            : (int) page to return during paginating
+            --page_size=<page_size>                                  : (int) number of items on page during pagination
 
         Returns:
             (list) List of contact dictionaries {'address': <peer ip>, 'udp_port': <dht port>, 'tcp_port': <peer port>,
@@ -3555,7 +3552,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
             for peer in peers
         ]
-        return results
+        return paginate_list(results, page, page_size)
 
     @requires(DATABASE_COMPONENT)
     async def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):
@@ -3593,7 +3590,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(BLOB_COMPONENT, WALLET_COMPONENT)
     async def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
-                                finished=None, page_size=None, page=None):
+                                finished=None, page=None, page_size=None):
         """
         Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
@@ -3601,8 +3598,7 @@ class Daemon(metaclass=JSONRPCServerType):
             blob_list [--needed] [--finished] [<uri> | --uri=<uri>]
                       [<stream_hash> | --stream_hash=<stream_hash>]
                       [<sd_hash> | --sd_hash=<sd_hash>]
-                      [<page_size> | --page_size=<page_size>]
-                      [<page> | --page=<page>]
+                      [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --needed                     : (bool) only return needed blobs
@@ -3610,8 +3606,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --uri=<uri>                  : (str) filter blobs by stream in a uri
             --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
             --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
-            --page_size=<page_size>      : (int) results page size
-            --page=<page>                : (int) page of results to return
+            --page=<page>                : (int) page to return during paginating
+            --page_size=<page_size>      : (int) number of items on page during pagination
 
         Returns:
             (list) List of blob hashes
@@ -3639,11 +3635,7 @@ class Daemon(metaclass=JSONRPCServerType):
             blobs = [blob_hash for blob_hash in blobs if not self.blob_manager.is_blob_verified(blob_hash)]
         if finished:
             blobs = [blob_hash for blob_hash in blobs if self.blob_manager.is_blob_verified(blob_hash)]
-        page_size = page_size or len(blobs)
-        page = page or 0
-        start_index = page * page_size
-        stop_index = start_index + page_size
-        return blobs[start_index:stop_index]
+        return paginate_list(blobs, page, page_size)
 
     @requires(BLOB_COMPONENT)
     async def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
@@ -4153,9 +4145,3 @@ def get_loggly_query_string(installation_id):
     }
     data = urlencode(params)
     return base_loggly_search_url + data
-
-
-async def get_records_with_count(get_records, get_record_count, fetch_count, **kwargs):
-    records = await get_records(**kwargs)
-    record_count = await get_record_count(**kwargs) if fetch_count else 0
-    return (records, record_count)
